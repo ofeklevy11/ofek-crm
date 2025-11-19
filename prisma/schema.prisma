@@ -1,0 +1,72 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int         @id @default(autoincrement())
+  name         String
+  email        String      @unique
+  passwordHash String
+  role         String      @default("user") // admin, user, guest
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  tables       TableMeta[] @relation("CreatedBy")
+  records      Record[]    @relation("CreatedBy")
+  auditLogs    AuditLog[]
+}
+
+model TableMeta {
+  id        Int      @id @default(autoincrement())
+  name      String
+  slug      String   @unique
+  createdBy Int
+  schemaJson Json    // Defines the structure of the custom table
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  records   Record[] @relation("TableRecords")
+  creator   User     @relation(fields: [createdBy], references: [id], name: "CreatedBy")
+}
+
+model Record {
+  id        Int       @id @default(autoincrement())
+  tableId   Int
+  data      Json      // Stores the dynamic data for the record
+  createdBy Int?
+  updatedBy Int?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  table     TableMeta @relation(fields: [tableId], references: [id], name: "TableRecords")
+  creator   User?     @relation(fields: [createdBy], references: [id], name: "CreatedBy")
+  attachments Attachment[]
+  auditLogs   AuditLog[]
+}
+
+model Attachment {
+  id         Int      @id @default(autoincrement())
+  recordId   Int
+  filename   String
+  url        String
+  size       Int
+  uploadedBy Int
+  uploadedAt DateTime @default(now())
+  record     Record   @relation(fields: [recordId], references: [id])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  recordId  Int?
+  userId    Int?
+  action    String   // CREATE, UPDATE, DELETE
+  diffJson  Json?
+  timestamp DateTime @default(now())
+  record    Record?  @relation(fields: [recordId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
+}
