@@ -21,6 +21,13 @@ export default function Home() {
             Go to Tables →
           </Link>
 
+          <Link
+            href="/calendar"
+            className="block w-full bg-gradient-to-r from-purple-600 to-purple-700 text-white py-4 px-6 rounded-xl hover:from-purple-700 hover:to-purple-800 transition font-semibold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+          >
+            Go to Calendar →
+          </Link>
+
           <p className="text-sm text-gray-500 pt-4">
             Create dynamic tables, manage records, and export your data
           </p>

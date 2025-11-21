@@ -1,7 +1,10 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  /* config options here */
+const nextConfig = {
+  productionSourceMaps: false,
+  experimental: {
+    turbo: {
+      sourceMaps: false,
+    },
+  },
 };
 
-export default nextConfig;
+module.exports = nextConfig;

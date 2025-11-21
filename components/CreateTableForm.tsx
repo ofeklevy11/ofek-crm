@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 interface FieldRow {
@@ -8,6 +8,15 @@ interface FieldRow {
   type: string;
   label: string;
   options: string; // Comma separated for UI
+  relationTableId?: string; // For relation
+  relationField?: string; // For lookup (which relation field to use)
+  lookupField?: string; // For lookup (which field from related table to show)
+}
+
+interface TableOption {
+  id: number;
+  name: string;
+  schemaJson: any;
 }
 
 export default function CreateTableForm() {
@@ -15,6 +24,14 @@ export default function CreateTableForm() {
   const [loading, setLoading] = useState(false);
   const [tableName, setTableName] = useState("");
   const [slug, setSlug] = useState("");
+  const [availableTables, setAvailableTables] = useState<TableOption[]>([]);
+
+  useEffect(() => {
+    fetch("/api/tables")
+      .then((res) => res.json())
+      .then((data) => setAvailableTables(data))
+      .catch((err) => console.error("Failed to load tables", err));
+  }, []);
 
   const [fields, setFields] = useState<FieldRow[]>([
     { name: "title", type: "text", label: "Title", options: "" },
@@ -56,19 +73,38 @@ export default function CreateTableForm() {
     e.preventDefault();
     setLoading(true);
 
+    // Validate duplicate field names
+    const names = fields.map((f) => f.name);
+    const uniqueNames = new Set(names);
+    if (uniqueNames.size !== names.length) {
+      alert(
+        "Field names must be unique. Please check your field system names."
+      );
+      setLoading(false);
+      return;
+    }
+
     try {
       // Construct schema from fields
       const schemaJson = fields.map((f) => ({
         name: f.name,
         type: f.type,
         label: f.label,
-        options:
-          f.type === "select"
-            ? f.options
-                .split(",")
-                .map((o) => o.trim())
-                .filter(Boolean)
-            : undefined,
+        options: ["select", "multi-select", "radio", "tags"].includes(f.type)
+          ? Array.from(
+              new Set(
+                f.options
+                  .split(",")
+                  .map((o) => o.trim())
+                  .filter(Boolean)
+              )
+            )
+          : undefined,
+        relationTableId: f.relationTableId
+          ? Number(f.relationTableId)
+          : undefined,
+        relationField: f.relationField,
+        lookupField: f.lookupField,
       }));
 
       const res = await fetch("/api/tables", {
@@ -156,7 +192,7 @@ export default function CreateTableForm() {
           {fields.map((field, index) => (
             <div
               key={index}
-              className="p-6 bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-gray-200 hover:border-gray-300 transition shadow-sm"
+              className="p-6 bg-linear-to-br from-gray-50 to-white rounded-xl border-2 border-gray-200 hover:border-gray-300 transition shadow-sm"
             >
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                 <div className="lg:col-span-1">
@@ -201,10 +237,18 @@ export default function CreateTableForm() {
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
                   >
                     <option value="text">Text</option>
+                    <option value="textarea">Textarea</option>
                     <option value="number">Number</option>
                     <option value="date">Date</option>
                     <option value="boolean">Boolean</option>
+                    <option value="url">URL</option>
                     <option value="select">Select</option>
+                    <option value="multi-select">Multi Select</option>
+                    <option value="tags">Tags</option>
+                    <option value="radio">Radio Buttons</option>
+                    <option value="relation">Relation</option>
+                    <option value="lookup">Lookup</option>
+                    <option value="automation">Automation Trigger</option>
                   </select>
                 </div>
                 <div className="lg:col-span-1 flex items-end">
@@ -219,7 +263,9 @@ export default function CreateTableForm() {
                 </div>
               </div>
 
-              {field.type === "select" && (
+              {["select", "multi-select", "radio", "tags"].includes(
+                field.type
+              ) && (
                 <div className="mt-4 pt-4 border-t border-gray-200">
                   <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
                     Options (comma separated)
@@ -236,6 +282,102 @@ export default function CreateTableForm() {
                   <p className="text-xs text-gray-500 mt-2">
                     Separate each option with a comma
                   </p>
+                </div>
+              )}
+
+              {field.type === "relation" && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
+                    Related Table
+                  </label>
+                  <select
+                    value={field.relationTableId || ""}
+                    onChange={(e) =>
+                      handleFieldChange(
+                        index,
+                        "relationTableId",
+                        e.target.value
+                      )
+                    }
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                  >
+                    <option value="">Select a table...</option>
+                    {availableTables.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {field.type === "lookup" && (
+                <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
+                      Relation Field
+                    </label>
+                    <select
+                      value={field.relationField || ""}
+                      onChange={(e) =>
+                        handleFieldChange(
+                          index,
+                          "relationField",
+                          e.target.value
+                        )
+                      }
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                    >
+                      <option value="">Select relation field...</option>
+                      {fields
+                        .filter((f) => f.type === "relation" && f.name)
+                        .map((f) => (
+                          <option key={f.name} value={f.name}>
+                            {f.label || f.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
+                      Target Field
+                    </label>
+                    <select
+                      value={field.lookupField || ""}
+                      onChange={(e) =>
+                        handleFieldChange(index, "lookupField", e.target.value)
+                      }
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                    >
+                      <option value="">Select Target Field...</option>
+                      {(() => {
+                        const relationField = fields.find(
+                          (f) => f.name === field.relationField
+                        );
+                        if (!relationField?.relationTableId) return null;
+                        const relatedTable = availableTables.find(
+                          (t) => t.id === Number(relationField.relationTableId)
+                        );
+                        if (!relatedTable?.schemaJson) return null;
+
+                        let relatedSchema: any[] = [];
+                        try {
+                          relatedSchema =
+                            typeof relatedTable.schemaJson === "string"
+                              ? JSON.parse(relatedTable.schemaJson)
+                              : relatedTable.schemaJson;
+                        } catch (e) {
+                          return null;
+                        }
+
+                        return relatedSchema.map((f: any) => (
+                          <option key={f.name} value={f.name}>
+                            {f.label || f.name}
+                          </option>
+                        ));
+                      })()}
+                    </select>
+                  </div>
                 </div>
               )}
             </div>
@@ -267,7 +409,7 @@ export default function CreateTableForm() {
         <button
           type="submit"
           disabled={loading}
-          className="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-10 rounded-xl hover:from-blue-700 hover:to-blue-800 transition disabled:opacity-50 font-medium shadow-lg"
+          className="bg-linear-to-r from-blue-600 to-blue-700 text-white py-3 px-10 rounded-xl hover:from-blue-700 hover:to-blue-800 transition disabled:opacity-50 font-medium shadow-lg"
         >
           {loading ? "Creating Table..." : "Create Table"}
         </button>

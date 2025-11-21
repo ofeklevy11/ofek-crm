@@ -8,6 +8,15 @@ interface FieldRow {
   type: string;
   label: string;
   options: string;
+  relationTableId?: string;
+  relationField?: string;
+  lookupField?: string;
+}
+
+interface TableOption {
+  id: number;
+  name: string;
+  schemaJson: any;
 }
 
 interface EditTableModalProps {
@@ -27,6 +36,14 @@ export default function EditTableModal({
   const [tableName, setTableName] = useState("");
   const [slug, setSlug] = useState("");
   const [fields, setFields] = useState<FieldRow[]>([]);
+  const [availableTables, setAvailableTables] = useState<TableOption[]>([]);
+
+  useEffect(() => {
+    fetch("/api/tables")
+      .then((res) => res.json())
+      .then((data) => setAvailableTables(data))
+      .catch((err) => console.error("Failed to load tables", err));
+  }, []);
 
   useEffect(() => {
     if (isOpen && tableId) {
@@ -51,6 +68,11 @@ export default function EditTableModal({
         type: field.type,
         label: field.label,
         options: field.options ? field.options.join(", ") : "",
+        relationTableId: field.relationTableId
+          ? String(field.relationTableId)
+          : undefined,
+        relationField: field.relationField,
+        lookupField: field.lookupField,
       }));
       setFields(parsedFields);
     } catch (error) {
@@ -90,18 +112,33 @@ export default function EditTableModal({
     e.preventDefault();
     setLoading(true);
 
+    // Validate duplicate field names
+    const names = fields.map((f) => f.name);
+    const uniqueNames = new Set(names);
+    if (uniqueNames.size !== names.length) {
+      alert(
+        "Field names must be unique. Please check your field system names."
+      );
+      setLoading(false);
+      return;
+    }
+
     try {
       const schemaJson = fields.map((f) => ({
         name: f.name,
         type: f.type,
         label: f.label,
-        options:
-          f.type === "select"
-            ? f.options
-                .split(",")
-                .map((o) => o.trim())
-                .filter(Boolean)
-            : undefined,
+        options: ["select", "multi-select", "radio", "tags"].includes(f.type)
+          ? f.options
+              .split(",")
+              .map((o) => o.trim())
+              .filter(Boolean)
+          : undefined,
+        relationTableId: f.relationTableId
+          ? Number(f.relationTableId)
+          : undefined,
+        relationField: f.relationField,
+        lookupField: f.lookupField,
       }));
 
       const res = await fetch(`/api/tables/${tableId}`, {
@@ -235,14 +272,24 @@ export default function EditTableModal({
                         className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
                       >
                         <option value="text">Text</option>
+                        <option value="textarea">Textarea</option>
                         <option value="number">Number</option>
                         <option value="date">Date</option>
                         <option value="boolean">Boolean</option>
+                        <option value="url">URL</option>
                         <option value="select">Select</option>
+                        <option value="multi-select">Multi Select</option>
+                        <option value="tags">Tags</option>
+                        <option value="radio">Radio Buttons</option>
+                        <option value="relation">Relation</option>
+                        <option value="lookup">Lookup</option>
+                        <option value="automation">Automation Trigger</option>
                       </select>
                     </div>
 
-                    {field.type === "select" && (
+                    {["select", "multi-select", "radio", "tags"].includes(
+                      field.type
+                    ) && (
                       <div className="flex-1">
                         <label className="block text-xs font-bold text-black mb-1">
                           Options (comma separated)
@@ -256,6 +303,107 @@ export default function EditTableModal({
                           className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
                           placeholder="Option 1, Option 2"
                         />
+                      </div>
+                    )}
+
+                    {field.type === "relation" && (
+                      <div className="flex-1">
+                        <label className="block text-xs font-bold text-black mb-1">
+                          Related Table
+                        </label>
+                        <select
+                          value={field.relationTableId || ""}
+                          onChange={(e) =>
+                            handleFieldChange(
+                              index,
+                              "relationTableId",
+                              e.target.value
+                            )
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
+                        >
+                          <option value="">Select a table...</option>
+                          {availableTables.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {field.type === "lookup" && (
+                      <div className="flex-[2] grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-bold text-black mb-1">
+                            Relation Field
+                          </label>
+                          <select
+                            value={field.relationField || ""}
+                            onChange={(e) =>
+                              handleFieldChange(
+                                index,
+                                "relationField",
+                                e.target.value
+                              )
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
+                          >
+                            <option value="">Select relation...</option>
+                            {fields
+                              .filter((f) => f.type === "relation" && f.name)
+                              .map((f) => (
+                                <option key={f.name} value={f.name}>
+                                  {f.label || f.name}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-black mb-1">
+                            Target Field
+                          </label>
+                          <select
+                            value={field.lookupField || ""}
+                            onChange={(e) =>
+                              handleFieldChange(
+                                index,
+                                "lookupField",
+                                e.target.value
+                              )
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
+                          >
+                            <option value="">Select Target Field...</option>
+                            {(() => {
+                              const relationField = fields.find(
+                                (f) => f.name === field.relationField
+                              );
+                              if (!relationField?.relationTableId) return null;
+                              const relatedTable = availableTables.find(
+                                (t) =>
+                                  t.id === Number(relationField.relationTableId)
+                              );
+                              if (!relatedTable?.schemaJson) return null;
+
+                              let relatedSchema: any[] = [];
+                              try {
+                                relatedSchema =
+                                  typeof relatedTable.schemaJson === "string"
+                                    ? JSON.parse(relatedTable.schemaJson)
+                                    : relatedTable.schemaJson;
+                              } catch (e) {
+                                return null;
+                              }
+
+                              return relatedSchema.map((f: any) => (
+                                <option key={f.name} value={f.name}>
+                                  {f.label || f.name}
+                                </option>
+                              ));
+                            })()}
+                          </select>
+                        </div>
                       </div>
                     )}
 

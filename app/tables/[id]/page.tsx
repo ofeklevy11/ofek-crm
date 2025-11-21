@@ -107,7 +107,10 @@ export default async function TableDetailsPage({
         <RecordTable
           tableId={tableId}
           schema={schema}
-          initialRecords={records}
+          initialRecords={records.map((r) => ({
+            ...r,
+            createdAt: r.createdAt.toISOString(),
+          }))}
         />
         <Pagination totalPages={totalPages} />
       </div>

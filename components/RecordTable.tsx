@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import EditRecordModal from "./EditRecordModal";
+import ViewTextModal from "./ViewTextModal";
 
 interface SchemaField {
   name: string;
@@ -27,6 +28,10 @@ export default function RecordTable({
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editingRecord, setEditingRecord] = useState<any>(null);
+  const [viewText, setViewText] = useState<{
+    title: string;
+    text: string;
+  } | null>(null);
 
   const toggleSelectAll = () => {
     if (selectedIds.length === records.length) {
@@ -242,11 +247,23 @@ export default function RecordTable({
                 />
               </th>
               <th className="p-4">ID</th>
-              {schema.map((field) => (
-                <th key={field.name} className="p-4 whitespace-nowrap">
-                  {field.label}
-                </th>
-              ))}
+              {schema
+                .filter(
+                  (field, index, self) =>
+                    index === self.findIndex((t) => t.name === field.name)
+                )
+                .map((field) => (
+                  <th
+                    key={field.name}
+                    className={`p-4 whitespace-nowrap ${
+                      ["tags", "multi-select"].includes(field.type)
+                        ? "min-w-[200px]"
+                        : ""
+                    }`}
+                  >
+                    {field.label}
+                  </th>
+                ))}
               <th className="p-4">Attachments</th>
               <th className="p-4">Created At</th>
               <th className="p-4">Actions</th>
@@ -264,15 +281,94 @@ export default function RecordTable({
                   />
                 </td>
                 <td className="p-4 text-black">#{record.id}</td>
-                {schema.map((field) => (
-                  <td key={field.name} className="p-4 text-black">
-                    {/* Basic rendering of JSON data */}
-                    {String(record.data[field.name] ?? "-")}
-                  </td>
-                ))}
-                <td className="p-4 text-black">
-                  {record._count?.attachments || 0}
-                </td>
+                {schema
+                  .filter(
+                    (field, index, self) =>
+                      index === self.findIndex((t) => t.name === field.name)
+                  )
+                  .map((field) => (
+                    <td key={field.name} className="p-4 text-black">
+                      {/* Basic rendering of JSON data */}
+                      {(() => {
+                        const val = record.data[field.name];
+                        if (val === null || val === undefined || val === "")
+                          return "-";
+
+                        switch (field.type) {
+                          case "boolean":
+                            return val ? "Yes" : "No";
+                          case "textarea":
+                          case "text":
+                          case "url":
+                            if (field.type === "url") {
+                              return (
+                                <a
+                                  href={val}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-blue-600 hover:underline max-w-xs truncate block"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {val}
+                                </a>
+                              );
+                            }
+                            return (
+                              <div
+                                className="max-w-xs truncate cursor-pointer hover:bg-gray-100 p-1 rounded"
+                                title="Click to view full text"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setViewText({
+                                    title: field.label,
+                                    text: String(val),
+                                  });
+                                }}
+                              >
+                                {String(val)}
+                              </div>
+                            );
+                          case "tags":
+                          case "multi-select":
+                            let displayVal = val;
+                            if (
+                              typeof val === "string" &&
+                              val.startsWith("[")
+                            ) {
+                              try {
+                                displayVal = JSON.parse(val);
+                              } catch (e) {
+                                // ignore error, treat as string
+                              }
+                            }
+
+                            if (Array.isArray(displayVal)) {
+                              return (
+                                <div className="flex flex-wrap gap-1">
+                                  {displayVal.map((v: string, i: number) => (
+                                    <span
+                                      key={i}
+                                      className="bg-gray-100 text-gray-800 px-2 py-0.5 rounded text-xs border border-gray-200"
+                                    >
+                                      {v}
+                                    </span>
+                                  ))}
+                                </div>
+                              );
+                            }
+                            return String(val);
+                          case "date":
+                            return new Date(val).toLocaleDateString();
+                          default:
+                            return (
+                              <div className="max-w-xs truncate">
+                                {String(val)}
+                              </div>
+                            );
+                        }
+                      })()}
+                    </td>
+                  ))}
                 <td className="p-4 text-black">
                   {new Date(record.createdAt).toLocaleDateString()}
                 </td>
@@ -308,6 +404,14 @@ export default function RecordTable({
             setEditingRecord(null);
             router.refresh();
           }}
+        />
+      )}
+
+      {viewText && (
+        <ViewTextModal
+          title={viewText.title}
+          text={viewText.text}
+          onClose={() => setViewText(null)}
         />
       )}
     </div>

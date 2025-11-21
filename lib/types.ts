@@ -1,0 +1,19 @@
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  description?: string;
+  startTime: Date;
+  endTime: Date;
+  color?: string;
+}
+
+export const defaultEventColors = [
+  "#4285F4", // Google Blue
+  "#EA4335", // Google Red
+  "#FBBC04", // Google Yellow
+  "#34A853", // Google Green
+  "#9334E6", // Purple
+  "#F97316", // Orange
+  "#06B6D4", // Cyan
+  "#EC4899", // Pink
+];

@@ -2,7 +2,6 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import TableCard from "@/components/TableCard";
 
-export const dynamic = "force-dynamic";
 
 export default async function TablesPage() {
   const tables = await prisma.tableMeta.findMany({
