@@ -13,6 +13,7 @@ interface KanbanColumnProps {
   onTaskMove: (taskId: string, newStatus: TaskStatus) => void;
   onTaskCreate: () => void;
   onTaskDelete: (taskId: string) => void;
+  onTaskEdit: (task: Task) => void;
 }
 
 export default function KanbanColumn({
@@ -23,6 +24,7 @@ export default function KanbanColumn({
   onTaskMove,
   onTaskCreate,
   onTaskDelete,
+  onTaskEdit,
 }: KanbanColumnProps) {
   const [isDragOver, setIsDragOver] = React.useState(false);
 
@@ -91,6 +93,7 @@ export default function KanbanColumn({
               key={task.id}
               task={task}
               onDelete={() => onTaskDelete(task.id)}
+              onEdit={() => onTaskEdit(task)}
             />
           ))
         )}

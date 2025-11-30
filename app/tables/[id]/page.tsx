@@ -111,6 +111,7 @@ export default async function TableDetailsPage({
             ...r,
             createdAt: r.createdAt.toISOString(),
           }))}
+          slug={table.slug}
         />
         <Pagination totalPages={totalPages} />
       </div>

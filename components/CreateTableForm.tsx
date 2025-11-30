@@ -11,6 +11,7 @@ interface FieldRow {
   relationTableId?: string; // For relation
   relationField?: string; // For lookup (which relation field to use)
   lookupField?: string; // For lookup (which field from related table to show)
+  defaultValue?: string;
 }
 
 interface TableOption {
@@ -44,7 +45,10 @@ export default function CreateTableForm() {
   ]);
 
   const handleAddField = () => {
-    setFields([...fields, { name: "", type: "text", label: "", options: "" }]);
+    setFields([
+      ...fields,
+      { name: "", type: "text", label: "", options: "", defaultValue: "" },
+    ]);
   };
 
   const handleRemoveField = (index: number) => {
@@ -105,6 +109,7 @@ export default function CreateTableForm() {
           : undefined,
         relationField: f.relationField,
         lookupField: f.lookupField,
+        defaultValue: f.defaultValue,
       }));
 
       const res = await fetch("/api/tables", {
@@ -261,6 +266,21 @@ export default function CreateTableForm() {
                     Remove
                   </button>
                 </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
+                  Default Value
+                </label>
+                <input
+                  type="text"
+                  value={field.defaultValue || ""}
+                  onChange={(e) =>
+                    handleFieldChange(index, "defaultValue", e.target.value)
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                  placeholder="Optional default value"
+                />
               </div>
 
               {["select", "multi-select", "radio", "tags"].includes(

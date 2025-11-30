@@ -11,6 +11,7 @@ interface FieldRow {
   relationTableId?: string;
   relationField?: string;
   lookupField?: string;
+  defaultValue?: string;
 }
 
 interface TableOption {
@@ -73,6 +74,7 @@ export default function EditTableModal({
           : undefined,
         relationField: field.relationField,
         lookupField: field.lookupField,
+        defaultValue: field.defaultValue,
       }));
       setFields(parsedFields);
     } catch (error) {
@@ -84,7 +86,10 @@ export default function EditTableModal({
   };
 
   const handleAddField = () => {
-    setFields([...fields, { name: "", type: "text", label: "", options: "" }]);
+    setFields([
+      ...fields,
+      { name: "", type: "text", label: "", options: "", defaultValue: "" },
+    ]);
   };
 
   const handleRemoveField = (index: number) => {
@@ -139,6 +144,7 @@ export default function EditTableModal({
           : undefined,
         relationField: f.relationField,
         lookupField: f.lookupField,
+        defaultValue: f.defaultValue,
       }));
 
       const res = await fetch(`/api/tables/${tableId}`, {
@@ -287,6 +293,25 @@ export default function EditTableModal({
                       </select>
                     </div>
 
+                    <div className="w-48">
+                      <label className="block text-xs font-bold text-black mb-1">
+                        Default Value
+                      </label>
+                      <input
+                        type="text"
+                        value={field.defaultValue || ""}
+                        onChange={(e) =>
+                          handleFieldChange(
+                            index,
+                            "defaultValue",
+                            e.target.value
+                          )
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
+                        placeholder="Default"
+                      />
+                    </div>
+
                     {["select", "multi-select", "radio", "tags"].includes(
                       field.type
                     ) && (
@@ -333,7 +358,10 @@ export default function EditTableModal({
                     )}
 
                     {field.type === "lookup" && (
-                      <div className="flex-[2] grid grid-cols-2 gap-2">
+                      <div
+                        className="grid grid-cols-2 gap-2"
+                        style={{ flex: 2 }}
+                      >
                         <div>
                           <label className="block text-xs font-bold text-black mb-1">
                             Relation Field

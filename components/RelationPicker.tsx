@@ -102,7 +102,7 @@ export default function RelationPicker({
                     value === record.id ? "bg-blue-50 font-medium" : ""
                   }`}
                 >
-                  <span className="font-mono text-gray-500 mr-2">
+                  <span className="font-mono text-gray-500 me-2">
                     #{record.id}
                   </span>
                   {String(Object.values(record.data)[0] || "Untitled")}

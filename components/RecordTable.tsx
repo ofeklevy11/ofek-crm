@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import EditRecordModal from "./EditRecordModal";
 import ViewTextModal from "./ViewTextModal";
@@ -16,28 +16,104 @@ interface RecordTableProps {
   tableId: number;
   schema: SchemaField[];
   initialRecords: any[];
+  slug?: string;
 }
 
 export default function RecordTable({
   tableId,
   schema,
   initialRecords,
+  slug,
 }: RecordTableProps) {
   const router = useRouter();
-  const [records, setRecords] = useState(initialRecords);
+  const [records, setRecords] = useState<any[]>(initialRecords ?? []);
+
+  useEffect(() => {
+    if (initialRecords) {
+      setRecords(initialRecords);
+    }
+  }, [initialRecords]);
+
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [editingRecord, setEditingRecord] = useState<any>(null);
+  const [editingRecord, setEditingRecord] = useState<any | null>(null);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
   const [viewText, setViewText] = useState<{
     title: string;
     text: string;
   } | null>(null);
 
+  // unique fields (avoid recomputing/filtering multiple times)
+  const uniqueFields = schema.filter(
+    (field, index, self) =>
+      index === self.findIndex((t) => t.name === field.name)
+  );
+  // helper: find source/status fields
+  const statusField = schema.find(
+    (f) =>
+      f.name.toLowerCase() === "status" ||
+      f.label === "סטטוס" ||
+      f.label.toLowerCase() === "status" ||
+      f.label.includes("סטטוס")
+  );
+  const statusFieldName = statusField?.name;
+  const sourceFieldName = schema.find(
+    (f) =>
+      f.name.includes("source") ||
+      f.label.toLowerCase().includes("source") ||
+      f.label.includes("מקור")
+  )?.name;
+
+  const activeBooleanFieldName = schema.find(
+    (f) =>
+      f.type === "boolean" &&
+      (f.name.toLowerCase().includes("active") || f.label.includes("פעיל"))
+  )?.name;
+
+  // Filter records
+  const filteredRecords = records.filter((record) => {
+    if (
+      statusFilter &&
+      statusFieldName &&
+      record.data?.[statusFieldName] !== statusFilter
+    )
+      return false;
+    if (
+      sourceFilter &&
+      sourceFieldName &&
+      record.data?.[sourceFieldName] !== sourceFilter
+    )
+      return false;
+    return true;
+  });
+
+  // Time-based stats
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - now.getDay());
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const newLeadsWeek = records.filter(
+    (r) => r.createdAt && new Date(r.createdAt) >= startOfWeek
+  ).length;
+  const newLeadsMonth = records.filter(
+    (r) => r.createdAt && new Date(r.createdAt) >= startOfMonth
+  ).length;
+
+  const getPercentage = (count: number) => {
+    const total = records.length;
+    if (total === 0) return 0;
+    return Math.round((count / total) * 100);
+  };
+
   const toggleSelectAll = () => {
-    if (selectedIds.length === records.length) {
+    if (selectedIds.length === filteredRecords.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(records.map((r) => r.id));
+      setSelectedIds(filteredRecords.map((r) => r.id));
     }
   };
 
@@ -60,7 +136,7 @@ export default function RecordTable({
       });
       if (!res.ok) throw new Error("Failed to delete");
 
-      setRecords(records.filter((r) => !selectedIds.includes(r.id)));
+      setRecords((prev) => prev.filter((r) => !selectedIds.includes(r.id)));
       setSelectedIds([]);
       router.refresh();
     } catch (error) {
@@ -82,35 +158,29 @@ export default function RecordTable({
       return;
     }
 
-    // Generate CSV headers
-    const headers = ["ID", ...schema.map((f) => f.label), "Created At"];
-    // Use semicolon delimiter for better Excel compatibility with international characters
-    const csvContent = [
-      headers.join(";"),
-      ...recordsToExport.map((record) => {
-        const row = [
-          record.id,
-          ...schema.map((field) => {
-            const val = record.data[field.name];
-            const stringVal = String(val ?? "");
-            // Escape quotes and wrap in quotes
-            return `"${stringVal.replace(/"/g, '""')}"`;
-          }),
-          new Date(record.createdAt).toLocaleDateString(),
-        ];
-        return row.join(";");
-      }),
-    ].join("\n");
+    const headers = ["ID", ...uniqueFields.map((f) => f.label), "Created At"];
+    const csvContent = [headers.join(";")]
+      .concat(
+        recordsToExport.map((record) => {
+          const row = [
+            record.id,
+            ...uniqueFields.map((field) => {
+              const val = record.data?.[field.name];
+              const stringVal = String(val ?? "");
+              return `"${stringVal.replace(/"/g, '""')}"`;
+            }),
+            new Date(record.createdAt).toLocaleDateString(),
+          ];
+          return row.join(";");
+        })
+      )
+      .join("\n");
 
-    // Add UTF-8 BOM for Excel compatibility
     const BOM = "\uFEFF";
-    const csvWithBOM = BOM + csvContent;
-
-    // Create a Blob from the CSV content
-    const blob = new Blob([csvWithBOM], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([BOM + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
     const url = URL.createObjectURL(blob);
-
-    // Create a link and trigger the download
     const link = document.createElement("a");
     link.href = url;
     link.setAttribute(
@@ -121,10 +191,6 @@ export default function RecordTable({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  };
-
-  const handleExportAll = (format: "csv" | "txt") => {
-    window.location.href = `/api/tables/${tableId}/export?format=${format}`;
   };
 
   const handleExportTXT = () => {
@@ -138,32 +204,28 @@ export default function RecordTable({
       return;
     }
 
-    // Generate tab-delimited content
-    const headers = ["ID", ...schema.map((f) => f.label), "Created At"];
-    const txtContent = [
-      headers.join("\t"),
-      ...recordsToExport.map((record) => {
-        const row = [
-          record.id,
-          ...schema.map((field) => {
-            const val = record.data[field.name];
-            return String(val ?? "");
-          }),
-          new Date(record.createdAt).toLocaleDateString(),
-        ];
-        return row.join("\t");
-      }),
-    ].join("\n");
+    const headers = ["ID", ...uniqueFields.map((f) => f.label), "Created At"];
+    const txtContent = [headers.join("\t")]
+      .concat(
+        recordsToExport.map((record) => {
+          const row = [
+            record.id,
+            ...uniqueFields.map((field) => {
+              const val = record.data?.[field.name];
+              return String(val ?? "");
+            }),
+            new Date(record.createdAt).toLocaleDateString(),
+          ];
+          return row.join("\t");
+        })
+      )
+      .join("\n");
 
-    // Add UTF-8 BOM
     const BOM = "\uFEFF";
-    const txtWithBOM = BOM + txtContent;
-
-    // Create a Blob from the TXT content
-    const blob = new Blob([txtWithBOM], { type: "text/plain;charset=utf-8;" });
+    const blob = new Blob([BOM + txtContent], {
+      type: "text/plain;charset=utf-8;",
+    });
     const url = URL.createObjectURL(blob);
-
-    // Create a link and trigger the download
     const link = document.createElement("a");
     link.href = url;
     link.setAttribute(
@@ -176,243 +238,754 @@ export default function RecordTable({
     URL.revokeObjectURL(url);
   };
 
+  const handleExportAll = (format: "csv" | "txt") => {
+    window.location.href = `/api/tables/${tableId}/export?format=${format}`;
+  };
+
+  const getRowColorClass = (recordData: any) => {
+    // Digital Marketing Table Logic
+    // 1. Check for boolean "Active" field being false (Inactive) - Highest Priority
+    if (
+      activeBooleanFieldName &&
+      recordData?.[activeBooleanFieldName] === false
+    ) {
+      return "bg-red-100 hover:bg-red-200";
+    }
+
+    const values = Object.values(recordData || {});
+    const stringValues = values.map((v) => String(v).trim());
+
+    if (stringValues.some((v) => v.includes("לא פעיל")))
+      return "bg-red-100 hover:bg-red-200";
+    if (stringValues.some((v) => v.includes("ריטיינר")))
+      return "bg-green-100 hover:bg-green-200";
+    if (stringValues.some((v) => v.includes("תשלום חד פעמי")))
+      return "bg-yellow-100 hover:bg-yellow-200";
+
+    // Leads Table Logic
+    const status = statusFieldName ? recordData?.[statusFieldName] : null;
+    if (!status) return "bg-white hover:bg-gray-50";
+    switch (status) {
+      case "לא רלוונטי":
+        return "bg-red-100 hover:bg-red-200";
+      case "ליד רגיל":
+        return "bg-white hover:bg-gray-50";
+      case "ליד קר":
+        return "bg-yellow-100 hover:bg-yellow-200";
+      case "ליד חם":
+        return "bg-green-100 hover:bg-green-200";
+      case "ליד שנסגר":
+        return "bg-blue-100 hover:bg-blue-200";
+      case "ליד שלא נסגר":
+        return "bg-orange-100 hover:bg-orange-200";
+      default:
+        return "bg-white hover:bg-gray-50";
+    }
+  };
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-        <div className="text-sm text-black">{selectedIds.length} selected</div>
-        {selectedIds.length > 0 && (
-          <div className="flex gap-2">
+    <div className="flex flex-col lg:flex-row gap-6 items-start">
+      <div className="flex-1 w-full bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row gap-4 justify-between items-center bg-gray-50">
+          <div className="flex gap-4 items-center w-full md:w-auto">
+            <div className="text-sm text-black whitespace-nowrap">
+              {selectedIds.length} selected
+            </div>
+            {slug === "leads" && (
+              <>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white text-black"
+                >
+                  <option value="">All Statuses</option>
+                  {statusField?.options?.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={sourceFilter}
+                  onChange={(e) => setSourceFilter(e.target.value)}
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white text-black"
+                >
+                  <option value="">All Sources</option>
+                  {schema
+                    .find(
+                      (f) =>
+                        f.name.includes("source") ||
+                        f.label.toLowerCase().includes("source") ||
+                        f.label.includes("מקור")
+                    )
+                    ?.options?.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                </select>
+              </>
+            )}
+          </div>
+
+          {/* actions */}
+          {selectedIds.length > 0 ? (
+            <div className="flex gap-2">
+              <div className="relative group">
+                <button className="bg-white border border-gray-300 text-black px-3 py-1 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
+                  Export Selected ▼
+                </button>
+                <div className="hidden group-hover:block absolute end-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[150px]">
+                  <button
+                    onClick={handleExportCSV}
+                    className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50"
+                  >
+                    Export as CSV
+                  </button>
+                  <button
+                    onClick={handleExportTXT}
+                    className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50"
+                  >
+                    Export as TXT
+                  </button>
+                </div>
+              </div>
+
+              <button
+                onClick={handleBulkDelete}
+                disabled={isDeleting}
+                className="bg-red-50 text-red-600 px-3 py-1 rounded-lg text-sm font-medium hover:bg-red-100 transition"
+              >
+                {isDeleting ? "Deleting..." : "Delete Selected"}
+              </button>
+            </div>
+          ) : (
             <div className="relative group">
               <button className="bg-white border border-gray-300 text-black px-3 py-1 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
-                Export Selected ▼
+                Export All ▼
               </button>
-              <div className="hidden group-hover:block absolute right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[150px]">
+              <div className="hidden group-hover:block absolute end-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[150px]">
                 <button
-                  onClick={handleExportCSV}
-                  className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50 rounded-t-lg"
+                  onClick={() => handleExportAll("csv")}
+                  className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50"
                 >
                   Export as CSV
                 </button>
                 <button
-                  onClick={handleExportTXT}
-                  className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50 rounded-b-lg"
+                  onClick={() => handleExportAll("txt")}
+                  className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50"
                 >
                   Export as TXT
                 </button>
               </div>
             </div>
-            <button
-              onClick={handleBulkDelete}
-              disabled={isDeleting}
-              className="bg-red-50 text-red-600 px-3 py-1 rounded-lg text-sm font-medium hover:bg-red-100 transition"
-            >
-              {isDeleting ? "Deleting..." : "Delete Selected"}
-            </button>
-          </div>
-        )}
-        {selectedIds.length === 0 && (
-          <div className="relative group">
-            <button className="bg-white border border-gray-300 text-black px-3 py-1 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
-              Export All ▼
-            </button>
-            <div className="hidden group-hover:block absolute right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[150px]">
-              <button
-                onClick={() => handleExportAll("csv")}
-                className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50 rounded-t-lg"
-              >
-                Export as CSV
-              </button>
-              <button
-                onClick={() => handleExportAll("txt")}
-                className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50 rounded-b-lg"
-              >
-                Export as TXT
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-gray-50 text-black font-medium border-b border-gray-100">
-            <tr>
-              <th className="p-4 w-10">
-                <input
-                  type="checkbox"
-                  checked={
-                    records.length > 0 && selectedIds.length === records.length
-                  }
-                  onChange={toggleSelectAll}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-              </th>
-              <th className="p-4">ID</th>
-              {schema
-                .filter(
-                  (field, index, self) =>
-                    index === self.findIndex((t) => t.name === field.name)
-                )
-                .map((field) => (
+          )}
+        </div>
+
+        <div className="p-4 overflow-x-auto">
+          <table className="w-full text-start text-sm">
+            <thead className="bg-gray-50 text-black font-medium border-b border-gray-100">
+              <tr>
+                <th className="p-4 w-10">
+                  <input
+                    type="checkbox"
+                    checked={
+                      filteredRecords.length > 0 &&
+                      selectedIds.length === filteredRecords.length
+                    }
+                    onChange={toggleSelectAll}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </th>
+                <th className="p-4 w-10"></th>
+                <th className="p-4">ID</th>
+                {uniqueFields.map((field) => (
                   <th
                     key={field.name}
                     className={`p-4 whitespace-nowrap ${
                       ["tags", "multi-select"].includes(field.type)
                         ? "min-w-[200px]"
-                        : ""
+                        : "min-w-[150px]"
                     }`}
                   >
                     {field.label}
                   </th>
                 ))}
-              <th className="p-4">Attachments</th>
-              <th className="p-4">Created At</th>
-              <th className="p-4">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {records.map((record) => (
-              <tr key={record.id} className="hover:bg-gray-50 transition">
-                <td className="p-4">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(record.id)}
-                    onChange={() => toggleSelect(record.id)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                </td>
-                <td className="p-4 text-black">#{record.id}</td>
-                {schema
-                  .filter(
-                    (field, index, self) =>
-                      index === self.findIndex((t) => t.name === field.name)
-                  )
-                  .map((field) => (
-                    <td key={field.name} className="p-4 text-black">
-                      {/* Basic rendering of JSON data */}
-                      {(() => {
-                        const val = record.data[field.name];
-                        if (val === null || val === undefined || val === "")
-                          return "-";
+                <th className="p-4 whitespace-nowrap">Created At</th>
+                <th className="p-4 whitespace-nowrap">Updated At</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filteredRecords.map((record) => (
+                <tr
+                  key={record.id}
+                  className={`${getRowColorClass(
+                    record.data
+                  )} transition border-b border-gray-100`}
+                >
+                  <td className="p-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(record.id)}
+                      onChange={() => toggleSelect(record.id)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </td>
+                  <td className="p-4">
+                    <button
+                      onClick={() => setEditingRecord(record)}
+                      className="text-blue-600 hover:text-blue-800 font-medium"
+                      title="Edit Record"
+                    >
+                      ✏️
+                    </button>
+                  </td>
+                  <td className="p-4 text-black">#{record.id}</td>
 
-                        switch (field.type) {
-                          case "boolean":
-                            return val ? "Yes" : "No";
-                          case "textarea":
-                          case "text":
-                          case "url":
-                            if (field.type === "url") {
-                              return (
-                                <a
-                                  href={val}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-blue-600 hover:underline max-w-xs truncate block"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {val}
-                                </a>
-                              );
-                            }
-                            return (
-                              <div
-                                className="max-w-xs truncate cursor-pointer hover:bg-gray-100 p-1 rounded"
-                                title="Click to view full text"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setViewText({
-                                    title: field.label,
-                                    text: String(val),
-                                  });
-                                }}
-                              >
-                                {String(val)}
-                              </div>
-                            );
-                          case "tags":
-                          case "multi-select":
-                            let displayVal = val;
-                            if (
-                              typeof val === "string" &&
-                              val.startsWith("[")
-                            ) {
-                              try {
-                                displayVal = JSON.parse(val);
-                              } catch (e) {
-                                // ignore error, treat as string
+                  {uniqueFields.map((field) => (
+                    <td key={field.name} className="p-4 text-black align-top">
+                      <div className="max-h-[100px] max-w-[200px] overflow-y-auto custom-scrollbar">
+                        {(() => {
+                          const val = record.data?.[field.name];
+                          if (val === null || val === undefined || val === "")
+                            return "-";
+
+                          switch (field.type) {
+                            case "boolean":
+                              return val ? "Yes" : "No";
+                            case "textarea":
+                            case "text":
+                            case "url":
+                              if (field.type === "url") {
+                                return (
+                                  <a
+                                    href={val}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-blue-600 hover:underline break-all block"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {val}
+                                  </a>
+                                );
                               }
-                            }
-
-                            if (Array.isArray(displayVal)) {
                               return (
-                                <div className="flex flex-wrap gap-1">
-                                  {displayVal.map((v: string, i: number) => (
-                                    <span
-                                      key={i}
-                                      className="bg-gray-100 text-gray-800 px-2 py-0.5 rounded text-xs border border-gray-200"
-                                    >
-                                      {v}
-                                    </span>
-                                  ))}
+                                <div
+                                  className="break-words whitespace-pre-wrap cursor-pointer hover:bg-gray-100 p-1 rounded"
+                                  title="Click to view full text"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setViewText({
+                                      title: field.label,
+                                      text: String(val),
+                                    });
+                                  }}
+                                >
+                                  {String(val).length > 60
+                                    ? String(val).slice(0, 60) + "..."
+                                    : String(val)}
                                 </div>
                               );
-                            }
-                            return String(val);
-                          case "date":
-                            return new Date(val).toLocaleDateString();
-                          default:
-                            return (
-                              <div className="max-w-xs truncate">
-                                {String(val)}
-                              </div>
-                            );
-                        }
-                      })()}
+                            case "tags":
+                            case "multi-select":
+                              let displayVal: any = val;
+                              if (
+                                typeof val === "string" &&
+                                val.startsWith("[")
+                              ) {
+                                try {
+                                  displayVal = JSON.parse(val);
+                                } catch (e) {
+                                  // ignore parsing error
+                                }
+                              }
+                              if (Array.isArray(displayVal)) {
+                                return (
+                                  <div className="flex flex-wrap gap-1">
+                                    {displayVal.map((v: string, i: number) => (
+                                      <span
+                                        key={i}
+                                        className="bg-gray-100 text-gray-800 px-2 py-0.5 rounded text-xs border border-gray-200"
+                                      >
+                                        {v}
+                                      </span>
+                                    ))}
+                                  </div>
+                                );
+                              }
+                              return String(val);
+                            case "date":
+                              return new Date(val).toLocaleDateString();
+                            default:
+                              return (
+                                <div className="break-words whitespace-pre-wrap">
+                                  {String(val)}
+                                </div>
+                              );
+                          }
+                        })()}
+                      </div>
                     </td>
                   ))}
-                <td className="p-4 text-black">
-                  {new Date(record.createdAt).toLocaleDateString()}
-                </td>
-                <td className="p-4">
-                  <button
-                    onClick={() => setEditingRecord(record)}
-                    className="text-blue-600 hover:text-blue-800 font-medium"
+
+                  <td className="p-4 text-black">
+                    {record.createdAt
+                      ? new Date(record.createdAt).toLocaleDateString()
+                      : "-"}
+                  </td>
+                  <td className="p-4 text-black">
+                    {record.updatedAt
+                      ? new Date(record.updatedAt).toLocaleDateString()
+                      : "-"}
+                  </td>
+                </tr>
+              ))}
+
+              {filteredRecords.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={uniqueFields.length + 5}
+                    className="p-8 text-center text-black"
                   >
-                    Edit
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {records.length === 0 && (
-              <tr>
-                <td
-                  colSpan={schema.length + 5}
-                  className="p-8 text-center text-black"
-                >
-                  No records found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                    No records found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {editingRecord && (
+          <EditRecordModal
+            record={editingRecord}
+            schema={schema}
+            onClose={() => {
+              setEditingRecord(null);
+              router.refresh();
+            }}
+          />
+        )}
+
+        {viewText && (
+          <ViewTextModal
+            title={viewText.title}
+            text={viewText.text}
+            onClose={() => setViewText(null)}
+          />
+        )}
       </div>
 
-      {editingRecord && (
-        <EditRecordModal
-          record={editingRecord}
-          schema={schema}
-          onClose={() => {
-            setEditingRecord(null);
-            router.refresh();
-          }}
-        />
+      {slug === "leads" && (
+        <div className="w-full lg:w-80 shrink-0 space-y-4">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <h3 className="font-bold text-gray-900 mb-4">New Leads</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-blue-50 p-3 rounded-lg text-center">
+                <div className="text-2xl font-bold text-blue-600">
+                  {newLeadsWeek}
+                </div>
+                <div className="text-xs text-blue-600 font-medium">
+                  This Week
+                </div>
+              </div>
+              <div className="bg-purple-50 p-3 rounded-lg text-center">
+                <div className="text-2xl font-bold text-purple-600">
+                  {newLeadsMonth}
+                </div>
+                <div className="text-xs text-purple-600 font-medium">
+                  This Month
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <h3 className="font-bold text-gray-900 mb-4">Lead Status Stats</h3>
+            <div className="space-y-4">
+              {!statusField?.options?.length ? (
+                <p className="text-sm text-gray-500">
+                  No status field configured
+                </p>
+              ) : (
+                statusField.options.map((option) => {
+                  const count = records.filter(
+                    (r) => r.data?.[statusField.name] === option
+                  ).length;
+                  const percentage = getPercentage(count);
+                  const getStatusColor = (status: string) => {
+                    switch (status) {
+                      case "לא רלוונטי":
+                        return "bg-red-500";
+                      case "ליד רגיל":
+                        return "bg-gray-400";
+                      case "ליד קר":
+                        return "bg-yellow-500";
+                      case "ליד חם":
+                        return "bg-green-500";
+                      case "ליד שנסגר":
+                        return "bg-blue-500";
+                      case "ליד שלא נסגר":
+                        return "bg-orange-500";
+                      default:
+                        return "bg-gray-300";
+                    }
+                  };
+
+                  return (
+                    <div key={option}>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-600">{option}</span>
+                        <span className="font-medium text-gray-900">
+                          {count} ({percentage}%)
+                        </span>
+                      </div>
+                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${getStatusColor(
+                            option
+                          )}`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <h3 className="font-bold text-gray-900 mb-4">Lead Sources</h3>
+            <div className="space-y-3">
+              {!sourceFieldName ||
+              !schema.find((f) => f.name === sourceFieldName)?.options
+                ?.length ? (
+                <p className="text-sm text-gray-500">
+                  No source field configured
+                </p>
+              ) : (
+                (
+                  schema.find((f) => f.name === sourceFieldName)!.options || []
+                ).map((option, index) => {
+                  const count = records.filter(
+                    (r) => r.data?.[sourceFieldName] === option
+                  ).length;
+                  const percentage = getPercentage(count);
+                  const sourceColors = [
+                    "bg-blue-600",
+                    "bg-purple-600",
+                    "bg-green-600",
+                    "bg-orange-600",
+                    "bg-pink-600",
+                    "bg-indigo-600",
+                    "bg-teal-600",
+                    "bg-red-600",
+                  ];
+                  const colorClass = sourceColors[index % sourceColors.length];
+
+                  return (
+                    <div key={option}>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-600">{option}</span>
+                        <span className="font-medium text-gray-900">
+                          {count} ({percentage}%)
+                        </span>
+                      </div>
+                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${colorClass} rounded-full`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <h3 className="font-bold text-gray-900 mb-4">Legend</h3>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-white border border-gray-200"></div>
+                <span className="text-sm text-gray-600">Regular Lead</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-green-100 border border-green-200"></div>
+                <span className="text-sm text-gray-600">Hot Lead</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-yellow-100 border border-yellow-200"></div>
+                <span className="text-sm text-gray-600">Cold Lead</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-blue-100 border border-blue-200"></div>
+                <span className="text-sm text-gray-600">Closed Lead</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-orange-100 border border-orange-200"></div>
+                <span className="text-sm text-gray-600">Unclosed Lead</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-red-100 border border-red-200"></div>
+                <span className="text-sm text-gray-600">Irrelevant</span>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
-      {viewText && (
-        <ViewTextModal
-          title={viewText.title}
-          text={viewText.text}
-          onClose={() => setViewText(null)}
-        />
+      {slug === "digital-marketing" && (
+        <div className="w-full lg:w-80 shrink-0 space-y-4">
+          {/* New Leads Stats */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <h3 className="font-bold text-gray-900 mb-4">New Clients</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-blue-50 p-3 rounded-lg text-center">
+                <div className="text-2xl font-bold text-blue-600">
+                  {newLeadsWeek}
+                </div>
+                <div className="text-xs text-blue-600 font-medium">
+                  This Week
+                </div>
+              </div>
+              <div className="bg-purple-50 p-3 rounded-lg text-center">
+                <div className="text-2xl font-bold text-purple-600">
+                  {newLeadsMonth}
+                </div>
+                <div className="text-xs text-purple-600 font-medium">
+                  This Month
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Revenue Stats */}
+          {(() => {
+            const paymentTypeField = schema.find(
+              (f) =>
+                f.label.includes("סוג תשלום") ||
+                f.options?.includes("ריטיינר") ||
+                f.name.includes("payment")
+            );
+
+            const amountField = schema.find(
+              (f) =>
+                f.type === "number" ||
+                f.label.includes("סכום") ||
+                f.label.includes("מחיר") ||
+                f.name.includes("amount") ||
+                f.name.includes("price")
+            );
+
+            if (!paymentTypeField || !amountField) return null;
+
+            const retainerSum = records
+              .filter((r) =>
+                String(r.data?.[paymentTypeField.name] || "").includes(
+                  "ריטיינר"
+                )
+              )
+              .reduce((sum, r) => {
+                const val = parseFloat(r.data?.[amountField.name]);
+                return sum + (isNaN(val) ? 0 : val);
+              }, 0);
+
+            const oneTimeSum = records
+              .filter((r) =>
+                String(r.data?.[paymentTypeField.name] || "").includes(
+                  "תשלום חד פעמי"
+                )
+              )
+              .reduce((sum, r) => {
+                const val = parseFloat(r.data?.[amountField.name]);
+                return sum + (isNaN(val) ? 0 : val);
+              }, 0);
+
+            return (
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="font-bold text-gray-900 mb-4">Revenue Stats</h3>
+                <div className="space-y-4">
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <div className="text-sm text-green-800 font-medium mb-1">
+                      Retainer (Monthly)
+                    </div>
+                    <div className="text-2xl font-bold text-green-700">
+                      ₪{retainerSum.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="bg-yellow-50 p-4 rounded-lg">
+                    <div className="text-sm text-yellow-800 font-medium mb-1">
+                      One-Time Payment
+                    </div>
+                    <div className="text-2xl font-bold text-yellow-700">
+                      ₪{oneTimeSum.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Client Type Stats */}
+          {(() => {
+            const paymentTypeField = schema.find(
+              (f) =>
+                f.label.includes("סוג תשלום") ||
+                f.options?.includes("ריטיינר") ||
+                f.name.includes("payment")
+            );
+
+            if (!paymentTypeField) return null;
+
+            const retainerCount = records.filter((r) =>
+              String(r.data?.[paymentTypeField.name] || "").includes("ריטיינר")
+            ).length;
+
+            const oneTimeCount = records.filter((r) =>
+              String(r.data?.[paymentTypeField.name] || "").includes(
+                "תשלום חד פעמי"
+              )
+            ).length;
+
+            return (
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="font-bold text-gray-900 mb-4">Client Types</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-green-50 p-3 rounded-lg text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {retainerCount}
+                    </div>
+                    <div className="text-xs text-green-600 font-medium">
+                      Retainers
+                    </div>
+                  </div>
+                  <div className="bg-yellow-50 p-3 rounded-lg text-center">
+                    <div className="text-2xl font-bold text-yellow-600">
+                      {oneTimeCount}
+                    </div>
+                    <div className="text-xs text-yellow-600 font-medium">
+                      One-Time
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Service Summary */}
+          {(() => {
+            const serviceField = schema.find(
+              (f) =>
+                f.label.includes("שירות") ||
+                f.name.toLowerCase().includes("service")
+            );
+
+            if (!serviceField) return null;
+
+            // Count occurrences of each service
+            const serviceCounts: Record<string, number> = {};
+            records.forEach((r) => {
+              const val = r.data?.[serviceField.name];
+              if (val) {
+                // Handle multi-select or single select
+                let services: string[] = [];
+                if (Array.isArray(val)) {
+                  services = val;
+                } else if (typeof val === "string") {
+                  if (val.startsWith("[") && val.endsWith("]")) {
+                    try {
+                      const parsed = JSON.parse(val);
+                      if (Array.isArray(parsed)) services = parsed;
+                      else services = [val];
+                    } catch {
+                      services = [val];
+                    }
+                  } else {
+                    services = [val];
+                  }
+                }
+
+                services.forEach((s: string) => {
+                  const cleanS = String(s).trim();
+                  if (cleanS) {
+                    serviceCounts[cleanS] = (serviceCounts[cleanS] || 0) + 1;
+                  }
+                });
+              }
+            });
+
+            const sortedServices = Object.entries(serviceCounts).sort(
+              (a, b) => b[1] - a[1]
+            );
+
+            return (
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="font-bold text-gray-900 mb-4">
+                  Services Breakdown
+                </h3>
+                <div className="space-y-3">
+                  {sortedServices.length === 0 ? (
+                    <p className="text-sm text-gray-500">No services found</p>
+                  ) : (
+                    sortedServices.map(([service, count], index) => {
+                      const percentage = getPercentage(count);
+                      const colors = [
+                        "bg-indigo-500",
+                        "bg-pink-500",
+                        "bg-cyan-500",
+                        "bg-amber-500",
+                      ];
+                      const color = colors[index % colors.length];
+
+                      return (
+                        <div key={service}>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span
+                              className="text-gray-600 truncate max-w-[150px]"
+                              title={service}
+                            >
+                              {service}
+                            </span>
+                            <span className="font-medium text-gray-900">
+                              {count}
+                            </span>
+                          </div>
+                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${color}`}
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Legend */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <h3 className="font-bold text-gray-900 mb-4">Legend</h3>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-green-100 border border-green-200"></div>
+                <span className="text-sm text-gray-600">Retainer</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-yellow-100 border border-yellow-200"></div>
+                <span className="text-sm text-gray-600">One-Time Payment</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-red-100 border border-red-200"></div>
+                <span className="text-sm text-gray-600">Inactive Client</span>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

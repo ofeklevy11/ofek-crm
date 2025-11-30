@@ -7,9 +7,10 @@ import AlertDialog from "./AlertDialog";
 interface TaskCardProps {
   task: Task;
   onDelete: (id: string) => void;
+  onEdit: () => void;
 }
 
-export default function TaskCard({ task, onDelete }: TaskCardProps) {
+export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -65,14 +66,23 @@ export default function TaskCard({ task, onDelete }: TaskCardProps) {
         isDestructive={true}
       />
 
-      {/* Delete button (opens dialog) */}
-      <button
-        onClick={() => setConfirmOpen(true)}
-        className="absolute top-2 right-2 text-red-400 hover:text-white p-1 rounded"
-        title="מחיקת משימה"
-      >
-        🗑️
-      </button>
+      {/* Actions */}
+      <div className="absolute top-2 end-2 flex gap-1">
+        <button
+          onClick={onEdit}
+          className="text-slate-400 hover:text-blue-400 p-1 rounded transition-colors"
+          title="עריכת משימה"
+        >
+          ✎
+        </button>
+        <button
+          onClick={() => setConfirmOpen(true)}
+          className="text-slate-400 hover:text-red-400 p-1 rounded transition-colors"
+          title="מחיקת משימה"
+        >
+          🗑️
+        </button>
+      </div>
 
       {/* Header */}
       <h4 className="text-white font-semibold text-sm mb-2">{task.title}</h4>

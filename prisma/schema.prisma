@@ -11,16 +11,17 @@ datasource db {
 }
 
 model User {
-  id           Int         @id @default(autoincrement())
-  name         String
-  email        String      @unique
-  passwordHash String
-  role         String      @default("user") // admin, user, guest
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  tables       TableMeta[] @relation("CreatedBy")
-  records      Record[]    @relation("CreatedBy")
-  auditLogs    AuditLog[]
+  id                   Int         @id @default(autoincrement())
+  name                 String
+  email                String      @unique
+  passwordHash         String
+  role                 String      @default("basic") // basic, manager, admin
+  allowedWriteTableIds Int[]       @default([])
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  tables               TableMeta[] @relation("CreatedBy")
+  records              Record[]    @relation("CreatedBy")
+  auditLogs            AuditLog[]
 }
 
 model TableMeta {
@@ -69,4 +70,17 @@ model AuditLog {
   timestamp DateTime @default(now())
   record    Record?  @relation(fields: [recordId], references: [id])
   user      User?    @relation(fields: [userId], references: [id])
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  status      String
+  assignee    String?
+  priority    String?
+  dueDate     DateTime? // Stored as DateTime, frontend sends ISO string
+  tags        String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

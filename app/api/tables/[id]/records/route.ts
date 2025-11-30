@@ -48,6 +48,19 @@ export async function POST(
       return NextResponse.json({ error: "Invalid table ID" }, { status: 400 });
     }
 
+    // Check write permissions
+    if (createdBy) {
+      const { getUserById, canWriteTable } = await import("@/lib/permissions");
+      const user = await getUserById(Number(createdBy));
+
+      if (!user || !canWriteTable(user, tableId)) {
+        return NextResponse.json(
+          { error: "You don't have permission to write to this table" },
+          { status: 403 }
+        );
+      }
+    }
+
     const record = await prisma.record.create({
       data: {
         tableId,

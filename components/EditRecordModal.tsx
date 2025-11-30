@@ -28,6 +28,7 @@ export default function EditRecordModal({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<Record<string, any>>({});
+  const [createdAt, setCreatedAt] = useState("");
   const [attachments, setAttachments] = useState<any[]>([]);
   const [newAttachmentUrl, setNewAttachmentUrl] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -48,6 +49,16 @@ export default function EditRecordModal({
         }
       });
       setFormData(parsedData);
+      if (record.createdAt) {
+        // Format for datetime-local input: YYYY-MM-DDTHH:mm
+        const date = new Date(record.createdAt);
+        const formatted = new Date(
+          date.getTime() - date.getTimezoneOffset() * 60000
+        )
+          .toISOString()
+          .slice(0, 16);
+        setCreatedAt(formatted);
+      }
       fetchAttachments();
     }
   }, [record, schema]);
@@ -98,6 +109,7 @@ export default function EditRecordModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           data: formData,
+          createdAt: new Date(createdAt).toISOString(),
           updatedBy: 1, // Hardcoded user
         }),
       });
@@ -348,6 +360,19 @@ export default function EditRecordModal({
                   )}
                 </div>
               ))}
+
+            {/* Created At Field */}
+            <div>
+              <label className="block text-sm font-medium text-black mb-1">
+                Created At
+              </label>
+              <input
+                type="datetime-local"
+                value={createdAt}
+                onChange={(e) => setCreatedAt(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
           </div>
 
           <div className="border-t border-gray-100 pt-4 mt-4">

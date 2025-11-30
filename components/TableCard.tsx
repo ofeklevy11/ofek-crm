@@ -98,7 +98,7 @@ export default function TableCard({ table }: TableCardProps) {
         </div>
 
         {/* Buttons (appear on hover) */}
-        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-10">
+        <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-10">
           <button
             onClick={handleEditClick}
             className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-700 shadow-md transition"
@@ -130,9 +130,11 @@ export default function TableCard({ table }: TableCardProps) {
         onClose={() => setIsDeleteDialogOpen(false)}
         onConfirm={handleConfirmDelete}
         title="Delete Table"
-        description={`Are you sure you want to delete "${table.name}"? This will permanently delete all ${
-          table._count.records
-        } ${table._count.records === 1 ? "record" : "records"}, and this action cannot be undone.`}
+        description={`Are you sure you want to delete "${
+          table.name
+        }"? This will permanently delete all ${table._count.records} ${
+          table._count.records === 1 ? "record" : "records"
+        }, and this action cannot be undone.`}
         confirmText="Delete"
         cancelText="Cancel"
         isDestructive

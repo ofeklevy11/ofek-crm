@@ -49,6 +49,8 @@ export default function TaskKanbanBoard() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalStatus, setModalStatus] = useState<TaskStatus>("todo");
 
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+
   useEffect(() => {
     fetchTasks();
   }, []);
@@ -88,20 +90,34 @@ export default function TaskKanbanBoard() {
   const handleTaskCreate = (status?: TaskStatus) => {
     // If no status provided, default to 'todo'; user can change via modal select
     setModalStatus(status ?? "todo");
+    setEditingTask(null);
     setModalOpen(true);
   };
 
+  const handleTaskEdit = (task: Task) => {
+    setEditingTask(task);
+    setModalStatus(task.status);
+    setModalOpen(true);
+  };
+
+  const handleTaskUpdate = (updatedTask: Task) => {
+    setTasks(tasks.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
+  };
+
   const handleTaskDelete = async (taskId: string) => {
-    if (!confirm("האם אתה בטוח שברצונך למחוק משימה זו?")) return;
     try {
       const response = await fetch(`/api/tasks/${taskId}`, {
         method: "DELETE",
       });
       if (response.ok) {
         setTasks(tasks.filter((t) => t.id !== taskId));
+      } else {
+        console.error("Failed to delete task");
+        alert("שגיאה במחיקת המשימה");
       }
     } catch (error) {
       console.error("Error deleting task:", error);
+      alert("שגיאה במחיקת המשימה");
     }
   };
 
@@ -120,7 +136,7 @@ export default function TaskKanbanBoard() {
       <div className="flex items-center gap-4 bg-slate-800/50 backdrop-blur-sm p-4 rounded-xl border border-slate-700/50">
         <div className="flex-1 relative">
           <span
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+            className="absolute start-3 top-1/2 -translate-y-1/2 text-slate-400"
             role="img"
             aria-label="search"
           >
@@ -131,7 +147,7 @@ export default function TaskKanbanBoard() {
             placeholder="חיפוש משימות..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-900/50 text-white placeholder-slate-400 border border-slate-600 rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+            className="w-full bg-slate-900/50 text-white placeholder-slate-400 border border-slate-600 rounded-lg px-4 py-2 ps-10 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
           />
         </div>
         <button
@@ -160,6 +176,7 @@ export default function TaskKanbanBoard() {
               onTaskMove={handleTaskMove}
               onTaskCreate={() => handleTaskCreate(col.id)}
               onTaskDelete={handleTaskDelete}
+              onTaskEdit={handleTaskEdit}
               status={col.id}
             />
           ))}
@@ -169,8 +186,13 @@ export default function TaskKanbanBoard() {
       {modalOpen && (
         <TaskModal
           status={modalStatus}
-          onClose={() => setModalOpen(false)}
+          task={editingTask}
+          onClose={() => {
+            setModalOpen(false);
+            setEditingTask(null);
+          }}
           onCreated={(newTask) => setTasks([...tasks, newTask])}
+          onUpdated={handleTaskUpdate}
         />
       )}
     </div>
