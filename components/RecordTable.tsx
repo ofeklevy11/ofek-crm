@@ -10,6 +10,8 @@ interface SchemaField {
   type: string;
   label: string;
   options?: string[];
+  relationTableId?: number;
+  displayField?: string;
 }
 
 interface RecordTableProps {
@@ -43,6 +45,48 @@ export default function RecordTable({
     title: string;
     text: string;
   } | null>(null);
+  const [relatedData, setRelatedData] = useState<Record<string, any>>({});
+
+  // Fetch related data
+  useEffect(() => {
+    const fetchRelatedData = async () => {
+      const relationFields = schema.filter(
+        (f) => f.type === "relation" && f.relationTableId
+      );
+      const newRelatedData: Record<string, any> = {};
+
+      await Promise.all(
+        relationFields.map(async (field) => {
+          if (!field.relationTableId) return;
+          try {
+            // Fetch all records from the related table
+            // Optimization: In a real app, we should only fetch referenced IDs
+            const res = await fetch(
+              `/api/tables/${field.relationTableId}/records`
+            );
+            if (res.ok) {
+              const data = await res.json();
+              // Index by ID for fast lookup
+              const dataMap: Record<number, any> = {};
+              data.forEach((r: any) => {
+                dataMap[r.id] = r;
+              });
+              newRelatedData[field.relationTableId!] = dataMap;
+            }
+          } catch (error) {
+            console.error(
+              `Failed to fetch related table ${field.relationTableId}`,
+              error
+            );
+          }
+        })
+      );
+
+      setRelatedData(newRelatedData);
+    };
+
+    fetchRelatedData();
+  }, [schema]);
 
   // unique fields (avoid recomputing/filtering multiple times)
   const uniqueFields = schema.filter(
@@ -517,6 +561,59 @@ export default function RecordTable({
                               return String(val);
                             case "date":
                               return new Date(val).toLocaleDateString();
+                            case "relation":
+                              const relatedTableId = field.relationTableId;
+                              const tableData =
+                                relatedTableId && relatedData[relatedTableId];
+                              const displayField = field.displayField;
+
+                              const getLabel = (id: number) => {
+                                if (!tableData || !tableData[id])
+                                  return `#${id}`;
+                                const r = tableData[id];
+                                if (displayField && r.data[displayField]) {
+                                  return String(r.data[displayField]);
+                                }
+                                return (
+                                  String(Object.values(r.data)[0]) || `#${id}`
+                                );
+                              };
+
+                              if (Array.isArray(val)) {
+                                return (
+                                  <div className="flex flex-wrap gap-1">
+                                    {val.map((id: any) => (
+                                      <button
+                                        key={id}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (relatedTableId) {
+                                            router.push(
+                                              `/tables/${relatedTableId}`
+                                            );
+                                          }
+                                        }}
+                                        className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs border border-blue-100 font-medium hover:bg-blue-100 hover:border-blue-200 transition text-left"
+                                      >
+                                        {getLabel(id)}
+                                      </button>
+                                    ))}
+                                  </div>
+                                );
+                              }
+                              return (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (relatedTableId) {
+                                      router.push(`/tables/${relatedTableId}`);
+                                    }
+                                  }}
+                                  className="text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded text-xs border border-blue-100 hover:bg-blue-100 hover:border-blue-200 transition text-left"
+                                >
+                                  {getLabel(val)}
+                                </button>
+                              );
                             default:
                               return (
                                 <div className="break-words whitespace-pre-wrap">

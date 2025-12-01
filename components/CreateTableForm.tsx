@@ -12,6 +12,8 @@ interface FieldRow {
   relationField?: string; // For lookup (which relation field to use)
   lookupField?: string; // For lookup (which field from related table to show)
   defaultValue?: string;
+  allowMultiple?: boolean; // For relation (many-to-many)
+  displayField?: string; // For relation (which field to show in picker)
 }
 
 interface TableOption {
@@ -60,13 +62,17 @@ export default function CreateTableForm() {
   const handleFieldChange = (
     index: number,
     key: keyof FieldRow,
-    value: string
+    value: string | boolean
   ) => {
     const newFields = [...fields];
-    newFields[index][key] = value;
+    (newFields[index][key] as any) = value;
 
     // Auto-generate name from label if name is empty
-    if (key === "label" && newFields[index].name === "") {
+    if (
+      key === "label" &&
+      newFields[index].name === "" &&
+      typeof value === "string"
+    ) {
       newFields[index].name = value.toLowerCase().replace(/[^a-z0-9]/g, "");
     }
 
@@ -110,6 +116,8 @@ export default function CreateTableForm() {
         relationField: f.relationField,
         lookupField: f.lookupField,
         defaultValue: f.defaultValue,
+        allowMultiple: f.allowMultiple,
+        displayField: f.displayField,
       }));
 
       const res = await fetch("/api/tables", {
@@ -306,28 +314,98 @@ export default function CreateTableForm() {
               )}
 
               {field.type === "relation" && (
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
-                    Related Table
-                  </label>
-                  <select
-                    value={field.relationTableId || ""}
-                    onChange={(e) =>
-                      handleFieldChange(
-                        index,
-                        "relationTableId",
-                        e.target.value
-                      )
-                    }
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
-                  >
-                    <option value="">Select a table...</option>
-                    {availableTables.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
+                <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
+                      Related Table
+                    </label>
+                    <select
+                      value={field.relationTableId || ""}
+                      onChange={(e) =>
+                        handleFieldChange(
+                          index,
+                          "relationTableId",
+                          e.target.value
+                        )
+                      }
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                    >
+                      <option value="">Select a table...</option>
+                      {availableTables.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {field.relationTableId && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
+                          Display Field
+                        </label>
+                        <select
+                          value={field.displayField || ""}
+                          onChange={(e) =>
+                            handleFieldChange(
+                              index,
+                              "displayField",
+                              e.target.value
+                            )
+                          }
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                        >
+                          <option value="">Default (First Field)</option>
+                          {(() => {
+                            const relatedTable = availableTables.find(
+                              (t) => t.id === Number(field.relationTableId)
+                            );
+                            if (!relatedTable?.schemaJson) return null;
+
+                            let relatedSchema: any[] = [];
+                            try {
+                              relatedSchema =
+                                typeof relatedTable.schemaJson === "string"
+                                  ? JSON.parse(relatedTable.schemaJson)
+                                  : relatedTable.schemaJson;
+                            } catch (e) {
+                              return null;
+                            }
+
+                            return relatedSchema.map((f: any) => (
+                              <option key={f.name} value={f.name}>
+                                {f.label || f.name}
+                              </option>
+                            ));
+                          })()}
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Which field to show in the picker
+                        </p>
+                      </div>
+
+                      <div className="flex items-center">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={field.allowMultiple || false}
+                            onChange={(e) =>
+                              handleFieldChange(
+                                index,
+                                "allowMultiple",
+                                e.target.checked
+                              )
+                            }
+                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                          />
+                          <span className="text-sm font-medium text-black">
+                            Allow Multiple Selection
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -12,6 +12,8 @@ interface FieldRow {
   relationField?: string;
   lookupField?: string;
   defaultValue?: string;
+  allowMultiple?: boolean;
+  displayField?: string;
 }
 
 interface TableOption {
@@ -75,6 +77,8 @@ export default function EditTableModal({
         relationField: field.relationField,
         lookupField: field.lookupField,
         defaultValue: field.defaultValue,
+        allowMultiple: field.allowMultiple,
+        displayField: field.displayField,
       }));
       setFields(parsedFields);
     } catch (error) {
@@ -101,12 +105,16 @@ export default function EditTableModal({
   const handleFieldChange = (
     index: number,
     key: keyof FieldRow,
-    value: string
+    value: string | boolean
   ) => {
     const newFields = [...fields];
-    newFields[index][key] = value;
+    (newFields[index][key] as any) = value;
 
-    if (key === "label" && newFields[index].name === "") {
+    if (
+      key === "label" &&
+      newFields[index].name === "" &&
+      typeof value === "string"
+    ) {
       newFields[index].name = value.toLowerCase().replace(/[^a-z0-9]/g, "");
     }
 
@@ -145,6 +153,8 @@ export default function EditTableModal({
         relationField: f.relationField,
         lookupField: f.lookupField,
         defaultValue: f.defaultValue,
+        allowMultiple: f.allowMultiple,
+        displayField: f.displayField,
       }));
 
       const res = await fetch(`/api/tables/${tableId}`, {
@@ -332,28 +342,95 @@ export default function EditTableModal({
                     )}
 
                     {field.type === "relation" && (
-                      <div className="flex-1">
-                        <label className="block text-xs font-bold text-black mb-1">
-                          Related Table
-                        </label>
-                        <select
-                          value={field.relationTableId || ""}
-                          onChange={(e) =>
-                            handleFieldChange(
-                              index,
-                              "relationTableId",
-                              e.target.value
-                            )
-                          }
-                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
-                        >
-                          <option value="">Select a table...</option>
-                          {availableTables.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name}
-                            </option>
-                          ))}
-                        </select>
+                      <div className="flex-1 space-y-2">
+                        <div>
+                          <label className="block text-xs font-bold text-black mb-1">
+                            Related Table
+                          </label>
+                          <select
+                            value={field.relationTableId || ""}
+                            onChange={(e) =>
+                              handleFieldChange(
+                                index,
+                                "relationTableId",
+                                e.target.value
+                              )
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
+                          >
+                            <option value="">Select a table...</option>
+                            {availableTables.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {field.relationTableId && (
+                          <div className="space-y-2">
+                            <div>
+                              <label className="block text-xs font-bold text-black mb-1">
+                                Display Field
+                              </label>
+                              <select
+                                value={field.displayField || ""}
+                                onChange={(e) =>
+                                  handleFieldChange(
+                                    index,
+                                    "displayField",
+                                    e.target.value
+                                  )
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
+                              >
+                                <option value="">Default (First Field)</option>
+                                {(() => {
+                                  const relatedTable = availableTables.find(
+                                    (t) =>
+                                      t.id === Number(field.relationTableId)
+                                  );
+                                  if (!relatedTable?.schemaJson) return null;
+
+                                  let relatedSchema: any[] = [];
+                                  try {
+                                    relatedSchema =
+                                      typeof relatedTable.schemaJson ===
+                                      "string"
+                                        ? JSON.parse(relatedTable.schemaJson)
+                                        : relatedTable.schemaJson;
+                                  } catch (e) {
+                                    return null;
+                                  }
+
+                                  return relatedSchema.map((f: any) => (
+                                    <option key={f.name} value={f.name}>
+                                      {f.label || f.name}
+                                    </option>
+                                  ));
+                                })()}
+                              </select>
+                            </div>
+
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={field.allowMultiple || false}
+                                onChange={(e) =>
+                                  handleFieldChange(
+                                    index,
+                                    "allowMultiple",
+                                    e.target.checked
+                                  )
+                                }
+                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                              />
+                              <span className="text-xs font-medium text-black">
+                                Allow Multiple
+                              </span>
+                            </label>
+                          </div>
+                        )}
                       </div>
                     )}
 

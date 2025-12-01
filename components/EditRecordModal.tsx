@@ -12,6 +12,8 @@ interface SchemaField {
   relationTableId?: number;
   relationField?: string;
   lookupField?: string;
+  allowMultiple?: boolean;
+  displayField?: string;
 }
 
 interface EditRecordModalProps {
@@ -285,6 +287,8 @@ export default function EditRecordModal({
                     <RelationPicker
                       tableId={field.relationTableId}
                       value={formData[field.name]}
+                      allowMultiple={field.allowMultiple}
+                      displayField={field.displayField}
                       onChange={async (val) => {
                         // Update the relation field
                         const newFormData = { ...formData, [field.name]: val };
@@ -298,7 +302,7 @@ export default function EditRecordModal({
                         );
 
                         if (lookupFields.length > 0) {
-                          if (val) {
+                          if (val && !Array.isArray(val)) {
                             try {
                               const res = await fetch(`/api/records/${val}`);
                               if (res.ok) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import UserModal from "@/components/UserModal";
 import AlertDialog from "@/components/AlertDialog";
 
@@ -21,6 +22,7 @@ interface Table {
 }
 
 export default function UsersPage() {
+  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -28,11 +30,32 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deleteUserId, setDeleteUserId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
-    fetchUsers();
-    fetchTables();
+    checkPermissions();
   }, []);
+
+  const checkPermissions = async () => {
+    try {
+      const response = await fetch("/api/auth/me");
+      if (response.ok) {
+        const user = await response.json();
+        if (user.role === "admin") {
+          setIsAuthorized(true);
+          fetchUsers();
+          fetchTables();
+        } else {
+          router.push("/");
+        }
+      } else {
+        router.push("/");
+      }
+    } catch (error) {
+      console.error("Error checking permissions:", error);
+      router.push("/");
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -128,6 +151,14 @@ export default function UsersPage() {
         return role;
     }
   };
+
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-8">

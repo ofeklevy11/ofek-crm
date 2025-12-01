@@ -7,10 +7,6 @@ import { DayView } from "./DayView";
 import { EventModal } from "./EventModal";
 import { addDays, addWeeks, addMonths } from "@/lib/dateUtils";
 import { CalendarEvent } from "@/lib/types";
-import {
-  saveEventsToLocalStorage,
-  loadEventsFromLocalStorage,
-} from "@/lib/storage";
 
 export function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -25,18 +21,27 @@ export function Calendar() {
     number | undefined
   >();
 
-  // Load events from localStorage on mount
+  // Load events from API on mount
   useEffect(() => {
-    const loadedEvents = loadEventsFromLocalStorage();
-    setEvents(loadedEvents);
+    fetchEvents();
   }, []);
 
-  // Save events to localStorage whenever they change
-  useEffect(() => {
-    if (events.length > 0 || typeof window !== "undefined") {
-      saveEventsToLocalStorage(events);
+  const fetchEvents = async () => {
+    try {
+      const response = await fetch("/api/calendar");
+      if (response.ok) {
+        const data = await response.json();
+        const parsedEvents = data.map((event: any) => ({
+          ...event,
+          startTime: new Date(event.startTime),
+          endTime: new Date(event.endTime),
+        }));
+        setEvents(parsedEvents);
+      }
+    } catch (error) {
+      console.error("Failed to fetch events:", error);
     }
-  }, [events]);
+  };
 
   const handlePrev = () => {
     if (view === "day") {
@@ -74,26 +79,61 @@ export function Calendar() {
     setCurrentDate(date);
   };
 
-  const handleSaveEvent = (eventData: Omit<CalendarEvent, "id">) => {
-    if (selectedEvent) {
-      // Update existing event
-      setEvents(
-        events.map((e) =>
-          e.id === selectedEvent.id ? { ...eventData, id: selectedEvent.id } : e
-        )
-      );
-      setSelectedEvent(undefined);
-    } else {
-      // Create new event
-      const newEvent: CalendarEvent = {
-        ...eventData,
-        id: `event-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-      };
-      setEvents([...events, newEvent]);
+  const handleSaveEvent = async (eventData: Omit<CalendarEvent, "id">) => {
+    try {
+      if (selectedEvent) {
+        // Update existing event
+        const response = await fetch(`/api/calendar/${selectedEvent.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(eventData),
+        });
+
+        if (response.ok) {
+          const updatedEvent = await response.json();
+          setEvents(
+            events.map((e) =>
+              e.id === selectedEvent.id
+                ? {
+                    ...updatedEvent,
+                    startTime: new Date(updatedEvent.startTime),
+                    endTime: new Date(updatedEvent.endTime),
+                  }
+                : e
+            )
+          );
+          setSelectedEvent(undefined);
+        }
+      } else {
+        // Create new event
+        const response = await fetch("/api/calendar", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(eventData),
+        });
+
+        if (response.ok) {
+          const newEvent = await response.json();
+          setEvents([
+            ...events,
+            {
+              ...newEvent,
+              startTime: new Date(newEvent.startTime),
+              endTime: new Date(newEvent.endTime),
+            },
+          ]);
+        }
+      }
+      setIsModalOpen(false);
+      setInitialEventDate(undefined);
+      setInitialEventHour(undefined);
+    } catch (error) {
+      console.error("Failed to save event:", error);
     }
-    setIsModalOpen(false);
-    setInitialEventDate(undefined);
-    setInitialEventHour(undefined);
   };
 
   const handleEventClick = (event: CalendarEvent) => {
@@ -103,11 +143,21 @@ export function Calendar() {
     setIsModalOpen(true);
   };
 
-  const handleDeleteEvent = () => {
+  const handleDeleteEvent = async () => {
     if (selectedEvent) {
-      setEvents(events.filter((e) => e.id !== selectedEvent.id));
-      setSelectedEvent(undefined);
-      setIsModalOpen(false);
+      try {
+        const response = await fetch(`/api/calendar/${selectedEvent.id}`, {
+          method: "DELETE",
+        });
+
+        if (response.ok) {
+          setEvents(events.filter((e) => e.id !== selectedEvent.id));
+          setSelectedEvent(undefined);
+          setIsModalOpen(false);
+        }
+      } catch (error) {
+        console.error("Failed to delete event:", error);
+      }
     }
   };
 

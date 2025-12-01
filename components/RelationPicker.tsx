@@ -6,12 +6,16 @@ interface RelationPickerProps {
   tableId: number;
   value: any;
   onChange: (value: any) => void;
+  allowMultiple?: boolean;
+  displayField?: string;
 }
 
 export default function RelationPicker({
   tableId,
   value,
   onChange,
+  allowMultiple = false,
+  displayField,
 }: RelationPickerProps) {
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -23,6 +27,13 @@ export default function RelationPicker({
       fetchRecords();
     }
   }, [isOpen]);
+
+  // Also fetch records if we have a value but no records (to display the selected label)
+  useEffect(() => {
+    if (value && records.length === 0) {
+      fetchRecords();
+    }
+  }, [value]);
 
   const fetchRecords = async () => {
     setLoading(true);
@@ -39,33 +50,99 @@ export default function RelationPicker({
     }
   };
 
+  const getRecordLabel = (record: any) => {
+    if (!record) return "";
+    if (displayField && record.data[displayField]) {
+      return String(record.data[displayField]);
+    }
+    // Fallback to first value
+    return String(Object.values(record.data)[0] || "Untitled");
+  };
+
   const filteredRecords = records
     .filter((r) => {
       if (!searchTerm) return true;
-      // Search in all data values
       const searchStr = searchTerm.toLowerCase();
+      // Search in display field if available, otherwise all fields
+      if (displayField && r.data[displayField]) {
+        return String(r.data[displayField]).toLowerCase().includes(searchStr);
+      }
       return Object.values(r.data).some((v) =>
         String(v).toLowerCase().includes(searchStr)
       );
     })
     .slice(0, 50);
 
-  const selectedRecord = records.find((r) => r.id === value);
+  const handleSelect = (recordId: number) => {
+    if (allowMultiple) {
+      const currentValues = Array.isArray(value) ? value : value ? [value] : [];
+      const newValues = currentValues.includes(recordId)
+        ? currentValues.filter((id: number) => id !== recordId)
+        : [...currentValues, recordId];
+      onChange(newValues);
+    } else {
+      onChange(recordId);
+      setIsOpen(false);
+    }
+  };
+
+  const isSelected = (recordId: number) => {
+    if (allowMultiple) {
+      return Array.isArray(value) && value.includes(recordId);
+    }
+    return value === recordId;
+  };
+
+  const renderTrigger = () => {
+    if (allowMultiple) {
+      const selectedIds = Array.isArray(value) ? value : value ? [value] : [];
+      if (selectedIds.length === 0) {
+        return <span className="text-gray-500">Select records...</span>;
+      }
+      return (
+        <div className="flex flex-wrap gap-1">
+          {selectedIds.map((id: number) => {
+            const record = records.find((r) => r.id === id);
+            return (
+              <span
+                key={id}
+                className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
+              >
+                {record ? getRecordLabel(record) : `#${id}`}
+                <span
+                  className="cursor-pointer hover:text-blue-900 font-bold"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSelect(id);
+                  }}
+                >
+                  ×
+                </span>
+              </span>
+            );
+          })}
+        </div>
+      );
+    } else {
+      const selectedRecord = records.find((r) => r.id === value);
+      return (
+        <span className={selectedRecord ? "text-black" : "text-gray-500"}>
+          {selectedRecord
+            ? `Record #${selectedRecord.id} - ${getRecordLabel(selectedRecord)}`
+            : "Select a record..."}
+        </span>
+      );
+    }
+  };
 
   return (
     <div className="relative">
       <div
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer flex justify-between items-center"
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer flex justify-between items-center min-h-[42px]"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <span className={selectedRecord ? "text-black" : "text-gray-500"}>
-          {selectedRecord
-            ? `Record #${selectedRecord.id} - ${
-                Object.values(selectedRecord.data)[0] || ""
-              }`
-            : "Select a record..."}
-        </span>
-        <span className="text-gray-400">▼</span>
+        <div className="flex-1">{renderTrigger()}</div>
+        <span className="text-gray-400 ml-2">▼</span>
       </div>
 
       {isOpen && (
@@ -91,23 +168,29 @@ export default function RelationPicker({
                 No records found
               </div>
             ) : (
-              filteredRecords.map((record) => (
-                <div
-                  key={record.id}
-                  onClick={() => {
-                    onChange(record.id);
-                    setIsOpen(false);
-                  }}
-                  className={`px-4 py-2 text-sm cursor-pointer hover:bg-blue-50 text-black ${
-                    value === record.id ? "bg-blue-50 font-medium" : ""
-                  }`}
-                >
-                  <span className="font-mono text-gray-500 me-2">
-                    #{record.id}
-                  </span>
-                  {String(Object.values(record.data)[0] || "Untitled")}
-                </div>
-              ))
+              filteredRecords.map((record) => {
+                const selected = isSelected(record.id);
+                return (
+                  <div
+                    key={record.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelect(record.id);
+                    }}
+                    className={`px-4 py-2 text-sm cursor-pointer hover:bg-blue-50 text-black flex items-center justify-between ${
+                      selected ? "bg-blue-50 font-medium" : ""
+                    }`}
+                  >
+                    <div>
+                      <span className="font-mono text-gray-500 me-2">
+                        #{record.id}
+                      </span>
+                      {getRecordLabel(record)}
+                    </div>
+                    {selected && <span className="text-blue-600">✓</span>}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

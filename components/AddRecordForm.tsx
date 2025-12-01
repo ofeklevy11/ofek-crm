@@ -13,6 +13,8 @@ interface SchemaField {
   relationField?: string;
   lookupField?: string;
   defaultValue?: string;
+  allowMultiple?: boolean;
+  displayField?: string;
 }
 
 export default function AddRecordForm({
@@ -244,6 +246,8 @@ export default function AddRecordForm({
                         <RelationPicker
                           tableId={field.relationTableId}
                           value={formData[field.name]}
+                          allowMultiple={field.allowMultiple}
+                          displayField={field.displayField}
                           onChange={async (val) => {
                             // Update the relation field
                             const newFormData = {
@@ -260,7 +264,7 @@ export default function AddRecordForm({
                             );
 
                             if (lookupFields.length > 0) {
-                              if (val) {
+                              if (val && !Array.isArray(val)) {
                                 try {
                                   // Fetch the related record
                                   // Assuming val is the record ID
@@ -287,7 +291,7 @@ export default function AddRecordForm({
                                   );
                                 }
                               } else {
-                                // Clear lookup fields if relation is cleared
+                                // Clear lookup fields if relation is cleared or multiple
                                 const updates: Record<string, any> = {};
                                 lookupFields.forEach((lf) => {
                                   updates[lf.name] = "";
