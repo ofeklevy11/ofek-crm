@@ -7,7 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+
 }
 
 model User {
@@ -22,6 +22,7 @@ model User {
   tables               TableMeta[] @relation("CreatedBy")
   records              Record[]    @relation("CreatedBy")
   auditLogs            AuditLog[]
+  transactions         Transaction[]
 }
 
 model TableMeta {
@@ -94,4 +95,84 @@ model CalendarEvent {
   color       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// Financial Module Models
+
+model Client {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String?
+  phone     String?
+  company   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  retainers       Retainer[]
+  oneTimePayments OneTimePayment[]
+  transactions    Transaction[]
+  paymentMethods  PaymentMethodInternal[]
+}
+
+model Retainer {
+  id           Int      @id @default(autoincrement())
+  clientId     Int
+  title        String
+  amount       Decimal  @db.Decimal(10, 2)
+  frequency    String   // monthly, quarterly
+  startDate    DateTime
+  nextDueDate  DateTime?
+  status       String   // active, paused, cancelled
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  client       Client   @relation(fields: [clientId], references: [id])
+}
+
+model OneTimePayment {
+  id          Int      @id @default(autoincrement())
+  clientId    Int
+  title       String
+  amount      Decimal  @db.Decimal(10, 2)
+  dueDate     DateTime
+  paidDate    DateTime?
+  status      String   // pending, paid, overdue, cancelled
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client      Client   @relation(fields: [clientId], references: [id])
+}
+
+model Transaction {
+  id            Int      @id @default(autoincrement())
+  clientId      Int
+  relatedType   String   // retainer, one_time
+  relatedId     Int
+  amount        Decimal  @db.Decimal(10, 2)
+  attemptedBy   Int?     // User ID
+  attemptDate   DateTime @default(now())
+  paidDate      DateTime?
+  status        String   // manual-marked-paid, pending, failed, refunded
+  receiptFile   String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  client        Client   @relation(fields: [clientId], references: [id])
+  user          User?    @relation(fields: [attemptedBy], references: [id])
+}
+
+model PaymentMethodInternal {
+  id          Int      @id @default(autoincrement())
+  clientId    Int
+  methodType  String   // card, bank, cash, other
+  details     String?
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client      Client   @relation(fields: [clientId], references: [id])
 }
