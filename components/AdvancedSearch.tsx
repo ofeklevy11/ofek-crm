@@ -49,11 +49,9 @@ export default function AdvancedSearch({
         return JSON.parse(saved);
       }
     }
-    // Default: first 3 searchable fields
+    // Default: first 3 searchable fields (including relations)
     const searchableFields = schema
-      .filter(
-        (f) => f.type !== "relation" && f.type !== "file" && f.type !== "image"
-      )
+      .filter((f) => f.type !== "file" && f.type !== "image")
       .slice(0, 3)
       .map((f) => f.name);
 
@@ -290,13 +288,21 @@ export default function AdvancedSearch({
                           .map((fieldName) => {
                             const value = result.data[fieldName];
                             if (!value) return null;
+
+                            // Check if it's a resolved relation field
+                            const displayValue =
+                              typeof value === "object" &&
+                              value._displayValue !== undefined
+                                ? value._displayValue
+                                : String(value);
+
                             return (
                               <div key={fieldName} className="truncate">
                                 <span className="font-medium">
                                   {getFieldLabel(fieldName)}:
                                 </span>{" "}
-                                {String(value).substring(0, 40)}
-                                {String(value).length > 40 && "..."}
+                                {displayValue.substring(0, 40)}
+                                {displayValue.length > 40 && "..."}
                               </div>
                             );
                           })}

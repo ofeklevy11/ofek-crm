@@ -61,7 +61,7 @@ export async function GET(
     const allRecords = await prisma.record.findMany({
       where: { tableId: tableId },
       orderBy: { createdAt: "desc" },
-      take: 200, // Increased limit for better search results
+      take: 200,
     });
 
     // Filter records based on search query in specified fields
@@ -97,7 +97,75 @@ export async function GET(
     // Limit results
     const limitedRecords = filteredRecords.slice(0, limit);
 
-    // Format records for response with only display fields
+    // Fetch related data for relation fields
+    const relationFields = schema.filter((f) => f.type === "relation");
+    const relatedDataMap: Record<number, Record<number, any>> = {};
+
+    // Fetch all related records needed
+    await Promise.all(
+      relationFields.map(async (field) => {
+        if (!field.relationTableId) return;
+
+        try {
+          const relatedRecords = await prisma.record.findMany({
+            where: { tableId: field.relationTableId },
+          });
+
+          const dataMap: Record<number, any> = {};
+          relatedRecords.forEach((r) => {
+            let data = r.data as any;
+            if (typeof data === "string") {
+              try {
+                data = JSON.parse(data);
+              } catch (e) {
+                data = {};
+              }
+            }
+            dataMap[r.id] = data;
+          });
+
+          relatedDataMap[field.relationTableId] = dataMap;
+        } catch (error) {
+          console.error(
+            `Failed to fetch related table ${field.relationTableId}`,
+            error
+          );
+        }
+      })
+    );
+
+    // Helper function to resolve relation value
+    const resolveRelationValue = (fieldName: string, value: any): string => {
+      const field = schema.find((f) => f.name === fieldName);
+      if (!field || field.type !== "relation" || !field.relationTableId) {
+        return String(value);
+      }
+
+      const relatedTable = relatedDataMap[field.relationTableId];
+      if (!relatedTable) return String(value);
+
+      if (Array.isArray(value)) {
+        return value
+          .map((id) => {
+            const relatedRecord = relatedTable[id];
+            if (!relatedRecord) return `#${id}`;
+            if (field.displayField && relatedRecord[field.displayField]) {
+              return String(relatedRecord[field.displayField]);
+            }
+            return String(Object.values(relatedRecord)[0] || `#${id}`);
+          })
+          .join(", ");
+      }
+
+      const relatedRecord = relatedTable[value];
+      if (!relatedRecord) return String(value);
+      if (field.displayField && relatedRecord[field.displayField]) {
+        return String(relatedRecord[field.displayField]);
+      }
+      return String(Object.values(relatedRecord)[0] || value);
+    };
+
+    // Format records for response with resolved relations
     const formattedRecords = limitedRecords.map((record) => {
       let data = record.data as any;
 
@@ -109,20 +177,32 @@ export async function GET(
         }
       }
 
-      // Create a display title from first display field
+      // Create a display title from first display field (with relation resolution)
       let displayTitle = `#${record.id}`;
       if (displayFields.length > 0) {
         const firstField = displayFields[0];
         if (data[firstField]) {
-          displayTitle = String(data[firstField]).substring(0, 60);
+          displayTitle = resolveRelationValue(
+            firstField,
+            data[firstField]
+          ).substring(0, 60);
         }
       }
 
-      // Filter data to include only display fields
+      // Filter data to include only display fields with resolved relations
       const filteredData: Record<string, any> = {};
       displayFields.forEach((fieldName) => {
         if (data[fieldName] !== undefined) {
-          filteredData[fieldName] = data[fieldName];
+          const field = schema.find((f) => f.name === fieldName);
+          if (field && field.type === "relation") {
+            // For relation fields, provide both ID and resolved name
+            filteredData[fieldName] = {
+              _id: data[fieldName],
+              _displayValue: resolveRelationValue(fieldName, data[fieldName]),
+            };
+          } else {
+            filteredData[fieldName] = data[fieldName];
+          }
         }
       });
 

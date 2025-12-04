@@ -33,12 +33,9 @@ export default function SearchSettingsModal({
     currentSettings.displayFields
   );
 
-  // Get fields that can be searched (exclude relations, files, images)
+  // Get fields that can be searched (exclude only files and images)
   const availableFields = schema.filter(
-    (field) =>
-      field.type !== "relation" &&
-      field.type !== "file" &&
-      field.type !== "image"
+    (field) => field.type !== "file" && field.type !== "image"
   );
 
   const toggleSearchableField = (fieldName: string) => {

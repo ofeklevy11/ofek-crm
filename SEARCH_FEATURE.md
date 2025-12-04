@@ -105,7 +105,7 @@ GET /api/tables/[tableId]/search?q=<query>&searchFields=<fields>&displayFields=<
 
 ## LocalStorage Schema
 
-```typescript
+````typescript
 interface SearchSettings {
   searchableFields: string[]; // שמות העמודות לחיפוש
   displayFields: string[]; // שמות העמודות להצגה
@@ -118,13 +118,13 @@ localStorage.setItem(
     searchableFields: ["client_name", "company", "email"],
     displayFields: ["client_name", "phone", "email"],
   })
+  }
 );
 ```
 
 ## עמודות ניתנות לחיפוש
 
 ✅ **נתמך**:
-
 - text
 - textarea
 - number
@@ -134,17 +134,15 @@ localStorage.setItem(
 - multi-select
 - tags
 - url
+- **relation** (קישורים לטבלאות אחרות) ✨ חדש!
 
 ❌ **לא נתמך**:
-
-- relation (קישורים לטבלאות אחרות)
 - file (קבצים)
 - image (תמונות)
 
 ## ברירות מחדל
 
 בפעם הראשונה שנכנסים לטבלה:
-
 - **עמודות לחיפוש**: 3 העמודות הראשונות הניתנות לחיפוש
 - **עמודות להצגה**: אותן 3 עמודות
 
@@ -159,7 +157,7 @@ localStorage.setItem(
 
 ```bash
 pnpm run dev
-```
+````
 
 האפליקציה תפעל בכתובת: http://localhost:3000
 
