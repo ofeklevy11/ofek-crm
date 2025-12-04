@@ -1,50 +1,78 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar as CalendarIcon, DollarSign, User } from "lucide-react";
+import { Calendar as CalendarIcon } from "lucide-react";
+import ClientSelector from "./ClientSelector";
 
 interface Client {
   id: number;
   name: string;
+  data: any;
+  tableSlug: string;
 }
 
 export default function CreatePaymentForm() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [clients, setClients] = useState<Client[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Fetch clients from API
-    fetch("/api/finance/clients")
-      .then((res) => res.json())
-      .then((data) => setClients(data))
-      .catch((err) => {
-        console.error("Error fetching clients:", err);
-        setError("Failed to load clients");
-      });
-  }, []);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (!selectedClient) {
+      setError("יש לבחור לקוח");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     const formData = new FormData(e.currentTarget);
-    const data = {
-      title: formData.get("title"),
-      clientId: formData.get("client"),
-      amount: parseFloat(formData.get("amount") as string),
-      dueDate: formData.get("dueDate"),
-      notes: formData.get("notes") || "",
-    };
+
+    // First, ensure the client exists in Finance.Client table
+    let financeClientId: number;
 
     try {
+      // Check if client already exists or create new one
+      const clientData = {
+        name: selectedClient.name,
+        email: selectedClient.data["email"] || null,
+        phone:
+          selectedClient.data["phone-number"] ||
+          selectedClient.data["phone"] ||
+          null,
+        company: selectedClient.data["company"] || null,
+        notes: `Imported from ${selectedClient.tableSlug} (Record ID: ${selectedClient.id})`,
+      };
+
+      const clientResponse = await fetch("/api/finance/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(clientData),
+      });
+
+      if (clientResponse.ok) {
+        const createdClient = await clientResponse.json();
+        financeClientId = createdClient.id;
+      } else {
+        throw new Error("Failed to create client in finance system");
+      }
+
+      // Now create the payment
+      const paymentData = {
+        title: formData.get("title"),
+        clientId: financeClientId,
+        amount: parseFloat(formData.get("amount") as string),
+        dueDate: formData.get("dueDate"),
+        notes: formData.get("notes") || "",
+      };
+
       const response = await fetch("/api/finance/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(paymentData),
       });
 
       if (!response.ok) {
@@ -55,7 +83,7 @@ export default function CreatePaymentForm() {
       router.refresh();
     } catch (err) {
       console.error("Error creating payment:", err);
-      setError("Failed to create payment. Please try again.");
+      setError("שגיאה ביצירת התשלום. נסה שוב.");
       setIsLoading(false);
     }
   };
@@ -74,7 +102,7 @@ export default function CreatePaymentForm() {
             htmlFor="title"
             className="block text-sm font-medium text-gray-700"
           >
-            Payment Title
+            כותרת התשלום *
           </label>
           <div className="mt-1">
             <input
@@ -83,36 +111,32 @@ export default function CreatePaymentForm() {
               id="title"
               required
               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-              placeholder="e.g. Website Design Project"
+              placeholder="לדוגמה: עיצוב אתר"
             />
           </div>
         </div>
 
         <div>
-          <label
-            htmlFor="client"
-            className="block text-sm font-medium text-gray-700"
-          >
-            Client
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            בחר לקוח *
           </label>
-          <div className="mt-1 relative rounded-md shadow-sm">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <User className="h-4 w-4 text-gray-400" />
+          <ClientSelector
+            selectedClient={selectedClient}
+            onSelect={setSelectedClient}
+          />
+          {selectedClient && (
+            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <span className="font-medium">לקוח נבחר:</span>{" "}
+                {selectedClient.name}
+              </p>
+              {selectedClient.data["company"] && (
+                <p className="text-xs text-blue-600 mt-1">
+                  חברה: {selectedClient.data["company"]}
+                </p>
+              )}
             </div>
-            <select
-              id="client"
-              name="client"
-              required
-              className="block w-full pl-10 rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-            >
-              <option value="">Select a client...</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          )}
         </div>
 
         <div>
@@ -120,7 +144,7 @@ export default function CreatePaymentForm() {
             htmlFor="amount"
             className="block text-sm font-medium text-gray-700"
           >
-            Amount
+            סכום *
           </label>
           <div className="mt-1 relative rounded-md shadow-sm">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -144,7 +168,7 @@ export default function CreatePaymentForm() {
             htmlFor="dueDate"
             className="block text-sm font-medium text-gray-700"
           >
-            Due Date
+            תאריך יעד *
           </label>
           <div className="mt-1 relative rounded-md shadow-sm">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -165,7 +189,7 @@ export default function CreatePaymentForm() {
             htmlFor="notes"
             className="block text-sm font-medium text-gray-700"
           >
-            Notes
+            הערות
           </label>
           <div className="mt-1">
             <textarea
@@ -173,6 +197,7 @@ export default function CreatePaymentForm() {
               name="notes"
               rows={3}
               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
+              placeholder="הערות נוספות..."
             />
           </div>
         </div>
@@ -184,14 +209,14 @@ export default function CreatePaymentForm() {
           onClick={() => router.back()}
           className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
-          Cancel
+          ביטול
         </button>
         <button
           type="submit"
-          disabled={isLoading}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          disabled={isLoading || !selectedClient}
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isLoading ? "Creating..." : "Create Payment"}
+          {isLoading ? "יוצר..." : "צור תשלום"}
         </button>
       </div>
     </form>

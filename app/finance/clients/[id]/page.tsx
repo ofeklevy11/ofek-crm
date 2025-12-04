@@ -7,9 +7,10 @@ import { notFound } from "next/navigation";
 export default async function ClientOverviewPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const clientId = parseInt(params.id);
+  const { id } = await params;
+  const clientId = parseInt(id);
 
   // Fetch client data from database
   const client = await prisma.client.findUnique({

@@ -7,7 +7,7 @@ interface FinancialStatsProps {
   collectionRate: number;
 }
 
-export function FinancialStats({
+export default function FinancialStats({
   totalRevenue,
   outstandingDebt,
   activeRetainers,
