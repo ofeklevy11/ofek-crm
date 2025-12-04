@@ -15,11 +15,27 @@ export async function GET(
 
     const searchParams = request.nextUrl.searchParams;
     const searchQuery = searchParams.get("q") || "";
-    const searchField = searchParams.get("field") || ""; // העמודה לחיפוש
     const limit = parseInt(searchParams.get("limit") || "5");
+    const searchFieldsParam = searchParams.get("searchFields") || "";
+    const displayFieldsParam = searchParams.get("displayFields") || "";
+
+    // Parse field lists
+    const searchFields = searchFieldsParam
+      ? searchFieldsParam.split(",").filter(Boolean)
+      : [];
+    const displayFields = displayFieldsParam
+      ? displayFieldsParam.split(",").filter(Boolean)
+      : [];
 
     if (!searchQuery) {
       return NextResponse.json([]);
+    }
+
+    if (searchFields.length === 0) {
+      return NextResponse.json(
+        { error: "No search fields specified" },
+        { status: 400 }
+      );
     }
 
     // Get the table metadata and schema
@@ -45,26 +61,24 @@ export async function GET(
     const allRecords = await prisma.record.findMany({
       where: { tableId: tableId },
       orderBy: { createdAt: "desc" },
-      take: 100, // limit to avoid memory issues
+      take: 200, // Increased limit for better search results
     });
 
-    let filteredRecords = allRecords;
+    // Filter records based on search query in specified fields
+    const filteredRecords = allRecords.filter((record) => {
+      let data = record.data as any;
 
-    // Filter based on search query
-    if (searchField && searchQuery) {
-      // חיפוש בשדה ספציפי
-      filteredRecords = allRecords.filter((record) => {
-        let data = record.data as any;
-
-        if (typeof data === "string") {
-          try {
-            data = JSON.parse(data);
-          } catch (e) {
-            return false;
-          }
+      if (typeof data === "string") {
+        try {
+          data = JSON.parse(data);
+        } catch (e) {
+          return false;
         }
+      }
 
-        const fieldValue = data?.[searchField];
+      // Search only in specified fields
+      return searchFields.some((fieldName) => {
+        const fieldValue = data?.[fieldName];
         if (!fieldValue) return false;
 
         // Handle different field types
@@ -78,37 +92,12 @@ export async function GET(
           .toLowerCase()
           .includes(searchQuery.toLowerCase());
       });
-    } else if (searchQuery) {
-      // חיפוש בכל השדות
-      filteredRecords = allRecords.filter((record) => {
-        let data = record.data as any;
-
-        if (typeof data === "string") {
-          try {
-            data = JSON.parse(data);
-          } catch (e) {
-            return false;
-          }
-        }
-
-        return Object.values(data).some((value) => {
-          if (typeof value === "string") {
-            return value.toLowerCase().includes(searchQuery.toLowerCase());
-          }
-          if (Array.isArray(value)) {
-            return value.some((v) =>
-              String(v).toLowerCase().includes(searchQuery.toLowerCase())
-            );
-          }
-          return false;
-        });
-      });
-    }
+    });
 
     // Limit results
     const limitedRecords = filteredRecords.slice(0, limit);
 
-    // Format records for response
+    // Format records for response with only display fields
     const formattedRecords = limitedRecords.map((record) => {
       let data = record.data as any;
 
@@ -120,17 +109,27 @@ export async function GET(
         }
       }
 
-      // Create a display title based on the first non-empty field or ID
+      // Create a display title from first display field
       let displayTitle = `#${record.id}`;
-      const firstField = schema[0];
-      if (firstField && data[firstField.name]) {
-        displayTitle = String(data[firstField.name]).substring(0, 60);
+      if (displayFields.length > 0) {
+        const firstField = displayFields[0];
+        if (data[firstField]) {
+          displayTitle = String(data[firstField]).substring(0, 60);
+        }
       }
+
+      // Filter data to include only display fields
+      const filteredData: Record<string, any> = {};
+      displayFields.forEach((fieldName) => {
+        if (data[fieldName] !== undefined) {
+          filteredData[fieldName] = data[fieldName];
+        }
+      });
 
       return {
         id: record.id,
         displayTitle,
-        data,
+        data: filteredData,
         tableId: tableId,
       };
     });
