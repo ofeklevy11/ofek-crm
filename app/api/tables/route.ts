@@ -35,6 +35,7 @@ export async function POST(request: Request) {
         slug,
         schemaJson: schemaJson || {},
         createdBy: Number(createdBy), // Ensure it's a number
+        categoryId: body.categoryId ? Number(body.categoryId) : undefined,
       },
     });
 

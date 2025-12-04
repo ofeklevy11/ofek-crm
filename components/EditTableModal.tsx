@@ -40,12 +40,21 @@ export default function EditTableModal({
   const [slug, setSlug] = useState("");
   const [fields, setFields] = useState<FieldRow[]>([]);
   const [availableTables, setAvailableTables] = useState<TableOption[]>([]);
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>(
+    []
+  );
+  const [categoryId, setCategoryId] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/tables")
       .then((res) => res.json())
       .then((data) => setAvailableTables(data))
       .catch((err) => console.error("Failed to load tables", err));
+
+    fetch("/api/categories")
+      .then((res) => res.json())
+      .then((data) => setCategories(data))
+      .catch((err) => console.error("Failed to load categories", err));
   }, []);
 
   useEffect(() => {
@@ -63,6 +72,7 @@ export default function EditTableModal({
       const table = await res.json();
       setTableName(table.name);
       setSlug(table.slug);
+      setCategoryId(table.categoryId || null);
 
       // Parse schema
       const schema = table.schemaJson as any[];
@@ -164,6 +174,7 @@ export default function EditTableModal({
           name: tableName,
           slug: slug,
           schemaJson,
+          categoryId,
         }),
       });
 
@@ -225,6 +236,28 @@ export default function EditTableModal({
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-black"
                   placeholder="e.g. projects"
                 />
+              </div>
+
+              <div className="col-span-full">
+                <label className="block text-sm font-bold text-black mb-2">
+                  Category
+                </label>
+                <select
+                  value={categoryId || ""}
+                  onChange={(e) =>
+                    setCategoryId(
+                      e.target.value ? Number(e.target.value) : null
+                    )
+                  }
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-black"
+                >
+                  <option value="">Uncategorized</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 

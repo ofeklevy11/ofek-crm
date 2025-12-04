@@ -1,54 +1,60 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-
 }
 
 model User {
-  id                   Int         @id @default(autoincrement())
+  id                   Int           @id @default(autoincrement())
   name                 String
-  email                String      @unique
+  email                String        @unique
   passwordHash         String
-  role                 String      @default("basic") // basic, manager, admin
-  allowedWriteTableIds Int[]       @default([])
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
-  tables               TableMeta[] @relation("CreatedBy")
-  records              Record[]    @relation("CreatedBy")
+  role                 String        @default("basic")
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  allowedWriteTableIds Int[]         @default([])
   auditLogs            AuditLog[]
+  records              Record[]      @relation("CreatedBy")
+  tables               TableMeta[]   @relation("CreatedBy")
   transactions         Transaction[]
 }
 
 model TableMeta {
-  id        Int      @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
+  name       String
+  slug       String   @unique
+  createdBy  Int
+  schemaJson Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  records    Record[] @relation("TableRecords")
+  creator    User     @relation("CreatedBy", fields: [createdBy], references: [id])
+  categoryId Int?
+  category   TableCategory? @relation(fields: [categoryId], references: [id])
+}
+
+model TableCategory {
+  id        Int         @id @default(autoincrement())
   name      String
-  slug      String   @unique
-  createdBy Int
-  schemaJson Json    // Defines the structure of the custom table
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  records   Record[] @relation("TableRecords")
-  creator   User     @relation(fields: [createdBy], references: [id], name: "CreatedBy")
+  tables    TableMeta[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 }
 
 model Record {
-  id        Int       @id @default(autoincrement())
-  tableId   Int
-  data      Json      // Stores the dynamic data for the record
-  createdBy Int?
-  updatedBy Int?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  table     TableMeta @relation(fields: [tableId], references: [id], name: "TableRecords")
-  creator   User?     @relation(fields: [createdBy], references: [id], name: "CreatedBy")
+  id          Int          @id @default(autoincrement())
+  tableId     Int
+  data        Json
+  createdBy   Int?
+  updatedBy   Int?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
   attachments Attachment[]
   auditLogs   AuditLog[]
+  creator     User?        @relation("CreatedBy", fields: [createdBy], references: [id])
+  table       TableMeta    @relation("TableRecords", fields: [tableId], references: [id])
 }
 
 model Attachment {
@@ -66,7 +72,7 @@ model AuditLog {
   id        Int      @id @default(autoincrement())
   recordId  Int?
   userId    Int?
-  action    String   // CREATE, UPDATE, DELETE
+  action    String
   diffJson  Json?
   timestamp DateTime @default(now())
   record    Record?  @relation(fields: [recordId], references: [id])
@@ -74,16 +80,16 @@ model AuditLog {
 }
 
 model Task {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   title       String
   description String?
   status      String
   assignee    String?
   priority    String?
-  dueDate     DateTime? // Stored as DateTime, frontend sends ISO string
+  dueDate     DateTime?
   tags        String[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model CalendarEvent {
@@ -97,82 +103,75 @@ model CalendarEvent {
   updatedAt   DateTime @updatedAt
 }
 
-// Financial Module Models
-
 model Client {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String?
-  phone     String?
-  company   String?
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  retainers       Retainer[]
+  id              Int                     @id @default(autoincrement())
+  name            String
+  email           String?
+  phone           String?
+  company         String?
+  notes           String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
   oneTimePayments OneTimePayment[]
-  transactions    Transaction[]
   paymentMethods  PaymentMethodInternal[]
+  retainers       Retainer[]
+  transactions    Transaction[]
 }
 
 model Retainer {
-  id           Int      @id @default(autoincrement())
-  clientId     Int
-  title        String
-  amount       Decimal  @db.Decimal(10, 2)
-  frequency    String   // monthly, quarterly
-  startDate    DateTime
-  nextDueDate  DateTime?
-  status       String   // active, paused, cancelled
-  notes        String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  client       Client   @relation(fields: [clientId], references: [id])
+  id          Int       @id @default(autoincrement())
+  clientId    Int
+  title       String
+  amount      Decimal   @db.Decimal(10, 2)
+  frequency   String
+  startDate   DateTime
+  nextDueDate DateTime?
+  status      String
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  client      Client    @relation(fields: [clientId], references: [id])
 }
 
 model OneTimePayment {
-  id          Int      @id @default(autoincrement())
-  clientId    Int
-  title       String
-  amount      Decimal  @db.Decimal(10, 2)
-  dueDate     DateTime
-  paidDate    DateTime?
-  status      String   // pending, paid, overdue, cancelled
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  client      Client   @relation(fields: [clientId], references: [id])
+  id        Int       @id @default(autoincrement())
+  clientId  Int
+  title     String
+  amount    Decimal   @db.Decimal(10, 2)
+  dueDate   DateTime
+  paidDate  DateTime?
+  status    String
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  client    Client    @relation(fields: [clientId], references: [id])
 }
 
 model Transaction {
-  id            Int      @id @default(autoincrement())
-  clientId      Int
-  relatedType   String   // retainer, one_time
-  relatedId     Int
-  amount        Decimal  @db.Decimal(10, 2)
-  attemptedBy   Int?     // User ID
-  attemptDate   DateTime @default(now())
-  paidDate      DateTime?
-  status        String   // manual-marked-paid, pending, failed, refunded
-  receiptFile   String?
-  notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  client        Client   @relation(fields: [clientId], references: [id])
-  user          User?    @relation(fields: [attemptedBy], references: [id])
+  id          Int       @id @default(autoincrement())
+  clientId    Int
+  relatedType String
+  relatedId   Int
+  amount      Decimal   @db.Decimal(10, 2)
+  attemptedBy Int?
+  attemptDate DateTime  @default(now())
+  paidDate    DateTime?
+  status      String
+  receiptFile String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User?     @relation(fields: [attemptedBy], references: [id])
+  client      Client    @relation(fields: [clientId], references: [id])
 }
 
 model PaymentMethodInternal {
-  id          Int      @id @default(autoincrement())
-  clientId    Int
-  methodType  String   // card, bank, cash, other
-  details     String?
-  note        String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  client      Client   @relation(fields: [clientId], references: [id])
+  id         Int      @id @default(autoincrement())
+  clientId   Int
+  methodType String
+  details    String?
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  client     Client   @relation(fields: [clientId], references: [id])
 }

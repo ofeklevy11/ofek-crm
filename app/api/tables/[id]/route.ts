@@ -55,6 +55,7 @@ export async function PATCH(
         ...(name && { name }),
         ...(slug && { slug }),
         ...(schemaJson && { schemaJson }),
+        ...(body.categoryId !== undefined && { categoryId: body.categoryId }),
       },
     });
 

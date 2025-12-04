@@ -28,12 +28,21 @@ export default function CreateTableForm() {
   const [tableName, setTableName] = useState("");
   const [slug, setSlug] = useState("");
   const [availableTables, setAvailableTables] = useState<TableOption[]>([]);
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>(
+    []
+  );
+  const [categoryId, setCategoryId] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/tables")
       .then((res) => res.json())
       .then((data) => setAvailableTables(data))
       .catch((err) => console.error("Failed to load tables", err));
+
+    fetch("/api/categories")
+      .then((res) => res.json())
+      .then((data) => setCategories(data))
+      .catch((err) => console.error("Failed to load categories", err));
   }, []);
 
   const [fields, setFields] = useState<FieldRow[]>([
@@ -128,6 +137,7 @@ export default function CreateTableForm() {
           slug: slug,
           schemaJson,
           createdBy: 1, // Hardcoded for MVP
+          categoryId,
         }),
       });
 
@@ -180,6 +190,29 @@ export default function CreateTableForm() {
           />
           <p className="text-xs text-gray-500 mt-2">
             URL-friendly identifier (lowercase, no spaces)
+          </p>
+        </div>
+
+        <div className="col-span-full">
+          <label className="block text-sm font-bold text-black mb-3">
+            Category
+          </label>
+          <select
+            value={categoryId || ""}
+            onChange={(e) =>
+              setCategoryId(e.target.value ? Number(e.target.value) : null)
+            }
+            className="w-full px-5 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-black text-lg"
+          >
+            <option value="">Uncategorized</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 mt-2">
+            Group this table under a category
           </p>
         </div>
       </div>

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import EditRecordModal from "./EditRecordModal";
 import ViewTextModal from "./ViewTextModal";
+import AdvancedSearch from "./AdvancedSearch";
 
 interface SchemaField {
   name: string;
@@ -46,6 +47,10 @@ export default function RecordTable({
     text: string;
   } | null>(null);
   const [relatedData, setRelatedData] = useState<Record<string, any>>({});
+  const [highlightedRecordId, setHighlightedRecordId] = useState<number | null>(
+    null
+  );
+  const recordRefs = useRef<Record<number, HTMLTableRowElement>>({});
 
   // Fetch related data
   useEffect(() => {
@@ -87,6 +92,31 @@ export default function RecordTable({
 
     fetchRelatedData();
   }, [schema]);
+
+  // Scroll to highlighted record
+  useEffect(() => {
+    if (highlightedRecordId && recordRefs.current[highlightedRecordId]) {
+      recordRefs.current[highlightedRecordId].scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      // Remove highlight after 3 seconds
+      const timeout = setTimeout(() => {
+        setHighlightedRecordId(null);
+      }, 3000);
+      return () => clearTimeout(timeout);
+    }
+  }, [highlightedRecordId]);
+
+  // Handler for when a record is selected from search
+  const handleRecordSelect = (recordId: number) => {
+    setHighlightedRecordId(recordId);
+    // Open edit modal for the selected record
+    const record = records.find((r) => r.id === recordId);
+    if (record) {
+      setEditingRecord(record);
+    }
+  };
 
   // unique fields (avoid recomputing/filtering multiple times)
   const uniqueFields = schema.filter(
@@ -329,348 +359,371 @@ export default function RecordTable({
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 items-start">
-      <div className="flex-1 w-full bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row gap-4 justify-between items-center bg-gray-50">
-          <div className="flex gap-4 items-center w-full md:w-auto">
-            <div className="text-sm text-black whitespace-nowrap">
-              {selectedIds.length} selected
-            </div>
-            {slug === "leads" && (
-              <>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white text-black"
-                >
-                  <option value="">All Statuses</option>
-                  {statusField?.options?.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
+      <div className="flex-1 w-full space-y-4">
+        {/* Advanced Search Component */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <AdvancedSearch
+            tableId={tableId}
+            schema={schema}
+            onRecordSelect={handleRecordSelect}
+          />
+        </div>
 
-                <select
-                  value={sourceFilter}
-                  onChange={(e) => setSourceFilter(e.target.value)}
-                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white text-black"
-                >
-                  <option value="">All Sources</option>
-                  {schema
-                    .find(
-                      (f) =>
-                        f.name.includes("source") ||
-                        f.label.toLowerCase().includes("source") ||
-                        f.label.includes("מקור")
-                    )
-                    ?.options?.map((opt) => (
+        {/* Main Table */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row gap-4 justify-between items-center bg-gray-50">
+            <div className="flex gap-4 items-center w-full md:w-auto">
+              <div className="text-sm text-black whitespace-nowrap">
+                {selectedIds.length} selected
+              </div>
+              {slug === "leads" && (
+                <>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white text-black"
+                  >
+                    <option value="">All Statuses</option>
+                    {statusField?.options?.map((opt) => (
                       <option key={opt} value={opt}>
                         {opt}
                       </option>
                     ))}
-                </select>
-              </>
-            )}
-          </div>
+                  </select>
 
-          {/* actions */}
-          {selectedIds.length > 0 ? (
-            <div className="flex gap-2">
+                  <select
+                    value={sourceFilter}
+                    onChange={(e) => setSourceFilter(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white text-black"
+                  >
+                    <option value="">All Sources</option>
+                    {schema
+                      .find(
+                        (f) =>
+                          f.name.includes("source") ||
+                          f.label.toLowerCase().includes("source") ||
+                          f.label.includes("מקור")
+                      )
+                      ?.options?.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                  </select>
+                </>
+              )}
+            </div>
+
+            {/* actions */}
+            {selectedIds.length > 0 ? (
+              <div className="flex gap-2">
+                <div className="relative group">
+                  <button className="bg-white border border-gray-300 text-black px-3 py-1 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
+                    Export Selected ▼
+                  </button>
+                  <div className="hidden group-hover:block absolute end-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[150px]">
+                    <button
+                      onClick={handleExportCSV}
+                      className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50"
+                    >
+                      Export as CSV
+                    </button>
+                    <button
+                      onClick={handleExportTXT}
+                      className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50"
+                    >
+                      Export as TXT
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={isDeleting}
+                  className="bg-red-50 text-red-600 px-3 py-1 rounded-lg text-sm font-medium hover:bg-red-100 transition"
+                >
+                  {isDeleting ? "Deleting..." : "Delete Selected"}
+                </button>
+              </div>
+            ) : (
               <div className="relative group">
                 <button className="bg-white border border-gray-300 text-black px-3 py-1 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
-                  Export Selected ▼
+                  Export All ▼
                 </button>
                 <div className="hidden group-hover:block absolute end-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[150px]">
                   <button
-                    onClick={handleExportCSV}
+                    onClick={() => handleExportAll("csv")}
                     className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50"
                   >
                     Export as CSV
                   </button>
                   <button
-                    onClick={handleExportTXT}
+                    onClick={() => handleExportAll("txt")}
                     className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50"
                   >
                     Export as TXT
                   </button>
                 </div>
               </div>
+            )}
+          </div>
 
-              <button
-                onClick={handleBulkDelete}
-                disabled={isDeleting}
-                className="bg-red-50 text-red-600 px-3 py-1 rounded-lg text-sm font-medium hover:bg-red-100 transition"
-              >
-                {isDeleting ? "Deleting..." : "Delete Selected"}
-              </button>
-            </div>
-          ) : (
-            <div className="relative group">
-              <button className="bg-white border border-gray-300 text-black px-3 py-1 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
-                Export All ▼
-              </button>
-              <div className="hidden group-hover:block absolute end-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[150px]">
-                <button
-                  onClick={() => handleExportAll("csv")}
-                  className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50"
-                >
-                  Export as CSV
-                </button>
-                <button
-                  onClick={() => handleExportAll("txt")}
-                  className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50"
-                >
-                  Export as TXT
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="p-4 overflow-x-auto">
-          <table className="w-full text-start text-sm">
-            <thead className="bg-gray-50 text-black font-medium border-b border-gray-100">
-              <tr>
-                <th className="p-4 w-10">
-                  <input
-                    type="checkbox"
-                    checked={
-                      filteredRecords.length > 0 &&
-                      selectedIds.length === filteredRecords.length
-                    }
-                    onChange={toggleSelectAll}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                </th>
-                <th className="p-4 w-10"></th>
-                <th className="p-4">ID</th>
-                {uniqueFields.map((field) => (
-                  <th
-                    key={field.name}
-                    className={`p-4 whitespace-nowrap ${
-                      ["tags", "multi-select"].includes(field.type)
-                        ? "min-w-[200px]"
-                        : "min-w-[150px]"
-                    }`}
-                  >
-                    {field.label}
-                  </th>
-                ))}
-                <th className="p-4 whitespace-nowrap">Created At</th>
-                <th className="p-4 whitespace-nowrap">Updated At</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredRecords.map((record) => (
-                <tr
-                  key={record.id}
-                  className={`${getRowColorClass(
-                    record.data
-                  )} transition border-b border-gray-100`}
-                >
-                  <td className="p-4">
+          <div className="p-4 overflow-x-auto">
+            <table className="w-full text-start text-sm">
+              <thead className="bg-gray-50 text-black font-medium border-b border-gray-100">
+                <tr>
+                  <th className="p-4 w-10">
                     <input
                       type="checkbox"
-                      checked={selectedIds.includes(record.id)}
-                      onChange={() => toggleSelect(record.id)}
+                      checked={
+                        filteredRecords.length > 0 &&
+                        selectedIds.length === filteredRecords.length
+                      }
+                      onChange={toggleSelectAll}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
-                  </td>
-                  <td className="p-4">
-                    <button
-                      onClick={() => setEditingRecord(record)}
-                      className="text-blue-600 hover:text-blue-800 font-medium"
-                      title="Edit Record"
-                    >
-                      ✏️
-                    </button>
-                  </td>
-                  <td className="p-4 text-black">#{record.id}</td>
-
+                  </th>
+                  <th className="p-4 w-10"></th>
+                  <th className="p-4">ID</th>
                   {uniqueFields.map((field) => (
-                    <td key={field.name} className="p-4 text-black align-top">
-                      <div className="max-h-[100px] max-w-[200px] overflow-y-auto custom-scrollbar">
-                        {(() => {
-                          const val = record.data?.[field.name];
-                          if (val === null || val === undefined || val === "")
-                            return "-";
-
-                          switch (field.type) {
-                            case "boolean":
-                              return val ? "Yes" : "No";
-                            case "textarea":
-                            case "text":
-                            case "url":
-                              if (field.type === "url") {
-                                return (
-                                  <a
-                                    href={val}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-blue-600 hover:underline break-all block"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    {val}
-                                  </a>
-                                );
-                              }
-                              return (
-                                <div
-                                  className="break-words whitespace-pre-wrap cursor-pointer hover:bg-gray-100 p-1 rounded"
-                                  title="Click to view full text"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setViewText({
-                                      title: field.label,
-                                      text: String(val),
-                                    });
-                                  }}
-                                >
-                                  {String(val).length > 60
-                                    ? String(val).slice(0, 60) + "..."
-                                    : String(val)}
-                                </div>
-                              );
-                            case "tags":
-                            case "multi-select":
-                              let displayVal: any = val;
-                              if (
-                                typeof val === "string" &&
-                                val.startsWith("[")
-                              ) {
-                                try {
-                                  displayVal = JSON.parse(val);
-                                } catch (e) {
-                                  // ignore parsing error
-                                }
-                              }
-                              if (Array.isArray(displayVal)) {
-                                return (
-                                  <div className="flex flex-wrap gap-1">
-                                    {displayVal.map((v: string, i: number) => (
-                                      <span
-                                        key={i}
-                                        className="bg-gray-100 text-gray-800 px-2 py-0.5 rounded text-xs border border-gray-200"
-                                      >
-                                        {v}
-                                      </span>
-                                    ))}
-                                  </div>
-                                );
-                              }
-                              return String(val);
-                            case "date":
-                              return new Date(val).toLocaleDateString();
-                            case "relation":
-                              const relatedTableId = field.relationTableId;
-                              const tableData =
-                                relatedTableId && relatedData[relatedTableId];
-                              const displayField = field.displayField;
-
-                              const getLabel = (id: number) => {
-                                if (!tableData || !tableData[id])
-                                  return `#${id}`;
-                                const r = tableData[id];
-                                if (displayField && r.data[displayField]) {
-                                  return String(r.data[displayField]);
-                                }
-                                return (
-                                  String(Object.values(r.data)[0]) || `#${id}`
-                                );
-                              };
-
-                              if (Array.isArray(val)) {
-                                return (
-                                  <div className="flex flex-wrap gap-1">
-                                    {val.map((id: any) => (
-                                      <button
-                                        key={id}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (relatedTableId) {
-                                            router.push(
-                                              `/tables/${relatedTableId}`
-                                            );
-                                          }
-                                        }}
-                                        className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs border border-blue-100 font-medium hover:bg-blue-100 hover:border-blue-200 transition text-left"
-                                      >
-                                        {getLabel(id)}
-                                      </button>
-                                    ))}
-                                  </div>
-                                );
-                              }
-                              return (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (relatedTableId) {
-                                      router.push(`/tables/${relatedTableId}`);
-                                    }
-                                  }}
-                                  className="text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded text-xs border border-blue-100 hover:bg-blue-100 hover:border-blue-200 transition text-left"
-                                >
-                                  {getLabel(val)}
-                                </button>
-                              );
-                            default:
-                              return (
-                                <div className="break-words whitespace-pre-wrap">
-                                  {String(val)}
-                                </div>
-                              );
-                          }
-                        })()}
-                      </div>
-                    </td>
+                    <th
+                      key={field.name}
+                      className={`p-4 whitespace-nowrap ${
+                        ["tags", "multi-select"].includes(field.type)
+                          ? "min-w-[200px]"
+                          : "min-w-[150px]"
+                      }`}
+                    >
+                      {field.label}
+                    </th>
                   ))}
-
-                  <td className="p-4 text-black">
-                    {record.createdAt
-                      ? new Date(record.createdAt).toLocaleDateString()
-                      : "-"}
-                  </td>
-                  <td className="p-4 text-black">
-                    {record.updatedAt
-                      ? new Date(record.updatedAt).toLocaleDateString()
-                      : "-"}
-                  </td>
+                  <th className="p-4 whitespace-nowrap">Created At</th>
+                  <th className="p-4 whitespace-nowrap">Updated At</th>
                 </tr>
-              ))}
-
-              {filteredRecords.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={uniqueFields.length + 5}
-                    className="p-8 text-center text-black"
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredRecords.map((record) => (
+                  <tr
+                    key={record.id}
+                    ref={(el) => {
+                      if (el) recordRefs.current[record.id] = el;
+                    }}
+                    className={`${getRowColorClass(
+                      record.data
+                    )} transition border-b border-gray-100 ${
+                      highlightedRecordId === record.id
+                        ? "ring-4 ring-blue-400 ring-opacity-75"
+                        : ""
+                    }`}
                   >
-                    No records found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    <td className="p-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(record.id)}
+                        onChange={() => toggleSelect(record.id)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
+                    <td className="p-4">
+                      <button
+                        onClick={() => setEditingRecord(record)}
+                        className="text-blue-600 hover:text-blue-800 font-medium"
+                        title="Edit Record"
+                      >
+                        ✏️
+                      </button>
+                    </td>
+                    <td className="p-4 text-black">#{record.id}</td>
+
+                    {uniqueFields.map((field) => (
+                      <td key={field.name} className="p-4 text-black align-top">
+                        <div className="max-h-[100px] max-w-[200px] overflow-y-auto custom-scrollbar">
+                          {(() => {
+                            const val = record.data?.[field.name];
+                            if (val === null || val === undefined || val === "")
+                              return "-";
+
+                            switch (field.type) {
+                              case "boolean":
+                                return val ? "Yes" : "No";
+                              case "textarea":
+                              case "text":
+                              case "url":
+                                if (field.type === "url") {
+                                  return (
+                                    <a
+                                      href={val}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-blue-600 hover:underline break-all block"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {val}
+                                    </a>
+                                  );
+                                }
+                                return (
+                                  <div
+                                    className="break-words whitespace-pre-wrap cursor-pointer hover:bg-gray-100 p-1 rounded"
+                                    title="Click to view full text"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setViewText({
+                                        title: field.label,
+                                        text: String(val),
+                                      });
+                                    }}
+                                  >
+                                    {String(val).length > 60
+                                      ? String(val).slice(0, 60) + "..."
+                                      : String(val)}
+                                  </div>
+                                );
+                              case "tags":
+                              case "multi-select":
+                                let displayVal: any = val;
+                                if (
+                                  typeof val === "string" &&
+                                  val.startsWith("[")
+                                ) {
+                                  try {
+                                    displayVal = JSON.parse(val);
+                                  } catch (e) {
+                                    // ignore parsing error
+                                  }
+                                }
+                                if (Array.isArray(displayVal)) {
+                                  return (
+                                    <div className="flex flex-wrap gap-1">
+                                      {displayVal.map(
+                                        (v: string, i: number) => (
+                                          <span
+                                            key={i}
+                                            className="bg-gray-100 text-gray-800 px-2 py-0.5 rounded text-xs border border-gray-200"
+                                          >
+                                            {v}
+                                          </span>
+                                        )
+                                      )}
+                                    </div>
+                                  );
+                                }
+                                return String(val);
+                              case "date":
+                                return new Date(val).toLocaleDateString();
+                              case "relation":
+                                const relatedTableId = field.relationTableId;
+                                const tableData =
+                                  relatedTableId && relatedData[relatedTableId];
+                                const displayField = field.displayField;
+
+                                const getLabel = (id: number) => {
+                                  if (!tableData || !tableData[id])
+                                    return `#${id}`;
+                                  const r = tableData[id];
+                                  if (displayField && r.data[displayField]) {
+                                    return String(r.data[displayField]);
+                                  }
+                                  return (
+                                    String(Object.values(r.data)[0]) || `#${id}`
+                                  );
+                                };
+
+                                if (Array.isArray(val)) {
+                                  return (
+                                    <div className="flex flex-wrap gap-1">
+                                      {val.map((id: any) => (
+                                        <button
+                                          key={id}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (relatedTableId) {
+                                              router.push(
+                                                `/tables/${relatedTableId}`
+                                              );
+                                            }
+                                          }}
+                                          className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs border border-blue-100 font-medium hover:bg-blue-100 hover:border-blue-200 transition text-left"
+                                        >
+                                          {getLabel(id)}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (relatedTableId) {
+                                        router.push(
+                                          `/tables/${relatedTableId}`
+                                        );
+                                      }
+                                    }}
+                                    className="text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded text-xs border border-blue-100 hover:bg-blue-100 hover:border-blue-200 transition text-left"
+                                  >
+                                    {getLabel(val)}
+                                  </button>
+                                );
+                              default:
+                                return (
+                                  <div className="break-words whitespace-pre-wrap">
+                                    {String(val)}
+                                  </div>
+                                );
+                            }
+                          })()}
+                        </div>
+                      </td>
+                    ))}
+
+                    <td className="p-4 text-black">
+                      {record.createdAt
+                        ? new Date(record.createdAt).toLocaleDateString()
+                        : "-"}
+                    </td>
+                    <td className="p-4 text-black">
+                      {record.updatedAt
+                        ? new Date(record.updatedAt).toLocaleDateString()
+                        : "-"}
+                    </td>
+                  </tr>
+                ))}
+
+                {filteredRecords.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={uniqueFields.length + 5}
+                      className="p-8 text-center text-black"
+                    >
+                      No records found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {editingRecord && (
+            <EditRecordModal
+              record={editingRecord}
+              schema={schema}
+              onClose={() => {
+                setEditingRecord(null);
+                router.refresh();
+              }}
+            />
+          )}
+
+          {viewText && (
+            <ViewTextModal
+              title={viewText.title}
+              text={viewText.text}
+              onClose={() => setViewText(null)}
+            />
+          )}
         </div>
-
-        {editingRecord && (
-          <EditRecordModal
-            record={editingRecord}
-            schema={schema}
-            onClose={() => {
-              setEditingRecord(null);
-              router.refresh();
-            }}
-          />
-        )}
-
-        {viewText && (
-          <ViewTextModal
-            title={viewText.title}
-            text={viewText.text}
-            onClose={() => setViewText(null)}
-          />
-        )}
       </div>
 
       {slug === "leads" && (
