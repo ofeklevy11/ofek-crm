@@ -1,13 +1,27 @@
 import { prisma } from "@/lib/prisma";
 import { ArrowLeft, Calendar, DollarSign } from "lucide-react";
 import Link from "next/link";
+import Pagination from "@/components/Pagination";
 
-export default async function RetainersPage() {
+export default async function RetainersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page } = await searchParams;
+  const currentPage = Number(page) || 1;
+  const pageSize = 30;
+
+  const totalRetainers = await prisma.retainer.count();
+  const totalPages = Math.ceil(totalRetainers / pageSize);
+
   const retainers = await prisma.retainer.findMany({
     include: {
       client: true,
     },
     orderBy: { createdAt: "desc" },
+    skip: (currentPage - 1) * pageSize,
+    take: pageSize,
   });
 
   const activeRetainers = retainers.filter((r) => r.status === "active");
@@ -157,6 +171,8 @@ export default async function RetainersPage() {
           </tbody>
         </table>
       </div>
+
+      <Pagination totalPages={totalPages} />
     </div>
   );
 }

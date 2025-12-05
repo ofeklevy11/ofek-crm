@@ -20,7 +20,7 @@ export default async function TableDetailsPage({
   const { q, page } = await searchParams;
   const tableId = parseInt(id);
   const currentPage = Number(page) || 1;
-  const pageSize = 20;
+  const pageSize = 30;
 
   if (isNaN(tableId)) return notFound();
 

@@ -1,13 +1,27 @@
 import { prisma } from "@/lib/prisma";
 import { ArrowLeft, Calendar, CheckCircle, XCircle, Clock } from "lucide-react";
 import Link from "next/link";
+import Pagination from "@/components/Pagination";
 
-export default async function PaymentsPage() {
+export default async function PaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page } = await searchParams;
+  const currentPage = Number(page) || 1;
+  const pageSize = 30;
+
+  const totalPayments = await prisma.oneTimePayment.count();
+  const totalPages = Math.ceil(totalPayments / pageSize);
+
   const payments = await prisma.oneTimePayment.findMany({
     include: {
       client: true,
     },
     orderBy: { createdAt: "desc" },
+    skip: (currentPage - 1) * pageSize,
+    take: pageSize,
   });
 
   const pendingPayments = payments.filter((p) => p.status === "pending");
@@ -185,6 +199,8 @@ export default async function PaymentsPage() {
           </tbody>
         </table>
       </div>
+
+      <Pagination totalPages={totalPages} />
     </div>
   );
 }

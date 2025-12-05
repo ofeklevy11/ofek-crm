@@ -52,6 +52,35 @@ export default function RecordTable({
   );
   const recordRefs = useRef<Record<number, HTMLTableRowElement>>({});
 
+  // Toggle state for views - Initialize from localStorage
+  const [viewToggles, setViewToggles] = useState<Record<string, boolean>>(
+    () => {
+      if (typeof window === "undefined") return {};
+      const saved = localStorage.getItem(`viewToggles_${slug}`);
+      return saved ? JSON.parse(saved) : {};
+    }
+  );
+
+  // Save view toggles to localStorage whenever they change
+  useEffect(() => {
+    if (slug) {
+      localStorage.setItem(`viewToggles_${slug}`, JSON.stringify(viewToggles));
+    }
+  }, [viewToggles, slug]);
+
+  // Helper to check if a view is enabled (default to true if not set)
+  const isViewEnabled = (viewName: string) => {
+    return viewToggles[viewName] !== false;
+  };
+
+  // Helper to toggle a view
+  const toggleView = (viewName: string) => {
+    setViewToggles((prev) => ({
+      ...prev,
+      [viewName]: !isViewEnabled(viewName),
+    }));
+  };
+
   // Fetch related data
   useEffect(() => {
     const fetchRelatedData = async () => {
@@ -306,14 +335,45 @@ export default function RecordTable({
       "download",
       `table_export_${new Date().toISOString().split("T")[0]}.txt`
     );
-    document.body.appendChild(link);
-    link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
   const handleExportAll = (format: "csv" | "txt") => {
     window.location.href = `/api/tables/${tableId}/export?format=${format}`;
+  };
+
+  // ViewCard component for wrapping views with toggle functionality
+  const ViewCard = ({
+    viewName,
+    title,
+    children,
+  }: {
+    viewName: string;
+    title: string;
+    children: React.ReactNode;
+  }) => {
+    const isEnabled = isViewEnabled(viewName);
+
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-gray-50 to-white">
+          <h3 className="font-bold text-gray-900">{title}</h3>
+          <button
+            onClick={() => toggleView(viewName)}
+            className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+              isEnabled
+                ? "bg-green-100 text-green-700 hover:bg-green-200"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+            title={isEnabled ? "הסתר" : "הצג"}
+          >
+            {isEnabled ? "ON" : "OFF"}
+          </button>
+        </div>
+        {isEnabled && <div className="p-6">{children}</div>}
+      </div>
+    );
   };
 
   const getRowColorClass = (recordData: any) => {
@@ -728,8 +788,7 @@ export default function RecordTable({
 
       {slug === "leads" && (
         <div className="w-full lg:w-80 shrink-0 space-y-4">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-900 mb-4">New Leads</h3>
+          <ViewCard viewName="leads_new_leads" title="New Leads">
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-blue-50 p-3 rounded-lg text-center">
                 <div className="text-2xl font-bold text-blue-600">
@@ -748,10 +807,9 @@ export default function RecordTable({
                 </div>
               </div>
             </div>
-          </div>
+          </ViewCard>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-900 mb-4">Lead Status Stats</h3>
+          <ViewCard viewName="leads_status_stats" title="Lead Status Stats">
             <div className="space-y-4">
               {!statusField?.options?.length ? (
                 <p className="text-sm text-gray-500">
@@ -803,10 +861,9 @@ export default function RecordTable({
                 })
               )}
             </div>
-          </div>
+          </ViewCard>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-900 mb-4">Lead Sources</h3>
+          <ViewCard viewName="leads_sources" title="Lead Sources">
             <div className="space-y-3">
               {!sourceFieldName ||
               !schema.find((f) => f.name === sourceFieldName)?.options
@@ -853,9 +910,9 @@ export default function RecordTable({
                 })
               )}
             </div>
-          </div>
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-900 mb-4">Legend</h3>
+          </ViewCard>
+
+          <ViewCard viewName="leads_legend" title="Legend">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded bg-white border border-gray-200"></div>
@@ -882,15 +939,13 @@ export default function RecordTable({
                 <span className="text-sm text-gray-600">Irrelevant</span>
               </div>
             </div>
-          </div>
+          </ViewCard>
         </div>
       )}
 
       {slug === "digital-marketing" && (
         <div className="w-full lg:w-80 shrink-0 space-y-4">
-          {/* New Leads Stats */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-900 mb-4">New Clients</h3>
+          <ViewCard viewName="dm_new_clients" title="New Clients">
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-blue-50 p-3 rounded-lg text-center">
                 <div className="text-2xl font-bold text-blue-600">
@@ -909,9 +964,8 @@ export default function RecordTable({
                 </div>
               </div>
             </div>
-          </div>
+          </ViewCard>
 
-          {/* Revenue Stats */}
           {(() => {
             const paymentTypeField = schema.find(
               (f) =>
@@ -954,8 +1008,7 @@ export default function RecordTable({
               }, 0);
 
             return (
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="font-bold text-gray-900 mb-4">Revenue Stats</h3>
+              <ViewCard viewName="dm_revenue" title="Revenue Stats">
                 <div className="space-y-4">
                   <div className="bg-green-50 p-4 rounded-lg">
                     <div className="text-sm text-green-800 font-medium mb-1">
@@ -974,11 +1027,10 @@ export default function RecordTable({
                     </div>
                   </div>
                 </div>
-              </div>
+              </ViewCard>
             );
           })()}
 
-          {/* Client Type Stats */}
           {(() => {
             const paymentTypeField = schema.find(
               (f) =>
@@ -1000,8 +1052,7 @@ export default function RecordTable({
             ).length;
 
             return (
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="font-bold text-gray-900 mb-4">Client Types</h3>
+              <ViewCard viewName="dm_client_types" title="Client Types">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-green-50 p-3 rounded-lg text-center">
                     <div className="text-2xl font-bold text-green-600">
@@ -1020,11 +1071,10 @@ export default function RecordTable({
                     </div>
                   </div>
                 </div>
-              </div>
+              </ViewCard>
             );
           })()}
 
-          {/* Service Summary */}
           {(() => {
             const serviceField = schema.find(
               (f) =>
@@ -1034,12 +1084,10 @@ export default function RecordTable({
 
             if (!serviceField) return null;
 
-            // Count occurrences of each service
             const serviceCounts: Record<string, number> = {};
             records.forEach((r) => {
               const val = r.data?.[serviceField.name];
               if (val) {
-                // Handle multi-select or single select
                 let services: string[] = [];
                 if (Array.isArray(val)) {
                   services = val;
@@ -1071,10 +1119,7 @@ export default function RecordTable({
             );
 
             return (
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="font-bold text-gray-900 mb-4">
-                  Services Breakdown
-                </h3>
+              <ViewCard viewName="dm_services" title="Services Breakdown">
                 <div className="space-y-3">
                   {sortedServices.length === 0 ? (
                     <p className="text-sm text-gray-500">No services found</p>
@@ -1113,13 +1158,11 @@ export default function RecordTable({
                     })
                   )}
                 </div>
-              </div>
+              </ViewCard>
             );
           })()}
 
-          {/* Legend */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-900 mb-4">Legend</h3>
+          <ViewCard viewName="dm_legend" title="Legend">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded bg-green-100 border border-green-200"></div>
@@ -1134,7 +1177,7 @@ export default function RecordTable({
                 <span className="text-sm text-gray-600">Inactive Client</span>
               </div>
             </div>
-          </div>
+          </ViewCard>
         </div>
       )}
     </div>

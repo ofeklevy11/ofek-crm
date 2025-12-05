@@ -31,6 +31,8 @@ export default function UsersPage() {
   const [deleteUserId, setDeleteUserId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 30;
 
   useEffect(() => {
     checkPermissions();
@@ -160,6 +162,52 @@ export default function UsersPage() {
     );
   }
 
+  // Calculate pagination
+  const totalPages = Math.ceil(users.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedUsers = users.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Generate page numbers to display
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxPagesToShow = 7;
+
+    if (totalPages <= maxPagesToShow) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(1);
+
+      if (currentPage > 3) {
+        pages.push("...");
+      }
+
+      const startPage = Math.max(2, currentPage - 1);
+      const endPage = Math.min(totalPages - 1, currentPage + 1);
+
+      for (let i = startPage; i <= endPage; i++) {
+        pages.push(i);
+      }
+
+      if (currentPage < totalPages - 2) {
+        pages.push("...");
+      }
+
+      pages.push(totalPages);
+    }
+
+    return pages;
+  };
+
+  const pageNumbers = getPageNumbers();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-8">
       <div className="max-w-7xl mx-auto">
@@ -183,110 +231,197 @@ export default function UsersPage() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
           </div>
         ) : (
-          <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
-                    שם
-                  </th>
-                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
-                    אימייל
-                  </th>
-                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
-                    תפקיד
-                  </th>
-                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
-                    הרשאות כתיבה
-                  </th>
-                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
-                    פעולות
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {users.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50 transition">
-                    <td className="px-6 py-4 text-black">{user.name}</td>
-                    <td className="px-6 py-4 text-black">{user.email}</td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(
-                          user.role
-                        )}`}
-                      >
-                        {getRoleLabel(user.role)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-black text-sm">
-                      {user.role === "admin" ? (
-                        <span className="text-purple-600 font-medium">
-                          גישה מלאה לכל הטבלאות
-                        </span>
-                      ) : user.role === "manager" ? (
-                        user.allowedWriteTableIds.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {user.allowedWriteTableIds.map((tableId) => {
-                              const table = tables.find(
-                                (t) => t.id === tableId
-                              );
-                              return (
-                                <span
-                                  key={tableId}
-                                  className="inline-block px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs border border-blue-200"
-                                >
-                                  {table?.name || `#${tableId}`}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <span className="text-gray-500">
-                            אין הרשאות כתיבה
-                          </span>
-                        )
-                      ) : (
-                        <span className="text-gray-500">קריאה בלבד</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEditUser(user)}
-                          className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-700 transition"
-                        >
-                          ערוך
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClick(user.id)}
-                          className="bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-700 transition"
-                        >
-                          מחק
-                        </button>
-                      </div>
-                    </td>
+          <>
+            <div className="bg-white rounded-2xl shadow-md overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
+                      שם
+                    </th>
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
+                      אימייל
+                    </th>
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
+                      תפקיד
+                    </th>
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
+                      הרשאות כתיבה
+                    </th>
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
+                      פעולות
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {paginatedUsers.map((user) => (
+                    <tr key={user.id} className="hover:bg-gray-50 transition">
+                      <td className="px-6 py-4 text-black">{user.name}</td>
+                      <td className="px-6 py-4 text-black">{user.email}</td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(
+                            user.role
+                          )}`}
+                        >
+                          {getRoleLabel(user.role)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-black text-sm">
+                        {user.role === "admin" ? (
+                          <span className="text-purple-600 font-medium">
+                            גישה מלאה לכל הטבלאות
+                          </span>
+                        ) : user.role === "manager" ? (
+                          user.allowedWriteTableIds.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {user.allowedWriteTableIds.map((tableId) => {
+                                const table = tables.find(
+                                  (t) => t.id === tableId
+                                );
+                                return (
+                                  <span
+                                    key={tableId}
+                                    className="inline-block px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs border border-blue-200"
+                                  >
+                                    {table?.name || `#${tableId}`}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-gray-500">
+                              אין הרשאות כתיבה
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-gray-500">קריאה בלבד</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleEditUser(user)}
+                            className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-700 transition"
+                          >
+                            ערוך
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(user.id)}
+                            className="bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-700 transition"
+                          >
+                            מחק
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-            {users.length === 0 && (
-              <div className="text-center py-16">
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  אין משתמשים
-                </h3>
-                <p className="text-gray-600 mb-6">
-                  צור את המשתמש הראשון במערכת
-                </p>
-                <button
-                  onClick={handleCreateUser}
-                  className="inline-block bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-8 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
-                >
-                  + צור משתמש ראשון
-                </button>
+              {users.length === 0 && (
+                <div className="text-center py-16">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                    אין משתמשים
+                  </h3>
+                  <p className="text-gray-600 mb-6">
+                    צור את המשתמש הראשון במערכת
+                  </p>
+                  <button
+                    onClick={handleCreateUser}
+                    className="inline-block bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-8 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
+                  >
+                    + צור משתמש ראשון
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex flex-col items-center gap-4 mt-8 mb-6">
+                <div className="flex items-center gap-2 flex-wrap justify-center">
+                  {/* First Page Button */}
+                  <button
+                    onClick={() => handlePageChange(1)}
+                    disabled={currentPage <= 1}
+                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200"
+                    title="עמוד ראשון"
+                  >
+                    ⏮ ראשון
+                  </button>
+
+                  {/* Previous Button */}
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage <= 1}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200"
+                    title="עמוד קודם"
+                  >
+                    ← הקודם
+                  </button>
+
+                  {/* Page Numbers */}
+                  <div className="flex items-center gap-1">
+                    {pageNumbers.map((page, index) => {
+                      if (page === "...") {
+                        return (
+                          <span
+                            key={`ellipsis-${index}`}
+                            className="px-2 text-gray-500"
+                          >
+                            ...
+                          </span>
+                        );
+                      }
+
+                      const pageNum = page as number;
+                      const isActive = pageNum === currentPage;
+
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => handlePageChange(pageNum)}
+                          className={`min-w-[40px] px-3 py-2 rounded-lg font-medium transition-all duration-200 ${
+                            isActive
+                              ? "bg-blue-600 text-white shadow-md scale-105"
+                              : "border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-400"
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Next Button */}
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage >= totalPages}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200"
+                    title="עמוד הבא"
+                  >
+                    הבא →
+                  </button>
+
+                  {/* Last Page Button */}
+                  <button
+                    onClick={() => handlePageChange(totalPages)}
+                    disabled={currentPage >= totalPages}
+                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200"
+                    title="עמוד אחרון"
+                  >
+                    אחרון ⏭
+                  </button>
+                </div>
+
+                {/* Page Info */}
+                <div className="text-sm text-gray-600 font-medium">
+                  עמוד {currentPage} מתוך {totalPages}
+                </div>
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
 

@@ -1,8 +1,20 @@
 import { prisma } from "@/lib/prisma";
 import { ArrowLeft, Mail, Phone, Building, Eye } from "lucide-react";
 import Link from "next/link";
+import Pagination from "@/components/Pagination";
 
-export default async function ClientsPage() {
+export default async function ClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page } = await searchParams;
+  const currentPage = Number(page) || 1;
+  const pageSize = 30;
+
+  const totalClients = await prisma.client.count();
+  const totalPages = Math.ceil(totalClients / pageSize);
+
   const clients = await prisma.client.findMany({
     include: {
       retainers: {
@@ -14,6 +26,8 @@ export default async function ClientsPage() {
       transactions: true,
     },
     orderBy: { createdAt: "desc" },
+    skip: (currentPage - 1) * pageSize,
+    take: pageSize,
   });
 
   return (
@@ -137,6 +151,8 @@ export default async function ClientsPage() {
           </tbody>
         </table>
       </div>
+
+      <Pagination totalPages={totalPages} />
     </div>
   );
 }
