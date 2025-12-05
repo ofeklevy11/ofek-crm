@@ -108,9 +108,7 @@ function AggregationView({ title, data }: { title: string; data: any }) {
   return (
     <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-4 rounded-lg">
       <div className="text-sm text-gray-600 font-medium mb-1">
-        {data.aggregationType === "count" && data.field
-          ? `ערכים ייחודיים ב-${data.field}`
-          : data.aggregationType === "count"
+        {data.aggregationType === "count"
           ? 'סה"כ רשומות'
           : `${data.aggregationType?.toUpperCase()} of ${data.field}`}
       </div>
@@ -120,15 +118,8 @@ function AggregationView({ title, data }: { title: string; data: any }) {
           : data.result.toLocaleString()}
       </div>
       <div className="text-xs text-gray-500 mt-1">
-        {data.aggregationType === "count" && data.field
-          ? `מתוך ${data.count.toLocaleString()} רשומות`
-          : `מבוסס על ${data.count.toLocaleString()} רשומות`}
+        מבוסס על {data.count.toLocaleString()} רשומות
       </div>
-      {data.isLimited && (
-        <div className="mt-2 text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
-          ⚠️ הגבלה ל-{data.maxLimit.toLocaleString()} ערכים ייחודיים
-        </div>
-      )}
     </div>
   );
 }

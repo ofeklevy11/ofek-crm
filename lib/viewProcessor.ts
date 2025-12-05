@@ -117,58 +117,17 @@ function processAggregationView(
   }
 
   // Simple aggregation
-  // For count, we can optionally count unique values of a field
+  // For count, just count the filtered records
   if (config.aggregationType === "count") {
-    if (config.targetField) {
-      // Count unique values of the specified field (limited to 1000)
-      const uniqueValues = new Set<string>();
-      const MAX_UNIQUE_VALUES = 1000;
-
-      filteredRecords.forEach((record) => {
-        if (uniqueValues.size >= MAX_UNIQUE_VALUES) return;
-
-        const value = record.data?.[config.targetField!];
-        if (value !== null && value !== undefined && value !== "") {
-          // Handle arrays (multi-select fields)
-          if (Array.isArray(value)) {
-            value.forEach((v) => {
-              if (uniqueValues.size < MAX_UNIQUE_VALUES) {
-                uniqueValues.add(String(v));
-              }
-            });
-          } else {
-            uniqueValues.add(String(value));
-          }
-        }
-      });
-
-      const isLimited = uniqueValues.size >= MAX_UNIQUE_VALUES;
-
-      return {
-        type: "aggregation",
-        title: config.title,
-        data: {
-          aggregationType: "count",
-          field: config.targetField,
-          result: uniqueValues.size,
-          count: filteredRecords.length,
-          uniqueCount: uniqueValues.size,
-          isLimited,
-          maxLimit: MAX_UNIQUE_VALUES,
-        },
-      };
-    } else {
-      // Simple count of all filtered records
-      return {
-        type: "aggregation",
-        title: config.title,
-        data: {
-          aggregationType: "count",
-          result: filteredRecords.length,
-          count: filteredRecords.length,
-        },
-      };
-    }
+    return {
+      type: "aggregation",
+      title: config.title,
+      data: {
+        aggregationType: "count",
+        result: filteredRecords.length,
+        count: filteredRecords.length,
+      },
+    };
   }
 
   // For sum/avg, we need a target field

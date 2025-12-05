@@ -40,6 +40,10 @@ export default function AddViewModal({
   const [targetFields, setTargetFields] = useState<string[]>([]);
   const [groupByField, setGroupByField] = useState("");
 
+  // Filter state for count aggregation
+  const [filterField, setFilterField] = useState("");
+  const [filterValue, setFilterValue] = useState("");
+
   // Date filter state
   const [useDateFilter, setUseDateFilter] = useState(false);
   const [dateField, setDateField] = useState("");
@@ -77,8 +81,16 @@ export default function AddViewModal({
         if (targetField) config.targetField = targetField;
         if (targetFields.length > 0) config.targetFields = targetFields;
       } else if (aggregationType === "count") {
-        // For count, targetField is optional - if provided, count unique values of that field
-        if (targetField) config.targetField = targetField;
+        // For count, add filter if specified
+        if (filterField && filterValue) {
+          config.filters = [
+            {
+              field: filterField,
+              operator: "equals",
+              value: filterValue,
+            },
+          ];
+        }
       } else {
         // For sum/avg, targetField is required
         config.targetField = targetField;
@@ -345,29 +357,97 @@ export default function AddViewModal({
                   </div>
                 </>
               ) : aggregationType === "count" ? (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    שדה לספירה (אופציונלי)
-                  </label>
-                  <select
-                    value={targetField}
-                    onChange={(e) => setTargetField(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  >
-                    <option value="">ספירה כללית - כל הרשומות</option>
-                    {schema.map((field) => (
-                      <option key={field.name} value={field.name}>
-                        {field.label} - ספירת ערכים ייחודיים
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {targetField
-                      ? `יספור כמה ערכים ייחודיים יש בשדה "${
-                          schema.find((f) => f.name === targetField)?.label
-                        }" (עד 1000 רשומות)`
-                      : "תספור את כל הרשומות בטבלה"}
-                  </p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      שדה לפילטר (אופציונלי)
+                    </label>
+                    <select
+                      value={filterField}
+                      onChange={(e) => {
+                        setFilterField(e.target.value);
+                        setFilterValue(""); // Reset value when field changes
+                      }}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                    >
+                      <option value="">ספירה כללית - כל הרשומות</option>
+                      {schema.map((field) => (
+                        <option key={field.name} value={field.name}>
+                          {field.label} ({field.type})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {filterField
+                        ? `תספור רק רשומות שבשדה "${
+                            schema.find((f) => f.name === filterField)?.label
+                          }" יש את הערך שתבחר למטה`
+                        : "תספור את כל הרשומות בטבלה (ללא פילטר)"}
+                    </p>
+                  </div>
+
+                  {filterField &&
+                    (() => {
+                      const field = schema.find((f) => f.name === filterField);
+                      if (!field) return null;
+
+                      return (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            ערך לחיפוש <span className="text-red-500">*</span>
+                          </label>
+                          {field.type === "select" && field.options ? (
+                            <select
+                              value={filterValue}
+                              onChange={(e) => setFilterValue(e.target.value)}
+                              required
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                            >
+                              <option value="">בחר ערך...</option>
+                              {field.options.map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                          ) : field.type === "number" ? (
+                            <input
+                              type="number"
+                              value={filterValue}
+                              onChange={(e) => setFilterValue(e.target.value)}
+                              required
+                              placeholder="הכנס מספר..."
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                            />
+                          ) : field.type === "date" ? (
+                            <input
+                              type="date"
+                              value={filterValue}
+                              onChange={(e) => setFilterValue(e.target.value)}
+                              required
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                            />
+                          ) : (
+                            <input
+                              type="text"
+                              value={filterValue}
+                              onChange={(e) => setFilterValue(e.target.value)}
+                              required
+                              placeholder={`הכנס ${
+                                field.type === "text" ||
+                                field.type === "long-text"
+                                  ? "טקסט"
+                                  : "ערך"
+                              }...`}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                            />
+                          )}
+                          <p className="text-xs text-gray-500 mt-1">
+                            סוג שדה: {field.type}
+                          </p>
+                        </div>
+                      );
+                    })()}
                 </div>
               ) : (
                 <div>
