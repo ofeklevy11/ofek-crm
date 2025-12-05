@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import EditRecordModal from "./EditRecordModal";
 import ViewTextModal from "./ViewTextModal";
 import AdvancedSearch from "./AdvancedSearch";
+import ViewsPanel from "./ViewsPanel";
 
 interface SchemaField {
   name: string;
@@ -20,6 +21,13 @@ interface RecordTableProps {
   schema: SchemaField[];
   initialRecords: any[];
   slug?: string;
+  views?: Array<{
+    id: number;
+    name: string;
+    slug: string;
+    config: any;
+    isEnabled: boolean;
+  }>;
 }
 
 export default function RecordTable({
@@ -27,6 +35,7 @@ export default function RecordTable({
   schema,
   initialRecords,
   slug,
+  views = [],
 }: RecordTableProps) {
   const router = useRouter();
   const [records, setRecords] = useState<any[]>(initialRecords ?? []);
@@ -51,35 +60,6 @@ export default function RecordTable({
     null
   );
   const recordRefs = useRef<Record<number, HTMLTableRowElement>>({});
-
-  // Toggle state for views - Initialize from localStorage
-  const [viewToggles, setViewToggles] = useState<Record<string, boolean>>(
-    () => {
-      if (typeof window === "undefined") return {};
-      const saved = localStorage.getItem(`viewToggles_${slug}`);
-      return saved ? JSON.parse(saved) : {};
-    }
-  );
-
-  // Save view toggles to localStorage whenever they change
-  useEffect(() => {
-    if (slug) {
-      localStorage.setItem(`viewToggles_${slug}`, JSON.stringify(viewToggles));
-    }
-  }, [viewToggles, slug]);
-
-  // Helper to check if a view is enabled (default to true if not set)
-  const isViewEnabled = (viewName: string) => {
-    return viewToggles[viewName] !== false;
-  };
-
-  // Helper to toggle a view
-  const toggleView = (viewName: string) => {
-    setViewToggles((prev) => ({
-      ...prev,
-      [viewName]: !isViewEnabled(viewName),
-    }));
-  };
 
   // Fetch related data
   useEffect(() => {
@@ -350,39 +330,6 @@ export default function RecordTable({
 
   const handleExportAll = (format: "csv" | "txt") => {
     window.location.href = `/api/tables/${tableId}/export?format=${format}`;
-  };
-
-  // ViewCard component for wrapping views with toggle functionality
-  const ViewCard = ({
-    viewName,
-    title,
-    children,
-  }: {
-    viewName: string;
-    title: string;
-    children: React.ReactNode;
-  }) => {
-    const isEnabled = isViewEnabled(viewName);
-
-    return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-gray-50 to-white">
-          <h3 className="font-bold text-gray-900">{title}</h3>
-          <button
-            onClick={() => toggleView(viewName)}
-            className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
-              isEnabled
-                ? "bg-green-100 text-green-700 hover:bg-green-200"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-            title={isEnabled ? "הסתר" : "הצג"}
-          >
-            {isEnabled ? "ON" : "OFF"}
-          </button>
-        </div>
-        {isEnabled && <div className="p-6">{children}</div>}
-      </div>
-    );
   };
 
   const getRowColorClass = (recordData: any) => {
@@ -795,399 +742,15 @@ export default function RecordTable({
         </div>
       </div>
 
-      {slug === "leads" && (
-        <div className="w-full lg:w-80 shrink-0 space-y-4">
-          <ViewCard viewName="leads_new_leads" title="New Leads">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-blue-50 p-3 rounded-lg text-center">
-                <div className="text-2xl font-bold text-blue-600">
-                  {newLeadsWeek}
-                </div>
-                <div className="text-xs text-blue-600 font-medium">
-                  This Week
-                </div>
-              </div>
-              <div className="bg-purple-50 p-3 rounded-lg text-center">
-                <div className="text-2xl font-bold text-purple-600">
-                  {newLeadsMonth}
-                </div>
-                <div className="text-xs text-purple-600 font-medium">
-                  This Month
-                </div>
-              </div>
-            </div>
-          </ViewCard>
-
-          <ViewCard viewName="leads_status_stats" title="Lead Status Stats">
-            <div className="space-y-4">
-              {!statusField?.options?.length ? (
-                <p className="text-sm text-gray-500">
-                  No status field configured
-                </p>
-              ) : (
-                statusField.options.map((option) => {
-                  const count = records.filter(
-                    (r) => r.data?.[statusField.name] === option
-                  ).length;
-                  const percentage = getPercentage(count);
-                  const getStatusColor = (status: string) => {
-                    switch (status) {
-                      case "לא רלוונטי":
-                        return "bg-red-500";
-                      case "ליד רגיל":
-                        return "bg-gray-400";
-                      case "ליד קר":
-                        return "bg-yellow-500";
-                      case "ליד חם":
-                        return "bg-green-500";
-                      case "ליד שנסגר":
-                        return "bg-blue-500";
-                      case "ליד שלא נסגר":
-                        return "bg-orange-500";
-                      default:
-                        return "bg-gray-300";
-                    }
-                  };
-
-                  return (
-                    <div key={option}>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-600">{option}</span>
-                        <span className="font-medium text-gray-900">
-                          {count} ({percentage}%)
-                        </span>
-                      </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${getStatusColor(
-                            option
-                          )}`}
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </ViewCard>
-
-          <ViewCard viewName="leads_sources" title="Lead Sources">
-            <div className="space-y-3">
-              {!sourceFieldName ||
-              !schema.find((f) => f.name === sourceFieldName)?.options
-                ?.length ? (
-                <p className="text-sm text-gray-500">
-                  No source field configured
-                </p>
-              ) : (
-                (
-                  schema.find((f) => f.name === sourceFieldName)!.options || []
-                ).map((option, index) => {
-                  const count = records.filter(
-                    (r) => r.data?.[sourceFieldName] === option
-                  ).length;
-                  const percentage = getPercentage(count);
-                  const sourceColors = [
-                    "bg-blue-600",
-                    "bg-purple-600",
-                    "bg-green-600",
-                    "bg-orange-600",
-                    "bg-pink-600",
-                    "bg-indigo-600",
-                    "bg-teal-600",
-                    "bg-red-600",
-                  ];
-                  const colorClass = sourceColors[index % sourceColors.length];
-
-                  return (
-                    <div key={option}>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-600">{option}</span>
-                        <span className="font-medium text-gray-900">
-                          {count} ({percentage}%)
-                        </span>
-                      </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full ${colorClass} rounded-full`}
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </ViewCard>
-
-          <ViewCard viewName="leads_legend" title="Legend">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-white border border-gray-200"></div>
-                <span className="text-sm text-gray-600">Regular Lead</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-green-100 border border-green-200"></div>
-                <span className="text-sm text-gray-600">Hot Lead</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-yellow-100 border border-yellow-200"></div>
-                <span className="text-sm text-gray-600">Cold Lead</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-blue-100 border border-blue-200"></div>
-                <span className="text-sm text-gray-600">Closed Lead</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-orange-100 border border-orange-200"></div>
-                <span className="text-sm text-gray-600">Unclosed Lead</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-red-100 border border-red-200"></div>
-                <span className="text-sm text-gray-600">Irrelevant</span>
-              </div>
-            </div>
-          </ViewCard>
-        </div>
-      )}
-
-      {slug === "digital-marketing" && (
-        <div className="w-full lg:w-80 shrink-0 space-y-4">
-          <ViewCard viewName="dm_new_clients" title="New Clients">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-blue-50 p-3 rounded-lg text-center">
-                <div className="text-2xl font-bold text-blue-600">
-                  {newLeadsWeek}
-                </div>
-                <div className="text-xs text-blue-600 font-medium">
-                  This Week
-                </div>
-              </div>
-              <div className="bg-purple-50 p-3 rounded-lg text-center">
-                <div className="text-2xl font-bold text-purple-600">
-                  {newLeadsMonth}
-                </div>
-                <div className="text-xs text-purple-600 font-medium">
-                  This Month
-                </div>
-              </div>
-            </div>
-          </ViewCard>
-
-          {(() => {
-            const paymentTypeField = schema.find(
-              (f) =>
-                f.label.includes("סוג תשלום") ||
-                f.options?.includes("ריטיינר") ||
-                f.name.includes("payment")
-            );
-
-            const amountField = schema.find(
-              (f) =>
-                f.type === "number" ||
-                f.label.includes("סכום") ||
-                f.label.includes("מחיר") ||
-                f.name.includes("amount") ||
-                f.name.includes("price")
-            );
-
-            if (!paymentTypeField || !amountField) return null;
-
-            const retainerSum = records
-              .filter((r) =>
-                String(r.data?.[paymentTypeField.name] || "").includes(
-                  "ריטיינר"
-                )
-              )
-              .reduce((sum, r) => {
-                const val = parseFloat(r.data?.[amountField.name]);
-                return sum + (isNaN(val) ? 0 : val);
-              }, 0);
-
-            const oneTimeSum = records
-              .filter((r) =>
-                String(r.data?.[paymentTypeField.name] || "").includes(
-                  "תשלום חד פעמי"
-                )
-              )
-              .reduce((sum, r) => {
-                const val = parseFloat(r.data?.[amountField.name]);
-                return sum + (isNaN(val) ? 0 : val);
-              }, 0);
-
-            return (
-              <ViewCard viewName="dm_revenue" title="Revenue Stats">
-                <div className="space-y-4">
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <div className="text-sm text-green-800 font-medium mb-1">
-                      Retainer (Monthly)
-                    </div>
-                    <div className="text-2xl font-bold text-green-700">
-                      ₪{retainerSum.toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="bg-yellow-50 p-4 rounded-lg">
-                    <div className="text-sm text-yellow-800 font-medium mb-1">
-                      One-Time Payment
-                    </div>
-                    <div className="text-2xl font-bold text-yellow-700">
-                      ₪{oneTimeSum.toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-              </ViewCard>
-            );
-          })()}
-
-          {(() => {
-            const paymentTypeField = schema.find(
-              (f) =>
-                f.label.includes("סוג תשלום") ||
-                f.options?.includes("ריטיינר") ||
-                f.name.includes("payment")
-            );
-
-            if (!paymentTypeField) return null;
-
-            const retainerCount = records.filter((r) =>
-              String(r.data?.[paymentTypeField.name] || "").includes("ריטיינר")
-            ).length;
-
-            const oneTimeCount = records.filter((r) =>
-              String(r.data?.[paymentTypeField.name] || "").includes(
-                "תשלום חד פעמי"
-              )
-            ).length;
-
-            return (
-              <ViewCard viewName="dm_client_types" title="Client Types">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-green-50 p-3 rounded-lg text-center">
-                    <div className="text-2xl font-bold text-green-600">
-                      {retainerCount}
-                    </div>
-                    <div className="text-xs text-green-600 font-medium">
-                      Retainers
-                    </div>
-                  </div>
-                  <div className="bg-yellow-50 p-3 rounded-lg text-center">
-                    <div className="text-2xl font-bold text-yellow-600">
-                      {oneTimeCount}
-                    </div>
-                    <div className="text-xs text-yellow-600 font-medium">
-                      One-Time
-                    </div>
-                  </div>
-                </div>
-              </ViewCard>
-            );
-          })()}
-
-          {(() => {
-            const serviceField = schema.find(
-              (f) =>
-                f.label.includes("שירות") ||
-                f.name.toLowerCase().includes("service")
-            );
-
-            if (!serviceField) return null;
-
-            const serviceCounts: Record<string, number> = {};
-            records.forEach((r) => {
-              const val = r.data?.[serviceField.name];
-              if (val) {
-                let services: string[] = [];
-                if (Array.isArray(val)) {
-                  services = val;
-                } else if (typeof val === "string") {
-                  if (val.startsWith("[") && val.endsWith("]")) {
-                    try {
-                      const parsed = JSON.parse(val);
-                      if (Array.isArray(parsed)) services = parsed;
-                      else services = [val];
-                    } catch {
-                      services = [val];
-                    }
-                  } else {
-                    services = [val];
-                  }
-                }
-
-                services.forEach((s: string) => {
-                  const cleanS = String(s).trim();
-                  if (cleanS) {
-                    serviceCounts[cleanS] = (serviceCounts[cleanS] || 0) + 1;
-                  }
-                });
-              }
-            });
-
-            const sortedServices = Object.entries(serviceCounts).sort(
-              (a, b) => b[1] - a[1]
-            );
-
-            return (
-              <ViewCard viewName="dm_services" title="Services Breakdown">
-                <div className="space-y-3">
-                  {sortedServices.length === 0 ? (
-                    <p className="text-sm text-gray-500">No services found</p>
-                  ) : (
-                    sortedServices.map(([service, count], index) => {
-                      const percentage = getPercentage(count);
-                      const colors = [
-                        "bg-indigo-500",
-                        "bg-pink-500",
-                        "bg-cyan-500",
-                        "bg-amber-500",
-                      ];
-                      const color = colors[index % colors.length];
-
-                      return (
-                        <div key={service}>
-                          <div className="flex justify-between text-sm mb-1">
-                            <span
-                              className="text-gray-600 truncate max-w-[150px]"
-                              title={service}
-                            >
-                              {service}
-                            </span>
-                            <span className="font-medium text-gray-900">
-                              {count}
-                            </span>
-                          </div>
-                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${color}`}
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </ViewCard>
-            );
-          })()}
-
-          <ViewCard viewName="dm_legend" title="Legend">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-green-100 border border-green-200"></div>
-                <span className="text-sm text-gray-600">Retainer</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-yellow-100 border border-yellow-200"></div>
-                <span className="text-sm text-gray-600">One-Time Payment</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-red-100 border border-red-200"></div>
-                <span className="text-sm text-gray-600">Inactive Client</span>
-              </div>
-            </div>
-          </ViewCard>
-        </div>
+      {/* Dynamic Views Panel - replaces all hardcoded views */}
+      {slug && (
+        <ViewsPanel
+          tableId={tableId}
+          tableSlug={slug}
+          schema={schema}
+          records={records}
+          views={views || []}
+        />
       )}
     </div>
   );

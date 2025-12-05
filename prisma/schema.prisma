@@ -33,6 +33,7 @@ model TableMeta {
   creator    User     @relation("CreatedBy", fields: [createdBy], references: [id])
   categoryId Int?
   category   TableCategory? @relation(fields: [categoryId], references: [id])
+  views      View[]   @relation("TableViews")
 }
 
 model TableCategory {
@@ -42,6 +43,22 @@ model TableCategory {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 }
+
+model View {
+  id         Int       @id @default(autoincrement())
+  tableId    Int
+  name       String
+  slug       String
+  config     Json
+  isEnabled  Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  table      TableMeta @relation("TableViews", fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@unique([tableId, slug])
+  @@index([tableId])
+}
+
 
 model Record {
   id          Int          @id @default(autoincrement())

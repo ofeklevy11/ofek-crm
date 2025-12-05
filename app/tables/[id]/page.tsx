@@ -78,6 +78,12 @@ export default async function TableDetailsPage({
     console.error("Invalid schema JSON", e);
   }
 
+  // Load views for this table
+  const views = await prisma.view.findMany({
+    where: { tableId },
+    orderBy: { createdAt: "asc" },
+  });
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-8">
       <div className="max-w-7xl mx-auto">
@@ -112,6 +118,13 @@ export default async function TableDetailsPage({
             createdAt: r.createdAt.toISOString(),
           }))}
           slug={table.slug}
+          views={views.map((v) => ({
+            id: v.id,
+            name: v.name,
+            slug: v.slug,
+            config: v.config,
+            isEnabled: v.isEnabled,
+          }))}
         />
         <Pagination totalPages={totalPages} />
       </div>
