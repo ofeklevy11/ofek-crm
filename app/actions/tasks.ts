@@ -90,6 +90,16 @@ export async function updateTask(
       data: updateData,
     });
 
+    if (data.status) {
+      // Old hardcoded notification - remove if no longer needed, or keep for testing specific case
+      // For now, replacing with the dynamic automation system
+      const { processTaskStatusChange } = await import("./automations");
+      // Getting the task before update to know previous status would be ideal for "fromStatus" logic
+      // Since we already fetched it at the start or database, but updateTask doesn't fetch first.
+      // For simplified "Status Changed To" logic:
+      await processTaskStatusChange(task.title, "unknown", data.status);
+    }
+
     revalidatePath("/tasks");
     revalidatePath("/");
 
