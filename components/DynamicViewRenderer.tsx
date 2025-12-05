@@ -29,9 +29,9 @@ export default function DynamicViewRenderer({
 
 function StatsView({ title, data }: { title: string; data: any }) {
   const timeRangeLabels = {
-    week: "This Week",
-    month: "This Month",
-    all: "All Time",
+    week: "השבוע",
+    month: "החודש",
+    all: "כל הזמנים",
   };
 
   const colors = {
@@ -43,14 +43,25 @@ function StatsView({ title, data }: { title: string; data: any }) {
   const color = colors[data.timeRange as keyof typeof colors] || colors.all;
 
   return (
-    <div>
+    <div className="space-y-2">
       <div className={`${color.bg} p-3 rounded-lg text-center`}>
-        <div className={`text-2xl font-bold ${color.text}`}>{data.count}</div>
+        <div className={`text-2xl font-bold ${color.text}`}>
+          {data.count.toLocaleString()}
+          {data.isOverLimit && <span>+</span>}
+        </div>
         <div className={`text-xs ${color.text} font-medium`}>
           {timeRangeLabels[data.timeRange as keyof typeof timeRangeLabels] ||
-            "Count"}
+            "ספירה"}
         </div>
       </div>
+      {data.isOverLimit && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 text-xs text-orange-800">
+          <div className="font-semibold">📊 מעל 1,000 רשומות</div>
+          <div className="mt-1">
+            לצפייה במלוא הנתונים, יש לשדרג את החבילה. צור קשר עם התמיכה.
+          </div>
+        </div>
+      )}
     </div>
   );
 }

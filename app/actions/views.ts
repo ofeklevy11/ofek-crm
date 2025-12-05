@@ -59,7 +59,24 @@ export async function createView(data: {
     return { success: true, view };
   } catch (error: any) {
     console.error("Error creating view:", error);
-    return { success: false, error: error.message };
+
+    // Check if it's a unique constraint error
+    if (
+      error.code === "P2002" ||
+      error.message?.includes("Unique constraint")
+    ) {
+      return {
+        success: false,
+        error:
+          "תצוגה עם אותו מזהה כבר קיימת בטבלה הזו. אנא בחר שם או מזהה אחר.",
+      };
+    }
+
+    // Generic error message for other types of errors
+    return {
+      success: false,
+      error: "אירעה שגיאה ביצירת התצוגה. אנא נסה שוב או צור קשר עם התמיכה.",
+    };
   }
 }
 
@@ -87,7 +104,33 @@ export async function updateView(
     return { success: true, view };
   } catch (error: any) {
     console.error("Error updating view:", error);
-    return { success: false, error: error.message };
+
+    // Check if it's a unique constraint error
+    if (
+      error.code === "P2002" ||
+      error.message?.includes("Unique constraint")
+    ) {
+      return {
+        success: false,
+        error: "מזהה זה כבר בשימוש. אנא בחר מזהה אחר.",
+      };
+    }
+
+    // Check if view not found
+    if (
+      error.code === "P2025" ||
+      error.message?.includes("Record to update not found")
+    ) {
+      return {
+        success: false,
+        error: "התצוגה לא נמצאה.",
+      };
+    }
+
+    return {
+      success: false,
+      error: "אירעה שגיאה בעדכון התצוגה. אנא נסה שוב.",
+    };
   }
 }
 
@@ -98,7 +141,7 @@ export async function toggleView(viewId: number) {
     });
 
     if (!currentView) {
-      return { success: false, error: "View not found" };
+      return { success: false, error: "התצוגה לא נמצאה." };
     }
 
     const view = await prisma.view.update({
@@ -112,7 +155,10 @@ export async function toggleView(viewId: number) {
     return { success: true, view };
   } catch (error: any) {
     console.error("Error toggling view:", error);
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: "אירעה שגיאה בשינוי מצב התצוגה. אנא נסה שוב.",
+    };
   }
 }
 
@@ -123,7 +169,7 @@ export async function deleteView(viewId: number) {
     });
 
     if (!view) {
-      return { success: false, error: "View not found" };
+      return { success: false, error: "התצוגה לא נמצאה." };
     }
 
     await prisma.view.delete({
@@ -134,7 +180,10 @@ export async function deleteView(viewId: number) {
     return { success: true };
   } catch (error: any) {
     console.error("Error deleting view:", error);
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: "אירעה שגיאה במחיקת התצוגה. אנא נסה שוב.",
+    };
   }
 }
 

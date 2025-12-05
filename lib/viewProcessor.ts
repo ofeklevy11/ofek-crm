@@ -75,15 +75,21 @@ function processStatsView(
     config.filters || [],
     config.dateFilter
   );
-  const count = filteredRecords.filter(
+  const actualCount = filteredRecords.filter(
     (r) => r.createdAt && new Date(r.createdAt) >= startDate
   ).length;
+
+  const MAX_DISPLAY_COUNT = 999;
+  const isOverLimit = actualCount > MAX_DISPLAY_COUNT;
+  const displayCount = isOverLimit ? MAX_DISPLAY_COUNT : actualCount;
 
   return {
     type: "stats",
     title: config.title,
     data: {
-      count,
+      count: displayCount,
+      actualCount,
+      isOverLimit,
       timeRange: config.timeRange,
     },
   };
