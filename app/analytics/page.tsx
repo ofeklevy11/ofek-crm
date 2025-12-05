@@ -146,6 +146,7 @@ export default function AnalyticsPage() {
           isOpen={!!selectedView}
           onClose={() => setSelectedView(null)}
           title={selectedView.ruleName}
+          tableName={selectedView.tableName}
           data={selectedView.data}
         />
       )}

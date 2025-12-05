@@ -6,12 +6,15 @@ interface AnalyticsDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
+  tableName: string;
   data: {
     id: string;
     title: string;
     status: string;
     duration: string;
     updatedAt: string;
+    type: string;
+    recordId: string | number;
   }[];
 }
 
@@ -19,17 +22,24 @@ export default function AnalyticsDetailsModal({
   isOpen,
   onClose,
   title,
+  tableName,
   data,
 }: AnalyticsDetailsModalProps) {
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] flex flex-col">
         <div className="flex justify-between items-center p-6 border-b border-gray-200">
-          <h3 className="text-xl font-semibold text-gray-900 line-clamp-1">
-            {title}
-          </h3>
+          <div>
+            <h3 className="text-xl font-semibold text-gray-900 line-clamp-1">
+              {title}
+            </h3>
+            <p className="text-sm text-gray-500 mt-1">
+              מקור:{" "}
+              <span className="font-medium text-gray-700">{tableName}</span>
+            </p>
+          </div>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-500 transition-colors"
@@ -48,6 +58,9 @@ export default function AnalyticsDetailsModal({
               <table className="w-full text-right">
                 <thead className="bg-gray-50 text-gray-700 text-sm">
                   <tr>
+                    <th className="px-4 py-3 font-medium text-right rounded-tr-lg">
+                      מזהה רשומה
+                    </th>
                     <th className="px-4 py-3 font-medium text-right">
                       שינוי סטטוס
                     </th>
@@ -59,6 +72,9 @@ export default function AnalyticsDetailsModal({
                 <tbody className="divide-y divide-gray-100 text-sm">
                   {data.map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">
+                        {item.recordId}
+                      </td>
                       <td className="px-4 py-3 text-gray-900">{item.status}</td>
                       <td className="px-4 py-3 text-blue-600 font-medium ltr text-right">
                         <span dir="ltr">{item.duration}</span>

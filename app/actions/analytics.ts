@@ -120,6 +120,7 @@ export async function getAnalyticsData() {
             duration: d.durationString, // Already formatted in DB
             updatedAt: d.createdAt, // Or recordUpdatedAt
             type: tableName,
+            recordId: d.recordId || d.taskId || "",
           };
         });
       }

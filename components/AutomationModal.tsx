@@ -40,7 +40,7 @@ export default function AutomationModal({
   const [name, setName] = useState(editingRule?.name || "");
   const [triggerType, setTriggerType] = useState<
     "TASK_STATUS_CHANGE" | "NEW_RECORD" | "RECORD_FIELD_CHANGE"
-  >((editingRule?.triggerType as any) || "TASK_STATUS_CHANGE");
+  >((editingRule?.triggerType as any) || "RECORD_FIELD_CHANGE");
 
   // Task specific
   const [toStatus, setToStatus] = useState(
@@ -219,9 +219,6 @@ export default function AutomationModal({
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="TASK_STATUS_CHANGE">
-                שינוי סטטוס משימה (ישן)
-              </option>
               <option value="RECORD_FIELD_CHANGE">שינוי ערך בטבלה</option>
               <option value="NEW_RECORD">רשומה חדשה בטבלה</option>
             </select>
