@@ -49,11 +49,16 @@ export default function RecordTable({
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editingRecord, setEditingRecord] = useState<any | null>(null);
+  const [editingField, setEditingField] = useState<string | undefined>(
+    undefined
+  );
   // Dynamic filters - one state for each select/multi-select field
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [viewText, setViewText] = useState<{
     title: string;
     text: string;
+    record?: any;
+    fieldName?: string;
   } | null>(null);
   const [relatedData, setRelatedData] = useState<Record<string, any>>({});
   const [highlightedRecordId, setHighlightedRecordId] = useState<number | null>(
@@ -124,6 +129,7 @@ export default function RecordTable({
     const record = records.find((r) => r.id === recordId);
     if (record) {
       setEditingRecord(record);
+      setEditingField(undefined);
     }
   };
 
@@ -600,7 +606,10 @@ export default function RecordTable({
                     </td>
                     <td className="p-4">
                       <button
-                        onClick={() => setEditingRecord(record)}
+                        onClick={() => {
+                          setEditingRecord(record);
+                          setEditingField(undefined);
+                        }}
                         className="text-blue-600 hover:text-blue-800 font-medium"
                         title="Edit Record"
                       >
@@ -610,7 +619,16 @@ export default function RecordTable({
                     <td className="p-4 text-black">#{record.id}</td>
 
                     {uniqueFields.map((field) => (
-                      <td key={field.name} className="p-4 text-black align-top">
+                      <td
+                        key={field.name}
+                        onClick={() => {
+                          // Click entire cell to edit
+                          setEditingRecord(record);
+                          setEditingField(field.name);
+                        }}
+                        className="p-4 text-black align-top cursor-pointer hover:bg-black/5"
+                        title="Click to edit"
+                      >
                         <div className="max-h-[100px] max-w-[200px] overflow-y-auto custom-scrollbar">
                           {(() => {
                             const val = record.data?.[field.name];
@@ -645,6 +663,8 @@ export default function RecordTable({
                                       setViewText({
                                         title: field.label,
                                         text: String(val),
+                                        record: record,
+                                        fieldName: field.name,
                                       });
                                     }}
                                   >
@@ -783,8 +803,10 @@ export default function RecordTable({
             <EditRecordModal
               record={editingRecord}
               schema={schema}
+              initialFocusField={editingField}
               onClose={() => {
                 setEditingRecord(null);
+                setEditingField(undefined);
                 router.refresh();
               }}
             />
@@ -794,6 +816,15 @@ export default function RecordTable({
             <ViewTextModal
               title={viewText.title}
               text={viewText.text}
+              onEdit={
+                viewText.record
+                  ? () => {
+                      setEditingRecord(viewText.record);
+                      setEditingField(viewText.fieldName);
+                      setViewText(null);
+                    }
+                  : undefined
+              }
               onClose={() => setViewText(null)}
             />
           )}

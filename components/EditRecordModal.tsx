@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import RelationPicker from "./RelationPicker";
 
@@ -20,12 +20,14 @@ interface EditRecordModalProps {
   record: any;
   schema: SchemaField[];
   onClose: () => void;
+  initialFocusField?: string;
 }
 
 export default function EditRecordModal({
   record,
   schema,
   onClose,
+  initialFocusField,
 }: EditRecordModalProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -34,6 +36,20 @@ export default function EditRecordModal({
   const [attachments, setAttachments] = useState<any[]>([]);
   const [newAttachmentUrl, setNewAttachmentUrl] = useState("");
   const [uploading, setUploading] = useState(false);
+
+  // Auto-focus logic
+  useEffect(() => {
+    if (initialFocusField) {
+      // Small timeout to ensure DOM is ready
+      setTimeout(() => {
+        const element = document.getElementById(`field-${initialFocusField}`);
+        if (element) {
+          element.focus();
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 100);
+    }
+  }, [initialFocusField]);
 
   useEffect(() => {
     if (record && record.data) {
@@ -153,6 +169,7 @@ export default function EditRecordModal({
                   </label>
                   {field.type === "select" ? (
                     <select
+                      id={`field-${field.name}`}
                       value={formData[field.name] || ""}
                       onChange={(e) =>
                         setFormData({
@@ -171,6 +188,7 @@ export default function EditRecordModal({
                     </select>
                   ) : field.type === "boolean" ? (
                     <select
+                      id={`field-${field.name}`}
                       value={
                         formData[field.name] === undefined
                           ? ""
@@ -190,6 +208,7 @@ export default function EditRecordModal({
                     </select>
                   ) : field.type === "textarea" ? (
                     <textarea
+                      id={`field-${field.name}`}
                       value={formData[field.name] || ""}
                       onChange={(e) =>
                         setFormData({
@@ -200,7 +219,7 @@ export default function EditRecordModal({
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none min-h-[100px]"
                     />
                   ) : field.type === "radio" ? (
-                    <div className="flex gap-4 pt-2">
+                    <div className="flex gap-4 pt-2" id={`field-${field.name}`}>
                       {field.options?.map((opt, i) => (
                         <label
                           key={`${opt}-${i}`}
@@ -226,6 +245,7 @@ export default function EditRecordModal({
                   ) : field.type === "multi-select" ? (
                     <select
                       multiple
+                      id={`field-${field.name}`}
                       value={
                         Array.isArray(formData[field.name])
                           ? formData[field.name]
@@ -247,7 +267,10 @@ export default function EditRecordModal({
                       ))}
                     </select>
                   ) : field.type === "tags" ? (
-                    <div className="flex flex-wrap gap-2">
+                    <div
+                      className="flex flex-wrap gap-2"
+                      id={`field-${field.name}`}
+                    >
                       {field.options?.map((tag, i) => {
                         const rawValue = formData[field.name];
                         const currentTags = Array.isArray(rawValue)
@@ -284,58 +307,64 @@ export default function EditRecordModal({
                       )}
                     </div>
                   ) : field.type === "relation" && field.relationTableId ? (
-                    <RelationPicker
-                      tableId={field.relationTableId}
-                      value={formData[field.name]}
-                      allowMultiple={field.allowMultiple}
-                      displayField={field.displayField}
-                      onChange={async (val) => {
-                        // Update the relation field
-                        const newFormData = { ...formData, [field.name]: val };
-                        setFormData(newFormData);
+                    <div id={`field-${field.name}`}>
+                      <RelationPicker
+                        tableId={field.relationTableId}
+                        value={formData[field.name]}
+                        allowMultiple={field.allowMultiple}
+                        displayField={field.displayField}
+                        onChange={async (val) => {
+                          // Update the relation field
+                          const newFormData = {
+                            ...formData,
+                            [field.name]: val,
+                          };
+                          setFormData(newFormData);
 
-                        // Find dependent lookup fields
-                        const lookupFields = schema.filter(
-                          (f) =>
-                            f.type === "lookup" &&
-                            f.relationField === field.name
-                        );
+                          // Find dependent lookup fields
+                          const lookupFields = schema.filter(
+                            (f) =>
+                              f.type === "lookup" &&
+                              f.relationField === field.name
+                          );
 
-                        if (lookupFields.length > 0) {
-                          if (val && !Array.isArray(val)) {
-                            try {
-                              const res = await fetch(`/api/records/${val}`);
-                              if (res.ok) {
-                                const relatedRecord = await res.json();
-                                const updates: Record<string, any> = {};
+                          if (lookupFields.length > 0) {
+                            if (val && !Array.isArray(val)) {
+                              try {
+                                const res = await fetch(`/api/records/${val}`);
+                                if (res.ok) {
+                                  const relatedRecord = await res.json();
+                                  const updates: Record<string, any> = {};
 
-                                lookupFields.forEach((lf) => {
-                                  if (lf.lookupField) {
-                                    updates[lf.name] =
-                                      relatedRecord.data[lf.lookupField];
-                                  }
-                                });
+                                  lookupFields.forEach((lf) => {
+                                    if (lf.lookupField) {
+                                      updates[lf.name] =
+                                        relatedRecord.data[lf.lookupField];
+                                    }
+                                  });
 
-                                setFormData({ ...newFormData, ...updates });
+                                  setFormData({ ...newFormData, ...updates });
+                                }
+                              } catch (error) {
+                                console.error(
+                                  "Failed to fetch lookup data",
+                                  error
+                                );
                               }
-                            } catch (error) {
-                              console.error(
-                                "Failed to fetch lookup data",
-                                error
-                              );
+                            } else {
+                              const updates: Record<string, any> = {};
+                              lookupFields.forEach((lf) => {
+                                updates[lf.name] = "";
+                              });
+                              setFormData({ ...newFormData, ...updates });
                             }
-                          } else {
-                            const updates: Record<string, any> = {};
-                            lookupFields.forEach((lf) => {
-                              updates[lf.name] = "";
-                            });
-                            setFormData({ ...newFormData, ...updates });
                           }
-                        }
-                      }}
-                    />
+                        }}
+                      />
+                    </div>
                   ) : (
                     <input
+                      id={`field-${field.name}`}
                       type={
                         field.type === "number"
                           ? "number"
