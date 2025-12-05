@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import TableCard from "@/components/TableCard";
 import { useRouter } from "next/navigation";
+import AITableCreator from "@/components/AITableCreator";
 
 interface Category {
   id: number;
@@ -31,6 +32,7 @@ export default function TablesDashboard({
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
 
@@ -78,6 +80,12 @@ export default function TablesDashboard({
             <p className="text-gray-600">Manage your custom data tables</p>
           </div>
           <div className="flex gap-4">
+            <button
+              onClick={() => setIsAIModalOpen(true)}
+              className="bg-white text-indigo-600 py-3 px-6 rounded-xl hover:bg-indigo-50 transition shadow-sm border border-indigo-200 font-medium flex items-center gap-2"
+            >
+              <span className="text-lg">✨</span> Create with AI
+            </button>
             <button
               onClick={() => setIsCategoryModalOpen(true)}
               className="bg-white text-gray-700 py-3 px-6 rounded-xl hover:bg-gray-50 transition shadow-sm border border-gray-200 font-medium"
@@ -144,12 +152,20 @@ export default function TablesDashboard({
                 <p className="text-gray-600 mb-6">
                   Create your first table to start managing your data
                 </p>
-                <Link
-                  href="/tables/new"
-                  className="inline-block bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-8 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
-                >
-                  + Create Your First Table
-                </Link>
+                <div className="flex justify-center gap-4">
+                  <button
+                    onClick={() => setIsAIModalOpen(true)}
+                    className="bg-white text-indigo-600 py-3 px-6 rounded-xl hover:bg-indigo-50 transition shadow-sm border border-indigo-200 font-medium flex items-center gap-2"
+                  >
+                    <span className="text-lg">✨</span> Create with AI
+                  </button>
+                  <Link
+                    href="/tables/new"
+                    className="inline-block bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-8 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
+                  >
+                    + Create Your First Table
+                  </Link>
+                </div>
               </div>
             </div>
           )}
@@ -192,6 +208,12 @@ export default function TablesDashboard({
           </div>
         </div>
       )}
+
+      {/* AI Table Creator Modal */}
+      <AITableCreator
+        isOpen={isAIModalOpen}
+        onClose={() => setIsAIModalOpen(false)}
+      />
     </div>
   );
 }
