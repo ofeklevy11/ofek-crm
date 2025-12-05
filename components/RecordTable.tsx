@@ -40,8 +40,8 @@ export default function RecordTable({
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editingRecord, setEditingRecord] = useState<any | null>(null);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [sourceFilter, setSourceFilter] = useState("");
+  // Dynamic filters - one state for each select/multi-select field
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [viewText, setViewText] = useState<{
     title: string;
     text: string;
@@ -152,7 +152,8 @@ export default function RecordTable({
     (field, index, self) =>
       index === self.findIndex((t) => t.name === field.name)
   );
-  // helper: find source/status fields
+
+  // helper: find status and source fields (for row coloring and dashboard widgets)
   const statusField = schema.find(
     (f) =>
       f.name.toLowerCase() === "status" ||
@@ -161,6 +162,7 @@ export default function RecordTable({
       f.label.includes("סטטוס")
   );
   const statusFieldName = statusField?.name;
+
   const sourceFieldName = schema.find(
     (f) =>
       f.name.includes("source") ||
@@ -174,20 +176,27 @@ export default function RecordTable({
       (f.name.toLowerCase().includes("active") || f.label.includes("פעיל"))
   )?.name;
 
-  // Filter records
+  // Get all filterable fields (select and multi-select)
+  const filterableFields = schema.filter(
+    (f) => f.type === "select" || f.type === "multi-select"
+  );
+
+  // Filter records based on all active filters
   const filteredRecords = records.filter((record) => {
-    if (
-      statusFilter &&
-      statusFieldName &&
-      record.data?.[statusFieldName] !== statusFilter
-    )
-      return false;
-    if (
-      sourceFilter &&
-      sourceFieldName &&
-      record.data?.[sourceFieldName] !== sourceFilter
-    )
-      return false;
+    // Check each active filter
+    for (const [fieldName, filterValue] of Object.entries(filters)) {
+      if (!filterValue) continue; // Skip empty filters
+
+      const recordValue = record.data?.[fieldName];
+
+      // For multi-select fields, check if array includes the filter value
+      if (Array.isArray(recordValue)) {
+        if (!recordValue.includes(filterValue)) return false;
+      } else {
+        // For select fields, check exact match
+        if (recordValue !== filterValue) return false;
+      }
+    }
     return true;
   });
 
@@ -436,42 +445,42 @@ export default function RecordTable({
               <div className="text-sm text-black whitespace-nowrap">
                 {selectedIds.length} selected
               </div>
-              {slug === "leads" && (
-                <>
+              {/* Dynamic Filters for all select/multi-select fields */}
+              {filterableFields.map((field) => {
+                // Get unique options for this field from the records
+                const uniqueOptions = Array.from(
+                  new Set(
+                    records
+                      .map((r) => r.data?.[field.name])
+                      .filter(Boolean)
+                      .flatMap((val) =>
+                        // Handle both array values (multi-select) and single values (select)
+                        Array.isArray(val) ? val : [val]
+                      )
+                  )
+                ).sort();
+
+                return (
                   <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
+                    key={field.name}
+                    value={filters[field.name] || ""}
+                    onChange={(e) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        [field.name]: e.target.value,
+                      }))
+                    }
                     className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white text-black"
                   >
-                    <option value="">All Statuses</option>
-                    {statusField?.options?.map((opt) => (
+                    <option value="">כל {field.label}</option>
+                    {(field.options || uniqueOptions).map((opt) => (
                       <option key={opt} value={opt}>
                         {opt}
                       </option>
                     ))}
                   </select>
-
-                  <select
-                    value={sourceFilter}
-                    onChange={(e) => setSourceFilter(e.target.value)}
-                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white text-black"
-                  >
-                    <option value="">All Sources</option>
-                    {schema
-                      .find(
-                        (f) =>
-                          f.name.includes("source") ||
-                          f.label.toLowerCase().includes("source") ||
-                          f.label.includes("מקור")
-                      )
-                      ?.options?.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                  </select>
-                </>
-              )}
+                );
+              })}
             </div>
 
             {/* actions */}
