@@ -81,7 +81,7 @@ export default async function TableDetailsPage({
   // Load views for this table
   const views = await prisma.view.findMany({
     where: { tableId },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
   });
 
   return (

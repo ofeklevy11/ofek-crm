@@ -45,6 +45,15 @@ export async function createView(data: {
   isEnabled?: boolean;
 }) {
   try {
+    // Get the highest order value for this table to add the new view at the end
+    const maxOrderView = await prisma.view.findFirst({
+      where: { tableId: data.tableId },
+      orderBy: { order: "desc" },
+      select: { order: true },
+    });
+
+    const nextOrder = (maxOrderView?.order ?? -1) + 1;
+
     const view = await prisma.view.create({
       data: {
         tableId: data.tableId,
@@ -52,6 +61,7 @@ export async function createView(data: {
         slug: data.slug,
         config: data.config as any,
         isEnabled: data.isEnabled ?? true,
+        order: nextOrder,
       },
     });
 
@@ -191,7 +201,7 @@ export async function getViewsForTable(tableId: number) {
   try {
     const views = await prisma.view.findMany({
       where: { tableId },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ order: "asc" }, { createdAt: "asc" }],
     });
 
     return { success: true, views };
@@ -208,12 +218,44 @@ export async function getEnabledViewsForTable(tableId: number) {
         tableId,
         isEnabled: true,
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ order: "asc" }, { createdAt: "asc" }],
     });
 
     return { success: true, views };
   } catch (error: any) {
     console.error("Error fetching enabled views:", error);
     return { success: false, error: error.message, views: [] };
+  }
+}
+
+export async function reorderViews(
+  tableId: number,
+  viewOrders: Array<{ id: number; order: number }>
+) {
+  try {
+    console.log("🔄 Reordering views for table:", tableId);
+    console.log("📊 New order:", viewOrders);
+
+    // Update all views in a transaction for consistency
+    await prisma.$transaction(
+      viewOrders.map(({ id, order }) => {
+        console.log(`  - Updating view ${id} to order ${order}`);
+        return prisma.view.update({
+          where: { id },
+          data: { order },
+        });
+      })
+    );
+
+    console.log("✅ Views reordered successfully");
+    revalidatePath(`/tables/${tableId}`);
+    return { success: true };
+  } catch (error: any) {
+    console.error("❌ Error reordering views:", error);
+    console.error("Error details:", error.message, error.stack);
+    return {
+      success: false,
+      error: "אירעה שגיאה בשינוי סדר התצוגות. אנא נסה שוב.",
+    };
   }
 }
