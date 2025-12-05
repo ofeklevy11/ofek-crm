@@ -333,6 +333,35 @@ export default function RecordTable({
   };
 
   const getRowColorClass = (recordData: any) => {
+    // Check ALL enabled legend views and try to find a matching color
+    const legendViews =
+      views?.filter(
+        (v) =>
+          v.isEnabled &&
+          v.config?.type === "legend" &&
+          v.config?.legendField &&
+          v.config?.colorMappings
+      ) || [];
+
+    // Try each legend view until we find a match
+    for (const legendView of legendViews) {
+      const { legendField, colorMappings } = legendView.config;
+      const fieldValue = recordData?.[legendField];
+
+      // Handle both single values and arrays (for multi-select)
+      const values = Array.isArray(fieldValue) ? fieldValue : [fieldValue];
+
+      // Find the first matching color mapping
+      for (const value of values) {
+        const mapping = colorMappings[String(value)];
+        if (mapping?.color) {
+          // Use empty class - we'll apply color with inline style
+          return "";
+        }
+      }
+    }
+
+    // Fallback to original hard-coded logic
     // Digital Marketing Table Logic
     // 1. Check for boolean "Active" field being false (Inactive) - Highest Priority
     if (
@@ -371,6 +400,35 @@ export default function RecordTable({
       default:
         return "bg-white hover:bg-gray-50";
     }
+  };
+
+  const getRowStyle = (recordData: any): React.CSSProperties | undefined => {
+    // Check ALL enabled legend views and try to find a matching color
+    const legendViews =
+      views?.filter(
+        (v) =>
+          v.isEnabled &&
+          v.config?.type === "legend" &&
+          v.config?.legendField &&
+          v.config?.colorMappings
+      ) || [];
+
+    // Try each legend view until we find a match
+    for (const legendView of legendViews) {
+      const { legendField, colorMappings } = legendView.config;
+      const fieldValue = recordData?.[legendField];
+      const values = Array.isArray(fieldValue) ? fieldValue : [fieldValue];
+
+      for (const value of values) {
+        const mapping = colorMappings[String(value)];
+        if (mapping?.color) {
+          return {
+            backgroundColor: `${mapping.color}33`,
+          };
+        }
+      }
+    }
+    return undefined;
   };
 
   return (
@@ -531,6 +589,7 @@ export default function RecordTable({
                         ? "ring-4 ring-blue-400 ring-opacity-75"
                         : ""
                     }`}
+                    style={getRowStyle(record.data)}
                   >
                     <td className="p-4">
                       <input

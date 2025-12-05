@@ -78,6 +78,14 @@ export default function EditViewModal({
     currentConfig.config.dateFilter?.endDate || ""
   );
 
+  // Legend color mapping state
+  const [legendField, setLegendField] = useState(
+    currentConfig.config.legendField || ""
+  );
+  const [colorMappings, setColorMappings] = useState<
+    Record<string, { color: string; description?: string }>
+  >(currentConfig.config.colorMappings || {});
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -112,6 +120,20 @@ export default function EditViewModal({
         // For sum/avg, targetField is required
         config.targetField = targetField;
         if (targetFields.length > 0) config.targetFields = targetFields;
+      }
+    } else if (currentConfig.config.type === "legend") {
+      // Add color mapping configuration
+      if (legendField && Object.keys(colorMappings).length > 0) {
+        config.legendField = legendField;
+        config.colorMappings = colorMappings;
+        // Build legend items array for backward compatibility
+        config.legendItems = Object.entries(colorMappings).map(
+          ([value, mapping]) => ({
+            label: value,
+            color: mapping.color,
+            description: mapping.description,
+          })
+        );
       }
     }
 
@@ -403,6 +425,110 @@ export default function EditViewModal({
                 </div>
               )}
             </>
+          )}
+
+          {/* Legend-specific options */}
+          {currentConfig.config.type === "legend" && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  בחר שדה לצביעה <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={legendField}
+                  onChange={(e) => {
+                    const field = e.target.value;
+                    setLegendField(field);
+                    // Initialize color mappings for all options
+                    if (field) {
+                      const selectedField = schema.find(
+                        (f) => f.name === field
+                      );
+                      if (selectedField?.options) {
+                        const newMappings: Record<
+                          string,
+                          { color: string; description?: string }
+                        > = {};
+                        selectedField.options.forEach((opt) => {
+                          newMappings[opt] = {
+                            color: colorMappings[opt]?.color || "#e5e7eb",
+                            description: colorMappings[opt]?.description || "",
+                          };
+                        });
+                        setColorMappings(newMappings);
+                      }
+                    }
+                  }}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                >
+                  <option value="">בחר שדה...</option>
+                  {schema
+                    .filter(
+                      (f) => f.type === "select" || f.type === "multi-select"
+                    )
+                    .map((field) => (
+                      <option key={field.name} value={field.name}>
+                        {field.label}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  השדה שעל פיו יצבעו השורות בטבלה
+                </p>
+              </div>
+
+              {legendField && Object.keys(colorMappings).length > 0 && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">
+                    הגדר צבעים לכל ערך:
+                  </h4>
+                  <div className="space-y-3">
+                    {Object.entries(colorMappings).map(([value, mapping]) => (
+                      <div
+                        key={value}
+                        className="bg-white p-3 rounded-lg border border-gray-200"
+                      >
+                        <div className="flex items-center gap-3 mb-2">
+                          <input
+                            type="color"
+                            value={mapping.color}
+                            onChange={(e) =>
+                              setColorMappings((prev) => ({
+                                ...prev,
+                                [value]: {
+                                  ...prev[value],
+                                  color: e.target.value,
+                                },
+                              }))
+                            }
+                            className="w-12 h-8 rounded border border-gray-300 cursor-pointer"
+                          />
+                          <span className="text-sm font-medium text-gray-900 flex-1">
+                            {value}
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          value={mapping.description || ""}
+                          onChange={(e) =>
+                            setColorMappings((prev) => ({
+                              ...prev,
+                              [value]: {
+                                ...prev[value],
+                                description: e.target.value,
+                              },
+                            }))
+                          }
+                          placeholder="תיאור אופציונלי..."
+                          className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Date Filter Section */}

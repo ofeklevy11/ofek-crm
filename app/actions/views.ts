@@ -30,6 +30,8 @@ export interface ViewConfig {
     endDate?: string; // for custom range
   };
   // For legend/display
+  legendField?: string; // Field to map colors for
+  colorMappings?: Record<string, { color: string; description?: string }>; // Value -> color mapping
   legendItems?: Array<{
     color: string;
     label: string;
