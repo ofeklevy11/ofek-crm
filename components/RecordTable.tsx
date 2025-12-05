@@ -332,8 +332,8 @@ export default function RecordTable({
     window.location.href = `/api/tables/${tableId}/export?format=${format}`;
   };
 
-  const getRowColorClass = (recordData: any) => {
-    // Check ALL enabled legend views and try to find a matching color
+  const getWinningLegendColor = (recordData: any) => {
+    // Check ALL enabled legend views
     const legendViews =
       views?.filter(
         (v) =>
@@ -343,7 +343,9 @@ export default function RecordTable({
           v.config?.colorMappings
       ) || [];
 
-    // Try each legend view until we find a match
+    const matches: Array<{ color: string; priority: number }> = [];
+
+    // Collect all matching colors from all legend views
     for (const legendView of legendViews) {
       const { legendField, colorMappings } = legendView.config;
       const fieldValue = recordData?.[legendField];
@@ -351,14 +353,30 @@ export default function RecordTable({
       // Handle both single values and arrays (for multi-select)
       const values = Array.isArray(fieldValue) ? fieldValue : [fieldValue];
 
-      // Find the first matching color mapping
       for (const value of values) {
         const mapping = colorMappings[String(value)];
         if (mapping?.color) {
-          // Use empty class - we'll apply color with inline style
-          return "";
+          matches.push({
+            color: mapping.color,
+            priority: mapping.priority || 0,
+          });
         }
       }
+    }
+
+    if (matches.length === 0) return null;
+
+    // Sort by priority (descending)
+    matches.sort((a, b) => b.priority - a.priority);
+
+    // Return the color with the highest priority
+    return matches[0].color;
+  };
+
+  const getRowColorClass = (recordData: any) => {
+    // If we have a winning legend color, return empty string (style will handle it)
+    if (getWinningLegendColor(recordData)) {
+      return "";
     }
 
     // Fallback to original hard-coded logic
@@ -403,30 +421,11 @@ export default function RecordTable({
   };
 
   const getRowStyle = (recordData: any): React.CSSProperties | undefined => {
-    // Check ALL enabled legend views and try to find a matching color
-    const legendViews =
-      views?.filter(
-        (v) =>
-          v.isEnabled &&
-          v.config?.type === "legend" &&
-          v.config?.legendField &&
-          v.config?.colorMappings
-      ) || [];
-
-    // Try each legend view until we find a match
-    for (const legendView of legendViews) {
-      const { legendField, colorMappings } = legendView.config;
-      const fieldValue = recordData?.[legendField];
-      const values = Array.isArray(fieldValue) ? fieldValue : [fieldValue];
-
-      for (const value of values) {
-        const mapping = colorMappings[String(value)];
-        if (mapping?.color) {
-          return {
-            backgroundColor: `${mapping.color}33`,
-          };
-        }
-      }
+    const color = getWinningLegendColor(recordData);
+    if (color) {
+      return {
+        backgroundColor: `${color}33`, // 33 = ~20% opacity
+      };
     }
     return undefined;
   };

@@ -83,7 +83,7 @@ export default function EditViewModal({
     currentConfig.config.legendField || ""
   );
   const [colorMappings, setColorMappings] = useState<
-    Record<string, { color: string; description?: string }>
+    Record<string, { color: string; description?: string; priority?: number }>
   >(currentConfig.config.colorMappings || {});
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -447,12 +447,17 @@ export default function EditViewModal({
                       if (selectedField?.options) {
                         const newMappings: Record<
                           string,
-                          { color: string; description?: string }
+                          {
+                            color: string;
+                            description?: string;
+                            priority?: number;
+                          }
                         > = {};
                         selectedField.options.forEach((opt) => {
                           newMappings[opt] = {
                             color: colorMappings[opt]?.color || "#e5e7eb",
                             description: colorMappings[opt]?.description || "",
+                            priority: colorMappings[opt]?.priority || 0,
                           };
                         });
                         setColorMappings(newMappings);
@@ -504,6 +509,25 @@ export default function EditViewModal({
                             }
                             className="w-12 h-8 rounded border border-gray-300 cursor-pointer"
                           />
+                          <div className="flex items-center gap-1">
+                            <label className="text-xs text-gray-500">
+                              עדיפות:
+                            </label>
+                            <input
+                              type="number"
+                              value={mapping.priority ?? 0}
+                              onChange={(e) =>
+                                setColorMappings((prev) => ({
+                                  ...prev,
+                                  [value]: {
+                                    ...prev[value],
+                                    priority: parseInt(e.target.value) || 0,
+                                  },
+                                }))
+                              }
+                              className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none"
+                            />
+                          </div>
                           <span className="text-sm font-medium text-gray-900 flex-1">
                             {value}
                           </span>
