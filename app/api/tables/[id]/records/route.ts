@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
+import { processNewRecordTrigger } from "@/app/actions/automations";
 
 export async function GET(
   request: Request,
@@ -75,6 +76,19 @@ export async function POST(
       "CREATE",
       data
     );
+
+    // Trigger automations
+    const table = await prisma.tableMeta.findUnique({
+      where: { id: tableId },
+      select: { name: true },
+    });
+
+    if (table) {
+      // Don't await strictly to not block response
+      processNewRecordTrigger(tableId, table.name, record.id).catch(
+        console.error
+      );
+    }
 
     return NextResponse.json(record);
   } catch (error) {

@@ -6,7 +6,7 @@ import {
   deleteAutomationRule,
   toggleAutomationRule,
 } from "@/app/actions/automations";
-import { Plus, Trash2, Power, PowerOff } from "lucide-react";
+import { Plus, Trash2, Power, PowerOff, Edit } from "lucide-react";
 
 interface AutomationRule {
   id: number;
@@ -24,16 +24,19 @@ interface AutomationRule {
 interface AutomationsListProps {
   initialRules: AutomationRule[];
   users: any[];
+  tables: { id: number; name: string }[];
   currentUserId: number;
 }
 
 export default function AutomationsList({
   initialRules,
   users,
+  tables,
   currentUserId,
 }: AutomationsListProps) {
   const [rules, setRules] = useState<AutomationRule[]>(initialRules);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
 
   const handleDelete = async (id: number) => {
     if (confirm("האם אתה בטוח שברצונך למחוק אוטומציה זו?")) {
@@ -49,12 +52,20 @@ export default function AutomationsList({
     );
   };
 
+  const handleEdit = (rule: AutomationRule) => {
+    setEditingRule(rule);
+    setIsModalOpen(true);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200">
         <h2 className="text-lg font-medium text-gray-900">האוטומציות שלי</h2>
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setEditingRule(null);
+            setIsModalOpen(true);
+          }}
           className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
           <Plus className="ml-2 -mr-1 h-5 w-5" />
@@ -73,7 +84,13 @@ export default function AutomationsList({
             }`}
           >
             <dt>
-              <div className="absolute top-4 left-4">
+              <div className="absolute top-4 left-4 flex gap-2">
+                <button
+                  onClick={() => handleEdit(rule)}
+                  className="text-gray-400 hover:text-blue-500 transition-colors"
+                >
+                  <Edit size={20} />
+                </button>
                 <button
                   onClick={() => handleDelete(rule.id)}
                   className="text-gray-400 hover:text-red-500 transition-colors"
@@ -98,6 +115,12 @@ export default function AutomationsList({
                   <span className="font-semibold">טריגר:</span>{" "}
                   {rule.triggerType === "TASK_STATUS_CHANGE"
                     ? "שינוי סטטוס משימה"
+                    : rule.triggerType === "NEW_RECORD"
+                    ? `רשומה חדשה ב${
+                        tables.find(
+                          (t) => t.id === Number(rule.triggerConfig.tableId)
+                        )?.name || "טבלה לא ידועה"
+                      }`
                     : rule.triggerType}
                 </p>
                 <p>
@@ -134,8 +157,13 @@ export default function AutomationsList({
       {isModalOpen && (
         <AutomationModal
           users={users}
+          tables={tables}
           currentUserId={currentUserId}
-          onClose={() => setIsModalOpen(false)}
+          editingRule={editingRule}
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingRule(null);
+          }}
           onCreated={async () => {
             // Refresh page or re-fetch not ideally efficient but simple for now
             window.location.reload();

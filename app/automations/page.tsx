@@ -4,6 +4,8 @@ import { getUsers } from "@/app/actions/users";
 import { redirect } from "next/navigation";
 import AutomationsList from "@/components/AutomationsList";
 
+import { prisma } from "@/lib/prisma";
+
 export const dynamic = "force-dynamic";
 
 export default async function AutomationsPage() {
@@ -13,9 +15,13 @@ export default async function AutomationsPage() {
     redirect("/auth/login");
   }
 
-  const [rulesResponse, usersResponse] = await Promise.all([
+  const [rulesResponse, usersResponse, tables] = await Promise.all([
     getAutomationRules(),
     getUsers(),
+    prisma.tableMeta.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   const rules = rulesResponse.success ? rulesResponse.data : [];
@@ -37,6 +43,7 @@ export default async function AutomationsPage() {
       <AutomationsList
         initialRules={rules as any[]}
         users={users as any[]}
+        tables={tables}
         currentUserId={user.id}
       />
     </div>

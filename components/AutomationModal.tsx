@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { createAutomationRule } from "@/app/actions/automations";
+import {
+  createAutomationRule,
+  updateAutomationRule,
+} from "@/app/actions/automations";
 import { X } from "lucide-react";
 
 interface User {
@@ -11,25 +14,44 @@ interface User {
 
 interface AutomationModalProps {
   users: User[];
+  tables: { id: number; name: string }[];
   currentUserId: number;
   onClose: () => void;
   onCreated: () => void;
+  editingRule?: {
+    id: number;
+    name: string;
+    triggerType: string;
+    triggerConfig: any;
+    actionType: string;
+    actionConfig: any;
+  } | null;
 }
 
 export default function AutomationModal({
   users,
+  tables,
   currentUserId,
   onClose,
   onCreated,
+  editingRule,
 }: AutomationModalProps) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState(editingRule?.name || "");
   const [triggerType, setTriggerType] = useState<
-    "TASK_STATUS_CHANGE" | "MANUAL"
-  >("TASK_STATUS_CHANGE");
-  const [toStatus, setToStatus] = useState("any");
-  const [recipientId, setRecipientId] = useState("");
+    "TASK_STATUS_CHANGE" | "NEW_RECORD"
+  >((editingRule?.triggerType as any) || "TASK_STATUS_CHANGE");
+  const [toStatus, setToStatus] = useState(
+    editingRule?.triggerConfig?.toStatus || "any"
+  );
+  const [tableId, setTableId] = useState(
+    editingRule?.triggerConfig?.tableId || ""
+  );
+  const [recipientId, setRecipientId] = useState(
+    editingRule?.actionConfig?.recipientId?.toString() || ""
+  );
   const [messageTemplate, setMessageTemplate] = useState(
-    "המשימה {taskTitle} עברה לסטטוס {toStatus}"
+    editingRule?.actionConfig?.messageTemplate ||
+      "המשימה {taskTitle} עברה לסטטוס {toStatus}"
   );
   const [loading, setLoading] = useState(false);
 
@@ -41,9 +63,11 @@ export default function AutomationModal({
       const triggerConfig =
         triggerType === "TASK_STATUS_CHANGE"
           ? { toStatus: toStatus === "any" ? undefined : toStatus }
+          : triggerType === "NEW_RECORD"
+          ? { tableId }
           : {};
 
-      const result = await createAutomationRule({
+      const data = {
         name,
         triggerType,
         triggerConfig,
@@ -53,18 +77,27 @@ export default function AutomationModal({
           messageTemplate,
           titleTemplate: "עדכון משימה",
         },
-        createdBy: currentUserId,
-      });
+      };
+
+      let result;
+      if (editingRule) {
+        result = await updateAutomationRule(editingRule.id, data);
+      } else {
+        result = await createAutomationRule({
+          ...data,
+          createdBy: currentUserId,
+        });
+      }
 
       if (result.success) {
         onCreated();
         onClose();
       } else {
-        alert("Failed to create automation");
+        alert("Failed to save automation");
       }
     } catch (error) {
       console.error(error);
-      alert("Error creating automation");
+      alert("Error saving automation");
     } finally {
       setLoading(false);
     }
@@ -75,7 +108,7 @@ export default function AutomationModal({
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
         <div className="flex justify-between items-center p-6 border-b border-gray-200">
           <h3 className="text-xl font-semibold text-gray-900">
-            צור אוטומציה חדשה
+            {editingRule ? "ערוך אוטומציה" : "צור אוטומציה חדשה"}
           </h3>
           <button
             onClick={onClose}
@@ -106,11 +139,21 @@ export default function AutomationModal({
             </label>
             <select
               value={triggerType}
-              onChange={(e) => setTriggerType(e.target.value as any)}
+              onChange={(e) => {
+                const type = e.target.value as any;
+                setTriggerType(type);
+                if (type === "NEW_RECORD") {
+                  setMessageTemplate("נוצרה רשומה חדשה בטבלה {tableName}");
+                } else if (type === "TASK_STATUS_CHANGE") {
+                  setMessageTemplate(
+                    "המשימה {taskTitle} עברה לסטטוס {toStatus}"
+                  );
+                }
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="TASK_STATUS_CHANGE">שינוי סטטוס משימה</option>
-              {/* <option value="MANUAL">ידני</option> Future use */}
+              <option value="NEW_RECORD">רשומה חדשה בטבלה</option>
             </select>
           </div>
 
@@ -129,6 +172,27 @@ export default function AutomationModal({
                 <option value="in_progress">בטיפול</option>
                 <option value="waiting_client">ממתין ללקוח</option>
                 <option value="completed_month">בוצע</option>
+              </select>
+            </div>
+          )}
+
+          {triggerType === "NEW_RECORD" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                באיזו טבלה?
+              </label>
+              <select
+                required
+                value={tableId}
+                onChange={(e) => setTableId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">בחר טבלה...</option>
+                {tables.map((table) => (
+                  <option key={table.id} value={table.id}>
+                    {table.name}
+                  </option>
+                ))}
               </select>
             </div>
           )}
@@ -169,7 +233,10 @@ export default function AutomationModal({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
               <p className="text-xs text-gray-500 mt-1">
-                משתנים זמינים: {"{taskTitle}"}, {"{fromStatus}"}, {"{toStatus}"}
+                משתנים זמינים:{" "}
+                {triggerType === "TASK_STATUS_CHANGE"
+                  ? "{taskTitle}, {fromStatus}, {toStatus}"
+                  : "{tableName}"}
               </p>
             </div>
           </div>
@@ -187,7 +254,11 @@ export default function AutomationModal({
               disabled={loading}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
-              {loading ? "יוצר..." : "צור אוטומציה"}
+              {loading
+                ? "שומר..."
+                : editingRule
+                ? "שמור שינויים"
+                : "צור אוטומציה"}
             </button>
           </div>
         </form>

@@ -48,6 +48,35 @@ export async function createAutomationRule(data: {
   }
 }
 
+export async function updateAutomationRule(
+  id: number,
+  data: {
+    name: string;
+    triggerType: string;
+    triggerConfig: any;
+    actionType: string;
+    actionConfig: any;
+  }
+) {
+  try {
+    const rule = await prisma.automationRule.update({
+      where: { id },
+      data: {
+        name: data.name,
+        triggerType: data.triggerType,
+        triggerConfig: data.triggerConfig,
+        actionType: data.actionType,
+        actionConfig: data.actionConfig,
+      },
+    });
+    revalidatePath("/automations");
+    return { success: true, data: rule };
+  } catch (error) {
+    console.error("Error updating automation rule:", error);
+    return { success: false, error: "Failed to update automation rule" };
+  }
+}
+
 export async function deleteAutomationRule(id: number) {
   try {
     await prisma.automationRule.delete({
@@ -134,5 +163,46 @@ export async function processTaskStatusChange(
   } catch (error) {
     console.error("Error processing task status automations:", error);
     // Don't throw, just log, so we don't block the main flow
+  }
+}
+
+export async function processNewRecordTrigger(
+  tableId: number,
+  tableName: string,
+  recordId: number
+) {
+  try {
+    const rules = await prisma.automationRule.findMany({
+      where: {
+        isActive: true,
+        triggerType: "NEW_RECORD",
+      },
+    });
+
+    for (const rule of rules) {
+      const triggerConfig = rule.triggerConfig as TriggerConfig;
+
+      // Check if rule matches the table
+      if (triggerConfig.tableId && parseInt(triggerConfig.tableId) !== tableId)
+        continue;
+
+      // Execute Action
+      if (rule.actionType === "SEND_NOTIFICATION") {
+        const actionConfig = rule.actionConfig as ActionConfig;
+        if (actionConfig.recipientId) {
+          await sendNotification({
+            userId: actionConfig.recipientId,
+            title: actionConfig.titleTemplate || "New Record Created",
+            message: (
+              actionConfig.messageTemplate ||
+              "New record created in table {tableName}"
+            ).replace("{tableName}", tableName),
+            link: `/tables/${tableId}`,
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error processing new record automations:", error);
   }
 }
