@@ -34,15 +34,20 @@ export default function CreateTableForm() {
   const [categoryId, setCategoryId] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch("/api/tables")
-      .then((res) => res.json())
-      .then((data) => setAvailableTables(data))
-      .catch((err) => console.error("Failed to load tables", err));
+    const loadData = async () => {
+      const { getTables, getCategories } = await import("@/app/actions");
 
-    fetch("/api/categories")
-      .then((res) => res.json())
-      .then((data) => setCategories(data))
-      .catch((err) => console.error("Failed to load categories", err));
+      const tablesResult = await getTables();
+      if (tablesResult.success) {
+        setAvailableTables(tablesResult.data!);
+      }
+
+      const categoriesResult = await getCategories();
+      if (categoriesResult.success) {
+        setCategories(categoriesResult.data!);
+      }
+    };
+    loadData();
   }, []);
 
   const [fields, setFields] = useState<FieldRow[]>([
@@ -129,19 +134,18 @@ export default function CreateTableForm() {
         displayField: f.displayField,
       }));
 
-      const res = await fetch("/api/tables", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: tableName,
-          slug: slug,
-          schemaJson,
-          createdBy: 1, // Hardcoded for MVP
-          categoryId,
-        }),
+      const { createTable } = await import("@/app/actions");
+      const result = await createTable({
+        name: tableName,
+        slug: slug,
+        schemaJson: schemaJson as any,
+        createdBy: 1, // Hardcoded for MVP
+        categoryId: categoryId ?? undefined,
       });
 
-      if (!res.ok) throw new Error("Failed to create table");
+      if (!result.success) {
+        throw new Error(result.error || "Failed to create table");
+      }
 
       router.push("/tables");
       router.refresh();

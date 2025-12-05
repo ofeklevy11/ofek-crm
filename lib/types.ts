@@ -1,10 +1,10 @@
 export interface CalendarEvent {
   id: string;
   title: string;
-  description?: string;
+  description?: string | null;
   startTime: Date;
   endTime: Date;
-  color?: string;
+  color?: string | null;
 }
 
 export const defaultEventColors = [

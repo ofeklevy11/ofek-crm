@@ -79,40 +79,33 @@ export default function TaskModal({
       priority,
       assignee,
       tags: selectedTags,
-      updatedAt: new Date().toISOString(),
     };
 
-    if (task) {
-      // Update existing task
-      const res = await fetch(`/api/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(taskData),
-      });
-      if (res.ok) {
-        const updatedTask = await res.json();
-        if (onUpdated) onUpdated(updatedTask);
-        onClose();
+    try {
+      if (task) {
+        // Update existing task
+        const { updateTask } = await import("@/app/actions");
+        const result = await updateTask(task.id, taskData);
+        if (result.success) {
+          if (onUpdated) onUpdated(result.data);
+          onClose();
+        } else {
+          alert("עדכון משימה נכשל");
+        }
       } else {
-        alert("עדכון משימה נכשל");
+        // Create new task
+        const { createTask } = await import("@/app/actions");
+        const result = await createTask(taskData);
+        if (result.success) {
+          onCreated(result.data);
+          onClose();
+        } else {
+          alert("הוספת משימה נכשלה");
+        }
       }
-    } else {
-      // Create new task
-      const res = await fetch("/api/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...taskData,
-          createdAt: new Date().toISOString(),
-        }),
-      });
-      if (res.ok) {
-        const newTask = await res.json();
-        onCreated(newTask);
-        onClose();
-      } else {
-        alert("הוספת משימה נכשלה");
-      }
+    } catch (error) {
+      console.error("Error saving task:", error);
+      alert("שגיאה בשמירת המשימה");
     }
   };
 

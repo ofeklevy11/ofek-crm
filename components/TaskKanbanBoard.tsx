@@ -13,14 +13,14 @@ export type TaskStatus =
 export interface Task {
   id: string;
   title: string;
-  description?: string;
-  status: TaskStatus;
-  assignee?: string;
-  priority?: "low" | "medium" | "high";
-  dueDate?: string;
+  description?: string | null;
+  status: TaskStatus | string;
+  assignee?: string | null;
+  priority?: "low" | "medium" | "high" | string | null;
+  dueDate?: Date | string | null;
   tags?: string[];
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
 }
 
 const COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
@@ -58,10 +58,10 @@ export default function TaskKanbanBoard() {
   const fetchTasks = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/tasks");
-      if (response.ok) {
-        const data = await response.json();
-        setTasks(data);
+      const { getTasks } = await import("@/app/actions");
+      const result = await getTasks();
+      if (result.success) {
+        setTasks(result.data! as Task[]);
       }
     } catch (error) {
       console.error("Error fetching tasks:", error);
@@ -72,12 +72,9 @@ export default function TaskKanbanBoard() {
 
   const handleTaskMove = async (taskId: string, newStatus: TaskStatus) => {
     try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (response.ok) {
+      const { updateTask } = await import("@/app/actions");
+      const result = await updateTask(taskId, { status: newStatus });
+      if (result.success) {
         setTasks(
           tasks.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
         );
@@ -96,7 +93,7 @@ export default function TaskKanbanBoard() {
 
   const handleTaskEdit = (task: Task) => {
     setEditingTask(task);
-    setModalStatus(task.status);
+    setModalStatus(task.status as TaskStatus);
     setModalOpen(true);
   };
 
@@ -106,10 +103,9 @@ export default function TaskKanbanBoard() {
 
   const handleTaskDelete = async (taskId: string) => {
     try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: "DELETE",
-      });
-      if (response.ok) {
+      const { deleteTask } = await import("@/app/actions");
+      const result = await deleteTask(taskId);
+      if (result.success) {
         setTasks(tasks.filter((t) => t.id !== taskId));
       } else {
         console.error("Failed to delete task");

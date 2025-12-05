@@ -28,10 +28,10 @@ export function Calendar() {
 
   const fetchEvents = async () => {
     try {
-      const response = await fetch("/api/calendar");
-      if (response.ok) {
-        const data = await response.json();
-        const parsedEvents = data.map((event: any) => ({
+      const { getCalendarEvents } = await import("@/app/actions");
+      const result = await getCalendarEvents();
+      if (result.success) {
+        const parsedEvents = result.data!.map((event: any) => ({
           ...event,
           startTime: new Date(event.startTime),
           endTime: new Date(event.endTime),
@@ -83,16 +83,17 @@ export function Calendar() {
     try {
       if (selectedEvent) {
         // Update existing event
-        const response = await fetch(`/api/calendar/${selectedEvent.id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(eventData),
+        const { updateCalendarEvent } = await import("@/app/actions");
+        const result = await updateCalendarEvent(selectedEvent.id, {
+          title: eventData.title,
+          description: eventData.description ?? undefined,
+          startTime: eventData.startTime.toISOString(),
+          endTime: eventData.endTime.toISOString(),
+          color: eventData.color ?? undefined,
         });
 
-        if (response.ok) {
-          const updatedEvent = await response.json();
+        if (result.success) {
+          const updatedEvent = result.data!;
           setEvents(
             events.map((e) =>
               e.id === selectedEvent.id
@@ -108,16 +109,17 @@ export function Calendar() {
         }
       } else {
         // Create new event
-        const response = await fetch("/api/calendar", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(eventData),
+        const { createCalendarEvent } = await import("@/app/actions");
+        const result = await createCalendarEvent({
+          title: eventData.title,
+          description: eventData.description ?? undefined,
+          startTime: eventData.startTime.toISOString(),
+          endTime: eventData.endTime.toISOString(),
+          color: eventData.color ?? undefined,
         });
 
-        if (response.ok) {
-          const newEvent = await response.json();
+        if (result.success) {
+          const newEvent = result.data!;
           setEvents([
             ...events,
             {
@@ -146,11 +148,10 @@ export function Calendar() {
   const handleDeleteEvent = async () => {
     if (selectedEvent) {
       try {
-        const response = await fetch(`/api/calendar/${selectedEvent.id}`, {
-          method: "DELETE",
-        });
+        const { deleteCalendarEvent } = await import("@/app/actions");
+        const result = await deleteCalendarEvent(selectedEvent.id);
 
-        if (response.ok) {
+        if (result.success) {
           setEvents(events.filter((e) => e.id !== selectedEvent.id));
           setSelectedEvent(undefined);
           setIsModalOpen(false);

@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { ArrowLeft, Mail, Phone, Building, Eye } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import Pagination from "@/components/Pagination";
+import ClientsTable from "@/components/finance/ClientsTable";
 
 export default async function ClientsPage({
   searchParams,
@@ -57,100 +58,7 @@ export default async function ClientsPage({
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Contact
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Active Retainers
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Outstanding
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {clients.map((client) => {
-              const outstanding = client.oneTimePayments.reduce(
-                (sum, payment) => sum + Number(payment.amount),
-                0
-              );
-
-              return (
-                <tr
-                  key={client.id}
-                  className="hover:bg-gray-50 transition-colors"
-                >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {client.name}
-                    </div>
-                    {client.company && (
-                      <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                        <Building className="w-3 h-3" />
-                        {client.company}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {client.email && (
-                      <div className="flex items-center gap-1">
-                        <Mail className="w-3 h-3" />
-                        {client.email}
-                      </div>
-                    )}
-                    {client.phone && (
-                      <div className="flex items-center gap-1 mt-1">
-                        <Phone className="w-3 h-3" />
-                        {client.phone}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      {client.retainers.length}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium text-center">
-                    {outstanding > 0 ? (
-                      <span className="text-red-600">
-                        ₪{outstanding.toLocaleString()}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">₪0</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                    <Link
-                      href={`/finance/clients/${client.id}`}
-                      className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-900"
-                    >
-                      <Eye className="w-4 h-4" />
-                      View
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
-            {clients.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                  No clients found. Start by adding your first client.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <ClientsTable clients={clients} />
 
       <Pagination totalPages={totalPages} />
     </div>

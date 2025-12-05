@@ -40,16 +40,14 @@ export default function TablesDashboard({
 
     setCreatingCategory(true);
     try {
-      const res = await fetch("/api/categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCategoryName }),
-      });
+      const { createCategory } = await import("@/app/actions");
+      const result = await createCategory(newCategoryName);
 
-      if (!res.ok) throw new Error("Failed to create category");
+      if (!result.success) {
+        throw new Error(result.error || "Failed to create category");
+      }
 
-      const newCategory = await res.json();
-      setCategories([...categories, newCategory]);
+      setCategories([...categories, result.data!]);
       setNewCategoryName("");
       setIsCategoryModalOpen(false);
       router.refresh();
