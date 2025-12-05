@@ -77,6 +77,9 @@ model AutomationRule {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   creator       User     @relation(fields: [createdBy], references: [id])
+  
+  // Relation to the new time tracking table
+  statusDurations StatusDuration[]
 }
 
 model Notification {
@@ -143,6 +146,8 @@ model Record {
   auditLogs   AuditLog[]
   creator     User?        @relation("CreatedBy", fields: [createdBy], references: [id])
   table       TableMeta    @relation("TableRecords", fields: [tableId], references: [id])
+  
+  statusDurations StatusDuration[]
 }
 
 model Attachment {
@@ -160,6 +165,7 @@ model AuditLog {
   id        Int      @id @default(autoincrement())
   recordId  Int?
   userId    Int?
+  taskId    String?
   action    String
   diffJson  Json?
   timestamp DateTime @default(now())
@@ -176,8 +182,11 @@ model Task {
   priority    String?
   dueDate     DateTime?
   tags        String[]
+  duration_status_change String? // Legacy field, kept for safety or can be removed if fully migrated
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  
+  statusDurations StatusDuration[]
 }
 
 model CalendarEvent {
@@ -262,4 +271,29 @@ model PaymentMethodInternal {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   client     Client   @relation(fields: [clientId], references: [id])
+}
+
+// NEW TABLE FOR DURATION TRACKING
+model StatusDuration {
+  id               Int            @id @default(autoincrement())
+  
+  automationRuleId Int
+  automationRule   AutomationRule @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
+  
+  recordId         Int?
+  record           Record?        @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  
+  taskId           String?
+  task             Task?          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  durationSeconds  Int
+  durationString   String // For display: "Xd Yh Zm Qs"
+  
+  fromValue        String?
+  toValue          String?
+  
+  createdAt        DateTime       @default(now())
+  
+  @@index([automationRuleId])
+  @@index([recordId])
 }

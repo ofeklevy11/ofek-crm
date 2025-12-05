@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   createAutomationRule,
   updateAutomationRule,
 } from "@/app/actions/automations";
-import { X } from "lucide-react";
+import { getTableById } from "@/app/actions/tables";
+import { X, Loader2 } from "lucide-react";
 
 interface User {
   id: number;
@@ -38,14 +39,54 @@ export default function AutomationModal({
 }: AutomationModalProps) {
   const [name, setName] = useState(editingRule?.name || "");
   const [triggerType, setTriggerType] = useState<
-    "TASK_STATUS_CHANGE" | "NEW_RECORD"
+    "TASK_STATUS_CHANGE" | "NEW_RECORD" | "RECORD_FIELD_CHANGE"
   >((editingRule?.triggerType as any) || "TASK_STATUS_CHANGE");
+
+  // Task specific
   const [toStatus, setToStatus] = useState(
     editingRule?.triggerConfig?.toStatus || "any"
   );
+
+  // Generic Record specific
   const [tableId, setTableId] = useState(
     editingRule?.triggerConfig?.tableId || ""
   );
+  const [columnId, setColumnId] = useState(
+    editingRule?.triggerConfig?.columnId || ""
+  );
+  const [fromValue, setFromValue] = useState(
+    editingRule?.triggerConfig?.fromValue || ""
+  );
+  const [toValue, setToValue] = useState(
+    editingRule?.triggerConfig?.toValue || ""
+  );
+
+  const [columns, setColumns] = useState<any[]>([]);
+  const [loadingColumns, setLoadingColumns] = useState(false);
+
+  useEffect(() => {
+    if (tableId && triggerType === "RECORD_FIELD_CHANGE") {
+      setLoadingColumns(true);
+      getTableById(Number(tableId))
+        .then((res) => {
+          if (res.success && res.data && res.data.schemaJson) {
+            const schema = res.data.schemaJson as any;
+            // Handle both schema structures: Array of columns directly or Object with columns property
+            if (Array.isArray(schema)) {
+              setColumns(schema);
+            } else if (schema && Array.isArray(schema.columns)) {
+              setColumns(schema.columns);
+            } else {
+              setColumns([]);
+            }
+          }
+        })
+        .finally(() => setLoadingColumns(false));
+    } else {
+      setColumns([]);
+    }
+  }, [tableId, triggerType]);
+
   const [recipientId, setRecipientId] = useState(
     editingRule?.actionConfig?.recipientId?.toString() || ""
   );
@@ -55,28 +96,43 @@ export default function AutomationModal({
   );
   const [loading, setLoading] = useState(false);
 
+  const [actionType, setActionType] = useState<
+    "SEND_NOTIFICATION" | "CALCULATE_DURATION"
+  >((editingRule?.actionType as any) || "SEND_NOTIFICATION");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const triggerConfig =
-        triggerType === "TASK_STATUS_CHANGE"
-          ? { toStatus: toStatus === "any" ? undefined : toStatus }
-          : triggerType === "NEW_RECORD"
-          ? { tableId }
-          : {};
+      let triggerConfig: any = {};
+
+      if (triggerType === "TASK_STATUS_CHANGE") {
+        triggerConfig = { toStatus: toStatus === "any" ? undefined : toStatus };
+      } else if (triggerType === "NEW_RECORD") {
+        triggerConfig = { tableId };
+      } else if (triggerType === "RECORD_FIELD_CHANGE") {
+        triggerConfig = {
+          tableId,
+          columnId,
+          fromValue: fromValue || undefined,
+          toValue: toValue || undefined,
+        };
+      }
 
       const data = {
         name,
         triggerType,
         triggerConfig,
-        actionType: "SEND_NOTIFICATION",
-        actionConfig: {
-          recipientId: parseInt(recipientId),
-          messageTemplate,
-          titleTemplate: "עדכון משימה",
-        },
+        actionType,
+        actionConfig:
+          actionType === "SEND_NOTIFICATION"
+            ? {
+                recipientId: parseInt(recipientId),
+                messageTemplate,
+                titleTemplate: "עדכון במערכת",
+              }
+            : {},
       };
 
       let result;
@@ -102,6 +158,13 @@ export default function AutomationModal({
       setLoading(false);
     }
   };
+
+  const selectedColumn = columns.find(
+    (c) => c.id === columnId || c.name === columnId
+  );
+  const isSelectColumn =
+    selectedColumn &&
+    (selectedColumn.type === "select" || selectedColumn.type === "multiSelect");
 
   return (
     <div className="fixed inset-0 bg-black/50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
@@ -129,7 +192,7 @@ export default function AutomationModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              placeholder="לדוגמה: התראה על סיום משימה"
+              placeholder="לדוגמה: התראה על שינוי סטטוס"
             />
           </div>
 
@@ -148,11 +211,18 @@ export default function AutomationModal({
                   setMessageTemplate(
                     "המשימה {taskTitle} עברה לסטטוס {toStatus}"
                   );
+                } else if (type === "RECORD_FIELD_CHANGE") {
+                  setMessageTemplate(
+                    "שדה {fieldName} שונה מ-{fromValue} ל-{toValue}"
+                  );
                 }
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="TASK_STATUS_CHANGE">שינוי סטטוס משימה</option>
+              <option value="TASK_STATUS_CHANGE">
+                שינוי סטטוס משימה (ישן)
+              </option>
+              <option value="RECORD_FIELD_CHANGE">שינוי ערך בטבלה</option>
               <option value="NEW_RECORD">רשומה חדשה בטבלה</option>
             </select>
           </div>
@@ -176,7 +246,8 @@ export default function AutomationModal({
             </div>
           )}
 
-          {triggerType === "NEW_RECORD" && (
+          {(triggerType === "NEW_RECORD" ||
+            triggerType === "RECORD_FIELD_CHANGE") && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 באיזו טבלה?
@@ -197,48 +268,174 @@ export default function AutomationModal({
             </div>
           )}
 
-          <div className="border-t pt-4 mt-4">
-            <h4 className="text-sm font-medium text-gray-900 mb-3">
-              פעולה: שליחת התראה
-            </h4>
+          {triggerType === "RECORD_FIELD_CHANGE" && tableId && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  בחר עמודה לניטור
+                </label>
+                {loadingColumns ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Loader2 className="animate-spin" size={16} /> בודק
+                    עמודות...
+                  </div>
+                ) : (
+                  <select
+                    required
+                    value={columnId}
+                    onChange={(e) => {
+                      setColumnId(e.target.value);
+                      setFromValue("");
+                      setToValue("");
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">בחר עמודה...</option>
+                    {columns.map((col: any) => (
+                      <option key={col.id || col.name} value={col.name}>
+                        {col.label || col.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
 
-            <div>
+              {selectedColumn && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      מ- {actionType !== "CALCULATE_DURATION" && "(אופציונלי)"}
+                    </label>
+                    {isSelectColumn ? (
+                      <select
+                        required={actionType === "CALCULATE_DURATION"}
+                        value={fromValue}
+                        onChange={(e) => setFromValue(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">כל ערך</option>
+                        {selectedColumn.options?.map((opt: string) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        required={actionType === "CALCULATE_DURATION"}
+                        value={fromValue}
+                        onChange={(e) => setFromValue(e.target.value)}
+                        placeholder="כל ערך"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      ל- {actionType !== "CALCULATE_DURATION" && "(אופציונלי)"}
+                    </label>
+                    {isSelectColumn ? (
+                      <select
+                        required={actionType === "CALCULATE_DURATION"}
+                        value={toValue}
+                        onChange={(e) => setToValue(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">כל ערך</option>
+                        {selectedColumn.options?.map((opt: string) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        required={actionType === "CALCULATE_DURATION"}
+                        value={toValue}
+                        onChange={(e) => setToValue(e.target.value)}
+                        placeholder="כל ערך"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          <div className="border-t pt-4 mt-4">
+            <h4 className="text-sm font-medium text-gray-900 mb-3">פעולה</h4>
+
+            <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                למי לשלוח?
+                סוג הפעולה
               </label>
               <select
-                required
-                value={recipientId}
-                onChange={(e) => setRecipientId(e.target.value)}
+                value={actionType}
+                onChange={(e) =>
+                  setActionType(
+                    e.target.value as "SEND_NOTIFICATION" | "CALCULATE_DURATION"
+                  )
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="">בחר משתמש...</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
+                <option value="SEND_NOTIFICATION">שליחת התראה</option>
+                <option value="CALCULATE_DURATION">חישוב זמן בסטטוס</option>
               </select>
             </div>
 
-            <div className="mt-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                תוכן ההודעה
-              </label>
-              <textarea
-                required
-                value={messageTemplate}
-                onChange={(e) => setMessageTemplate(e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                משתנים זמינים:{" "}
-                {triggerType === "TASK_STATUS_CHANGE"
-                  ? "{taskTitle}, {fromStatus}, {toStatus}"
-                  : "{tableName}"}
+            {actionType === "SEND_NOTIFICATION" && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    למי לשלוח?
+                  </label>
+                  <select
+                    required
+                    value={recipientId}
+                    onChange={(e) => setRecipientId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">בחר משתמש...</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mt-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    תוכן ההודעה
+                  </label>
+                  <textarea
+                    required
+                    value={messageTemplate}
+                    onChange={(e) => setMessageTemplate(e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    משתנים זמינים:{" "}
+                    {triggerType === "TASK_STATUS_CHANGE"
+                      ? "{taskTitle}, {fromStatus}, {toStatus}"
+                      : triggerType === "RECORD_FIELD_CHANGE"
+                      ? "{tableName}, {fieldName}, {fromValue}, {toValue}"
+                      : "{tableName}"}
+                  </p>
+                </div>
+              </>
+            )}
+            {actionType === "CALCULATE_DURATION" && (
+              <p className="text-sm text-gray-600">
+                פעולה זו תחשב את הזמן שבו הרשומה הייתה בסטטוס "
+                {fromValue || "המקור"}" לפני המעבר לסטטוס "{toValue || "היעד"}".
+                התוצאה תשמר בשדה בדאטהבייס.
               </p>
-            </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 mt-6">

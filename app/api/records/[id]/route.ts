@@ -16,25 +16,24 @@ export async function PUT(
       return NextResponse.json({ error: "Invalid record ID" }, { status: 400 });
     }
 
-    // Check write permissions
+    // Check write permissions and fetch existing record for automations
+    const existingRecord = await prisma.record.findUnique({
+      where: { id: recordId },
+    });
+
+    if (!existingRecord) {
+      return NextResponse.json({ error: "Record not found" }, { status: 404 });
+    }
+
     if (updatedBy) {
-      const existingRecord = await prisma.record.findUnique({
-        where: { id: recordId },
-        select: { tableId: true },
-      });
+      const { getUserById, canWriteTable } = await import("@/lib/permissions");
+      const user = await getUserById(Number(updatedBy));
 
-      if (existingRecord) {
-        const { getUserById, canWriteTable } = await import(
-          "@/lib/permissions"
+      if (!user || !canWriteTable(user, existingRecord.tableId)) {
+        return NextResponse.json(
+          { error: "You don't have permission to write to this table" },
+          { status: 403 }
         );
-        const user = await getUserById(Number(updatedBy));
-
-        if (!user || !canWriteTable(user, existingRecord.tableId)) {
-          return NextResponse.json(
-            { error: "You don't have permission to write to this table" },
-            { status: 403 }
-          );
-        }
       }
     }
 
@@ -53,6 +52,21 @@ export async function PUT(
       "UPDATE",
       data
     );
+
+    // Trigger Automations
+    try {
+      const { processRecordUpdate } = await import("@/app/actions/automations");
+      // Run in background / parallel to not block response?
+      // Ideally await to ensure it runs, but errors shouldn't fail the request.
+      await processRecordUpdate(
+        record.tableId,
+        record.id,
+        existingRecord.data as any,
+        data
+      );
+    } catch (autoError) {
+      console.error("Failed to process automations:", autoError);
+    }
 
     return NextResponse.json(record);
   } catch (error) {

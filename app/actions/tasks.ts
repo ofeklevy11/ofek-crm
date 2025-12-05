@@ -85,19 +85,42 @@ export async function updateTask(
       updateData.dueDate = data.dueDate ? new Date(data.dueDate) : null;
     }
 
+    // Fetch old task to get previous status
+    const existingTask = await prisma.task.findUnique({
+      where: { id },
+    });
+
     const task = await prisma.task.update({
       where: { id },
       data: updateData,
     });
 
-    if (data.status) {
-      // Old hardcoded notification - remove if no longer needed, or keep for testing specific case
-      // For now, replacing with the dynamic automation system
+    if (existingTask && data.status && existingTask.status !== data.status) {
+      // Create Audit Log
+      await prisma.auditLog.create({
+        data: {
+          taskId: id,
+          action: "UPDATE",
+          diffJson: {
+            status: {
+              from: existingTask.status,
+              to: data.status,
+            },
+          },
+          // Assuming system user or currently logged in user triggers this.
+          // Since updateTask is generic server action, we might not have userId easily here without auth context.
+          // For now leaving userId null or we could get it if we had auth in scope.
+        },
+      });
+
       const { processTaskStatusChange } = await import("./automations");
-      // Getting the task before update to know previous status would be ideal for "fromStatus" logic
-      // Since we already fetched it at the start or database, but updateTask doesn't fetch first.
-      // For simplified "Status Changed To" logic:
-      await processTaskStatusChange(task.title, "unknown", data.status);
+      // Now passing taskId and correct fromStatus
+      await processTaskStatusChange(
+        task.id,
+        task.title,
+        existingTask.status,
+        data.status
+      );
     }
 
     revalidatePath("/tasks");

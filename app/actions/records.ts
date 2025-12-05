@@ -72,31 +72,49 @@ export async function updateRecord(
     createdAt?: string;
   }
 ) {
+  console.log(`[Records] updateRecord called for Record ID: ${recordId}`);
   try {
+    // Fetch existing record to check permissions AND for automation diffs
+    const existingRecord = await prisma.record.findUnique({
+      where: { id: recordId },
+    });
+
+    if (!existingRecord) {
+      console.log(`[Records] Record ${recordId} not found`);
+      return { success: false, error: "Record not found" };
+    }
+
     const { data: recordData, updatedBy, createdAt } = data;
 
     // Check write permissions
     if (updatedBy) {
-      const existingRecord = await prisma.record.findUnique({
-        where: { id: recordId },
-        select: { tableId: true },
-      });
-
-      if (existingRecord) {
-        const user = await getUserById(Number(updatedBy));
-        if (!user || !canWriteTable(user, existingRecord.tableId)) {
-          return {
-            success: false,
-            error: "You don't have permission to write to this table",
-          };
-        }
+      const user = await getUserById(Number(updatedBy));
+      if (!user || !canWriteTable(user, existingRecord.tableId)) {
+        return {
+          success: false,
+          error: "You don't have permission to write to this table",
+        };
       }
     }
+
+    // Merge new data with existing data to ensure we don't lose fields if recordData is partial
+    // This is CRITICAL for automations that add data (like duration_status_change)
+    const existingData = (existingRecord.data as Record<string, unknown>) || {};
+    const mergedData = {
+      ...existingData,
+      ...recordData,
+    };
+
+    console.log(
+      `[Records] Updating record ${recordId}. Keys in payload: ${Object.keys(
+        recordData
+      ).join(", ")}`
+    );
 
     const record = await prisma.record.update({
       where: { id: recordId },
       data: {
-        data: recordData as any,
+        data: mergedData as any,
         updatedBy: updatedBy ? Number(updatedBy) : null,
         ...(createdAt && { createdAt: new Date(createdAt) }),
       },
@@ -108,6 +126,21 @@ export async function updateRecord(
       "UPDATE",
       recordData
     );
+
+    // Trigger Automation
+    console.log(`[Records] Triggering automations for Table ${record.tableId}`);
+    try {
+      const { processRecordUpdate } = await import("./automations");
+      // existingRecord.data is Json, cast it
+      await processRecordUpdate(
+        record.tableId,
+        record.id,
+        existingRecord.data as any,
+        recordData
+      );
+    } catch (autoError) {
+      console.error(`[Records] Failed to process automations:`, autoError);
+    }
 
     revalidatePath(`/tables/${record.tableId}`);
     revalidatePath("/");

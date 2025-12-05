@@ -44,6 +44,9 @@ export default async function Navbar() {
                   Users
                 </Link>
               )}
+              <Link href="/analytics" className={linkClass}>
+                Analytics
+              </Link>
               <ChatNavbarLink />
             </div>
           </div>
