@@ -21,6 +21,48 @@ model User {
   transactions         Transaction[]
   notifications        Notification[]
   automationRules      AutomationRule[]
+  sentMessages         Message[]     @relation("SentMessages")
+  receivedMessages     Message[]     @relation("ReceivedMessages")
+  createdGroups        Group[]       @relation("CreatedGroups")
+  groupMemberships     GroupMember[]
+}
+
+model Message {
+  id         Int      @id @default(autoincrement())
+  content    String
+  senderId   Int
+  receiverId Int?
+  groupId    Int?
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiver   User?    @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  group      Group?   @relation(fields: [groupId], references: [id])
+}
+
+model Group {
+  id        Int           @id @default(autoincrement())
+  name      String
+  imageUrl  String?
+  creatorId Int
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  creator   User          @relation("CreatedGroups", fields: [creatorId], references: [id])
+  members   GroupMember[]
+  messages  Message[]
+}
+
+model GroupMember {
+  id        Int      @id @default(autoincrement())
+  groupId   Int
+  userId    Int
+  joinedAt  DateTime @default(now())
+  lastReadAt DateTime @default(now())
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
 }
 
 model AutomationRule {
