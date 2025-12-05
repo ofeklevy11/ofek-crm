@@ -87,9 +87,15 @@ export default function UserMenu({ user }: UserMenuProps) {
           <div className="border-t border-gray-100 py-1">
             <button
               className="w-full text-right px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-              onClick={() => {
-                // Placeholder for logout
-                alert("התנתקות תתבצע כאן");
+              onClick={async () => {
+                try {
+                  await fetch("/api/auth/logout", {
+                    method: "POST",
+                  });
+                  window.location.href = "/login";
+                } catch (error) {
+                  console.error("Logout failed", error);
+                }
               }}
             >
               התנתק

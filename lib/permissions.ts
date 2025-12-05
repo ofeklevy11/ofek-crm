@@ -72,16 +72,29 @@ export async function getUserById(userId: number): Promise<User | null> {
   }
 }
 
+import { cookies } from "next/headers";
+import { verifyUserId } from "@/lib/auth";
+
 /**
- * Temporary: Get hardcoded admin user for development
- * In production, this should come from session/auth
+ * Get the current authenticated user from the session cookie
  */
 export async function getCurrentUser(): Promise<User | null> {
-  // For now, return the first admin user
-  // TODO: Replace with actual authentication
   try {
-    const user = await prisma.user.findFirst({
-      where: { role: "admin" },
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+
+    if (!token) {
+      return null;
+    }
+
+    const userId = verifyUserId(token);
+
+    if (!userId) {
+      return null;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
       select: {
         id: true,
         name: true,
@@ -90,6 +103,7 @@ export async function getCurrentUser(): Promise<User | null> {
         allowedWriteTableIds: true,
       },
     });
+
     return user as User | null;
   } catch (error) {
     console.error("Error fetching current user:", error);
