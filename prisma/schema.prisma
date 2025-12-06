@@ -68,9 +68,9 @@ model GroupMember {
 model AutomationRule {
   id            Int      @id @default(autoincrement())
   name          String
-  triggerType   String   // 'MANUAL', 'TASK_STATUS_CHANGE', 'RECORD_CREATE'
+  triggerType   String   // 'MANUAL', 'TASK_STATUS_CHANGE', 'RECORD_CREATE', 'MULTI_EVENT_DURATION'
   triggerConfig Json?    // Configuration for the trigger (e.g., fromStatus, toStatus)
-  actionType    String   // 'SEND_NOTIFICATION'
+  actionType    String   // 'SEND_NOTIFICATION', 'CALCULATE_DURATION', 'CALCULATE_MULTI_EVENT_DURATION'
   actionConfig  Json?    // Configuration for the action (e.g., recipientId, message)
   isActive      Boolean  @default(true)
   createdBy     Int
@@ -78,8 +78,9 @@ model AutomationRule {
   updatedAt     DateTime @updatedAt
   creator       User     @relation(fields: [createdBy], references: [id])
   
-  // Relation to the new time tracking table
+  // Relation to the new time tracking tables
   statusDurations StatusDuration[]
+  multiEventDurations MultiEventDuration[]
 }
 
 model Notification {
@@ -148,6 +149,7 @@ model Record {
   table       TableMeta    @relation("TableRecords", fields: [tableId], references: [id])
   
   statusDurations StatusDuration[]
+  multiEventDurations MultiEventDuration[]
 }
 
 model Attachment {
@@ -187,6 +189,7 @@ model Task {
   updatedAt   DateTime  @updatedAt
   
   statusDurations StatusDuration[]
+  multiEventDurations MultiEventDuration[]
 }
 
 model CalendarEvent {
@@ -296,4 +299,40 @@ model StatusDuration {
   
   @@index([automationRuleId])
   @@index([recordId])
+}
+
+// TABLE FOR MULTI-EVENT DURATION TRACKING
+model MultiEventDuration {
+  id               Int            @id @default(autoincrement())
+  
+  automationRuleId Int
+  automationRule   AutomationRule @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
+  
+  recordId         Int?
+  record           Record?        @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  
+  taskId           String?
+  task             Task?          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  // Stores the event chain as JSON:
+  // [{ eventName: "ליד נוצר", timestamp: "...", value: "..." }, ...]
+  eventChain       Json
+  
+  // Stores the calculated deltas between events as JSON:
+  // [{ from: "ליד נוצר", to: "בטיפול", durationSeconds: 3600, durationString: "1h" }, ...]
+  eventDeltas      Json
+  
+  // Overall metrics
+  totalDurationSeconds Int
+  totalDurationString  String
+  
+  // Weighted metric (if applicable)
+  weightedScore    Float?
+  
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  
+  @@index([automationRuleId])
+  @@index([recordId])
+  @@index([taskId])
 }

@@ -1,0 +1,5 @@
+// קטע קוד להוספה בסוף פונקציית processRecordUpdate
+// הוסף את השורות הבאות לפני: } catch (error) {
+
+    // 🔥 טריגר חדש: חישוב ביצועים בין אירועים מרובים
+    await processMultiEventDurationTrigger(tableId, recordId, oldData, newData);

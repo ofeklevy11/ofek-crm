@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import AutomationModal from "@/components/AutomationModal";
+import MultiEventAutomationModal from "@/components/MultiEventAutomationModal";
 import {
   deleteAutomationRule,
   toggleAutomationRule,
 } from "@/app/actions/automations";
-import { Plus, Trash2, Power, PowerOff, Edit } from "lucide-react";
+import { Plus, Trash2, Power, Edit, Zap } from "lucide-react";
 
 interface AutomationRule {
   id: number;
@@ -36,6 +37,7 @@ export default function AutomationsList({
 }: AutomationsListProps) {
   const [rules, setRules] = useState<AutomationRule[]>(initialRules);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMultiEventModalOpen, setIsMultiEventModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
 
   const handleDelete = async (id: number) => {
@@ -61,16 +63,25 @@ export default function AutomationsList({
     <div className="space-y-6">
       <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200">
         <h2 className="text-lg font-medium text-gray-900">האוטומציות שלי</h2>
-        <button
-          onClick={() => {
-            setEditingRule(null);
-            setIsModalOpen(true);
-          }}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          <Plus className="ml-2 -mr-1 h-5 w-5" />
-          אוטומציה חדשה
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setEditingRule(null);
+              setIsModalOpen(true);
+            }}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            <Plus className="ml-2 -mr-1 h-5 w-5" />
+            אוטומציה חדשה
+          </button>
+          <button
+            onClick={() => setIsMultiEventModalOpen(true)}
+            className="inline-flex items-center px-4 py-2 border border-orange-600 text-sm font-medium rounded-md shadow-sm text-orange-600 bg-white hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+          >
+            <Zap className="ml-2 -mr-1 h-5 w-5" />
+            🔥 אירועים מרובים
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -121,13 +132,22 @@ export default function AutomationsList({
                           (t) => t.id === Number(rule.triggerConfig.tableId)
                         )?.name || "טבלה לא ידועה"
                       }`
+                    : rule.triggerType === "MULTI_EVENT_DURATION"
+                    ? "🔥 חישוב אירועים מרובים"
                     : rule.triggerType}
                 </p>
-                <p>
-                  <span className="font-semibold">נשלח ל:</span>{" "}
-                  {users.find((u) => u.id === rule.actionConfig?.recipientId)
-                    ?.name || "לא ידוע"}
-                </p>
+                {rule.actionType === "SEND_NOTIFICATION" && (
+                  <p>
+                    <span className="font-semibold">נשלח ל:</span>{" "}
+                    {users.find((u) => u.id === rule.actionConfig?.recipientId)
+                      ?.name || "לא ידוע"}
+                  </p>
+                )}
+                {rule.actionType === "CALCULATE_MULTI_EVENT_DURATION" && (
+                  <p className="text-xs text-orange-600 mt-1">
+                    מודד זמנים בין שרשרת אירועים
+                  </p>
+                )}
               </div>
 
               <div className="absolute bottom-0 inset-x-0 bg-gray-50 px-4 py-4 sm:px-6">
@@ -165,9 +185,17 @@ export default function AutomationsList({
             setEditingRule(null);
           }}
           onCreated={async () => {
-            // Refresh page or re-fetch not ideally efficient but simple for now
             window.location.reload();
           }}
+        />
+      )}
+
+      {isMultiEventModalOpen && (
+        <MultiEventAutomationModal
+          tables={tables}
+          currentUserId={currentUserId}
+          onClose={() => setIsMultiEventModalOpen(false)}
+          onCreated={() => window.location.reload()}
         />
       )}
     </div>

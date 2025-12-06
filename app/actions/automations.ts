@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { sendNotification } from "./notifications";
+import { processMultiEventDurationTrigger } from "./multi-event-automations";
 
 export async function getAutomationRules() {
   try {
@@ -678,6 +679,9 @@ export async function processRecordUpdate(
         }
       }
     }
+
+    // Process Multi-Event Duration Trigger
+    await processMultiEventDurationTrigger(tableId, recordId, oldData, newData);
   } catch (error) {
     console.error("Error processing record update automations:", error);
   }

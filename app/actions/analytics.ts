@@ -53,7 +53,9 @@ export async function getAnalyticsData() {
     const rules = await prisma.automationRule.findMany({
       where: {
         isActive: true,
-        actionType: "CALCULATE_DURATION",
+        actionType: {
+          in: ["CALCULATE_DURATION", "CALCULATE_MULTI_EVENT_DURATION"],
+        },
       },
     });
 
@@ -73,8 +75,86 @@ export async function getAnalyticsData() {
               })
             )?.name || "טבלה לא ידועה";
 
-      if (rule.actionType === "CALCULATE_DURATION") {
-        // Query the new StatusDuration table
+      // 🔥 טיפול בטריגר של אירועים מרובים
+      if (rule.actionType === "CALCULATE_MULTI_EVENT_DURATION") {
+        const multiEventDurations = await prisma.multiEventDuration.findMany({
+          where: { automationRuleId: rule.id },
+          include: {
+            record: true,
+            task: true,
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        items = multiEventDurations.map((d) => {
+          let title = "Unknown";
+
+          if (d.task) {
+            title = d.task.title;
+          } else if (d.record) {
+            const data = d.record.data as any;
+            const titleField =
+              Object.keys(data).find(
+                (k) =>
+                  k.toLowerCase().includes("name") ||
+                  k.toLowerCase().includes("title") ||
+                  (typeof data[k] === "string" &&
+                    data[k].length < 50 &&
+                    k !== "duration_status_change")
+              ) || "Record";
+            title = data[titleField]
+              ? String(data[titleField])
+              : `Record #${d.record.id}`;
+          }
+
+          // Format event chain for display
+          const eventChain = d.eventChain as any[];
+          const eventNames = eventChain
+            .map((e: any) => e.eventName)
+            .join(" → ");
+
+          return {
+            id: d.id,
+            title: title,
+            status: eventNames,
+            duration: d.totalDurationString,
+            totalDurationSeconds: d.totalDurationSeconds,
+            weightedScore: d.weightedScore,
+            eventDeltas: d.eventDeltas, // מידע על כל דלטה
+            updatedAt: d.createdAt,
+            type: tableName,
+            recordId: d.recordId || d.taskId || "",
+          };
+        });
+
+        // Calculate statistics for multi-event
+        let stats = null;
+        if (items.length > 0) {
+          const secondsArray = items.map((item) => item.totalDurationSeconds);
+          const totalSeconds = secondsArray.reduce((a, b) => a + b, 0);
+          const averageSeconds = Math.round(totalSeconds / secondsArray.length);
+          const minSeconds = Math.min(...secondsArray);
+          const maxSeconds = Math.max(...secondsArray);
+
+          stats = {
+            averageDuration: formatSecondsToHebrew(averageSeconds),
+            minDuration: formatSecondsToHebrew(minSeconds),
+            maxDuration: formatSecondsToHebrew(maxSeconds),
+            totalRecords: items.length,
+            averageSeconds,
+          };
+        }
+
+        views.push({
+          ruleId: rule.id,
+          ruleName: ruleName,
+          tableName: tableName,
+          type: "multi-event", // 🔥 סימון שזה multi-event
+          data: items,
+          stats: stats,
+        });
+      } else if (rule.actionType === "CALCULATE_DURATION") {
+        // Query the StatusDuration table (single event)
         const durations = await prisma.statusDuration.findMany({
           where: { automationRuleId: rule.id },
           include: {
@@ -92,7 +172,6 @@ export async function getAnalyticsData() {
             title = d.task.title;
           } else if (d.record) {
             const data = d.record.data as any;
-            // Find title field
             const titleField =
               Object.keys(data).find(
                 (k) =>
@@ -117,52 +196,52 @@ export async function getAnalyticsData() {
             id: d.id,
             title: title,
             status: statusDisplay,
-            duration: d.durationString, // Already formatted in DB
-            updatedAt: d.createdAt, // Or recordUpdatedAt
+            duration: d.durationString,
+            updatedAt: d.createdAt,
             type: tableName,
             recordId: d.recordId || d.taskId || "",
           };
         });
-      }
 
-      // Calculate statistics if we have data
-      let stats = null;
-      if (items.length > 0) {
-        // We can fetch aggregate directly from DB if we wanted, but let's stick to JS for now as we have the items
+        // Calculate statistics
+        let stats = null;
+        if (items.length > 0) {
+          const durationSeconds = await prisma.statusDuration.findMany({
+            where: { automationRuleId: rule.id },
+            select: { durationSeconds: true },
+          });
 
-        const durationSeconds = await prisma.statusDuration.findMany({
-          where: { automationRuleId: rule.id },
-          select: { durationSeconds: true },
-        });
+          const secondsArray = durationSeconds.map((d) => d.durationSeconds);
 
-        const secondsArray = durationSeconds.map((d) => d.durationSeconds);
+          if (secondsArray.length > 0) {
+            const totalSeconds = secondsArray.reduce((a, b) => a + b, 0);
+            const averageSeconds = Math.round(
+              totalSeconds / secondsArray.length
+            );
+            const minSeconds = Math.min(...secondsArray);
+            const maxSeconds = Math.max(...secondsArray);
 
-        if (secondsArray.length > 0) {
-          const totalSeconds = secondsArray.reduce((a, b) => a + b, 0);
-          const averageSeconds = Math.round(totalSeconds / secondsArray.length);
-          const minSeconds = Math.min(...secondsArray);
-          const maxSeconds = Math.max(...secondsArray);
-
-          stats = {
-            averageDuration: formatSecondsToHebrew(averageSeconds),
-            minDuration: formatSecondsToHebrew(minSeconds),
-            maxDuration: formatSecondsToHebrew(maxSeconds),
-            totalRecords: items.length,
-            averageSeconds,
-          };
+            stats = {
+              averageDuration: formatSecondsToHebrew(averageSeconds),
+              minDuration: formatSecondsToHebrew(minSeconds),
+              maxDuration: formatSecondsToHebrew(maxSeconds),
+              totalRecords: items.length,
+              averageSeconds,
+            };
+          }
         }
-      }
 
-      views.push({
-        ruleId: rule.id,
-        ruleName: ruleName,
-        tableName: tableName,
-        data: items,
-        stats: stats,
-      });
+        views.push({
+          ruleId: rule.id,
+          ruleName: ruleName,
+          tableName: tableName,
+          type: "single-event", // סימון שזה single event
+          data: items,
+          stats: stats,
+        });
+      }
     }
 
-    // Sort views by something? Maybe rule ID.
     return { success: true, data: views };
   } catch (error) {
     console.error("Error fetching analytics data:", error);

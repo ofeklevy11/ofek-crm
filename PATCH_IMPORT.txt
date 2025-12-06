@@ -1,0 +1,4 @@
+// קטע קוד להוספה בתחילת app/actions/automations.ts
+// הוסף את השורה הזו אחרי: import { sendNotification } from "./notifications";
+
+import { processMultiEventDurationTrigger } from "./multi-event-automations";
