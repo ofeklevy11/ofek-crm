@@ -40,6 +40,85 @@ const COLOR_OPTIONS = [
   { label: "ורוד", value: "bg-pink-50", border: "border-pink-100" },
 ];
 
+const KEY_MAPPING: Record<string, string> = {
+  status: "סטטוס",
+  priority: "עדיפות",
+  assignee: "נציג מטפל",
+  tags: "תגיות",
+  amount: "סכום",
+  title: "כותרת",
+  description: "תיאור",
+  client: "לקוח",
+  phone: "טלפון",
+  email: "מייל",
+  relatedType: "סוג קשור",
+  frequency: "תדירות",
+  startDate: "תאריך התחלה",
+  dueDate: "תאריך יעד",
+  createdAt: "נוצר ב",
+  updatedAt: "עודכן ב",
+  // Common Values translation
+  todo: "לביצוע",
+  in_progress: "בטיפול",
+  waiting_client: "ממתין",
+  completed_month: "הושלם",
+  archive: "ארכיון",
+  low: "נמוכה",
+  medium: "בינונית",
+  high: "גבוהה",
+  active: "פעיל",
+  paused: "מושהה",
+  cancelled: "מבוטל",
+  paid: "שולם",
+  pending: "ממתין",
+  overdue: "באיחור",
+  completed: "הושלם",
+  failed: "נכשל",
+};
+
+const translate = (key: string) => KEY_MAPPING[key] || key;
+
+function ConfigDetails({ config, type }: { config: any; type: string }) {
+  if (!config) return null;
+
+  const renderFilter = (filter: any, label?: string) => {
+    if (!filter || Object.keys(filter).length === 0) return null;
+    return (
+      <div className="flex flex-wrap gap-1 items-center bg-white/50 rounded-md px-2 py-1 border border-black/5">
+        {label && <span className="text-gray-500 text-xs ml-1">{label}:</span>}
+        {Object.entries(filter).map(([key, val]) => (
+          <span
+            key={key}
+            className="text-gray-700 text-xs font-medium bg-white border border-gray-200 px-1.5 rounded"
+          >
+            {translate(key)}: {translate(String(val))}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5 mt-2 w-full">
+      {type === "COUNT" && renderFilter(config.filter)}
+      {type === "CONVERSION" && (
+        <>
+          {renderFilter(config.totalFilter, "סה״כ")}
+          {renderFilter(config.successFilter, "הצלחה")}
+        </>
+      )}
+      {config.groupByField && (
+        <div className="flex items-center gap-1">
+          <span className="text-gray-500 text-xs">קבץ לפי:</span>
+          <span className="text-indigo-600 text-xs font-semibold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+            {translate(config.groupByField)}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AnalyticsCard({
   view,
   onOpenDetails,
@@ -48,7 +127,11 @@ function AnalyticsCard({
 }: {
   view: any;
   onOpenDetails: (view: any) => void;
-  onColorChange: (ruleId: number, color: string) => void;
+  onColorChange: (
+    id: number,
+    type: "AUTOMATION" | "CUSTOM",
+    color: string
+  ) => void;
   onEdit: (view: any) => void;
 }) {
   const {
@@ -103,6 +186,10 @@ function AnalyticsCard({
           <p className="text-sm text-gray-500 mt-1">
             {view.tableName === "System" ? "מערכת" : `מקור: ${view.tableName}`}
           </p>
+
+          {!isAutomation && (
+            <ConfigDetails config={view.config} type={view.type} />
+          )}
         </div>
         <div className="relative flex gap-1">
           <button
@@ -136,7 +223,13 @@ function AnalyticsCard({
                   key={color.value}
                   className={`w-6 h-6 rounded-full border border-gray-200 ${color.value} hover:scale-110 transition-transform`}
                   onClick={() => {
-                    if (view.ruleId) onColorChange(view.ruleId, color.value);
+                    if (isAutomation) {
+                      if (view.ruleId)
+                        onColorChange(view.ruleId, "AUTOMATION", color.value);
+                    } else {
+                      if (view.viewId)
+                        onColorChange(view.viewId, "CUSTOM", color.value);
+                    }
                     setShowColorPicker(false);
                   }}
                   title={color.label}
@@ -261,12 +354,13 @@ export default function AnalyticsPage() {
         const newItems = arrayMove(items, oldIndex, newIndex);
 
         // Update Backend
-        const updates = newItems
-          .filter((i) => i.source === "AUTOMATION")
-          .map((item: any, index: number) => ({
-            ruleId: item.ruleId,
-            order: index,
-          }));
+        const updates = newItems.map((item: any, index: number) => ({
+          id: item.source === "AUTOMATION" ? item.ruleId : item.viewId,
+          type: (item.source === "AUTOMATION" ? "AUTOMATION" : "CUSTOM") as
+            | "AUTOMATION"
+            | "CUSTOM",
+          order: index,
+        }));
 
         if (updates.length > 0) updateAnalyticsViewOrder(updates);
 
@@ -275,13 +369,21 @@ export default function AnalyticsPage() {
     }
   };
 
-  const handleColorChange = async (ruleId: number, color: string) => {
-    if (!ruleId) return;
+  const handleColorChange = async (
+    id: number,
+    type: "AUTOMATION" | "CUSTOM",
+    color: string
+  ) => {
+    if (!id) return;
     setViews((prev) =>
-      prev.map((v) => (v.ruleId === ruleId ? { ...v, color } : v))
+      prev.map((v) => {
+        if (type === "AUTOMATION" && v.ruleId === id) return { ...v, color };
+        if (type === "CUSTOM" && v.viewId === id) return { ...v, color };
+        return v;
+      })
     );
     try {
-      await updateAnalyticsViewColor(ruleId, color);
+      await updateAnalyticsViewColor(id, type, color);
     } catch (err) {
       console.error("Failed to update color", err);
     }

@@ -536,16 +536,24 @@ export async function getAnalyticsData() {
 }
 
 export async function updateAnalyticsViewOrder(
-  items: { ruleId: number; order: number }[]
+  items: { id: number; type: "AUTOMATION" | "CUSTOM"; order: number }[]
 ) {
   try {
-    const updates = items.map((item) =>
-      prisma.automationRule.update({
-        where: { id: item.ruleId },
-        data: { analyticsOrder: item.order },
-      })
-    );
-    await Promise.all(updates);
+    const updates = items.map((item) => {
+      if (item.type === "AUTOMATION") {
+        return prisma.automationRule.update({
+          where: { id: item.id },
+          data: { analyticsOrder: item.order },
+        });
+      } else {
+        return prisma.analyticsView.update({
+          where: { id: item.id },
+          data: { order: item.order },
+        });
+      }
+    });
+
+    await prisma.$transaction(updates);
     return { success: true };
   } catch (error) {
     console.error("Error updating analytics view order:", error);
@@ -553,12 +561,23 @@ export async function updateAnalyticsViewOrder(
   }
 }
 
-export async function updateAnalyticsViewColor(ruleId: number, color: string) {
+export async function updateAnalyticsViewColor(
+  id: number,
+  type: "AUTOMATION" | "CUSTOM",
+  color: string
+) {
   try {
-    await prisma.automationRule.update({
-      where: { id: ruleId },
-      data: { analyticsColor: color },
-    });
+    if (type === "AUTOMATION") {
+      await prisma.automationRule.update({
+        where: { id },
+        data: { analyticsColor: color },
+      });
+    } else {
+      await prisma.analyticsView.update({
+        where: { id },
+        data: { color },
+      });
+    }
     return { success: true };
   } catch (error) {
     console.error("Error updating analytics view color:", error);
