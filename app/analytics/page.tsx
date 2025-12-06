@@ -74,6 +74,9 @@ const KEY_MAPPING: Record<string, string> = {
   overdue: "באיחור",
   completed: "הושלם",
   failed: "נכשל",
+  this_week: "השבוע (א'-ש')",
+  last_30_days: "30 ימים אחרונים",
+  last_year: "שנה אחרונה",
 };
 
 const translate = (key: string) => KEY_MAPPING[key] || key;
@@ -98,6 +101,36 @@ function ConfigDetails({ config, type }: { config: any; type: string }) {
     );
   };
 
+  const renderDateRange = () => {
+    if (!config.dateRangeType || config.dateRangeType === "all") return null;
+
+    let text = translate(config.dateRangeType);
+    if (config.dateRangeType === "custom") {
+      const start = config.customStartDate
+        ? new Date(config.customStartDate).toLocaleDateString("he-IL")
+        : "";
+      const end = config.customEndDate
+        ? new Date(config.customEndDate).toLocaleDateString("he-IL")
+        : "";
+      text = `${start} - ${end}`;
+    }
+
+    const isCalendar = config.model === "CalendarEvent";
+    const basisText = isCalendar ? "לפי זמן אירוע" : "לפי זמן יצירה";
+
+    return (
+      <div className="flex items-center gap-1 mt-1">
+        <span className="text-gray-500 text-xs">זמן:</span>
+        <span className="text-blue-600 text-xs font-medium bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 flex items-center gap-1">
+          {text}
+          <span className="text-[9px] text-blue-400 border-r border-blue-200 pr-1 mr-1">
+            {basisText}
+          </span>
+        </span>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col gap-1.5 mt-2 w-full">
       {type === "COUNT" && renderFilter(config.filter)}
@@ -107,6 +140,9 @@ function ConfigDetails({ config, type }: { config: any; type: string }) {
           {renderFilter(config.successFilter, "הצלחה")}
         </>
       )}
+
+      {renderDateRange()}
+
       {config.groupByField && (
         <div className="flex items-center gap-1">
           <span className="text-gray-500 text-xs">קבץ לפי:</span>

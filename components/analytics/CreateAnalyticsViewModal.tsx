@@ -474,6 +474,71 @@ export default function CreateAnalyticsViewModal({
       </div>
     );
 
+    const DateFilter = () => (
+      <div className="space-y-2 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+        <label className="block text-sm font-medium text-gray-700">
+          טווח זמנים
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { id: "all", label: "הכל" },
+            { id: "this_week", label: "השבוע (א'-ש')" },
+            { id: "last_30_days", label: "30 ימים אחרונים" },
+            { id: "last_year", label: "שנה אחרונה" },
+            { id: "custom", label: "מותאם אישית" },
+          ].map((option) => (
+            <button
+              key={option.id}
+              onClick={() => setConfig({ ...config, dateRangeType: option.id })}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                (config.dateRangeType || "all") === option.id
+                  ? "bg-blue-100 text-blue-700 border-blue-200"
+                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        {config.model === "CalendarEvent" && (
+          <p className="text-xs text-orange-600 mt-2 bg-orange-50 p-2 rounded border border-orange-100">
+            שים לב: עבור יומן, החישוב מתבצע לפי זמן האירוע (Start Time) ולא לפי
+            זמן היצירה.
+          </p>
+        )}
+
+        {config.dateRangeType === "custom" && (
+          <div className="flex gap-2 mt-2">
+            <div className="flex-1">
+              <label className="block text-xs text-gray-500 mb-1">מתאריך</label>
+              <input
+                type="date"
+                value={config.customStartDate || ""}
+                onChange={(e) =>
+                  setConfig({ ...config, customStartDate: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded p-1.5 text-sm"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs text-gray-500 mb-1">
+                עד תאריך
+              </label>
+              <input
+                type="date"
+                value={config.customEndDate || ""}
+                onChange={(e) =>
+                  setConfig({ ...config, customEndDate: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded p-1.5 text-sm"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+
     if (selectedType === "CONVERSION") {
       const totalKey = Object.keys(config.totalFilter || {})[0] || "";
       const totalVal =
@@ -486,6 +551,7 @@ export default function CreateAnalyticsViewModal({
       return (
         <div className="space-y-6">
           <TableSelect />
+          <DateFilter />
           <GroupByInput />
 
           <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
@@ -571,6 +637,7 @@ export default function CreateAnalyticsViewModal({
       return (
         <div className="space-y-6">
           <TableSelect />
+          <DateFilter />
           <GroupByInput />
 
           <div className="space-y-2">

@@ -340,21 +340,75 @@ export async function getAnalyticsData() {
 
     // --- Process Custom Views ---
     // --- Process Custom Views ---
+    // Helper for date filtering
+    // Helper for date filtering
+    function getDateFilter(config: any) {
+      if (!config.dateRangeType || config.dateRangeType === "all")
+        return undefined;
+
+      const now = new Date();
+      let startDate: Date | undefined;
+      let endDate: Date | undefined;
+
+      switch (config.dateRangeType) {
+        case "this_week":
+          startDate = new Date(now);
+          startDate.setDate(now.getDate() - now.getDay()); // Sunday
+          startDate.setHours(0, 0, 0, 0);
+
+          endDate = new Date(startDate);
+          endDate.setDate(startDate.getDate() + 6); // Saturday
+          endDate.setHours(23, 59, 59, 999);
+          break;
+        case "last_30_days":
+          startDate = new Date(now);
+          startDate.setDate(now.getDate() - 30);
+          break;
+        case "last_year":
+          startDate = new Date(now);
+          startDate.setFullYear(now.getFullYear() - 1);
+          break;
+        case "custom":
+          if (config.customStartDate)
+            startDate = new Date(config.customStartDate);
+          if (config.customEndDate) {
+            endDate = new Date(config.customEndDate);
+            endDate.setHours(23, 59, 59, 999);
+          }
+          break;
+      }
+
+      const filter: any = {};
+      if (startDate) filter.gte = startDate;
+      if (endDate) filter.lte = endDate;
+
+      return Object.keys(filter).length > 0 ? filter : undefined;
+    }
+
+    // --- Process Custom Views ---
     for (const view of customViews) {
       const config = view.config as any;
       let tableName = "System";
       let rawData: any[] = [];
 
+      const dateRange = getDateFilter(config);
+
+      const dateField =
+        config.model === "CalendarEvent" ? "startTime" : "createdAt";
+      const dateFilter = dateRange ? { [dateField]: dateRange } : {};
+
       // 1. Fetch Data Source
       if (config.model === "Task") {
         tableName = "משימות מערכת";
         rawData = await prisma.task.findMany({
+          where: dateFilter,
           take: 1000,
           orderBy: { createdAt: "desc" },
         });
       } else if (config.model === "Retainer") {
         tableName = "פיננסים: ריטיינרים";
         rawData = await prisma.retainer.findMany({
+          where: dateFilter,
           take: 1000,
           orderBy: { createdAt: "desc" },
           include: { client: true },
@@ -362,6 +416,7 @@ export async function getAnalyticsData() {
       } else if (config.model === "OneTimePayment") {
         tableName = "פיננסים: תשלומים";
         rawData = await prisma.oneTimePayment.findMany({
+          where: dateFilter,
           take: 1000,
           orderBy: { createdAt: "desc" },
           include: { client: true },
@@ -369,6 +424,7 @@ export async function getAnalyticsData() {
       } else if (config.model === "Transaction") {
         tableName = "פיננסים: תנועות";
         rawData = await prisma.transaction.findMany({
+          where: dateFilter,
           take: 1000,
           orderBy: { createdAt: "desc" },
           include: { client: true },
@@ -376,13 +432,14 @@ export async function getAnalyticsData() {
       } else if (config.model === "CalendarEvent") {
         tableName = "יומן: אירועים";
         rawData = await prisma.calendarEvent.findMany({
+          where: dateFilter,
           take: 1000,
-          orderBy: { createdAt: "desc" },
+          orderBy: { startTime: "desc" },
         });
       } else if (config.tableId) {
         tableName = await getTableName(Number(config.tableId));
         rawData = await prisma.record.findMany({
-          where: { tableId: Number(config.tableId) },
+          where: { tableId: Number(config.tableId), ...dateFilter },
           orderBy: { createdAt: "desc" },
           take: 1000,
         });
