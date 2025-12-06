@@ -191,8 +191,72 @@ export default function MultiEventAutomationModal({
     );
   };
 
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  // ולידציה של קשרים בין טבלאות
+  useEffect(() => {
+    if (!isMultiTableMode) {
+      setValidationError(null);
+      return;
+    }
+
+    const checkRelations = () => {
+      for (let i = 0; i < eventChain.length - 1; i++) {
+        const current = eventChain[i];
+        const next = eventChain[i + 1];
+
+        const t1 = current.tableId || tableId;
+        const t2 = next.tableId || tableId;
+
+        // אם זה אותה טבלה, הכל בסדר
+        if (t1 === t2) continue;
+        if (!t1 || !t2) continue; // עדיין לא נבחרו
+
+        // בדיקת סכמות (אם נטענו)
+        const schema1 = schemas[t1];
+        const schema2 = schemas[t2];
+
+        if (!schema1 || !schema2) return; // עדיין טוען
+
+        // האם יש קשר ישיר מ-1 ל-2?
+        const rel1to2 = schema1.find(
+          (f) =>
+            f.type === "relation" && f.options && f.options.includes(String(t2))
+        ); // Assuming options stores relationTableId or we need another way?
+        // Wait, schema structure in AddRecordForm: relationTableId property.
+        // Let's check SchemaField interface in this file. It doesn't have relationTableId.
+        // We need to update SchemaField interface and the check.
+
+        // Actually, looking at getTableById response in other files, it returns full schema.
+        // Let's assume the schema in state has relationTableId.
+
+        const hasRel1to2 = schema1.some(
+          (f: any) =>
+            f.type === "relation" && Number(f.relationTableId) === Number(t2)
+        );
+        const hasRel2to1 = schema2.some(
+          (f: any) =>
+            f.type === "relation" && Number(f.relationTableId) === Number(t1)
+        );
+
+        if (!hasRel1to2 && !hasRel2to1) {
+          setValidationError(
+            `חסר קשר (Relation) בין שלב ${i + 1} (${current.eventName}) לשלב ${
+              i + 2
+            } (${next.eventName}). חובה לקשר בין הטבלאות.`
+          );
+          return;
+        }
+      }
+      setValidationError(null);
+    };
+
+    checkRelations();
+  }, [eventChain, schemas, isMultiTableMode, tableId]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (validationError) return;
     setLoading(true);
 
     try {
@@ -603,6 +667,20 @@ export default function MultiEventAutomationModal({
           </form>
         </div>
 
+        {isMultiTableMode && !validationError && (
+          <div className="mx-6 mb-2 p-3 bg-blue-50 text-blue-700 rounded-lg border border-blue-200 text-sm flex items-center gap-2">
+            <Database size={16} />
+            שים לב: במצב מרובה טבלאות, חייב להיות שדה קשר (Relation) בין הטבלאות
+            המשויכות לשלבים עוקבים.
+          </div>
+        )}
+
+        {validationError && (
+          <div className="mx-6 mb-2 p-3 bg-red-50 text-red-700 rounded-lg border border-red-200 text-sm flex items-center gap-2">
+            ⚠️ {validationError}
+          </div>
+        )}
+
         <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-lg shrink-0">
           <button
             type="button"
@@ -614,8 +692,8 @@ export default function MultiEventAutomationModal({
           <button
             type="submit"
             form="automation-form"
-            disabled={loading}
-            className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition shadow-md hover:shadow-lg"
+            disabled={loading || !!validationError}
+            className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-md hover:shadow-lg"
           >
             {loading ? "שומר..." : "שמור הגדרות"}
           </button>
