@@ -1,0 +1,12 @@
+
+model AnalyticsView {
+  id          Int      @id @default(autoincrement())
+  title       String
+  type        String   // 'COUNT', 'AVERAGE', 'SUM', 'CONVERSION', 'DISTRIBUTION'
+  description String?
+  config      Json     // Stores: tableId, field, filter, groupBy, etc.
+  order       Int      @default(0)
+  color       String?  @default("bg-white")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

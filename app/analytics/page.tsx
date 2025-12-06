@@ -1,10 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getAnalyticsData } from "@/app/actions/analytics";
-import { Loader2, List } from "lucide-react";
+import { Loader2, List, Plus, Palette, Edit3, Settings } from "lucide-react";
 import Link from "next/link";
 import AnalyticsDetailsModal from "@/components/AnalyticsDetailsModal";
+import CreateAnalyticsViewModal from "@/components/analytics/CreateAnalyticsViewModal";
 import {
   DndContext,
   closestCenter,
@@ -26,7 +28,6 @@ import {
   updateAnalyticsViewOrder,
   updateAnalyticsViewColor,
 } from "@/app/actions/analytics";
-import { Palette } from "lucide-react";
 
 // Available colors for the cards
 const COLOR_OPTIONS = [
@@ -43,10 +44,12 @@ function AnalyticsCard({
   view,
   onOpenDetails,
   onColorChange,
+  onEdit,
 }: {
   view: any;
   onOpenDetails: (view: any) => void;
   onColorChange: (ruleId: number, color: string) => void;
+  onEdit: (view: any) => void;
 }) {
   const {
     attributes,
@@ -55,7 +58,7 @@ function AnalyticsCard({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: view.ruleId });
+  } = useSortable({ id: view.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -68,6 +71,8 @@ function AnalyticsCard({
   const currentColor =
     COLOR_OPTIONS.find((c) => c.value === view.color) || COLOR_OPTIONS[0];
 
+  const isAutomation = view.source === "AUTOMATION";
+
   return (
     <div
       ref={setNodeRef}
@@ -77,20 +82,42 @@ function AnalyticsCard({
       className={`relative rounded-lg shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col justify-between aspect-square border ${currentColor.value} ${currentColor.border}`}
     >
       <div className="flex justify-between items-start">
-        <div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                isAutomation
+                  ? "bg-indigo-100 text-indigo-700 border-indigo-200"
+                  : "bg-orange-100 text-orange-700 border-orange-200"
+              }`}
+            >
+              {isAutomation ? "אוטומציה" : "ידני"}
+            </span>
+          </div>
           <h3
             className="text-lg font-semibold text-gray-900 line-clamp-2"
             title={view.ruleName}
           >
             {view.ruleName}
           </h3>
-          <p className="text-sm text-gray-500 mt-1">מקור: {view.tableName}</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {view.tableName === "System" ? "מערכת" : `מקור: ${view.tableName}`}
+          </p>
         </div>
-        <div className="relative">
+        <div className="relative flex gap-1">
+          <button
+            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-black/5 rounded-full transition-colors"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onEdit(view);
+            }}
+            title={isAutomation ? "ערוך אוטומציה" : "ערוך תצוגה"}
+          >
+            {isAutomation ? <Settings size={16} /> : <Edit3 size={16} />}
+          </button>
           <button
             className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-full transition-colors"
             onPointerDown={(e) => {
-              // Using onPointerDown to prevent drag start
               e.stopPropagation();
               setShowColorPicker(!showColorPicker);
             }}
@@ -109,7 +136,7 @@ function AnalyticsCard({
                   key={color.value}
                   className={`w-6 h-6 rounded-full border border-gray-200 ${color.value} hover:scale-110 transition-transform`}
                   onClick={() => {
-                    onColorChange(view.ruleId, color.value);
+                    if (view.ruleId) onColorChange(view.ruleId, color.value);
                     setShowColorPicker(false);
                   }}
                   title={color.label}
@@ -121,23 +148,32 @@ function AnalyticsCard({
       </div>
 
       <div className="flex-1 flex flex-col justify-center items-center my-4 cursor-grab active:cursor-grabbing">
-        {view.data.length === 0 ? (
+        {!view.stats ? (
           <div className="text-center">
             <span className="text-4xl font-bold text-gray-200">-</span>
             <p className="text-sm text-gray-400 mt-2">אין מספיק נתונים</p>
           </div>
-        ) : !view.stats ? (
-          <div className="text-center">
-            <span className="text-4xl font-bold text-gray-200">-</span>
-            <p className="text-sm text-gray-400 mt-2">אין מספיק נתונים</p>
+        ) : view.stats.mainMetric ? (
+          // Generic Stats
+          <div className="text-center w-full">
+            <div className="text-4xl font-bold text-blue-600 mb-2 truncate px-2">
+              {view.stats.mainMetric}
+            </div>
+            <p className="text-sm text-gray-500">{view.stats.label || "ערך"}</p>
+            {view.stats.subMetric && (
+              <p className="text-xs text-gray-400 mt-1" dir="ltr">
+                {view.stats.subMetric}
+              </p>
+            )}
           </div>
         ) : (
+          // Legacy Duration Stats
           <div className="text-center">
             <div className="text-3xl font-bold text-blue-600 mb-2">
               {view.stats.averageDuration}
             </div>
             <p className="text-sm text-gray-500">ממוצע זמן</p>
-            <div className="flex gap-4 mt-4 text-xs text-gray-600">
+            <div className="flex gap-4 mt-4 text-xs text-gray-600 justify-center">
               <div>
                 <span className="font-semibold">מינימום:</span>{" "}
                 {view.stats.minDuration}
@@ -155,7 +191,7 @@ function AnalyticsCard({
         <span>מבוסס על:</span>
         <div className="flex items-center gap-2">
           <span className="font-medium bg-black/5 px-2 py-1 rounded-full">
-            {view.data.length} רשומות
+            {view.stats?.totalRecords || view.data.length} רשומות
           </span>
           {view.data.length > 0 && (
             <button
@@ -174,9 +210,12 @@ function AnalyticsCard({
 }
 
 export default function AnalyticsPage() {
+  const router = useRouter();
   const [views, setViews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedView, setSelectedView] = useState<any | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingView, setEditingView] = useState<any | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -185,39 +224,51 @@ export default function AnalyticsPage() {
     })
   );
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await getAnalyticsData();
-        if (res.success && res.data) {
-          setViews(res.data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch analytics data", error);
-      } finally {
-        setLoading(false);
+  async function fetchData() {
+    try {
+      setLoading(true);
+      const res = await getAnalyticsData();
+      if (res.success && res.data) {
+        setViews(res.data);
       }
+    } catch (error) {
+      console.error("Failed to fetch analytics data", error);
+    } finally {
+      setLoading(false);
     }
+  }
+
+  useEffect(() => {
     fetchData();
   }, []);
+
+  const handleEdit = (view: any) => {
+    if (view.source === "AUTOMATION") {
+      router.push("/automations");
+    } else {
+      setEditingView(view);
+      setIsCreateModalOpen(true);
+    }
+  };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
       setViews((items) => {
-        const oldIndex = items.findIndex((i) => i.ruleId === active.id);
-        const newIndex = items.findIndex((i) => i.ruleId === over.id);
+        const oldIndex = items.findIndex((i) => i.id === active.id);
+        const newIndex = items.findIndex((i) => i.id === over.id);
         const newItems = arrayMove(items, oldIndex, newIndex);
 
-        // Optimistic update
-        const updates = newItems.map((item: any, index: number) => ({
-          ruleId: item.ruleId,
-          order: index,
-        }));
+        // Update Backend
+        const updates = newItems
+          .filter((i) => i.source === "AUTOMATION")
+          .map((item: any, index: number) => ({
+            ruleId: item.ruleId,
+            order: index,
+          }));
 
-        // Fire and forget update
-        updateAnalyticsViewOrder(updates);
+        if (updates.length > 0) updateAnalyticsViewOrder(updates);
 
         return newItems;
       });
@@ -225,7 +276,7 @@ export default function AnalyticsPage() {
   };
 
   const handleColorChange = async (ruleId: number, color: string) => {
-    // Optimistic update
+    if (!ruleId) return;
     setViews((prev) =>
       prev.map((v) => (v.ruleId === ruleId ? { ...v, color } : v))
     );
@@ -233,7 +284,6 @@ export default function AnalyticsPage() {
       await updateAnalyticsViewColor(ruleId, color);
     } catch (err) {
       console.error("Failed to update color", err);
-      // Revert or show error could happen here, but keeping it simple for now
     }
   };
 
@@ -243,32 +293,44 @@ export default function AnalyticsPage() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">ניתוח נתונים</h1>
-            <p className="text-gray-500 mt-2">
-              צפה בנתוני זמנים המחושבים על ידי האוטומציות שלך. גרור והשלך כדי
-              לסדר מחדש.
-            </p>
+            <p className="text-gray-500 mt-2">דוחות וניתוחים בזמן אמת.</p>
           </div>
-          <Link
-            href="/"
-            className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            חזרה לדאשבורד
-          </Link>
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                setEditingView(null);
+                setIsCreateModalOpen(true);
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+            >
+              <Plus size={16} />
+              צור תצוגה
+            </button>
+            <Link
+              href="/"
+              className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              חזרה לדאשבורד
+            </Link>
+          </div>
         </div>
 
-        {loading ? (
+        {loading && views.length === 0 ? (
           <div className="flex justify-center items-center h-64">
             <Loader2 className="animate-spin text-blue-600" size={48} />
           </div>
         ) : views.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-12 text-center">
-            <div className="text-gray-500 text-lg">
-              לא נמצאו אוטומציות לחישוב זמנים.
-            </div>
-            <div className="text-gray-400 mt-2">
-              צור אוטומציה חדשה עם פעולה "חישוב זמן בסטטוס" כדי לראות כאן
-              נתונים.
-            </div>
+            <div className="text-gray-500 text-lg">אין עדיין תצוגות ניתוח.</div>
+            <button
+              onClick={() => {
+                setEditingView(null);
+                setIsCreateModalOpen(true);
+              }}
+              className="mt-4 text-blue-600 hover:underline"
+            >
+              צור תצוגה חדשה
+            </button>
           </div>
         ) : (
           <DndContext
@@ -277,16 +339,17 @@ export default function AnalyticsPage() {
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={views.map((v) => v.ruleId)}
+              items={views.map((v) => v.id)} // Use Unified ID
               strategy={rectSortingStrategy}
             >
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {views.map((view) => (
                   <AnalyticsCard
-                    key={view.ruleId}
+                    key={view.id}
                     view={view}
                     onOpenDetails={setSelectedView}
                     onColorChange={handleColorChange}
+                    onEdit={handleEdit}
                   />
                 ))}
               </div>
@@ -294,6 +357,17 @@ export default function AnalyticsPage() {
           </DndContext>
         )}
       </div>
+
+      {/* Create Modal */}
+      <CreateAnalyticsViewModal
+        isOpen={isCreateModalOpen}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setEditingView(null);
+        }}
+        onSuccess={fetchData}
+        initialData={editingView}
+      />
 
       {/* Details Modal */}
       {selectedView && (

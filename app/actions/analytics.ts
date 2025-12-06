@@ -38,8 +38,102 @@ function formatSecondsToHebrew(totalSeconds: number): string {
   return parts.join(", ");
 }
 
+// ... imports
+
+// Helper for JS-based filtering of JSON data
+
+// Helper for flexible matching (case-insensitive, trimmed, string conversion)
+// Also handles "no filter" case properly
+// Helper for flexible matching (case-insensitive, trimmed, string conversion)
+function filterRecords(records: any[], filter: any) {
+  if (!filter || Object.keys(filter).length === 0) return records;
+  return records.filter((r) => {
+    return Object.entries(filter).every(([key, value]) => {
+      if (!value) return true;
+
+      // flexible access: try .data[key], then [key]
+      let dataVal = (r.data as any)?.[key];
+      if (dataVal === undefined) {
+        dataVal = (r as any)[key];
+      }
+
+      if (dataVal === undefined || dataVal === null) return false;
+
+      const strDataVal = String(dataVal).trim().toLowerCase();
+      const strFilterVal = String(value).trim().toLowerCase();
+
+      return strDataVal === strFilterVal;
+    });
+  });
+}
+
+export async function createAnalyticsView(data: {
+  title: string;
+  type: string;
+  description?: string;
+  config: any;
+  color?: string;
+}) {
+  try {
+    const view = await prisma.analyticsView.create({
+      data: {
+        title: data.title,
+        type: data.type,
+        description: data.description,
+        config: data.config,
+        color: data.color || "bg-white",
+        // Put it at the end
+        order: 999,
+      },
+    });
+    return { success: true, data: view };
+  } catch (error) {
+    console.error("Error creating analytics view:", error);
+    return { success: false, error: "Failed to create view" };
+  }
+}
+
+export async function deleteAnalyticsView(id: number) {
+  try {
+    await prisma.analyticsView.delete({ where: { id } });
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting analytics view:", error);
+    return { success: false, error: "Failed to delete view" };
+  }
+}
+
+export async function updateAnalyticsView(
+  id: number,
+  data: {
+    title?: string;
+    type?: string;
+    description?: string;
+    config?: any;
+    color?: string;
+  }
+) {
+  try {
+    const view = await prisma.analyticsView.update({
+      where: { id },
+      data: {
+        title: data.title,
+        type: data.type,
+        description: data.description,
+        config: data.config,
+        color: data.color,
+      },
+    });
+    return { success: true, data: view };
+  } catch (error) {
+    console.error("Error updating analytics view:", error);
+    return { success: false, error: "Failed to update view" };
+  }
+}
+
 export async function getAnalyticsData() {
   try {
+    // 1. Fetch Automation Rules (Existing)
     const rules = await prisma.automationRule.findMany({
       where: {
         isActive: true,
@@ -47,16 +141,17 @@ export async function getAnalyticsData() {
           in: ["CALCULATE_DURATION", "CALCULATE_MULTI_EVENT_DURATION"],
         },
       },
-      orderBy: {
-        analyticsOrder: "asc", // Sort by persisted order
-      },
     });
+
+    // 2. Fetch Custom Analytics Views (New)
+    const customViews = await prisma.analyticsView.findMany();
 
     const views = [];
 
     // Cache for table names
     const tableNameCache = new Map<number, string>();
     const getTableName = async (id: number) => {
+      if (!id) return "Unknown Table";
       if (tableNameCache.has(id)) return tableNameCache.get(id)!;
       const t = await prisma.tableMeta.findUnique({ where: { id } });
       const name = t ? t.name : "טבלה לא ידועה";
@@ -64,6 +159,7 @@ export async function getAnalyticsData() {
       return name;
     };
 
+    // --- Process Automation Rules ---
     for (const rule of rules) {
       let items: any[] = [];
       const ruleName = rule.name;
@@ -78,8 +174,7 @@ export async function getAnalyticsData() {
           : await getTableName(mainTableId);
 
       if (rule.actionType === "CALCULATE_MULTI_EVENT_DURATION") {
-        // Build a map of eventName -> TableName from the rule config
-        // This ensures backwards compatibility for old records
+        // ... (Existing Logic for Multi Event)
         const eventTableMap = new Map<string, string>();
         if (
           triggerConfig.eventChain &&
@@ -88,35 +183,29 @@ export async function getAnalyticsData() {
           for (const event of triggerConfig.eventChain) {
             const tId = event.tableId ? Number(event.tableId) : mainTableId;
             if (tId) {
-              const tName = await getTableName(tId);
-              eventTableMap.set(event.eventName, tName);
+              eventTableMap.set(event.eventName, await getTableName(tId));
             }
           }
         }
 
         const multiEventDurations = await prisma.multiEventDuration.findMany({
           where: { automationRuleId: rule.id },
-          include: {
-            record: true,
-            task: true,
-          },
+          include: { record: true, task: true },
           orderBy: { createdAt: "desc" },
         });
 
         items = multiEventDurations.map((d) => {
+          // ... simplify title logic repeated ...
           let title = "Unknown";
-          if (d.task) {
-            title = d.task.title;
-          } else if (d.record) {
+          if (d.task) title = d.task.title;
+          else if (d.record) {
             const data = d.record.data as any;
             const titleField =
               Object.keys(data).find(
                 (k) =>
                   k.toLowerCase().includes("name") ||
                   k.toLowerCase().includes("title") ||
-                  (typeof data[k] === "string" &&
-                    data[k].length < 50 &&
-                    k !== "duration_status_change")
+                  (typeof data[k] === "string" && data[k].length < 50)
               ) || "Record";
             title = data[titleField]
               ? String(data[titleField])
@@ -126,7 +215,6 @@ export async function getAnalyticsData() {
           const eventChain = d.eventChain as any[];
           const eventNames = eventChain
             .map((e: any) => {
-              // Try to get table name from stored event, or fall back to rule config map
               const tName = e.tableName || eventTableMap.get(e.eventName);
               return tName ? `${e.eventName} (${tName})` : e.eventName;
             })
@@ -134,37 +222,38 @@ export async function getAnalyticsData() {
 
           return {
             id: d.id,
-            title: title,
+            title,
             status: eventNames,
             duration: d.totalDurationString,
             totalDurationSeconds: d.totalDurationSeconds,
             weightedScore: d.weightedScore,
-            eventDeltas: d.eventDeltas,
             updatedAt: d.createdAt,
             type: tableName,
-            recordId: d.recordId || d.taskId || "",
           };
         });
 
+        // Calculate Stats
         let stats = null;
         if (items.length > 0) {
-          const secondsArray = items.map((item) => item.totalDurationSeconds);
-          const totalSeconds = secondsArray.reduce((a, b) => a + b, 0);
-          const averageSeconds = Math.round(totalSeconds / secondsArray.length);
-          const minSeconds = Math.min(...secondsArray);
-          const maxSeconds = Math.max(...secondsArray);
-
+          const totalSeconds = items.reduce(
+            (acc, item) => acc + item.totalDurationSeconds,
+            0
+          );
+          const avg = Math.round(totalSeconds / items.length);
+          const min = Math.min(...items.map((i) => i.totalDurationSeconds));
+          const max = Math.max(...items.map((i) => i.totalDurationSeconds));
           stats = {
-            averageDuration: formatSecondsToHebrew(averageSeconds),
-            minDuration: formatSecondsToHebrew(minSeconds),
-            maxDuration: formatSecondsToHebrew(maxSeconds),
+            averageDuration: formatSecondsToHebrew(avg),
+            minDuration: formatSecondsToHebrew(min),
+            maxDuration: formatSecondsToHebrew(max),
             totalRecords: items.length,
-            averageSeconds,
+            averageSeconds: avg,
           };
         }
 
         views.push({
-          ruleId: rule.id,
+          id: `rule_${rule.id}`, // Unified ID
+          ruleId: rule.id, // Keep for backward compat if needed
           ruleName: ruleName,
           tableName: tableName,
           type: "multi-event",
@@ -172,80 +261,70 @@ export async function getAnalyticsData() {
           stats: stats,
           order: rule.analyticsOrder ?? 0,
           color: rule.analyticsColor ?? "bg-white",
+          source: "AUTOMATION",
         });
       } else if (rule.actionType === "CALCULATE_DURATION") {
+        // ... (Existing Logic for Duration)
         const durations = await prisma.statusDuration.findMany({
           where: { automationRuleId: rule.id },
-          include: {
-            record: true,
-            task: true,
-          },
+          include: { record: true, task: true },
           orderBy: { createdAt: "desc" },
         });
 
         items = durations.map((d) => {
           let title = "Unknown";
-          let status = d.toValue || "N/A";
-
-          if (d.task) {
-            title = d.task.title;
-          } else if (d.record) {
+          if (d.task) title = d.task.title;
+          else if (d.record) {
             const data = d.record.data as any;
             const titleField =
               Object.keys(data).find(
                 (k) =>
                   k.toLowerCase().includes("name") ||
                   k.toLowerCase().includes("title") ||
-                  (typeof data[k] === "string" &&
-                    data[k].length < 50 &&
-                    k !== "duration_status_change")
+                  (typeof data[k] === "string" && data[k].length < 50)
               ) || "Record";
             title = data[titleField]
               ? String(data[titleField])
               : `Record #${d.record.id}`;
           }
 
-          let statusDisplay = status;
-          if (d.fromValue && d.toValue) {
+          let statusDisplay = d.toValue || "N/A";
+          if (d.fromValue && d.toValue)
             statusDisplay = `${d.fromValue} -> ${d.toValue}`;
-          }
 
           return {
             id: d.id,
-            title: title,
+            title,
             status: statusDisplay,
             duration: d.durationString,
+            durationSeconds: d.durationSeconds,
             updatedAt: d.createdAt,
             type: tableName,
-            recordId: d.recordId || d.taskId || "",
           };
         });
 
         let stats = null;
         if (items.length > 0) {
-          const durationSeconds = await prisma.statusDuration.findMany({
-            where: { automationRuleId: rule.id },
-            select: { durationSeconds: true },
-          });
-          const secondsArray = durationSeconds.map((d) => d.durationSeconds);
-          if (secondsArray.length > 0) {
-            const totalSeconds = secondsArray.reduce((a, b) => a + b, 0);
-            const averageSeconds = Math.round(
-              totalSeconds / secondsArray.length
-            );
-            const minSeconds = Math.min(...secondsArray);
-            const maxSeconds = Math.max(...secondsArray);
-            stats = {
-              averageDuration: formatSecondsToHebrew(averageSeconds),
-              minDuration: formatSecondsToHebrew(minSeconds),
-              maxDuration: formatSecondsToHebrew(maxSeconds),
-              totalRecords: items.length,
-              averageSeconds,
-            };
-          }
+          const totalSeconds = items.reduce(
+            (acc, item) => acc + item.durationSeconds,
+            0
+          );
+          const avg = Math.round(totalSeconds / items.length);
+          stats = {
+            averageDuration: formatSecondsToHebrew(avg),
+            minDuration: formatSecondsToHebrew(
+              Math.min(...items.map((i) => i.durationSeconds))
+            ),
+            maxDuration: formatSecondsToHebrew(
+              Math.max(...items.map((i) => i.durationSeconds))
+            ),
+            totalRecords: items.length,
+            averageSeconds: avg,
+          };
         }
 
         views.push({
+          id: `rule_${rule.id}`,
           ruleId: rule.id,
           ruleName: ruleName,
           tableName: tableName,
@@ -254,16 +333,201 @@ export async function getAnalyticsData() {
           stats: stats,
           order: rule.analyticsOrder ?? 0,
           color: rule.analyticsColor ?? "bg-white",
+          source: "AUTOMATION",
         });
       }
     }
 
-    // Secondary sort in JS just in case of nulls or mixed query results if needed,
-    // but the DB query sort is usually sufficient.
-    // We already sorted the fetched rules, so `views` should be roughly in order
-    // unless multiple rules map to one view (not the case here).
-    views.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    // --- Process Custom Views ---
+    // --- Process Custom Views ---
+    for (const view of customViews) {
+      const config = view.config as any;
+      let tableName = "System";
+      let rawData: any[] = [];
 
+      // 1. Fetch Data Source
+      if (config.model === "Task") {
+        tableName = "משימות מערכת";
+        rawData = await prisma.task.findMany({
+          take: 1000,
+          orderBy: { createdAt: "desc" },
+        });
+      } else if (config.model === "Retainer") {
+        tableName = "פיננסים: ריטיינרים";
+        rawData = await prisma.retainer.findMany({
+          take: 1000,
+          orderBy: { createdAt: "desc" },
+          include: { client: true },
+        });
+      } else if (config.model === "OneTimePayment") {
+        tableName = "פיננסים: תשלומים";
+        rawData = await prisma.oneTimePayment.findMany({
+          take: 1000,
+          orderBy: { createdAt: "desc" },
+          include: { client: true },
+        });
+      } else if (config.model === "Transaction") {
+        tableName = "פיננסים: תנועות";
+        rawData = await prisma.transaction.findMany({
+          take: 1000,
+          orderBy: { createdAt: "desc" },
+          include: { client: true },
+        });
+      } else if (config.model === "CalendarEvent") {
+        tableName = "יומן: אירועים";
+        rawData = await prisma.calendarEvent.findMany({
+          take: 1000,
+          orderBy: { createdAt: "desc" },
+        });
+      } else if (config.tableId) {
+        tableName = await getTableName(Number(config.tableId));
+        rawData = await prisma.record.findMany({
+          where: { tableId: Number(config.tableId) },
+          orderBy: { createdAt: "desc" },
+          take: 1000,
+        });
+      }
+
+      let stats = null;
+      let items: any[] = [];
+
+      // 2. Process View Type
+      if (view.type === "CONVERSION") {
+        if (config.groupByField) {
+          const groups: Record<string, { total: number; success: number }> = {};
+          rawData.forEach((r) => {
+            if (filterRecords([r], config.totalFilter).length > 0) {
+              let rawKey = (r.data as any)?.[config.groupByField];
+              if (rawKey === undefined)
+                rawKey = (r as any)[config.groupByField];
+
+              const key = rawKey ? String(rawKey) : "ללא";
+              if (!groups[key]) groups[key] = { total: 0, success: 0 };
+              groups[key].total++;
+
+              if (filterRecords([r], config.successFilter).length > 0) {
+                groups[key].success++;
+              }
+            }
+          });
+
+          items = Object.entries(groups)
+            .map(([key, val]) => {
+              const rate = val.total > 0 ? (val.success / val.total) * 100 : 0;
+              return {
+                id: key,
+                title: key,
+                status: `${val.success} / ${val.total}`,
+                value: `${rate.toFixed(1)}%`,
+                count: val.total,
+                type: "conversion-group",
+              };
+            })
+            .sort((a, b) => b.count - a.count);
+
+          const totalAll = Object.values(groups).reduce(
+            (acc, g) => acc + g.total,
+            0
+          );
+          const successAll = Object.values(groups).reduce(
+            (acc, g) => acc + g.success,
+            0
+          );
+          const globalRate =
+            totalAll > 0 ? ((successAll / totalAll) * 100).toFixed(1) : "0";
+          stats = {
+            mainMetric: `${globalRate}%`,
+            subMetric: `סה"כ המרה (${successAll}/${totalAll})`,
+            label: "ממוצע כללי",
+          };
+        } else {
+          const totalSet = filterRecords(rawData, config.totalFilter);
+          const successSet = filterRecords(rawData, config.successFilter);
+          const rate =
+            totalSet.length > 0
+              ? ((successSet.length / totalSet.length) * 100).toFixed(1)
+              : "0";
+          stats = {
+            mainMetric: `${rate}%`,
+            subMetric: `${successSet.length} / ${totalSet.length}`,
+            label: "אחוז המרה",
+          };
+
+          items = successSet.slice(0, 50).map((r) => ({
+            id: r.id,
+            title:
+              r.title ||
+              (r.data as any)?.name ||
+              (r.data as any)?.title ||
+              `Record ${r.id}`,
+            status: r.status || "הושלם",
+            updatedAt: r.updatedAt,
+          }));
+        }
+      } else if (view.type === "COUNT") {
+        const filtered = filterRecords(rawData, config.filter);
+
+        if (config.groupByField) {
+          const groups: Record<string, number> = {};
+          filtered.forEach((r) => {
+            let rawKey = (r.data as any)?.[config.groupByField];
+            if (rawKey === undefined) rawKey = (r as any)[config.groupByField];
+            const key = rawKey ? String(rawKey) : "ללא";
+            groups[key] = (groups[key] || 0) + 1;
+          });
+
+          items = Object.entries(groups)
+            .map(([key, count]) => ({
+              id: key,
+              title: key,
+              value: String(count),
+              type: "count-group",
+            }))
+            .sort((a, b) => Number(b.value) - Number(a.value));
+
+          stats = {
+            mainMetric: String(filtered.length),
+            subMetric: "רשומות",
+            label: "סה״כ",
+          };
+        } else {
+          stats = {
+            mainMetric: String(filtered.length),
+            subMetric: "רשומות",
+            label: "כמות",
+          };
+          items = filtered.slice(0, 50).map((r) => ({
+            id: r.id,
+            title:
+              r.title ||
+              (r.data as any)?.name ||
+              (r.data as any)?.title ||
+              `Record ${r.id}`,
+            status: r.status || (r.client ? r.client.name : "-"),
+            value: r.amount
+              ? `₪${Number(r.amount).toLocaleString()}`
+              : undefined,
+            updatedAt: r.updatedAt,
+          }));
+        }
+      }
+
+      views.push({
+        id: `view_${view.id}`,
+        viewId: view.id,
+        ruleName: view.title,
+        tableName: tableName,
+        type: view.type,
+        data: items,
+        stats: stats,
+        order: view.order,
+        color: view.color,
+        source: "CUSTOM",
+        config: config, // Pass config for editing
+      });
+    }
+
+    views.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     return { success: true, data: views };
   } catch (error) {
     console.error("Error fetching analytics data:", error);

@@ -59,54 +59,73 @@ export default function AnalyticsDetailsModal({
                 <thead className="bg-gray-50 text-gray-700 text-sm">
                   <tr>
                     <th className="px-4 py-3 font-medium text-right rounded-tr-lg">
-                      מזהה רשומה
+                      {(data[0] as any).type?.includes("group")
+                        ? "קבוצה"
+                        : "שם / מזהה"}
                     </th>
                     <th className="px-4 py-3 font-medium text-right">
-                      שינוי סטטוס
+                      {(data[0] as any).type === "conversion-group"
+                        ? "המרות / סה״כ"
+                        : "סטטוס / פרטים"}
                     </th>
                     <th className="px-4 py-3 font-medium text-right rounded-tl-lg">
-                      משך זמן
+                      {(data[0] as any).type === "conversion-group"
+                        ? "אחוז המרה"
+                        : "ערך / זמן"}
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-sm">
                   {data.map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">
-                        {item.recordId}
+                      <td className="px-4 py-3 text-gray-900 font-medium">
+                        {item.title || item.id}
                       </td>
-                      <td className="px-4 py-3 text-gray-900">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {item.status.split(" → ").map((part, index, arr) => {
-                            const match = part.match(/^(.*)\s\((.*)\)$/);
-                            const eventName = match ? match[1] : part;
-                            const tableName = match ? match[2] : "";
-
-                            return (
-                              <div key={index} className="flex items-center">
-                                <div className="flex flex-col items-start bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-                                  <span className="font-medium text-sm text-gray-800">
-                                    {eventName}
-                                  </span>
-                                  {tableName && (
-                                    <span className="text-xs text-gray-500 mt-0.5 opacity-80 flex items-center gap-1">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
-                                      {tableName}
-                                    </span>
-                                  )}
-                                </div>
-                                {index < arr.length - 1 && (
-                                  <span className="text-gray-400 mx-2 text-lg">
-                                    →
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
+                      <td className="px-4 py-3 text-gray-700">
+                        {/* If status contains arrow, render duration chain logic, else simple text */}
+                        {item.status && item.status.includes(" → ") ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            {item.status
+                              .split(" → ")
+                              .map((part, index, arr) => {
+                                const match = part.match(/^(.*)\s\((.*)\)$/);
+                                const eventName = match ? match[1] : part;
+                                const tableName = match ? match[2] : "";
+                                return (
+                                  <div
+                                    key={index}
+                                    className="flex items-center"
+                                  >
+                                    <div className="flex flex-col items-start bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+                                      <span className="font-medium text-sm text-gray-800">
+                                        {eventName}
+                                      </span>
+                                      {tableName && (
+                                        <span className="text-xs text-gray-500 mt-0.5 opacity-80 flex items-center gap-1">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                                          {tableName}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {index < arr.length - 1 && (
+                                      <span className="text-gray-400 mx-2 text-lg">
+                                        →
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        ) : (
+                          <span className="px-2 py-1 bg-gray-100 rounded-md text-sm">
+                            {item.status || "-"}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-blue-600 font-medium ltr text-right">
-                        <span dir="ltr">{item.duration}</span>
+                        <span dir="ltr">
+                          {item.duration || (item as any).value || "-"}
+                        </span>
                       </td>
                     </tr>
                   ))}
