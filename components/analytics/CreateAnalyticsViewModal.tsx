@@ -450,10 +450,10 @@ export default function CreateAnalyticsViewModal({
 
     const GroupByInput = () => (
       <div className="space-y-2">
-        <FieldSelect
-          label="קבץ לפי שדה (אופציונלי)"
-          value={config.groupByField || ""}
-          onChange={(val: string) => {
+        {FieldSelect({
+          label: "קבץ לפי שדה (אופציונלי)",
+          value: config.groupByField || "",
+          onChange: (val: string) => {
             const newConfig = { ...config, groupByField: val };
             // Auto-fill filter fields if they are empty
             if (val && selectedType === "CONVERSION") {
@@ -465,9 +465,9 @@ export default function CreateAnalyticsViewModal({
               }
             }
             setConfig(newConfig);
-          }}
-          placeholder="בחר שדה לקיבוץ..."
-        />
+          },
+          placeholder: "בחר שדה לקיבוץ...",
+        })}
         <p className="text-xs text-gray-500">
           השאר ריק כדי לקבל חישוב כללי לכל המאגר.
         </p>
@@ -550,9 +550,9 @@ export default function CreateAnalyticsViewModal({
 
       return (
         <div className="space-y-6">
-          <TableSelect />
-          <DateFilter />
-          <GroupByInput />
+          {TableSelect()}
+          {DateFilter()}
+          {GroupByInput()}
 
           <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
             <h4 className="font-semibold text-gray-900 border-b border-gray-200 pb-2">
@@ -565,29 +565,29 @@ export default function CreateAnalyticsViewModal({
                 סך הכל (מכנה) - תנאי סינון
               </label>
               <div className="flex gap-2">
-                <FieldSelect
-                  value={totalKey}
-                  onChange={(key: string) => {
+                {FieldSelect({
+                  value: totalKey,
+                  onChange: (key: string) => {
                     const val = key ? totalVal : "";
                     setConfig({
                       ...config,
                       totalFilter: key ? { [key]: val } : {},
                     });
-                  }}
-                  placeholder="שדה..."
-                />
-                <ValueInput
-                  fieldName={totalKey}
-                  value={totalVal}
-                  onChange={(val: string) => {
+                  },
+                  placeholder: "שדה...",
+                })}
+                {ValueInput({
+                  fieldName: totalKey,
+                  value: totalVal,
+                  onChange: (val: string) => {
                     if (totalKey)
                       setConfig({
                         ...config,
                         totalFilter: { [totalKey]: val },
                       });
-                  }}
-                  placeholder="ערך..."
-                />
+                  },
+                  placeholder: "ערך...",
+                })}
               </div>
               <p className="text-xs text-gray-500">
                 אם ריק, יחשב את כל הרשומות בטבלה.
@@ -600,29 +600,29 @@ export default function CreateAnalyticsViewModal({
                 הצלחה (מונה) - תנאי סינון
               </label>
               <div className="flex gap-2">
-                <FieldSelect
-                  value={successKey}
-                  onChange={(key: string) => {
+                {FieldSelect({
+                  value: successKey,
+                  onChange: (key: string) => {
                     const val = key ? successVal : "";
                     setConfig({
                       ...config,
                       successFilter: key ? { [key]: val } : {},
                     });
-                  }}
-                  placeholder="שדה..."
-                />
-                <ValueInput
-                  fieldName={successKey}
-                  value={successVal}
-                  onChange={(val: string) => {
+                  },
+                  placeholder: "שדה...",
+                })}
+                {ValueInput({
+                  fieldName: successKey,
+                  value: successVal,
+                  onChange: (val: string) => {
                     if (successKey)
                       setConfig({
                         ...config,
                         successFilter: { [successKey]: val },
                       });
-                  }}
-                  placeholder="ערך..."
-                />
+                  },
+                  placeholder: "ערך...",
+                })}
               </div>
             </div>
           </div>
@@ -636,32 +636,32 @@ export default function CreateAnalyticsViewModal({
 
       return (
         <div className="space-y-6">
-          <TableSelect />
-          <DateFilter />
-          <GroupByInput />
+          {TableSelect()}
+          {DateFilter()}
+          {GroupByInput()}
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
               סינון (אופציונלי)
             </label>
             <div className="flex gap-2">
-              <FieldSelect
-                value={filterKey}
-                onChange={(key: string) => {
+              {FieldSelect({
+                value: filterKey,
+                onChange: (key: string) => {
                   const val = key ? filterVal : "";
                   setConfig({ ...config, filter: key ? { [key]: val } : {} });
-                }}
-                placeholder="שדה..."
-              />
-              <ValueInput
-                fieldName={filterKey}
-                value={filterVal}
-                onChange={(val: string) => {
+                },
+                placeholder: "שדה...",
+              })}
+              {ValueInput({
+                fieldName: filterKey,
+                value: filterVal,
+                onChange: (val: string) => {
                   if (filterKey)
                     setConfig({ ...config, filter: { [filterKey]: val } });
-                }}
-                placeholder="ערך..."
-              />
+                },
+                placeholder: "ערך...",
+              })}
             </div>
             <p className="text-xs text-gray-500">רק רשומות שתואמות יספרו.</p>
           </div>
