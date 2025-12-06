@@ -55,8 +55,13 @@ export default function AutomationsList({
   };
 
   const handleEdit = (rule: AutomationRule) => {
-    setEditingRule(rule);
-    setIsModalOpen(true);
+    if (rule.triggerType === "MULTI_EVENT_DURATION") {
+      setEditingRule(rule);
+      setIsMultiEventModalOpen(true);
+    } else {
+      setEditingRule(rule);
+      setIsModalOpen(true);
+    }
   };
 
   return (
@@ -75,7 +80,10 @@ export default function AutomationsList({
             אוטומציה חדשה
           </button>
           <button
-            onClick={() => setIsMultiEventModalOpen(true)}
+            onClick={() => {
+              setEditingRule(null);
+              setIsMultiEventModalOpen(true);
+            }}
             className="inline-flex items-center px-4 py-2 border border-orange-600 text-sm font-medium rounded-md shadow-sm text-orange-600 bg-white hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
           >
             <Zap className="ml-2 -mr-1 h-5 w-5" />
@@ -193,8 +201,13 @@ export default function AutomationsList({
       {isMultiEventModalOpen && (
         <MultiEventAutomationModal
           tables={tables}
+          users={users}
           currentUserId={currentUserId}
-          onClose={() => setIsMultiEventModalOpen(false)}
+          editingRule={editingRule}
+          onClose={() => {
+            setIsMultiEventModalOpen(false);
+            setEditingRule(null);
+          }}
           onCreated={() => window.location.reload()}
         />
       )}

@@ -75,7 +75,36 @@ export default function AnalyticsDetailsModal({
                       <td className="px-4 py-3 text-gray-500 font-mono text-xs">
                         {item.recordId}
                       </td>
-                      <td className="px-4 py-3 text-gray-900">{item.status}</td>
+                      <td className="px-4 py-3 text-gray-900">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {item.status.split(" → ").map((part, index, arr) => {
+                            const match = part.match(/^(.*)\s\((.*)\)$/);
+                            const eventName = match ? match[1] : part;
+                            const tableName = match ? match[2] : "";
+
+                            return (
+                              <div key={index} className="flex items-center">
+                                <div className="flex flex-col items-start bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+                                  <span className="font-medium text-sm text-gray-800">
+                                    {eventName}
+                                  </span>
+                                  {tableName && (
+                                    <span className="text-xs text-gray-500 mt-0.5 opacity-80 flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                                      {tableName}
+                                    </span>
+                                  )}
+                                </div>
+                                {index < arr.length - 1 && (
+                                  <span className="text-gray-400 mx-2 text-lg">
+                                    →
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-blue-600 font-medium ltr text-right">
                         <span dir="ltr">{item.duration}</span>
                       </td>

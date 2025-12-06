@@ -7,20 +7,15 @@ import { prisma } from "@/lib/prisma";
  */
 function parseDurationToSeconds(durationStr: string): number {
   if (!durationStr) return 0;
-
-  // Handle format with status suffix "duration|from->to"
   const cleanDuration = durationStr.split("|")[0];
-
   const daysMatch = cleanDuration.match(/(\d+)d/);
   const hoursMatch = cleanDuration.match(/(\d+)h/);
   const minutesMatch = cleanDuration.match(/(\d+)m/);
   const secondsMatch = cleanDuration.match(/(\d+)s/);
-
   const days = daysMatch ? parseInt(daysMatch[1]) : 0;
   const hours = hoursMatch ? parseInt(hoursMatch[1]) : 0;
   const minutes = minutesMatch ? parseInt(minutesMatch[1]) : 0;
   const seconds = secondsMatch ? parseInt(secondsMatch[1]) : 0;
-
   return days * 24 * 3600 + hours * 3600 + minutes * 60 + seconds;
 }
 
@@ -29,27 +24,22 @@ function parseDurationToSeconds(durationStr: string): number {
  */
 function formatSecondsToHebrew(totalSeconds: number): string {
   if (totalSeconds === 0) return "0 שניות";
-
   const days = Math.floor(totalSeconds / (24 * 3600));
   const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-
   const parts = [];
   if (days > 0) parts.push(`${days} ${days === 1 ? "יום" : "ימים"}`);
   if (hours > 0) parts.push(`${hours} ${hours === 1 ? "שעה" : "שעות"}`);
   if (minutes > 0) parts.push(`${minutes} ${minutes === 1 ? "דקה" : "דקות"}`);
   if (seconds > 0)
     parts.push(`${seconds} ${seconds === 1 ? "שנייה" : "שניות"}`);
-
   if (parts.length === 0) return "0 שניות";
-
   return parts.join(", ");
 }
 
 export async function getAnalyticsData() {
   try {
-    // 1. Fetch all active "CALCULATE_DURATION" automation rules
     const rules = await prisma.automationRule.findMany({
       where: {
         isActive: true,
@@ -61,22 +51,46 @@ export async function getAnalyticsData() {
 
     const views = [];
 
-    // 2. Iterate through rules and collect data for each
+    // Cache for table names
+    const tableNameCache = new Map<number, string>();
+    const getTableName = async (id: number) => {
+      if (tableNameCache.has(id)) return tableNameCache.get(id)!;
+      const t = await prisma.tableMeta.findUnique({ where: { id } });
+      const name = t ? t.name : "טבלה לא ידועה";
+      tableNameCache.set(id, name);
+      return name;
+    };
+
     for (const rule of rules) {
       let items: any[] = [];
       const ruleName = rule.name;
+      const triggerConfig = rule.triggerConfig as any;
+      const mainTableId = triggerConfig.tableId
+        ? parseInt(triggerConfig.tableId)
+        : 0;
+
       const tableName =
         rule.triggerType === "TASK_STATUS_CHANGE"
           ? "משימות"
-          : (
-              await prisma.tableMeta.findUnique({
-                where: { id: parseInt((rule.triggerConfig as any).tableId) },
-                select: { name: true },
-              })
-            )?.name || "טבלה לא ידועה";
+          : await getTableName(mainTableId);
 
-      // 🔥 טיפול בטריגר של אירועים מרובים
       if (rule.actionType === "CALCULATE_MULTI_EVENT_DURATION") {
+        // Build a map of eventName -> TableName from the rule config
+        // This ensures backwards compatibility for old records
+        const eventTableMap = new Map<string, string>();
+        if (
+          triggerConfig.eventChain &&
+          Array.isArray(triggerConfig.eventChain)
+        ) {
+          for (const event of triggerConfig.eventChain) {
+            const tId = event.tableId ? Number(event.tableId) : mainTableId;
+            if (tId) {
+              const tName = await getTableName(tId);
+              eventTableMap.set(event.eventName, tName);
+            }
+          }
+        }
+
         const multiEventDurations = await prisma.multiEventDuration.findMany({
           where: { automationRuleId: rule.id },
           include: {
@@ -88,7 +102,6 @@ export async function getAnalyticsData() {
 
         items = multiEventDurations.map((d) => {
           let title = "Unknown";
-
           if (d.task) {
             title = d.task.title;
           } else if (d.record) {
@@ -107,10 +120,13 @@ export async function getAnalyticsData() {
               : `Record #${d.record.id}`;
           }
 
-          // Format event chain for display
           const eventChain = d.eventChain as any[];
           const eventNames = eventChain
-            .map((e: any) => e.eventName)
+            .map((e: any) => {
+              // Try to get table name from stored event, or fall back to rule config map
+              const tName = e.tableName || eventTableMap.get(e.eventName);
+              return tName ? `${e.eventName} (${tName})` : e.eventName;
+            })
             .join(" → ");
 
           return {
@@ -120,14 +136,13 @@ export async function getAnalyticsData() {
             duration: d.totalDurationString,
             totalDurationSeconds: d.totalDurationSeconds,
             weightedScore: d.weightedScore,
-            eventDeltas: d.eventDeltas, // מידע על כל דלטה
+            eventDeltas: d.eventDeltas,
             updatedAt: d.createdAt,
             type: tableName,
             recordId: d.recordId || d.taskId || "",
           };
         });
 
-        // Calculate statistics for multi-event
         let stats = null;
         if (items.length > 0) {
           const secondsArray = items.map((item) => item.totalDurationSeconds);
@@ -149,12 +164,11 @@ export async function getAnalyticsData() {
           ruleId: rule.id,
           ruleName: ruleName,
           tableName: tableName,
-          type: "multi-event", // 🔥 סימון שזה multi-event
+          type: "multi-event",
           data: items,
           stats: stats,
         });
       } else if (rule.actionType === "CALCULATE_DURATION") {
-        // Query the StatusDuration table (single event)
         const durations = await prisma.statusDuration.findMany({
           where: { automationRuleId: rule.id },
           include: {
@@ -186,7 +200,6 @@ export async function getAnalyticsData() {
               : `Record #${d.record.id}`;
           }
 
-          // Format status as "From -> To" if available
           let statusDisplay = status;
           if (d.fromValue && d.toValue) {
             statusDisplay = `${d.fromValue} -> ${d.toValue}`;
@@ -203,16 +216,13 @@ export async function getAnalyticsData() {
           };
         });
 
-        // Calculate statistics
         let stats = null;
         if (items.length > 0) {
           const durationSeconds = await prisma.statusDuration.findMany({
             where: { automationRuleId: rule.id },
             select: { durationSeconds: true },
           });
-
           const secondsArray = durationSeconds.map((d) => d.durationSeconds);
-
           if (secondsArray.length > 0) {
             const totalSeconds = secondsArray.reduce((a, b) => a + b, 0);
             const averageSeconds = Math.round(
@@ -220,7 +230,6 @@ export async function getAnalyticsData() {
             );
             const minSeconds = Math.min(...secondsArray);
             const maxSeconds = Math.max(...secondsArray);
-
             stats = {
               averageDuration: formatSecondsToHebrew(averageSeconds),
               minDuration: formatSecondsToHebrew(minSeconds),
@@ -235,7 +244,7 @@ export async function getAnalyticsData() {
           ruleId: rule.id,
           ruleName: ruleName,
           tableName: tableName,
-          type: "single-event", // סימון שזה single event
+          type: "single-event",
           data: items,
           stats: stats,
         });

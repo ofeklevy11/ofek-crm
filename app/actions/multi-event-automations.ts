@@ -1,17 +1,86 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { sendNotification } from "./notifications";
+
+// פונקציית עזר לחילוץ מזהים מכל סוג של ערך
+function extractIdsFromValue(val: any): number[] {
+  const ids = new Set<number>();
+
+  if (val === null || val === undefined) return [];
+
+  if (typeof val === "number") {
+    ids.add(val);
+  } else if (
+    typeof val === "string" &&
+    !isNaN(Number(val)) &&
+    val.trim() !== ""
+  ) {
+    ids.add(Number(val));
+  } else if (Array.isArray(val)) {
+    val.forEach((item) => {
+      const extracted = extractIdsFromValue(item);
+      extracted.forEach((id) => ids.add(id));
+    });
+  } else if (typeof val === "object" && val !== null) {
+    if ("id" in val) {
+      const extracted = extractIdsFromValue(val.id);
+      extracted.forEach((id) => ids.add(id));
+    }
+  }
+
+  return Array.from(ids);
+}
+
+// פונקציית עזר לרקורסיה של רשומות קשורות (ללא Soft Match, רק יחסים ישירים)
+async function getRelatedRecordIdsRecursive(
+  recordId: number,
+  visited = new Set<number>(),
+  depth = 0
+): Promise<Set<number>> {
+  if (visited.has(recordId) || depth >= 4) return visited;
+  visited.add(recordId);
+
+  try {
+    const record = await prisma.record.findUnique({
+      where: { id: recordId },
+      include: { table: true },
+    });
+
+    if (record && record.table && record.table.schemaJson) {
+      const schema = record.table.schemaJson as any[];
+      const recordData = record.data as any;
+
+      if (Array.isArray(schema)) {
+        const promises: Promise<any>[] = [];
+
+        schema.forEach((field) => {
+          if (field.type === "relation" && recordData[field.name]) {
+            const val = recordData[field.name];
+            const linkedIds = extractIdsFromValue(val);
+
+            linkedIds.forEach((id) => {
+              if (!visited.has(id)) {
+                promises.push(
+                  getRelatedRecordIdsRecursive(id, visited, depth + 1)
+                );
+              }
+            });
+          }
+        });
+
+        await Promise.all(promises);
+      }
+    }
+  } catch (err) {
+    console.error("[Multi-Event] Error in recursive lookup:", err);
+  }
+
+  return visited;
+}
 
 /**
- * חישוב ביצועים - משך זמן בין אירועים מרובים (Multi-Event Duration Calculation)
- *
- * פונקציה זו מחשבת את הזמן שעבר בין סדרת אירועים ברשומה.
- * לדוגמה: מודדת כמה זמן עבר מ"ליד נוצר" → "בטיפול" → "לקוח משלם"
- *
- * @param tableId - מזהה הטבלה
- * @param recordId - מזהה הרשומה
- * @param eventChain - שרשרת האירועים שצריך למדוד
- * @param automationRuleId - מזהה כלל האוטומציה
+ * חישוב ביצועים - משך זמן בין אירועים מרובים
  */
 export async function calculateMultiEventDuration(
   tableId: number,
@@ -20,52 +89,85 @@ export async function calculateMultiEventDuration(
     eventName: string;
     columnId: string;
     value: string;
+    tableId?: string;
   }>,
   automationRuleId: number
 ) {
   console.log(`[Multi-Event] Starting calculation for Record ${recordId}`);
 
   try {
-    // שלב 1: משיכת כל ה-audit logs של הרשומה
-    const allLogs = await prisma.auditLog.findMany({
-      where: {
-        recordId: recordId,
-        action: { in: ["UPDATE", "CREATE"] },
-      },
-      orderBy: { timestamp: "asc" }, // מהישן לחדש
+    const rule = await prisma.automationRule.findUnique({
+      where: { id: automationRuleId },
     });
 
-    console.log(`[Multi-Event] Found ${allLogs.length} logs for record`);
+    // 1. איסוף כל הרשומות הקשורות
+    const targetRecordIds = await getRelatedRecordIdsRecursive(recordId);
 
-    // שלב 2: חיפוש timestamps לכל אירוע בשרשרת
+    console.log(
+      `[Multi-Event] Looking for logs in ${
+        targetRecordIds.size
+      } records: ${Array.from(targetRecordIds).join(", ")}`
+    );
+
+    // 2. משיכת כל ה-audit logs
+    const allLogs = await prisma.auditLog.findMany({
+      where: {
+        recordId: { in: Array.from(targetRecordIds) },
+        action: { in: ["UPDATE", "CREATE"] },
+      },
+      orderBy: { timestamp: "asc" },
+    });
+
+    console.log(`[Multi-Event] Found ${allLogs.length} logs combined`);
+
+    // Cache לשמות טבלאות
+    const tableNameCache = new Map<number, string>();
+    const getTableName = async (id: number) => {
+      if (tableNameCache.has(id)) return tableNameCache.get(id)!;
+      const t = await prisma.tableMeta.findUnique({ where: { id } });
+      const name = t ? t.name : "Unknown Table";
+      tableNameCache.set(id, name);
+      return name;
+    };
+
+    // טעינת הטבלה הראשית לקאש
+    await getTableName(tableId);
+
+    // 3. חיפוש האירועים בשרשרת
     const eventTimestamps: Array<{
       eventName: string;
       timestamp: Date;
       columnId: string;
       value: string;
+      tableName: string; // הוספנו את שם הטבלאה
     }> = [];
 
     for (const event of eventChain) {
       let found = false;
+      const targetValue = String(event.value).trim().toLowerCase();
+
+      // שליפת שם הטבלאה של האירוע
+      const eventTableId = event.tableId ? Number(event.tableId) : tableId;
+      const tableName = await getTableName(eventTableId);
 
       // חיפוש בלוגים
       for (const log of allLogs) {
         const logData = log.diffJson as any;
-        const logValue = logData ? logData[event.columnId] : undefined;
+        if (!logData || logData[event.columnId] === undefined) continue;
 
-        if (
-          logValue !== undefined &&
-          String(logValue) === String(event.value)
-        ) {
+        const logValue = String(logData[event.columnId]).trim().toLowerCase();
+
+        if (logValue === targetValue) {
           eventTimestamps.push({
             eventName: event.eventName,
             timestamp: log.timestamp,
             columnId: event.columnId,
             value: event.value,
+            tableName: tableName, // שמירת השם
           });
           found = true;
           console.log(
-            `[Multi-Event] ✅ Found ${event.eventName} at ${log.timestamp}`
+            `[Multi-Event] ✅ Found '${event.eventName}' at ${log.timestamp} (Record: ${log.recordId})`
           );
           break;
         }
@@ -73,14 +175,13 @@ export async function calculateMultiEventDuration(
 
       if (!found) {
         console.log(
-          `[Multi-Event] ⚠️ Event '${event.eventName}' not found in history`
+          `[Multi-Event] ⚠️ Event '${event.eventName}' NOT found. Searched for Column: '${event.columnId}' with Value: '${targetValue}'`
         );
-        // אם אירוע לא נמצא, לא נוכל לחשב - נצא
         return null;
       }
     }
 
-    // שלב 3: חישוב דלתות בין אירועים
+    // 4. חישוב זמנים
     const deltas: Array<{
       from: string;
       to: string;
@@ -97,11 +198,9 @@ export async function calculateMultiEventDuration(
         new Date(currentEvent.timestamp).getTime();
       const diffSeconds = Math.floor(diffMs / 1000);
 
-      // המרה לפורמט קריא
       const diffMinutes = Math.floor(diffSeconds / 60);
       const diffHours = Math.floor(diffMinutes / 60);
       const diffDays = Math.floor(diffHours / 24);
-
       const remainingHours = diffHours % 24;
       const remainingMinutes = diffMinutes % 60;
       const remainingSeconds = diffSeconds % 60;
@@ -114,13 +213,9 @@ export async function calculateMultiEventDuration(
         durationSeconds: diffSeconds,
         durationString,
       });
-
-      console.log(
-        `[Multi-Event] Delta: ${currentEvent.eventName} → ${nextEvent.eventName}: ${durationString}`
-      );
     }
 
-    // שלב 4: חישוב זמן כולל
+    // 5. סיכום ושמירה
     const totalDurationSeconds = deltas.reduce(
       (sum, delta) => sum + delta.durationSeconds,
       0
@@ -129,23 +224,15 @@ export async function calculateMultiEventDuration(
     const totalMinutes = Math.floor(totalDurationSeconds / 60);
     const totalHours = Math.floor(totalMinutes / 60);
     const totalDays = Math.floor(totalHours / 24);
-
     const totalRemainingHours = totalHours % 24;
     const totalRemainingMinutes = totalMinutes % 60;
     const totalRemainingSeconds = totalDurationSeconds % 60;
 
     const totalDurationString = `${totalDays}d ${totalRemainingHours}h ${totalRemainingMinutes}m ${totalRemainingSeconds}s`;
 
-    console.log(
-      `[Multi-Event] Total duration: ${totalDurationString} (${totalDurationSeconds}s)`
-    );
-
-    // שלב 5: חישוב weighted score (ממוצע משוקלל)
-    // כרגע פשוט - ממוצע הזמנים
     const weightedScore =
       deltas.length > 0 ? totalDurationSeconds / deltas.length : 0;
 
-    // שלב 6: שמירה בטבלת MultiEventDuration
     const result = await prisma.multiEventDuration.create({
       data: {
         automationRuleId,
@@ -159,8 +246,26 @@ export async function calculateMultiEventDuration(
     });
 
     console.log(
-      `[Multi-Event] ✅ Successfully saved multi-event duration record #${result.id}`
+      `[Multi-Event] ✅ Successfully saved result #${result.id}. Duration: ${totalDurationString}`
     );
+
+    // 6. התראה
+    if (rule && rule.actionConfig) {
+      const config = rule.actionConfig as any;
+      if (
+        config.notification &&
+        config.notification.recipientId &&
+        config.notification.message
+      ) {
+        console.log(`[Multi-Event] Sending notification...`);
+        await sendNotification({
+          userId: Number(config.notification.recipientId),
+          title: "משימה הושלמה: " + rule.name,
+          message: `${config.notification.message}\nמשך כולל: ${totalDurationString}`,
+          link: `/tables/${tableId}?recordId=${recordId}`,
+        });
+      }
+    }
 
     return result;
   } catch (error) {
@@ -170,7 +275,7 @@ export async function calculateMultiEventDuration(
 }
 
 /**
- * פונקציה שמופעלת אוטומטית כשרשומה מתעדכנת - בודקת אם צריך לחשב multi-event duration
+ * טריגר לאוטומציה
  */
 export async function processMultiEventDurationTrigger(
   tableId: number,
@@ -178,10 +283,6 @@ export async function processMultiEventDurationTrigger(
   oldData: any,
   newData: any
 ) {
-  console.log(
-    `[Multi-Event Trigger] Checking for multi-event triggers on Record ${recordId}`
-  );
-
   try {
     const rules = await prisma.automationRule.findMany({
       where: {
@@ -190,43 +291,45 @@ export async function processMultiEventDurationTrigger(
       },
     });
 
-    console.log(
-      `[Multi-Event Trigger] Found ${rules.length} active multi-event rules`
-    );
-
     for (const rule of rules) {
       const triggerConfig = rule.triggerConfig as any;
-
-      // בדיקה שזה הטבלה הנכונה
-      if (triggerConfig.tableId && Number(triggerConfig.tableId) !== tableId) {
-        continue;
-      }
-
       const eventChain = triggerConfig.eventChain || [];
 
-      if (eventChain.length < 2) {
-        console.log(
-          `[Multi-Event Trigger] Rule ${rule.id} has insufficient events in chain`
-        );
+      if (eventChain.length < 2) continue;
+
+      const lastEvent = eventChain[eventChain.length - 1];
+
+      const expectedTableId = lastEvent.tableId
+        ? Number(lastEvent.tableId)
+        : triggerConfig.tableId
+        ? Number(triggerConfig.tableId)
+        : null;
+
+      if (expectedTableId && expectedTableId !== tableId) {
         continue;
       }
 
-      // בדיקה האם השינוי הנוכחי משלים את שרשרת האירועים
-      const lastEvent = eventChain[eventChain.length - 1];
       const lastEventColumn = lastEvent.columnId;
-      const lastEventValue = lastEvent.value;
+      const lastEventValue = String(lastEvent.value).trim().toLowerCase();
 
-      // האם השינוי הנוכחי הוא המעבר לאירוע האחרון?
+      const newValue =
+        newData[lastEventColumn] !== undefined
+          ? String(newData[lastEventColumn]).trim().toLowerCase()
+          : undefined;
+      const oldValue =
+        oldData[lastEventColumn] !== undefined
+          ? String(oldData[lastEventColumn]).trim().toLowerCase()
+          : undefined;
+
       if (
-        newData[lastEventColumn] !== undefined &&
-        String(newData[lastEventColumn]) === String(lastEventValue) &&
-        oldData[lastEventColumn] !== newData[lastEventColumn]
+        newValue !== undefined &&
+        newValue === lastEventValue &&
+        oldValue !== newValue
       ) {
         console.log(
-          `[Multi-Event Trigger] ✅ Detected completion of event chain for Rule ${rule.id}`
+          `[Multi-Event Trigger] ✅ Chain completion detected for Rule ${rule.id}`
         );
 
-        // מפעילים את החישוב
         await calculateMultiEventDuration(
           tableId,
           recordId,

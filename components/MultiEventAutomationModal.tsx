@@ -1,15 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createAutomationRule } from "@/app/actions/automations";
+import {
+  createAutomationRule,
+  updateAutomationRule,
+} from "@/app/actions/automations";
 import { getTableById } from "@/app/actions/tables";
-import { X, Plus, Trash2 } from "lucide-react";
+import { X, Plus, Trash2, Bell, Database } from "lucide-react";
 
 interface MultiEventAutomationModalProps {
   tables: { id: number; name: string }[];
+  users?: any[]; // רשימת משתמשים לשליחת התראות
   currentUserId: number;
   onClose: () => void;
   onCreated: () => void;
+  editingRule?: any;
 }
 
 interface SchemaField {
@@ -21,65 +26,133 @@ interface SchemaField {
 
 export default function MultiEventAutomationModal({
   tables,
+  users = [],
   currentUserId,
   onClose,
   onCreated,
+  editingRule,
 }: MultiEventAutomationModalProps) {
   const [name, setName] = useState("");
-  const [tableId, setTableId] = useState("");
+  const [tableId, setTableId] = useState(""); // טבלה ראשית / דיפולטיבית
+  const [isMultiTableMode, setIsMultiTableMode] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [columns, setColumns] = useState<SchemaField[]>([]);
-  const [loadingColumns, setLoadingColumns] = useState(false);
 
-  // טעינת עמודות כשבוחרים טבלה
-  useEffect(() => {
-    async function fetchColumns() {
-      if (!tableId) {
-        setColumns([]);
-        return;
-      }
+  // ניהול סכמות מרובות (cache)
+  const [schemas, setSchemas] = useState<Record<string, SchemaField[]>>({});
+  const [loadingSchemas, setLoadingSchemas] = useState<Record<string, boolean>>(
+    {}
+  );
 
-      setLoadingColumns(true);
-      try {
-        const result = await getTableById(Number(tableId));
-        if (
-          result.success &&
-          result.data &&
-          Array.isArray(result.data.schemaJson)
-        ) {
-          setColumns(result.data.schemaJson as any);
-        } else {
-          setColumns([]);
-        }
-      } catch (error) {
-        console.error("Failed to load table schema", error);
-        setColumns([]);
-      } finally {
-        setLoadingColumns(false);
-      }
-    }
-
-    fetchColumns();
-  }, [tableId]);
+  // הגדרות התראה
+  const [notifyEnabled, setNotifyEnabled] = useState(false);
+  const [notifyRecipient, setNotifyRecipient] = useState("");
+  const [notifyMessage, setNotifyMessage] = useState("");
 
   // שרשרת אירועים
   const [eventChain, setEventChain] = useState<
     Array<{
       id: string;
+      tableId: string; // לכל אירוע יש טבלה (במצב מרובה טבלאות)
       eventName: string;
       columnName: string;
       value: string;
     }>
   >([
-    { id: "1", eventName: "", columnName: "", value: "" },
-    { id: "2", eventName: "", columnName: "", value: "" },
+    { id: "1", tableId: "", eventName: "", columnName: "", value: "" },
+    { id: "2", tableId: "", eventName: "", columnName: "", value: "" },
   ]);
+
+  // פונקציה לטעינת סכמה של טבלה ספציפית
+  const loadTableSchema = async (tid: string) => {
+    if (!tid || schemas[tid] || loadingSchemas[tid]) return;
+
+    setLoadingSchemas((prev) => ({ ...prev, [tid]: true }));
+    try {
+      const result = await getTableById(Number(tid));
+      if (
+        result.success &&
+        result.data &&
+        Array.isArray(result.data.schemaJson)
+      ) {
+        setSchemas((prev) => ({
+          ...prev,
+          [tid]: result.data.schemaJson as any,
+        }));
+      } else {
+        setSchemas((prev) => ({ ...prev, [tid]: [] }));
+      }
+    } catch (error) {
+      console.error(`Failed to load schema for table ${tid}`, error);
+      setSchemas((prev) => ({ ...prev, [tid]: [] }));
+    } finally {
+      setLoadingSchemas((prev) => ({ ...prev, [tid]: false }));
+    }
+  };
+
+  // אתחול מצב עריכה
+  useEffect(() => {
+    if (editingRule) {
+      setName(editingRule.name);
+
+      // טיפול בהגדרות התראה אם קיימות
+      const actionConfig = editingRule.actionConfig || {};
+      if (actionConfig.notification) {
+        setNotifyEnabled(true);
+        setNotifyRecipient(String(actionConfig.notification.recipientId || ""));
+        setNotifyMessage(actionConfig.notification.message || "");
+      }
+
+      const config = editingRule.triggerConfig;
+      if (config) {
+        const mainTableId = String(config.tableId || "");
+        setTableId(mainTableId);
+        loadTableSchema(mainTableId); // טעינת סכמה ראשית
+
+        if (Array.isArray(config.eventChain)) {
+          // בדיקה אם במקרה יש שימוש בטבלאות שונות בשרשרת
+          const usedTableIds = new Set<string>();
+          const chain = config.eventChain.map((e: any, index: number) => {
+            const tId = String(e.tableId || mainTableId);
+            usedTableIds.add(tId);
+            return {
+              id: String(Date.now() + index),
+              tableId: tId,
+              eventName: e.eventName || "",
+              columnName: e.columnId || "",
+              value: e.value || "",
+            };
+          });
+
+          setEventChain(chain);
+
+          // אם יש יותר מטבלה אחת בשימוש, נפעיל מצב מרובה
+          if (usedTableIds.size > 1) {
+            setIsMultiTableMode(true);
+          }
+
+          // טעינת כל הסכמות הנדרשות
+          usedTableIds.forEach((id) => loadTableSchema(id));
+        }
+      }
+    }
+  }, [editingRule]);
+
+  // כשבוחרים טבלה ראשית, נעדכן את כולם (אם לא במצב מרובה)
+  useEffect(() => {
+    if (tableId) {
+      loadTableSchema(tableId);
+      if (!isMultiTableMode) {
+        setEventChain((prev) => prev.map((e) => ({ ...e, tableId })));
+      }
+    }
+  }, [tableId, isMultiTableMode]);
 
   const addEvent = () => {
     setEventChain([
       ...eventChain,
       {
         id: Date.now().toString(),
+        tableId: isMultiTableMode ? "" : tableId,
         eventName: "",
         columnName: "",
         value: "",
@@ -95,14 +168,20 @@ export default function MultiEventAutomationModal({
 
   const updateEvent = (
     id: string,
-    field: "eventName" | "columnName" | "value",
+    field: "tableId" | "eventName" | "columnName" | "value",
     newValue: string
   ) => {
     setEventChain(
       eventChain.map((e) => {
         if (e.id !== id) return e;
 
-        // אם שינינו עמודה, נאפס את הערך כי הוא כנראה לא רלוונטי לעמודה החדשה
+        if (field === "tableId") {
+          // אם שינינו טבלה, נטען סכמה ונאפס עמודה וערך
+          loadTableSchema(newValue);
+          return { ...e, tableId: newValue, columnName: "", value: "" };
+        }
+
+        // אם שינינו עמודה, נאפס את הערך
         if (field === "columnName") {
           return { ...e, columnName: newValue, value: "" };
         }
@@ -122,45 +201,65 @@ export default function MultiEventAutomationModal({
         eventName: event.eventName,
         columnId: event.columnName,
         value: event.value,
+        tableId: event.tableId || tableId, // שימוש בטבלה הספציפית או הראשית
       }));
 
-      const result = await createAutomationRule({
+      const actionConfig: any = {};
+      if (notifyEnabled) {
+        actionConfig.notification = {
+          recipientId: notifyRecipient,
+          message: notifyMessage,
+        };
+      }
+
+      const ruleData = {
         name,
         triggerType: "MULTI_EVENT_DURATION",
         triggerConfig: {
-          tableId,
+          tableId, // טבלה ראשית (לצרכי חיפוש ותצוגה כללית)
           eventChain: formattedEventChain,
         },
         actionType: "CALCULATE_MULTI_EVENT_DURATION",
-        actionConfig: {},
+        actionConfig,
         createdBy: currentUserId,
-      });
+      };
+
+      let result;
+      if (editingRule) {
+        result = await updateAutomationRule(editingRule.id, ruleData);
+      } else {
+        result = await createAutomationRule(ruleData);
+      }
 
       if (result.success) {
         onCreated();
         onClose();
       } else {
-        alert("שגיאה ביצירת האוטומציה");
+        alert("שגיאה בשמירת האוטומציה");
       }
     } catch (error) {
       console.error(error);
-      alert("שגיאה ביצירת האוטומציה");
+      alert("שגיאה בשמירת האוטומציה");
     } finally {
       setLoading(false);
     }
   };
 
+  // helper לקבלת עמודות עבור אירוע ספציפי
+  const getColumnsForEvent = (tId: string) => {
+    return schemas[tId] || [];
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl">
-        <div className="flex justify-between items-center p-6 border-b border-gray-200">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="flex justify-between items-center p-6 border-b border-gray-200 shrink-0">
           <div>
             <h3 className="text-xl font-semibold text-gray-900">
               🔥 חישוב ביצועים - אירועים מרובים
             </h3>
             <p className="text-sm text-gray-500 mt-1">
-              מדוד זמנים בין סדרת אירועים (לדוגמה: ליד נוצר → בטיפול → לקוח
-              משלם)
+              מדוד זמנים בין סדרת אירועים והתראות
             </p>
           </div>
           <button
@@ -171,245 +270,356 @@ export default function MultiEventAutomationModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* שם האוטומציה */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">
-              שם האוטומציה
-            </label>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-              placeholder="לדוגמה: זמן המרה מליד ללקוח"
-            />
-          </div>
+        <div className="overflow-y-auto p-6 space-y-8">
+          <form
+            id="automation-form"
+            onSubmit={handleSubmit}
+            className="space-y-8"
+          >
+            {/* הגדרות כלליות */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-5 bg-gray-50 rounded-xl border border-gray-200">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">
+                  שם האוטומציה
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="לדוגמה: זמן המרה מליד ללקוח"
+                />
+              </div>
 
-          {/* בחירת טבלה */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">
-              באיזו טבלה?
-            </label>
-            <select
-              required
-              value={tableId}
-              onChange={(e) => setTableId(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
-            >
-              <option value="">בחר טבלה...</option>
-              {tables.map((table) => (
-                <option key={table.id} value={table.id}>
-                  {table.name}
-                </option>
-              ))}
-            </select>
-          </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">
+                  טבלה ראשית / דיפולטיבית
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    required
+                    value={tableId}
+                    onChange={(e) => setTableId(e.target.value)}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="">בחר טבלה...</option>
+                    {tables.map((table) => (
+                      <option key={table.id} value={table.id}>
+                        {table.name}
+                      </option>
+                    ))}
+                  </select>
 
-          {/* שרשרת אירועים */}
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <label className="block text-sm font-bold text-gray-700">
-                שרשרת אירועים
-              </label>
-              <button
-                type="button"
-                onClick={addEvent}
-                className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 px-3 py-1 rounded-md hover:bg-blue-50 transition"
-              >
-                <Plus size={16} />
-                הוסף אירוע
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsMultiTableMode(!isMultiTableMode)}
+                    className={`px-3 py-2 rounded-lg border flex items-center gap-2 text-sm font-medium transition ${
+                      isMultiTableMode
+                        ? "bg-blue-100 border-blue-300 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50"
+                    }`}
+                    title="אפשר בחירת טבלה שונה לכל שלב בשרשרת"
+                  >
+                    <Database size={16} />
+                    טבלאות מרובות
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-4">
-              {eventChain.map((event, index) => {
-                // מציאת העמודה שנבחרה עבור האירוע הנוכחי
-                const selectedColumn = columns.find(
-                  (c) => c.name === event.columnName
-                );
-                const hasOptions =
-                  selectedColumn &&
-                  (selectedColumn.type === "select" ||
-                    selectedColumn.type === "multi-select" ||
-                    selectedColumn.type === "radio" ||
-                    selectedColumn.type === "status");
-                const isBoolean =
-                  selectedColumn && selectedColumn.type === "boolean";
+            {/* שרשרת אירועים */}
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <label className="block text-lg font-bold text-gray-800">
+                  שרשרת אירועים
+                </label>
+                <button
+                  type="button"
+                  onClick={addEvent}
+                  className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 px-3 py-1 rounded-md hover:bg-blue-50 transition"
+                >
+                  <Plus size={16} />
+                  הוסף אירוע
+                </button>
+              </div>
 
-                return (
-                  <div
-                    key={event.id}
-                    className="bg-gray-50 p-5 rounded-xl border border-gray-200 shadow-sm relative transition hover:border-blue-300"
-                  >
-                    <div className="flex items-center gap-2 mb-4">
-                      <div
-                        className={`w-3 h-3 rounded-full ${
-                          index === 0
-                            ? "bg-green-500"
-                            : index === eventChain.length - 1
-                            ? "bg-red-500"
-                            : "bg-yellow-500"
-                        }`}
-                      ></div>
-                      <h4 className="text-sm font-semibold text-gray-900">
-                        {index === 0
-                          ? "אירוע התחלה"
-                          : index === eventChain.length - 1
-                          ? "אירוע סיום"
-                          : `שלב ביניים ${index}`}
-                      </h4>
+              <div className="space-y-4">
+                {eventChain.map((event, index) => {
+                  const currentTableId = isMultiTableMode
+                    ? event.tableId
+                    : tableId;
+                  const currentColumns = getColumnsForEvent(currentTableId);
 
-                      {eventChain.length > 2 && (
-                        <button
-                          type="button"
-                          onClick={() => removeEvent(event.id)}
-                          className="absolute top-4 left-4 text-gray-400 hover:text-red-500 transition-colors p-1"
-                          title="מחק שלב"
+                  // מציאת העמודה שנבחרה
+                  const selectedColumn = currentColumns.find(
+                    (c) => c.name === event.columnName
+                  );
+                  const hasOptions =
+                    selectedColumn &&
+                    (selectedColumn.type === "select" ||
+                      selectedColumn.type === "multi-select" ||
+                      selectedColumn.type === "radio" ||
+                      selectedColumn.type === "status");
+                  const isBoolean =
+                    selectedColumn && selectedColumn.type === "boolean";
+                  const isLoading = loadingSchemas[currentTableId];
+
+                  return (
+                    <div
+                      key={event.id}
+                      className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm relative transition hover:border-blue-300 group"
+                    >
+                      <div className="flex items-center gap-3 mb-4 border-b border-gray-100 pb-3">
+                        <div
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-xs text-white font-bold ${
+                            index === 0
+                              ? "bg-green-500"
+                              : index === eventChain.length - 1
+                              ? "bg-red-500"
+                              : "bg-yellow-500"
+                          }`}
                         >
-                          <Trash2 size={18} />
-                        </button>
-                      )}
-                    </div>
+                          {index + 1}
+                        </div>
+                        <h4 className="text-sm font-semibold text-gray-900">
+                          {index === 0
+                            ? "אירוע התחלה"
+                            : index === eventChain.length - 1
+                            ? "אירוע סיום"
+                            : `שלב ביניים`}
+                        </h4>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* שם האירוע */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">
-                          שם האירוע לתצוגה
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={event.eventName}
-                          onChange={(e) =>
-                            updateEvent(event.id, "eventName", e.target.value)
-                          }
-                          placeholder='לדוגמה: "ליד חדש"'
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                        />
-                      </div>
-
-                      {/* שם העמודה - Dropdown חכם */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">
-                          עמודה מנטרת
-                        </label>
-                        {loadingColumns ? (
-                          <div className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-100 text-gray-400 animate-pulse">
-                            טוען עמודות...
-                          </div>
-                        ) : (
-                          <select
-                            required
-                            value={event.columnName}
-                            onChange={(e) =>
-                              updateEvent(
-                                event.id,
-                                "columnName",
-                                e.target.value
-                              )
-                            }
-                            disabled={!tableId}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition disabled:bg-gray-100 disabled:text-gray-400"
+                        {eventChain.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => removeEvent(event.id)}
+                            className="mr-auto text-gray-400 hover:text-red-500 transition-colors p-1 opacity-0 group-hover:opacity-100"
+                            title="מחק שלב"
                           >
-                            <option value="">בחר עמודה...</option>
-                            {columns.map((col) => (
-                              <option key={col.name} value={col.name}>
-                                {col.label || col.name}
-                              </option>
-                            ))}
-                          </select>
+                            <Trash2 size={18} />
+                          </button>
                         )}
                       </div>
 
-                      {/* הערך - דינמי לפי סוג העמודה */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">
-                          ערך טריגר
-                        </label>
-
-                        {isBoolean ? (
-                          <select
-                            required
-                            value={event.value}
-                            onChange={(e) =>
-                              updateEvent(event.id, "value", e.target.value)
-                            }
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition"
-                          >
-                            <option value="">בחר...</option>
-                            <option value="true">כן / פעיל</option>
-                            <option value="false">לא / כבוי</option>
-                          </select>
-                        ) : hasOptions ? (
-                          <select
-                            required
-                            value={event.value}
-                            onChange={(e) =>
-                              updateEvent(event.id, "value", e.target.value)
-                            }
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition"
-                          >
-                            <option value="">בחר ערך...</option>
-                            {selectedColumn.options?.map((opt, i) => (
-                              <option key={`${opt}-${i}`} value={opt}>
-                                {opt}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
+                      <div
+                        className={`grid gap-4 ${
+                          isMultiTableMode ? "grid-cols-4" : "grid-cols-3"
+                        }`}
+                      >
+                        {/* שם האירוע */}
+                        <div className="col-span-1">
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5 ">
+                            שם השלב (לתצוגה)
+                          </label>
                           <input
                             type="text"
                             required
-                            value={event.value}
+                            value={event.eventName}
                             onChange={(e) =>
-                              updateEvent(event.id, "value", e.target.value)
+                              updateEvent(event.id, "eventName", e.target.value)
                             }
-                            placeholder={
-                              !event.columnName
-                                ? "בחר עמודה קודם"
-                                : "הזן ערך..."
-                            }
-                            disabled={!event.columnName}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition disabled:bg-gray-100"
+                            placeholder='לדוגמה: "ליד חדש"'
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
+                        </div>
+
+                        {/* בחירת טבלה (רק במצב מרובה) */}
+                        {isMultiTableMode && (
+                          <div className="col-span-1">
+                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ">
+                              טבלה
+                            </label>
+                            <select
+                              required={isMultiTableMode}
+                              value={event.tableId}
+                              onChange={(e) =>
+                                updateEvent(event.id, "tableId", e.target.value)
+                              }
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                            >
+                              <option value="">בחר טבלה...</option>
+                              {tables.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         )}
+
+                        {/* שם העמודה (משתנה לפי טבלה) */}
+                        <div className="col-span-1">
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5 ">
+                            עמודה מנטרת
+                          </label>
+                          {isLoading ? (
+                            <div className="px-3 py-2 text-sm bg-gray-50 text-gray-400 rounded-lg border">
+                              טוען...
+                            </div>
+                          ) : (
+                            <select
+                              required
+                              value={event.columnName}
+                              onChange={(e) =>
+                                updateEvent(
+                                  event.id,
+                                  "columnName",
+                                  e.target.value
+                                )
+                              }
+                              disabled={!currentTableId}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-100"
+                            >
+                              <option value="">
+                                {currentTableId
+                                  ? "בחר עמודה..."
+                                  : "בחר טבלה קודם"}
+                              </option>
+                              {currentColumns.map((col) => (
+                                <option key={col.name} value={col.name}>
+                                  {col.label || col.name}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+
+                        {/* הערך */}
+                        <div className="col-span-1">
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5 ">
+                            ערך לטריגר
+                          </label>
+
+                          {isBoolean ? (
+                            <select
+                              required
+                              value={event.value}
+                              onChange={(e) =>
+                                updateEvent(event.id, "value", e.target.value)
+                              }
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                            >
+                              <option value="">בחר...</option>
+                              <option value="true">כן / פעיל</option>
+                              <option value="false">לא / כבוי</option>
+                            </select>
+                          ) : hasOptions ? (
+                            <select
+                              required
+                              value={event.value}
+                              onChange={(e) =>
+                                updateEvent(event.id, "value", e.target.value)
+                              }
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                            >
+                              <option value="">בחר ערך...</option>
+                              {selectedColumn.options?.map((opt, i) => (
+                                <option key={`${opt}-${i}`} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              required
+                              value={event.value}
+                              onChange={(e) =>
+                                updateEvent(event.id, "value", e.target.value)
+                              }
+                              placeholder={
+                                !event.columnName
+                                  ? "בחר עמודה קודם"
+                                  : "הזן ערך / * לכל שינוי"
+                              }
+                              disabled={!event.columnName}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                            />
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
-            <p className="text-xs text-gray-500 mt-3 flex items-center gap-1">
-              💡
-              <span>
-                הגדר את השרשרת לפי סדר כרונולוגי. המערכת תחשב אוטומטית את הזמן
-                בין כל שני שלבים עוקבים.
-              </span>
-            </p>
-          </div>
+            {/* הגדרות התראה */}
+            <div className="p-5 bg-orange-50 rounded-xl border border-orange-200 mt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <input
+                  type="checkbox"
+                  id="notifyEnabled"
+                  checked={notifyEnabled}
+                  onChange={(e) => setNotifyEnabled(e.target.checked)}
+                  className="w-5 h-5 text-orange-600 rounded focus:ring-orange-500 border-gray-300"
+                />
+                <label
+                  htmlFor="notifyEnabled"
+                  className="font-bold text-gray-800 flex items-center gap-2 cursor-pointer"
+                >
+                  <Bell size={18} className="text-orange-600" />
+                  שלח התראה בסיום התהליך
+                </label>
+              </div>
 
-          {/* כפתורים */}
-          <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition shadow-sm"
-            >
-              ביטול
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition shadow-md hover:shadow-lg"
-            >
-              {loading ? "שומר..." : "צור אוטומציה"}
-            </button>
-          </div>
-        </form>
+              {notifyEnabled && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      למי לשלוח?
+                    </label>
+                    <select
+                      required={notifyEnabled}
+                      value={notifyRecipient}
+                      onChange={(e) => setNotifyRecipient(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 bg-white"
+                    >
+                      <option value="">בחר משתמש...</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      תוכן ההודעה
+                    </label>
+                    <input
+                      type="text"
+                      required={notifyEnabled}
+                      value={notifyMessage}
+                      onChange={(e) => setNotifyMessage(e.target.value)}
+                      placeholder='לדוגמה: "תהליך לקוח חדש הושלם בהצלחה!"'
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </form>
+        </div>
+
+        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-lg shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition shadow-sm"
+          >
+            ביטול
+          </button>
+          <button
+            type="submit"
+            form="automation-form"
+            disabled={loading}
+            className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition shadow-md hover:shadow-lg"
+          >
+            {loading ? "שומר..." : "שמור הגדרות"}
+          </button>
+        </div>
       </div>
     </div>
   );
