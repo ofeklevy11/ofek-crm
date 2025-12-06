@@ -5,6 +5,7 @@ import { CalendarHeader } from "./CalendarHeader";
 import { WeekView } from "./WeekView";
 import { DayView } from "./DayView";
 import { EventModal } from "./EventModal";
+import { AllEventsModal } from "./AllEventsModal";
 import { addDays, addWeeks, addMonths } from "@/lib/dateUtils";
 import { CalendarEvent } from "@/lib/types";
 
@@ -13,6 +14,7 @@ export function Calendar() {
   const [view, setView] = useState<"day" | "week">("week");
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAllEventsModalOpen, setIsAllEventsModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<
     CalendarEvent | undefined
   >();
@@ -162,6 +164,25 @@ export function Calendar() {
     }
   };
 
+  const handleDeleteById = async (event: CalendarEvent) => {
+    if (confirm("האם אתה בטוח שברצונך למחוק אירוע זה?")) {
+      try {
+        const { deleteCalendarEvent } = await import("@/app/actions");
+        const result = await deleteCalendarEvent(event.id);
+
+        if (result.success) {
+          setEvents(events.filter((e) => e.id !== event.id));
+          if (selectedEvent?.id === event.id) {
+            setSelectedEvent(undefined);
+            setIsModalOpen(false);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to delete event:", error);
+      }
+    }
+  };
+
   // Get next rounded hour from current time
   const getNextRoundedHour = (): number => {
     const now = new Date();
@@ -223,6 +244,7 @@ export function Calendar() {
         onPrevMonth={handlePrevMonth}
         onNextMonth={handleNextMonth}
         onSelectDate={handleSelectDate}
+        onShowAllEvents={() => setIsAllEventsModalOpen(true)}
       />
       <div className="flex-1 overflow-hidden">
         {view === "week" ? (
@@ -255,6 +277,19 @@ export function Calendar() {
         event={selectedEvent}
         initialDate={initialEventDate}
         initialHour={initialEventHour}
+      />
+
+      <AllEventsModal
+        isOpen={isAllEventsModalOpen}
+        onClose={() => setIsAllEventsModalOpen(false)}
+        events={events}
+        onEdit={(event) => {
+          handleEventClick(event);
+          // We can optionally close the list here, but keeping it open allows for quick edits of multiple items if supported.
+          // However, handleEventClick opens a modal. Having two modals might be UI clutter.
+          // Let's not close it for now, assuming standard z-index stacking handles it.
+        }}
+        onDelete={handleDeleteById}
       />
     </div>
   );
