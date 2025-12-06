@@ -69,6 +69,7 @@ export default function ViewAutomationModal({
   const [metric, setMetric] = useState("rawMetric"); // 'rawMetric' maps to the raw value we exposed
   const [operator, setOperator] = useState("lt");
   const [threshold, setThreshold] = useState("0");
+  const [frequency, setFrequency] = useState("always"); // always, once, daily, weekly
   const [actionType, setActionType] = useState("SEND_NOTIFICATION");
 
   // Action: Notification
@@ -103,6 +104,7 @@ export default function ViewAutomationModal({
     setMetric("rawMetric");
     setOperator("lt");
     setThreshold("10"); // Default example
+    setFrequency("always");
     setActionType("SEND_NOTIFICATION");
     setRecipientId("");
     setMessageTemplate(
@@ -126,6 +128,7 @@ export default function ViewAutomationModal({
     setMetric(tConfig.metric || "rawMetric");
     setOperator(tConfig.operator || "lt");
     setThreshold(String(tConfig.threshold || "0"));
+    setFrequency(tConfig.frequency || "always");
 
     setActionType(rule.actionType);
     const aConfig = rule.actionConfig as any;
@@ -172,6 +175,7 @@ export default function ViewAutomationModal({
       metric,
       operator,
       threshold: parseFloat(threshold),
+      frequency,
       viewType: view.type,
       viewConfig: view.config,
     };
@@ -342,6 +346,32 @@ export default function ViewAutomationModal({
                   placeholder="לדוגמה: התראה על ירידה בהמרה"
                   required
                 />
+              </div>
+
+              {/* Frequency Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  תדירות ביצוע
+                </label>
+                <select
+                  value={frequency}
+                  onChange={(e) => setFrequency(e.target.value)}
+                  className="w-full px-3 py-2 border border-blue-200 bg-blue-50/50 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="always">תמיד (בכל פעם שהתנאי מתקיים)</option>
+                  <option value="once">
+                    פעם אחת (ברגע שהתנאי מתקיים לראשונה)
+                  </option>
+                  <option value="daily">
+                    פעם ביום (מקסימום פעם אחת ב-24 שעות)
+                  </option>
+                  <option value="weekly">
+                    פעם בשבוע (מקסימום פעם אחת ב-7 ימים)
+                  </option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  קובע כמה פעמים האוטומציה תפעל אם התנאי ממשיך להתקיים.
+                </p>
               </div>
 
               {/* 2. Trigger */}

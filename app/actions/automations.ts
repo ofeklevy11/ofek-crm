@@ -418,9 +418,53 @@ export async function processViewAutomations(
       );
 
       if (triggered) {
+        // --- Frequency Check ---
+        const frequency = triggerConfig.frequency || "always";
+        const lastRunAt = triggerConfig.lastRunAt
+          ? new Date(triggerConfig.lastRunAt)
+          : null;
+
+        let shouldRunFrequency = true;
+        const now = new Date();
+
+        if (frequency === "once" && lastRunAt) {
+          shouldRunFrequency = false;
+          console.log(
+            `[Automations] ⏳ Skipping Rule ${rule.id} (Frequency: ONCE, already ran at ${lastRunAt})`
+          );
+        } else if (frequency === "daily" && lastRunAt) {
+          const diffHours =
+            (now.getTime() - lastRunAt.getTime()) / (1000 * 60 * 60);
+          if (diffHours < 24) {
+            shouldRunFrequency = false;
+            console.log(
+              `[Automations] ⏳ Skipping Rule ${
+                rule.id
+              } (Frequency: DAILY, ran ${diffHours.toFixed(1)}h ago)`
+            );
+          }
+        } else if (frequency === "weekly" && lastRunAt) {
+          const diffDays =
+            (now.getTime() - lastRunAt.getTime()) / (1000 * 60 * 60 * 24);
+          if (diffDays < 7) {
+            shouldRunFrequency = false;
+            console.log(
+              `[Automations] ⏳ Skipping Rule ${
+                rule.id
+              } (Frequency: WEEKLY, ran ${diffDays.toFixed(1)}d ago)`
+            );
+          }
+        }
+
+        if (!shouldRunFrequency) {
+          continue; // Skip execution
+        }
+
         console.log(
           `[Automations] 🔔 Rule ${rule.id} TRIGGERED! Executing Action...`
         );
+
+        let actionSuccess = false;
 
         if (rule.actionType === "SEND_NOTIFICATION") {
           const actionConfig = rule.actionConfig as ActionConfig;
@@ -439,6 +483,7 @@ export async function processViewAutomations(
                 link: "/analytics",
               });
               console.log(`[Automations] Notification send result:`, result);
+              actionSuccess = true;
             } catch (err) {
               console.error(`[Automations] Failed to send notification:`, err);
             }
@@ -467,8 +512,32 @@ export async function processViewAutomations(
               data: taskData,
             });
             console.log(`[Automations] Task created for rule ${rule.id}`);
+            actionSuccess = true;
           } catch (err) {
             console.error(`[Automations] Failed to create task:`, err);
+          }
+        }
+
+        // Update lastRunAt if successful
+        if (actionSuccess) {
+          try {
+            await prisma.automationRule.update({
+              where: { id: rule.id },
+              data: {
+                triggerConfig: {
+                  ...triggerConfig,
+                  lastRunAt: new Date().toISOString(),
+                },
+              },
+            });
+            console.log(
+              `[Automations] ✅ Updated lastRunAt for rule ${rule.id}`
+            );
+          } catch (updateErr) {
+            console.error(
+              `[Automations] Failed to update lastRunAt for rule ${rule.id}:`,
+              updateErr
+            );
           }
         }
       } else {
