@@ -13,12 +13,14 @@ import {
   Trash2,
   Edit2,
   Zap,
+  Power,
 } from "lucide-react";
 import {
   createAutomationRule,
   getViewAutomations,
   deleteAutomationRule,
   updateAutomationRule,
+  toggleAutomationRule,
 } from "@/app/actions/automations";
 import { getUsers } from "@/app/actions/users";
 
@@ -154,6 +156,25 @@ export default function ViewAutomationModal({
     fetchRules();
   };
 
+  const handleToggle = async (rule: any) => {
+    try {
+      const newState = !rule.isActive;
+      // Optimistic update
+      setRules((prev) =>
+        prev.map((r) => (r.id === rule.id ? { ...r, isActive: newState } : r))
+      );
+
+      const result = await toggleAutomationRule(rule.id, newState);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (err) {
+      console.error("Failed to toggle rule", err);
+      // Revert on error
+      fetchRules();
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -272,10 +293,19 @@ export default function ViewAutomationModal({
                   {rules.map((rule) => (
                     <div
                       key={rule.id}
-                      className="border border-gray-200 rounded-lg p-4 flex justify-between items-center bg-gray-50 hover:bg-white transition-colors"
+                      className={`border rounded-lg p-4 flex justify-between items-center transition-colors ${
+                        rule.isActive
+                          ? "bg-white border-blue-200 shadow-sm"
+                          : "bg-gray-50 border-gray-200 opacity-75"
+                      }`}
                     >
                       <div>
-                        <h3 className="font-semibold text-gray-800">
+                        <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                          {rule.isActive ? (
+                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                          ) : (
+                            <span className="w-2 h-2 rounded-full bg-gray-400" />
+                          )}
                           {rule.name}
                         </h3>
                         <div className="text-xs text-gray-500 mt-1 flex gap-2">
@@ -294,7 +324,21 @@ export default function ViewAutomationModal({
                           </span>
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 items-center">
+                        <button
+                          onClick={() => handleToggle(rule)}
+                          className={`p-2 rounded-full transition-colors ${
+                            rule.isActive
+                              ? "text-green-600 hover:bg-green-50"
+                              : "text-gray-400 hover:bg-gray-200"
+                          }`}
+                          title={
+                            rule.isActive ? "כבה אוטומציה" : "הפעל אוטומציה"
+                          }
+                        >
+                          <Power size={18} />
+                        </button>
+                        <div className="h-4 w-[1px] bg-gray-300 mx-1" />
                         <button
                           onClick={() => handleEdit(rule)}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"

@@ -492,6 +492,7 @@ export async function getAnalyticsData() {
           order: rule.analyticsOrder ?? 0,
           color: rule.analyticsColor ?? "bg-white",
           source: "AUTOMATION",
+          folderId: rule.folderId,
         });
       } else if (rule.actionType === "CALCULATE_DURATION") {
         // ... (Existing Logic for Duration)
@@ -564,6 +565,7 @@ export async function getAnalyticsData() {
           order: rule.analyticsOrder ?? 0,
           color: rule.analyticsColor ?? "bg-white",
           source: "AUTOMATION",
+          folderId: rule.folderId,
         });
       }
     }
@@ -584,6 +586,7 @@ export async function getAnalyticsData() {
         color: view.color,
         source: "CUSTOM",
         config: view.config, // Pass config for editing
+        folderId: view.folderId,
       });
     }
 

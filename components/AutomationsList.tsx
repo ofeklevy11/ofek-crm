@@ -104,12 +104,14 @@ export default function AutomationsList({
           >
             <dt>
               <div className="absolute top-4 left-4 flex gap-2">
-                <button
-                  onClick={() => handleEdit(rule)}
-                  className="text-gray-400 hover:text-blue-500 transition-colors"
-                >
-                  <Edit size={20} />
-                </button>
+                {rule.triggerType !== "VIEW_METRIC_THRESHOLD" && (
+                  <button
+                    onClick={() => handleEdit(rule)}
+                    className="text-gray-400 hover:text-blue-500 transition-colors"
+                  >
+                    <Edit size={20} />
+                  </button>
+                )}
                 <button
                   onClick={() => handleDelete(rule.id)}
                   className="text-gray-400 hover:text-red-500 transition-colors"
@@ -124,9 +126,16 @@ export default function AutomationsList({
               >
                 <Power size={24} />
               </div>
-              <p className="ml-16 text-xl font-semibold text-gray-900 truncate">
-                {rule.name}
-              </p>
+              <div className="ml-16 flex items-center gap-2">
+                <p className="text-xl font-semibold text-gray-900 truncate">
+                  {rule.name}
+                </p>
+                {rule.triggerType === "VIEW_METRIC_THRESHOLD" && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                    VIEW
+                  </span>
+                )}
+              </div>
             </dt>
             <dd className="ml-16 pb-6 flex items-baseline sm:pb-7">
               <div className="text-sm text-gray-500">
@@ -142,6 +151,8 @@ export default function AutomationsList({
                       }`
                     : rule.triggerType === "MULTI_EVENT_DURATION"
                     ? "🔥 חישוב אירועים מרובים"
+                    : rule.triggerType === "VIEW_METRIC_THRESHOLD"
+                    ? "תצוגה (View Metrics)"
                     : rule.triggerType}
                 </p>
                 {rule.actionType === "SEND_NOTIFICATION" && (

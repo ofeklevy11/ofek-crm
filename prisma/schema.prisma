@@ -85,6 +85,9 @@ model AutomationRule {
   // Analytics View Configuration
   analyticsOrder Int?     @default(0)
   analyticsColor String?  @default("bg-white") // Stores Tailwind class or color key
+  
+  folderId      Int?
+  folder        ViewFolder? @relation(fields: [folderId], references: [id])
 }
 
 model Notification {
@@ -351,4 +354,18 @@ model AnalyticsView {
   color       String?  @default("bg-white")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  folderId    Int?
+  folder      ViewFolder? @relation(fields: [folderId], references: [id])
+}
+
+model ViewFolder {
+  id        Int      @id @default(autoincrement())
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  analyticsViews AnalyticsView[]
+  automationRules AutomationRule[]
 }

@@ -38,6 +38,13 @@ import {
   updateAnalyticsViewOrder,
   updateAnalyticsViewColor,
 } from "@/app/actions/analytics";
+import {
+  createViewFolder,
+  getViewFolders,
+  deleteViewFolder,
+  moveViewToFolder,
+} from "@/app/actions/view-folders";
+import { Folder, FolderPlus, ArrowLeft, Move, X } from "lucide-react";
 
 // Available colors for the cards
 const COLOR_OPTIONS = [
@@ -171,6 +178,8 @@ function AnalyticsCard({
   onColorChange,
   onEdit,
   onAddAutomation,
+  onMove,
+  folders,
 }: {
   view: any;
   onOpenDetails: (view: any) => void;
@@ -181,6 +190,8 @@ function AnalyticsCard({
   ) => void;
   onEdit: (view: any) => void;
   onAddAutomation: (view: any) => void;
+  onMove: (view: any, folderId: number | null) => void;
+  folders: any[];
 }) {
   const {
     attributes,
@@ -199,6 +210,7 @@ function AnalyticsCard({
   };
 
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showFolderPicker, setShowFolderPicker] = useState(false); // New state for folder picker
   const currentColor =
     COLOR_OPTIONS.find((c) => c.value === view.color) || COLOR_OPTIONS[0];
 
@@ -240,6 +252,17 @@ function AnalyticsCard({
           )}
         </div>
         <div className="relative flex gap-1">
+          <button
+            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-black/5 rounded-full transition-colors"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              setShowFolderPicker(!showFolderPicker);
+              setShowColorPicker(false);
+            }}
+            title="העבר לתיקייה"
+          >
+            <Move size={16} />
+          </button>
           {!isAutomation && (
             <button
               className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-black/5 rounded-full transition-colors"
@@ -294,6 +317,43 @@ function AnalyticsCard({
                   }}
                   title={color.label}
                 />
+              ))}
+            </div>
+          )}
+
+          {showFolderPicker && (
+            <div
+              className="absolute top-8 left-0 z-20 bg-white shadow-lg rounded-lg p-2 border border-gray-100 w-48 flex flex-col gap-1 max-h-60 overflow-y-auto"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <div className="px-2 py-1 text-xs font-semibold text-gray-400 border-b border-gray-100 mb-1">
+                בחר תיקייה
+              </div>
+              <button
+                className="text-right px-2 py-1.5 text-sm hover:bg-gray-50 rounded flex items-center gap-2 text-gray-700"
+                onClick={() => {
+                  onMove(view, null);
+                  setShowFolderPicker(false);
+                }}
+              >
+                <Folder size={14} className="text-gray-400" />
+                ראשי (ללא תיקייה)
+              </button>
+              {folders.map((f) => (
+                <button
+                  key={f.id}
+                  className="text-right px-2 py-1.5 text-sm hover:bg-gray-50 rounded flex items-center gap-2 text-gray-700"
+                  onClick={() => {
+                    onMove(view, f.id);
+                    setShowFolderPicker(false);
+                  }}
+                >
+                  <Folder
+                    size={14}
+                    className="text-yellow-500 fill-yellow-100"
+                  />
+                  {f.name}
+                </button>
               ))}
             </div>
           )}
@@ -374,6 +434,32 @@ export default function AnalyticsPage() {
   const [viewAutomationTarget, setViewAutomationTarget] = useState<any>(null);
   const [currentUserId, setCurrentUserId] = useState<number>(0);
 
+  // Folder State
+  const [folders, setFolders] = useState<any[]>([]);
+  const [currentFolder, setCurrentFolder] = useState<number | null>(null);
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [movingView, setMovingView] = useState<any>(null); // View being moved
+
+  // Filter State
+  const [filter, setFilter] = useState<"all" | "manual" | "automation">("all");
+
+  const filteredViews = views.filter((view) => {
+    // 1. Folder Logic
+    if (currentFolder) {
+      if (view.folderId !== currentFolder) return false;
+    } else {
+      // Root: Hide items that are in folders
+      if (view.folderId) return false;
+    }
+
+    // 2. Type Logic
+    if (filter === "all") return true;
+    if (filter === "manual") return view.source !== "AUTOMATION";
+    if (filter === "automation") return view.source === "AUTOMATION";
+    return true;
+  });
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -384,9 +470,16 @@ export default function AnalyticsPage() {
   async function fetchData() {
     try {
       setLoading(true);
-      const res = await getAnalyticsData();
+      const [res, foldersRes] = await Promise.all([
+        getAnalyticsData(),
+        getViewFolders(),
+      ]);
+
       if (res.success && res.data) {
         setViews(res.data);
+      }
+      if (foldersRes.success && foldersRes.data) {
+        setFolders(foldersRes.data);
       }
     } catch (error) {
       console.error("Failed to fetch analytics data", error);
@@ -438,6 +531,39 @@ export default function AnalyticsPage() {
     }
   };
 
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return;
+    const res = await createViewFolder(newFolderName);
+    if (res.success) {
+      setFolders([...folders, res.data]);
+      setIsFolderModalOpen(false);
+      setNewFolderName("");
+    }
+  };
+
+  const handleMoveView = async (view: any, folderId: number | null) => {
+    if (!view) return;
+    const type = view.source;
+    const viewId = type === "AUTOMATION" ? view.ruleId : view.viewId;
+
+    await moveViewToFolder(viewId, type, folderId);
+    setMovingView(null);
+    fetchData(); // Refresh data to update lists
+  };
+
+  const handleDeleteFolder = async (id: number) => {
+    if (
+      !confirm(
+        "האם אתה בטוח שברצונך למחוק את התיקייה? הViews לא יימחקו אלא יעברו לתיקייה הראשית."
+      )
+    )
+      return;
+    await deleteViewFolder(id);
+    setFolders(folders.filter((f) => f.id !== id));
+    if (currentFolder === id) setCurrentFolder(null); // Go back to root
+    fetchData();
+  };
+
   const handleColorChange = async (
     id: number,
     type: "AUTOMATION" | "CUSTOM",
@@ -486,6 +612,107 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
+        {/* Folders Bar */}
+        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
+          <button
+            onClick={() => setCurrentFolder(null)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all whitespace-nowrap ${
+              currentFolder === null
+                ? "bg-blue-50 border-blue-200 text-blue-700 font-medium shadow-sm"
+                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            <Folder
+              size={18}
+              className={currentFolder === null ? "fill-blue-200" : ""}
+            />
+            ראשי
+          </button>
+
+          {folders.map((folder) => (
+            <div key={folder.id} className="relative group">
+              <button
+                onClick={() => setCurrentFolder(folder.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all whitespace-nowrap ${
+                  currentFolder === folder.id
+                    ? "bg-yellow-50 border-yellow-200 text-yellow-800 font-medium shadow-sm"
+                    : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <Folder
+                  size={18}
+                  className={`text-yellow-500 ${
+                    currentFolder === folder.id
+                      ? "fill-yellow-200"
+                      : "fill-yellow-100"
+                  }`}
+                />
+                {folder.name}
+              </button>
+              {currentFolder === folder.id && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteFolder(folder.id);
+                  }}
+                  className="absolute -top-2 -left-2 bg-white text-red-500 border border-gray-200 hover:bg-red-50 hover:border-red-200 rounded-full p-1 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                  title="מחק תיקייה"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+
+          <button
+            onClick={() => setIsFolderModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all whitespace-nowrap ml-2"
+          >
+            <FolderPlus size={18} />
+            <span className="text-sm">חדש</span>
+          </button>
+        </div>
+
+        {/* Filters UI */}
+        <div className="flex gap-2 mb-6 border-b border-gray-200 pb-4 overflow-x-auto">
+          <button
+            onClick={() => setFilter("all")}
+            className={`px-4 py-2 text-sm font-medium rounded-full transition-all whitespace-nowrap ${
+              filter === "all"
+                ? "bg-gray-900 text-white shadow-md ring-2 ring-gray-900 ring-offset-2"
+                : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+            }`}
+          >
+            הצג הכל
+          </button>
+          <button
+            onClick={() => setFilter("manual")}
+            className={`px-4 py-2 text-sm font-medium rounded-full transition-all flex items-center gap-2 whitespace-nowrap ${
+              filter === "manual"
+                ? "bg-orange-600 text-white shadow-md ring-2 ring-orange-600 ring-offset-2"
+                : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                filter === "manual" ? "bg-white" : "bg-orange-500"
+              }`}
+            />
+            ידני בלבד
+          </button>
+          <button
+            onClick={() => setFilter("automation")}
+            className={`px-4 py-2 text-sm font-medium rounded-full transition-all flex items-center gap-2 whitespace-nowrap ${
+              filter === "automation"
+                ? "bg-indigo-600 text-white shadow-md ring-2 ring-indigo-600 ring-offset-2"
+                : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+            }`}
+          >
+            <Zap size={14} />
+            אוטומציות (Views)
+          </button>
+        </div>
+
         {loading && views.length === 0 ? (
           <div className="flex justify-center items-center h-64">
             <Loader2 className="animate-spin text-blue-600" size={48} />
@@ -503,6 +730,24 @@ export default function AnalyticsPage() {
               צור תצוגה חדשה
             </button>
           </div>
+        ) : filteredViews.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl border border-gray-200 shadow-sm text-center">
+            <div className="bg-gray-50 p-4 rounded-full mb-4">
+              <List className="text-gray-400" size={32} />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900">
+              לא נמצאו תצוגות
+            </h3>
+            <p className="text-gray-500 mt-1 mb-4">
+              נסה לשנות את הסינון כדי לראות תוצאות.
+            </p>
+            <button
+              onClick={() => setFilter("all")}
+              className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-md hover:bg-gray-800 transition-colors"
+            >
+              הצג את כל התצוגות
+            </button>
+          </div>
         ) : (
           <DndContext
             sensors={sensors}
@@ -510,11 +755,11 @@ export default function AnalyticsPage() {
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={views.map((v) => v.id)} // Use Unified ID
+              items={filteredViews.map((v) => v.id)} // Use Unified ID
               strategy={rectSortingStrategy}
             >
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {views.map((view) => (
+                {filteredViews.map((view) => (
                   <AnalyticsCard
                     key={view.id}
                     view={view}
@@ -522,6 +767,8 @@ export default function AnalyticsPage() {
                     onColorChange={handleColorChange}
                     onEdit={handleEdit}
                     onAddAutomation={setViewAutomationTarget}
+                    onMove={handleMoveView}
+                    folders={folders}
                   />
                 ))}
               </div>
@@ -563,6 +810,52 @@ export default function AnalyticsPage() {
           }}
           userId={currentUserId || 1}
         />
+      )}
+
+      {/* Create Folder Modal */}
+      {isFolderModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-semibold text-gray-900">תיקייה חדשה</h3>
+              <button
+                onClick={() => setIsFolderModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                שם התיקייה
+              </label>
+              <input
+                type="text"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="למשל: שיווק, מכירות..."
+                autoFocus
+                onKeyDown={(e) => e.key === "Enter" && handleCreateFolder()}
+              />
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={() => setIsFolderModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  ביטול
+                </button>
+                <button
+                  onClick={handleCreateFolder}
+                  disabled={!newFolderName.trim()}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  צור תיקייה
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
