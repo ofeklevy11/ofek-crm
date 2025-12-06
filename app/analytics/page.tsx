@@ -3,10 +3,20 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getAnalyticsData } from "@/app/actions/analytics";
-import { Loader2, List, Plus, Palette, Edit3, Settings } from "lucide-react";
+import { getCurrentAuthUser } from "@/app/actions/auth";
+import {
+  Loader2,
+  List,
+  Plus,
+  Palette,
+  Edit3,
+  Settings,
+  Zap,
+} from "lucide-react";
 import Link from "next/link";
 import AnalyticsDetailsModal from "@/components/AnalyticsDetailsModal";
 import CreateAnalyticsViewModal from "@/components/analytics/CreateAnalyticsViewModal";
+import ViewAutomationModal from "@/components/analytics/ViewAutomationModal";
 import {
   DndContext,
   closestCenter,
@@ -160,6 +170,7 @@ function AnalyticsCard({
   onOpenDetails,
   onColorChange,
   onEdit,
+  onAddAutomation,
 }: {
   view: any;
   onOpenDetails: (view: any) => void;
@@ -169,6 +180,7 @@ function AnalyticsCard({
     color: string
   ) => void;
   onEdit: (view: any) => void;
+  onAddAutomation: (view: any) => void;
 }) {
   const {
     attributes,
@@ -228,6 +240,18 @@ function AnalyticsCard({
           )}
         </div>
         <div className="relative flex gap-1">
+          {!isAutomation && (
+            <button
+              className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-black/5 rounded-full transition-colors"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onAddAutomation(view);
+              }}
+              title="הוסף אוטומציה"
+            >
+              <Zap size={16} />
+            </button>
+          )}
           <button
             className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-black/5 rounded-full transition-colors"
             onPointerDown={(e) => {
@@ -346,6 +370,10 @@ export default function AnalyticsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingView, setEditingView] = useState<any | null>(null);
 
+  // Automation Modal State
+  const [viewAutomationTarget, setViewAutomationTarget] = useState<any>(null);
+  const [currentUserId, setCurrentUserId] = useState<number>(0);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -369,6 +397,11 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     fetchData();
+    getCurrentAuthUser().then((res) => {
+      if (res.success && res.data) {
+        setCurrentUserId(res.data.id);
+      }
+    });
   }, []);
 
   const handleEdit = (view: any) => {
@@ -488,6 +521,7 @@ export default function AnalyticsPage() {
                     onOpenDetails={setSelectedView}
                     onColorChange={handleColorChange}
                     onEdit={handleEdit}
+                    onAddAutomation={setViewAutomationTarget}
                   />
                 ))}
               </div>
@@ -515,6 +549,19 @@ export default function AnalyticsPage() {
           title={selectedView.ruleName}
           tableName={selectedView.tableName}
           data={selectedView.data}
+        />
+      )}
+
+      {/* View Automation Modal */}
+      {viewAutomationTarget && (
+        <ViewAutomationModal
+          view={viewAutomationTarget}
+          onClose={() => setViewAutomationTarget(null)}
+          onSuccess={() => {
+            // Should we refresh? Maybe not strictly needed as it only adds an automation rule
+            // But typically good practice
+          }}
+          userId={currentUserId || 1}
         />
       )}
     </div>

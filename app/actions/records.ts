@@ -54,6 +54,22 @@ export async function createRecord(data: {
       recordData
     );
 
+    // Trigger automations for new record
+    try {
+      const { processNewRecordTrigger } = await import("./automations");
+      const table = await prisma.tableMeta.findUnique({
+        where: { id: tableId },
+        select: { name: true },
+      });
+      await processNewRecordTrigger(
+        tableId,
+        table?.name || "Unknown Table",
+        record.id
+      );
+    } catch (autoError) {
+      console.error(`[Records] Failed to process automations:`, autoError);
+    }
+
     revalidatePath(`/tables/${tableId}`);
     revalidatePath("/");
 

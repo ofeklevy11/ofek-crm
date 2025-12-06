@@ -51,6 +51,21 @@ export async function createCalendarEvent(data: {
     revalidatePath("/calendar");
     revalidatePath("/");
 
+    // Trigger automations
+    console.log(
+      `[Calendar Actions] Created event ${event.id}, triggering automations`
+    );
+    try {
+      const { processViewAutomations } = await import("./automations");
+      // Use no args to check ALL views (including Calendar views)
+      await processViewAutomations();
+    } catch (autoError) {
+      console.error(
+        "[Calendar Actions] Failed to trigger automations:",
+        autoError
+      );
+    }
+
     return { success: true, data: event };
   } catch (error) {
     console.error("Error creating calendar event:", error);
@@ -87,6 +102,20 @@ export async function updateCalendarEvent(
     revalidatePath("/calendar");
     revalidatePath("/");
 
+    // Trigger automations
+    console.log(
+      `[Calendar Actions] Updated event ${event.id}, triggering automations`
+    );
+    try {
+      const { processViewAutomations } = await import("./automations");
+      await processViewAutomations();
+    } catch (autoError) {
+      console.error(
+        "[Calendar Actions] Failed to trigger automations:",
+        autoError
+      );
+    }
+
     return { success: true, data: event };
   } catch (error) {
     console.error("Error updating calendar event:", error);
@@ -102,6 +131,20 @@ export async function deleteCalendarEvent(id: string) {
 
     revalidatePath("/calendar");
     revalidatePath("/");
+
+    // Trigger automations
+    console.log(
+      `[Calendar Actions] Deleted event ${id}, triggering automations`
+    );
+    try {
+      const { processViewAutomations } = await import("./automations");
+      await processViewAutomations();
+    } catch (autoError) {
+      console.error(
+        "[Calendar Actions] Failed to trigger automations:",
+        autoError
+      );
+    }
 
     return { success: true };
   } catch (error) {

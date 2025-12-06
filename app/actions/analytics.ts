@@ -38,13 +38,10 @@ function formatSecondsToHebrew(totalSeconds: number): string {
   return parts.join(", ");
 }
 
-// ... imports
-
-// Helper for JS-based filtering of JSON data
-
-// Helper for flexible matching (case-insensitive, trimmed, string conversion)
-// Also handles "no filter" case properly
-// Helper for flexible matching (case-insensitive, trimmed, string conversion)
+/**
+ * Helper for flexible matching (case-insensitive, trimmed, string conversion)
+ * Also handles "no filter" case properly
+ */
 function filterRecords(records: any[], filter: any) {
   if (!filter || Object.keys(filter).length === 0) return records;
   return records.filter((r) => {
@@ -65,6 +62,250 @@ function filterRecords(records: any[], filter: any) {
       return strDataVal === strFilterVal;
     });
   });
+}
+
+function getDateFilter(config: any) {
+  if (!config.dateRangeType || config.dateRangeType === "all") return undefined;
+
+  const now = new Date();
+  let startDate: Date | undefined;
+  let endDate: Date | undefined;
+
+  switch (config.dateRangeType) {
+    case "this_week":
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - now.getDay()); // Sunday
+      startDate.setHours(0, 0, 0, 0);
+
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6); // Saturday
+      endDate.setHours(23, 59, 59, 999);
+      break;
+    case "last_30_days":
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - 30);
+      break;
+    case "last_year":
+      startDate = new Date(now);
+      startDate.setFullYear(now.getFullYear() - 1);
+      break;
+    case "custom":
+      if (config.customStartDate) startDate = new Date(config.customStartDate);
+      if (config.customEndDate) {
+        endDate = new Date(config.customEndDate);
+        endDate.setHours(23, 59, 59, 999);
+      }
+      break;
+  }
+
+  const filter: any = {};
+  if (startDate) filter.gte = startDate;
+  if (endDate) filter.lte = endDate;
+
+  return Object.keys(filter).length > 0 ? filter : undefined;
+}
+
+const tableNameCache = new Map<number, string>();
+const getTableName = async (id: number) => {
+  if (!id) return "Unknown Table";
+  if (tableNameCache.has(id)) return tableNameCache.get(id)!;
+  const t = await prisma.tableMeta.findUnique({ where: { id } });
+  const name = t ? t.name : "טבלה לא ידועה";
+  tableNameCache.set(id, name);
+  return name;
+};
+
+/**
+ * Calculates stats and items for a SINGLE custom view.
+ * Useful for automations to check current value without fetching everything.
+ */
+export async function calculateViewStats(view: any) {
+  const config = view.config as any;
+  let tableName = "System";
+  let rawData: any[] = [];
+
+  const dateRange = getDateFilter(config);
+
+  const dateField =
+    config.model === "CalendarEvent" ? "startTime" : "createdAt";
+  const dateFilter = dateRange ? { [dateField]: dateRange } : {};
+
+  // 1. Fetch Data Source
+  if (config.model === "Task") {
+    tableName = "משימות מערכת";
+    rawData = await prisma.task.findMany({
+      where: dateFilter,
+      take: 1000,
+      orderBy: { createdAt: "desc" },
+    });
+  } else if (config.model === "Retainer") {
+    tableName = "פיננסים: ריטיינרים";
+    rawData = await prisma.retainer.findMany({
+      where: dateFilter,
+      take: 1000,
+      orderBy: { createdAt: "desc" },
+      include: { client: true },
+    });
+  } else if (config.model === "OneTimePayment") {
+    tableName = "פיננסים: תשלומים";
+    rawData = await prisma.oneTimePayment.findMany({
+      where: dateFilter,
+      take: 1000,
+      orderBy: { createdAt: "desc" },
+      include: { client: true },
+    });
+  } else if (config.model === "Transaction") {
+    tableName = "פיננסים: תנועות";
+    rawData = await prisma.transaction.findMany({
+      where: dateFilter,
+      take: 1000,
+      orderBy: { createdAt: "desc" },
+      include: { client: true },
+    });
+  } else if (config.model === "CalendarEvent") {
+    tableName = "יומן: אירועים";
+    rawData = await prisma.calendarEvent.findMany({
+      where: dateFilter,
+      take: 1000,
+      orderBy: { startTime: "desc" },
+    });
+  } else if (config.tableId) {
+    tableName = await getTableName(Number(config.tableId));
+    rawData = await prisma.record.findMany({
+      where: { tableId: Number(config.tableId), ...dateFilter },
+      orderBy: { createdAt: "desc" },
+      take: 1000,
+    });
+  }
+
+  let stats: any = null;
+  let items: any[] = [];
+
+  // 2. Process View Type
+  if (view.type === "CONVERSION") {
+    if (config.groupByField) {
+      const groups: Record<string, { total: number; success: number }> = {};
+      rawData.forEach((r) => {
+        if (filterRecords([r], config.totalFilter).length > 0) {
+          let rawKey = (r.data as any)?.[config.groupByField];
+          if (rawKey === undefined) rawKey = (r as any)[config.groupByField];
+
+          const key = rawKey ? String(rawKey) : "ללא";
+          if (!groups[key]) groups[key] = { total: 0, success: 0 };
+          groups[key].total++;
+
+          if (filterRecords([r], config.successFilter).length > 0) {
+            groups[key].success++;
+          }
+        }
+      });
+
+      items = Object.entries(groups)
+        .map(([key, val]) => {
+          const rate = val.total > 0 ? (val.success / val.total) * 100 : 0;
+          return {
+            id: key,
+            title: key,
+            status: `${val.success} / ${val.total}`,
+            value: `${rate.toFixed(1)}%`,
+            count: val.total,
+            type: "conversion-group",
+            // rawRate for logic checks
+            rawRate: rate,
+          };
+        })
+        .sort((a, b) => b.count - a.count);
+
+      const totalAll = Object.values(groups).reduce(
+        (acc, g) => acc + g.total,
+        0
+      );
+      const successAll = Object.values(groups).reduce(
+        (acc, g) => acc + g.success,
+        0
+      );
+      const globalRate =
+        totalAll > 0 ? ((successAll / totalAll) * 100).toFixed(1) : "0";
+      stats = {
+        mainMetric: `${globalRate}%`,
+        subMetric: `סה"כ המרה (${successAll}/${totalAll})`,
+        label: "ממוצע כללי",
+        rawMetric: parseFloat(globalRate), // For automations
+      };
+    } else {
+      const totalSet = filterRecords(rawData, config.totalFilter);
+      const successSet = filterRecords(rawData, config.successFilter);
+      const rate =
+        totalSet.length > 0
+          ? ((successSet.length / totalSet.length) * 100).toFixed(1)
+          : "0";
+      stats = {
+        mainMetric: `${rate}%`,
+        subMetric: `${successSet.length} / ${totalSet.length}`,
+        label: "אחוז המרה",
+        rawMetric: parseFloat(rate), // For automations
+      };
+
+      items = successSet.slice(0, 50).map((r) => ({
+        id: r.id,
+        title:
+          r.title ||
+          (r.data as any)?.name ||
+          (r.data as any)?.title ||
+          `Record ${r.id}`,
+        status: r.status || "הושלם",
+        updatedAt: r.updatedAt,
+      }));
+    }
+  } else if (view.type === "COUNT") {
+    const filtered = filterRecords(rawData, config.filter);
+
+    if (config.groupByField) {
+      const groups: Record<string, number> = {};
+      filtered.forEach((r) => {
+        let rawKey = (r.data as any)?.[config.groupByField];
+        if (rawKey === undefined) rawKey = (r as any)[config.groupByField];
+        const key = rawKey ? String(rawKey) : "ללא";
+        groups[key] = (groups[key] || 0) + 1;
+      });
+
+      items = Object.entries(groups)
+        .map(([key, count]) => ({
+          id: key,
+          title: key,
+          value: String(count),
+          type: "count-group",
+        }))
+        .sort((a, b) => Number(b.value) - Number(a.value));
+
+      stats = {
+        mainMetric: String(filtered.length),
+        subMetric: "רשומות",
+        label: "סה״כ",
+        rawMetric: filtered.length,
+      };
+    } else {
+      stats = {
+        mainMetric: String(filtered.length),
+        subMetric: "רשומות",
+        label: "כמות",
+        rawMetric: filtered.length,
+      };
+      items = filtered.slice(0, 50).map((r) => ({
+        id: r.id,
+        title:
+          r.title ||
+          (r.data as any)?.name ||
+          (r.data as any)?.title ||
+          `Record ${r.id}`,
+        status: r.status || (r.client ? r.client.name : "-"),
+        value: r.amount ? `₪${Number(r.amount).toLocaleString()}` : undefined,
+        updatedAt: r.updatedAt,
+      }));
+    }
+  }
+
+  return { stats, items, tableName };
 }
 
 export async function createAnalyticsView(data: {
@@ -147,17 +388,6 @@ export async function getAnalyticsData() {
     const customViews = await prisma.analyticsView.findMany();
 
     const views = [];
-
-    // Cache for table names
-    const tableNameCache = new Map<number, string>();
-    const getTableName = async (id: number) => {
-      if (!id) return "Unknown Table";
-      if (tableNameCache.has(id)) return tableNameCache.get(id)!;
-      const t = await prisma.tableMeta.findUnique({ where: { id } });
-      const name = t ? t.name : "טבלה לא ידועה";
-      tableNameCache.set(id, name);
-      return name;
-    };
 
     // --- Process Automation Rules ---
     for (const rule of rules) {
@@ -339,235 +569,8 @@ export async function getAnalyticsData() {
     }
 
     // --- Process Custom Views ---
-    // --- Process Custom Views ---
-    // Helper for date filtering
-    // Helper for date filtering
-    function getDateFilter(config: any) {
-      if (!config.dateRangeType || config.dateRangeType === "all")
-        return undefined;
-
-      const now = new Date();
-      let startDate: Date | undefined;
-      let endDate: Date | undefined;
-
-      switch (config.dateRangeType) {
-        case "this_week":
-          startDate = new Date(now);
-          startDate.setDate(now.getDate() - now.getDay()); // Sunday
-          startDate.setHours(0, 0, 0, 0);
-
-          endDate = new Date(startDate);
-          endDate.setDate(startDate.getDate() + 6); // Saturday
-          endDate.setHours(23, 59, 59, 999);
-          break;
-        case "last_30_days":
-          startDate = new Date(now);
-          startDate.setDate(now.getDate() - 30);
-          break;
-        case "last_year":
-          startDate = new Date(now);
-          startDate.setFullYear(now.getFullYear() - 1);
-          break;
-        case "custom":
-          if (config.customStartDate)
-            startDate = new Date(config.customStartDate);
-          if (config.customEndDate) {
-            endDate = new Date(config.customEndDate);
-            endDate.setHours(23, 59, 59, 999);
-          }
-          break;
-      }
-
-      const filter: any = {};
-      if (startDate) filter.gte = startDate;
-      if (endDate) filter.lte = endDate;
-
-      return Object.keys(filter).length > 0 ? filter : undefined;
-    }
-
-    // --- Process Custom Views ---
     for (const view of customViews) {
-      const config = view.config as any;
-      let tableName = "System";
-      let rawData: any[] = [];
-
-      const dateRange = getDateFilter(config);
-
-      const dateField =
-        config.model === "CalendarEvent" ? "startTime" : "createdAt";
-      const dateFilter = dateRange ? { [dateField]: dateRange } : {};
-
-      // 1. Fetch Data Source
-      if (config.model === "Task") {
-        tableName = "משימות מערכת";
-        rawData = await prisma.task.findMany({
-          where: dateFilter,
-          take: 1000,
-          orderBy: { createdAt: "desc" },
-        });
-      } else if (config.model === "Retainer") {
-        tableName = "פיננסים: ריטיינרים";
-        rawData = await prisma.retainer.findMany({
-          where: dateFilter,
-          take: 1000,
-          orderBy: { createdAt: "desc" },
-          include: { client: true },
-        });
-      } else if (config.model === "OneTimePayment") {
-        tableName = "פיננסים: תשלומים";
-        rawData = await prisma.oneTimePayment.findMany({
-          where: dateFilter,
-          take: 1000,
-          orderBy: { createdAt: "desc" },
-          include: { client: true },
-        });
-      } else if (config.model === "Transaction") {
-        tableName = "פיננסים: תנועות";
-        rawData = await prisma.transaction.findMany({
-          where: dateFilter,
-          take: 1000,
-          orderBy: { createdAt: "desc" },
-          include: { client: true },
-        });
-      } else if (config.model === "CalendarEvent") {
-        tableName = "יומן: אירועים";
-        rawData = await prisma.calendarEvent.findMany({
-          where: dateFilter,
-          take: 1000,
-          orderBy: { startTime: "desc" },
-        });
-      } else if (config.tableId) {
-        tableName = await getTableName(Number(config.tableId));
-        rawData = await prisma.record.findMany({
-          where: { tableId: Number(config.tableId), ...dateFilter },
-          orderBy: { createdAt: "desc" },
-          take: 1000,
-        });
-      }
-
-      let stats = null;
-      let items: any[] = [];
-
-      // 2. Process View Type
-      if (view.type === "CONVERSION") {
-        if (config.groupByField) {
-          const groups: Record<string, { total: number; success: number }> = {};
-          rawData.forEach((r) => {
-            if (filterRecords([r], config.totalFilter).length > 0) {
-              let rawKey = (r.data as any)?.[config.groupByField];
-              if (rawKey === undefined)
-                rawKey = (r as any)[config.groupByField];
-
-              const key = rawKey ? String(rawKey) : "ללא";
-              if (!groups[key]) groups[key] = { total: 0, success: 0 };
-              groups[key].total++;
-
-              if (filterRecords([r], config.successFilter).length > 0) {
-                groups[key].success++;
-              }
-            }
-          });
-
-          items = Object.entries(groups)
-            .map(([key, val]) => {
-              const rate = val.total > 0 ? (val.success / val.total) * 100 : 0;
-              return {
-                id: key,
-                title: key,
-                status: `${val.success} / ${val.total}`,
-                value: `${rate.toFixed(1)}%`,
-                count: val.total,
-                type: "conversion-group",
-              };
-            })
-            .sort((a, b) => b.count - a.count);
-
-          const totalAll = Object.values(groups).reduce(
-            (acc, g) => acc + g.total,
-            0
-          );
-          const successAll = Object.values(groups).reduce(
-            (acc, g) => acc + g.success,
-            0
-          );
-          const globalRate =
-            totalAll > 0 ? ((successAll / totalAll) * 100).toFixed(1) : "0";
-          stats = {
-            mainMetric: `${globalRate}%`,
-            subMetric: `סה"כ המרה (${successAll}/${totalAll})`,
-            label: "ממוצע כללי",
-          };
-        } else {
-          const totalSet = filterRecords(rawData, config.totalFilter);
-          const successSet = filterRecords(rawData, config.successFilter);
-          const rate =
-            totalSet.length > 0
-              ? ((successSet.length / totalSet.length) * 100).toFixed(1)
-              : "0";
-          stats = {
-            mainMetric: `${rate}%`,
-            subMetric: `${successSet.length} / ${totalSet.length}`,
-            label: "אחוז המרה",
-          };
-
-          items = successSet.slice(0, 50).map((r) => ({
-            id: r.id,
-            title:
-              r.title ||
-              (r.data as any)?.name ||
-              (r.data as any)?.title ||
-              `Record ${r.id}`,
-            status: r.status || "הושלם",
-            updatedAt: r.updatedAt,
-          }));
-        }
-      } else if (view.type === "COUNT") {
-        const filtered = filterRecords(rawData, config.filter);
-
-        if (config.groupByField) {
-          const groups: Record<string, number> = {};
-          filtered.forEach((r) => {
-            let rawKey = (r.data as any)?.[config.groupByField];
-            if (rawKey === undefined) rawKey = (r as any)[config.groupByField];
-            const key = rawKey ? String(rawKey) : "ללא";
-            groups[key] = (groups[key] || 0) + 1;
-          });
-
-          items = Object.entries(groups)
-            .map(([key, count]) => ({
-              id: key,
-              title: key,
-              value: String(count),
-              type: "count-group",
-            }))
-            .sort((a, b) => Number(b.value) - Number(a.value));
-
-          stats = {
-            mainMetric: String(filtered.length),
-            subMetric: "רשומות",
-            label: "סה״כ",
-          };
-        } else {
-          stats = {
-            mainMetric: String(filtered.length),
-            subMetric: "רשומות",
-            label: "כמות",
-          };
-          items = filtered.slice(0, 50).map((r) => ({
-            id: r.id,
-            title:
-              r.title ||
-              (r.data as any)?.name ||
-              (r.data as any)?.title ||
-              `Record ${r.id}`,
-            status: r.status || (r.client ? r.client.name : "-"),
-            value: r.amount
-              ? `₪${Number(r.amount).toLocaleString()}`
-              : undefined,
-            updatedAt: r.updatedAt,
-          }));
-        }
-      }
+      const { stats, items, tableName } = await calculateViewStats(view);
 
       views.push({
         id: `view_${view.id}`,
@@ -580,7 +583,7 @@ export async function getAnalyticsData() {
         order: view.order,
         color: view.color,
         source: "CUSTOM",
-        config: config, // Pass config for editing
+        config: view.config, // Pass config for editing
       });
     }
 

@@ -54,6 +54,9 @@ export async function PUT(
     );
 
     // Trigger Automations
+    console.log(
+      `[API Records] About to trigger automations for record ${record.id}, table ${record.tableId}`
+    );
     try {
       const { processRecordUpdate } = await import("@/app/actions/automations");
       // Run in background / parallel to not block response?
@@ -64,6 +67,7 @@ export async function PUT(
         existingRecord.data as any,
         data
       );
+      console.log(`[API Records] Successfully triggered automations`);
     } catch (autoError) {
       console.error("Failed to process automations:", autoError);
     }

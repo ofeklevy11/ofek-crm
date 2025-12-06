@@ -29,6 +29,20 @@ export async function POST(request: Request) {
       },
     });
 
+    // Trigger view automations
+    console.log(
+      `[Calendar API] Created event ${event.id}, triggering automations`
+    );
+    try {
+      const { processViewAutomations } = await import(
+        "@/app/actions/automations"
+      );
+      await processViewAutomations();
+      console.log(`[Calendar API] View automations triggered successfully`);
+    } catch (autoError) {
+      console.error("[Calendar API] Failed to trigger automations:", autoError);
+    }
+
     return NextResponse.json(event);
   } catch (error) {
     console.error("Error creating calendar event:", error);
