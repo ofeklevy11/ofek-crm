@@ -81,6 +81,10 @@ model AutomationRule {
   // Relation to the new time tracking tables
   statusDurations StatusDuration[]
   multiEventDurations MultiEventDuration[]
+
+  // Analytics View Configuration
+  analyticsOrder Int?     @default(0)
+  analyticsColor String?  @default("bg-white") // Stores Tailwind class or color key
 }
 
 model Notification {

@@ -47,6 +47,9 @@ export async function getAnalyticsData() {
           in: ["CALCULATE_DURATION", "CALCULATE_MULTI_EVENT_DURATION"],
         },
       },
+      orderBy: {
+        analyticsOrder: "asc", // Sort by persisted order
+      },
     });
 
     const views = [];
@@ -167,6 +170,8 @@ export async function getAnalyticsData() {
           type: "multi-event",
           data: items,
           stats: stats,
+          order: rule.analyticsOrder ?? 0,
+          color: rule.analyticsColor ?? "bg-white",
         });
       } else if (rule.actionType === "CALCULATE_DURATION") {
         const durations = await prisma.statusDuration.findMany({
@@ -247,13 +252,52 @@ export async function getAnalyticsData() {
           type: "single-event",
           data: items,
           stats: stats,
+          order: rule.analyticsOrder ?? 0,
+          color: rule.analyticsColor ?? "bg-white",
         });
       }
     }
+
+    // Secondary sort in JS just in case of nulls or mixed query results if needed,
+    // but the DB query sort is usually sufficient.
+    // We already sorted the fetched rules, so `views` should be roughly in order
+    // unless multiple rules map to one view (not the case here).
+    views.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
     return { success: true, data: views };
   } catch (error) {
     console.error("Error fetching analytics data:", error);
     return { success: false, error: "Failed to fetch analytics data" };
+  }
+}
+
+export async function updateAnalyticsViewOrder(
+  items: { ruleId: number; order: number }[]
+) {
+  try {
+    const updates = items.map((item) =>
+      prisma.automationRule.update({
+        where: { id: item.ruleId },
+        data: { analyticsOrder: item.order },
+      })
+    );
+    await Promise.all(updates);
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating analytics view order:", error);
+    return { success: false, error: "Failed to update order" };
+  }
+}
+
+export async function updateAnalyticsViewColor(ruleId: number, color: string) {
+  try {
+    await prisma.automationRule.update({
+      where: { id: ruleId },
+      data: { analyticsColor: color },
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating analytics view color:", error);
+    return { success: false, error: "Failed to update color" };
   }
 }
