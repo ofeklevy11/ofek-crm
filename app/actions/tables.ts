@@ -165,3 +165,22 @@ export async function searchInTable(tableId: number, searchTerm: string) {
     return { success: false, error: "Failed to search in table" };
   }
 }
+
+export async function updateTablesOrder(
+  updates: { id: number; order: number }[]
+) {
+  try {
+    const transaction = updates.map((update) =>
+      prisma.tableMeta.update({
+        where: { id: update.id },
+        data: { order: update.order },
+      })
+    );
+    await prisma.$transaction(transaction);
+    revalidatePath("/tables");
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating table order:", error);
+    return { success: false, error: "Failed to update table order" };
+  }
+}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import EditTableModal from "./EditTableModal";
 import AlertDialog from "./AlertDialog";
+import { User, Pencil, Trash2 } from "lucide-react";
 
 interface TableCardProps {
   table: {
@@ -12,6 +13,7 @@ interface TableCardProps {
     slug: string;
     createdAt: Date;
     _count: { records: number };
+    creator: { name: string };
   };
 }
 
@@ -93,26 +95,40 @@ export default function TableCard({ table }: TableCardProps) {
         </p>
 
         {/* Created date */}
-        <div className="text-xs text-black">
+        <div className="text-xs text-gray-500 mb-2">
           Created {new Date(table.createdAt).toLocaleDateString()}
+        </div>
+
+        {/* Creator Badge */}
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+          <User size={12} />
+          נוצר על ידי {table.creator.name}
         </div>
 
         {/* Buttons (appear on hover) */}
         <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-10">
           <button
             onClick={handleEditClick}
-            className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-700 shadow-md transition"
+            onPointerDown={(e) => e.stopPropagation()}
+            className="bg-white text-gray-500 hover:text-blue-600 p-2 rounded-lg shadow-sm border border-gray-200 hover:border-blue-200 transition"
+            title="Edit Table"
             disabled={isDeleting}
           >
-            Edit
+            <Pencil size={16} />
           </button>
 
           <button
             onClick={handleDeleteClick}
-            className="bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-700 shadow-md transition disabled:opacity-50"
+            onPointerDown={(e) => e.stopPropagation()}
+            className="bg-white text-gray-500 hover:text-red-600 p-2 rounded-lg shadow-sm border border-gray-200 hover:border-red-200 transition disabled:opacity-50"
+            title="Delete Table"
             disabled={isDeleting}
           >
-            {isDeleting ? "..." : "Delete"}
+            {isDeleting ? (
+              <span className="animate-spin w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full block"></span>
+            ) : (
+              <Trash2 size={16} />
+            )}
           </button>
         </div>
       </div>

@@ -76,3 +76,30 @@ export async function deleteCategory(id: number) {
     return { success: false, error: "Failed to delete category" };
   }
 }
+
+export async function convertUncategorizedToCategory(name: string) {
+  try {
+    if (!name) {
+      return { success: false, error: "Name is required" };
+    }
+
+    // 1. Create the new category
+    const category = await prisma.tableCategory.create({
+      data: { name },
+    });
+
+    // 2. Update all uncategorized tables to belong to this new category
+    await prisma.tableMeta.updateMany({
+      where: { categoryId: null },
+      data: { categoryId: category.id },
+    });
+
+    revalidatePath("/");
+    revalidatePath("/tables");
+
+    return { success: true, data: category };
+  } catch (error) {
+    console.error("Error converting uncategorized:", error);
+    return { success: false, error: "Failed to convert uncategorized tables" };
+  }
+}

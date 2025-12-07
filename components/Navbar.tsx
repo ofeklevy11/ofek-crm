@@ -24,35 +24,50 @@ export default async function Navbar() {
               <Link href="/" className={linkClass}>
                 Dashboard
               </Link>
-              <Link href="/tables" className={linkClass}>
-                Tables
-              </Link>
-              <Link href="/finance" className={linkClass}>
-                Finance
-              </Link>
-              <Link href="/calendar" className={linkClass}>
-                Calendar
-              </Link>
-              <Link href="/tasks" className={linkClass}>
-                Tasks
-              </Link>
-              <Link href="/automations" className={linkClass}>
-                Automations
-              </Link>
-              {user?.role === "admin" && (
-                <Link href="/users" className={linkClass}>
-                  Users
-                </Link>
+              {user && (
+                <>
+                  <Link href="/tables" className={linkClass}>
+                    Tables
+                  </Link>
+                  <Link href="/finance" className={linkClass}>
+                    Finance
+                  </Link>
+                  <Link href="/calendar" className={linkClass}>
+                    Calendar
+                  </Link>
+                  <Link href="/tasks" className={linkClass}>
+                    Tasks
+                  </Link>
+                  <Link href="/automations" className={linkClass}>
+                    Automations
+                  </Link>
+                  {user.role === "admin" && (
+                    <Link href="/users" className={linkClass}>
+                      Users
+                    </Link>
+                  )}
+                  <Link href="/analytics" className={linkClass}>
+                    Analytics
+                  </Link>
+                  <ChatNavbarLink />
+                </>
               )}
-              <Link href="/analytics" className={linkClass}>
-                Analytics
-              </Link>
-              <ChatNavbarLink />
             </div>
           </div>
           <div className="flex items-center gap-4">
-            {user && <NotificationBell userId={user.id} />}
-            <UserMenu user={user} />
+            {user ? (
+              <>
+                <NotificationBell userId={user.id} />
+                <UserMenu user={user} />
+              </>
+            ) : (
+              <Link
+                href="/login"
+                className="text-gray-500 hover:text-gray-900 font-medium"
+              >
+                Log In
+              </Link>
+            )}
           </div>
         </div>
       </div>

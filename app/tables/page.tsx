@@ -8,6 +8,9 @@ export default async function TablesPage() {
       _count: {
         select: { records: true },
       },
+      creator: {
+        select: { name: true },
+      },
     },
   });
 
