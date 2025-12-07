@@ -26,7 +26,8 @@ export async function PUT(
     }
 
     if (updatedBy) {
-      const { getUserById, canWriteTable } = await import("@/lib/permissions");
+      const { getUserById } = await import("@/lib/permissions-server");
+      const { canWriteTable } = await import("@/lib/permissions");
       const user = await getUserById(Number(updatedBy));
 
       if (!user || !canWriteTable(user, existingRecord.tableId)) {
@@ -104,9 +105,8 @@ export async function DELETE(
       });
 
       if (existingRecord) {
-        const { getUserById, canWriteTable } = await import(
-          "@/lib/permissions"
-        );
+        const { getUserById } = await import("@/lib/permissions-server");
+        const { canWriteTable } = await import("@/lib/permissions");
         const user = await getUserById(Number(deletedBy));
 
         if (!user || !canWriteTable(user, existingRecord.tableId)) {
