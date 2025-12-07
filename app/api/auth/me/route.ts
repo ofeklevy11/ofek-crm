@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/permissions";
+import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function GET() {
   try {

@@ -41,11 +41,15 @@ interface Table {
 interface TablesDashboardProps {
   initialTables: Table[];
   initialCategories: Category[];
+  canDelete?: boolean;
+  canEdit?: boolean;
 }
 
 export default function TablesDashboard({
   initialTables,
   initialCategories,
+  canDelete = false,
+  canEdit = false,
 }: TablesDashboardProps) {
   const router = useRouter();
 
@@ -62,7 +66,11 @@ export default function TablesDashboard({
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -254,7 +262,12 @@ export default function TablesDashboard({
                   >
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pl-4">
                       {catTables.map((table) => (
-                        <SortableTableCard key={table.id} table={table} />
+                        <SortableTableCard
+                          key={table.id}
+                          table={table}
+                          canDelete={canDelete}
+                          canEdit={canEdit}
+                        />
                       ))}
                       {catTables.length === 0 && (
                         <div className="col-span-full py-8 text-gray-400 italic text-sm border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center">
@@ -294,7 +307,12 @@ export default function TablesDashboard({
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pl-4">
                     {uncategorizedTables.map((table) => (
-                      <SortableTableCard key={table.id} table={table} />
+                      <SortableTableCard
+                        key={table.id}
+                        table={table}
+                        canDelete={canDelete}
+                        canEdit={canEdit}
+                      />
                     ))}
                   </div>
                 </SortableContext>

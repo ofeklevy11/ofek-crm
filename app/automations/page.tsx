@@ -1,9 +1,9 @@
-import { getCurrentUser } from "@/lib/permissions";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { getAutomationRules } from "@/app/actions/automations";
 import { getUsers } from "@/app/actions/users";
 import { redirect } from "next/navigation";
 import AutomationsList from "@/components/AutomationsList";
-
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,10 @@ export default async function AutomationsPage() {
 
   if (!user) {
     redirect("/auth/login");
+  }
+
+  if (!hasUserFlag(user, "canViewAutomations")) {
+    redirect("/");
   }
 
   const [rulesResponse, usersResponse, tables] = await Promise.all([

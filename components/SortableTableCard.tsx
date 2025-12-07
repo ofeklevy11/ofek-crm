@@ -7,9 +7,15 @@ import TableCard from "./TableCard";
 interface SortableTableCardProps {
   // We use the same 'table' type as TableCard
   table: any;
+  canDelete?: boolean;
+  canEdit?: boolean;
 }
 
-export default function SortableTableCard({ table }: SortableTableCardProps) {
+export default function SortableTableCard({
+  table,
+  canDelete,
+  canEdit,
+}: SortableTableCardProps) {
   const {
     attributes,
     listeners,
@@ -34,7 +40,7 @@ export default function SortableTableCard({ table }: SortableTableCardProps) {
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <TableCard table={table} />
+      <TableCard table={table} canDelete={canDelete} canEdit={canEdit} />
     </div>
   );
 }

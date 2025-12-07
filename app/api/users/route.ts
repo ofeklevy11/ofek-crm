@@ -14,6 +14,7 @@ export async function GET() {
         allowedWriteTableIds: true,
         createdAt: true,
         updatedAt: true,
+        permissions: true,
         // Don't expose passwordHash
       },
     });
@@ -30,7 +31,8 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, email, password, role, allowedWriteTableIds } = body;
+    const { name, email, password, role, allowedWriteTableIds, permissions } =
+      body;
 
     // Basic validation
     if (!name || !email || !password) {
@@ -62,6 +64,7 @@ export async function POST(request: Request) {
         passwordHash,
         role: role || "basic",
         allowedWriteTableIds: allowedWriteTableIds || [],
+        permissions: permissions || {},
       },
       select: {
         id: true,
@@ -71,6 +74,7 @@ export async function POST(request: Request) {
         allowedWriteTableIds: true,
         createdAt: true,
         updatedAt: true,
+        permissions: true,
       },
     });
 

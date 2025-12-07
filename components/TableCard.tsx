@@ -15,9 +15,15 @@ interface TableCardProps {
     _count: { records: number };
     creator: { name: string };
   };
+  canDelete?: boolean;
+  canEdit?: boolean;
 }
 
-export default function TableCard({ table }: TableCardProps) {
+export default function TableCard({
+  table,
+  canDelete = false,
+  canEdit = false,
+}: TableCardProps) {
   const router = useRouter();
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -107,29 +113,33 @@ export default function TableCard({ table }: TableCardProps) {
 
         {/* Buttons (appear on hover) */}
         <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-10">
-          <button
-            onClick={handleEditClick}
-            onPointerDown={(e) => e.stopPropagation()}
-            className="bg-white text-gray-500 hover:text-blue-600 p-2 rounded-lg shadow-sm border border-gray-200 hover:border-blue-200 transition"
-            title="Edit Table"
-            disabled={isDeleting}
-          >
-            <Pencil size={16} />
-          </button>
+          {canEdit && (
+            <button
+              onClick={handleEditClick}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="bg-white text-gray-500 hover:text-blue-600 p-2 rounded-lg shadow-sm border border-gray-200 hover:border-blue-200 transition"
+              title="Edit Table"
+              disabled={isDeleting}
+            >
+              <Pencil size={16} />
+            </button>
+          )}
 
-          <button
-            onClick={handleDeleteClick}
-            onPointerDown={(e) => e.stopPropagation()}
-            className="bg-white text-gray-500 hover:text-red-600 p-2 rounded-lg shadow-sm border border-gray-200 hover:border-red-200 transition disabled:opacity-50"
-            title="Delete Table"
-            disabled={isDeleting}
-          >
-            {isDeleting ? (
-              <span className="animate-spin w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full block"></span>
-            ) : (
-              <Trash2 size={16} />
-            )}
-          </button>
+          {canDelete && (
+            <button
+              onClick={handleDeleteClick}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="bg-white text-gray-500 hover:text-red-600 p-2 rounded-lg shadow-sm border border-gray-200 hover:border-red-200 transition disabled:opacity-50"
+              title="Delete Table"
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <span className="animate-spin w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full block"></span>
+              ) : (
+                <Trash2 size={16} />
+              )}
+            </button>
+          )}
         </div>
       </div>
 

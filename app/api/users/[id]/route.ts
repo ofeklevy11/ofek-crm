@@ -18,6 +18,7 @@ export async function GET(
         allowedWriteTableIds: true,
         createdAt: true,
         updatedAt: true,
+        permissions: true,
       },
     });
 
@@ -42,7 +43,8 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, email, password, role, allowedWriteTableIds } = body;
+    const { name, email, password, role, allowedWriteTableIds, permissions } =
+      body;
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
@@ -76,6 +78,7 @@ export async function PATCH(
     if (password) {
       updateData.passwordHash = await bcrypt.hash(password, 10);
     }
+    if (permissions) updateData.permissions = permissions;
 
     // Update user
     const updatedUser = await prisma.user.update({
@@ -89,6 +92,7 @@ export async function PATCH(
         allowedWriteTableIds: true,
         createdAt: true,
         updatedAt: true,
+        permissions: true,
       },
     });
 

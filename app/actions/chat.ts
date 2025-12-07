@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/permissions";
+import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
 
 // ... imports

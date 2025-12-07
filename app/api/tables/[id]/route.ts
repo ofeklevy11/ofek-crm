@@ -35,6 +35,22 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { getCurrentUser, canManageTables } = await import(
+      "@/lib/permissions"
+    );
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!canManageTables(user)) {
+      return NextResponse.json(
+        { error: "Forbidden: Only admins can update tables" },
+        { status: 403 }
+      );
+    }
+
     const { id } = await params;
     const body = await request.json();
     const { name, slug, schemaJson } = body;
@@ -74,6 +90,22 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { getCurrentUser, canManageTables } = await import(
+      "@/lib/permissions"
+    );
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!canManageTables(user)) {
+      return NextResponse.json(
+        { error: "Forbidden: Only admins can delete tables" },
+        { status: 403 }
+      );
+    }
+
     const { id } = await params;
 
     // Check if table exists

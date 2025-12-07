@@ -1,5 +1,3 @@
-import { prisma } from "@/lib/prisma";
-
 export type UserRole = "basic" | "manager" | "admin";
 
 export interface User {
@@ -8,6 +6,19 @@ export interface User {
   email: string;
   role: UserRole;
   allowedWriteTableIds: number[];
+  permissions?: Record<string, boolean>; // JSON field in DB
+}
+
+export const USER_FLAGS = [
+  { key: "canViewAutomations", label: "גישה לאוטומציות" },
+  { key: "canViewAnalytics", label: "גישה לניתוח נתונים" },
+] as const;
+
+export type UserFlagKey = (typeof USER_FLAGS)[number]["key"];
+
+export function hasUserFlag(user: User, flag: UserFlagKey): boolean {
+  if (user.role === "admin") return true; // Admins have all flags implicitly
+  return !!user.permissions?.[flag];
 }
 
 /**
@@ -48,65 +59,4 @@ export function canManageUsers(user: User): boolean {
  */
 export function canManageTables(user: User): boolean {
   return user.role === "admin";
-}
-
-/**
- * Get user by ID
- */
-export async function getUserById(userId: number): Promise<User | null> {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        allowedWriteTableIds: true,
-      },
-    });
-    return user as User | null;
-  } catch (error) {
-    console.error("Error fetching user:", error);
-    return null;
-  }
-}
-
-import { cookies } from "next/headers";
-import { verifyUserId } from "@/lib/auth";
-
-/**
- * Get the current authenticated user from the session cookie
- */
-export async function getCurrentUser(): Promise<User | null> {
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-
-    if (!token) {
-      return null;
-    }
-
-    const userId = verifyUserId(token);
-
-    if (!userId) {
-      return null;
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        allowedWriteTableIds: true,
-      },
-    });
-
-    return user as User | null;
-  } catch (error) {
-    console.error("Error fetching current user:", error);
-    return null;
-  }
 }

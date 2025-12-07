@@ -1,4 +1,4 @@
-import { getCurrentUser } from "@/lib/permissions";
+import { getCurrentUser } from "@/lib/permissions-server";
 import { getNotifications } from "@/app/actions/notifications";
 import Link from "next/link";
 import { redirect } from "next/navigation";

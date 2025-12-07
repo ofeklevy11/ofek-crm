@@ -2,7 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
-import { getUserById, canWriteTable } from "@/lib/permissions";
+import { getUserById } from "@/lib/permissions-server";
+import { canWriteTable } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 
 export async function getRecordsByTableId(tableId: number) {

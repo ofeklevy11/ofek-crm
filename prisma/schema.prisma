@@ -12,6 +12,7 @@ model User {
   email                String        @unique
   passwordHash         String
   role                 String        @default("basic")
+  permissions          Json?         @default("{}")
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
   allowedWriteTableIds Int[]         @default([])

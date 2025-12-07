@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/permissions";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import UserMenu from "./UserMenu";
 import ChatNavbarLink from "./chat/ChatNavbarLink";
 import NotificationBell from "./NotificationBell";
@@ -29,26 +30,34 @@ export default async function Navbar() {
                   <Link href="/tables" className={linkClass}>
                     Tables
                   </Link>
-                  <Link href="/finance" className={linkClass}>
-                    Finance
-                  </Link>
-                  <Link href="/calendar" className={linkClass}>
-                    Calendar
-                  </Link>
+                  {user.role === "admin" && (
+                    <>
+                      <Link href="/finance" className={linkClass}>
+                        Finance
+                      </Link>
+                      <Link href="/calendar" className={linkClass}>
+                        Calendar
+                      </Link>
+                    </>
+                  )}
                   <Link href="/tasks" className={linkClass}>
                     Tasks
                   </Link>
-                  <Link href="/automations" className={linkClass}>
-                    Automations
-                  </Link>
+                  {hasUserFlag(user, "canViewAutomations") && (
+                    <Link href="/automations" className={linkClass}>
+                      Automations
+                    </Link>
+                  )}
                   {user.role === "admin" && (
                     <Link href="/users" className={linkClass}>
                       Users
                     </Link>
                   )}
-                  <Link href="/analytics" className={linkClass}>
-                    Analytics
-                  </Link>
+                  {hasUserFlag(user, "canViewAnalytics") && (
+                    <Link href="/analytics" className={linkClass}>
+                      Analytics
+                    </Link>
+                  )}
                   <ChatNavbarLink />
                 </>
               )}

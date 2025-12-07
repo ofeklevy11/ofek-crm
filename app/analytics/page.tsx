@@ -45,6 +45,7 @@ import {
   moveViewToFolder,
 } from "@/app/actions/view-folders";
 import { Folder, FolderPlus, ArrowLeft, Move, X } from "lucide-react";
+import { hasUserFlag } from "@/lib/permissions";
 
 // Available colors for the cards
 const COLOR_OPTIONS = [
@@ -492,6 +493,10 @@ export default function AnalyticsPage() {
     fetchData();
     getCurrentAuthUser().then((res) => {
       if (res.success && res.data) {
+        if (!hasUserFlag(res.data as any, "canViewAnalytics")) {
+          router.push("/");
+          return;
+        }
         setCurrentUserId(res.data.id);
       }
     });

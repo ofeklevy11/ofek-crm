@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 
+import { USER_FLAGS } from "@/lib/permissions";
+
 interface UserModalProps {
   user: {
     id: number;
@@ -9,6 +11,7 @@ interface UserModalProps {
     email: string;
     role: "basic" | "manager" | "admin";
     allowedWriteTableIds: number[];
+    permissions?: Record<string, boolean>;
   } | null;
   tables: {
     id: number;
@@ -31,6 +34,7 @@ export default function UserModal({
     password: "",
     role: "basic" as "basic" | "manager" | "admin",
     allowedWriteTableIds: [] as number[],
+    permissions: {} as Record<string, boolean>,
   });
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -43,6 +47,7 @@ export default function UserModal({
         password: "", // Don't pre-fill password
         role: user.role,
         allowedWriteTableIds: user.allowedWriteTableIds,
+        permissions: user.permissions || {},
       });
     }
   }, [user]);
@@ -73,6 +78,7 @@ export default function UserModal({
         email: formData.email,
         role: formData.role,
         allowedWriteTableIds: formData.allowedWriteTableIds,
+        permissions: formData.permissions,
       };
 
       // Only include password if it's set
@@ -105,6 +111,16 @@ export default function UserModal({
       allowedWriteTableIds: prev.allowedWriteTableIds.includes(tableId)
         ? prev.allowedWriteTableIds.filter((id) => id !== tableId)
         : [...prev.allowedWriteTableIds, tableId],
+    }));
+  };
+
+  const handlePermissionToggle = (key: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      permissions: {
+        ...prev.permissions,
+        [key]: !prev.permissions[key],
+      },
     }));
   };
 
@@ -254,6 +270,31 @@ export default function UserModal({
               </label>
             </div>
           </div>
+
+          {/* Flags / Permissions - Only for non-admins */}
+          {formData.role !== "admin" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-900 mb-2">
+                הרשאות נוספות
+              </label>
+              <div className="space-y-3 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                {USER_FLAGS.map((flag) => (
+                  <label
+                    key={flag.key}
+                    className="flex items-center gap-3 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!formData.permissions[flag.key]}
+                      onChange={() => handlePermissionToggle(flag.key)}
+                      className="rounded w-4 h-4 text-blue-600"
+                    />
+                    <span className="text-gray-900">{flag.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Table Permissions (for managers) */}
           {formData.role === "manager" && (

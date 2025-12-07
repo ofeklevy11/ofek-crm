@@ -1,5 +1,5 @@
 import ChatInterface from "@/components/chat/ChatInterface";
-import { getCurrentUser } from "@/lib/permissions";
+import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
 
 export const metadata = {
