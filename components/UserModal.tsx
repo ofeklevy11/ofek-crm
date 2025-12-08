@@ -12,6 +12,7 @@ interface UserModalProps {
     role: "basic" | "manager" | "admin";
     allowedWriteTableIds: number[];
     permissions?: Record<string, boolean>;
+    tablePermissions?: Record<string, "read" | "write" | "none">;
   } | null;
   tables: {
     id: number;
@@ -35,6 +36,7 @@ export default function UserModal({
     role: "basic" as "basic" | "manager" | "admin",
     allowedWriteTableIds: [] as number[],
     permissions: {} as Record<string, boolean>,
+    tablePermissions: {} as Record<string, "read" | "write" | "none">,
   });
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -48,6 +50,7 @@ export default function UserModal({
         role: user.role,
         allowedWriteTableIds: user.allowedWriteTableIds,
         permissions: user.permissions || {},
+        tablePermissions: user.tablePermissions || {},
       });
     }
   }, [user]);
@@ -79,6 +82,7 @@ export default function UserModal({
         role: formData.role,
         allowedWriteTableIds: formData.allowedWriteTableIds,
         permissions: formData.permissions,
+        tablePermissions: formData.tablePermissions,
       };
 
       // Only include password if it's set
@@ -120,6 +124,19 @@ export default function UserModal({
       permissions: {
         ...prev.permissions,
         [key]: !prev.permissions[key],
+      },
+    }));
+  };
+
+  const handleTablePermissionChange = (
+    tableId: number,
+    permission: "read" | "write" | "none"
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      tablePermissions: {
+        ...prev.tablePermissions,
+        [tableId]: permission,
       },
     }));
   };
@@ -274,24 +291,111 @@ export default function UserModal({
           {/* Flags / Permissions - Only for non-admins */}
           {formData.role !== "admin" && (
             <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
+              <label className="block text-sm font-medium text-gray-900 mb-3">
                 הרשאות נוספות
               </label>
-              <div className="space-y-3 bg-gray-50 p-4 rounded-lg border border-gray-200">
-                {USER_FLAGS.map((flag) => (
-                  <label
-                    key={flag.key}
-                    className="flex items-center gap-3 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={!!formData.permissions[flag.key]}
-                      onChange={() => handlePermissionToggle(flag.key)}
-                      className="rounded w-4 h-4 text-blue-600"
-                    />
-                    <span className="text-gray-900">{flag.label}</span>
-                  </label>
-                ))}
+              <div className="space-y-4 bg-gray-50 p-5 rounded-lg border border-gray-200">
+                {/* Viewing Permissions */}
+                <div className="bg-white p-4 rounded-lg border border-blue-100">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <span className="text-blue-600">👁️</span>
+                    הרשאות צפייה
+                  </h3>
+                  <div className="space-y-2">
+                    {[
+                      "canViewAutomations",
+                      "canViewAnalytics",
+                      "canViewAllTasks",
+                    ].map((key) => {
+                      const flag = USER_FLAGS.find((f) => f.key === key);
+                      if (!flag) return null;
+                      return (
+                        <label
+                          key={flag.key}
+                          className="flex items-start gap-3 cursor-pointer hover:bg-blue-50 p-2 rounded transition"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={!!formData.permissions[flag.key]}
+                            onChange={() => handlePermissionToggle(flag.key)}
+                            className="rounded w-4 h-4 text-blue-600 mt-0.5"
+                          />
+                          <span className="text-gray-900 text-sm">
+                            {flag.label}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Management Permissions */}
+                <div className="bg-white p-4 rounded-lg border border-green-100">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <span className="text-green-600">⚙️</span>
+                    הרשאות ניהול
+                  </h3>
+                  <div className="space-y-2">
+                    {[
+                      "canManageTables",
+                      "canManageAnalytics",
+                      "canCreateTasks",
+                    ].map((key) => {
+                      const flag = USER_FLAGS.find((f) => f.key === key);
+                      if (!flag) return null;
+                      return (
+                        <label
+                          key={flag.key}
+                          className="flex items-start gap-3 cursor-pointer hover:bg-green-50 p-2 rounded transition"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={!!formData.permissions[flag.key]}
+                            onChange={() => handlePermissionToggle(flag.key)}
+                            className="rounded w-4 h-4 text-green-600 mt-0.5"
+                          />
+                          <span className="text-gray-900 text-sm">
+                            {flag.label}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Table Operations */}
+                <div className="bg-white p-4 rounded-lg border border-purple-100">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <span className="text-purple-600">🔧</span>
+                    פעולות בטבלאות המשתמש קיבל גישה אליהן
+                  </h3>
+                  <div className="space-y-2">
+                    {[
+                      "canSearchTables",
+                      "canFilterTables",
+                      "canExportTables",
+                    ].map((key) => {
+                      const flag = USER_FLAGS.find((f) => f.key === key);
+                      if (!flag) return null;
+                      return (
+                        <label
+                          key={flag.key}
+                          className="flex items-start gap-3 cursor-pointer hover:bg-purple-50 p-2 rounded transition"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={!!formData.permissions[flag.key]}
+                            onChange={() => handlePermissionToggle(flag.key)}
+                            className="rounded w-4 h-4 text-purple-600 mt-0.5"
+                          />
+                          <span className="text-gray-900 text-sm">
+                            {flag.label}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -330,6 +434,83 @@ export default function UserModal({
                     </label>
                   ))
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Table Permissions (for basic users) */}
+          {formData.role === "basic" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-900 mb-2">
+                הרשאות לטבלאות
+              </label>
+              <div className="border border-gray-300 rounded-lg overflow-hidden">
+                <div className="bg-gray-50 border-b border-gray-200 grid grid-cols-12 px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  <div className="col-span-6">שם טבלה</div>
+                  <div className="col-span-2 text-center">ללא גישה</div>
+                  <div className="col-span-2 text-center">קריאה בלבד</div>
+                  <div className="col-span-2 text-center">קריאה וכתיבה</div>
+                </div>
+                <div className="max-h-64 overflow-y-auto divide-y divide-gray-200">
+                  {tables.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500 text-sm">
+                      אין טבלאות זמינות
+                    </div>
+                  ) : (
+                    tables.map((table) => {
+                      const perm =
+                        formData.tablePermissions[table.id] || "none";
+                      return (
+                        <div
+                          key={table.id}
+                          className="grid grid-cols-12 items-center px-4 py-2 hover:bg-gray-50 transition"
+                        >
+                          <div className="col-span-6">
+                            <div className="text-sm font-medium text-gray-900">
+                              {table.name}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {table.slug}
+                            </div>
+                          </div>
+                          <div className="col-span-2 flex justify-center">
+                            <input
+                              type="radio"
+                              name={`perm-${table.id}`}
+                              checked={perm === "none"}
+                              onChange={() =>
+                                handleTablePermissionChange(table.id, "none")
+                              }
+                              className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300"
+                            />
+                          </div>
+                          <div className="col-span-2 flex justify-center">
+                            <input
+                              type="radio"
+                              name={`perm-${table.id}`}
+                              checked={perm === "read"}
+                              onChange={() =>
+                                handleTablePermissionChange(table.id, "read")
+                              }
+                              className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300"
+                            />
+                          </div>
+                          <div className="col-span-2 flex justify-center">
+                            <input
+                              type="radio"
+                              name={`perm-${table.id}`}
+                              checked={perm === "write"}
+                              onChange={() =>
+                                handleTablePermissionChange(table.id, "write")
+                              }
+                              className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
           )}

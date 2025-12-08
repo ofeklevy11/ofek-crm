@@ -7,11 +7,19 @@ export interface User {
   role: UserRole;
   allowedWriteTableIds: number[];
   permissions?: Record<string, boolean>; // JSON field in DB
+  tablePermissions?: Record<string, "read" | "write" | "none">; // JSON field in DB
 }
 
 export const USER_FLAGS = [
   { key: "canViewAutomations", label: "גישה לאוטומציות" },
   { key: "canViewAnalytics", label: "גישה לניתוח נתונים" },
+  { key: "canCreateTasks", label: "יצירת משימות" },
+  { key: "canViewAllTasks", label: "צפייה בכל המשימות" },
+  { key: "canManageTables", label: "ניהול טבלאות (יצירה/עריכה/מחיקה)" },
+  { key: "canManageAnalytics", label: "ניהול דוחות (יצירה/עריכה/מחיקה)" },
+  { key: "canSearchTables", label: "חיפוש בטבלאות" },
+  { key: "canFilterTables", label: "שימוש בפילטרים" },
+  { key: "canExportTables", label: "ייצוא נתונים לקבצים" },
 ] as const;
 
 export type UserFlagKey = (typeof USER_FLAGS)[number]["key"];
@@ -23,17 +31,22 @@ export function hasUserFlag(user: User, flag: UserFlagKey): boolean {
 
 /**
  * Check if user has read access to a table
- * All roles have read access to all tables
+ * - admin: can read all tables
+ * - manager: can read all tables
+ * - basic: can read if tablePermissions[tableId] is 'read' or 'write'
  */
 export function canReadTable(user: User, tableId: number): boolean {
-  return true; // All users can read all tables
+  if (user.role === "admin" || user.role === "manager") return true;
+
+  const perm = user.tablePermissions?.[tableId.toString()];
+  return perm === "read" || perm === "write";
 }
 
 /**
  * Check if user has write access to a table
  * - admin: can write to all tables
  * - manager: can write to tables in allowedWriteTableIds
- * - basic: cannot write to any table
+ * - basic: can write if tablePermissions[tableId] is 'write'
  */
 export function canWriteTable(user: User, tableId: number): boolean {
   if (user.role === "admin") {
@@ -42,7 +55,9 @@ export function canWriteTable(user: User, tableId: number): boolean {
   if (user.role === "manager") {
     return user.allowedWriteTableIds.includes(tableId);
   }
-  return false; // basic users have no write access
+
+  const perm = user.tablePermissions?.[tableId.toString()];
+  return perm === "write";
 }
 
 /**
@@ -55,8 +70,16 @@ export function canManageUsers(user: User): boolean {
 
 /**
  * Check if user can create/delete tables
- * Only admin can manage tables
+ * Admin or user with canManageTables flag
  */
 export function canManageTables(user: User): boolean {
-  return user.role === "admin";
+  return hasUserFlag(user, "canManageTables");
+}
+
+/**
+ * Check if user can create/delete analytics views
+ * Admin or user with canManageAnalytics flag
+ */
+export function canManageAnalytics(user: User): boolean {
+  return hasUserFlag(user, "canManageAnalytics");
 }

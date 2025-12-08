@@ -2,12 +2,21 @@
 
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
-import { getUserById } from "@/lib/permissions-server";
-import { canWriteTable } from "@/lib/permissions";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { canWriteTable, canReadTable } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 
 export async function getRecordsByTableId(tableId: number) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    if (!canReadTable(user, tableId)) {
+      return { success: false, error: "אין לך הרשאה לצפות בטבלה זו" };
+    }
+
     const records = await prisma.record.findMany({
       where: { tableId },
       orderBy: { createdAt: "desc" },
@@ -28,32 +37,34 @@ export async function createRecord(data: {
   try {
     const { tableId, data: recordData, createdBy, createdAt } = data;
 
-    // Check write permissions
-    if (createdBy) {
-      const user = await getUserById(Number(createdBy));
-      if (!user || !canWriteTable(user, tableId)) {
-        return {
-          success: false,
-          error: "You don't have permission to write to this table",
-        };
-      }
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
     }
+
+    if (!canWriteTable(user, tableId)) {
+      return {
+        success: false,
+        error: "אין לך הרשאה לכתוב לטבלה זו",
+      };
+    }
+
+    // Use the authenticated user's ID as createdBy if not explicitly provided (or force it?)
+    // For now, defaulting to authenticated user if createdBy is not passed, or verifying if it matches?
+    // Let's rely on authenticated user for `createdBy` field to prevent spoofing,
+    // unless it's a system action (but this is a server action called by client usually).
+    const actualCreatedBy = user.id;
 
     const record = await prisma.record.create({
       data: {
         tableId,
         data: recordData as any,
-        createdBy: createdBy ? Number(createdBy) : null,
+        createdBy: actualCreatedBy,
         ...(createdAt && { createdAt: new Date(createdAt) }),
       },
     });
 
-    await createAuditLog(
-      record.id,
-      createdBy ? Number(createdBy) : null,
-      "CREATE",
-      recordData
-    );
+    await createAuditLog(record.id, actualCreatedBy, "CREATE", recordData);
 
     // Trigger automations for new record
     try {
@@ -103,16 +114,19 @@ export async function updateRecord(
 
     const { data: recordData, updatedBy, createdAt } = data;
 
-    // Check write permissions
-    if (updatedBy) {
-      const user = await getUserById(Number(updatedBy));
-      if (!user || !canWriteTable(user, existingRecord.tableId)) {
-        return {
-          success: false,
-          error: "You don't have permission to write to this table",
-        };
-      }
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
     }
+
+    if (!canWriteTable(user, existingRecord.tableId)) {
+      return {
+        success: false,
+        error: "אין לך הרשאה לערוך רשומות בטבלה זו",
+      };
+    }
+
+    const actualUpdatedBy = user.id;
 
     // Merge new data with existing data to ensure we don't lose fields if recordData is partial
     // This is CRITICAL for automations that add data (like duration_status_change)
@@ -132,17 +146,12 @@ export async function updateRecord(
       where: { id: recordId },
       data: {
         data: mergedData as any,
-        updatedBy: updatedBy ? Number(updatedBy) : null,
+        updatedBy: actualUpdatedBy,
         ...(createdAt && { createdAt: new Date(createdAt) }),
       },
     });
 
-    await createAuditLog(
-      record.id,
-      updatedBy ? Number(updatedBy) : null,
-      "UPDATE",
-      recordData
-    );
+    await createAuditLog(record.id, actualUpdatedBy, "UPDATE", recordData);
 
     // Trigger Automation
     console.log(`[Records] Triggering automations for Table ${record.tableId}`);
@@ -171,34 +180,31 @@ export async function updateRecord(
 
 export async function deleteRecord(recordId: number, deletedBy?: number) {
   try {
-    // Check write permissions
-    if (deletedBy) {
-      const existingRecord = await prisma.record.findUnique({
-        where: { id: recordId },
-        select: { tableId: true },
-      });
-
-      if (existingRecord) {
-        const user = await getUserById(Number(deletedBy));
-        if (!user || !canWriteTable(user, existingRecord.tableId)) {
-          return {
-            success: false,
-            error: "You don't have permission to write to this table",
-          };
-        }
-
-        await prisma.record.delete({
-          where: { id: recordId },
-        });
-
-        await createAuditLog(recordId, null, "DELETE");
-
-        revalidatePath(`/tables/${existingRecord.tableId}`);
-        revalidatePath("/");
-
-        return { success: true };
-      }
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
     }
+
+    // We need to fetch the record first to know the tableId
+    const existingRecord = await prisma.record.findUnique({
+      where: { id: recordId },
+      select: { tableId: true },
+    });
+
+    if (!existingRecord) {
+      // Record already deleted or doesn't exist
+      return { success: true };
+    }
+
+    if (!canWriteTable(user, existingRecord.tableId)) {
+      return {
+        success: false,
+        error: "אין לך הרשאה למחוק רשומות מטבלה זו",
+      };
+    }
+
+    // Check write permissions
+    /* Legacy check removed */
 
     await prisma.record.delete({
       where: { id: recordId },
@@ -220,19 +226,23 @@ export async function bulkDeleteRecords(
   deletedBy?: number
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     // If we have deletedBy, check permissions for the first record
-    if (deletedBy && recordIds.length > 0) {
+    if (recordIds.length > 0) {
       const existingRecord = await prisma.record.findUnique({
         where: { id: recordIds[0] },
         select: { tableId: true },
       });
 
       if (existingRecord) {
-        const user = await getUserById(Number(deletedBy));
-        if (!user || !canWriteTable(user, existingRecord.tableId)) {
+        if (!canWriteTable(user, existingRecord.tableId)) {
           return {
             success: false,
-            error: "You don't have permission to write to this table",
+            error: "אין לך הרשאה למחוק רשומות מטבלה זו",
           };
         }
       }

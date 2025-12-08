@@ -6,7 +6,7 @@ import { canManageTables } from "@/lib/permissions";
 
 export default async function TablesPage() {
   const user = await getCurrentUser();
-  const canDelete = user ? canManageTables(user) : false;
+  const canManage = user ? canManageTables(user) : false;
 
   const tables = await prisma.tableMeta.findMany({
     orderBy: { createdAt: "desc" },
@@ -28,8 +28,7 @@ export default async function TablesPage() {
     <TablesDashboard
       initialTables={tables}
       initialCategories={categories}
-      canDelete={canDelete}
-      canEdit={canDelete}
+      canManage={canManage}
     />
   );
 }

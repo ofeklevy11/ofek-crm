@@ -2,13 +2,26 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { canReadTable, canManageTables, hasUserFlag } from "@/lib/permissions";
 
 export async function getTables() {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     const tables = await prisma.tableMeta.findMany({
       orderBy: { createdAt: "desc" },
     });
-    return { success: true, data: tables };
+
+    // Filter tables based on user permissions
+    const allowedTables = tables.filter((table) =>
+      canReadTable(user, table.id)
+    );
+
+    return { success: true, data: allowedTables };
   } catch (error) {
     console.error("Error fetching tables:", error);
     return { success: false, error: "Failed to fetch tables" };
@@ -23,6 +36,15 @@ export async function getTableById(id: number) {
 
     if (!table) {
       return { success: false, error: "Table not found" };
+    }
+
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    if (!canReadTable(user, table.id)) {
+      return { success: false, error: "אין לך הרשאה לצפות בטבלה זו" };
     }
 
     return { success: true, data: table };
@@ -44,6 +66,18 @@ export async function createTable(data: {
 
     if (!name || !slug || !createdBy) {
       return { success: false, error: "Missing required fields" };
+    }
+
+    const user = await getCurrentUser();
+    if (!user || user.id !== Number(createdBy)) {
+      // Ideally we check if `user` matches `createdBy`, but `createdBy` param might be redundant if we use `user.id`.
+      // For now, let's just ensure the current user is authorized.
+    }
+
+    // Only admin can create tables for now (or maybe managers too if we change logic)
+    // Using canManageTables which checks for admin role
+    if (!user || !canManageTables(user)) {
+      return { success: false, error: "אין לך הרשאה ליצור טבלאות" };
     }
 
     const table = await prisma.tableMeta.create({
@@ -84,6 +118,11 @@ export async function updateTable(
       updateData.categoryId = data.categoryId;
     }
 
+    const user = await getCurrentUser();
+    if (!user || !canManageTables(user)) {
+      return { success: false, error: "אין לך הרשאה לערוך טבלאות" };
+    }
+
     const table = await prisma.tableMeta.update({
       where: { id },
       data: updateData,
@@ -102,6 +141,11 @@ export async function updateTable(
 
 export async function deleteTable(id: number) {
   try {
+    const user = await getCurrentUser();
+    if (!user || !canManageTables(user)) {
+      return { success: false, error: "אין לך הרשאה למחוק טבלאות" };
+    }
+
     await prisma.tableMeta.delete({
       where: { id },
     });
@@ -129,6 +173,16 @@ export async function exportTableData(tableId: number) {
       return { success: false, error: "Table not found" };
     }
 
+    const user = await getCurrentUser();
+    if (!user || !canReadTable(user, tableId)) {
+      return { success: false, error: "אין לך הרשאה לייצא טבלה זו" };
+    }
+
+    // Check if user has export permission
+    if (!hasUserFlag(user, "canExportTables")) {
+      return { success: false, error: "אין לך הרשאה לייצא נתונים" };
+    }
+
     return { success: true, data: table };
   } catch (error) {
     console.error("Error exporting table:", error);
@@ -144,6 +198,16 @@ export async function searchInTable(tableId: number, searchTerm: string) {
 
     if (!table) {
       return { success: false, error: "Table not found" };
+    }
+
+    const user = await getCurrentUser();
+    if (!user || !canReadTable(user, tableId)) {
+      return { success: false, error: "אין לך הרשאה לחפש בטבלה זו" };
+    }
+
+    // Check if user has search permission
+    if (!hasUserFlag(user, "canSearchTables")) {
+      return { success: false, error: "אין לך הרשאה לחפש בטבלאות" };
     }
 
     const records = await prisma.record.findMany({
@@ -170,12 +234,19 @@ export async function updateTablesOrder(
   updates: { id: number; order: number }[]
 ) {
   try {
+    // Check perms
+    const user = await getCurrentUser();
+    if (!user || !canManageTables(user)) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     const transaction = updates.map((update) =>
       prisma.tableMeta.update({
         where: { id: update.id },
         data: { order: update.order },
       })
     );
+
     await prisma.$transaction(transaction);
     revalidatePath("/tables");
     return { success: true };

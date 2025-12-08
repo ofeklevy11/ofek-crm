@@ -28,6 +28,10 @@ interface RecordTableProps {
     config: any;
     isEnabled: boolean;
   }>;
+  canEdit?: boolean;
+  canSearch?: boolean;
+  canFilter?: boolean;
+  canExport?: boolean;
 }
 
 export default function RecordTable({
@@ -36,6 +40,10 @@ export default function RecordTable({
   initialRecords,
   slug,
   views = [],
+  canEdit = false,
+  canSearch = false,
+  canFilter = false,
+  canExport = false,
 }: RecordTableProps) {
   const router = useRouter();
   const [records, setRecords] = useState<any[]>(initialRecords ?? []);
@@ -440,13 +448,15 @@ export default function RecordTable({
     <div className="flex flex-col lg:flex-row gap-6 items-start">
       <div className="flex-1 w-full space-y-4">
         {/* Advanced Search Component */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <AdvancedSearch
-            tableId={tableId}
-            schema={schema}
-            onRecordSelect={handleRecordSelect}
-          />
-        </div>
+        {canSearch && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <AdvancedSearch
+              tableId={tableId}
+              schema={schema}
+              onRecordSelect={handleRecordSelect}
+            />
+          </div>
+        )}
 
         {/* Main Table */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -456,75 +466,81 @@ export default function RecordTable({
                 {selectedIds.length} selected
               </div>
               {/* Dynamic Filters for all select/multi-select fields */}
-              {filterableFields.map((field) => {
-                // Get unique options for this field from the records
-                const uniqueOptions = Array.from(
-                  new Set(
-                    records
-                      .map((r) => r.data?.[field.name])
-                      .filter(Boolean)
-                      .flatMap((val) =>
-                        // Handle both array values (multi-select) and single values (select)
-                        Array.isArray(val) ? val : [val]
-                      )
-                  )
-                ).sort();
+              {canFilter &&
+                filterableFields.map((field) => {
+                  // Get unique options for this field from the records
+                  const uniqueOptions = Array.from(
+                    new Set(
+                      records
+                        .map((r) => r.data?.[field.name])
+                        .filter(Boolean)
+                        .flatMap((val) =>
+                          // Handle both array values (multi-select) and single values (select)
+                          Array.isArray(val) ? val : [val]
+                        )
+                    )
+                  ).sort();
 
-                return (
-                  <select
-                    key={field.name}
-                    value={filters[field.name] || ""}
-                    onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        [field.name]: e.target.value,
-                      }))
-                    }
-                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white text-black"
-                  >
-                    <option value="">כל {field.label}</option>
-                    {(field.options || uniqueOptions).map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                );
-              })}
+                  return (
+                    <select
+                      key={field.name}
+                      value={filters[field.name] || ""}
+                      onChange={(e) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          [field.name]: e.target.value,
+                        }))
+                      }
+                      className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white text-black"
+                    >
+                      <option value="">כל {field.label}</option>
+                      {(field.options || uniqueOptions).map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })}
             </div>
 
             {/* actions */}
-            {selectedIds.length > 0 ? (
+            {selectedIds.length > 0 && (
               <div className="flex gap-2">
-                <div className="relative group">
-                  <button className="bg-white border border-gray-300 text-black px-3 py-1 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
-                    Export Selected ▼
-                  </button>
-                  <div className="hidden group-hover:block absolute end-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[150px]">
-                    <button
-                      onClick={handleExportCSV}
-                      className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50"
-                    >
-                      Export as CSV
+                {canExport && (
+                  <div className="relative group">
+                    <button className="bg-white border border-gray-300 text-black px-3 py-1 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
+                      Export Selected ▼
                     </button>
-                    <button
-                      onClick={handleExportTXT}
-                      className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50"
-                    >
-                      Export as TXT
-                    </button>
+                    <div className="hidden group-hover:block absolute end-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[150px]">
+                      <button
+                        onClick={handleExportCSV}
+                        className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50"
+                      >
+                        Export as CSV
+                      </button>
+                      <button
+                        onClick={handleExportTXT}
+                        className="block w-full text-left px-4 py-2 text-sm text-black hover:bg-gray-50"
+                      >
+                        Export as TXT
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                <button
-                  onClick={handleBulkDelete}
-                  disabled={isDeleting}
-                  className="bg-red-50 text-red-600 px-3 py-1 rounded-lg text-sm font-medium hover:bg-red-100 transition"
-                >
-                  {isDeleting ? "Deleting..." : "Delete Selected"}
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={isDeleting}
+                    className="bg-red-50 text-red-600 px-3 py-1 rounded-lg text-sm font-medium hover:bg-red-100 transition"
+                  >
+                    {isDeleting ? "Deleting..." : "Delete Selected"}
+                  </button>
+                )}
               </div>
-            ) : (
+            )}
+            {selectedIds.length === 0 && canExport && (
               <div className="relative group">
                 <button className="bg-white border border-gray-300 text-black px-3 py-1 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
                   Export All ▼
@@ -605,16 +621,18 @@ export default function RecordTable({
                       />
                     </td>
                     <td className="p-4">
-                      <button
-                        onClick={() => {
-                          setEditingRecord(record);
-                          setEditingField(undefined);
-                        }}
-                        className="text-blue-600 hover:text-blue-800 font-medium"
-                        title="Edit Record"
-                      >
-                        ✏️
-                      </button>
+                      {canEdit && (
+                        <button
+                          onClick={() => {
+                            setEditingRecord(record);
+                            setEditingField(undefined);
+                          }}
+                          className="text-blue-600 hover:text-blue-800 font-medium"
+                          title="Edit Record"
+                        >
+                          ✏️
+                        </button>
+                      )}
                     </td>
                     <td className="p-4 text-black">#{record.id}</td>
 
@@ -622,12 +640,17 @@ export default function RecordTable({
                       <td
                         key={field.name}
                         onClick={() => {
+                          if (!canEdit) return; // Prevent edit if no permission
                           // Click entire cell to edit
                           setEditingRecord(record);
                           setEditingField(field.name);
                         }}
-                        className="p-4 text-black align-top cursor-pointer hover:bg-black/5"
-                        title="Click to edit"
+                        className={`p-4 text-black align-top ${
+                          canEdit
+                            ? "cursor-pointer hover:bg-black/5"
+                            : "cursor-default"
+                        }`}
+                        title={canEdit ? "Click to edit" : ""}
                       >
                         <div className="max-h-[100px] max-w-[200px] overflow-y-auto custom-scrollbar">
                           {(() => {

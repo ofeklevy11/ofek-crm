@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import KanbanColumn from "./KanbanColumn";
 import TaskModal from "./TaskModal";
+import { User, hasUserFlag } from "@/lib/permissions";
 
 export type TaskStatus =
   | "todo"
@@ -15,7 +16,12 @@ export interface Task {
   title: string;
   description?: string | null;
   status: TaskStatus | string;
-  assignee?: string | null;
+  assigneeId?: number | null;
+  assignee?: {
+    id: number;
+    name: string;
+    email: string;
+  } | null;
   priority?: "low" | "medium" | "high" | string | null;
   dueDate?: Date | string | null;
   tags?: string[];
@@ -42,7 +48,11 @@ const COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
   },
 ];
 
-export default function TaskKanbanBoard() {
+interface TaskKanbanBoardProps {
+  currentUser: User | null;
+}
+
+export default function TaskKanbanBoard({ currentUser }: TaskKanbanBoardProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -50,6 +60,11 @@ export default function TaskKanbanBoard() {
   const [modalStatus, setModalStatus] = useState<TaskStatus>("todo");
 
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+
+  const canCreate =
+    currentUser &&
+    (currentUser.role === "admin" ||
+      hasUserFlag(currentUser, "canCreateTasks"));
 
   useEffect(() => {
     fetchTasks();
@@ -146,15 +161,17 @@ export default function TaskKanbanBoard() {
             className="w-full bg-slate-900/50 text-white placeholder-slate-400 border border-slate-600 rounded-lg px-4 py-2 ps-10 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
           />
         </div>
-        <button
-          onClick={() => handleTaskCreate()}
-          className="flex items-center gap-2 bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-2 rounded-lg transition-all shadow-lg hover:shadow-blue-500/50 font-medium"
-        >
-          <span className="w-5 h-5" role="img" aria-label="plus">
-            +
-          </span>
-          משימה חדשה
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => handleTaskCreate()}
+            className="flex items-center gap-2 bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-2 rounded-lg transition-all shadow-lg hover:shadow-blue-500/50 font-medium"
+          >
+            <span className="w-5 h-5" role="img" aria-label="plus">
+              +
+            </span>
+            משימה חדשה
+          </button>
+        )}
       </div>
       {/* Kanban Board */}
       {isLoading ? (
@@ -174,6 +191,7 @@ export default function TaskKanbanBoard() {
               onTaskDelete={handleTaskDelete}
               onTaskEdit={handleTaskEdit}
               status={col.id}
+              canCreate={canCreate ?? false}
             />
           ))}
         </div>

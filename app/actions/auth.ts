@@ -5,18 +5,48 @@ import { cookies } from "next/headers";
 
 export async function getCurrentAuthUser() {
   try {
-    // This is a placeholder for authentication
-    // You should implement proper authentication based on your system
     const cookieStore = await cookies();
-    const userEmail = cookieStore.get("user_email")?.value;
+    const token = cookieStore.get("auth_token")?.value;
 
-    if (!userEmail) {
+    if (!token) {
+      // Fallback for dev/legacy: check user_email if auth_token is missing
+      const userEmail = cookieStore.get("user_email")?.value;
+      if (userEmail) {
+        const user = await prisma.user.findUnique({
+          where: { email: userEmail },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            permissions: true,
+            allowedWriteTableIds: true,
+            tablePermissions: true,
+          },
+        });
+        if (user) return { success: true, data: user };
+      }
       return { success: false, error: "Not authenticated" };
     }
 
+    // Import dynamically to avoid circular deps if any, or just use what permissions-server uses
+    const { verifyUserId } = await import("@/lib/auth");
+    const userId = verifyUserId(token);
+
+    if (!userId) {
+      return { success: false, error: "Invalid token" };
+    }
+
     const user = await prisma.user.findUnique({
-      where: {
-        email: userEmail,
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        permissions: true,
+        allowedWriteTableIds: true,
+        tablePermissions: true,
       },
     });
 

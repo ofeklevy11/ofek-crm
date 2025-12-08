@@ -1,6 +1,8 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { canManageAnalytics } from "@/lib/permissions";
 
 /**
  * Helper function to parse duration string "Xd Yh Zm Qs" to total seconds
@@ -316,6 +318,11 @@ export async function createAnalyticsView(data: {
   color?: string;
 }) {
   try {
+    const user = await getCurrentUser();
+    if (!user || !canManageAnalytics(user)) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     const view = await prisma.analyticsView.create({
       data: {
         title: data.title,
@@ -336,6 +343,10 @@ export async function createAnalyticsView(data: {
 
 export async function deleteAnalyticsView(id: number) {
   try {
+    const user = await getCurrentUser();
+    if (!user || !canManageAnalytics(user)) {
+      return { success: false, error: "Unauthorized" };
+    }
     await prisma.analyticsView.delete({ where: { id } });
     return { success: true };
   } catch (error) {
@@ -355,6 +366,11 @@ export async function updateAnalyticsView(
   }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user || !canManageAnalytics(user)) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     const view = await prisma.analyticsView.update({
       where: { id },
       data: {
@@ -602,6 +618,11 @@ export async function updateAnalyticsViewOrder(
   items: { id: number; type: "AUTOMATION" | "CUSTOM"; order: number }[]
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user || !canManageAnalytics(user)) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     const updates = items.map((item) => {
       if (item.type === "AUTOMATION") {
         return prisma.automationRule.update({
@@ -630,6 +651,11 @@ export async function updateAnalyticsViewColor(
   color: string
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user || !canManageAnalytics(user)) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     if (type === "AUTOMATION") {
       await prisma.automationRule.update({
         where: { id },

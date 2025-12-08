@@ -2,6 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { canManageTables } from "@/lib/permissions";
 
 export async function getCategories() {
   try {
@@ -22,6 +24,11 @@ export async function getCategories() {
 
 export async function createCategory(name: string) {
   try {
+    const user = await getCurrentUser();
+    if (!user || !canManageTables(user)) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     if (!name) {
       return { success: false, error: "Name is required" };
     }
@@ -42,6 +49,11 @@ export async function createCategory(name: string) {
 
 export async function updateCategory(id: number, name: string) {
   try {
+    const user = await getCurrentUser();
+    if (!user || !canManageTables(user)) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     if (!name) {
       return { success: false, error: "Name is required" };
     }
@@ -63,6 +75,11 @@ export async function updateCategory(id: number, name: string) {
 
 export async function deleteCategory(id: number) {
   try {
+    const user = await getCurrentUser();
+    if (!user || !canManageTables(user)) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     await prisma.tableCategory.delete({
       where: { id },
     });
@@ -79,6 +96,11 @@ export async function deleteCategory(id: number) {
 
 export async function convertUncategorizedToCategory(name: string) {
   try {
+    const user = await getCurrentUser();
+    if (!user || !canManageTables(user)) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     if (!name) {
       return { success: false, error: "Name is required" };
     }

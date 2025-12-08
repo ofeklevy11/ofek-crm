@@ -2,10 +2,32 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 
 export async function getTasks() {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const canViewAll =
+      user.role === "admin" || hasUserFlag(user, "canViewAllTasks");
+
+    const whereClause = canViewAll ? {} : { assigneeId: user.id };
+
     const tasks = await prisma.task.findMany({
+      where: whereClause,
+      include: {
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
     return { success: true, data: tasks };
@@ -19,6 +41,15 @@ export async function getTaskById(id: string) {
   try {
     const task = await prisma.task.findUnique({
       where: { id },
+      include: {
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
     });
 
     if (!task) {
@@ -36,12 +67,24 @@ export async function createTask(data: {
   title: string;
   description?: string;
   status?: string;
-  assignee?: string;
+  assigneeId?: number;
   priority?: string;
   tags?: string[];
   dueDate?: string;
 }) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const canCreate =
+      user.role === "admin" || hasUserFlag(user, "canCreateTasks");
+
+    if (!canCreate) {
+      return { success: false, error: "אין לך הרשאה ליצור משימות" };
+    }
+
     const dueDate = data.dueDate ? new Date(data.dueDate) : null;
 
     const newTask = await prisma.task.create({
@@ -49,10 +92,19 @@ export async function createTask(data: {
         title: data.title,
         description: data.description,
         status: data.status ?? "todo",
-        assignee: data.assignee,
+        assigneeId: data.assigneeId,
         priority: data.priority,
         tags: data.tags || [],
         dueDate: dueDate,
+      },
+      include: {
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
     });
 
@@ -83,7 +135,7 @@ export async function updateTask(
     title?: string;
     description?: string;
     status?: string;
-    assignee?: string;
+    assigneeId?: number | null;
     priority?: string;
     tags?: string[];
     dueDate?: string | null;
@@ -99,11 +151,46 @@ export async function updateTask(
     // Fetch old task to get previous status
     const existingTask = await prisma.task.findUnique({
       where: { id },
+      include: {
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
     });
+
+    if (!existingTask) {
+      return { success: false, error: "Task not found" };
+    }
+
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const canViewAll =
+      user.role === "admin" || hasUserFlag(user, "canViewAllTasks");
+    const isAssignee = existingTask.assigneeId === user.id;
+
+    if (!canViewAll && !isAssignee) {
+      return { success: false, error: "אין לך הרשאה לערוך משימה זו" };
+    }
 
     const task = await prisma.task.update({
       where: { id },
       data: updateData,
+      include: {
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
     });
 
     if (existingTask && data.status && existingTask.status !== data.status) {
@@ -157,6 +244,19 @@ export async function updateTask(
 
 export async function deleteTask(id: string) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Only allow deletion if user can create tasks (Manager logic) or is Admin
+    const canDelete =
+      user.role === "admin" || hasUserFlag(user, "canCreateTasks");
+
+    if (!canDelete) {
+      return { success: false, error: "אין לך הרשאה למחוק משימות" };
+    }
+
     await prisma.task.delete({
       where: { id },
     });

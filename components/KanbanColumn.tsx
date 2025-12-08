@@ -14,6 +14,7 @@ interface KanbanColumnProps {
   onTaskCreate: () => void;
   onTaskDelete: (taskId: string) => void;
   onTaskEdit: (task: Task) => void;
+  canCreate?: boolean;
 }
 
 export default function KanbanColumn({
@@ -25,6 +26,7 @@ export default function KanbanColumn({
   onTaskCreate,
   onTaskDelete,
   onTaskEdit,
+  canCreate = false,
 }: KanbanColumnProps) {
   const [isDragOver, setIsDragOver] = React.useState(false);
 
@@ -60,13 +62,15 @@ export default function KanbanColumn({
       <div className={`bg-linear-to-r ${color} p-4 shadow-lg`}>
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-white font-bold text-lg">{title}</h3>
-          <button
-            onClick={onTaskCreate}
-            className="bg-white/20 hover:bg-white/30 text-white p-1.5 rounded-lg transition-all hover:scale-110"
-            title="הוסף משימה"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
+          {canCreate && (
+            <button
+              onClick={onTaskCreate}
+              className="bg-white/20 hover:bg-white/30 text-white p-1.5 rounded-lg transition-all hover:scale-110"
+              title="הוסף משימה"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <span className="bg-white/20 text-white text-sm px-3 py-1 rounded-full font-medium">
@@ -80,12 +84,14 @@ export default function KanbanColumn({
         {tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-500 py-12">
             <p className="text-center">אין משימות</p>
-            <button
-              onClick={onTaskCreate}
-              className="mt-4 text-blue-400 hover:text-blue-300 text-sm underline"
-            >
-              הוסף משימה ראשונה
-            </button>
+            {canCreate && (
+              <button
+                onClick={onTaskCreate}
+                className="mt-4 text-blue-400 hover:text-blue-300 text-sm underline"
+              >
+                הוסף משימה ראשונה
+              </button>
+            )}
           </div>
         ) : (
           tasks.map((task) => (

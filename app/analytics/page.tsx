@@ -181,6 +181,7 @@ function AnalyticsCard({
   onAddAutomation,
   onMove,
   folders,
+  canManage,
 }: {
   view: any;
   onOpenDetails: (view: any) => void;
@@ -193,6 +194,7 @@ function AnalyticsCard({
   onAddAutomation: (view: any) => void;
   onMove: (view: any, folderId: number | null) => void;
   folders: any[];
+  canManage: boolean;
 }) {
   const {
     attributes,
@@ -201,7 +203,7 @@ function AnalyticsCard({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: view.id });
+  } = useSortable({ id: view.id, disabled: !canManage });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -252,113 +254,115 @@ function AnalyticsCard({
             <ConfigDetails config={view.config} type={view.type} />
           )}
         </div>
-        <div className="relative flex gap-1">
-          <button
-            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-black/5 rounded-full transition-colors"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              setShowFolderPicker(!showFolderPicker);
-              setShowColorPicker(false);
-            }}
-            title="העבר לתיקייה"
-          >
-            <Move size={16} />
-          </button>
-          {!isAutomation && (
+        {canManage && (
+          <div className="relative flex gap-1">
             <button
-              className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-black/5 rounded-full transition-colors"
+              className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-black/5 rounded-full transition-colors"
               onPointerDown={(e) => {
                 e.stopPropagation();
-                onAddAutomation(view);
+                setShowFolderPicker(!showFolderPicker);
+                setShowColorPicker(false);
               }}
-              title="הוסף אוטומציה"
+              title="העבר לתיקייה"
             >
-              <Zap size={16} />
+              <Move size={16} />
             </button>
-          )}
-          <button
-            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-black/5 rounded-full transition-colors"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              onEdit(view);
-            }}
-            title={isAutomation ? "ערוך אוטומציה" : "ערוך תצוגה"}
-          >
-            {isAutomation ? <Settings size={16} /> : <Edit3 size={16} />}
-          </button>
-          <button
-            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-full transition-colors"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              setShowColorPicker(!showColorPicker);
-            }}
-            title="שנה צבע"
-          >
-            <Palette size={16} />
-          </button>
-
-          {showColorPicker && (
-            <div
-              className="absolute top-8 left-0 z-10 bg-white shadow-lg rounded-lg p-2 grid grid-cols-4 gap-1 border border-gray-100 w-32"
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              {COLOR_OPTIONS.map((color) => (
-                <button
-                  key={color.value}
-                  className={`w-6 h-6 rounded-full border border-gray-200 ${color.value} hover:scale-110 transition-transform`}
-                  onClick={() => {
-                    if (isAutomation) {
-                      if (view.ruleId)
-                        onColorChange(view.ruleId, "AUTOMATION", color.value);
-                    } else {
-                      if (view.viewId)
-                        onColorChange(view.viewId, "CUSTOM", color.value);
-                    }
-                    setShowColorPicker(false);
-                  }}
-                  title={color.label}
-                />
-              ))}
-            </div>
-          )}
-
-          {showFolderPicker && (
-            <div
-              className="absolute top-8 left-0 z-20 bg-white shadow-lg rounded-lg p-2 border border-gray-100 w-48 flex flex-col gap-1 max-h-60 overflow-y-auto"
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              <div className="px-2 py-1 text-xs font-semibold text-gray-400 border-b border-gray-100 mb-1">
-                בחר תיקייה
-              </div>
+            {!isAutomation && (
               <button
-                className="text-right px-2 py-1.5 text-sm hover:bg-gray-50 rounded flex items-center gap-2 text-gray-700"
-                onClick={() => {
-                  onMove(view, null);
-                  setShowFolderPicker(false);
+                className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-black/5 rounded-full transition-colors"
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  onAddAutomation(view);
                 }}
+                title="הוסף אוטומציה"
               >
-                <Folder size={14} className="text-gray-400" />
-                ראשי (ללא תיקייה)
+                <Zap size={16} />
               </button>
-              {folders.map((f) => (
+            )}
+            <button
+              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-black/5 rounded-full transition-colors"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onEdit(view);
+              }}
+              title={isAutomation ? "ערוך אוטומציה" : "ערוך תצוגה"}
+            >
+              {isAutomation ? <Settings size={16} /> : <Edit3 size={16} />}
+            </button>
+            <button
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-full transition-colors"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                setShowColorPicker(!showColorPicker);
+              }}
+              title="שנה צבע"
+            >
+              <Palette size={16} />
+            </button>
+
+            {showColorPicker && (
+              <div
+                className="absolute top-8 left-0 z-10 bg-white shadow-lg rounded-lg p-2 grid grid-cols-4 gap-1 border border-gray-100 w-32"
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                {COLOR_OPTIONS.map((color) => (
+                  <button
+                    key={color.value}
+                    className={`w-6 h-6 rounded-full border border-gray-200 ${color.value} hover:scale-110 transition-transform`}
+                    onClick={() => {
+                      if (isAutomation) {
+                        if (view.ruleId)
+                          onColorChange(view.ruleId, "AUTOMATION", color.value);
+                      } else {
+                        if (view.viewId)
+                          onColorChange(view.viewId, "CUSTOM", color.value);
+                      }
+                      setShowColorPicker(false);
+                    }}
+                    title={color.label}
+                  />
+                ))}
+              </div>
+            )}
+
+            {showFolderPicker && (
+              <div
+                className="absolute top-8 left-0 z-20 bg-white shadow-lg rounded-lg p-2 border border-gray-100 w-48 flex flex-col gap-1 max-h-60 overflow-y-auto"
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <div className="px-2 py-1 text-xs font-semibold text-gray-400 border-b border-gray-100 mb-1">
+                  בחר תיקייה
+                </div>
                 <button
-                  key={f.id}
                   className="text-right px-2 py-1.5 text-sm hover:bg-gray-50 rounded flex items-center gap-2 text-gray-700"
                   onClick={() => {
-                    onMove(view, f.id);
+                    onMove(view, null);
                     setShowFolderPicker(false);
                   }}
                 >
-                  <Folder
-                    size={14}
-                    className="text-yellow-500 fill-yellow-100"
-                  />
-                  {f.name}
+                  <Folder size={14} className="text-gray-400" />
+                  ראשי (ללא תיקייה)
                 </button>
-              ))}
-            </div>
-          )}
-        </div>
+                {folders.map((f) => (
+                  <button
+                    key={f.id}
+                    className="text-right px-2 py-1.5 text-sm hover:bg-gray-50 rounded flex items-center gap-2 text-gray-700"
+                    onClick={() => {
+                      onMove(view, f.id);
+                      setShowFolderPicker(false);
+                    }}
+                  >
+                    <Folder
+                      size={14}
+                      className="text-yellow-500 fill-yellow-100"
+                    />
+                    {f.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex-1 flex flex-col justify-center items-center my-4 cursor-grab active:cursor-grabbing">
@@ -430,6 +434,7 @@ export default function AnalyticsPage() {
   const [selectedView, setSelectedView] = useState<any | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingView, setEditingView] = useState<any | null>(null);
+  const [canManage, setCanManage] = useState(false);
 
   // Automation Modal State
   const [viewAutomationTarget, setViewAutomationTarget] = useState<any>(null);
@@ -462,7 +467,11 @@ export default function AnalyticsPage() {
   });
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -497,6 +506,7 @@ export default function AnalyticsPage() {
           router.push("/");
           return;
         }
+        setCanManage(hasUserFlag(res.data as any, "canManageAnalytics"));
         setCurrentUserId(res.data.id);
       }
     });
@@ -512,6 +522,7 @@ export default function AnalyticsPage() {
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
+    if (!canManage) return;
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
@@ -598,16 +609,18 @@ export default function AnalyticsPage() {
             <p className="text-gray-500 mt-2">דוחות וניתוחים בזמן אמת.</p>
           </div>
           <div className="flex gap-3">
-            <button
-              onClick={() => {
-                setEditingView(null);
-                setIsCreateModalOpen(true);
-              }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
-            >
-              <Plus size={16} />
-              צור תצוגה
-            </button>
+            {canManage && (
+              <button
+                onClick={() => {
+                  setEditingView(null);
+                  setIsCreateModalOpen(true);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+              >
+                <Plus size={16} />
+                צור תצוגה
+              </button>
+            )}
             <Link
               href="/"
               className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -774,6 +787,7 @@ export default function AnalyticsPage() {
                     onAddAutomation={setViewAutomationTarget}
                     onMove={handleMoveView}
                     folders={folders}
+                    canManage={canManage}
                   />
                 ))}
               </div>

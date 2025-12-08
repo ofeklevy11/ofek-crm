@@ -41,15 +41,13 @@ interface Table {
 interface TablesDashboardProps {
   initialTables: Table[];
   initialCategories: Category[];
-  canDelete?: boolean;
-  canEdit?: boolean;
+  canManage?: boolean;
 }
 
 export default function TablesDashboard({
   initialTables,
   initialCategories,
-  canDelete = false,
-  canEdit = false,
+  canManage = false,
 }: TablesDashboardProps) {
   const router = useRouter();
 
@@ -77,6 +75,8 @@ export default function TablesDashboard({
   );
 
   const handleDragEnd = async (event: DragEndEvent) => {
+    if (!canManage) return; // Prevent drag if no permission (though UI shouldn't allow it if we disable dnd)
+
     const { active, over } = event;
 
     if (!over || active.id === over.id) {
@@ -211,26 +211,28 @@ export default function TablesDashboard({
               <h1 className="text-4xl font-bold text-gray-900 mb-2">Tables</h1>
               <p className="text-gray-600">Manage your custom data tables</p>
             </div>
-            <div className="flex gap-4">
-              <button
-                onClick={() => setIsAIModalOpen(true)}
-                className="bg-white text-indigo-600 py-3 px-6 rounded-xl hover:bg-indigo-50 transition shadow-sm border border-indigo-200 font-medium flex items-center gap-2"
-              >
-                <span className="text-lg">✨</span> Create with AI
-              </button>
-              <button
-                onClick={() => setIsCategoryModalOpen(true)}
-                className="bg-white text-gray-700 py-3 px-6 rounded-xl hover:bg-gray-50 transition shadow-sm border border-gray-200 font-medium"
-              >
-                + New Category
-              </button>
-              <Link
-                href="/tables/new"
-                className="bg-linear-to-r from-blue-600 to-blue-700 text-white py-3 px-6 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
-              >
-                + Create Table
-              </Link>
-            </div>
+            {canManage && (
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setIsAIModalOpen(true)}
+                  className="bg-white text-indigo-600 py-3 px-6 rounded-xl hover:bg-indigo-50 transition shadow-sm border border-indigo-200 font-medium flex items-center gap-2"
+                >
+                  <span className="text-lg">✨</span> Create with AI
+                </button>
+                <button
+                  onClick={() => setIsCategoryModalOpen(true)}
+                  className="bg-white text-gray-700 py-3 px-6 rounded-xl hover:bg-gray-50 transition shadow-sm border border-gray-200 font-medium"
+                >
+                  + New Category
+                </button>
+                <Link
+                  href="/tables/new"
+                  className="bg-linear-to-r from-blue-600 to-blue-700 text-white py-3 px-6 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
+                >
+                  + Create Table
+                </Link>
+              </div>
+            )}
           </div>
 
           <div className="space-y-12">
@@ -247,26 +249,29 @@ export default function TablesDashboard({
                         ({catTables.length})
                       </span>
                     </h2>
-                    <button
-                      onClick={() => openEditModal(category)}
-                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                      title="Edit category name"
-                    >
-                      <Pencil size={16} />
-                    </button>
+                    {canManage && (
+                      <button
+                        onClick={() => openEditModal(category)}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                        title="Edit category name"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                    )}
                   </div>
 
                   <SortableContext
                     items={catTables.map((t) => t.id)}
                     strategy={rectSortingStrategy}
+                    disabled={!canManage}
                   >
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pl-4">
                       {catTables.map((table) => (
                         <SortableTableCard
                           key={table.id}
                           table={table}
-                          canDelete={canDelete}
-                          canEdit={canEdit}
+                          canDelete={canManage}
+                          canEdit={canManage}
                         />
                       ))}
                       {catTables.length === 0 && (
@@ -291,27 +296,30 @@ export default function TablesDashboard({
                       ({uncategorizedTables.length})
                     </span>
                   </h2>
-                  <button
-                    onClick={() =>
-                      openEditModal({ id: -1, name: "Uncategorized" })
-                    }
-                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                    title="Rename Uncategorized Group"
-                  >
-                    <Pencil size={16} />
-                  </button>
+                  {canManage && (
+                    <button
+                      onClick={() =>
+                        openEditModal({ id: -1, name: "Uncategorized" })
+                      }
+                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                      title="Rename Uncategorized Group"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                  )}
                 </div>
                 <SortableContext
                   items={uncategorizedTables.map((t) => t.id)}
                   strategy={rectSortingStrategy}
+                  disabled={!canManage}
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pl-4">
                     {uncategorizedTables.map((table) => (
                       <SortableTableCard
                         key={table.id}
                         table={table}
-                        canDelete={canDelete}
-                        canEdit={canEdit}
+                        canDelete={canManage}
+                        canEdit={canManage}
                       />
                     ))}
                   </div>
@@ -328,20 +336,22 @@ export default function TablesDashboard({
                   <p className="text-gray-600 mb-6">
                     Create your first table to start managing your data
                   </p>
-                  <div className="flex justify-center gap-4">
-                    <button
-                      onClick={() => setIsAIModalOpen(true)}
-                      className="bg-white text-indigo-600 py-3 px-6 rounded-xl hover:bg-indigo-50 transition shadow-sm border border-indigo-200 font-medium flex items-center gap-2"
-                    >
-                      <span className="text-lg">✨</span> Create with AI
-                    </button>
-                    <Link
-                      href="/tables/new"
-                      className="inline-block bg-linear-to-r from-blue-600 to-blue-700 text-white py-3 px-8 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
-                    >
-                      + Create Your First Table
-                    </Link>
-                  </div>
+                  {canManage && (
+                    <div className="flex justify-center gap-4">
+                      <button
+                        onClick={() => setIsAIModalOpen(true)}
+                        className="bg-white text-indigo-600 py-3 px-6 rounded-xl hover:bg-indigo-50 transition shadow-sm border border-indigo-200 font-medium flex items-center gap-2"
+                      >
+                        <span className="text-lg">✨</span> Create with AI
+                      </button>
+                      <Link
+                        href="/tables/new"
+                        className="inline-block bg-linear-to-r from-blue-600 to-blue-700 text-white py-3 px-8 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
+                      >
+                        + Create Your First Table
+                      </Link>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

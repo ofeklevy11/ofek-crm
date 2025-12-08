@@ -51,7 +51,8 @@ export async function POST(
 
     // Check write permissions
     if (createdBy) {
-      const { getUserById, canWriteTable } = await import("@/lib/permissions");
+      const { getUserById } = await import("@/lib/permissions-server");
+      const { canWriteTable } = await import("@/lib/permissions");
       const user = await getUserById(Number(createdBy));
 
       if (!user || !canWriteTable(user, tableId)) {

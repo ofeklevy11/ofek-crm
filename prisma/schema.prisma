@@ -16,6 +16,7 @@ model User {
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
   allowedWriteTableIds Int[]         @default([])
+  tablePermissions     Json?         @default("{}") // { [tableId]: "read" | "write" }
   auditLogs            AuditLog[]
   records              Record[]      @relation("CreatedBy")
   tables               TableMeta[]   @relation("CreatedBy")
@@ -26,6 +27,7 @@ model User {
   receivedMessages     Message[]     @relation("ReceivedMessages")
   createdGroups        Group[]       @relation("CreatedGroups")
   groupMemberships     GroupMember[]
+  assignedTasks        Task[]        @relation("TaskAssignee")
 }
 
 model Message {
@@ -189,7 +191,8 @@ model Task {
   title       String
   description String?
   status      String
-  assignee    String?
+  assigneeId  Int?
+  assignee    User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
   priority    String?
   dueDate     DateTime?
   tags        String[]

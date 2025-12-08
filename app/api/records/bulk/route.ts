@@ -5,7 +5,7 @@ import { createAuditLog } from "@/lib/audit";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { action, recordIds } = body;
+    const { action, recordIds, userId } = body;
 
     if (!recordIds || !Array.isArray(recordIds)) {
       return NextResponse.json(
@@ -15,6 +15,31 @@ export async function POST(request: Request) {
     }
 
     if (action === "delete") {
+      // Check permissions if userId is provided
+      if (userId && recordIds.length > 0) {
+        const { getUserById } = await import("@/lib/permissions-server");
+        const { canWriteTable } = await import("@/lib/permissions");
+
+        // Check permission on the first record (assuming all belong to same table or user has general access)
+        const firstRecord = await prisma.record.findUnique({
+          where: { id: Number(recordIds[0]) },
+          select: { tableId: true },
+        });
+
+        if (firstRecord) {
+          const user = await getUserById(Number(userId));
+          if (!user || !canWriteTable(user, firstRecord.tableId)) {
+            return NextResponse.json(
+              {
+                error:
+                  "You don't have permission to delete records from this table",
+              },
+              { status: 403 }
+            );
+          }
+        }
+      }
+
       // Log before delete or after? After is better but we lose data.
       // For bulk delete, we might just log IDs.
 
@@ -28,7 +53,11 @@ export async function POST(request: Request) {
 
       // Log bulk delete
       for (const id of recordIds) {
-        await createAuditLog(Number(id), null, "DELETE (BULK)");
+        await createAuditLog(
+          Number(id),
+          userId ? Number(userId) : null,
+          "DELETE (BULK)"
+        );
       }
 
       return NextResponse.json({ success: true, count });

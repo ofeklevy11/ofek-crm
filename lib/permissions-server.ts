@@ -17,6 +17,7 @@ export async function getUserById(userId: number): Promise<User | null> {
         role: true,
         allowedWriteTableIds: true,
         permissions: true,
+        tablePermissions: true,
       },
     });
     // Cast to User to ensure type compatibility (Prisma Json type vs User interface)
@@ -54,6 +55,7 @@ export async function getCurrentUser(): Promise<User | null> {
         role: true,
         allowedWriteTableIds: true,
         permissions: true,
+        tablePermissions: true,
       },
     });
 

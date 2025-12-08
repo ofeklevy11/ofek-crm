@@ -36,9 +36,10 @@ export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
     }
   };
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return null;
-    const date = new Date(dateString);
+  const formatDate = (dateValue?: string | Date) => {
+    if (!dateValue) return null;
+    const date =
+      typeof dateValue === "string" ? new Date(dateValue) : dateValue;
     return date.toLocaleDateString("he-IL", { month: "short", day: "numeric" });
   };
 
@@ -138,7 +139,8 @@ export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
         {/* Assignee */}
         {task.assignee && (
           <div className="flex items-center gap-1.5 bg-slate-700/50 px-2 py-1 rounded-full">
-            👤 <span className="text-xs text-slate-300">{task.assignee}</span>
+            👤{" "}
+            <span className="text-xs text-slate-300">{task.assignee.name}</span>
           </div>
         )}
       </div>

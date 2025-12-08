@@ -2,7 +2,9 @@ import { prisma } from "@/lib/prisma";
 import RecordTable from "@/components/RecordTable";
 import AddRecordForm from "@/components/AddRecordForm";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { canReadTable, canWriteTable, hasUserFlag } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,22 @@ export default async function TableDetailsPage({
   });
 
   if (!table) return notFound();
+
+  const user = await getCurrentUser();
+  if (!user) return redirect("/login");
+
+  if (!canReadTable(user, table.id)) {
+    return (
+      <div className="p-8 text-center text-red-600 font-bold text-xl">
+        אין לך הרשאה לצפות בטבלה זו
+      </div>
+    );
+  }
+
+  const canEdit = canWriteTable(user, table.id);
+  const canSearch = hasUserFlag(user, "canSearchTables");
+  const canFilter = hasUserFlag(user, "canFilterTables");
+  const canExport = hasUserFlag(user, "canExportTables");
 
   let records;
   let totalCount = 0;
@@ -104,8 +122,8 @@ export default async function TableDetailsPage({
               </p>
             </div>
             <div className="flex gap-3 items-center w-full md:w-auto">
-              <SearchInput />
-              <AddRecordForm tableId={tableId} schema={schema} />
+              {canSearch && <SearchInput />}
+              {canEdit && <AddRecordForm tableId={tableId} schema={schema} />}
             </div>
           </div>
         </div>
@@ -125,6 +143,10 @@ export default async function TableDetailsPage({
             config: v.config,
             isEnabled: v.isEnabled,
           }))}
+          canEdit={canEdit}
+          canSearch={canSearch}
+          canFilter={canFilter}
+          canExport={canExport}
         />
         <Pagination totalPages={totalPages} />
       </div>

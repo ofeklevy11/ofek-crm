@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 interface TaskModalProps {
   // initial column status where the task will be created; user can change it
@@ -29,11 +29,33 @@ export default function TaskModal({
   const [priority, setPriority] = useState<"high" | "medium" | "low">(
     task?.priority || "low"
   );
-  const [assignee, setAssignee] = useState(task?.assignee || "");
+  const [assigneeId, setAssigneeId] = useState<number | undefined>(
+    task?.assigneeId || task?.assignee?.id || undefined
+  );
   const [selectedTags, setSelectedTags] = useState<string[]>(task?.tags || []);
   const [tagInput, setTagInput] = useState("");
+  const [users, setUsers] = useState<
+    Array<{ id: number; name: string; email: string }>
+  >([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
 
-  const AVAILABLE_ASSIGNEES = ["אופק", "דני", "שרה", "מיכאל"];
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const { getUsers } = await import("@/app/actions/users");
+        const result = await getUsers();
+        if (result.success && result.data) {
+          setUsers(result.data);
+        }
+      } catch (error) {
+        console.error("Error fetching users:", error);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+    fetchUsers();
+  }, []);
+
   const AVAILABLE_TAGS = [
     "עיצוב",
     "דחוף",
@@ -77,7 +99,7 @@ export default function TaskModal({
       dueDate,
       status: selectedStatus,
       priority,
-      assignee,
+      assigneeId: assigneeId || undefined,
       tags: selectedTags,
     };
 
@@ -184,12 +206,23 @@ export default function TaskModal({
             </div>
             <div>
               <label className="block text-slate-400 text-sm mb-1">אחראי</label>
-              <input
-                placeholder="שם האחראי"
+              <select
                 className="w-full bg-slate-900/50 text-white rounded px-3 py-2 border border-slate-700 focus:border-blue-500 outline-none"
-                value={assignee}
-                onChange={(e) => setAssignee(e.target.value)}
-              />
+                value={assigneeId || ""}
+                onChange={(e) =>
+                  setAssigneeId(
+                    e.target.value ? Number(e.target.value) : undefined
+                  )
+                }
+                disabled={loadingUsers}
+              >
+                <option value="">ללא אחראי</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
