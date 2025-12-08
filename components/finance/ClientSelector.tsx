@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Search, Users, Globe, X } from "lucide-react";
+import { Search, X, Database } from "lucide-react";
 
 interface Client {
   id: number;
@@ -10,69 +10,103 @@ interface Client {
   tableSlug: string;
 }
 
+interface Table {
+  id: number;
+  name: string;
+  slug: string;
+}
+
 interface ClientSelectorProps {
   onSelect: (client: Client | null) => void;
   selectedClient: Client | null;
 }
-
-type TableType = "digital-marketing" | "work-web-design";
 
 export default function ClientSelector({
   onSelect,
   selectedClient,
 }: ClientSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<TableType>("digital-marketing");
+  const [activeTableSlug, setActiveTableSlug] = useState<string>("");
+  const [tables, setTables] = useState<Table[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingTables, setIsLoadingTables] = useState(true);
+
+  // Fetch available tables
+  useEffect(() => {
+    async function fetchTables() {
+      try {
+        const response = await fetch("/api/tables");
+        if (response.ok) {
+          const data = await response.json();
+          setTables(data);
+          if (data.length > 0) {
+            setActiveTableSlug(data[0].slug);
+          }
+        } else {
+          console.error("Failed to fetch tables");
+        }
+      } catch (error) {
+        console.error("Error fetching tables:", error);
+      } finally {
+        setIsLoadingTables(false);
+      }
+    }
+    fetchTables();
+  }, []);
 
   // Debounced search function
-  const searchClients = useCallback(async (table: TableType, query: string) => {
-    setIsLoading(true);
-    try {
-      const params = new URLSearchParams({
-        table: table,
-        search: query,
-      });
+  const searchClients = useCallback(
+    async (tableSlug: string, query: string) => {
+      if (!tableSlug) return;
 
-      const response = await fetch(`/api/finance/search-clients?${params}`);
-      if (response.ok) {
-        const data = await response.json();
-        setClients(data);
-      } else {
-        console.error("Failed to fetch clients");
+      setIsLoading(true);
+      try {
+        const params = new URLSearchParams({
+          table: tableSlug,
+          search: query,
+        });
+
+        const response = await fetch(`/api/finance/search-clients?${params}`);
+        if (response.ok) {
+          const data = await response.json();
+          setClients(data);
+        } else {
+          console.error("Failed to fetch clients");
+          setClients([]);
+        }
+      } catch (error) {
+        console.error("Error fetching clients:", error);
         setClients([]);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("Error fetching clients:", error);
-      setClients([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   // Debounce effect
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (isOpen) {
-        searchClients(activeTab, searchQuery);
+      if (isOpen && activeTableSlug) {
+        searchClients(activeTableSlug, searchQuery);
       }
     }, 300); // 300ms debounce
 
     return () => clearTimeout(timeoutId);
-  }, [searchQuery, activeTab, isOpen, searchClients]);
+  }, [searchQuery, activeTableSlug, isOpen, searchClients]);
 
-  // Load clients when opening or changing tab
+  // Load clients when opening
   useEffect(() => {
-    if (isOpen) {
-      searchClients(activeTab, searchQuery);
+    if (isOpen && activeTableSlug) {
+      searchClients(activeTableSlug, searchQuery);
     }
-  }, [isOpen, activeTab]); // Don't include searchClients and searchQuery here
+  }, [isOpen, activeTableSlug]); // Don't include searchClients and searchQuery here
 
-  const handleTabChange = (tab: TableType) => {
-    setActiveTab(tab);
-    setSearchQuery(""); // Reset search when changing tabs
+  const handleTableChange = (slug: string) => {
+    setActiveTableSlug(slug);
+    setSearchQuery(""); // Reset search when changing tables
   };
 
   const handleSelectClient = (client: Client) => {
@@ -114,36 +148,32 @@ export default function ClientSelector({
       {/* Dropdown Panel */}
       {isOpen && (
         <div className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg">
-          {/* Tabs */}
-          <div className="flex border-b border-gray-200">
-            <button
-              type="button"
-              onClick={() => handleTabChange("digital-marketing")}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === "digital-marketing"
-                  ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50"
-                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Users className="w-4 h-4" />
-                <span>שיווק דיגיטלי</span>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleTabChange("work-web-design")}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === "work-web-design"
-                  ? "text-purple-600 border-b-2 border-purple-600 bg-purple-50"
-                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Globe className="w-4 h-4" />
-                <span>בניית אתרים</span>
-              </div>
-            </button>
+          {/* Table Selection */}
+          <div className="p-3 border-b border-gray-200 bg-gray-50">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              בחר טבלת מקור
+            </label>
+            <div className="relative">
+              <Database className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <select
+                value={activeTableSlug}
+                onChange={(e) => handleTableChange(e.target.value)}
+                disabled={isLoadingTables}
+                className="w-full pr-10 pl-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+              >
+                {isLoadingTables ? (
+                  <option>טוען טבלאות...</option>
+                ) : tables.length === 0 ? (
+                  <option value="">אין טבלאות זמינות</option>
+                ) : (
+                  tables.map((table) => (
+                    <option key={table.id} value={table.slug}>
+                      {table.name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
           </div>
 
           {/* Search Box */}
@@ -170,7 +200,7 @@ export default function ClientSelector({
               </div>
             ) : clients.length === 0 ? (
               <div className="p-4 text-center text-gray-500">
-                <p className="text-sm">לא נמצאו לקוחות</p>
+                <p className="text-sm">לא נמצאו לקוחות (או לא נבחרה טבלה)</p>
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
@@ -184,16 +214,26 @@ export default function ClientSelector({
                     <div className="font-medium text-gray-900">
                       {client.name}
                     </div>
-                    {client.data["company"] && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        {client.data["company"]}
-                      </div>
-                    )}
-                    {client.data["phone-number"] && (
-                      <div className="text-xs text-gray-400 mt-1">
-                        {client.data["phone-number"]}
-                      </div>
-                    )}
+                    {/* Display extra fields if available to help identify */}
+                    {Object.entries(client.data)
+                      .slice(0, 3)
+                      .map(([key, value]) => {
+                        if (
+                          key !== "c_name" &&
+                          typeof value === "string" &&
+                          value.length < 50
+                        ) {
+                          return (
+                            <div
+                              key={key}
+                              className="text-xs text-gray-500 mt-1 truncate"
+                            >
+                              {key}: {value}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })}
                   </button>
                 ))}
               </div>
@@ -203,7 +243,7 @@ export default function ClientSelector({
           {/* Footer */}
           <div className="p-3 bg-gray-50 border-t border-gray-200">
             <p className="text-xs text-gray-500 text-center">
-              {clients.length} לקוחות נמצאו
+              {clients.length} רשומות נמצאו
             </p>
           </div>
         </div>

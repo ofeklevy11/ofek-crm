@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function GET() {
   try {
-    const events = await prisma.calendarEvent.findMany();
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // CRITICAL: Filter by companyId for multi-tenancy
+    const events = await prisma.calendarEvent.findMany({
+      where: { companyId: user.companyId },
+    });
     return NextResponse.json(events);
   } catch (error) {
     console.error("Error fetching calendar events:", error);
@@ -16,11 +25,17 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { title, description, startTime, endTime, color } = body;
 
     const event = await prisma.calendarEvent.create({
       data: {
+        companyId: user.companyId, // CRITICAL: Set companyId for multi-tenancy
         title,
         description,
         startTime: new Date(startTime),

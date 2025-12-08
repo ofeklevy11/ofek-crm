@@ -5,7 +5,7 @@ import { createAuditLog } from "@/lib/audit";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { action, recordIds, userId } = body;
+    const { action, recordIds } = body;
 
     if (!recordIds || !Array.isArray(recordIds)) {
       return NextResponse.json(
@@ -14,10 +14,20 @@ export async function POST(request: Request) {
       );
     }
 
+    // Get the current authenticated user from session
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
     if (action === "delete") {
-      // Check permissions if userId is provided
-      if (userId && recordIds.length > 0) {
-        const { getUserById } = await import("@/lib/permissions-server");
+      // Check permissions
+      if (recordIds.length > 0) {
         const { canWriteTable } = await import("@/lib/permissions");
 
         // Check permission on the first record (assuming all belong to same table or user has general access)
@@ -27,8 +37,7 @@ export async function POST(request: Request) {
         });
 
         if (firstRecord) {
-          const user = await getUserById(Number(userId));
-          if (!user || !canWriteTable(user, firstRecord.tableId)) {
+          if (!canWriteTable(currentUser, firstRecord.tableId)) {
             return NextResponse.json(
               {
                 error:
@@ -53,11 +62,7 @@ export async function POST(request: Request) {
 
       // Log bulk delete
       for (const id of recordIds) {
-        await createAuditLog(
-          Number(id),
-          userId ? Number(userId) : null,
-          "DELETE (BULK)"
-        );
+        await createAuditLog(Number(id), currentUser.id, "DELETE (BULK)");
       }
 
       return NextResponse.json({ success: true, count });

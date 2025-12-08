@@ -26,15 +26,20 @@ export default async function TableDetailsPage({
 
   if (isNaN(tableId)) return notFound();
 
-  const table = await prisma.tableMeta.findUnique({
-    where: { id: tableId },
+  const user = await getCurrentUser();
+  if (!user) return redirect("/login");
+
+  // CRITICAL: Filter by companyId
+  const table = await prisma.tableMeta.findFirst({
+    where: {
+      id: tableId,
+      companyId: user.companyId,
+    },
   });
 
   if (!table) return notFound();
 
-  const user = await getCurrentUser();
-  if (!user) return redirect("/login");
-
+  // Additional permission check (role base)
   if (!canReadTable(user, table.id)) {
     return (
       <div className="p-8 text-center text-red-600 font-bold text-xl">
@@ -52,9 +57,18 @@ export default async function TableDetailsPage({
   let totalCount = 0;
 
   if (q) {
+    // RAW QUERY: Be careful, but since we verified table ownership, filtering by tableId is safer.
+    // However, it's better to verify table's company again if possible, but tableId check above is usually enough for id-based constraints.
+    // The previous check "prisma.tableMeta.findFirst" ensures that 'tableId' belongs to the user's company.
+    // So any record with this tableId is implicitly in the same company (assuming data integrity).
+    // Still, adding "companyId" to record filter is safest.
+
+    // Note: raw query is harder to filter companyId if it's not indexed or easy to access, but Record has companyId column.
+    // Let's modify the raw query to include companyId
     const rawRecords = await prisma.$queryRaw<{ id: number }[]>`
       SELECT id FROM "Record"
       WHERE "tableId" = ${tableId}
+      AND "companyId" = ${user.companyId}
       AND "data"::text ILIKE ${`%${q}%`}
     `;
     totalCount = rawRecords.length;
@@ -70,11 +84,18 @@ export default async function TableDetailsPage({
       },
     });
   } else {
+    // CRITICAL: Filter by companyId
     totalCount = await prisma.record.count({
-      where: { tableId },
+      where: {
+        tableId,
+        companyId: user.companyId,
+      },
     });
     records = await prisma.record.findMany({
-      where: { tableId },
+      where: {
+        tableId,
+        companyId: user.companyId,
+      },
       orderBy: { createdAt: "desc" },
       skip: (currentPage - 1) * pageSize,
       take: pageSize,
@@ -97,6 +118,7 @@ export default async function TableDetailsPage({
   }
 
   // Load views for this table
+  // Since we verified table belongs to company, views belonging to this table are safe.
   const views = await prisma.view.findMany({
     where: { tableId },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],

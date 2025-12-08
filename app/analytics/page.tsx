@@ -12,11 +12,13 @@ import {
   Edit3,
   Settings,
   Zap,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import AnalyticsDetailsModal from "@/components/AnalyticsDetailsModal";
 import CreateAnalyticsViewModal from "@/components/analytics/CreateAnalyticsViewModal";
 import ViewAutomationModal from "@/components/analytics/ViewAutomationModal";
+import AIAnalyticsCreator from "@/components/analytics/AIAnalyticsCreator";
 import {
   DndContext,
   closestCenter,
@@ -44,7 +46,8 @@ import {
   deleteViewFolder,
   moveViewToFolder,
 } from "@/app/actions/view-folders";
-import { Folder, FolderPlus, ArrowLeft, Move, X } from "lucide-react";
+import { deleteAnalyticsView } from "@/app/actions/analytics";
+import { Folder, FolderPlus, ArrowLeft, Move, X, Trash2 } from "lucide-react";
 import { hasUserFlag } from "@/lib/permissions";
 
 // Available colors for the cards
@@ -180,6 +183,7 @@ function AnalyticsCard({
   onEdit,
   onAddAutomation,
   onMove,
+  onDelete,
   folders,
   canManage,
 }: {
@@ -193,6 +197,7 @@ function AnalyticsCard({
   onEdit: (view: any) => void;
   onAddAutomation: (view: any) => void;
   onMove: (view: any, folderId: number | null) => void;
+  onDelete: (view: any) => void;
   folders: any[];
   canManage: boolean;
 }) {
@@ -298,6 +303,16 @@ function AnalyticsCard({
               title="שנה צבע"
             >
               <Palette size={16} />
+            </button>
+            <button
+              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-black/5 rounded-full transition-colors"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onDelete(view);
+              }}
+              title="מחק תצוגה"
+            >
+              <Trash2 size={16} />
             </button>
 
             {showColorPicker && (
@@ -435,6 +450,7 @@ export default function AnalyticsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingView, setEditingView] = useState<any | null>(null);
   const [canManage, setCanManage] = useState(false);
+  const [isAIMode, setIsAIMode] = useState(false);
 
   // Automation Modal State
   const [viewAutomationTarget, setViewAutomationTarget] = useState<any>(null);
@@ -446,6 +462,12 @@ export default function AnalyticsPage() {
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [movingView, setMovingView] = useState<any>(null); // View being moved
+
+  // Toast State
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "error" | "success";
+  } | null>(null);
 
   // Filter State
   const [filter, setFilter] = useState<"all" | "manual" | "automation">("all");
@@ -600,6 +622,34 @@ export default function AnalyticsPage() {
     }
   };
 
+  const handleDelete = async (view: any) => {
+    if (view.source === "AUTOMATION") {
+      setToast({
+        message: "ה-VIEW מגיע מאוטומציות, נא למחוק את הview מעמוד אוטומציות",
+        type: "error",
+      });
+      setTimeout(() => setToast(null), 5000);
+      return;
+    }
+
+    if (!confirm("האם אתה בטוח שברצונך למחוק את התצוגה?")) return;
+
+    try {
+      // Assuming 'viewId' is the correct field for custom views based on previous code
+      const res = await deleteAnalyticsView(view.viewId);
+      if (res.success) {
+        setViews((prev) => prev.filter((v) => v.viewId !== view.viewId));
+        setToast({ message: "התצוגה נמחקה בהצלחה", type: "success" });
+        setTimeout(() => setToast(null), 3000);
+      } else {
+        setToast({ message: "שגיאה במחיקת התצוגה", type: "error" });
+      }
+    } catch (error) {
+      console.error("Failed to delete view:", error);
+      setToast({ message: "שגיאה במחיקת התצוגה", type: "error" });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-8" dir="rtl">
       <div className="max-w-7xl mx-auto">
@@ -610,16 +660,25 @@ export default function AnalyticsPage() {
           </div>
           <div className="flex gap-3">
             {canManage && (
-              <button
-                onClick={() => {
-                  setEditingView(null);
-                  setIsCreateModalOpen(true);
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
-              >
-                <Plus size={16} />
-                צור תצוגה
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsAIMode(true)}
+                  className="px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-md shadow-sm text-sm font-medium hover:opacity-90 flex items-center gap-2"
+                >
+                  <Sparkles size={16} className="text-yellow-300" />
+                  צור עם AI
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingView(null);
+                    setIsCreateModalOpen(true);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+                >
+                  <Plus size={16} />
+                  צור תצוגה
+                </button>
+              </div>
             )}
             <Link
               href="/"
@@ -786,6 +845,7 @@ export default function AnalyticsPage() {
                     onEdit={handleEdit}
                     onAddAutomation={setViewAutomationTarget}
                     onMove={handleMoveView}
+                    onDelete={handleDelete}
                     folders={folders}
                     canManage={canManage}
                   />
@@ -796,38 +856,46 @@ export default function AnalyticsPage() {
         )}
       </div>
 
-      {/* Create Modal */}
       <CreateAnalyticsViewModal
         isOpen={isCreateModalOpen}
         onClose={() => {
           setIsCreateModalOpen(false);
           setEditingView(null);
         }}
-        onSuccess={fetchData}
+        onSuccess={() => {
+          fetchData();
+          setIsCreateModalOpen(false);
+          setEditingView(null);
+        }}
         initialData={editingView}
       />
 
-      {/* Details Modal */}
-      {selectedView && (
-        <AnalyticsDetailsModal
-          isOpen={!!selectedView}
-          onClose={() => setSelectedView(null)}
-          title={selectedView.ruleName}
-          tableName={selectedView.tableName}
-          data={selectedView.data}
-        />
-      )}
+      <AIAnalyticsCreator
+        isOpen={isAIMode}
+        onClose={() => setIsAIMode(false)}
+        onSuccess={() => {
+          fetchData();
+          setIsAIMode(false);
+        }}
+      />
 
-      {/* View Automation Modal */}
+      <AnalyticsDetailsModal
+        isOpen={!!selectedView}
+        onClose={() => setSelectedView(null)}
+        title={selectedView?.ruleName || ""}
+        tableName={selectedView?.tableName || ""}
+        data={selectedView?.data || []}
+      />
+
       {viewAutomationTarget && (
         <ViewAutomationModal
-          view={viewAutomationTarget}
           onClose={() => setViewAutomationTarget(null)}
+          view={viewAutomationTarget}
+          userId={currentUserId || 0}
           onSuccess={() => {
-            // Should we refresh? Maybe not strictly needed as it only adds an automation rule
-            // But typically good practice
+            fetchData();
+            // Maybe close?
           }}
-          userId={currentUserId || 1}
         />
       )}
 

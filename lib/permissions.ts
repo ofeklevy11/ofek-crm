@@ -2,6 +2,7 @@ export type UserRole = "basic" | "manager" | "admin";
 
 export interface User {
   id: number;
+  companyId: number;
   name: string;
   email: string;
   role: UserRole;

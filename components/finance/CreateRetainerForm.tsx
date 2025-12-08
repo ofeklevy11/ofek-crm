@@ -47,12 +47,22 @@ export default function CreateRetainerForm() {
         notes: `Imported from ${selectedClient.tableSlug} (Record ID: ${selectedClient.id})`,
       };
 
+      // Create/Get finance client
+      const clientResponse = await fetch("/api/finance/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(clientData),
+      });
+
+      if (!clientResponse.ok) {
+        throw new Error("Failed to create client in finance system");
+      }
+
+      const createdClient = await clientResponse.json();
+      financeClientId = createdClient.id;
+
       // Import actions
       const { createRetainer } = await import("@/app/actions");
-
-      // For now, we'll use a simplified approach
-      // You may need to create a separate action for finance clients
-      const financeClientId = selectedClient.id;
 
       // Now create the retainer
       const retainerData = {

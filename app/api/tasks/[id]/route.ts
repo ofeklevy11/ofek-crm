@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/permissions-server";
 
 // GET a single task
 export async function GET(
@@ -11,8 +12,17 @@ export async function GET(
   const { id } = await context.params;
 
   try {
-    const task = await prisma.task.findUnique({
-      where: { id },
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // CRITICAL: Filter by companyId
+    const task = await prisma.task.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
     });
 
     if (!task) {
@@ -36,6 +46,23 @@ export async function PATCH(
   const { id } = await context.params;
 
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // First verify ownership/existence
+    const existingTask = await prisma.task.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
+    });
+
+    if (!existingTask) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+
     const body = await request.json();
 
     // Convert dueDate string to Date object if present
@@ -43,6 +70,9 @@ export async function PATCH(
     if (dataToUpdate.dueDate) {
       dataToUpdate.dueDate = new Date(dataToUpdate.dueDate);
     }
+
+    // Prevent changing companyId via update
+    delete dataToUpdate.companyId;
 
     const updated = await prisma.task.update({
       where: { id },
@@ -72,6 +102,23 @@ export async function DELETE(
   const { id } = await context.params;
 
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Verify ownership/existence first (or use deleteMany with count check)
+    const existingTask = await prisma.task.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
+    });
+
+    if (!existingTask) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+
     await prisma.task.delete({
       where: { id },
     });

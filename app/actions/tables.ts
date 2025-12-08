@@ -12,7 +12,9 @@ export async function getTables() {
       return { success: false, error: "Unauthorized" };
     }
 
+    // CRITICAL: Filter by companyId for multi-tenancy
     const tables = await prisma.tableMeta.findMany({
+      where: { companyId: user.companyId },
       orderBy: { createdAt: "desc" },
     });
 
@@ -30,17 +32,21 @@ export async function getTables() {
 
 export async function getTableById(id: number) {
   try {
-    const table = await prisma.tableMeta.findUnique({
-      where: { id },
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // CRITICAL: Filter by companyId for multi-tenancy
+    const table = await prisma.tableMeta.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
     });
 
     if (!table) {
       return { success: false, error: "Table not found" };
-    }
-
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, error: "Unauthorized" };
     }
 
     if (!canReadTable(user, table.id)) {
@@ -58,25 +64,23 @@ export async function createTable(data: {
   name: string;
   slug: string;
   schemaJson?: Record<string, unknown>;
-  createdBy: number;
   categoryId?: number;
 }) {
   try {
-    const { name, slug, schemaJson, createdBy, categoryId } = data;
+    const { name, slug, schemaJson, categoryId } = data;
 
-    if (!name || !slug || !createdBy) {
+    if (!name || !slug) {
       return { success: false, error: "Missing required fields" };
     }
 
     const user = await getCurrentUser();
-    if (!user || user.id !== Number(createdBy)) {
-      // Ideally we check if `user` matches `createdBy`, but `createdBy` param might be redundant if we use `user.id`.
-      // For now, let's just ensure the current user is authorized.
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
     }
 
     // Only admin can create tables for now (or maybe managers too if we change logic)
     // Using canManageTables which checks for admin role
-    if (!user || !canManageTables(user)) {
+    if (!canManageTables(user)) {
       return { success: false, error: "אין לך הרשאה ליצור טבלאות" };
     }
 
@@ -85,7 +89,8 @@ export async function createTable(data: {
         name,
         slug,
         schemaJson: (schemaJson || {}) as any,
-        createdBy: Number(createdBy),
+        companyId: user.companyId,
+        createdBy: user.id,
         categoryId: categoryId ? Number(categoryId) : undefined,
       },
     });

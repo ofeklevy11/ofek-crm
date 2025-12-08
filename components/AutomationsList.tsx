@@ -3,11 +3,12 @@
 import { useState } from "react";
 import AutomationModal from "@/components/AutomationModal";
 import MultiEventAutomationModal from "@/components/MultiEventAutomationModal";
+import AIAutomationCreator from "@/components/AIAutomationCreator";
 import {
   deleteAutomationRule,
   toggleAutomationRule,
 } from "@/app/actions/automations";
-import { Plus, Trash2, Power, Edit, Zap } from "lucide-react";
+import { Plus, Trash2, Power, Edit, Zap, Sparkles } from "lucide-react";
 
 interface AutomationRule {
   id: number;
@@ -25,7 +26,7 @@ interface AutomationRule {
 interface AutomationsListProps {
   initialRules: AutomationRule[];
   users: any[];
-  tables: { id: number; name: string }[];
+  tables: { id: number; name: string; schemaJson: any }[];
   currentUserId: number;
 }
 
@@ -38,6 +39,7 @@ export default function AutomationsList({
   const [rules, setRules] = useState<AutomationRule[]>(initialRules);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMultiEventModalOpen, setIsMultiEventModalOpen] = useState(false);
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
 
   const handleDelete = async (id: number) => {
@@ -69,6 +71,16 @@ export default function AutomationsList({
       <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200">
         <h2 className="text-lg font-medium text-gray-900">האוטומציות שלי</h2>
         <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setEditingRule(null);
+              setIsAIModalOpen(true);
+            }}
+            className="inline-flex items-center px-4 py-2 border border-purple-600 text-sm font-medium rounded-md shadow-sm text-white bg-linear-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+          >
+            <Sparkles className="ml-2 -mr-1 h-5 w-5" />
+            צור אוטומציה עם AI
+          </button>
           <button
             onClick={() => {
               setEditingRule(null);
@@ -220,6 +232,16 @@ export default function AutomationsList({
             setEditingRule(null);
           }}
           onCreated={() => window.location.reload()}
+        />
+      )}
+
+      {isAIModalOpen && (
+        <AIAutomationCreator
+          isOpen={isAIModalOpen}
+          onClose={() => setIsAIModalOpen(false)}
+          tables={tables}
+          users={users}
+          currentUserId={currentUserId}
         />
       )}
     </div>

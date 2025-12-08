@@ -3,20 +3,32 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import Pagination from "@/components/Pagination";
 import ClientsTable from "@/components/finance/ClientsTable";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { redirect } from "next/navigation";
 
 export default async function ClientsPage({
   searchParams,
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
   const { page } = await searchParams;
   const currentPage = Number(page) || 1;
   const pageSize = 30;
 
-  const totalClients = await prisma.client.count();
+  // CRITICAL: Filter by companyId
+  const totalClients = await prisma.client.count({
+    where: { companyId: user.companyId },
+  });
   const totalPages = Math.ceil(totalClients / pageSize);
 
+  // CRITICAL: Filter by companyId
   const clients = await prisma.client.findMany({
+    where: { companyId: user.companyId },
     include: {
       retainers: {
         where: { status: "active" },

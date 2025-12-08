@@ -139,7 +139,6 @@ export default function CreateTableForm() {
         name: tableName,
         slug: slug,
         schemaJson: schemaJson as any,
-        createdBy: 1, // Hardcoded for MVP
         categoryId: categoryId ?? undefined,
       });
 

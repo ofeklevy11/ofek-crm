@@ -12,6 +12,7 @@ export async function getUserById(userId: number): Promise<User | null> {
       where: { id: userId },
       select: {
         id: true,
+        companyId: true,
         name: true,
         email: true,
         role: true,
@@ -50,6 +51,7 @@ export async function getCurrentUser(): Promise<User | null> {
       where: { id: userId },
       select: {
         id: true,
+        companyId: true,
         name: true,
         email: true,
         role: true,

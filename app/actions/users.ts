@@ -2,10 +2,13 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requireCompanyId } from "@/lib/company";
 
 export async function getUsers() {
   try {
+    const companyId = await requireCompanyId();
     const users = await prisma.user.findMany({
+      where: { companyId },
       orderBy: { createdAt: "desc" },
     });
     return { success: true, data: users };
@@ -17,8 +20,9 @@ export async function getUsers() {
 
 export async function getUserById(id: number) {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id },
+    const companyId = await requireCompanyId();
+    const user = await prisma.user.findFirst({
+      where: { id, companyId },
     });
 
     if (!user) {
@@ -34,8 +38,9 @@ export async function getUserById(id: number) {
 
 export async function getCurrentUser(email: string) {
   try {
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const companyId = await requireCompanyId();
+    const user = await prisma.user.findFirst({
+      where: { email, companyId },
     });
 
     if (!user) {
@@ -76,6 +81,16 @@ export async function updateUser(
 
 export async function deleteUser(id: number) {
   try {
+    const companyId = await requireCompanyId();
+    // First verify the user belongs to the same company
+    const user = await prisma.user.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!user) {
+      return { success: false, error: "User not found or access denied" };
+    }
+
     await prisma.user.delete({
       where: { id },
     });

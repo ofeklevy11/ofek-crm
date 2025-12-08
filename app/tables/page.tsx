@@ -3,12 +3,19 @@ import TablesDashboard from "@/components/TablesDashboard";
 
 import { getCurrentUser } from "@/lib/permissions-server";
 import { canManageTables } from "@/lib/permissions";
+import { redirect } from "next/navigation";
 
 export default async function TablesPage() {
   const user = await getCurrentUser();
-  const canManage = user ? canManageTables(user) : false;
+  if (!user) {
+    redirect("/login");
+  }
 
+  const canManage = canManageTables(user);
+
+  // CRITICAL: Filter by companyId
   const tables = await prisma.tableMeta.findMany({
+    where: { companyId: user.companyId },
     orderBy: { createdAt: "desc" },
     include: {
       _count: {
@@ -20,7 +27,9 @@ export default async function TablesPage() {
     },
   });
 
+  // CRITICAL: Filter by companyId
   const categories = await prisma.tableCategory.findMany({
+    where: { companyId: user.companyId },
     orderBy: { createdAt: "asc" },
   });
 

@@ -172,7 +172,6 @@ export default function AITableCreator({
         name: currentSchema.tableName,
         slug: currentSchema.slug,
         schemaJson: refinedFields as any,
-        createdBy: 1, // Hardcoded as per existing form
         categoryId: undefined, // AI doesn't categorize for now
       });
 

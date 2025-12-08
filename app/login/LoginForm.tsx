@@ -117,6 +117,18 @@ export default function LoginForm() {
           )}
         </button>
       </div>
+
+      <div className="text-center">
+        <p className="text-sm text-gray-600">
+          עדיין אין לך חשבון?{" "}
+          <a
+            href="/register"
+            className="font-medium text-indigo-600 hover:text-indigo-500"
+          >
+            הירשם כאן
+          </a>
+        </p>
+      </div>
     </form>
   );
 }

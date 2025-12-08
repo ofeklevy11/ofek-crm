@@ -50,7 +50,6 @@ export default function AddRecordForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           data: formData,
-          createdBy: 1, // Hardcoded user
         }),
       });
 

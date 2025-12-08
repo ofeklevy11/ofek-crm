@@ -3,20 +3,36 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import Pagination from "@/components/Pagination";
 import PaymentsTable from "@/components/finance/PaymentsTable";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { redirect } from "next/navigation";
 
 export default async function PaymentsPage({
   searchParams,
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
   const { page } = await searchParams;
   const currentPage = Number(page) || 1;
   const pageSize = 30;
 
-  const totalPayments = await prisma.oneTimePayment.count();
+  // CRITICAL: Filter by client.companyId
+  const totalPayments = await prisma.oneTimePayment.count({
+    where: {
+      client: { companyId: user.companyId },
+    },
+  });
   const totalPages = Math.ceil(totalPayments / pageSize);
 
+  // CRITICAL: Filter by client.companyId
   const payments = await prisma.oneTimePayment.findMany({
+    where: {
+      client: { companyId: user.companyId },
+    },
     include: {
       client: true,
     },

@@ -1,16 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const retainerId = parseInt(id);
 
-    const retainer = await prisma.retainer.findUnique({
-      where: { id: retainerId },
+    // CRITICAL: Filter by client.companyId
+    const retainer = await prisma.retainer.findFirst({
+      where: {
+        id: retainerId,
+        client: {
+          companyId: user.companyId,
+        },
+      },
       include: { client: true },
     });
 
@@ -36,9 +48,31 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const retainerId = parseInt(id);
     const data = await request.json();
+
+    // Verify ownership via client
+    const existingRetainer = await prisma.retainer.findFirst({
+      where: {
+        id: retainerId,
+        client: {
+          companyId: user.companyId,
+        },
+      },
+    });
+
+    if (!existingRetainer) {
+      return NextResponse.json(
+        { error: "Retainer not found" },
+        { status: 404 }
+      );
+    }
 
     // Validate status if provided
     if (
@@ -75,8 +109,30 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const retainerId = parseInt(id);
+
+    // Verify ownership via client
+    const existingRetainer = await prisma.retainer.findFirst({
+      where: {
+        id: retainerId,
+        client: {
+          companyId: user.companyId,
+        },
+      },
+    });
+
+    if (!existingRetainer) {
+      return NextResponse.json(
+        { error: "Retainer not found" },
+        { status: 404 }
+      );
+    }
 
     await prisma.retainer.delete({
       where: { id: retainerId },

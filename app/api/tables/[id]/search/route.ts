@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const tableId = parseInt(id);
 
@@ -38,9 +44,12 @@ export async function GET(
       );
     }
 
-    // Get the table metadata and schema
-    const table = await prisma.tableMeta.findUnique({
-      where: { id: tableId },
+    // Get the table metadata and schema - FILTERED BY COMPANY
+    const table = await prisma.tableMeta.findFirst({
+      where: {
+        id: tableId,
+        companyId: user.companyId,
+      },
     });
 
     if (!table) {
@@ -57,9 +66,12 @@ export async function GET(
       console.error("Invalid schema JSON", e);
     }
 
-    // Get all records from the table
+    // Get all records from the table - FILTERED BY COMPANY
     const allRecords = await prisma.record.findMany({
-      where: { tableId: tableId },
+      where: {
+        tableId: tableId,
+        companyId: user.companyId,
+      },
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -101,14 +113,17 @@ export async function GET(
     const relationFields = schema.filter((f) => f.type === "relation");
     const relatedDataMap: Record<number, Record<number, any>> = {};
 
-    // Fetch all related records needed
+    // Fetch all related records needed - FILTERED BY COMPANY
     await Promise.all(
       relationFields.map(async (field) => {
         if (!field.relationTableId) return;
 
         try {
           const relatedRecords = await prisma.record.findMany({
-            where: { tableId: field.relationTableId },
+            where: {
+              tableId: field.relationTableId,
+              companyId: user.companyId, // Ensure related records are also accessible
+            },
           });
 
           const dataMap: Record<number, any> = {};

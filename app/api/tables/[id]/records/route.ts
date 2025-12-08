@@ -15,8 +15,26 @@ export async function GET(
       return NextResponse.json({ error: "Invalid table ID" }, { status: 400 });
     }
 
+    // CRITICAL: Verify table belongs to user's company for multi-tenancy
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // First, verify the table belongs to this company
+    const table = await prisma.tableMeta.findFirst({
+      where: { id: tableId, companyId: currentUser.companyId },
+    });
+
+    if (!table) {
+      return NextResponse.json({ error: "Table not found" }, { status: 404 });
+    }
+
+    // Now get records (they inherit companyId from table)
     const records = await prisma.record.findMany({
-      where: { tableId },
+      where: { tableId, companyId: currentUser.companyId },
       orderBy: { createdAt: "desc" },
       include: {
         creator: {
@@ -43,40 +61,42 @@ export async function POST(
     const { id } = await params;
     const tableId = parseInt(id);
     const body = await request.json();
-    const { data, createdBy } = body;
+    const { data } = body;
 
     if (isNaN(tableId)) {
       return NextResponse.json({ error: "Invalid table ID" }, { status: 400 });
     }
 
-    // Check write permissions
-    if (createdBy) {
-      const { getUserById } = await import("@/lib/permissions-server");
-      const { canWriteTable } = await import("@/lib/permissions");
-      const user = await getUserById(Number(createdBy));
+    // Get the current authenticated user from session
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const { canWriteTable } = await import("@/lib/permissions");
+    const currentUser = await getCurrentUser();
 
-      if (!user || !canWriteTable(user, tableId)) {
-        return NextResponse.json(
-          { error: "You don't have permission to write to this table" },
-          { status: 403 }
-        );
-      }
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    // Check write permissions
+    if (!canWriteTable(currentUser, tableId)) {
+      return NextResponse.json(
+        { error: "You don't have permission to write to this table" },
+        { status: 403 }
+      );
     }
 
     const record = await prisma.record.create({
       data: {
         tableId,
+        companyId: currentUser.companyId,
         data: data || {},
-        createdBy: createdBy ? Number(createdBy) : null,
+        createdBy: currentUser.id,
       },
     });
 
-    await createAuditLog(
-      record.id,
-      createdBy ? Number(createdBy) : null,
-      "CREATE",
-      data
-    );
+    await createAuditLog(record.id, currentUser.id, "CREATE", data);
 
     // Trigger automations
     const table = await prisma.tableMeta.findUnique({

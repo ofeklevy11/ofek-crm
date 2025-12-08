@@ -41,6 +41,27 @@ function formatSecondsToHebrew(totalSeconds: number): string {
 }
 
 /**
+ * Helper to extract value from record, handling custom fields, system fields, and relations (objects with name/title).
+ */
+function extractValue(record: any, key: string): any {
+  // 1. Try custom data
+  let val = (record.data as any)?.[key];
+
+  // 2. Try top-level system field
+  if (val === undefined) {
+    val = (record as any)[key];
+  }
+
+  // 3. Handle relations (e.g. assignee is an User object)
+  if (val && typeof val === "object" && !Array.isArray(val)) {
+    if ("name" in val) return val.name;
+    if ("title" in val) return val.title;
+  }
+
+  return val;
+}
+
+/**
  * Helper for flexible matching (case-insensitive, trimmed, string conversion)
  * Also handles "no filter" case properly
  */
@@ -50,18 +71,18 @@ function filterRecords(records: any[], filter: any) {
     return Object.entries(filter).every(([key, value]) => {
       if (!value) return true;
 
-      // flexible access: try .data[key], then [key]
-      let dataVal = (r.data as any)?.[key];
-      if (dataVal === undefined) {
-        dataVal = (r as any)[key];
-      }
+      const dataVal = extractValue(r, key);
 
       if (dataVal === undefined || dataVal === null) return false;
 
       const strDataVal = String(dataVal).trim().toLowerCase();
-      const strFilterVal = String(value).trim().toLowerCase();
 
-      return strDataVal === strFilterVal;
+      // Support comma-separated OR logic
+      const filterValues = String(value)
+        .split(",")
+        .map((v) => v.trim().toLowerCase());
+
+      return filterValues.includes(strDataVal);
     });
   });
 }
@@ -139,6 +160,7 @@ export async function calculateViewStats(view: any) {
       where: dateFilter,
       take: 1000,
       orderBy: { createdAt: "desc" },
+      include: { assignee: true }, // Include assignee for filtering by name
     });
   } else if (config.model === "Retainer") {
     tableName = "פיננסים: ריטיינרים";
@@ -185,12 +207,29 @@ export async function calculateViewStats(view: any) {
 
   // 2. Process View Type
   if (view.type === "CONVERSION") {
+    // Smart Logic: If filters share the same key, implicit inclusive OR for denominator
+    // This solves "Conversion from New to Completed" where a record cannot be both New and Completed at once.
+    // We treat the Total as "Funnel Start" which should include "Funnel End".
+    const enhancedTotalFilter = { ...config.totalFilter };
+    if (config.totalFilter && config.successFilter) {
+      Object.keys(config.totalFilter).forEach((key) => {
+        if (config.successFilter[key]) {
+          const totalVal = String(config.totalFilter[key]);
+          const successVal = String(config.successFilter[key]);
+          // If values differ, append success value to total value (comma separated)
+          if (!totalVal.includes(successVal)) {
+            enhancedTotalFilter[key] = `${totalVal},${successVal}`;
+          }
+        }
+      });
+    }
+
     if (config.groupByField) {
       const groups: Record<string, { total: number; success: number }> = {};
       rawData.forEach((r) => {
-        if (filterRecords([r], config.totalFilter).length > 0) {
-          let rawKey = (r.data as any)?.[config.groupByField];
-          if (rawKey === undefined) rawKey = (r as any)[config.groupByField];
+        // Use enhanced total filter
+        if (filterRecords([r], enhancedTotalFilter).length > 0) {
+          let rawKey = extractValue(r, config.groupByField);
 
           const key = rawKey ? String(rawKey) : "ללא";
           if (!groups[key]) groups[key] = { total: 0, success: 0 };
@@ -235,7 +274,7 @@ export async function calculateViewStats(view: any) {
         rawMetric: parseFloat(globalRate), // For automations
       };
     } else {
-      const totalSet = filterRecords(rawData, config.totalFilter);
+      const totalSet = filterRecords(rawData, enhancedTotalFilter);
       const successSet = filterRecords(rawData, config.successFilter);
       const rate =
         totalSet.length > 0
@@ -265,8 +304,7 @@ export async function calculateViewStats(view: any) {
     if (config.groupByField) {
       const groups: Record<string, number> = {};
       filtered.forEach((r) => {
-        let rawKey = (r.data as any)?.[config.groupByField];
-        if (rawKey === undefined) rawKey = (r as any)[config.groupByField];
+        let rawKey = extractValue(r, config.groupByField);
         const key = rawKey ? String(rawKey) : "ללא";
         groups[key] = (groups[key] || 0) + 1;
       });
@@ -325,6 +363,7 @@ export async function createAnalyticsView(data: {
 
     const view = await prisma.analyticsView.create({
       data: {
+        companyId: user.companyId, // CRITICAL: Set companyId for multi-tenancy
         title: data.title,
         type: data.type,
         description: data.description,
@@ -390,9 +429,15 @@ export async function updateAnalyticsView(
 
 export async function getAnalyticsData() {
   try {
-    // 1. Fetch Automation Rules (Existing)
+    // 1. Fetch Automation Rules (Existing) - FILTERED BY COMPANY
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     const rules = await prisma.automationRule.findMany({
       where: {
+        companyId: user.companyId, // CRITICAL: Filter by companyId
         isActive: true,
         actionType: {
           in: ["CALCULATE_DURATION", "CALCULATE_MULTI_EVENT_DURATION"],
@@ -400,8 +445,10 @@ export async function getAnalyticsData() {
       },
     });
 
-    // 2. Fetch Custom Analytics Views (New)
-    const customViews = await prisma.analyticsView.findMany();
+    // 2. Fetch Custom Analytics Views (New) - FILTERED BY COMPANY
+    const customViews = await prisma.analyticsView.findMany({
+      where: { companyId: user.companyId },
+    });
 
     const views = [];
 

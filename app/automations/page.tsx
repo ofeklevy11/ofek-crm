@@ -23,7 +23,7 @@ export default async function AutomationsPage() {
     getAutomationRules(),
     getUsers(),
     prisma.tableMeta.findMany({
-      select: { id: true, name: true },
+      select: { id: true, name: true, schemaJson: true },
       orderBy: { name: "asc" },
     }),
   ]);

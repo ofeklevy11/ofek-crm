@@ -104,7 +104,6 @@ export default function EditRecordModal({
           filename: newAttachmentUrl.split("/").pop() || "file",
           url: newAttachmentUrl,
           size: 0,
-          uploadedBy: 1,
         }),
       });
       if (res.ok) {
@@ -128,7 +127,6 @@ export default function EditRecordModal({
         body: JSON.stringify({
           data: formData,
           createdAt: new Date(createdAt).toISOString(),
-          updatedBy: 1, // Hardcoded user
         }),
       });
 

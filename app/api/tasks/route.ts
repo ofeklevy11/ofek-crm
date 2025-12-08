@@ -1,12 +1,18 @@
-"use server";
-
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/permissions-server";
 
 // GET all tasks
 export async function GET(request: NextRequest) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // CRITICAL: Filter by companyId for multi-tenancy
     const tasks = await prisma.task.findMany({
+      where: { companyId: user.companyId },
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(tasks);
@@ -22,6 +28,11 @@ export async function GET(request: NextRequest) {
 // POST a new task
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
 
     // Convert dueDate string to Date object if present
@@ -29,10 +40,11 @@ export async function POST(request: NextRequest) {
 
     const newTask = await prisma.task.create({
       data: {
+        companyId: user.companyId, // CRITICAL: Set companyId for multi-tenancy
         title: body.title,
         description: body.description,
         status: body.status ?? "todo",
-        assignee: body.assignee,
+        assigneeId: body.assigneeId,
         priority: body.priority,
         tags: body.tags || [],
         dueDate: dueDate,

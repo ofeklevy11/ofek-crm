@@ -10,49 +10,54 @@ export async function PUT(
     const { id } = await params;
     const recordId = parseInt(id);
     const body = await request.json();
-    const { data, updatedBy, createdAt } = body;
+    const { data, createdAt } = body;
 
     if (isNaN(recordId)) {
       return NextResponse.json({ error: "Invalid record ID" }, { status: 400 });
     }
 
+    // Get the current authenticated user from session
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const { canWriteTable } = await import("@/lib/permissions");
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
     // Check write permissions and fetch existing record for automations
-    const existingRecord = await prisma.record.findUnique({
-      where: { id: recordId },
+    // CRITICAL: Filter by companyId
+    const existingRecord = await prisma.record.findFirst({
+      where: {
+        id: recordId,
+        companyId: currentUser.companyId,
+      },
     });
 
     if (!existingRecord) {
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
-    if (updatedBy) {
-      const { getUserById } = await import("@/lib/permissions-server");
-      const { canWriteTable } = await import("@/lib/permissions");
-      const user = await getUserById(Number(updatedBy));
-
-      if (!user || !canWriteTable(user, existingRecord.tableId)) {
-        return NextResponse.json(
-          { error: "You don't have permission to write to this table" },
-          { status: 403 }
-        );
-      }
+    if (!canWriteTable(currentUser, existingRecord.tableId)) {
+      return NextResponse.json(
+        { error: "You don't have permission to write to this table" },
+        { status: 403 }
+      );
     }
 
     const record = await prisma.record.update({
       where: { id: recordId },
       data: {
         data,
-        updatedBy: updatedBy ? Number(updatedBy) : null,
+        updatedBy: currentUser.id,
         ...(createdAt && { createdAt: new Date(createdAt) }),
       },
     });
 
-    await createAuditLog(
-      record.id,
-      updatedBy ? Number(updatedBy) : null,
-      "UPDATE",
-      data
-    );
+    await createAuditLog(record.id, currentUser.id, "UPDATE", data);
 
     // Trigger Automations
     console.log(
@@ -90,39 +95,49 @@ export async function DELETE(
   try {
     const { id } = await params;
     const recordId = parseInt(id);
-    const body = await request.json();
-    const { deletedBy } = body;
 
     if (isNaN(recordId)) {
       return NextResponse.json({ error: "Invalid record ID" }, { status: 400 });
     }
 
+    // Get the current authenticated user from session
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const { canWriteTable } = await import("@/lib/permissions");
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
     // Check write permissions
-    if (deletedBy) {
-      const existingRecord = await prisma.record.findUnique({
-        where: { id: recordId },
-        select: { tableId: true },
-      });
+    // CRITICAL: Filter by companyId
+    const existingRecord = await prisma.record.findFirst({
+      where: {
+        id: recordId,
+        companyId: currentUser.companyId,
+      },
+      select: { tableId: true },
+    });
 
-      if (existingRecord) {
-        const { getUserById } = await import("@/lib/permissions-server");
-        const { canWriteTable } = await import("@/lib/permissions");
-        const user = await getUserById(Number(deletedBy));
+    if (!existingRecord) {
+      return NextResponse.json({ error: "Record not found" }, { status: 404 });
+    }
 
-        if (!user || !canWriteTable(user, existingRecord.tableId)) {
-          return NextResponse.json(
-            { error: "You don't have permission to write to this table" },
-            { status: 403 }
-          );
-        }
-      }
+    if (!canWriteTable(currentUser, existingRecord.tableId)) {
+      return NextResponse.json(
+        { error: "You don't have permission to write to this table" },
+        { status: 403 }
+      );
     }
 
     await prisma.record.delete({
       where: { id: recordId },
     });
 
-    await createAuditLog(recordId, null, "DELETE");
+    await createAuditLog(recordId, currentUser.id, "DELETE");
 
     return NextResponse.json({ success: true });
   } catch (error) {

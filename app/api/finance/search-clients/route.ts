@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const tableSlug = searchParams.get("table"); // 'work-dm' or 'work-web-design'
     const searchQuery = searchParams.get("search") || "";
@@ -14,18 +20,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get the table metadata
-    const table = await prisma.tableMeta.findUnique({
-      where: { slug: tableSlug },
+    // Get the table metadata - FILTERED BY COMPANY
+    const table = await prisma.tableMeta.findFirst({
+      where: { slug: tableSlug, companyId: user.companyId },
     });
 
     if (!table) {
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
 
-    // Get all records from the table
+    // Get all records from the table - FILTERED BY COMPANY
     let records = await prisma.record.findMany({
-      where: { tableId: table.id },
+      where: { tableId: table.id, companyId: user.companyId },
       select: {
         id: true,
         data: true,
@@ -70,16 +76,55 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // DEBUG: Log to see what we actually have (first record only)
-      if (record.id === records[0]?.id) {
-        console.log("=== DEBUG RECORD DATA ===");
-        console.log("Type of data:", typeof data);
-        console.log("c_name value:", data["c_name"]);
-        console.log("Full data:", JSON.stringify(data, null, 2));
+      // Improved name detection strategy
+      let clientName = "Unknown";
+
+      const potentialNameKeys = [
+        "c_name",
+        "name",
+        "Name",
+        "full_name",
+        "fullName",
+        "title",
+        "Title",
+        "client_name",
+      ];
+
+      // 1. Try known keys
+      for (const key of potentialNameKeys) {
+        if (data[key] && typeof data[key] === "string") {
+          clientName = data[key];
+          break;
+        }
       }
 
-      // Simple and direct access as requested
-      const clientName = data["c_name"] || "Unknown";
+      // 2. If still Unknown, look for any key with "name" in it
+      if (clientName === "Unknown") {
+        const nameKey = Object.keys(data).find(
+          (k) => k.toLowerCase().includes("name") && typeof data[k] === "string"
+        );
+        if (nameKey) {
+          clientName = data[nameKey];
+        }
+      }
+
+      // 3. Fallback to first string field
+      if (clientName === "Unknown") {
+        const firstStringVal = Object.values(data).find(
+          (v) =>
+            typeof v === "string" &&
+            (v as string).length > 0 &&
+            (v as string).length < 100
+        );
+        if (firstStringVal) {
+          clientName = firstStringVal as string;
+        }
+      }
+
+      // 4. Ultimate fallback
+      if (clientName === "Unknown") {
+        clientName = `Record #${record.id}`;
+      }
 
       return {
         id: record.id,

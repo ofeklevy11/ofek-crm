@@ -3,20 +3,36 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import Pagination from "@/components/Pagination";
 import RetainersTable from "@/components/finance/RetainersTable";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { redirect } from "next/navigation";
 
 export default async function RetainersPage({
   searchParams,
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
   const { page } = await searchParams;
   const currentPage = Number(page) || 1;
   const pageSize = 30;
 
-  const totalRetainers = await prisma.retainer.count();
+  // CRITICAL: Filter by client.companyId
+  const totalRetainers = await prisma.retainer.count({
+    where: {
+      client: { companyId: user.companyId },
+    },
+  });
   const totalPages = Math.ceil(totalRetainers / pageSize);
 
+  // CRITICAL: Filter by client.companyId
   const retainers = await prisma.retainer.findMany({
+    where: {
+      client: { companyId: user.companyId },
+    },
     include: {
       client: true,
     },

@@ -1,21 +1,30 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function getNotifications(
-  userId: number,
+  userId?: number, // Deprecated argument, we use session user now
   limit: number | null = 20
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Force usage of current user ID for security
+    const targetUserId = user.id;
+
     const notifications = await prisma.notification.findMany({
       where: {
-        userId: userId,
+        userId: targetUserId,
+        companyId: user.companyId, // Extra safety
       },
       orderBy: {
         createdAt: "desc",
       },
-      take: limit ? limit : undefined, // If limit is null/0, take all (undefined means no limit in prisma usually, or we can just omit take)
+      take: limit ? limit : undefined,
     });
     return { success: true, data: notifications };
   } catch (error) {
@@ -26,6 +35,26 @@ export async function getNotifications(
 
 export async function markAsRead(notificationId: number) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Verify ownership
+    const notification = await prisma.notification.findFirst({
+      where: {
+        id: notificationId,
+        userId: user.id,
+      },
+    });
+
+    if (!notification) {
+      return {
+        success: false,
+        error: "Notification not found or unauthorized",
+      };
+    }
+
     await prisma.notification.update({
       where: {
         id: notificationId,
@@ -34,8 +63,7 @@ export async function markAsRead(notificationId: number) {
         read: true,
       },
     });
-    // We don't necessarily need to revalidate path here if we update local state,
-    // but proper revalidation is good.
+
     return { success: true };
   } catch (error) {
     console.error("Error marking notification as read:", error);
@@ -50,8 +78,32 @@ export async function createNotification(data: {
   link?: string;
 }) {
   try {
+    // Get current user for companyId (notifications should be within same company)
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return { success: false, error: "Unauthorized" }; // Or internal system call?
+      // If this is called by system automation (background job), we might not have a session.
+      // But typically actions are called from user context.
+    }
+
+    // Optional: Verify that target userId belongs to the same company?
+    // This adds a DB call but increases security.
+    const targetUser = await prisma.user.findFirst({
+      where: { id: data.userId, companyId: currentUser.companyId },
+    });
+
+    if (!targetUser) {
+      console.warn(
+        `[createNotification] Target user ${data.userId} not found in company ${currentUser.companyId}`
+      );
+      // return { success: false, error: "Target user not found" }; // Or just fail silently?
+      // Let's proceed only if found to maintain isolation.
+      return { success: false, error: "User not in company" };
+    }
+
     const notification = await prisma.notification.create({
       data: {
+        companyId: currentUser.companyId, // CRITICAL: Set companyId for multi-tenancy
         userId: data.userId,
         title: data.title,
         message: data.message,

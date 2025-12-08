@@ -316,6 +316,28 @@ export default function CreateAnalyticsViewModal({
       onChange,
       placeholder = "ערך...",
     }: any) => {
+      // If no field is selected, disable the input
+      if (!fieldName) {
+        return (
+          <div className="flex-1">
+            {label && (
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {label}
+              </label>
+            )}
+            <input
+              type="text"
+              className="w-full border border-gray-300 rounded-md p-2 text-left bg-gray-100 text-gray-500 cursor-not-allowed"
+              dir="ltr"
+              placeholder="בחר שדה קודם..."
+              value=""
+              disabled
+              readOnly
+            />
+          </div>
+        );
+      }
+
       const field = currentFields.find((f) => f.systemName === fieldName);
       let options: any[] = [];
 

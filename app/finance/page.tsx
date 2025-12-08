@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import FinancialStats from "@/components/finance/FinancialStats";
 import ActiveRetainersTable from "@/components/finance/ActiveRetainersTable";
 import PendingPaymentsTable from "@/components/finance/PendingPaymentsTable";
+import { getCurrentUser } from "@/lib/permissions-server";
 import {
   Plus,
   ArrowRight,
@@ -10,28 +11,45 @@ import {
   AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 export default async function FinancePage() {
-  // Fetch real data from database
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  // Fetch real data from database - CRITICAL: Filter by client.companyId
   const [transactions, activeRetainers, pendingPayments, stats] =
     await Promise.all([
       prisma.transaction.findMany({
+        where: {
+          client: { companyId: user.companyId },
+        },
         include: { client: true },
         orderBy: { createdAt: "desc" },
         take: 5,
       }),
       prisma.retainer.findMany({
-        where: { status: "active" },
+        where: {
+          status: "active",
+          client: { companyId: user.companyId },
+        },
         include: { client: true },
         orderBy: { nextDueDate: "asc" },
       }),
       prisma.oneTimePayment.findMany({
-        where: { status: { in: ["pending", "overdue"] } },
+        where: {
+          status: { in: ["pending", "overdue"] },
+          client: { companyId: user.companyId },
+        },
         include: { client: true },
         orderBy: { dueDate: "asc" },
       }),
       // Calculate stats
-      prisma.client.count(),
+      prisma.client.count({
+        where: { companyId: user.companyId },
+      }),
     ]);
 
   // Calculate totals
@@ -98,7 +116,6 @@ export default async function FinancePage() {
             Manage client profiles and history
           </p>
         </Link>
-
         <Link
           href="/finance/retainers"
           className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-purple-300 hover:shadow-md transition-all"
@@ -114,7 +131,6 @@ export default async function FinancePage() {
             {activeRetainers.length} active recurring payments
           </p>
         </Link>
-
         <Link
           href="/finance/payments"
           className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-green-300 hover:shadow-md transition-all"

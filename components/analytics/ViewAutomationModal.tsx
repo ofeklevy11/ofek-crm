@@ -223,7 +223,6 @@ export default function ViewAutomationModal({
           triggerConfig,
           actionType,
           actionConfig,
-          createdBy: userId,
         });
         if (!result.success) throw new Error(result.error);
       } else {
@@ -338,7 +337,7 @@ export default function ViewAutomationModal({
                         >
                           <Power size={18} />
                         </button>
-                        <div className="h-4 w-[1px] bg-gray-300 mx-1" />
+                        <div className="h-4 w-px bg-gray-300 mx-1" />
                         <button
                           onClick={() => handleEdit(rule)}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"

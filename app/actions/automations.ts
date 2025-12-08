@@ -37,7 +37,16 @@ interface ActionConfig {
 
 export async function getAutomationRules() {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return { success: false, error: "Authentication required" };
+    }
+
+    // CRITICAL: Filter by companyId for multi-tenancy
     const rules = await prisma.automationRule.findMany({
+      where: { companyId: currentUser.companyId },
       orderBy: { createdAt: "desc" },
       include: {
         creator: {
@@ -58,9 +67,16 @@ export async function createAutomationRule(data: {
   triggerConfig: any;
   actionType: string;
   actionConfig: any;
-  createdBy: number;
 }) {
   try {
+    // Get the current authenticated user from session
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return { success: false, error: "Authentication required" };
+    }
+
     const rule = await prisma.automationRule.create({
       data: {
         name: data.name,
@@ -68,7 +84,12 @@ export async function createAutomationRule(data: {
         triggerConfig: data.triggerConfig,
         actionType: data.actionType,
         actionConfig: data.actionConfig,
-        createdBy: data.createdBy,
+        creator: {
+          connect: { id: currentUser.id },
+        },
+        company: {
+          connect: { id: currentUser.companyId },
+        },
       },
     });
 

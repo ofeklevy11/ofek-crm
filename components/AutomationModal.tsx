@@ -139,10 +139,7 @@ export default function AutomationModal({
       if (editingRule) {
         result = await updateAutomationRule(editingRule.id, data);
       } else {
-        result = await createAutomationRule({
-          ...data,
-          createdBy: currentUserId,
-        });
+        result = await createAutomationRule(data);
       }
 
       if (result.success) {

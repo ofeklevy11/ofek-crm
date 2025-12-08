@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function POST(
   request: Request,
@@ -9,10 +10,32 @@ export async function POST(
     const { id } = await params;
     const recordId = parseInt(id);
     const body = await request.json();
-    const { filename, url, size, uploadedBy } = body;
+    const { filename, url, size } = body;
 
     if (isNaN(recordId)) {
       return NextResponse.json({ error: "Invalid record ID" }, { status: 400 });
+    }
+
+    // Get the current authenticated user from session
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    // Verify record exists and belongs to company
+    const existingRecord = await prisma.record.findFirst({
+      where: {
+        id: recordId,
+        companyId: currentUser.companyId,
+      },
+    });
+
+    if (!existingRecord) {
+      return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
     const attachment = await prisma.attachment.create({
@@ -21,7 +44,7 @@ export async function POST(
         filename,
         url,
         size: size || 0,
-        uploadedBy: uploadedBy || 1, // Default to admin
+        uploadedBy: currentUser.id,
       },
     });
 
@@ -45,6 +68,24 @@ export async function GET(
 
     if (isNaN(recordId)) {
       return NextResponse.json({ error: "Invalid record ID" }, { status: 400 });
+    }
+
+    // Get current user to verify access
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Verify record access
+    const existingRecord = await prisma.record.findFirst({
+      where: {
+        id: recordId,
+        companyId: currentUser.companyId,
+      },
+    });
+
+    if (!existingRecord) {
+      return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
     const attachments = await prisma.attachment.findMany({

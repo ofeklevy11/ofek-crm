@@ -14,8 +14,10 @@ export async function getTasks() {
 
     const canViewAll =
       user.role === "admin" || hasUserFlag(user, "canViewAllTasks");
-
-    const whereClause = canViewAll ? {} : { assigneeId: user.id };
+    // CRITICAL: Always filter by companyId for multi-tenancy
+    const whereClause = canViewAll
+      ? { companyId: user.companyId }
+      : { companyId: user.companyId, assigneeId: user.id };
 
     const tasks = await prisma.task.findMany({
       where: whereClause,
@@ -89,6 +91,7 @@ export async function createTask(data: {
 
     const newTask = await prisma.task.create({
       data: {
+        companyId: user.companyId, // CRITICAL: Set companyId for multi-tenancy
         title: data.title,
         description: data.description,
         status: data.status ?? "todo",

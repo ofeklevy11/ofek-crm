@@ -2,10 +2,19 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function getCalendarEvents() {
   try {
-    const events = await prisma.calendarEvent.findMany();
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // CRITICAL: Filter by companyId
+    const events = await prisma.calendarEvent.findMany({
+      where: { companyId: user.companyId },
+    });
     return { success: true, data: events };
   } catch (error) {
     console.error("Error fetching calendar events:", error);
@@ -15,8 +24,17 @@ export async function getCalendarEvents() {
 
 export async function getCalendarEventById(id: string) {
   try {
-    const event = await prisma.calendarEvent.findUnique({
-      where: { id },
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // CRITICAL: Filter by companyId
+    const event = await prisma.calendarEvent.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
     });
 
     if (!event) {
@@ -38,8 +56,14 @@ export async function createCalendarEvent(data: {
   color?: string;
 }) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     const event = await prisma.calendarEvent.create({
       data: {
+        companyId: user.companyId, // CRITICAL: Set companyId
         title: data.title,
         description: data.description,
         startTime: new Date(data.startTime),
@@ -84,6 +108,23 @@ export async function updateCalendarEvent(
   }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Verify ownership
+    const existingEvent = await prisma.calendarEvent.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
+    });
+
+    if (!existingEvent) {
+      return { success: false, error: "Event not found" };
+    }
+
     const updateData: Record<string, unknown> = {};
 
     if (data.title !== undefined) updateData.title = data.title;
@@ -125,6 +166,23 @@ export async function updateCalendarEvent(
 
 export async function deleteCalendarEvent(id: string) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Verify ownership
+    const existingEvent = await prisma.calendarEvent.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
+    });
+
+    if (!existingEvent) {
+      return { success: false, error: "Event not found" };
+    }
+
     await prisma.calendarEvent.delete({
       where: { id },
     });

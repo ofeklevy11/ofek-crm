@@ -16,6 +16,7 @@ export async function getCurrentAuthUser() {
           where: { email: userEmail },
           select: {
             id: true,
+            companyId: true,
             name: true,
             email: true,
             role: true,
@@ -41,6 +42,7 @@ export async function getCurrentAuthUser() {
       where: { id: userId },
       select: {
         id: true,
+        companyId: true,
         name: true,
         email: true,
         role: true,

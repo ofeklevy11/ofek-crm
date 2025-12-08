@@ -285,7 +285,6 @@ export default function MultiEventAutomationModal({
         },
         actionType: "CALCULATE_MULTI_EVENT_DURATION",
         actionConfig,
-        createdBy: currentUserId,
       };
 
       let result;

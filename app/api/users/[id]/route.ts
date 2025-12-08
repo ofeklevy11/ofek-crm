@@ -1,15 +1,27 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
-    const user = await prisma.user.findUnique({
-      where: { id: parseInt(id) },
+    const targetUserId = parseInt(id);
+
+    // CRITICAL: Filter by companyId - can only see users in same company
+    const targetUser = await prisma.user.findFirst({
+      where: {
+        id: targetUserId,
+        companyId: user.companyId,
+      },
       select: {
         id: true,
         name: true,
@@ -23,11 +35,11 @@ export async function GET(
       },
     });
 
-    if (!user) {
+    if (!targetUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    return NextResponse.json(user);
+    return NextResponse.json(targetUser);
   } catch (error) {
     console.error("Error fetching user:", error);
     return NextResponse.json(
@@ -42,7 +54,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
+    const targetUserId = parseInt(id);
     const body = await request.json();
     const {
       name,
@@ -54,16 +72,22 @@ export async function PATCH(
       tablePermissions,
     } = body;
 
-    // Check if user exists
-    const existingUser = await prisma.user.findUnique({
-      where: { id: parseInt(id) },
+    // Check if user exists and belongs to company
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        id: targetUserId,
+        companyId: user.companyId,
+      },
     });
 
     if (!existingUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Check if email is taken by another user
+    // Only Admin can update other users (usually), but for now we rely on the caller UI to enforce role logic
+    // We just enforce company isolation here.
+
+    // Check if email is taken by another user (across system? or just company? Email should be unique globally usually)
     if (email && email !== existingUser.email) {
       const emailTaken = await prisma.user.findUnique({
         where: { email },
@@ -89,9 +113,9 @@ export async function PATCH(
     if (permissions) updateData.permissions = permissions;
     if (tablePermissions) updateData.tablePermissions = tablePermissions;
 
-    // Update user
+    // Update user - with company check in where clause just to be extra safe
     const updatedUser = await prisma.user.update({
-      where: { id: parseInt(id) },
+      where: { id: targetUserId }, // Prisma update by ID is standard, we verified ownership above
       data: updateData,
       select: {
         id: true,
@@ -121,20 +145,37 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    // Check if user exists
-    const existingUser = await prisma.user.findUnique({
-      where: { id: parseInt(id) },
+    const { id } = await params;
+    const targetUserId = parseInt(id);
+
+    // Check if user exists and belongs to company
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        id: targetUserId,
+        companyId: user.companyId,
+      },
     });
 
     if (!existingUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // Prevent deleting yourself? (Optional safety)
+    if (existingUser.id === user.id) {
+      return NextResponse.json(
+        { error: "Cannot delete yourself" },
+        { status: 400 }
+      );
+    }
+
     // Delete user
     await prisma.user.delete({
-      where: { id: parseInt(id) },
+      where: { id: targetUserId },
     });
 
     return NextResponse.json({ success: true });

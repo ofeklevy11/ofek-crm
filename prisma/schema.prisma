@@ -6,7 +6,30 @@ datasource db {
   provider = "postgresql"
 }
 
+model Company {
+  id        Int      @id @default(autoincrement())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  users               User[]
+  tables              TableMeta[]
+  records             Record[]
+  tasks               Task[]
+  clients             Client[]
+  automationRules     AutomationRule[]
+  calendarEvents      CalendarEvent[]
+  notifications       Notification[]
+  messages            Message[]
+  groups              Group[]
+  analyticsViews      AnalyticsView[]
+  viewFolders         ViewFolder[]
+  tableCategories     TableCategory[]
+}
+
 model User {
+  companyId            Int
   id                   Int           @id @default(autoincrement())
   name                 String
   email                String        @unique
@@ -28,10 +51,15 @@ model User {
   createdGroups        Group[]       @relation("CreatedGroups")
   groupMemberships     GroupMember[]
   assignedTasks        Task[]        @relation("TaskAssignee")
+  
+  company              Company       @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
 }
 
 model Message {
   id         Int      @id @default(autoincrement())
+  companyId  Int
   content    String
   senderId   Int
   receiverId Int?
@@ -42,10 +70,14 @@ model Message {
   sender     User     @relation("SentMessages", fields: [senderId], references: [id])
   receiver   User?    @relation("ReceivedMessages", fields: [receiverId], references: [id])
   group      Group?   @relation(fields: [groupId], references: [id])
+  company    Company  @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
 }
 
 model Group {
   id        Int           @id @default(autoincrement())
+  companyId Int
   name      String
   imageUrl  String?
   creatorId Int
@@ -54,6 +86,9 @@ model Group {
   creator   User          @relation("CreatedGroups", fields: [creatorId], references: [id])
   members   GroupMember[]
   messages  Message[]
+  company   Company       @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
 }
 
 model GroupMember {
@@ -70,6 +105,7 @@ model GroupMember {
 
 model AutomationRule {
   id            Int      @id @default(autoincrement())
+  companyId     Int
   name          String
   triggerType   String   // 'MANUAL', 'TASK_STATUS_CHANGE', 'RECORD_CREATE', 'MULTI_EVENT_DURATION'
   triggerConfig Json?    // Configuration for the trigger (e.g., fromStatus, toStatus)
@@ -91,10 +127,14 @@ model AutomationRule {
   
   folderId      Int?
   folder        ViewFolder? @relation(fields: [folderId], references: [id])
+  company       Company     @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
 }
 
 model Notification {
   id        Int      @id @default(autoincrement())
+  companyId Int
   userId    Int
   title     String
   message   String?
@@ -102,10 +142,14 @@ model Notification {
   link      String?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
 }
 
 model TableMeta {
   id         Int      @id @default(autoincrement())
+  companyId  Int
   name       String
   slug       String   @unique
   createdBy  Int
@@ -118,14 +162,21 @@ model TableMeta {
   category   TableCategory? @relation(fields: [categoryId], references: [id])
   order      Int            @default(0)
   views      View[]   @relation("TableViews")
+  company    Company  @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
 }
 
 model TableCategory {
   id        Int         @id @default(autoincrement())
+  companyId Int
   name      String
   tables    TableMeta[]
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
+  company   Company     @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
 }
 
 model View {
@@ -148,6 +199,7 @@ model View {
 
 model Record {
   id          Int          @id @default(autoincrement())
+  companyId   Int
   tableId     Int
   data        Json
   createdBy   Int?
@@ -158,9 +210,12 @@ model Record {
   auditLogs   AuditLog[]
   creator     User?        @relation("CreatedBy", fields: [createdBy], references: [id])
   table       TableMeta    @relation("TableRecords", fields: [tableId], references: [id])
+  company     Company      @relation(fields: [companyId], references: [id])
   
   statusDurations StatusDuration[]
   multiEventDurations MultiEventDuration[]
+  
+  @@index([companyId])
 }
 
 model Attachment {
@@ -188,6 +243,7 @@ model AuditLog {
 
 model Task {
   id          String    @id @default(cuid())
+  companyId   Int
   title       String
   description String?
   status      String
@@ -202,10 +258,14 @@ model Task {
   
   statusDurations StatusDuration[]
   multiEventDurations MultiEventDuration[]
+  company     Company   @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
 }
 
 model CalendarEvent {
   id          String   @id @default(cuid())
+  companyId   Int
   title       String
   description String?
   startTime   DateTime
@@ -213,10 +273,14 @@ model CalendarEvent {
   color       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  company     Company  @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
 }
 
 model Client {
   id              Int                     @id @default(autoincrement())
+  companyId       Int
   name            String
   email           String?
   phone           String?
@@ -228,6 +292,9 @@ model Client {
   paymentMethods  PaymentMethodInternal[]
   retainers       Retainer[]
   transactions    Transaction[]
+  companyRelation Company                 @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
 }
 
 model Retainer {
@@ -351,6 +418,7 @@ model MultiEventDuration {
 
 model AnalyticsView {
   id          Int      @id @default(autoincrement())
+  companyId   Int
   title       String
   type        String   // 'COUNT', 'AVERAGE', 'SUM', 'CONVERSION', 'DISTRIBUTION'
   description String?
@@ -362,10 +430,14 @@ model AnalyticsView {
 
   folderId    Int?
   folder      ViewFolder? @relation(fields: [folderId], references: [id])
+  company     Company     @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
 }
 
 model ViewFolder {
   id        Int      @id @default(autoincrement())
+  companyId Int
   name      String
   order     Int      @default(0)
   createdAt DateTime @default(now())
@@ -373,4 +445,7 @@ model ViewFolder {
 
   analyticsViews AnalyticsView[]
   automationRules AutomationRule[]
+  company        Company        @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
 }

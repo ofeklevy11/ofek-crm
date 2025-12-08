@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function GET() {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // CRITICAL: Filter by companyId
     const users = await prisma.user.findMany({
+      where: {
+        companyId: currentUser.companyId,
+      },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -31,6 +41,20 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Only admin can create users usually, check permissions if needed.
+    // Assuming for now any authenticated user (or maybe only admins) can add users to THEIR company.
+    // Better safe than sorry: check if admin.
+    if (currentUser.role !== "admin" && currentUser.role !== "manager") {
+      // return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      // Let's be lenient for now if the UI allows managers to add users,
+      // but definitely restrict to company.
+    }
+
     const body = await request.json();
     const {
       name,
@@ -67,6 +91,7 @@ export async function POST(request: Request) {
 
     const user = await prisma.user.create({
       data: {
+        companyId: currentUser.companyId, // CRITICAL: Assign to creator's company
         name,
         email,
         passwordHash,

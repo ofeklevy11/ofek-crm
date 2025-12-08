@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { canManageTables } from "@/lib/permissions";
 
 export async function GET() {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // CRITICAL: Filter by companyId for multi-tenancy
     const tables = await prisma.tableMeta.findMany({
+      where: { companyId: user.companyId },
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(tables);
@@ -18,11 +27,23 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!canManageTables(user)) {
+      return NextResponse.json(
+        { error: "אין לך הרשאה ליצור טבלאות" },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
-    const { name, slug, schemaJson, createdBy } = body;
+    const { name, slug, schemaJson } = body;
 
     // Basic validation
-    if (!name || !slug || !createdBy) {
+    if (!name || !slug) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -34,7 +55,8 @@ export async function POST(request: Request) {
         name,
         slug,
         schemaJson: schemaJson || {},
-        createdBy: Number(createdBy), // Ensure it's a number
+        companyId: user.companyId,
+        createdBy: user.id,
         categoryId: body.categoryId ? Number(body.categoryId) : undefined,
       },
     });

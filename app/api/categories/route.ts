@@ -1,13 +1,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function GET() {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // CRITICAL: Filter by companyId
     const categories = await prisma.tableCategory.findMany({
+      where: { companyId: user.companyId },
       orderBy: { createdAt: "asc" },
       include: {
         tables: {
           select: { id: true }, // Just to count or check existence if needed
+          where: { companyId: user.companyId }, // Double check on strict filtering
         },
       },
     });
@@ -23,6 +32,14 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Typically only admins/managers can create categories?
+    // Let's assume standard users can create categories for now, but strictly isolated to company.
+
     const body = await request.json();
     const { name } = body;
 
@@ -33,6 +50,7 @@ export async function POST(request: Request) {
     const category = await prisma.tableCategory.create({
       data: {
         name,
+        companyId: user.companyId, // CRITICAL: Attribute to company
       },
     });
 

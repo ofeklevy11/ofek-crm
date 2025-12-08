@@ -95,9 +95,10 @@ export async function getUsers() {
     throw new Error("Not authenticated");
   }
 
-  // Fetch all other users
+  // CRITICAL: Filter by companyId for multi-tenancy - users only see colleagues from same company
   const users = await prisma.user.findMany({
     where: {
+      companyId: currentUser.companyId,
       id: {
         not: currentUser.id,
       },
@@ -168,6 +169,7 @@ export async function createGroup(
 
   const group = await prisma.group.create({
     data: {
+      companyId: currentUser.companyId, // CRITICAL: Set companyId for multi-tenancy
       name,
       imageUrl,
       creatorId: currentUser.id,
@@ -287,6 +289,7 @@ export async function sendMessage(receiverId: number, content: string) {
 
   await prisma.message.create({
     data: {
+      companyId: currentUser.companyId, // CRITICAL: Set companyId for multi-tenancy
       content,
       senderId: currentUser.id,
       receiverId,
@@ -316,6 +319,7 @@ export async function sendGroupMessage(groupId: number, content: string) {
 
   await prisma.message.create({
     data: {
+      companyId: currentUser.companyId, // CRITICAL: Set companyId for multi-tenancy
       content,
       senderId: currentUser.id,
       groupId,
