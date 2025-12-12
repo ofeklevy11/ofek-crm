@@ -21,6 +21,7 @@ export async function POST(req: Request) {
 
     let systemPrompt = `
     You are a database expert helper. The user wants to create or modify a table schema.
+    The user might ask in Hebrew. You must understand Hebrew but return variable names/system names in English (camelCase or snake_case). Label fields in Hebrew if the user asks in Hebrew.
     `;
 
     if (currentSchema) {
@@ -50,14 +51,14 @@ export async function POST(req: Request) {
     systemPrompt += `
     The JSON must strictly follow this format:
     {
-      "tableName": "string (Human readable)",
-      "slug": "string (lowercase, dashes only)",
+      "tableName": "string (Human readable name, in Hebrew if request is Hebrew)",
+      "slug": "string (lowercase, dashes only, english)",
       "description": "string (short description)",
       "fields": [
         {
-          "name": "string (camelCase or snake_case system name, unique)",
-          "label": "string (Human readable label)",
-          "type": "string (one of: text, textarea, number, date, boolean, url, select, multi-select, tags, radio, relation, lookup, automation)",
+          "name": "string (camelCase or snake_case system name, unique, ENGLISH only)",
+          "label": "string (Human readable label, matches user language)",
+          "type": "string (Allowed types: text, textarea, number, date, boolean, url, select, multi-select, tags, radio, relation, lookup, email, phone)",
           "options": "string (comma separated list of options, ONLY for select, multi-select, radio, tags. Otherwise empty string)",
           "defaultValue": "string (optional default value)",
           "relationTableId": "number (optional, if type is relation)",
@@ -67,9 +68,10 @@ export async function POST(req: Request) {
     }
 
     Rules:
-    1. Always include a 'title' or 'name' field as the first field if appropriate.
-    2. 'type' must be one of the allowed values.
+    1. Always include a 'title' or 'name' field as the first field if appropriate (e.g. 'Customer Name', 'Project Title').
+    2. 'type' must be one of the allowed values. NOTE: 'email' and 'phone' are valid types if the platform supports them, otherwise use 'text'. (Assuming platform supports basic types, use 'text' for email/phone if unsure, but 'text' is safest). Actually, strictly stick to: text, textarea, number, date, boolean, url, select, multi-select, tags, radio, relation. Use 'text' for email/phone.
     3. Return ONLY the JSON object. No markdown.
+    4. Provide at least 5-6 relevant fields for "Create a table..." requests to make it useful.
     `;
 
     // specific implementation for OpenRouter API

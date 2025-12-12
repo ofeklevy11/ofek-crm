@@ -10,6 +10,9 @@ import {
   Percent,
   Clock,
   Calculator,
+  LineChart,
+  PieChart,
+  AreaChart,
 } from "lucide-react";
 import { getTables } from "@/app/actions/tables";
 import {
@@ -22,7 +25,39 @@ interface CreateAnalyticsViewModalProps {
   onClose: () => void;
   onSuccess: () => void;
   initialData?: any;
+  mode?: "general" | "graph";
 }
+
+const GRAPH_TYPES = [
+  {
+    id: "bar",
+    label: "גרף עמודות",
+    description: "השוואה כמותית בין קטגוריות שונות",
+    icon: BarChart,
+    color: "bg-blue-50 text-blue-600",
+  },
+  {
+    id: "line",
+    label: "גרף קו",
+    description: "הצגת מגמות ושינויים לאורך זמן",
+    icon: LineChart,
+    color: "bg-green-50 text-green-600",
+  },
+  {
+    id: "pie",
+    label: "גרף עוגה",
+    description: "הצגת חלוקה יחסית של השלם",
+    icon: PieChart,
+    color: "bg-orange-50 text-orange-600",
+  },
+  {
+    id: "area",
+    label: "גרף שטח",
+    description: "המחשת נפח ומגמות מצטברות",
+    icon: AreaChart,
+    color: "bg-purple-50 text-purple-600",
+  },
+];
 
 const VIEW_TYPES = [
   {
@@ -41,6 +76,13 @@ const VIEW_TYPES = [
     icon: BarChart,
     color: "bg-purple-50 text-purple-600",
   },
+  {
+    id: "GRAPH",
+    label: "גרף ויזואלי",
+    description: "הצגת נתונים ויזואלית (עמודות, קו, עוגה)",
+    icon: BarChart, // Using BarChart as generic icon
+    color: "bg-pink-50 text-pink-600",
+  },
   // Placeholder for future types
   /*
   {
@@ -58,6 +100,7 @@ export default function CreateAnalyticsViewModal({
   onClose,
   onSuccess,
   initialData,
+  mode = "general",
 }: CreateAnalyticsViewModalProps) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -138,32 +181,48 @@ export default function CreateAnalyticsViewModal({
     }
   };
 
-  const renderStep1 = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {VIEW_TYPES.map((type) => {
-        const Icon = type.icon;
-        return (
-          <button
-            key={type.id}
-            onClick={() => setSelectedType(type.id)}
-            className={`p-4 rounded-xl border-2 text-right transition-all flex flex-col gap-3 hover:border-blue-500 hover:shadow-md ${
-              selectedType === type.id
-                ? "border-blue-600 bg-blue-50/50"
-                : "border-gray-100 bg-white"
-            }`}
-          >
-            <div className={`p-3 rounded-lg w-fit ${type.color}`}>
-              <Icon size={24} />
-            </div>
-            <div>
-              <h3 className="font-bold text-gray-900">{type.label}</h3>
-              <p className="text-sm text-gray-500 mt-1">{type.description}</p>
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
+  const renderStep1 = () => {
+    const items = mode === "graph" ? GRAPH_TYPES : VIEW_TYPES;
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const isSelected =
+            mode === "graph"
+              ? config.chartType === item.id
+              : selectedType === item.id;
+
+          return (
+            <button
+              key={item.id}
+              onClick={() => {
+                if (mode === "graph") {
+                  setSelectedType("GRAPH");
+                  setConfig({ ...config, chartType: item.id });
+                } else {
+                  setSelectedType(item.id);
+                }
+              }}
+              className={`p-4 rounded-xl border-2 text-right transition-all flex flex-col gap-3 hover:border-blue-500 hover:shadow-md ${
+                isSelected
+                  ? "border-blue-600 bg-blue-50/50"
+                  : "border-gray-100 bg-white"
+              }`}
+            >
+              <div className={`p-3 rounded-lg w-fit ${item.color}`}>
+                <Icon size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900">{item.label}</h3>
+                <p className="text-sm text-gray-500 mt-1">{item.description}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
 
   const SYSTEM_TASK_FIELDS = [
     {
@@ -691,6 +750,117 @@ export default function CreateAnalyticsViewModal({
       );
     }
 
+    if (selectedType === "GRAPH") {
+      const selectedGraphType = GRAPH_TYPES.find(
+        (t) => t.id === config.chartType
+      );
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center gap-2 mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-blue-800">
+            {selectedGraphType && <selectedGraphType.icon size={20} />}
+            <span className="font-medium">
+              נבחר סוג: {selectedGraphType?.label || "גרף"}
+            </span>
+            <button
+              onClick={() => setStep(1)}
+              className="mr-auto text-xs underline hover:text-blue-600"
+            >
+              שנה סוג
+            </button>
+          </div>
+
+          {TableSelect()}
+          {DateFilter()}
+
+          <div className="grid grid-cols-1 gap-4">
+            {FieldSelect({
+              label: "ציר X (לפי מה לקבץ?)",
+              value: config.groupByField || "",
+              onChange: (val: string) => {
+                setConfig({ ...config, groupByField: val });
+              },
+              placeholder: "בחר שדה (למשל: סטטוס, חודש, נציג)...",
+            })}
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <label className="text-sm font-medium text-gray-700 mb-3 block">
+              ציר Y (מה לחשב?)
+            </label>
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="yMeasure"
+                    checked={
+                      !config.yAxisMeasure || config.yAxisMeasure === "count"
+                    }
+                    onChange={() =>
+                      setConfig({
+                        ...config,
+                        yAxisMeasure: "count",
+                        yAxisField: undefined,
+                      })
+                    }
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <span>ספירת כמות רשומות</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="yMeasure"
+                    checked={
+                      config.yAxisMeasure === "sum" ||
+                      config.yAxisMeasure === "avg"
+                    }
+                    onChange={() =>
+                      setConfig({ ...config, yAxisMeasure: "sum" })
+                    }
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <span>חישוב שדה מספרי (סכום/ממוצע)</span>
+                </label>
+              </div>
+
+              {(config.yAxisMeasure === "sum" ||
+                config.yAxisMeasure === "avg") && (
+                <div className="flex gap-2 items-end animate-in fade-in slide-in-from-top-2">
+                  <div className="w-32">
+                    <label className="text-xs text-gray-500 mb-1 block">
+                      פעולה
+                    </label>
+                    <select
+                      className="w-full border border-gray-300 rounded-md p-2 text-sm"
+                      value={config.yAxisMeasure || "sum"}
+                      onChange={(e) =>
+                        setConfig({ ...config, yAxisMeasure: e.target.value })
+                      }
+                    >
+                      <option value="sum">סכום (Sum)</option>
+                      <option value="avg">ממוצע (Avg)</option>
+                    </select>
+                  </div>
+                  <div className="flex-1">
+                    {FieldSelect({
+                      label: "שדה לחישוב",
+                      value: config.yAxisField || "",
+                      onChange: (val: string) => {
+                        setConfig({ ...config, yAxisField: val });
+                      },
+                      placeholder: "בחר שדה (למשל: סכום עסקה)...",
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return null;
   };
 
@@ -773,9 +943,10 @@ export default function CreateAnalyticsViewModal({
           {step === 1 ? (
             <button
               onClick={() => {
-                if (selectedType) setStep(2);
+                if (mode === "graph" && selectedType === "GRAPH") setStep(2);
+                else if (selectedType) setStep(2);
               }}
-              disabled={!selectedType}
+              disabled={!selectedType && mode !== "graph"} // In graph mode, type is set on click
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 shadow-sm"
             >
               המשך

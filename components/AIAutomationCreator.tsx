@@ -53,12 +53,12 @@ export default function AIAutomationCreator({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
+  const handleSend = async (text?: string) => {
+    const messageToSend = text || input;
+    if (!messageToSend.trim() || loading) return;
 
-    const userMsg = input;
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
+    setMessages((prev) => [...prev, { role: "user", content: messageToSend }]);
     setLoading(true);
 
     try {
@@ -79,7 +79,7 @@ export default function AIAutomationCreator({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: userMsg,
+          prompt: messageToSend,
           tables: tablesStr,
           users: usersStr,
           existingAutomations: "",
@@ -366,6 +366,109 @@ export default function AIAutomationCreator({
                 </div>
               </div>
             )}
+            {tables.length === 0 && !loading && (
+              <div className="flex flex-col items-center justify-center h-full p-8 text-center space-y-4">
+                <div className="bg-orange-100 p-4 rounded-full">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="32"
+                    height="32"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-orange-600"
+                  >
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-gray-800">
+                  אין טבלאות זמינות
+                </h3>
+                <p className="text-gray-500 max-w-sm">
+                  כדי ליצור אוטומציות, עליך ליצור קודם טבלאות במערכת.
+                </p>
+              </div>
+            )}
+
+            {messages.length === 1 && tables.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-2">
+                {(() => {
+                  const suggestions: string[] = [];
+
+                  // Limit processing to first 3 tables to avoid overwhelming logic, or pick random ones
+                  // Better: Iterate all tables and rank relevance
+
+                  tables.forEach((table) => {
+                    let columns: any[] = [];
+                    if (Array.isArray(table.schemaJson)) {
+                      columns = table.schemaJson;
+                    }
+
+                    const statusCol = columns.find(
+                      (c: any) =>
+                        c.name.toLowerCase().includes("status") ||
+                        c.type === "select"
+                    );
+                    const emailCol = columns.find(
+                      (c: any) =>
+                        c.type === "email" ||
+                        c.name.toLowerCase().includes("email")
+                    );
+                    const priorityCol = columns.find(
+                      (c: any) =>
+                        c.name.toLowerCase().includes("priority") ||
+                        c.name.includes("עדיפות")
+                    );
+
+                    // Suggestion 1: Status Change
+                    if (statusCol) {
+                      suggestions.push(
+                        `שלח התראה כש${
+                          statusCol.label || statusCol.name
+                        } בטבלת ${table.name} משתנה`
+                      );
+                    }
+
+                    // Suggestion 2: New Record Notification
+                    suggestions.push(
+                      `התראה על יצירת רשומה חדשה ב${table.name}`
+                    );
+
+                    // Suggestion 3: High Priority Task
+                    if (priorityCol) {
+                      suggestions.push(
+                        `צור משימה למנהל כאשר ${table.name} מוגדר כדחוף`
+                      );
+                    }
+                  });
+
+                  // Add some generic system suggestions if we don't have enough
+                  if (suggestions.length < 2) {
+                    suggestions.push(
+                      "צור משימה למנהל מכירות כשעסקה חדשה נסגרת"
+                    );
+                  }
+
+                  // Shuffle and pick 4
+                  return suggestions
+                    .sort(() => 0.5 - Math.random())
+                    .slice(0, 4);
+                })().map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleSend(s)}
+                    className="text-right text-sm p-3 bg-white border border-gray-200 rounded-xl hover:border-purple-400 hover:shadow-md transition-all text-gray-600 hover:text-purple-600"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
@@ -376,29 +479,36 @@ export default function AIAutomationCreator({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                placeholder="לדוגמה: צור התראה כשנוספת רשומה חדשה בטבלת לקוחות..."
-                className="w-full pl-5 pr-12 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition text-gray-800 shadow-inner"
+                placeholder={
+                  tables.length > 0
+                    ? "לדוגמה: צור התראה כשנוספת רשומה חדשה בטבלת לקוחות..."
+                    : "נא ליצור טבלאות קודם"
+                }
+                disabled={tables.length === 0}
+                className="w-full pl-5 pr-12 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition text-gray-800 shadow-inner disabled:bg-gray-100 disabled:text-gray-400"
               />
-              <button
-                onClick={handleSend}
-                disabled={loading || !input.trim()}
-                className="absolute right-2 top-2 p-2 bg-linear-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition disabled:opacity-50 shadow-md"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+              {tables.length > 0 && (
+                <button
+                  onClick={() => handleSend()}
+                  disabled={loading || !input.trim()}
+                  className="absolute right-2 top-2 p-2 bg-linear-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition disabled:opacity-50 shadow-md"
                 >
-                  <line x1="22" y1="2" x2="11" y2="13"></line>
-                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                </svg>
-              </button>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
         </div>

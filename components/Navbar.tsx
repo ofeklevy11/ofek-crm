@@ -48,6 +48,9 @@ export default async function Navbar() {
                       Automations
                     </Link>
                   )}
+                  <Link href="/workflows" className={linkClass}>
+                    Workflows
+                  </Link>
                   {user.role === "admin" && (
                     <Link href="/users" className={linkClass}>
                       Users
@@ -58,6 +61,18 @@ export default async function Navbar() {
                       Analytics
                     </Link>
                   )}
+                  <Link href="/services" className={linkClass}>
+                    Services
+                  </Link>
+                  <Link href="/quotes" className={linkClass}>
+                    Quotes
+                  </Link>
+                  <Link href="/service" className={linkClass}>
+                    Service
+                  </Link>
+                  <Link href="/files" className={linkClass}>
+                    Files
+                  </Link>
                   <ChatNavbarLink />
                 </>
               )}

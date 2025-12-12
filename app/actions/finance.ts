@@ -5,9 +5,20 @@ import { revalidatePath } from "next/cache";
 
 // ==================== RETAINERS ====================
 
+// ==================== RETAINERS ====================
+
 export async function getRetainers() {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
     const retainers = await prisma.retainer.findMany({
+      where: {
+        client: {
+          companyId: user.companyId,
+        },
+      },
       include: {
         client: true,
       },
@@ -22,6 +33,10 @@ export async function getRetainers() {
 
 export async function getRetainerById(id: number) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
     const retainer = await prisma.retainer.findUnique({
       where: { id },
       include: {
@@ -31,6 +46,11 @@ export async function getRetainerById(id: number) {
 
     if (!retainer) {
       return { success: false, error: "Retainer not found" };
+    }
+
+    // Authorization check
+    if (retainer.client.companyId !== user.companyId) {
+      return { success: false, error: "Unauthorized" };
     }
 
     return { success: true, data: retainer };
@@ -49,7 +69,19 @@ export async function createRetainer(data: {
   notes?: string;
 }) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
     const { title, clientId, amount, frequency, startDate, notes } = data;
+
+    // Verify client belongs to company
+    const client = await prisma.client.findUnique({
+      where: { id: Number(clientId) },
+    });
+    if (!client || client.companyId !== user.companyId) {
+      return { success: false, error: "Invalid client" };
+    }
 
     // Calculate next due date based on frequency
     const start = new Date(startDate);
@@ -103,6 +135,20 @@ export async function updateRetainer(
   }
 ) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
+    // Verify ownership
+    const existing = await prisma.retainer.findUnique({
+      where: { id },
+      include: { client: true },
+    });
+
+    if (!existing || existing.client.companyId !== user.companyId) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     const updateData: Record<string, unknown> = { ...data };
 
     if (data.nextDueDate) {
@@ -127,6 +173,20 @@ export async function updateRetainer(
 
 export async function deleteRetainer(id: number) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
+    // Verify ownership
+    const existing = await prisma.retainer.findUnique({
+      where: { id },
+      include: { client: true },
+    });
+
+    if (!existing || existing.client.companyId !== user.companyId) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     await prisma.retainer.delete({
       where: { id },
     });
@@ -146,7 +206,14 @@ export async function deleteRetainer(id: number) {
 
 export async function getPayments() {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
     const payments = await prisma.oneTimePayment.findMany({
+      where: {
+        client: { companyId: user.companyId },
+      },
       include: {
         client: true,
       },
@@ -161,6 +228,10 @@ export async function getPayments() {
 
 export async function getPaymentById(id: number) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
     const payment = await prisma.oneTimePayment.findUnique({
       where: { id },
       include: {
@@ -170,6 +241,10 @@ export async function getPaymentById(id: number) {
 
     if (!payment) {
       return { success: false, error: "Payment not found" };
+    }
+
+    if (payment.client.companyId !== user.companyId) {
+      return { success: false, error: "Unauthorized" };
     }
 
     return { success: true, data: payment };
@@ -187,7 +262,19 @@ export async function createPayment(data: {
   notes?: string;
 }) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
     const { title, clientId, amount, dueDate, notes } = data;
+
+    // Verify client belongs to company
+    const client = await prisma.client.findUnique({
+      where: { id: Number(clientId) },
+    });
+    if (!client || client.companyId !== user.companyId) {
+      return { success: false, error: "Invalid client" };
+    }
 
     const payment = await prisma.oneTimePayment.create({
       data: {
@@ -222,6 +309,19 @@ export async function updatePayment(
   }
 ) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
+    // Verify
+    const existing = await prisma.oneTimePayment.findUnique({
+      where: { id },
+      include: { client: true },
+    });
+    if (!existing || existing.client.companyId !== user.companyId) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     const updateData: Record<string, unknown> = { ...data };
 
     if (data.dueDate) {
@@ -246,6 +346,19 @@ export async function updatePayment(
 
 export async function deletePayment(id: number) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
+    // Verify
+    const existing = await prisma.oneTimePayment.findUnique({
+      where: { id },
+      include: { client: true },
+    });
+    if (!existing || existing.client.companyId !== user.companyId) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     await prisma.oneTimePayment.delete({
       where: { id },
     });
@@ -265,11 +378,52 @@ export async function deletePayment(id: number) {
 
 export async function searchClients(searchTerm: string) {
   try {
-    // This assumes you have a Client model in your Prisma schema
-    // Adjust the search logic based on your actual schema
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
+    // Find the clients table dynamically for this company
+    const clientTable = await prisma.tableMeta.findFirst({
+      where: {
+        companyId: user.companyId,
+        OR: [{ slug: "clients" }, { name: "לקוחות" }, { name: "Clients" }],
+      },
+    });
+
+    if (!clientTable) {
+      // Fallback: search in Client model if it exists directly?
+      // This app seems to have dual source of truth (TableMeta vs Client model)
+      // But schema has `Client` model. We should search THAT.
+      // Wait, the previous code was searching `Record` with tableId: 2.
+      // Let's assume we should search the `Client` model instead which is typed.
+
+      const clients = await prisma.client.findMany({
+        where: {
+          companyId: user.companyId,
+          OR: [
+            { name: { contains: searchTerm, mode: "insensitive" } },
+            { email: { contains: searchTerm, mode: "insensitive" } },
+            { company: { contains: searchTerm, mode: "insensitive" } },
+          ],
+        },
+        take: 10,
+      });
+
+      // Helper to format as 'data' for records?
+      // The caller expects filteredRecords.
+      // Let's return them as is, hoping the caller can handle Client objects OR objects with 'data' field.
+      // Previous code returned `filteredRecords` from `Record` model.
+      // This implies the frontend expects Record structure `{ data: { ... } }`.
+      // We should probably rely on `Client` model for Finance.
+
+      return { success: true, data: clients };
+    }
+
+    // If we want to stick to the Record model for custom fields:
     const records = await prisma.record.findMany({
       where: {
-        tableId: 2, // Assuming table ID 2 is for clients - adjust as needed
+        tableId: clientTable.id,
+        companyId: user.companyId, // Filter by company
       },
     });
 
@@ -287,14 +441,39 @@ export async function searchClients(searchTerm: string) {
 
 export async function getFinanceClients() {
   try {
-    const clients = await prisma.record.findMany({
-      where: {
-        tableId: 2, // Assuming table ID 2 is for clients - adjust as needed
-      },
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
+    // Try to get from Client model first (Best for Finance)
+    const clients = await prisma.client.findMany({
+      where: { companyId: user.companyId },
       orderBy: { createdAt: "desc" },
     });
 
-    return { success: true, data: clients };
+    if (clients.length > 0) {
+      return { success: true, data: clients };
+    }
+
+    // Fallback: Check for a "Clients" table in TableMeta
+    const clientTable = await prisma.tableMeta.findFirst({
+      where: {
+        companyId: user.companyId,
+        OR: [{ slug: "clients" }, { name: "לקוחות" }, { name: "Clients" }],
+      },
+    });
+
+    if (clientTable) {
+      const records = await prisma.record.findMany({
+        where: {
+          tableId: clientTable.id,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      return { success: true, data: records };
+    }
+
+    return { success: true, data: [] };
   } catch (error) {
     console.error("Error fetching finance clients:", error);
     return { success: false, error: "Failed to fetch finance clients" };

@@ -40,6 +40,7 @@ export async function POST(req: Request) {
 
     const systemPrompt = `
     You are an analytics configuration expert. The user wants to create an analytics view/chart for their CRM system.
+    The user might ask in Hebrew. You must understand Hebrew.
     
     USER REQUEST:
     "${prompt}"
@@ -53,16 +54,16 @@ export async function POST(req: Request) {
     
     The JSON must strictly follow this format:
     {
-      "title": "string (descriptive title for the view)",
+      "title": "string (descriptive title for the view, in Hebrew if request is Hebrew)",
       "type": "string (one of: 'COUNT', 'CONVERSION')",
       "description": "string (short explanation)",
       "config": {
         // Data Source
         "model": "string (Task, Retainer, OneTimePayment, Transaction, CalendarEvent) OR leave empty if using a custom table",
-        "tableId": "number (if using a custom table, provide the ID)",
+        "tableId": "number (if using a custom table, provide the ID from CONTEXT)",
         
         // Grouping
-        "groupByField": "string (field system name to group by, e.g., 'status', 'priority', or a custom field ID)",
+        "groupByField": "string (field system name to group by, e.g., 'status', 'priority', or a custom field ID/systemName)",
         
         // Date Range
         "dateRangeType": "string (one of: 'all', 'this_week', 'last_30_days', 'last_year')",
@@ -88,8 +89,8 @@ export async function POST(req: Request) {
     2. Conversion usually implies comparing a subset to a total (e.g. "won leads vs all leads").
     3. Breakdown/Pie chart requests usually mean COUNT with groupByField.
     4. If the user mentions a specific table, find its ID in the CONTEXT.
-    5. CRITICAL: Use EXACT field system names from columns or system models. DO NOT inventing new field names.
-    6. If grouping by a field (groupByField), prefer filtering by that same field if the user request implies narrowing down that specific breakdown (e.g. "Show me tasks by status" -> groupByField="status").
+    5. CRITICAL: Use EXACT field system names from columns or system models. Do NOT invent new field names. Check the 'columns' array in CONTEXT for custom tables.
+    6. If grouping by a field (groupByField), prefer filtering by that same field if the user request implies narrowing down that specific breakdown.
     7. Return ONLY the JSON object.
     `;
 

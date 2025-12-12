@@ -13,6 +13,7 @@ import {
   Settings,
   Zap,
   Sparkles,
+  BarChart2,
 } from "lucide-react";
 import Link from "next/link";
 import AnalyticsDetailsModal from "@/components/AnalyticsDetailsModal";
@@ -473,6 +474,9 @@ export default function AnalyticsPage() {
   const [filter, setFilter] = useState<"all" | "manual" | "automation">("all");
 
   const filteredViews = views.filter((view) => {
+    // Exclude Graphs (they have their own page)
+    if (view.type === "GRAPH") return false;
+
     // 1. Folder Logic
     if (currentFolder) {
       if (view.folderId !== currentFolder) return false;
@@ -680,6 +684,13 @@ export default function AnalyticsPage() {
                 </button>
               </div>
             )}
+            <Link
+              href="/analytics/graphs"
+              className="px-4 py-2 bg-pink-50 text-pink-700 border border-pink-200 rounded-md shadow-sm text-sm font-medium hover:bg-pink-100 flex items-center gap-2"
+            >
+              <BarChart2 size={16} />
+              תצוגת גרפים
+            </Link>
             <Link
               href="/"
               className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"

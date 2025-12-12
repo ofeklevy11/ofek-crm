@@ -26,6 +26,16 @@ model Company {
   analyticsViews      AnalyticsView[]
   viewFolders         ViewFolder[]
   tableCategories     TableCategory[]
+
+  workflows           Workflow[]
+  workflowInstances   WorkflowInstance[]
+  products            Product[]
+  quotes              Quote[]
+  tickets             Ticket[]
+  slaPolicies         SlaPolicy[]
+  
+  folders             Folder[]
+  files               File[]
 }
 
 model User {
@@ -51,8 +61,13 @@ model User {
   createdGroups        Group[]       @relation("CreatedGroups")
   groupMemberships     GroupMember[]
   assignedTasks        Task[]        @relation("TaskAssignee")
+  createdInstances     WorkflowInstance[] @relation("InstanceCreator")
+  assignedInstances    WorkflowInstance[] @relation("InstanceAssignee")
+  createdTickets       Ticket[]           @relation("TicketCreator")
+  assignedTickets      Ticket[]           @relation("TicketAssignee")
   
   company              Company       @relation(fields: [companyId], references: [id])
+  ticketComments       TicketComment[]
   
   @@index([companyId])
 }
@@ -293,6 +308,8 @@ model Client {
   retainers       Retainer[]
   transactions    Transaction[]
   companyRelation Company                 @relation(fields: [companyId], references: [id])
+  quotes          Quote[]
+  tickets         Ticket[]
   
   @@index([companyId])
 }
@@ -445,7 +462,232 @@ model ViewFolder {
 
   analyticsViews AnalyticsView[]
   automationRules AutomationRule[]
+
   company        Company        @relation(fields: [companyId], references: [id])
   
   @@index([companyId])
+}
+
+model Workflow {
+  id          Int             @id @default(autoincrement())
+  companyId   Int
+  name        String
+  description String?
+  color       String?         @default("blue")
+  icon        String?         @default("GitBranch")
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  
+  stages      WorkflowStage[]
+  instances   WorkflowInstance[]
+  company     Company         @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+}
+
+model WorkflowStage {
+  id          Int      @id @default(autoincrement())
+  workflowId  Int
+  name        String
+  description String?
+  color       String?
+  icon        String?
+  order       Int      @default(0)
+  
+  details     Json?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  instances   WorkflowInstance[] // Relation to instances currently at this stage
+
+  @@index([workflowId])
+}
+
+model WorkflowInstance {
+  id              Int      @id @default(autoincrement())
+  companyId       Int
+  workflowId      Int
+  name            String   // Specific name for this execution (e.g. "Onboarding Client X")
+  status          String   @default("active") // active, completed
+  
+  currentStageId  Int?
+  currentStage    WorkflowStage? @relation(fields: [currentStageId], references: [id])
+  
+  creatorId       Int
+  creator         User     @relation("InstanceCreator", fields: [creatorId], references: [id])
+  
+  assigneeId      Int?
+  assignee        User?    @relation("InstanceAssignee", fields: [assigneeId], references: [id])
+  
+  completedStages Json     @default("[]") // Array of stage IDs that are done
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  workflow        Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  company         Company  @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@index([workflowId])
+}
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  name        String
+  description String?
+  type        String   @default("SERVICE") // SERVICE, PRODUCT, PACKAGE
+  price       Decimal  @db.Decimal(10, 2)
+  cost        Decimal? @db.Decimal(10, 2)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  quoteItems  QuoteItem[]
+
+  @@index([companyId])
+}
+
+model Quote {
+  id          String   @id @default(cuid())
+  companyId   Int
+  
+  clientId        Int?
+  clientName      String
+  clientEmail     String?
+  clientPhone     String?
+  clientTaxId     String? // H.P.
+  clientAddress   String?
+  
+  total           Decimal  @db.Decimal(10, 2)
+  status          String   @default("DRAFT") // DRAFT, SENT, ACCEPTED, REJECTED
+  
+  validUntil      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company         Company  @relation(fields: [companyId], references: [id])
+  client          Client?  @relation(fields: [clientId], references: [id])
+  items           QuoteItem[]
+
+  @@index([companyId])
+}
+
+model QuoteItem {
+  id        Int      @id @default(autoincrement())
+  quoteId   String
+  productId Int?
+  
+  description String
+  quantity    Int      @default(1)
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  unitCost    Decimal? @db.Decimal(10, 2)
+
+  quote     Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product   Product? @relation(fields: [productId], references: [id])
+}
+
+model Ticket {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  title       String
+  description String?
+  status      String   @default("OPEN") // OPEN, IN_PROGRESS, WAITING, RESOLVED, CLOSED
+  priority    String   @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  type        String   @default("SERVICE") // SERVICE, COMPLAINT, RETENTION, OTHER
+  
+  clientId    Int?
+  client      Client?  @relation(fields: [clientId], references: [id])
+  
+  assigneeId  Int?
+  assignee    User?    @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  
+  creatorId   Int
+  creator     User     @relation("TicketCreator", fields: [creatorId], references: [id])
+  
+  tags        String[]
+  
+  slaDueDate  DateTime?
+  
+  comments    TicketComment[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
+  @@index([clientId])
+  @@index([assigneeId])
+}
+
+model TicketComment {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  
+  content   String
+  isInternal Boolean @default(false)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SlaPolicy {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  name        String
+  description String?
+  priority    String   // Defines which priority this SLA applies to
+  responseTimeMinutes Int // Target response time
+  resolveTimeMinutes  Int // Target resolution time
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  
+  @@unique([companyId, priority])
+}
+
+model Folder {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  parentId  Int?
+  name      String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parent    Folder?  @relation("FolderHierarchy", fields: [parentId], references: [id])
+  children  Folder[] @relation("FolderHierarchy")
+  files     File[]
+  company   Company  @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@index([parentId])
+}
+
+model File {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  folderId  Int?
+
+  name      String
+  url       String
+  key       String   
+  size      Int      
+  type      String   
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  folder    Folder?  @relation(fields: [folderId], references: [id])
+  company   Company  @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@index([folderId])
 }

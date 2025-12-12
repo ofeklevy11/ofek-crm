@@ -21,6 +21,7 @@ export async function POST(req: Request) {
 
     const systemPrompt = `
     You are an automation expert helper. The user wants to create an automation rule for their CRM system.
+    The user might ask in Hebrew. You must understand Hebrew.
     
     USER REQUEST:
     "${prompt}"
@@ -35,17 +36,17 @@ export async function POST(req: Request) {
     
     The JSON must strictly follow this format:
     {
-      "name": "string (descriptive name for the automation)",
+      "name": "string (descriptive name for the automation, in Hebrew if request is Hebrew)",
       "triggerType": "string (one of: 'NEW_RECORD', 'RECORD_FIELD_CHANGE', 'TASK_STATUS_CHANGE', 'MULTI_EVENT_DURATION')",
       "triggerConfig": {
-        // REQUIRED for ALL types (except TASK_STATUS_CHANGE):
+        // REQUIRED for ALL types (except TASK_STATUS_CHANGE, but recommended):
         "tableId": "number (The ID of the main table involved. For MULTI_EVENT, use the ID of the first table)",
 
         // For NEW_RECORD (Creation only):
         // No extra fields usually needed, maybe strict conditions if implemented.
 
         // For RECORD_FIELD_CHANGE (General table updates):
-        "columnId": "string (The ID of the field from the table schema, NOT the name)",
+        "columnId": "string (The ID of the field from the table schema, NOT the name. e.g. 'fld_12345')",
         "fromValue": "string (optional - trigger only if changing from this value)",
         "toValue": "string (optional - trigger only if changing to this value)",
         
@@ -95,15 +96,12 @@ export async function POST(req: Request) {
     Rules:
     1. Determine if this should be a regular automation (NEW_RECORD, TASK_STATUS_CHANGE) or a multi-event automation (MULTI_EVENT_DURATION).
     2. For multi-event automations, always use MULTI_EVENT_DURATION as triggerType and CALCULATE_MULTI_EVENT_DURATION as actionType.
-    3. For regular automations triggered by record creation/update, use NEW_RECORD as triggerType.
-    4. For task-related automations, use TASK_STATUS_CHANGE as triggerType.
+    3. For regular automations triggered by record creation/update, use NEW_RECORD as triggerType if it's about "new" or "created". Use RECORD_FIELD_CHANGE if it's about "changed" or "updated" specific field.
+    4. For task-related automations (built-in Task model), use TASK_STATUS_CHANGE as triggerType.
     5. Choose the most appropriate actionType based on what the user wants to happen.
-    6. Make sure all required fields for the chosen trigger/action types are included.
-    7. Return ONLY the JSON object. No markdown or explanations.
-    8. If creating a multi-event automation, include at least 2 events in the eventChain array.
-    9. ALWAYS find the most relevant table ID from the Context and put it in triggerConfig.tableId. If the automation monitors a specific table, use that ID. If it monitors multiple, use the primary one.
-    10. Ensure all keys are in English.
-    11. Look CAREFULLY at the 'Columns' list for each table in CONTEXT to find the correct columnId. Do NOT guess column IDs or names. Use the exact ID provided in the column list (e.g. 'fld_xxxxx').
+    6. Return ONLY the JSON object. No markdown or explanations.
+    7. ALWAYS find the most relevant table ID from the Context and put it in triggerConfig.tableId.
+    8. Look CAREFULLY at the 'Columns' list for each table in CONTEXT to find the correct columnId. Do NOT guess column IDs or names. Use the exact ID provided in the column list (e.g. 'fld_xxxxx'). IF you cannot find the column ID, try to find the closest match by name but prefer ID.
     `;
 
     const response = await fetch(

@@ -61,6 +61,14 @@ function extractValue(record: any, key: string): any {
   return val;
 }
 
+function extractNumericValue(record: any, key: string): number {
+  let val = (record.data as any)?.[key];
+  if (val === undefined) val = (record as any)[key];
+  if (typeof val === "string") val = val.replace(/[^0-9.-]+/g, ""); // Clean currency/text
+  const num = parseFloat(val);
+  return isNaN(num) ? 0 : num;
+}
+
 /**
  * Helper for flexible matching (case-insensitive, trimmed, string conversion)
  * Also handles "no filter" case properly
@@ -343,6 +351,53 @@ export async function calculateViewStats(view: any) {
         updatedAt: r.updatedAt,
       }));
     }
+  } else if (view.type === "GRAPH") {
+    const filtered = filterRecords(rawData, config.filter);
+    const groups: Record<string, { count: number; sum: number }> = {};
+
+    filtered.forEach((r) => {
+      let rawKey = extractValue(r, config.groupByField);
+      if (rawKey instanceof Date) {
+        rawKey = rawKey.toLocaleDateString("he-IL");
+      }
+      const key = rawKey ? String(rawKey) : "ללא";
+
+      if (!groups[key]) groups[key] = { count: 0, sum: 0 };
+      groups[key].count++;
+
+      if (config.yAxisMeasure && config.yAxisMeasure !== "count") {
+        groups[key].sum += extractNumericValue(r, config.yAxisField);
+      }
+    });
+
+    items = Object.entries(groups)
+      .map(([key, val]) => {
+        let value = val.count;
+        if (config.yAxisMeasure === "sum") value = val.sum;
+        if (config.yAxisMeasure === "avg")
+          value = val.count > 0 ? val.sum / val.count : 0;
+
+        return {
+          name: key,
+          value: parseFloat(value.toFixed(2)),
+          formatted: value.toLocaleString(),
+          count: val.count,
+        };
+      })
+      .sort((a, b) => b.value - a.value);
+
+    const totalValue = items.reduce((acc, i) => acc + i.value, 0);
+    stats = {
+      mainMetric: totalValue.toLocaleString(),
+      subMetric:
+        config.yAxisMeasure === "count"
+          ? "סה״כ רשומות"
+          : config.yAxisMeasure === "avg"
+          ? "ממוצע כולל"
+          : "סכום כולל",
+      label: config.chartType || "Graph",
+      rawMetric: totalValue,
+    };
   }
 
   return { stats, items, tableName };

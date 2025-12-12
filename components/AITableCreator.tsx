@@ -76,12 +76,12 @@ export default function AITableCreator({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
+  const handleSend = async (text?: string) => {
+    const messageToSend = text || input;
+    if (!messageToSend.trim() || loading) return;
 
-    const userMsg = input;
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
+    setMessages((prev) => [...prev, { role: "user", content: messageToSend }]);
     setLoading(true);
 
     try {
@@ -89,7 +89,7 @@ export default function AITableCreator({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: userMsg,
+          prompt: messageToSend,
           existingTables: existingTablesStr,
           currentSchema: currentSchema,
         }),
@@ -260,6 +260,24 @@ export default function AITableCreator({
                 </div>
               </div>
             )}
+            {messages.length === 1 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-2">
+                {[
+                  "טבלת לידים לסוכנות שיווק (שם, טלפון, מקור, סטטוס, תקציב)",
+                  "מעקב הוצאות והכנסות (תאריך, סכום, קטגוריה, סוג, חשבונית)",
+                  "ניהול מלאי מוצרים (שם, מק'ט, כמות, מחיר עלות, מחיר מכירה, ספק)",
+                  "ניהול פרויקטים ומשימות (שם משימה, אחראי, דד-ליין, עדיפות, סטטוס)",
+                ].map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleSend(s)}
+                    className="text-right text-sm p-3 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:shadow-md transition-all text-gray-600 hover:text-blue-600"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
@@ -274,7 +292,7 @@ export default function AITableCreator({
                 className="w-full pl-5 pr-12 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition text-gray-800 shadow-inner"
               />
               <button
-                onClick={handleSend}
+                onClick={() => handleSend()}
                 disabled={loading || !input.trim()}
                 className="absolute right-2 top-2 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:hover:bg-blue-600 shadow-md"
               >
@@ -377,7 +395,7 @@ export default function AITableCreator({
               <button
                 onClick={handleCreate}
                 disabled={creating}
-                className="flex-[2] py-3 px-4 bg-linear-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 font-medium shadow-lg hover:shadow-xl transition disabled:opacity-70 flex justify-center items-center gap-2"
+                className="flex-2 py-3 px-4 bg-linear-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 font-medium shadow-lg hover:shadow-xl transition disabled:opacity-70 flex justify-center items-center gap-2"
               >
                 {creating ? (
                   <>

@@ -30,13 +30,7 @@ export default function AIAnalyticsCreator({
   const [tables, setTables] = useState<any[]>([]);
   const [generatedView, setGeneratedView] = useState<any | null>(null);
 
-  // Suggested prompts for inspiration
-  const suggestions = [
-    "כמה משימות פתוחות יש לכל עובד?",
-    "מה אחוז המרת הלידים החודש?",
-    "פילוח סכום עסקאות לפי סטטוס",
-    "כמות פגישות בשבוע הקרוב",
-  ];
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -46,13 +40,66 @@ export default function AIAnalyticsCreator({
       getTables().then((res) => {
         if (res.success && res.data) {
           setTables(res.data);
+
+          // Generate Suggestions
+          const newSuggestions: string[] = [];
+
+          res.data.forEach((table: any) => {
+            let columns: any[] = [];
+            // Parsing schema safely
+            if (table.schemaJson) {
+              if (typeof table.schemaJson === "string") {
+                try {
+                  columns = JSON.parse(table.schemaJson);
+                } catch (e) {}
+              } else if (Array.isArray(table.schemaJson)) {
+                columns = table.schemaJson;
+              }
+            }
+
+            // Suggestion 1: Breakdown by Select field
+            const selectCol = columns.find((c: any) => c.type === "select");
+            if (selectCol) {
+              newSuggestions.push(
+                `פילוח ${table.name} לפי ${selectCol.label || selectCol.name}`
+              );
+            }
+
+            // Suggestion 2: Numerical Analysis
+            const numberCol = columns.find(
+              (c: any) =>
+                c.type === "number" ||
+                c.name.includes("מחיר") ||
+                c.name.includes("amount")
+            );
+            if (numberCol) {
+              newSuggestions.push(
+                `סה"כ ${numberCol.label || numberCol.name} מכל ה${table.name}`
+              );
+            }
+
+            // Suggestion 3: Count over time
+            newSuggestions.push(`כמות ${table.name} שהצטרפו בחודש האחרון`);
+          });
+
+          // System Model Suggestions
+          newSuggestions.push("כמה משימות פתוחות יש לכל עובד?");
+          newSuggestions.push("טבלת המרה של לידים למכירות");
+
+          // Randomize and Pick 4
+          setSuggestions(
+            newSuggestions.sort(() => 0.5 - Math.random()).slice(0, 4)
+          );
         }
       });
     }
   }, [isOpen]);
 
-  const handleGenerate = async () => {
-    if (!prompt.trim()) return;
+  const handleGenerate = async (text?: string) => {
+    const promptToUse = text || prompt;
+    if (!promptToUse.trim()) return;
+
+    if (text) setPrompt(text); // visually update input too
 
     setLoading(true);
     setError(null);
@@ -63,7 +110,7 @@ export default function AIAnalyticsCreator({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt,
+          prompt: promptToUse,
           tables: tables.map((t) => ({
             id: t.id,
             name: t.name,
@@ -119,7 +166,7 @@ export default function AIAnalyticsCreator({
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-6 text-white relative overflow-hidden">
+        <div className="bg-linear-to-r from-violet-600 to-indigo-600 p-6 text-white relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-xl" />
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/10 rounded-full -ml-12 -mb-12 blur-lg" />
 
@@ -146,41 +193,58 @@ export default function AIAnalyticsCreator({
         <div className="p-6 overflow-y-auto flex-1 bg-gray-50">
           {!generatedView ? (
             <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  מה תרצה לנתח?
-                </label>
-                <div className="relative">
-                  <textarea
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    placeholder="לדוגמה: תראה לי כמה לידים חדשים הצטרפו השבוע בחלוקה למקור הגעה..."
-                    className="w-full h-32 p-4 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 resize-none text-gray-800 shadow-sm"
-                    autoFocus
-                  />
-                  <div className="absolute bottom-3 left-3 text-xs text-gray-400">
-                    מופעל ע"י Gemini 2.0
+              {tables.length === 0 && !loading ? (
+                <div className="flex flex-col items-center justify-center p-8 text-center space-y-4 bg-gray-50 border border-gray-200 rounded-xl">
+                  <div className="bg-orange-100 p-4 rounded-full">
+                    <BarChart2 className="text-orange-600" size={32} />
                   </div>
+                  <h3 className="text-lg font-bold text-gray-800">
+                    אין נתונים לניתוח
+                  </h3>
+                  <p className="text-gray-500 max-w-sm">
+                    כדי ליצור דוחות ואנליטיקות, עליך ליצור קודם טבלאות ולהוסיף
+                    להן נתונים.
+                  </p>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      מה תרצה לנתח?
+                    </label>
+                    <div className="relative">
+                      <textarea
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        placeholder="לדוגמה: תראה לי כמה לידים חדשים הצטרפו השבוע בחלוקה למקור הגעה..."
+                        className="w-full h-32 p-4 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 resize-none text-gray-800 shadow-sm"
+                        autoFocus
+                      />
+                      <div className="absolute bottom-3 left-3 text-xs text-gray-400">
+                        מופעל ע"י Gemini 2.0
+                      </div>
+                    </div>
+                  </div>
 
-              {suggestions.length > 0 && (
-                <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-                    הצעות לנסות
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {suggestions.map((suggestion, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setPrompt(suggestion)}
-                        className="text-right text-sm p-3 bg-white border border-gray-200 rounded-lg hover:border-indigo-300 hover:shadow-md transition-all text-gray-600 hover:text-indigo-600"
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                  {suggestions.length > 0 && (
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                        הצעות מותאמות אישית
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {suggestions.map((suggestion, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => handleGenerate(suggestion)}
+                            className="text-right text-sm p-3 bg-white border border-gray-200 rounded-lg hover:border-indigo-300 hover:shadow-md transition-all text-gray-600 hover:text-indigo-600"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ) : (
@@ -310,9 +374,9 @@ export default function AIAnalyticsCreator({
                 ביטול
               </button>
               <button
-                onClick={handleGenerate}
-                disabled={loading || !prompt.trim()}
-                className="px-8 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-medium rounded-xl hover:opacity-90 transition-all shadow-lg shadow-indigo-200 disabled:opacity-70 disabled:shadow-none flex items-center gap-2"
+                onClick={() => handleGenerate()}
+                disabled={loading || !prompt.trim() || tables.length === 0}
+                className="px-8 py-2.5 bg-linear-to-r from-violet-600 to-indigo-600 text-white font-medium rounded-xl hover:opacity-90 transition-all shadow-lg shadow-indigo-200 disabled:opacity-70 disabled:shadow-none flex items-center gap-2"
               >
                 {loading ? (
                   <>
