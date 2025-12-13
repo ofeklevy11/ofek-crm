@@ -56,6 +56,11 @@ export default async function Navbar() {
                       Users
                     </Link>
                   )}
+                  {user.role === "admin" && (
+                    <Link href="/workers" className={linkClass}>
+                      Workers
+                    </Link>
+                  )}
                   {hasUserFlag(user, "canViewAnalytics") && (
                     <Link href="/analytics" className={linkClass}>
                       Analytics

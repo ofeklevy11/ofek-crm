@@ -40,6 +40,12 @@ model Company {
   financeRecords      FinanceRecord[]
   financeSyncRules    FinanceSyncRule[]
   taskSheets          TaskSheet[]
+  
+  // Workers Module
+  departments         Department[]
+  workers             Worker[]
+  onboardingPaths     OnboardingPath[]
+  workerTasks         WorkerTask[]
 }
 
 model User {
@@ -865,4 +871,222 @@ model TaskSheetItem {
   
   @@index([sheetId])
   @@index([linkedTaskId])
+}
+
+// ============================================
+// WORKERS MODULE - Employee Management System
+// ============================================
+
+// Department - Organizational unit for grouping workers
+model Department {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  
+  name        String               // e.g., "Sales", "Marketing", "Development"
+  description String?
+  color       String?  @default("#3B82F6") // For visual identification
+  icon        String?  @default("Building2")
+  
+  managerId   Int?                 // Optional department manager
+  
+  isActive    Boolean  @default(true)
+  
+  workers     Worker[]
+  onboardingPaths OnboardingPath[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
+}
+
+// Worker - Employee in the organization
+model Worker {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  
+  // Personal Info
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  avatar      String?              // Profile image URL
+  
+  // Employment Info
+  departmentId Int
+  department   Department @relation(fields: [departmentId], references: [id])
+  
+  position    String?              // Job title
+  employeeId  String?              // Internal employee number
+  
+  startDate   DateTime  @default(now())
+  endDate     DateTime?            // If employment ended
+  
+  status      String   @default("ONBOARDING") // ONBOARDING, ACTIVE, ON_LEAVE, TERMINATED
+  
+  // Optional link to system user
+  linkedUserId Int?     @unique
+  
+  // Custom fields as JSON
+  customFields Json?    @default("{}")
+  
+  notes       String?
+  
+  onboardingProgress WorkerOnboarding[]
+  assignedTasks      WorkerTask[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
+  @@index([departmentId])
+  @@index([status])
+}
+
+// OnboardingPath - Template for department-specific onboarding
+model OnboardingPath {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  
+  name        String               // e.g., "Sales Team Onboarding"
+  description String?
+  
+  departmentId Int?                // Optional - specific to department
+  department   Department? @relation(fields: [departmentId], references: [id])
+  
+  isDefault   Boolean  @default(false) // Default path for the department
+  isActive    Boolean  @default(true)
+  
+  estimatedDays Int?               // Expected time to complete
+  
+  steps       OnboardingStep[]
+  workerProgress WorkerOnboarding[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
+  @@index([departmentId])
+}
+
+// OnboardingStep - Individual step in an onboarding path
+model OnboardingStep {
+  id          Int      @id @default(autoincrement())
+  pathId      Int
+  
+  title       String               // Step name
+  description String?              // Detailed instructions
+  
+  type        String   @default("TASK") // TASK, TRAINING, DOCUMENT, MEETING, CHECKLIST
+  
+  order       Int      @default(0) // Display order
+  
+  estimatedMinutes Int?            // Expected time to complete
+  
+  // For TRAINING type - link to materials
+  resourceUrl String?
+  resourceType String?             // VIDEO, PDF, LINK, INTERNAL
+  
+  // Required dependencies (step IDs that must be completed first)
+  requiresSteps Int[]  @default([])
+  
+  // Automation when completed
+  onCompleteActions Json? @default("[]") // Similar to TaskSheet items
+  
+  isRequired  Boolean  @default(true)
+  
+  workerProgress WorkerOnboardingStep[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  path        OnboardingPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
+  
+  @@index([pathId])
+}
+
+// WorkerOnboarding - Tracks a worker's progress through an onboarding path
+model WorkerOnboarding {
+  id          Int      @id @default(autoincrement())
+  
+  workerId    Int
+  worker      Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  
+  pathId      Int
+  path        OnboardingPath @relation(fields: [pathId], references: [id])
+  
+  status      String   @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED, PAUSED
+  
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  
+  stepProgress WorkerOnboardingStep[]
+  
+  notes       String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([workerId, pathId])
+  @@index([workerId])
+  @@index([pathId])
+}
+
+// WorkerOnboardingStep - Tracks completion of individual steps
+model WorkerOnboardingStep {
+  id          Int      @id @default(autoincrement())
+  
+  onboardingId Int
+  onboarding   WorkerOnboarding @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+  
+  stepId      Int
+  step        OnboardingStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  
+  status      String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, SKIPPED
+  
+  completedAt DateTime?
+  notes       String?
+  
+  // Score/feedback if it's a training step
+  score       Int?
+  feedback    String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([onboardingId, stepId])
+  @@index([onboardingId])
+  @@index([stepId])
+}
+
+// WorkerTask - Tasks assigned to workers (separate from system Tasks)
+model WorkerTask {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  
+  workerId    Int
+  worker      Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  
+  title       String
+  description String?
+  
+  priority    String   @default("NORMAL") // URGENT, HIGH, NORMAL, LOW
+  status      String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
+  
+  dueDate     DateTime?
+  completedAt DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
+  @@index([workerId])
 }
