@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   X,
   Check,
@@ -13,11 +14,14 @@ import {
   LineChart,
   PieChart,
   AreaChart,
+  Eye,
+  Loader2,
 } from "lucide-react";
 import { getTables } from "@/app/actions/tables";
 import {
   createAnalyticsView,
   updateAnalyticsView,
+  previewAnalyticsView,
 } from "@/app/actions/analytics";
 
 interface CreateAnalyticsViewModalProps {
@@ -102,6 +106,7 @@ export default function CreateAnalyticsViewModal({
   initialData,
   mode = "general",
 }: CreateAnalyticsViewModalProps) {
+  const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [tables, setTables] = useState<any[]>([]);
@@ -110,6 +115,11 @@ export default function CreateAnalyticsViewModal({
   const [selectedType, setSelectedType] = useState<string>("");
   const [title, setTitle] = useState("");
   const [config, setConfig] = useState<any>({});
+
+  // Preview State
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Initialize from initialData when opening
   useEffect(() => {
@@ -135,6 +145,8 @@ export default function CreateAnalyticsViewModal({
         setTitle("");
         setSelectedType("");
         setConfig({});
+        setPreviewData(null);
+        setShowPreview(false);
       }
     }
   }, [isOpen, initialData]);
@@ -179,6 +191,130 @@ export default function CreateAnalyticsViewModal({
     } finally {
       setLoading(false);
     }
+  };
+
+  // Preview function
+  const handlePreview = async () => {
+    if (!selectedType || selectedType === "GRAPH") return;
+
+    setPreviewLoading(true);
+    setShowPreview(true);
+    try {
+      const res = await previewAnalyticsView({
+        type: selectedType,
+        config: config,
+      });
+      if (res.success) {
+        setPreviewData(res.data);
+      } else {
+        setPreviewData({ error: res.error || "שגיאה בטעינת התצוגה המקדימה" });
+      }
+    } catch (error) {
+      console.error("Preview error:", error);
+      setPreviewData({ error: "שגיאה בטעינת התצוגה המקדימה" });
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  // Render preview component
+  const renderPreview = () => {
+    if (!showPreview) return null;
+
+    return (
+      <div className="mt-6 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Eye size={18} className="text-blue-600" />
+            <h4 className="font-semibold text-gray-900">תצוגה מקדימה</h4>
+          </div>
+          <button
+            onClick={() => setShowPreview(false)}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {previewLoading ? (
+          <div className="flex justify-center items-center py-8">
+            <Loader2 className="animate-spin text-blue-600" size={32} />
+          </div>
+        ) : previewData?.error ? (
+          <div className="text-center py-6">
+            <p className="text-red-600 text-sm">{previewData.error}</p>
+          </div>
+        ) : previewData?.stats ? (
+          <div className="space-y-4">
+            {/* Main Stat */}
+            <div className="text-center bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+              <div className="text-3xl font-bold text-blue-600 mb-1">
+                {previewData.stats.mainMetric}
+              </div>
+              <div className="text-sm text-gray-500">
+                {previewData.stats.label}
+              </div>
+              {previewData.stats.subMetric && (
+                <div className="text-xs text-gray-400 mt-1">
+                  {previewData.stats.subMetric}
+                </div>
+              )}
+            </div>
+
+            {/* Source Info */}
+            <div className="flex items-center justify-between text-xs text-gray-500 bg-white/50 rounded-lg px-3 py-2">
+              <span>מקור: {previewData.tableName}</span>
+              <span>סה״כ: {previewData.totalRecords} רשומות</span>
+            </div>
+
+            {/* Preview Items */}
+            {previewData.items && previewData.items.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs text-gray-500 mb-2">דוגמאות ראשונות:</p>
+                <div className="max-h-40 overflow-y-auto space-y-1">
+                  {previewData.items
+                    .slice(0, 5)
+                    .map((item: any, idx: number) => (
+                      <div
+                        key={item.id || idx}
+                        className="bg-white rounded-md px-3 py-2 text-sm flex justify-between items-center border border-gray-100"
+                      >
+                        <span className="text-gray-700 truncate flex-1">
+                          {item.title || item.name || `פריט ${idx + 1}`}
+                        </span>
+                        <span className="text-blue-600 font-medium mr-2">
+                          {item.value || item.status || ""}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+                {previewData.items.length > 5 && (
+                  <p className="text-xs text-gray-400 text-center">
+                    +{previewData.items.length - 5} פריטים נוספים
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {(!previewData.items || previewData.items.length === 0) && (
+              <div className="text-center py-4 bg-yellow-50 border border-yellow-100 rounded-lg">
+                <p className="text-yellow-700 text-sm font-medium">
+                  לא נמצאו נתונים בהתאם להגדרות
+                </p>
+                <p className="text-yellow-600 text-xs mt-1">
+                  נסה לשנות את הסינון או מקור הנתונים
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-6 text-gray-400 text-sm">
+            לחץ על "תצוגה מקדימה" כדי לראות את התוצאות
+          </div>
+        )}
+      </div>
+    );
   };
 
   const renderStep1 = () => {
@@ -923,7 +1059,14 @@ export default function CreateAnalyticsViewModal({
                 2
               </div>
             </div>
-            {step === 1 ? renderStep1() : renderStep2()}
+            {step === 1 ? (
+              renderStep1()
+            ) : (
+              <>
+                {renderStep2()}
+                {selectedType !== "GRAPH" && renderPreview()}
+              </>
+            )}
           </div>
         </div>
 
@@ -943,6 +1086,12 @@ export default function CreateAnalyticsViewModal({
           {step === 1 ? (
             <button
               onClick={() => {
+                // If GRAPH type is selected, redirect to graphs page
+                if (selectedType === "GRAPH") {
+                  onClose();
+                  router.push("/analytics/graphs");
+                  return;
+                }
                 if (mode === "graph" && selectedType === "GRAPH") setStep(2);
                 else if (selectedType) setStep(2);
               }}
@@ -953,18 +1102,44 @@ export default function CreateAnalyticsViewModal({
               <ChevronLeft size={20} />
             </button>
           ) : (
-            <button
-              onClick={handleSubmit}
-              disabled={
-                loading ||
-                !title ||
-                (selectedType === "CONVERSION" && !config.tableId)
-              }
-              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 shadow-sm"
-            >
-              {loading ? "שומר..." : initialData ? "שמור שינויים" : "צור תצוגה"}
-              {!loading && <Check size={20} />}
-            </button>
+            <div className="flex gap-3">
+              {/* Preview Button - Only for non-GRAPH types */}
+              {selectedType !== "GRAPH" && (
+                <button
+                  onClick={handlePreview}
+                  disabled={
+                    previewLoading || (!config.tableId && !config.model)
+                  }
+                  className="px-4 py-2 bg-white border border-blue-300 text-blue-600 rounded-md hover:bg-blue-50 disabled:opacity-50 flex items-center gap-2 shadow-sm"
+                >
+                  {previewLoading ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <Eye size={18} />
+                  )}
+                  תצוגה מקדימה
+                </button>
+              )}
+              {/* Submit Button */}
+              <button
+                onClick={handleSubmit}
+                disabled={
+                  loading ||
+                  !title ||
+                  (selectedType === "CONVERSION" &&
+                    !config.tableId &&
+                    !config.model)
+                }
+                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 shadow-sm"
+              >
+                {loading
+                  ? "שומר..."
+                  : initialData
+                  ? "שמור שינויים"
+                  : "צור תצוגה"}
+                {!loading && <Check size={20} />}
+              </button>
+            </div>
           )}
         </div>
       </div>

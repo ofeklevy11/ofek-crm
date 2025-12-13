@@ -215,19 +215,20 @@ export async function calculateViewStats(view: any) {
 
   // 2. Process View Type
   if (view.type === "CONVERSION") {
-    // Smart Logic: If filters share the same key, implicit inclusive OR for denominator
+    // Smart Logic: If filters share the same key AND both have values, implicit inclusive OR for denominator
     // This solves "Conversion from New to Completed" where a record cannot be both New and Completed at once.
     // We treat the Total as "Funnel Start" which should include "Funnel End".
+    // IMPORTANT: If totalFilter value is empty, it means "count ALL records" - don't modify it!
     const enhancedTotalFilter = { ...config.totalFilter };
     if (config.totalFilter && config.successFilter) {
       Object.keys(config.totalFilter).forEach((key) => {
-        if (config.successFilter[key]) {
-          const totalVal = String(config.totalFilter[key]);
-          const successVal = String(config.successFilter[key]);
-          // If values differ, append success value to total value (comma separated)
-          if (!totalVal.includes(successVal)) {
-            enhancedTotalFilter[key] = `${totalVal},${successVal}`;
-          }
+        const totalVal = String(config.totalFilter[key] || "").trim();
+        const successVal = String(config.successFilter[key] || "").trim();
+
+        // Only enhance if totalFilter has a NON-EMPTY value
+        // If totalFilter value is empty, it means "count all" - don't modify!
+        if (totalVal && successVal && !totalVal.includes(successVal)) {
+          enhancedTotalFilter[key] = `${totalVal},${successVal}`;
         }
       });
     }
@@ -773,5 +774,43 @@ export async function updateAnalyticsViewColor(
   } catch (error) {
     console.error("Error updating analytics view color:", error);
     return { success: false, error: "Failed to update color" };
+  }
+}
+
+/**
+ * Preview analytics view stats without saving
+ * Used for live preview in the creation modal
+ */
+export async function previewAnalyticsView(data: {
+  type: string;
+  config: any;
+}) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Build a temporary view object for calculateViewStats
+    const tempView = {
+      id: 0,
+      type: data.type,
+      config: data.config,
+    };
+
+    const { stats, items, tableName } = await calculateViewStats(tempView);
+
+    return {
+      success: true,
+      data: {
+        stats,
+        items: items.slice(0, 10), // Limit preview items
+        tableName,
+        totalRecords: items.length,
+      },
+    };
+  } catch (error) {
+    console.error("Error previewing analytics view:", error);
+    return { success: false, error: "Failed to preview view" };
   }
 }

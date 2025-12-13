@@ -39,6 +39,7 @@ model Company {
   goals               Goal[]
   financeRecords      FinanceRecord[]
   financeSyncRules    FinanceSyncRule[]
+  taskSheets          TaskSheet[]
 }
 
 model User {
@@ -68,6 +69,9 @@ model User {
   assignedInstances    WorkflowInstance[] @relation("InstanceAssignee")
   createdTickets       Ticket[]           @relation("TicketCreator")
   assignedTickets      Ticket[]           @relation("TicketAssignee")
+  
+  assignedTaskSheets   TaskSheet[]   @relation("TaskSheetAssignee")
+  createdTaskSheets    TaskSheet[]   @relation("TaskSheetCreator")
   
   company              Company       @relation(fields: [companyId], references: [id])
   ticketComments       TicketComment[]
@@ -276,6 +280,7 @@ model Task {
   
   statusDurations StatusDuration[]
   multiEventDurations MultiEventDuration[]
+  taskSheetItems  TaskSheetItem[]
   company     Company   @relation(fields: [companyId], references: [id])
   
   @@index([companyId])
@@ -792,4 +797,72 @@ model FinanceSyncRule {
   records     FinanceRecord[]
 
   @@index([companyId])
+}
+
+// TASK SHEETS - Daily/Weekly Task Pages for Employees
+model TaskSheet {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  
+  title       String               // e.g., "Daily Tasks - Sales Team"
+  description String?
+  type        String   @default("DAILY") // DAILY, WEEKLY
+  
+  assigneeId  Int                  // The employee this sheet is assigned to
+  assignee    User     @relation("TaskSheetAssignee", fields: [assigneeId], references: [id])
+  
+  createdById Int                  // Admin who created the sheet
+  createdBy   User     @relation("TaskSheetCreator", fields: [createdById], references: [id])
+  
+  validFrom   DateTime @default(now())   // When this sheet becomes active
+  validUntil  DateTime?                   // Optional expiration
+  
+  isActive    Boolean  @default(true)
+  
+  items       TaskSheetItem[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
+  @@index([assigneeId])
+  @@index([createdById])
+}
+
+model TaskSheetItem {
+  id          Int      @id @default(autoincrement())
+  sheetId     Int
+  
+  title       String               // Task item title
+  description String?
+  
+  priority    String   @default("NORMAL") // URGENT, HIGH, NORMAL, LOW, OPPORTUNITY
+  category    String?              // Custom category like "דחוף", "הזדמנות", "ממתין"
+  
+  order       Int      @default(0) // Display order within the sheet
+  
+  isCompleted Boolean  @default(false)
+  completedAt DateTime?
+  
+  dueTime     String?              // Optional time like "09:00" for daily tasks
+  
+  notes       String?              // Optional notes when completing
+  
+  // Link to existing task (optional)
+  linkedTaskId String?
+  linkedTask   Task?    @relation(fields: [linkedTaskId], references: [id], onDelete: SetNull)
+  
+  // Automation actions to run when item is completed
+  // JSON format: [{ actionType: "UPDATE_RECORD" | "CREATE_TASK" | "CREATE_FINANCE" | "SEND_NOTIFICATION", config: {...} }]
+  onCompleteActions Json?  @default("[]")
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  sheet       TaskSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  
+  @@index([sheetId])
+  @@index([linkedTaskId])
 }
