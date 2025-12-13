@@ -333,8 +333,45 @@ export async function updatePayment(
       data: updateData,
     });
 
+    // --- REAL-TIME FINANCE SYNC FOR PAYMENTS ---
+    // If payment became "paid", trigger all TRANSACTIONS sync rules
+    if (
+      data.status === "paid" ||
+      data.status === "Pd" ||
+      data.status === "PAID" ||
+      data.status === "manual-marked-paid"
+    ) {
+      try {
+        const syncRules = await prisma.financeSyncRule.findMany({
+          where: {
+            sourceType: "TRANSACTIONS",
+            isActive: true,
+            companyId: existing.client.companyId,
+          },
+        });
+
+        if (syncRules.length > 0) {
+          console.log(
+            `[Finance] Payment #${id} marked as paid. Triggering ${syncRules.length} sync rules...`
+          );
+          const { runSyncRule } = await import("./finance-sync");
+          for (const rule of syncRules) {
+            runSyncRule(rule.id).catch((e) =>
+              console.error(`[Auto-Sync] Failed to run rule ${rule.id}`, e)
+            );
+          }
+        }
+      } catch (err) {
+        console.error(
+          "[Finance] Error triggering sync on payment update:",
+          err
+        );
+      }
+    }
+
     revalidatePath("/finance");
     revalidatePath("/finance/payments");
+    revalidatePath("/finance/income-expenses");
     revalidatePath("/");
 
     return { success: true, data: payment };

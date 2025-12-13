@@ -36,6 +36,9 @@ model Company {
   
   folders             Folder[]
   files               File[]
+  goals               Goal[]
+  financeRecords      FinanceRecord[]
+  financeSyncRules    FinanceSyncRule[]
 }
 
 model User {
@@ -310,6 +313,7 @@ model Client {
   companyRelation Company                 @relation(fields: [companyId], references: [id])
   quotes          Quote[]
   tickets         Ticket[]
+  financeRecords  FinanceRecord[]
   
   @@index([companyId])
 }
@@ -690,4 +694,102 @@ model File {
 
   @@index([companyId])
   @@index([folderId])
+}
+
+// Goal Planning Module
+model Goal {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  
+  name        String                    // Goal name (e.g., "Monthly Sales Target")
+  metricType  String                    // SALES, REVENUE, LEADS, TASKS, CLOSING_RATIO, RETAINERS, QUOTES
+  targetType  String   @default("sum")  // 'count' (quantity) or 'sum' (monetary/value)
+  targetValue Decimal  @db.Decimal(15, 2)
+  
+  // Flexible filters stored as JSON
+  // Examples: { clientId: 5 }, { frequency: "MONTHLY" }, { status: "DONE" }
+  filters     Json?    @default("{}")
+
+  // Legacy fields (kept for safety until migration, but filters json replaces them)
+  tableId     Int?
+  productId   Int?
+  
+  // Time period
+  periodType  String   @default("MONTHLY")  // MONTHLY, QUARTERLY, YEARLY, CUSTOM
+  startDate   DateTime
+  endDate     DateTime
+  
+  // Thresholds for alerts
+  warningThreshold   Int @default(70)   // % - Alert when below this
+  criticalThreshold  Int @default(50)   // % - Critical alert when below this
+  
+  isActive    Boolean  @default(true)
+  notes       String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
+  @@index([metricType])
+  @@index([startDate, endDate])
+}
+
+// DEDICATED FINANCE MODULE
+model FinanceRecord {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  
+  title       String   // e.g. "Google Ads", "Consulting Fee"
+  amount      Decimal  @db.Decimal(15, 2)
+  type        String   // 'INCOME' | 'EXPENSE'
+  category    String?  // 'Marketing', 'Office', 'Sales', 'Payroll'
+  
+  date        DateTime @default(now())
+  status      String   @default("COMPLETED") // PENDING, COMPLETED, CANCELLED
+  
+  // Optional relations for context
+  clientId    Int?
+  
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id])
+  client      Client?  @relation(fields: [clientId], references: [id])
+  
+  // Sync fields
+  syncRuleId  Int?
+  originId    String?  // ID of the original record to prevent duplicates
+  syncRule    FinanceSyncRule? @relation(fields: [syncRuleId], references: [id])
+
+  @@index([companyId])
+  @@index([date])
+  @@index([type])
+  @@unique([syncRuleId, originId]) // Prevent duplicate imports from same rule
+}
+
+model FinanceSyncRule {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  name        String
+  targetType  String   // 'INCOME' | 'EXPENSE'
+  
+  sourceType  String   // 'TABLE', 'TRANSACTIONS', 'RETAINERS'
+  sourceId    Int?     // If TABLE, the tableId
+  
+  // Mapping config: { amountField: "key1", dateField: "key2", titleField: "key3", categoryValue: "Sales" }
+  fieldMapping Json    
+  
+  lastRunAt   DateTime?
+  isActive    Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  records     FinanceRecord[]
+
+  @@index([companyId])
 }

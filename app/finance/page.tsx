@@ -9,6 +9,8 @@ import {
   CreditCard,
   Repeat,
   AlertCircle,
+  TrendingUp,
+  Wallet,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -46,7 +48,7 @@ export default async function FinancePage() {
         include: { client: true },
         orderBy: { dueDate: "asc" },
       }),
-      // Calculate stats
+      // Other stats if needed
       prisma.client.count({
         where: { companyId: user.companyId },
       }),
@@ -61,6 +63,17 @@ export default async function FinancePage() {
     (sum, p) => sum + Number(p.amount),
     0
   );
+
+  // Serialize data (convert Decimal to number) for Client Components
+  const serializedActiveRetainers = activeRetainers.map((r) => ({
+    ...r,
+    amount: Number(r.amount),
+  }));
+
+  const serializedPendingPayments = pendingPayments.map((p) => ({
+    ...p,
+    amount: Number(p.amount),
+  }));
 
   return (
     <div className="p-8 space-y-8 bg-gray-50/50 min-h-screen">
@@ -90,6 +103,30 @@ export default async function FinancePage() {
           </Link>
         </div>
       </div>
+
+      {/* NEW: Unified Ledger Navigation Card */}
+      <Link href="/finance/income-expenses" className="block group">
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl p-6 text-white shadow-lg shadow-indigo-200 transition-all transform group-hover:scale-[1.01] group-hover:shadow-xl relative overflow-hidden">
+          <div className="relative z-10 flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <Wallet className="w-6 h-6" />
+                דוח הוצאות והכנסות
+              </h2>
+              <p className="text-indigo-100 mt-1 max-w-xl">
+                נהל את כל התזרים העסקי שלך במקום אחד. מסך מרכז למעקב אחר הכנסות,
+                הוצאות ורווח נקי.
+              </p>
+            </div>
+            <div className="bg-white/20 p-2 rounded-full backdrop-blur-sm">
+              <ArrowRight className="w-6 h-6 text-white" />
+            </div>
+          </div>
+          {/* Background Decorations */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none" />
+        </div>
+      </Link>
 
       {/* Stats Cards */}
       <FinancialStats
@@ -148,6 +185,33 @@ export default async function FinancePage() {
         </Link>
       </div>
 
+      {/* Goal Planning - Prominent Section */}
+      <div className="rounded-xl overflow-hidden shadow-sm border border-indigo-100 bg-gradient-to-r from-indigo-50 to-purple-50 p-1 relative group">
+        <Link
+          href="/finance/goals"
+          className="flex items-center justify-between p-6 bg-white/60 hover:bg-white/90 rounded-lg transition-all"
+        >
+          <div className="flex items-center gap-6">
+            <div className="p-4 bg-indigo-100 rounded-xl group-hover:scale-110 transition-transform">
+              <TrendingUp className="w-8 h-8 text-indigo-600" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-1">
+                Goal Planning & Forecasting
+              </h3>
+              <p className="text-gray-600 font-medium">
+                Set monthly targets, track KPIs, and get AI-powered insights to
+                grow your business.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-indigo-600 font-bold bg-white px-4 py-2 rounded-lg shadow-sm group-hover:shadow-md transition-all">
+            Start Planning
+            <ArrowRight className="w-5 h-5" />
+          </div>
+        </Link>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Active Retainers Table */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
@@ -163,7 +227,9 @@ export default async function FinancePage() {
               View All
             </Link>
           </div>
-          <ActiveRetainersTable retainers={activeRetainers.slice(0, 5)} />
+          <ActiveRetainersTable
+            retainers={serializedActiveRetainers.slice(0, 5)}
+          />
         </div>
 
         {/* Pending Payments Table */}
@@ -180,7 +246,9 @@ export default async function FinancePage() {
               View All
             </Link>
           </div>
-          <PendingPaymentsTable payments={pendingPayments.slice(0, 5)} />
+          <PendingPaymentsTable
+            payments={serializedPendingPayments.slice(0, 5)}
+          />
         </div>
       </div>
     </div>

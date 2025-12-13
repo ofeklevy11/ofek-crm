@@ -684,6 +684,30 @@ export async function processNewRecordTrigger(
 
     // Check all view automations to ensure they trigger correctly
     await processViewAutomations();
+
+    // --- REAL TEME FINANCE SYNC ---
+    // Check if this table is source for any sync rule
+    try {
+      const syncRules = await prisma.financeSyncRule.findMany({
+        where: { sourceType: "TABLE", sourceId: tableId, isActive: true },
+      });
+
+      if (syncRules.length > 0) {
+        console.log(
+          `[Automations] Found ${syncRules.length} sync rules for Table ${tableId}. Triggering sync...`
+        );
+        const { runSyncRule } = await import("./finance-sync");
+        for (const rule of syncRules) {
+          // Run sync asynchronously to not block the user response
+          // We use processTableRecord logic there which handles "exists" checks efficiently
+          runSyncRule(rule.id).catch((e) =>
+            console.error(`[Auto-Sync] Failed to run rule ${rule.id}`, e)
+          );
+        }
+      }
+    } catch (err) {
+      console.error("[Automations] Error checking finance sync rules:", err);
+    }
   } catch (error) {
     console.error("Error processing new record automations:", error);
   }
@@ -816,6 +840,27 @@ export async function processRecordUpdate(
     );
     await processViewAutomations();
     console.log(`[Automations] ✅ Finished checking VIEW AUTOMATIONS`);
+
+    // --- REAL TEME FINANCE SYNC (ON UPDATE) ---
+    try {
+      const syncRules = await prisma.financeSyncRule.findMany({
+        where: { sourceType: "TABLE", sourceId: tableId, isActive: true },
+      });
+
+      if (syncRules.length > 0) {
+        console.log(
+          `[Automations] Record update in Table ${tableId}. Triggering ${syncRules.length} sync rules...`
+        );
+        const { runSyncRule } = await import("./finance-sync");
+        for (const rule of syncRules) {
+          runSyncRule(rule.id).catch((e) =>
+            console.error(`[Auto-Sync] Failed to run rule ${rule.id}`, e)
+          );
+        }
+      }
+    } catch (err) {
+      console.error("[Automations] Error triggering sync on update:", err);
+    }
   } catch (error) {
     console.error("Error processing record update automations:", error);
   }

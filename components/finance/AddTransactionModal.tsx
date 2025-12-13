@@ -1,0 +1,164 @@
+"use client";
+
+import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Plus, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { addFinanceRecord } from "@/app/actions/finance-records";
+
+export default function AddTransactionModal() {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  const [formData, setFormData] = useState({
+    title: "",
+    amount: "",
+    type: "EXPENSE",
+    category: "",
+    date: new Date().toISOString().split("T")[0],
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      await addFinanceRecord({
+        title: formData.title,
+        amount: Number(formData.amount),
+        type: formData.type as "INCOME" | "EXPENSE",
+        category: formData.category,
+        date: new Date(formData.date),
+      });
+
+      toast({ title: "נוסף בהצלחה!", description: "התנועה נקלטה במערכת" });
+      setOpen(false);
+      setFormData({
+        title: "",
+        amount: "",
+        type: "EXPENSE",
+        category: "",
+        date: new Date().toISOString().split("T")[0],
+      });
+    } catch (err) {
+      toast({
+        title: "שגיאה",
+        description: "לא ניתן להוסיף כעת",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button className="font-bold shadow-lg shadow-indigo-200">
+          <Plus className="w-4 h-4 mr-2" />
+          הוסף תנועה
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>הוספת תנועה חדשה</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>סוג תנועה</Label>
+              <Select
+                value={formData.type}
+                onValueChange={(val) =>
+                  setFormData((p) => ({ ...p, type: val }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="INCOME">הכנסה (+)</SelectItem>
+                  <SelectItem value="EXPENSE">הוצאה (-)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>תאריך</Label>
+              <Input
+                type="date"
+                required
+                value={formData.date}
+                onChange={(e) =>
+                  setFormData((p) => ({ ...p, date: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>תיאור / כותרת</Label>
+            <Input
+              placeholder="למשל: תשלום ספקים, מכירה ללקוח..."
+              required
+              value={formData.title}
+              onChange={(e) =>
+                setFormData((p) => ({ ...p, title: e.target.value }))
+              }
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>סכום (₪)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                required
+                placeholder="0.00"
+                value={formData.amount}
+                onChange={(e) =>
+                  setFormData((p) => ({ ...p, amount: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>קטגוריה (אופציונלי)</Label>
+              <Input
+                placeholder="שיווק, משרד, וכו'"
+                value={formData.category}
+                onChange={(e) =>
+                  setFormData((p) => ({ ...p, category: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+
+          <Button type="submit" disabled={loading} className="w-full mt-2">
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              "שמור תנועה"
+            )}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

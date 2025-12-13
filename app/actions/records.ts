@@ -57,6 +57,7 @@ export async function createRecord(data: {
 
     const record = await prisma.record.create({
       data: {
+        companyId: user.companyId,
         tableId,
         data: recordData as any,
         createdBy: actualCreatedBy,
@@ -210,6 +211,34 @@ export async function deleteRecord(recordId: number, deletedBy?: number) {
       where: { id: recordId },
     });
 
+    // CASCADE DELETE TO FINANCE
+    try {
+      // Find if this record was synced to finance
+      // We look for any SyncRule of type TABLE where sourceId is THIS table
+      // But simpler: just delete any finance record with originId == recordId AND syncRule.sourceType == TABLE
+      // Since originId isn't unique across all rules, we should probably check syncRule source.
+
+      // Find sync rules for this table
+      const syncRules = await prisma.financeSyncRule.findMany({
+        where: { sourceType: "TABLE", sourceId: existingRecord.tableId },
+      });
+
+      if (syncRules.length > 0) {
+        const ruleIds = syncRules.map((r) => r.id);
+        await prisma.financeRecord.deleteMany({
+          where: {
+            syncRuleId: { in: ruleIds },
+            originId: recordId.toString(),
+          },
+        });
+        console.log(
+          `[Records] Cascaded delete to Finance Records for origin #${recordId}`
+        );
+      }
+    } catch (e) {
+      console.error("Failed to cascade delete to finance:", e);
+    }
+
     await createAuditLog(recordId, null, "DELETE");
 
     revalidatePath("/");
@@ -248,6 +277,39 @@ export async function bulkDeleteRecords(
       }
     }
 
+    // CASCADE DELETE TO FINANCE
+    try {
+      if (recordIds.length > 0) {
+        // We assume all records belong to the same table for bulk ops usually,
+        // or we find the tableId from the first one as done above.
+        const firstRec = await prisma.record.findUnique({
+          where: { id: recordIds[0] },
+          select: { tableId: true },
+        });
+
+        if (firstRec) {
+          const syncRules = await prisma.financeSyncRule.findMany({
+            where: { sourceType: "TABLE", sourceId: firstRec.tableId },
+          });
+
+          if (syncRules.length > 0) {
+            const ruleIds = syncRules.map((r) => r.id);
+            await prisma.financeRecord.deleteMany({
+              where: {
+                syncRuleId: { in: ruleIds },
+                originId: { in: recordIds.map((id) => id.toString()) },
+              },
+            });
+            console.log(
+              `[Records] Bulk cascade delete to Finance Records for ${recordIds.length} items`
+            );
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Failed to cascade bulk delete to finance:", e);
+    }
+
     await prisma.record.deleteMany({
       where: {
         id: {
@@ -261,6 +323,8 @@ export async function bulkDeleteRecords(
     }
 
     revalidatePath("/");
+    revalidatePath("/finance");
+    revalidatePath("/finance/income-expenses");
 
     return { success: true };
   } catch (error) {
