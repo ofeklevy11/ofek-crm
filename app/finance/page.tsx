@@ -11,6 +11,7 @@ import {
   AlertCircle,
   TrendingUp,
   Wallet,
+  Briefcase,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -106,7 +107,7 @@ export default async function FinancePage() {
 
       {/* NEW: Unified Ledger Navigation Card */}
       <Link href="/finance/income-expenses" className="block group">
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl p-6 text-white shadow-lg shadow-indigo-200 transition-all transform group-hover:scale-[1.01] group-hover:shadow-xl relative overflow-hidden">
+        <div className="bg-linear-to-r from-indigo-600 to-purple-600 rounded-xl p-6 text-white shadow-lg shadow-indigo-200 transition-all transform group-hover:scale-[1.01] group-hover:shadow-xl relative overflow-hidden">
           <div className="relative z-10 flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -137,7 +138,7 @@ export default async function FinancePage() {
       />
 
       {/* Navigation Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Link
           href="/finance/clients"
           className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all"
@@ -183,10 +184,27 @@ export default async function FinancePage() {
             {pendingPayments.length} pending one-time payments
           </p>
         </Link>
+        <Link
+          href="/finance/fixed-expenses"
+          className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-orange-300 hover:shadow-md transition-all"
+        >
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-3 bg-orange-50 rounded-lg group-hover:bg-orange-100 transition-colors">
+              <Briefcase className="w-6 h-6 text-orange-600" />
+            </div>
+            <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-orange-500 transition-colors" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">
+            Fixed Expenses
+          </h3>
+          <p className="text-gray-500 text-sm mt-1">
+            Manage recurring monthly payments
+          </p>
+        </Link>
       </div>
 
       {/* Goal Planning - Prominent Section */}
-      <div className="rounded-xl overflow-hidden shadow-sm border border-indigo-100 bg-gradient-to-r from-indigo-50 to-purple-50 p-1 relative group">
+      <div className="rounded-xl overflow-hidden shadow-sm border border-indigo-100 bg-linear-to-r from-indigo-50 to-purple-50 p-1 relative group">
         <Link
           href="/finance/goals"
           className="flex items-center justify-between p-6 bg-white/60 hover:bg-white/90 rounded-lg transition-all"

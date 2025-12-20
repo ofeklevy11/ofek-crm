@@ -97,12 +97,12 @@ const nurturePaths = [
     description:
       "טיפול בלקוחות המובילים: הטבות בלעדיות, יחס מועדף ותוכן פרימיום לחיזוק הקשר.",
     icon: Crown,
-    color: "from-gray-400 to-gray-500", // Grayscale for disabled state
-    textColor: "text-gray-500",
-    bg: "bg-gray-200/50",
-    stats: "",
-    href: "#",
-    comingSoon: true, // Flag to identify this state
+    color: "from-amber-400 to-yellow-500",
+    textColor: "text-amber-600",
+    bg: "bg-amber-500/10",
+    stats: "לקוחות זהב",
+    href: "/nurture-hub/vip",
+    // comingSoon removed
   },
 ];
 
@@ -190,7 +190,7 @@ export default function NurtureHubPage() {
         {/* Main Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {nurturePaths.map((path, index) => {
-            const isComingSoon = path.comingSoon;
+            const isComingSoon = (path as any).comingSoon;
             const CardWrapper = isComingSoon ? "div" : Link;
 
             return (

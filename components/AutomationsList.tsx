@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import AutomationModal from "@/components/AutomationModal";
 import MultiEventAutomationModal from "@/components/MultiEventAutomationModal";
 import AIAutomationCreator from "@/components/AIAutomationCreator";
@@ -42,6 +43,8 @@ export default function AutomationsList({
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
 
+  const router = useRouter();
+
   const handleDelete = async (id: number) => {
     if (confirm("האם אתה בטוח שברצונך למחוק אוטומציה זו?")) {
       await deleteAutomationRule(id);
@@ -57,6 +60,16 @@ export default function AutomationsList({
   };
 
   const handleEdit = (rule: AutomationRule) => {
+    if (
+      rule.actionType === "ADD_TO_NURTURE_LIST" &&
+      rule.actionConfig?.listId
+    ) {
+      router.push(
+        `/nurture-hub/${rule.actionConfig.listId}?openAutomation=true`
+      );
+      return;
+    }
+
     if (rule.triggerType === "MULTI_EVENT_DURATION") {
       setEditingRule(rule);
       setIsMultiEventModalOpen(true);

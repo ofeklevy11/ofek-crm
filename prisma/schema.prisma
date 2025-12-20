@@ -38,6 +38,7 @@ model Company {
   files               File[]
   goals               Goal[]
   financeRecords      FinanceRecord[]
+  fixedExpenses       FixedExpense[]
   financeSyncRules    FinanceSyncRule[]
   taskSheets          TaskSheet[]
   
@@ -805,6 +806,27 @@ model FinanceSyncRule {
   company     Company  @relation(fields: [companyId], references: [id])
   records     FinanceRecord[]
 
+  @@index([companyId])
+}
+
+model FixedExpense {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  
+  title       String
+  amount      Decimal  @db.Decimal(10, 2)
+  frequency   String   // MONTHLY, YEARLY, WEEKLY, ONE_TIME
+  payDay      Int?     // Day of month (1-31)
+  
+  category    String?
+  description String?
+  status      String   @default("ACTIVE") // ACTIVE, PAUSED
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id])
+  
   @@index([companyId])
 }
 

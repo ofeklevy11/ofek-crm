@@ -32,6 +32,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { useSearchParams } from "next/navigation";
 
 import {
   getDataSources,
@@ -84,6 +85,7 @@ export default function CustomerListManager({
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("manual"); // manual, database
   const [loading, setLoading] = useState(false);
+  const searchParams = useSearchParams();
 
   // Automation State
   const [internalAutomationOpen, setInternalAutomationOpen] = useState(false);
@@ -99,6 +101,17 @@ export default function CustomerListManager({
       setInternalAutomationOpen(open);
     }
   };
+
+  useEffect(() => {
+    if (searchParams && searchParams.get("openAutomation") === "true") {
+      setAutomationOpen(true);
+      // Clean URL to prevent re-opening on refresh
+      const url = new URL(window.location.href);
+      url.searchParams.delete("openAutomation");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, [searchParams]);
+
   const [autoStep, setAutoStep] = useState(1);
   const [autoViewMode, setAutoViewMode] = useState<"list" | "create" | "edit">(
     "list"

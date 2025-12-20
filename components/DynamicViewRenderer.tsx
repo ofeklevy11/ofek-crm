@@ -35,30 +35,55 @@ function StatsView({ title, data }: { title: string; data: any }) {
   };
 
   const colors = {
-    week: { bg: "bg-blue-50", text: "text-blue-600" },
-    month: { bg: "bg-purple-50", text: "text-purple-600" },
-    all: { bg: "bg-gray-50", text: "text-gray-600" },
+    week: {
+      bg: "bg-gradient-to-br from-blue-50 to-blue-100",
+      text: "text-blue-700",
+      border: "border-blue-200",
+    },
+    month: {
+      bg: "bg-gradient-to-br from-purple-50 to-purple-100",
+      text: "text-purple-700",
+      border: "border-purple-200",
+    },
+    all: {
+      bg: "bg-gradient-to-br from-gray-50 to-gray-100",
+      text: "text-gray-700",
+      border: "border-gray-200",
+    },
   };
 
   const color = colors[data.timeRange as keyof typeof colors] || colors.all;
 
   return (
-    <div className="space-y-2">
-      <div className={`${color.bg} p-3 rounded-lg text-center`}>
-        <div className={`text-2xl font-bold ${color.text}`}>
+    <div className="space-y-3 w-full">
+      <div
+        className={`${color.bg} border ${color.border} p-6 rounded-2xl text-center shadow-sm relative overflow-hidden group hover:shadow-md transition-all`}
+      >
+        {/* Background decoration */}
+        <div className="absolute top-0 right-0 w-24 h-24 bg-white/20 rounded-full blur-2xl -mr-10 -mt-10" />
+        <div className="absolute bottom-0 left-0 w-20 h-20 bg-white/30 rounded-full blur-2xl -ml-10 -mb-10" />
+
+        <div
+          className={`text-4xl font-extrabold ${color.text} mb-1 relative z-10`}
+        >
           {data.count.toLocaleString()}
-          {data.isOverLimit && <span>+</span>}
+          {data.isOverLimit && <span className="text-2xl align-top">+</span>}
         </div>
-        <div className={`text-xs ${color.text} font-medium`}>
+        <div
+          className={`text-sm ${color.text} font-medium opacity-80 relative z-10`}
+        >
           {timeRangeLabels[data.timeRange as keyof typeof timeRangeLabels] ||
             "ספירה"}
         </div>
       </div>
       {data.isOverLimit && (
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 text-xs text-orange-800">
-          <div className="font-semibold">📊 מעל 1,000 רשומות</div>
-          <div className="mt-1">
-            לצפייה במלוא הנתונים, יש לשדרג את החבילה. צור קשר עם התמיכה.
+        <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 text-xs text-orange-800 flex items-start gap-2">
+          <span className="text-lg">📊</span>
+          <div>
+            <div className="font-bold">מעל 1,000 רשומות</div>
+            <div className="opacity-80">
+              לצפייה במלוא הנתונים, יש לשדרג חבילה.
+            </div>
           </div>
         </div>
       )}
@@ -68,43 +93,55 @@ function StatsView({ title, data }: { title: string; data: any }) {
 
 function AggregationView({ title, data }: { title: string; data: any }) {
   if (data.error) {
-    return <div className="text-sm text-red-500">{data.error}</div>;
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-4 bg-red-50 rounded-2xl border border-red-100 text-center">
+        <div className="text-red-500 mb-2">⚠️</div>
+        <div className="text-sm text-red-600 font-medium">{data.error}</div>
+      </div>
+    );
   }
 
   // Group-by aggregation
   if (data.groups) {
     return (
-      <div className="space-y-3">
+      <div className="w-full space-y-3 max-h-[220px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
         {data.groups.map((group: any, index: number) => {
           const defaultColors = [
             "bg-blue-500",
             "bg-purple-500",
-            "bg-green-500",
+            "bg-emerald-500",
             "bg-orange-500",
             "bg-pink-500",
             "bg-indigo-500",
-            "bg-teal-500",
-            "bg-red-500",
+            "bg-cyan-500",
+            "bg-rose-500",
           ];
 
-          const color =
+          const barColor =
             data.colorMapping?.[group.label] ||
             defaultColors[index % defaultColors.length];
 
+          const textColor = barColor.replace("bg-", "text-");
+
           return (
-            <div key={group.label}>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-gray-600">{group.label}</span>
-                <span className="font-medium text-gray-900">
-                  {group.count} ({Math.round(group.percentage)}%)
-                  {data.aggregationType === "sum" &&
-                    data.targetField &&
-                    ` - ₪${group.sum.toLocaleString()}`}
+            <div key={group.label} className="group">
+              <div className="flex justify-between items-end text-sm mb-1.5">
+                <span className="text-gray-700 font-medium truncate max-w-[60%]">
+                  {group.label || "ללא"}
+                </span>
+                <span className="font-bold text-gray-900 bg-gray-50 px-1.5 py-0.5 rounded text-xs">
+                  {data.aggregationType === "sum" && data.targetField
+                    ? `₪${Math.round(group.sum).toLocaleString()}`
+                    : group.count}
+                  <span className="text-gray-400 font-normal mx-1">|</span>
+                  <span className="text-gray-500">
+                    {Math.round(group.percentage)}%
+                  </span>
                 </span>
               </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full ${color}`}
+                  className={`h-full rounded-full ${barColor} shadow-sm group-hover:opacity-90 transition-all`}
                   style={{ width: `${group.percentage}%` }}
                 />
               </div>
@@ -117,19 +154,25 @@ function AggregationView({ title, data }: { title: string; data: any }) {
 
   // Simple aggregation (sum/count/avg)
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-4 rounded-lg">
-      <div className="text-sm text-gray-600 font-medium mb-1">
+    <div className="flex flex-col items-center justify-center text-center w-full h-full">
+      <div className="text-xs font-semibold text-blue-600 bg-blue-50/50 px-2 py-0.5 rounded-full mb-2 tracking-wide uppercase shadow-sm border border-blue-100/50 z-10">
         {data.aggregationType === "count"
           ? 'סה"כ רשומות'
-          : `${data.aggregationType?.toUpperCase()} of ${data.field}`}
+          : `${data.aggregationType?.toUpperCase()} | ${data.field}`}
       </div>
-      <div className="text-2xl font-bold text-gray-900">
+
+      <div className="text-4xl font-black tracking-tight z-10 my-1 bg-gradient-to-br from-gray-900 to-gray-700 bg-clip-text text-transparent transform group-hover:scale-110 transition-transform duration-300">
         {data.aggregationType === "sum" || data.aggregationType === "avg"
           ? `₪${Math.round(data.result).toLocaleString()}`
           : data.result.toLocaleString()}
       </div>
-      <div className="text-xs text-gray-500 mt-1">
-        מבוסס על {data.count.toLocaleString()} רשומות
+
+      <div className="text-xs text-gray-500 font-medium z-10 flex items-center gap-1 mt-1">
+        <span>מבוסס על</span>
+        <span className="font-bold text-gray-700 bg-white/50 px-1 rounded">
+          {data.count.toLocaleString()}
+        </span>
+        <span>רשומות</span>
       </div>
     </div>
   );
