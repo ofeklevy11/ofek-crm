@@ -679,6 +679,52 @@ export async function processNewRecordTrigger(
             link: `/tables/${tableId}`,
           });
         }
+      } else if (rule.actionType === "ADD_TO_NURTURE_LIST") {
+        const record = await prisma.record.findUnique({
+          where: { id: recordId },
+        });
+        if (record) {
+          const data = record.data as any;
+          const actionConfig = rule.actionConfig as any;
+          const mapping = actionConfig.mapping || {};
+          const name = data[mapping.name] || "Unknown";
+          const email = data[mapping.email] || "";
+          const phone = data[mapping.phone] || "";
+
+          if (email || phone) {
+            console.log(
+              `[Automations] 🟢 ADD_TO_NURTURE_LIST (New Record). Adding ${name} to ${actionConfig.listId}`
+            );
+
+            const added = await addToNurtureList({
+              companyId: rule.companyId,
+              listSlug: actionConfig.listId,
+              name,
+              email,
+              phone,
+              sourceType: "TABLE",
+              sourceId: String(recordId),
+              sourceTableId: tableId,
+            });
+
+            if (added) {
+              // Send notification based on configuration
+              const notifyTo = actionConfig.notifyUserId || rule.createdBy;
+              const notifyMsg = actionConfig.notifyMessage
+                ? actionConfig.notifyMessage.replace("{name}", name)
+                : `Lead ${name} was automatically added to list "${actionConfig.listId}".`;
+
+              if (actionConfig.sendNotification !== false && notifyTo) {
+                await sendNotification({
+                  userId: notifyTo,
+                  title: "Added to Nurture List",
+                  message: notifyMsg,
+                  link: `/nurture-hub`,
+                });
+              }
+            }
+          }
+        }
       }
     }
 
@@ -829,6 +875,50 @@ export async function processRecordUpdate(
             },
           });
         }
+      } else if (rule.actionType === "ADD_TO_NURTURE_LIST") {
+        const actionConfig = rule.actionConfig as any;
+        const mapping = actionConfig.mapping || {};
+
+        const nameField = mapping.name;
+        const emailField = mapping.email;
+        const phoneField = mapping.phone;
+
+        const name = newData[nameField] || "Unknown Name";
+        const email = newData[emailField] || "";
+        const phone = newData[phoneField] || "";
+
+        if (email || phone) {
+          console.log(
+            `[Automations] 🟢 ADD_TO_NURTURE_LIST triggered for Record ${recordId}. Adding ${name} (${email}, ${phone}) to list ${actionConfig.listId}`
+          );
+          const added = await addToNurtureList({
+            companyId: rule.companyId,
+            listSlug: actionConfig.listId,
+            name,
+            email,
+            phone,
+            sourceType: "TABLE",
+            sourceId: String(recordId),
+            sourceTableId: tableId,
+          });
+
+          if (added) {
+            // Send notification based on configuration
+            const notifyTo = actionConfig.notifyUserId || rule.createdBy;
+            const notifyMsg = actionConfig.notifyMessage
+              ? actionConfig.notifyMessage.replace("{name}", name)
+              : `Lead ${name} was automatically added to list "${actionConfig.listId}".`;
+
+            if (actionConfig.sendNotification !== false && notifyTo) {
+              await sendNotification({
+                userId: notifyTo,
+                title: "Added to Nurture List",
+                message: notifyMsg,
+                link: `/nurture-hub`,
+              });
+            }
+          }
+        }
       }
     }
 
@@ -884,5 +974,86 @@ export async function getViewAutomations(viewId: number) {
   } catch (error) {
     console.error("Error fetching view automations:", error);
     return { success: false, error: "Failed to fetch view automations" };
+  }
+}
+
+// Helper to add subscriber to nurture list
+async function addToNurtureList(params: {
+  companyId: number;
+  listSlug: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  sourceType: string;
+  sourceId: string;
+  sourceTableId?: number;
+}) {
+  const {
+    companyId,
+    listSlug,
+    name,
+    email,
+    phone,
+    sourceType,
+    sourceId,
+    sourceTableId,
+  } = params;
+
+  if (!email && !phone) return false;
+
+  try {
+    // 1. Find or create the list
+    let list = await prisma.nurtureList.findUnique({
+      where: {
+        companyId_slug: {
+          companyId,
+          slug: listSlug,
+        },
+      },
+    });
+
+    if (!list) {
+      list = await prisma.nurtureList.create({
+        data: {
+          companyId,
+          slug: listSlug,
+          name:
+            listSlug.charAt(0).toUpperCase() +
+            listSlug.slice(1).replace("-", " "),
+        },
+      });
+    }
+
+    // 2. Check if subscriber exists (by email or phone)
+    const conditions: any[] = [];
+    if (email) conditions.push({ email });
+    if (phone) conditions.push({ phone });
+
+    const existing = await prisma.nurtureSubscriber.findFirst({
+      where: {
+        nurtureListId: list.id,
+        OR: conditions,
+      },
+    });
+
+    if (!existing) {
+      await prisma.nurtureSubscriber.create({
+        data: {
+          nurtureListId: list.id,
+          name,
+          email,
+          phone,
+          sourceType,
+          sourceId,
+          sourceTableId,
+        },
+      });
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error("Error adding to nurture list:", error);
+    return false;
   }
 }

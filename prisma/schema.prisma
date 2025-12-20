@@ -46,6 +46,9 @@ model Company {
   workers             Worker[]
   onboardingPaths     OnboardingPath[]
   workerTasks         WorkerTask[]
+
+  // Nurture Hub
+  nurtureLists        NurtureList[]
 }
 
 model User {
@@ -1089,4 +1092,50 @@ model WorkerTask {
   
   @@index([companyId])
   @@index([workerId])
+}
+
+// NURTURE HUB MODULE
+model NurtureList {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  name        String   // e.g. "Birthday Club", "VIP Clients"
+  slug        String   // e.g. "birthday-club"
+  description String?
+
+  subscribers NurtureSubscriber[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, slug])
+  @@index([companyId])
+}
+
+model NurtureSubscriber {
+  id            Int      @id @default(autoincrement())
+  nurtureListId Int
+
+  name          String
+  email         String?
+  phone         String?
+  
+  // Channel preferences - whether to send via each channel
+  emailActive   Boolean  @default(true)
+  phoneActive   Boolean  @default(true)
+
+  // Metadata about where this came from
+  sourceType    String?  // 'TABLE', 'MANUAL', 'IMPORT'
+  sourceId      String?  // Record ID or similar
+  sourceTableId Int?     // Table ID when sourceType is 'TABLE'
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  nurtureList   NurtureList @relation(fields: [nurtureListId], references: [id], onDelete: Cascade)
+
+  @@index([nurtureListId])
+  @@index([email])
+  @@index([phone])
 }

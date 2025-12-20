@@ -91,12 +91,21 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50 max-h-96 overflow-y-auto">
-          <div className="py-2">
-            <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="text-sm font-semibold text-gray-700">
-                Notifications
-              </h3>
+        <div
+          dir="rtl"
+          className="absolute left-0 mt-2 w-64 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50 max-h-80 overflow-hidden"
+          style={{ maxWidth: "calc(100vw - 16px)" }}
+        >
+          <div className="overflow-y-auto max-h-72">
+            <div className="px-3 py-2 border-b border-gray-100 flex justify-between items-center bg-gray-50 sticky top-0">
+              <h3 className="text-sm font-semibold text-gray-700">התראות</h3>
+              <Link
+                href="/notifications"
+                className="text-xs font-medium text-blue-600 hover:text-blue-500 whitespace-nowrap"
+                onClick={() => setIsOpen(false)}
+              >
+                צפה בכולן
+              </Link>
             </div>
 
             {loading ? (
@@ -112,17 +121,17 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
                 {notifications.map((notification) => (
                   <li
                     key={notification.id}
-                    className={`px-4 py-3 hover:bg-gray-50 transition-colors duration-150 relative group ${
+                    className={`px-3 py-2 hover:bg-gray-50 transition-colors duration-150 relative group overflow-hidden ${
                       !notification.read ? "bg-blue-50" : ""
                     }`}
                   >
                     <div
-                      className="cursor-pointer"
+                      className="cursor-pointer overflow-hidden"
                       onClick={() => handleNotificationClick(notification)}
                     >
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-start justify-between gap-2">
                         <span
-                          className={`text-sm font-medium ${
+                          className={`text-sm font-medium truncate flex-1 min-w-0 ${
                             !notification.read
                               ? "text-gray-900"
                               : "text-gray-700"
@@ -147,7 +156,7 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
                         )}
                       </div>
                       {notification.message && (
-                        <span className="text-xs text-gray-500 mt-1 line-clamp-2 block">
+                        <span className="text-xs text-gray-500 mt-1 line-clamp-2 block break-words overflow-hidden">
                           {notification.message}
                         </span>
                       )}
@@ -159,15 +168,6 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
                 ))}
               </ul>
             )}
-          </div>
-          <div className="border-t border-gray-100 bg-gray-50 p-2 text-center">
-            <Link
-              href="/notifications"
-              className="text-xs font-medium text-blue-600 hover:text-blue-500"
-              onClick={() => setIsOpen(false)}
-            >
-              צפה בכל ההתראות
-            </Link>
           </div>
         </div>
       )}
