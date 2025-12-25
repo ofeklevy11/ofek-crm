@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Loader2 } from "lucide-react";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
@@ -41,89 +45,66 @@ export default function LoginForm() {
 
   return (
     <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-      <div className="rounded-md shadow-sm -space-y-px">
-        <div className="mb-4">
-          <label htmlFor="email-address" className="sr-only">
-            כתובת אימייל
-          </label>
-          <input
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="email-address">ktuvet email</Label>
+          <Input
             id="email-address"
             name="email"
             type="email"
             autoComplete="email"
             required
-            className="appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm transition-all duration-200"
             placeholder="כתובת אימייל"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            className="h-12"
           />
         </div>
-        <div>
-          <label htmlFor="password" className="sr-only">
-            סיסמא
-          </label>
-          <input
+        <div className="space-y-2">
+          <Label htmlFor="password">סיסמא</Label>
+          <Input
             id="password"
             name="password"
             type="password"
             autoComplete="current-password"
             required
-            className="appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm transition-all duration-200"
             placeholder="סיסמא"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            className="h-12"
           />
         </div>
       </div>
 
       {error && (
-        <div className="text-red-500 text-sm text-center bg-red-50 p-2 rounded-md border border-red-100">
+        <div className="text-destructive text-sm text-center bg-destructive/10 p-3 rounded-lg border border-destructive/20">
           {error}
         </div>
       )}
 
       <div>
-        <button
+        <Button
           type="submit"
           disabled={loading}
-          className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg"
+          className="w-full h-12 text-base"
         >
           {loading ? (
-            <span className="flex items-center">
-              <svg
-                className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               מתחבר...
-            </span>
+            </>
           ) : (
             "התחבר"
           )}
-        </button>
+        </Button>
       </div>
 
       <div className="text-center">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-muted-foreground">
           עדיין אין לך חשבון?{" "}
           <a
             href="/register"
-            className="font-medium text-indigo-600 hover:text-indigo-500"
+            className="font-medium text-primary hover:text-primary/90 transition-colors"
           >
             הירשם כאן
           </a>

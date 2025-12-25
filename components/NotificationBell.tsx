@@ -1,10 +1,18 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Bell } from "lucide-react";
 import { getNotifications, markAsRead } from "@/app/actions/notifications";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 interface Notification {
   id: number;
@@ -23,7 +31,6 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const fetchNotifications = async () => {
@@ -45,22 +52,6 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
     return () => clearInterval(interval);
   }, [userId]);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
   const handleNotificationClick = async (notification: Notification) => {
     if (!notification.read) {
       await markAsRead(notification.id);
@@ -77,100 +68,98 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-gray-600 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-full"
-      >
-        <Bell className="h-6 w-6" />
-        {unreadCount > 0 && (
-          <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-600 rounded-full">
-            {unreadCount}
-          </span>
-        )}
-      </button>
-
-      {isOpen && (
-        <div
-          dir="rtl"
-          className="absolute left-0 mt-2 w-64 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50 max-h-80 overflow-hidden"
-          style={{ maxWidth: "calc(100vw - 16px)" }}
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen} dir="rtl">
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative text-muted-foreground hover:text-foreground rounded-full h-8 w-8 lg:h-9 lg:w-9"
         >
-          <div className="overflow-y-auto max-h-72">
-            <div className="px-3 py-2 border-b border-gray-100 flex justify-between items-center bg-gray-50 sticky top-0">
-              <h3 className="text-sm font-semibold text-gray-700">התראות</h3>
-              <Link
-                href="/notifications"
-                className="text-xs font-medium text-blue-600 hover:text-blue-500 whitespace-nowrap"
-                onClick={() => setIsOpen(false)}
-              >
-                צפה בכולן
-              </Link>
-            </div>
-
-            {loading ? (
-              <div className="px-4 py-4 text-center text-sm text-gray-500">
-                Loading...
-              </div>
-            ) : notifications.length === 0 ? (
-              <div className="px-4 py-4 text-center text-sm text-gray-500">
-                No notifications
-              </div>
-            ) : (
-              <ul className="divide-y divide-gray-100">
-                {notifications.map((notification) => (
-                  <li
-                    key={notification.id}
-                    className={`px-3 py-2 hover:bg-gray-50 transition-colors duration-150 relative group overflow-hidden ${
-                      !notification.read ? "bg-blue-50" : ""
-                    }`}
-                  >
-                    <div
-                      className="cursor-pointer overflow-hidden"
-                      onClick={() => handleNotificationClick(notification)}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <span
-                          className={`text-sm font-medium truncate flex-1 min-w-0 ${
-                            !notification.read
-                              ? "text-gray-900"
-                              : "text-gray-700"
-                          }`}
-                        >
-                          {notification.title}
-                        </span>
-                        {!notification.read && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleNotificationClick({
-                                ...notification,
-                                link: null,
-                              }); // Hack to just mark as read without navigating
-                            }}
-                            className="text-gray-400 hover:text-green-600 p-0.5 rounded-full hover:bg-green-50"
-                            title="סמן כנקרא"
-                          >
-                            <Bell className="h-3 w-3 fill-current" />
-                          </button>
-                        )}
-                      </div>
-                      {notification.message && (
-                        <span className="text-xs text-gray-500 mt-1 line-clamp-2 block break-words overflow-hidden">
-                          {notification.message}
-                        </span>
-                      )}
-                      <span className="text-xs text-gray-400 mt-1 block">
-                        {new Date(notification.createdAt).toLocaleString()}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <Bell className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1 right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-background animate-pulse" />
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-80 p-0" align="end" forceMount>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-muted/30">
+          <h3 className="font-semibold text-sm">התראות</h3>
+          <Link
+            href="/notifications"
+            className="text-xs text-primary hover:underline hover:text-primary/80 transition-colors"
+            onClick={() => setIsOpen(false)}
+          >
+            צפה בכולן
+          </Link>
         </div>
-      )}
-    </div>
+        <ScrollArea className="h-[300px]">
+          {loading ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              טוען...
+            </div>
+          ) : notifications.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              אין התראות חדשות
+            </div>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {notifications.map((notification) => (
+                <div
+                  key={notification.id}
+                  className={cn(
+                    "relative px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer group",
+                    !notification.read && "bg-primary/5"
+                  )}
+                  onClick={() => handleNotificationClick(notification)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span
+                      className={cn(
+                        "text-sm font-medium leading-none",
+                        !notification.read
+                          ? "text-foreground"
+                          : "text-muted-foreground"
+                      )}
+                    >
+                      {notification.title}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                      {new Date(notification.createdAt).toLocaleTimeString(
+                        "he-IL",
+                        { hour: "2-digit", minute: "2-digit" }
+                      )}
+                    </span>
+                  </div>
+                  {notification.message && (
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      {notification.message}
+                    </p>
+                  )}
+
+                  {!notification.read && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute left-2 top-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleNotificationClick({
+                          ...notification,
+                          link: null,
+                        });
+                      }}
+                      title="סמן כנקרא"
+                    >
+                      <span className="sr-only">סמן כנקרא</span>
+                      <div className="h-2 w-2 rounded-full bg-primary" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

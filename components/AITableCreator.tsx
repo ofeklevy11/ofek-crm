@@ -2,6 +2,17 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Sparkles,
+  Send,
+  X,
+  ArrowRight,
+  Table as TableIcon,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Message {
   role: "user" | "model";
@@ -39,8 +50,7 @@ export default function AITableCreator({
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "model",
-      content:
-        "Hi! Describe the table you want to create, and I'll design it for you.",
+      content: "היי! תאר את הטבלה שתרצה ליצור, ואני אעצב אותה עבורך.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -107,11 +117,7 @@ export default function AITableCreator({
           ...prev,
           {
             role: "model",
-            content: `I've ${
-              currentSchema ? "updated" : "created"
-            } the schema for "${
-              data.schema.tableName
-            }". Check the preview on the right.`,
+            content: `יצרתי/עדכנתי את הסכמה עבור "${data.schema.tableName}". בדוק את התצוגה המקדימה מצד שמאל.`,
           },
         ]);
       } else {
@@ -119,8 +125,7 @@ export default function AITableCreator({
           ...prev,
           {
             role: "model",
-            content:
-              "I couldn't generate a schema from that. Could you try being more specific?",
+            content: "לא הצלחתי להבין את הבקשה. נסה לתאר בצורה מפורטת יותר.",
           },
         ]);
       }
@@ -130,7 +135,7 @@ export default function AITableCreator({
         ...prev,
         {
           role: "model",
-          content: "Sorry, something went wrong. Please try again.",
+          content: "מצטערים, משהו השתבש. אנא נסה שנית.",
         },
       ]);
     } finally {
@@ -143,16 +148,6 @@ export default function AITableCreator({
     setCreating(true);
 
     try {
-      // Transform fields for createTable
-      // The schema returns options as string "A, B, C", which fits the action expectation if we transform it to array if needed?
-      // Wait, CreateTableForm sends `options` as string[] for manual input but the API might handle it.
-      // Re-checking CreateTableForm:
-      // const schemaJson = fields.map((f) => ({ ... options: [...] }))
-      // The action expects `schemaJson` to be Record<string, unknown>, usually an array of fields.
-      // CreateTableForm parses the CSV string into array before sending.
-      // My AI prompt asks for "comma separated string" for options.
-      // So I should convert it to array here to match CreateTableForm logic.
-
       const refinedFields = currentSchema.fields.map((f) => ({
         ...f,
         options: f.options
@@ -161,7 +156,6 @@ export default function AITableCreator({
               .map((s) => s.trim())
               .filter(Boolean)
           : undefined,
-        // Ensure strictly typed values for creating table
         relationTableId: f.relationTableId
           ? Number(f.relationTableId)
           : undefined,
@@ -179,11 +173,11 @@ export default function AITableCreator({
         onClose();
         router.refresh();
       } else {
-        alert("Failed to create table: " + result.error);
+        alert("נכשל ביצירת טבלה: " + result.error);
       }
     } catch (e) {
       console.error(e);
-      alert("Error creating table");
+      alert("שגיאה ביצירת הטבלה");
     } finally {
       setCreating(false);
     }
@@ -192,192 +186,164 @@ export default function AITableCreator({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-6xl h-[80vh] rounded-3xl shadow-2xl flex overflow-hidden border border-gray-100 flex-col md:flex-row">
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div
+        className="bg-card w-full max-w-6xl h-[80vh] rounded-3xl shadow-2xl flex overflow-hidden border border-border flex-col md:flex-row"
+        dir="rtl"
+      >
         {/* Chat Section */}
         <div
-          className={`flex flex-col flex-1 h-full ${
+          className={cn(
+            "flex flex-col flex-1 h-full",
             currentSchema
-              ? "md:w-1/2 border-b md:border-b-0 md:border-r border-gray-200"
+              ? "md:w-1/2 border-b md:border-b-0 md:border-l border-border"
               : "w-full"
-          }`}
+          )}
         >
-          <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+          <div className="p-6 border-b border-border bg-muted/30 flex justify-between items-center">
             <div>
-              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <span className="text-2xl">✨</span> AI Table Creator
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Sparkles className="text-primary" /> יוצר טבלאות AI
               </h2>
-              <p className="text-sm text-gray-500">
-                Describe what you need, I'll build it.
+              <p className="text-sm text-muted-foreground">
+                תאר מה שאתה צריך, ואני אבנה את זה.
               </p>
             </div>
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition p-2"
+              className="text-muted-foreground hover:text-foreground"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
+              <X className="h-5 w-5" />
+            </Button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/30">
-            {messages.map((msg, i) => (
-              <div
-                key={i}
-                className={`flex ${
-                  msg.role === "user" ? "justify-end" : "justify-start"
-                }`}
-              >
+          <ScrollArea className="flex-1 p-6 bg-muted/10">
+            <div className="space-y-4">
+              {messages.map((msg, i) => (
                 <div
-                  className={`max-w-[80%] rounded-2xl px-5 py-3.5 shadow-sm ${
-                    msg.role === "user"
-                      ? "bg-blue-600 text-white rounded-br-none"
-                      : "bg-white border border-gray-100 text-gray-800 rounded-bl-none"
-                  }`}
+                  key={i}
+                  className={cn(
+                    "flex",
+                    msg.role === "user" ? "justify-end" : "justify-start"
+                  )}
                 >
-                  {msg.content}
-                </div>
-              </div>
-            ))}
-            {loading && (
-              <div className="flex justify-start">
-                <div className="bg-white border border-gray-100 px-5 py-3.5 rounded-2xl rounded-bl-none shadow-sm flex gap-2 items-center">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-.3s]"></div>
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-.5s]"></div>
-                </div>
-              </div>
-            )}
-            {messages.length === 1 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-2">
-                {[
-                  "טבלת לידים לסוכנות שיווק (שם, טלפון, מקור, סטטוס, תקציב)",
-                  "מעקב הוצאות והכנסות (תאריך, סכום, קטגוריה, סוג, חשבונית)",
-                  "ניהול מלאי מוצרים (שם, מק'ט, כמות, מחיר עלות, מחיר מכירה, ספק)",
-                  "ניהול פרויקטים ומשימות (שם משימה, אחראי, דד-ליין, עדיפות, סטטוס)",
-                ].map((s, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleSend(s)}
-                    className="text-right text-sm p-3 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:shadow-md transition-all text-gray-600 hover:text-blue-600"
+                  <div
+                    className={cn(
+                      "max-w-[80%] rounded-2xl px-5 py-3.5 shadow-sm text-sm",
+                      msg.role === "user"
+                        ? "bg-primary text-primary-foreground rounded-bl-none"
+                        : "bg-card border border-border text-foreground rounded-br-none"
+                    )}
                   >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="bg-card border border-border px-5 py-3.5 rounded-2xl rounded-br-none shadow-sm flex gap-2 items-center">
+                    <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-.3s]"></div>
+                    <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-.5s]"></div>
+                  </div>
+                </div>
+              )}
+              {messages.length === 1 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-2 pt-4">
+                  {[
+                    "טבלת לידים לסוכנות שיווק (שם, טלפון, מקור, סטטוס, תקציב)",
+                    "מעקב הוצאות והכנסות (תאריך, סכום, קטגוריה, סוג, חשבונית)",
+                    "ניהול מלאי מוצרים (שם, מק'ט, כמות, מחיר עלות, מחיר מכירה, ספק)",
+                    "ניהול פרויקטים ומשימות (שם משימה, אחראי, דד-ליין, עדיפות, סטטוס)",
+                  ].map((s, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleSend(s)}
+                      className="text-right text-sm p-3 bg-card border border-border rounded-xl hover:border-primary/50 hover:shadow-md transition-all text-muted-foreground hover:text-primary"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          </ScrollArea>
 
-          <div className="p-4 bg-white border-t border-gray-100">
-            <div className="relative">
-              <input
+          <div className="p-4 bg-card border-t border-border">
+            <div className="relative flex gap-2">
+              <Input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                placeholder="e.g., A CRM table for Real Estate leads..."
-                className="w-full pl-5 pr-12 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition text-gray-800 shadow-inner"
+                placeholder="למשל: טבלת CRM ללידים בנדל״ן..."
+                className="pl-5 pr-12 py-6 rounded-xl bg-muted/20"
               />
-              <button
+              <Button
                 onClick={() => handleSend()}
                 disabled={loading || !input.trim()}
-                className="absolute right-2 top-2 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:hover:bg-blue-600 shadow-md"
+                size="icon"
+                className="absolute left-2 top-2 h-8 w-8 rounded-lg"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="22" y1="2" x2="11" y2="13"></line>
-                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                </svg>
-              </button>
+                <ArrowRight className="h-4 w-4" />{" "}
+                {/* RTL arrow might need Left, but usually send is forward */}
+              </Button>
             </div>
           </div>
         </div>
 
         {/* Preview Section */}
         {currentSchema && (
-          <div className="flex-1 overflow-y-auto bg-white border-l border-gray-100 p-8 flex flex-col md:w-1/2 h-full">
-            <div className="mb-6 pb-6 border-b border-gray-100">
+          <div className="flex-1 overflow-y-auto bg-card border-r border-border p-8 flex flex-col md:w-1/2 h-full">
+            <div className="mb-6 pb-6 border-b border-border">
               <div className="flex items-start justify-between mb-2">
                 <div>
-                  <div className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">
-                    Preview
+                  <div className="text-xs font-bold text-primary uppercase tracking-widest mb-1">
+                    תצוגה מקדימה
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-900">
+                  <h3 className="text-2xl font-bold text-foreground">
                     {currentSchema.tableName}
                   </h3>
                 </div>
-                <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-mono">
+                <span className="bg-muted text-muted-foreground px-3 py-1 rounded-full text-xs font-mono">
                   {currentSchema.slug}
                 </span>
               </div>
               {currentSchema.description && (
-                <p className="text-gray-500">{currentSchema.description}</p>
+                <p className="text-muted-foreground">
+                  {currentSchema.description}
+                </p>
               )}
             </div>
 
             <div className="flex-1 space-y-3 mb-6 overflow-y-auto pr-2">
-              <h4 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                  <line x1="16" y1="13" x2="8" y2="13"></line>
-                  <line x1="16" y1="17" x2="8" y2="17"></line>
-                  <polyline points="10 9 9 9 8 9"></polyline>
-                </svg>
-                Fields ({currentSchema.fields.length})
+              <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                <TableIcon className="h-4 w-4" />
+                שדות ({currentSchema.fields.length})
               </h4>
               {currentSchema.fields.map((field, idx) => (
                 <div
                   key={idx}
-                  className="bg-gray-50 border border-gray-100 rounded-lg p-3 flex items-center justify-between group hover:border-blue-200 transition"
+                  className="bg-muted/30 border border-border rounded-lg p-3 flex items-center justify-between group hover:border-primary/30 transition"
                 >
                   <div>
-                    <div className="font-medium text-gray-800">
+                    <div className="font-medium text-foreground">
                       {field.label}
                     </div>
-                    <div className="text-xs text-gray-400 font-mono">
+                    <div className="text-xs text-muted-foreground font-mono">
                       {field.name}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs bg-white text-gray-500 border border-gray-200 px-2 py-0.5 rounded shadow-sm">
+                    <span className="text-xs bg-background text-muted-foreground border border-border px-2 py-0.5 rounded shadow-sm">
                       {field.type}
                     </span>
                     {field.options && (
                       <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded">
-                        List
+                        רשימה
                       </span>
                     )}
                   </div>
@@ -385,29 +351,31 @@ export default function AITableCreator({
               ))}
             </div>
 
-            <div className="pt-6 border-t border-gray-100 flex gap-3">
-              <button
+            <div className="pt-6 border-t border-border flex gap-3">
+              <Button
+                variant="outline"
                 onClick={() => setCurrentSchema(null)}
-                className="flex-1 py-3 px-4 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition"
+                className="flex-1 h-12"
               >
-                Discard
-              </button>
-              <button
+                ביטול
+              </Button>
+              <Button
                 onClick={handleCreate}
                 disabled={creating}
-                className="flex-2 py-3 px-4 bg-linear-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 font-medium shadow-lg hover:shadow-xl transition disabled:opacity-70 flex justify-center items-center gap-2"
+                className="flex-[2] h-12 gap-2"
               >
                 {creating ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    Creating Table...
+                    יוצר טבלה...
                   </>
                 ) : (
                   <>
-                    <span className="text-lg">+</span> Create Table
+                    <Sparkles className="h-4 w-4" />
+                    צור טבלה
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         )}

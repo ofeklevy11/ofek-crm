@@ -1,8 +1,30 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import RelationPicker from "./RelationPicker";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Save,
+  Trash2,
+  Plus,
+  RotateCw,
+  Paperclip,
+  ExternalLink,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface SchemaField {
   name: string;
@@ -36,11 +58,11 @@ export default function EditRecordModal({
   const [attachments, setAttachments] = useState<any[]>([]);
   const [newAttachmentUrl, setNewAttachmentUrl] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [open, setOpen] = useState(true);
 
   // Auto-focus logic
   useEffect(() => {
     if (initialFocusField) {
-      // Small timeout to ensure DOM is ready
       setTimeout(() => {
         const element = document.getElementById(`field-${initialFocusField}`);
         if (element) {
@@ -68,7 +90,7 @@ export default function EditRecordModal({
       });
       setFormData(parsedData);
       if (record.createdAt) {
-        // Format for datetime-local input: YYYY-MM-DDTHH:mm
+        // Format for datetime-local: YYYY-MM-DDTHH:mm
         const date = new Date(record.createdAt);
         const formatted = new Date(
           date.getTime() - date.getTimezoneOffset() * 60000
@@ -133,28 +155,41 @@ export default function EditRecordModal({
       if (!res.ok) throw new Error("Failed to update record");
 
       router.refresh();
-      onClose();
+      handleClose();
     } catch (error) {
       console.error(error);
-      alert("Error updating record");
+      alert("שגיאה בעדכון הרשומה");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleClose = () => {
+    setOpen(false);
+    setTimeout(onClose, 100); // Allow animation to finish
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-black">
-            Edit Record #{record.id}
-          </h3>
-          <button onClick={onClose} className="text-black hover:text-gray-700">
-            ✕
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="grid grid-cols-1 gap-4">
+    <Dialog
+      open={open}
+      onOpenChange={(val) => !val && handleClose()}
+      modal={true}
+    >
+      <DialogContent
+        className="max-w-xl w-full max-h-[90vh] overflow-y-auto"
+        dir="rtl"
+      >
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold flex items-center gap-2">
+            עריכת רשומה{" "}
+            <span className="text-muted-foreground font-mono">
+              #{record.id}
+            </span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-6 py-4">
+          <div className="space-y-4">
             {schema
               .filter(
                 (field, index, self) =>
@@ -162,50 +197,73 @@ export default function EditRecordModal({
               )
               .map((field) => (
                 <div key={field.name}>
-                  <label className="block text-sm font-medium text-black mb-1">
+                  <Label className="text-sm font-semibold mb-1.5 block">
                     {field.label}
-                  </label>
+                  </Label>
+
                   {field.type === "select" ? (
-                    <select
-                      id={`field-${field.name}`}
-                      value={formData[field.name] || ""}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          [field.name]: e.target.value,
-                        })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    >
-                      <option value="">Select...</option>
-                      {field.options?.map((opt, i) => (
-                        <option key={`${opt}-${i}`} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        id={`field-${field.name}`}
+                        value={formData[field.name] || ""}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            [field.name]: e.target.value,
+                          })
+                        }
+                        className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
+                      >
+                        <option value="">בחר...</option>
+                        {field.options?.map((opt, i) => (
+                          <option key={`${opt}-${i}`} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center px-2 text-gray-700">
+                        <svg
+                          className="fill-current h-4 w-4"
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                        </svg>
+                      </div>
+                    </div>
                   ) : field.type === "boolean" ? (
-                    <select
-                      id={`field-${field.name}`}
-                      value={
-                        formData[field.name] === undefined
-                          ? ""
-                          : String(formData[field.name])
-                      }
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          [field.name]: e.target.value === "true",
-                        })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    >
-                      <option value="">Select...</option>
-                      <option value="true">Yes</option>
-                      <option value="false">No</option>
-                    </select>
+                    <div className="relative">
+                      <select
+                        id={`field-${field.name}`}
+                        value={
+                          formData[field.name] === undefined
+                            ? ""
+                            : String(formData[field.name])
+                        }
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            [field.name]: e.target.value === "true",
+                          })
+                        }
+                        className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
+                      >
+                        <option value="">בחר...</option>
+                        <option value="true">כן</option>
+                        <option value="false">לא</option>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center px-2 text-gray-700">
+                        <svg
+                          className="fill-current h-4 w-4"
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                        </svg>
+                      </div>
+                    </div>
                   ) : field.type === "textarea" ? (
-                    <textarea
+                    <Textarea
                       id={`field-${field.name}`}
                       value={formData[field.name] || ""}
                       onChange={(e) =>
@@ -214,59 +272,61 @@ export default function EditRecordModal({
                           [field.name]: e.target.value,
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none min-h-[100px]"
+                      className="min-h-[80px]"
                     />
                   ) : field.type === "radio" ? (
-                    <div className="flex gap-4 pt-2" id={`field-${field.name}`}>
+                    <div
+                      className="flex flex-wrap gap-4 pt-1"
+                      id={`field-${field.name}`}
+                    >
                       {field.options?.map((opt, i) => (
                         <label
                           key={`${opt}-${i}`}
-                          className="flex items-center gap-2 text-black"
+                          className="flex items-center gap-2 cursor-pointer"
                         >
-                          <input
-                            type="radio"
-                            name={field.name}
-                            value={opt}
+                          <Checkbox
                             checked={formData[field.name] === opt}
-                            onChange={(e) =>
+                            onCheckedChange={() =>
                               setFormData({
                                 ...formData,
-                                [field.name]: e.target.value,
+                                [field.name]: opt,
                               })
                             }
-                            className="text-blue-600 focus:ring-blue-500"
+                            className="rounded-full"
                           />
-                          {opt}
+                          <span className="text-sm">{opt}</span>
                         </label>
                       ))}
                     </div>
                   ) : field.type === "multi-select" ? (
-                    <select
-                      multiple
-                      id={`field-${field.name}`}
-                      value={
-                        Array.isArray(formData[field.name])
-                          ? formData[field.name]
-                          : []
-                      }
-                      onChange={(e) => {
-                        const selected = Array.from(
-                          e.target.selectedOptions,
-                          (option) => option.value
-                        );
-                        setFormData({ ...formData, [field.name]: selected });
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none min-h-[100px]"
-                    >
-                      {field.options?.map((opt, i) => (
-                        <option key={`${opt}-${i}`} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        multiple
+                        id={`field-${field.name}`}
+                        value={
+                          Array.isArray(formData[field.name])
+                            ? formData[field.name]
+                            : []
+                        }
+                        onChange={(e) => {
+                          const selected = Array.from(
+                            e.target.selectedOptions,
+                            (option) => option.value
+                          );
+                          setFormData({ ...formData, [field.name]: selected });
+                        }}
+                        className="flex min-h-[100px] w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {field.options?.map((opt, i) => (
+                          <option key={`${opt}-${i}`} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   ) : field.type === "tags" ? (
                     <div
-                      className="flex flex-wrap gap-2"
+                      className="flex flex-wrap gap-2 p-2 bg-muted/20 rounded-md border border-input min-h-[40px]"
                       id={`field-${field.name}`}
                     >
                       {field.options?.map((tag, i) => {
@@ -276,9 +336,10 @@ export default function EditRecordModal({
                           : [];
                         const isSelected = currentTags.includes(tag);
                         return (
-                          <button
+                          <Badge
                             key={`${tag}-${i}`}
-                            type="button"
+                            variant={isSelected ? "default" : "outline"}
+                            className="text-xs cursor-pointer select-none hover:bg-primary/90"
                             onClick={() => {
                               const newTags = isSelected
                                 ? currentTags.filter((t: string) => t !== tag)
@@ -288,19 +349,14 @@ export default function EditRecordModal({
                                 [field.name]: newTags,
                               });
                             }}
-                            className={`px-3 py-1 rounded-full text-sm border transition ${
-                              isSelected
-                                ? "bg-blue-100 border-blue-300 text-blue-800"
-                                : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
-                            }`}
                           >
                             {tag}
-                          </button>
+                          </Badge>
                         );
                       })}
                       {(!field.options || field.options.length === 0) && (
-                        <p className="text-sm text-gray-500 italic">
-                          No tags defined in schema options.
+                        <p className="text-xs text-muted-foreground italic">
+                          לא הוגדרו תגיות
                         </p>
                       )}
                     </div>
@@ -312,14 +368,12 @@ export default function EditRecordModal({
                         allowMultiple={field.allowMultiple}
                         displayField={field.displayField}
                         onChange={async (val) => {
-                          // Update the relation field
                           const newFormData = {
                             ...formData,
                             [field.name]: val,
                           };
                           setFormData(newFormData);
 
-                          // Find dependent lookup fields
                           const lookupFields = schema.filter(
                             (f) =>
                               f.type === "lookup" &&
@@ -361,7 +415,7 @@ export default function EditRecordModal({
                       />
                     </div>
                   ) : (
-                    <input
+                    <Input
                       id={`field-${field.name}`}
                       type={
                         field.type === "number"
@@ -382,8 +436,11 @@ export default function EditRecordModal({
                               : e.target.value,
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder={field.type === "lookup" ? "Read Only" : ""}
+                      className={
+                        field.type === "lookup" || field.type === "automation"
+                          ? "bg-muted text-muted-foreground cursor-not-allowed"
+                          : ""
+                      }
                       readOnly={
                         field.type === "lookup" || field.type === "automation"
                       }
@@ -394,79 +451,85 @@ export default function EditRecordModal({
 
             {/* Created At Field */}
             <div>
-              <label className="block text-sm font-medium text-black mb-1">
-                Created At
-              </label>
-              <input
+              <Label className="text-sm font-semibold mb-1.5 block">
+                נוצר בתאריך
+              </Label>
+              <Input
                 type="datetime-local"
                 value={createdAt}
                 onChange={(e) => setCreatedAt(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
           </div>
 
-          <div className="border-t border-gray-100 pt-4 mt-4">
-            <h4 className="font-medium text-black mb-3">Attachments</h4>
-            <div className="space-y-3 mb-4">
+          <div className="border-t border-border pt-4 mt-4 space-y-3">
+            <h4 className="font-semibold text-sm flex items-center gap-2">
+              <Paperclip className="h-4 w-4" /> קבצים מצורפים
+            </h4>
+            <div className="space-y-2">
               {attachments.map((att) => (
                 <div
                   key={att.id}
-                  className="flex items-center justify-between bg-gray-50 p-2 rounded text-sm"
+                  className="flex items-center justify-between bg-muted/30 p-2 rounded-md border border-border text-sm"
                 >
                   <a
                     href={att.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline truncate max-w-[200px]"
+                    className="text-primary hover:underline truncate max-w-[200px] flex items-center gap-1"
                   >
-                    {att.filename}
+                    {att.filename} <ExternalLink className="h-3 w-3" />
                   </a>
-                  <span className="text-black text-xs">
+                  <span className="text-muted-foreground text-xs">
                     {new Date(att.uploadedAt).toLocaleDateString()}
                   </span>
                 </div>
               ))}
               {attachments.length === 0 && (
-                <p className="text-black text-sm italic">No attachments</p>
+                <p className="text-muted-foreground text-sm italic">
+                  אין קבצים מצורפים
+                </p>
               )}
             </div>
             <div className="flex gap-2">
-              <input
+              <Input
                 type="url"
-                placeholder="Paste file URL..."
+                placeholder="הדבק קישור לקובץ..."
                 value={newAttachmentUrl}
                 onChange={(e) => setNewAttachmentUrl(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                className="flex-1"
               />
-              <button
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={handleAddAttachment}
                 disabled={uploading || !newAttachmentUrl}
-                className="bg-gray-100 text-black px-3 py-2 rounded-lg text-sm hover:bg-gray-200 disabled:opacity-50"
               >
-                {uploading ? "Adding..." : "Add"}
-              </button>
+                {uploading ? "מוסיף..." : "הוסף"}
+              </Button>
             </div>
           </div>
-          <div className="flex justify-end pt-4 gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-black hover:bg-gray-100 rounded-lg transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="bg-blue-600 text-white py-2 px-6 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
-            >
-              {loading ? "Saving..." : "Save Changes"}
-            </button>
-          </div>
+
+          <DialogFooter className="gap-2 sm:justify-start">
+            <Button type="submit" disabled={loading} className="gap-2">
+              {loading ? (
+                <>
+                  <RotateCw className="mr-2 h-4 w-4 animate-spin" />
+                  שומר...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 ml-2" />
+                  שמור שינויים
+                </>
+              )}
+            </Button>
+            <Button type="button" variant="outline" onClick={handleClose}>
+              ביטול
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -82,31 +82,34 @@ export default function TableCard({
   return (
     <>
       <div
-        className="relative group bg-white rounded-xl shadow-sm hover:shadow-lg transition-all p-6 border border-gray-100 cursor-pointer"
+        className="relative group bg-card rounded-xl shadow-sm hover:shadow-lg transition-all p-6 border border-border cursor-pointer hover:border-primary/20"
         onClick={handleCardClick}
+        dir="rtl"
       >
         {/* Title + Slug */}
         <div className="flex justify-between items-start mb-4">
-          <h2 className="text-xl font-semibold text-black">{table.name}</h2>
+          <h2 className="text-xl font-semibold text-card-foreground">
+            {table.name}
+          </h2>
 
-          <span className="text-xs font-mono bg-gray-100 text-black py-1 px-2 rounded">
+          <span className="text-xs font-mono bg-muted text-muted-foreground py-1 px-2 rounded">
             {table.slug}
           </span>
         </div>
 
         {/* Records */}
-        <p className="text-black text-sm mb-4">
+        <p className="text-muted-foreground text-sm mb-4">
           {table._count.records}{" "}
-          {table._count.records === 1 ? "record" : "records"}
+          {table._count.records === 1 ? "רשומה" : "רשומות"}
         </p>
 
         {/* Created date */}
-        <div className="text-xs text-gray-500 mb-2">
-          Created {new Date(table.createdAt).toLocaleDateString()}
+        <div className="text-xs text-muted-foreground mb-2">
+          נוצר בתאריך {new Date(table.createdAt).toLocaleDateString("he-IL")}
         </div>
 
         {/* Creator Badge */}
-        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
           <User size={12} />
           נוצר על ידי {table.creator.name}
         </div>
@@ -117,8 +120,8 @@ export default function TableCard({
             <button
               onClick={handleEditClick}
               onPointerDown={(e) => e.stopPropagation()}
-              className="bg-white text-gray-500 hover:text-blue-600 p-2 rounded-lg shadow-sm border border-gray-200 hover:border-blue-200 transition"
-              title="Edit Table"
+              className="bg-background text-muted-foreground hover:text-primary p-2 rounded-lg shadow-sm border border-border hover:border-primary transition"
+              title="ערוך טבלה"
               disabled={isDeleting}
             >
               <Pencil size={16} />
@@ -129,12 +132,12 @@ export default function TableCard({
             <button
               onClick={handleDeleteClick}
               onPointerDown={(e) => e.stopPropagation()}
-              className="bg-white text-gray-500 hover:text-red-600 p-2 rounded-lg shadow-sm border border-gray-200 hover:border-red-200 transition disabled:opacity-50"
-              title="Delete Table"
+              className="bg-background text-muted-foreground hover:text-destructive p-2 rounded-lg shadow-sm border border-border hover:border-destructive transition disabled:opacity-50"
+              title="מחק טבלה"
               disabled={isDeleting}
             >
               {isDeleting ? (
-                <span className="animate-spin w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full block"></span>
+                <span className="animate-spin w-4 h-4 border-2 border-destructive border-t-transparent rounded-full block"></span>
               ) : (
                 <Trash2 size={16} />
               )}

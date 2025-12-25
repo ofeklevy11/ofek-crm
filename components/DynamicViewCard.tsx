@@ -4,6 +4,11 @@ import { useState } from "react";
 import { toggleView, deleteView, ViewConfig } from "@/app/actions/views";
 import { useRouter } from "next/navigation";
 import EditViewModal from "./EditViewModal";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Edit2, Trash2, Power, PowerOff } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface DynamicViewCardProps {
   viewId: number;
@@ -78,41 +83,60 @@ export default function DynamicViewCard({
 
   return (
     <>
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-gray-50 to-white">
-          <h3 className="font-bold text-gray-900">{title}</h3>
-          <div className="flex items-center gap-2">
-            <button
+      <Card className="overflow-hidden border-border/60 shadow-sm transition-all hover:shadow-md">
+        <CardHeader className="flex flex-row items-center justify-between p-4 bg-muted/30 border-b border-border/40">
+          <CardTitle className="text-sm font-bold text-foreground truncate">
+            {title}
+          </CardTitle>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => setShowEditModal(true)}
-              className="p-1 text-blue-600 hover:bg-blue-50 rounded transition"
+              className="h-8 w-8 text-muted-foreground hover:text-primary"
               title="ערוך תצוגה"
             >
-              ✏️
-            </button>
-            <button
+              <Edit2 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={handleToggle}
               disabled={isToggling}
-              className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+              className={cn(
+                "h-8 w-8 transition-colors",
                 isEnabled
-                  ? "bg-green-100 text-green-700 hover:bg-green-200"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              } disabled:opacity-50`}
+                  ? "text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
               title={isEnabled ? "הסתר" : "הצג"}
             >
-              {isToggling ? "..." : isEnabled ? "ON" : "OFF"}
-            </button>
-            <button
+              {isToggling ? (
+                <span className="animate-spin">⟳</span>
+              ) : isEnabled ? (
+                <Power className="h-4 w-4" />
+              ) : (
+                <PowerOff className="h-4 w-4" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={handleDelete}
               disabled={isDeleting}
-              className="p-1 text-red-500 hover:bg-red-50 rounded transition disabled:opacity-50"
+              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
               title="מחק תצוגה"
             >
-              {isDeleting ? "..." : "🗑️"}
-            </button>
+              {isDeleting ? (
+                <span className="animate-spin">⟳</span>
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+            </Button>
           </div>
-        </div>
-        {isEnabled && <div className="p-6">{children}</div>}
-      </div>
+        </CardHeader>
+        {isEnabled && <CardContent className="p-6">{children}</CardContent>}
+      </Card>
 
       {showEditModal && (
         <EditViewModal

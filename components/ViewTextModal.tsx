@@ -1,8 +1,19 @@
 "use client";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Edit2 } from "lucide-react";
+
 interface ViewTextModalProps {
   title: string;
   text: string;
+  isOpen: boolean;
   onClose: () => void;
   onEdit?: () => void;
 }
@@ -10,41 +21,43 @@ interface ViewTextModalProps {
 export default function ViewTextModal({
   title,
   text,
+  isOpen,
   onClose,
   onEdit,
 }: ViewTextModalProps) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full h-[80vh] flex flex-col">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-          <h3 className="text-lg font-bold text-black">{title}</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-black text-2xl leading-none"
-          >
-            &times;
-          </button>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className="max-w-4xl w-full h-[80vh] flex flex-col p-0"
+        dir="rtl"
+      >
+        <div className="p-6 border-b">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">{title}</DialogTitle>
+          </DialogHeader>
         </div>
-        <div className="p-6 overflow-y-auto whitespace-pre-wrap wrap-break-word text-black">
+
+        <div className="p-6 overflow-y-auto flex-1 whitespace-pre-wrap wrap-break-word text-foreground text-sm leading-relaxed">
           {text}
         </div>
-        <div className="p-4 border-t border-gray-100 flex justify-end gap-3">
+
+        <DialogFooter className="p-4 border-t gap-2 sm:justify-start">
           {onEdit && (
-            <button
-              onClick={onEdit}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
+            <Button
+              onClick={() => {
+                onEdit();
+                onClose();
+              }}
+              className="gap-2"
             >
-              <span>✏️</span> Edit Record
-            </button>
+              <Edit2 className="h-4 w-4" /> ערוך רשומה
+            </Button>
           )}
-          <button
-            onClick={onClose}
-            className="bg-gray-100 text-black px-4 py-2 rounded-lg hover:bg-gray-200 transition"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
+          <Button variant="outline" onClick={onClose}>
+            סגור
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

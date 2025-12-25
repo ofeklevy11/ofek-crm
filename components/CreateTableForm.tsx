@@ -2,6 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Plus, Trash2, ArrowRight, Save } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
 interface FieldRow {
   name: string;
@@ -51,12 +57,12 @@ export default function CreateTableForm() {
   }, []);
 
   const [fields, setFields] = useState<FieldRow[]>([
-    { name: "title", type: "text", label: "Title", options: "" },
+    { name: "title", type: "text", label: "כותרת", options: "" },
     {
       name: "status",
       type: "select",
-      label: "Status",
-      options: "New, Active, Closed",
+      label: "סטטוס",
+      options: "חדש, בטיפול, סגור",
     },
   ]);
 
@@ -87,7 +93,13 @@ export default function CreateTableForm() {
       newFields[index].name === "" &&
       typeof value === "string"
     ) {
-      newFields[index].name = value.toLowerCase().replace(/[^a-z0-9]/g, "");
+      // Very basic Hebrew to English slugify or just random?
+      // Actually better to leave empty for Hebrew to let user type English system name if possible
+      // But if they type English label, it works.
+      // We'll try to slugify only if it looks latin.
+      if (/^[a-zA-Z0-9 ]+$/.test(value)) {
+        newFields[index].name = value.toLowerCase().replace(/[^a-z0-9]/g, "_");
+      }
     }
 
     setFields(newFields);
@@ -101,9 +113,7 @@ export default function CreateTableForm() {
     const names = fields.map((f) => f.name);
     const uniqueNames = new Set(names);
     if (uniqueNames.size !== names.length) {
-      alert(
-        "Field names must be unique. Please check your field system names."
-      );
+      alert("שמות שדות מערכת חייבים להיות ייחודיים.");
       setLoading(false);
       return;
     }
@@ -150,7 +160,7 @@ export default function CreateTableForm() {
       router.refresh();
     } catch (error) {
       console.error(error);
-      alert("Error creating table");
+      alert("שגיאה ביצירת הטבלה");
     } finally {
       setLoading(false);
     }
@@ -159,202 +169,197 @@ export default function CreateTableForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-8 bg-white p-10 rounded-2xl shadow-lg border border-gray-200 text-black"
+      className="space-y-8 bg-card p-10 rounded-2xl shadow-sm border border-border text-foreground"
+      dir="rtl"
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <label className="block text-sm font-bold text-black mb-3">
-            Table Name
-          </label>
-          <input
+        <div className="space-y-3">
+          <Label className="text-base font-bold">שם הטבלה</Label>
+          <Input
             type="text"
             required
             value={tableName}
             onChange={(e) => setTableName(e.target.value)}
-            className="w-full px-5 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-black text-lg"
-            placeholder="e.g. Projects"
+            className="h-12 text-lg"
+            placeholder="לדוגמה: פרויקטים"
           />
-          <p className="text-xs text-gray-500 mt-2">
-            The display name for your table
+          <p className="text-xs text-muted-foreground">
+            השם שיוצג עבור הטבלה שלך
           </p>
         </div>
 
-        <div>
-          <label className="block text-sm font-bold text-black mb-3">
-            Slug
-          </label>
-          <input
+        <div className="space-y-3">
+          <Label className="text-base font-bold">מזהה (Slug)</Label>
+          <Input
             type="text"
             required
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
-            className="w-full px-5 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-black text-lg font-mono"
+            className="h-12 text-lg font-mono ltr text-right"
             placeholder="e.g. projects"
           />
-          <p className="text-xs text-gray-500 mt-2">
-            URL-friendly identifier (lowercase, no spaces)
+          <p className="text-xs text-muted-foreground">
+            מזהה לשימוש ב-URL (באנגלית, ללא רווחים)
           </p>
         </div>
 
-        <div className="col-span-full">
-          <label className="block text-sm font-bold text-black mb-3">
-            Category
-          </label>
+        <div className="col-span-full space-y-3">
+          <Label className="text-base font-bold">קטגוריה</Label>
           <select
             value={categoryId || ""}
             onChange={(e) =>
               setCategoryId(e.target.value ? Number(e.target.value) : null)
             }
-            className="w-full px-5 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-black text-lg"
+            className="w-full px-4 py-3 border border-input bg-background rounded-lg focus:ring-2 focus:ring-ring focus:border-input outline-none transition text-base"
           >
-            <option value="">Uncategorized</option>
+            <option value="">ללא קטגוריה</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
           </select>
-          <p className="text-xs text-gray-500 mt-2">
-            Group this table under a category
+          <p className="text-xs text-muted-foreground">
+            שייך את הטבלה לקטגוריה לסידור נוח
           </p>
         </div>
       </div>
 
-      <div className="border-t border-gray-200 pt-8">
+      <div className="border-t border-border pt-8">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h3 className="text-xl font-bold text-black">Fields</h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Define the structure of your table
+            <h3 className="text-xl font-bold">שדות</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              הגדר את מבנה הנתונים של הטבלה
             </p>
           </div>
-          <button
+          <Button
             type="button"
             onClick={handleAddField}
-            className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl transition font-medium shadow-sm"
+            variant="outline"
+            className="gap-2"
           >
-            + Add Field
-          </button>
+            <Plus className="h-4 w-4" />
+            הוסף שדה
+          </Button>
         </div>
 
         <div className="space-y-5">
           {fields.map((field, index) => (
             <div
               key={index}
-              className="p-6 bg-linear-to-br from-gray-50 to-white rounded-xl border-2 border-gray-200 hover:border-gray-300 transition shadow-sm"
+              className="p-6 bg-muted/20 rounded-xl border border-border hover:border-primary/20 transition shadow-sm"
             >
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                <div className="lg:col-span-1">
-                  <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
-                    Label
-                  </label>
-                  <input
+                <div className="lg:col-span-1 space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-wide">
+                    תווית (Label)
+                  </Label>
+                  <Input
                     type="text"
                     required
                     value={field.label}
                     onChange={(e) =>
                       handleFieldChange(index, "label", e.target.value)
                     }
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
-                    placeholder="Field Label"
+                    placeholder="שם השדה לתצוגה"
                   />
                 </div>
-                <div className="lg:col-span-1">
-                  <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
-                    System Name
-                  </label>
-                  <input
+                <div className="lg:col-span-1 space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-wide">
+                    שם מערכת (Name)
+                  </Label>
+                  <Input
                     type="text"
                     required
                     value={field.name}
                     onChange={(e) =>
                       handleFieldChange(index, "name", e.target.value)
                     }
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black font-mono text-sm"
+                    className="font-mono text-sm"
                     placeholder="field_name"
                   />
                 </div>
-                <div className="lg:col-span-1">
-                  <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
-                    Type
-                  </label>
+                <div className="lg:col-span-1 space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-wide">
+                    סוג
+                  </Label>
                   <select
                     value={field.type}
                     onChange={(e) =>
                       handleFieldChange(index, "type", e.target.value)
                     }
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                    className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   >
-                    <option value="text">Text</option>
-                    <option value="textarea">Textarea</option>
-                    <option value="number">Number</option>
-                    <option value="date">Date</option>
-                    <option value="boolean">Boolean</option>
-                    <option value="url">URL</option>
-                    <option value="select">Select</option>
-                    <option value="multi-select">Multi Select</option>
-                    <option value="tags">Tags</option>
-                    <option value="radio">Radio Buttons</option>
-                    <option value="relation">Relation</option>
-                    <option value="lookup">Lookup</option>
-                    <option value="automation">Automation Trigger</option>
+                    <option value="text">טקסט</option>
+                    <option value="textarea">טקסט ארוך</option>
+                    <option value="number">מספר</option>
+                    <option value="date">תאריך</option>
+                    <option value="boolean">כן/לא</option>
+                    <option value="url">קישור (URL)</option>
+                    <option value="select">בחירה (Select)</option>
+                    <option value="multi-select">בחירה מרובה</option>
+                    <option value="tags">תגיות</option>
+                    <option value="radio">כפתורי רדיו</option>
+                    <option value="relation">קשר (Relation)</option>
+                    <option value="lookup">חיפוש (Lookup)</option>
+                    <option value="automation">טריגר אוטומציה</option>
                   </select>
                 </div>
                 <div className="lg:col-span-1 flex items-end">
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
                     onClick={() => handleRemoveField(index)}
-                    className="w-full bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2.5 rounded-lg transition font-medium border border-red-200"
-                    title="Remove Field"
+                    className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 border border-destructive/20 gap-2"
                   >
-                    Remove
-                  </button>
+                    <Trash2 className="h-4 w-4" />
+                    הסר
+                  </Button>
                 </div>
               </div>
 
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
-                  Default Value
-                </label>
-                <input
+              <div className="mt-4 pt-4 border-t border-border/50">
+                <Label className="text-xs font-bold uppercase tracking-wide mb-2 block">
+                  ערך ברירת מחדל
+                </Label>
+                <Input
                   type="text"
                   value={field.defaultValue || ""}
                   onChange={(e) =>
                     handleFieldChange(index, "defaultValue", e.target.value)
                   }
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
-                  placeholder="Optional default value"
+                  placeholder="אופציונלי"
                 />
               </div>
 
               {["select", "multi-select", "radio", "tags"].includes(
                 field.type
               ) && (
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
-                    Options (comma separated)
-                  </label>
-                  <input
+                <div className="mt-4 pt-4 border-t border-border/50">
+                  <Label className="text-xs font-bold uppercase tracking-wide mb-2 block">
+                    אפשרויות (מופרדות בפסיקים)
+                  </Label>
+                  <Input
                     type="text"
                     value={field.options}
                     onChange={(e) =>
                       handleFieldChange(index, "options", e.target.value)
                     }
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
-                    placeholder="Option 1, Option 2, Option 3"
+                    placeholder="אפשרות 1, אפשרות 2, אפשרות 3"
                   />
-                  <p className="text-xs text-gray-500 mt-2">
-                    Separate each option with a comma
+                  <p className="text-xs text-muted-foreground mt-2">
+                    הפרד כל אפשרות בפסיק
                   </p>
                 </div>
               )}
 
               {field.type === "relation" && (
-                <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
-                      Related Table
-                    </label>
+                <div className="mt-4 pt-4 border-t border-border/50 space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wide">
+                      טבלה מקושרת
+                    </Label>
                     <select
                       value={field.relationTableId || ""}
                       onChange={(e) =>
@@ -364,9 +369,9 @@ export default function CreateTableForm() {
                           e.target.value
                         )
                       }
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                      className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
-                      <option value="">Select a table...</option>
+                      <option value="">בחר טבלה...</option>
                       {availableTables.map((t) => (
                         <option key={t.id} value={t.id}>
                           {t.name}
@@ -377,10 +382,10 @@ export default function CreateTableForm() {
 
                   {field.relationTableId && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
-                          Display Field
-                        </label>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold uppercase tracking-wide">
+                          שדה לתצוגה
+                        </Label>
                         <select
                           value={field.displayField || ""}
                           onChange={(e) =>
@@ -390,9 +395,9 @@ export default function CreateTableForm() {
                               e.target.value
                             )
                           }
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                          className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         >
-                          <option value="">Default (First Field)</option>
+                          <option value="">ברירת מחדל (שדה ראשון)</option>
                           {(() => {
                             const relatedTable = availableTables.find(
                               (t) => t.id === Number(field.relationTableId)
@@ -416,27 +421,21 @@ export default function CreateTableForm() {
                             ));
                           })()}
                         </select>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Which field to show in the picker
+                        <p className="text-xs text-muted-foreground mt-1">
+                          איזה שדה להציג בבחירה
                         </p>
                       </div>
 
-                      <div className="flex items-center">
+                      <div className="flex items-center pt-6">
                         <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
+                          <Switch
                             checked={field.allowMultiple || false}
-                            onChange={(e) =>
-                              handleFieldChange(
-                                index,
-                                "allowMultiple",
-                                e.target.checked
-                              )
+                            onCheckedChange={(checked) =>
+                              handleFieldChange(index, "allowMultiple", checked)
                             }
-                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
                           />
-                          <span className="text-sm font-medium text-black">
-                            Allow Multiple Selection
+                          <span className="text-sm font-medium">
+                            אפשר בחירה מרובה
                           </span>
                         </label>
                       </div>
@@ -446,11 +445,11 @@ export default function CreateTableForm() {
               )}
 
               {field.type === "lookup" && (
-                <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
-                      Relation Field
-                    </label>
+                <div className="mt-4 pt-4 border-t border-border/50 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wide">
+                      שדה מקושר (Relation Field)
+                    </Label>
                     <select
                       value={field.relationField || ""}
                       onChange={(e) =>
@@ -460,9 +459,9 @@ export default function CreateTableForm() {
                           e.target.value
                         )
                       }
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                      className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
-                      <option value="">Select relation field...</option>
+                      <option value="">בחר שדה מקושר...</option>
                       {fields
                         .filter((f) => f.type === "relation" && f.name)
                         .map((f) => (
@@ -472,18 +471,18 @@ export default function CreateTableForm() {
                         ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-black mb-2 uppercase tracking-wide">
-                      Target Field
-                    </label>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wide">
+                      שדה יעד (Target Field)
+                    </Label>
                     <select
                       value={field.lookupField || ""}
                       onChange={(e) =>
                         handleFieldChange(index, "lookupField", e.target.value)
                       }
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                      className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
-                      <option value="">Select Target Field...</option>
+                      <option value="">בחר שדה יעד...</option>
                       {(() => {
                         const relationField = fields.find(
                           (f) => f.name === field.relationField
@@ -519,34 +518,43 @@ export default function CreateTableForm() {
         </div>
 
         {fields.length === 0 && (
-          <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-            <p className="text-gray-500 mb-4">No fields added yet</p>
-            <button
+          <div className="text-center py-12 bg-muted/20 rounded-xl border-2 border-dashed border-border">
+            <p className="text-muted-foreground mb-4">לא נוספו שדות עדיין</p>
+            <Button
               type="button"
               onClick={handleAddField}
-              className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl transition font-medium"
+              variant="outline"
+              className="gap-2"
             >
-              + Add Your First Field
-            </button>
+              <Plus className="h-4 w-4" />
+              הוסף את השדה הראשון שלך
+            </Button>
           </div>
         )}
       </div>
 
-      <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
-        <button
+      <div className="flex justify-end gap-4 pt-6 border-t border-border">
+        <Button
           type="button"
           onClick={() => window.history.back()}
-          className="bg-gray-100 text-black py-3 px-10 rounded-xl hover:bg-gray-200 transition font-medium"
+          variant="outline"
+          className="h-12 px-8"
         >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={loading}
-          className="bg-linear-to-r from-blue-600 to-blue-700 text-white py-3 px-10 rounded-xl hover:from-blue-700 hover:to-blue-800 transition disabled:opacity-50 font-medium shadow-lg"
-        >
-          {loading ? "Creating Table..." : "Create Table"}
-        </button>
+          ביטול
+        </Button>
+        <Button type="submit" disabled={loading} className="h-12 px-8 gap-2">
+          {loading ? (
+            <>
+              <span className="animate-spin w-4 h-4 border-2 border-background border-t-transparent rounded-full font-bold inline-block mr-2" />
+              יוצר טבלה...
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4" />
+              צור טבלה
+            </>
+          )}
+        </Button>
       </div>
     </form>
   );

@@ -3,6 +3,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import SearchSettingsModal from "./SearchSettingsModal";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Settings, Search, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface SchemaField {
   name: string;
@@ -154,36 +160,19 @@ export default function AdvancedSearch({
       <div className="relative w-full" ref={dropdownRef}>
         <div className="flex gap-2">
           {/* Settings Button */}
-          <button
+          <Button
+            variant="outline"
+            className="gap-2 shrink-0"
             onClick={() => setShowSettingsModal(true)}
-            className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition shadow-md hover:shadow-lg flex items-center gap-2 shrink-0"
             title="הגדרות חיפוש"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
+            <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">הגדרות</span>
-          </button>
+          </Button>
 
           {/* Search input */}
           <div className="relative flex-1">
-            <input
+            <Input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -191,45 +180,14 @@ export default function AdvancedSearch({
                 if (results.length > 0) setShowDropdown(true);
               }}
               placeholder={`חיפוש ב-${searchSettings.searchableFields.length} עמודות...`}
-              className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none text-black"
+              className="pl-10"
               disabled={searchSettings.searchableFields.length === 0}
             />
-            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
               {isLoading ? (
-                <svg
-                  className="animate-spin h-5 w-5"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
+                <Search className="h-4 w-4" />
               )}
             </div>
           </div>
@@ -238,27 +196,30 @@ export default function AdvancedSearch({
         {/* Active settings indicator */}
         {searchSettings.searchableFields.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
-            <div className="text-xs text-gray-500">חיפוש ב:</div>
+            <div className="text-xs text-muted-foreground self-center">
+              חיפוש ב:
+            </div>
             {searchSettings.searchableFields.slice(0, 3).map((fieldName) => (
-              <span
+              <Badge
                 key={fieldName}
-                className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded"
+                variant="secondary"
+                className="text-xs font-normal"
               >
                 {getFieldLabel(fieldName)}
-              </span>
+              </Badge>
             ))}
             {searchSettings.searchableFields.length > 3 && (
-              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+              <Badge variant="outline" className="text-xs font-normal">
                 +{searchSettings.searchableFields.length - 3} עוד
-              </span>
+              </Badge>
             )}
           </div>
         )}
 
         {/* No settings warning */}
         {searchSettings.searchableFields.length === 0 && (
-          <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-sm text-yellow-800">
+          <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-900 rounded-lg">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200">
               ⚠️ לא נבחרו עמודות לחיפוש. לחץ על כפתור ההגדרות לבחירת עמודות.
             </p>
           </div>
@@ -266,23 +227,23 @@ export default function AdvancedSearch({
 
         {/* Results dropdown */}
         {showDropdown && results.length > 0 && (
-          <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto">
-            <div className="p-2">
-              <div className="text-xs text-gray-500 px-3 py-2 font-medium">
+          <div className="absolute z-50 w-full mt-2 bg-popover border border-border rounded-lg shadow-lg max-h-80 overflow-y-auto">
+            <div className="p-1">
+              <div className="text-xs text-muted-foreground px-3 py-2 font-medium">
                 {results.length} {results.length === 1 ? "תוצאה" : "תוצאות"}
               </div>
               {results.map((result) => (
-                <button
+                <div
                   key={result.id}
                   onClick={() => handleRecordSelect(result.id)}
-                  className="w-full text-right px-3 py-3 hover:bg-blue-50 rounded-lg transition-colors group"
+                  className="w-full text-right px-3 py-3 hover:bg-accent hover:text-accent-foreground rounded-md transition-colors cursor-pointer group"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-gray-900 truncate group-hover:text-blue-600">
+                      <div className="font-medium truncate text-foreground">
                         {result.displayTitle}
                       </div>
-                      <div className="text-xs text-gray-500 mt-1 space-y-1">
+                      <div className="text-xs text-muted-foreground mt-1 space-y-1">
                         {searchSettings.displayFields
                           .slice(0, 3)
                           .map((fieldName) => {
@@ -298,7 +259,7 @@ export default function AdvancedSearch({
 
                             return (
                               <div key={fieldName} className="truncate">
-                                <span className="font-medium">
+                                <span className="font-medium text-foreground/80">
                                   {getFieldLabel(fieldName)}:
                                 </span>{" "}
                                 {displayValue.substring(0, 40)}
@@ -308,11 +269,14 @@ export default function AdvancedSearch({
                           })}
                       </div>
                     </div>
-                    <div className="text-xs text-gray-400 shrink-0">
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] font-mono shrink-0"
+                    >
                       #{result.id}
-                    </div>
+                    </Badge>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           </div>
@@ -323,8 +287,8 @@ export default function AdvancedSearch({
           results.length === 0 &&
           searchQuery.length >= 2 &&
           !isLoading && (
-            <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
-              <div className="text-center text-gray-500 text-sm">
+            <div className="absolute z-50 w-full mt-2 bg-popover border border-border rounded-lg shadow-lg p-4">
+              <div className="text-center text-muted-foreground text-sm">
                 לא נמצאו תוצאות
               </div>
             </div>

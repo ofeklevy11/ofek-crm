@@ -9,77 +9,81 @@ export default async function Navbar() {
   const user = await getCurrentUser();
 
   const linkClass =
-    "border-transparent text-black hover:border-gray-300 hover:text-gray-900 inline-flex items-center px-0.5 pt-1 border-b-2 text-xs font-medium whitespace-nowrap";
+    "text-sm font-medium transition-colors hover:text-primary text-muted-foreground whitespace-nowrap";
+  const activeLinkClass = "text-sm font-medium text-primary whitespace-nowrap"; // You can add logic for active state later
 
   return (
-    <nav className="bg-white border-b border-gray-200">
-      <div className="max-w-full mx-auto px-2 sm:px-4 lg:px-6">
+    <nav className="bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 border-b border-border/40 sticky top-0 z-50">
+      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
-          <div className="flex items-center flex-1 min-w-0">
+          <div className="flex items-center flex-1 min-w-0 gap-8">
             <div className="shrink-0 flex items-center">
-              <Link href="/" className="text-lg font-bold text-indigo-600">
-                CRM
+              <Link
+                href="/"
+                className="text-xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent"
+              >
+                CRM למנהל
               </Link>
             </div>
-            <div className="hidden sm:ml-4 sm:flex sm:space-x-2 lg:space-x-4 overflow-x-auto scrollbar-hide">
+            <div className="hidden md:flex items-center space-x-6 space-x-reverse overflow-x-auto scrollbar-hide">
               <Link href="/" className={linkClass}>
-                Dashboard
+                לוח בקרה
               </Link>
               {user && (
                 <>
                   <Link href="/tables" className={linkClass}>
-                    Tables
+                    טבלאות
                   </Link>
                   {user.role === "admin" && (
                     <>
                       <Link href="/finance" className={linkClass}>
-                        Finance
+                        כספים
                       </Link>
                       <Link href="/calendar" className={linkClass}>
-                        Calendar
+                        יומן
                       </Link>
                     </>
                   )}
                   <Link href="/tasks" className={linkClass}>
-                    Tasks
+                    משימות
                   </Link>
                   <Link href="/nurture-hub" className={linkClass}>
-                    Nurture Hub
+                    טיפוח לקוחות
                   </Link>
                   {hasUserFlag(user, "canViewAutomations") && (
                     <Link href="/automations" className={linkClass}>
-                      Automations
+                      אוטומציות
                     </Link>
                   )}
                   <Link href="/workflows" className={linkClass}>
-                    Workflows
+                    תהליכים
                   </Link>
                   {user.role === "admin" && (
                     <Link href="/users" className={linkClass}>
-                      Users
+                      משתמשים
                     </Link>
                   )}
                   {user.role === "admin" && (
                     <Link href="/workers" className={linkClass}>
-                      Workers
+                      עובדים
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewAnalytics") && (
                     <Link href="/analytics" className={linkClass}>
-                      Analytics
+                      אנליטיקה
                     </Link>
                   )}
                   <Link href="/services" className={linkClass}>
-                    Services
+                    שירותים
                   </Link>
                   <Link href="/quotes" className={linkClass}>
-                    Quotes
+                    הצעות מחיר
                   </Link>
                   <Link href="/service" className={linkClass}>
-                    Service
+                    קריאות שירות
                   </Link>
                   <Link href="/files" className={linkClass}>
-                    Files
+                    קבצים
                   </Link>
                   <ChatNavbarLink />
                 </>
@@ -95,9 +99,9 @@ export default async function Navbar() {
             ) : (
               <Link
                 href="/login"
-                className="text-gray-500 hover:text-gray-900 font-medium"
+                className="text-sm font-medium text-muted-foreground hover:text-primary"
               >
-                Log In
+                התחבר
               </Link>
             )}
           </div>

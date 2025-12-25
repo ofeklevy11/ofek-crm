@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 import SearchInput from "@/components/SearchInput";
 import Pagination from "@/components/Pagination";
+import ViewsPanel from "@/components/ViewsPanel";
 
 export default async function TableDetailsPage({
   params,
@@ -125,22 +126,22 @@ export default async function TableDetailsPage({
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-8">
+    <div className="min-h-screen bg-muted/40 p-8" dir="rtl">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <Link
             href="/tables"
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition"
+            className="inline-flex items-center text-primary hover:text-primary/80 font-medium mb-4 transition text-sm"
           >
-            <span className="mr-2">←</span> Back to Tables
+            <span className="ml-2">→</span> חזרה לטבלאות
           </Link>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div>
-              <h1 className="text-4xl font-bold text-gray-900 mb-2">
+              <h1 className="text-4xl font-bold text-foreground mb-2">
                 {table.name}
               </h1>
-              <p className="text-gray-600">
-                {totalCount} {totalCount === 1 ? "record" : "records"} total
+              <p className="text-muted-foreground">
+                {totalCount} {totalCount === 1 ? "רשומה" : "רשומות"} בסך הכל
               </p>
             </div>
             <div className="flex gap-3 items-center w-full md:w-auto">
@@ -150,27 +151,48 @@ export default async function TableDetailsPage({
           </div>
         </div>
 
-        <RecordTable
-          tableId={tableId}
-          schema={schema}
-          initialRecords={records.map((r) => ({
-            ...r,
-            createdAt: r.createdAt.toISOString(),
-          }))}
-          slug={table.slug}
-          views={views.map((v) => ({
-            id: v.id,
-            name: v.name,
-            slug: v.slug,
-            config: v.config,
-            isEnabled: v.isEnabled,
-          }))}
-          canEdit={canEdit}
-          canSearch={canSearch}
-          canFilter={canFilter}
-          canExport={canExport}
-        />
-        <Pagination totalPages={totalPages} />
+        <div className="flex flex-col lg:flex-row gap-8 items-start">
+          <div className="flex-1 w-full min-w-0 space-y-4">
+            <RecordTable
+              tableId={tableId}
+              schema={schema}
+              initialRecords={records.map((r) => ({
+                ...r,
+                createdAt: r.createdAt.toISOString(),
+              }))}
+              slug={table.slug}
+              views={views.map((v) => ({
+                id: v.id,
+                name: v.name,
+                slug: v.slug,
+                config: v.config,
+                isEnabled: v.isEnabled,
+              }))}
+              canEdit={canEdit}
+              canSearch={canSearch}
+              canFilter={canFilter}
+              canExport={canExport}
+            />
+            <Pagination totalPages={totalPages} />
+          </div>
+
+          <ViewsPanel
+            tableId={tableId}
+            tableSlug={table.slug}
+            schema={schema}
+            records={records.map((r) => ({
+              ...r,
+              createdAt: r.createdAt.toISOString(),
+            }))}
+            views={views.map((v) => ({
+              id: v.id,
+              name: v.name,
+              slug: v.slug,
+              config: v.config,
+              isEnabled: v.isEnabled,
+            }))}
+          />
+        </div>
       </div>
     </div>
   );

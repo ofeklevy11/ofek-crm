@@ -24,6 +24,8 @@ import { processView } from "@/lib/viewProcessor";
 import { reorderViews } from "@/app/actions/views";
 import type { ViewConfig } from "@/app/actions/views";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 
 interface ViewsPanelProps {
   tableId: number;
@@ -136,17 +138,14 @@ export default function ViewsPanel({
 
   return (
     <div className="w-full lg:w-80 shrink-0 space-y-4">
-      {/* Add View Button */}
-      <button
+      <Button
         onClick={() => setShowAddModal(true)}
-        className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-medium hover:from-blue-700 hover:to-purple-700 transition shadow-sm"
+        className="w-full gap-2 bg-linear-to-r from-primary to-primary/80"
       >
-        + Add View
-      </button>
+        <Plus className="h-4 w-4" /> הוסף תצוגה
+      </Button>
 
-      {/* Render all views with drag-and-drop */}
       {!isMounted ? (
-        // Server-side / before hydration: render views without drag-and-drop
         <div className="space-y-4">
           {views.map((view) => {
             const processedData = processView(
@@ -174,7 +173,6 @@ export default function ViewsPanel({
           })}
         </div>
       ) : (
-        // Client-side: render with drag-and-drop
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -215,21 +213,24 @@ export default function ViewsPanel({
       )}
 
       {isReordering && (
-        <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg">
+        <div className="fixed bottom-4 right-4 bg-primary text-primary-foreground px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+          <span className="animate-spin duration-1000">⟳</span>
           שומר את הסדר החדש...
         </div>
       )}
 
       {views.length === 0 && (
-        <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-8 text-center">
-          <div className="text-gray-400 text-4xl mb-2">📊</div>
-          <p className="text-sm text-gray-500">
-            No views yet. Create your first view to get insights from your data.
+        <div className="bg-muted/30 border border-dashed border-muted rounded-xl p-8 text-center">
+          <div className="text-muted-foreground text-4xl mb-2 opacity-30">
+            📊
+          </div>
+          <p className="text-sm text-muted-foreground">
+            עדיין אין תצוגות. צור את התצוגה הראשונה שלך כדי לקבל תובנות
+            מהנתונים.
           </p>
         </div>
       )}
 
-      {/* Add View Modal */}
       {showAddModal && (
         <AddViewModal
           tableId={tableId}

@@ -3,6 +3,20 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import RelationPicker from "./RelationPicker";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Plus, X, Save, RotateCw } from "lucide-react";
 
 interface SchemaField {
   name: string;
@@ -60,7 +74,7 @@ export default function AddRecordForm({
       router.refresh();
     } catch (error) {
       console.error(error);
-      alert("Error creating record");
+      alert("שגיאה ביצירת הרשומה");
     } finally {
       setLoading(false);
     }
@@ -68,299 +82,338 @@ export default function AddRecordForm({
 
   if (!isOpen) {
     return (
-      <button
-        onClick={handleOpen}
-        className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition shadow-sm font-medium"
-      >
-        + Add Record
-      </button>
+      <Button onClick={handleOpen} className="gap-2">
+        <Plus className="h-4 w-4" /> הוסף רשומה
+      </Button>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] h-[90vh] flex flex-col">
-        <div className="flex justify-between items-center px-8 py-6 border-b border-gray-100">
-          <h3 className="text-2xl font-bold text-gray-900">New Record</h3>
-          <button
-            onClick={() => setIsOpen(false)}
-            className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition"
-          >
-            ×
-          </button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={setIsOpen} modal={true}>
+      <DialogContent
+        className="w-[95vw] h-[95vh] max-w-[95vw] sm:max-w-[95vw] rounded-xl border flex flex-col p-0 sm:p-0 overflow-hidden bg-background shadow-2xl"
+        dir="rtl"
+      >
+        <div className="flex flex-col h-full w-full">
+          <DialogHeader className="p-6 border-b bg-background/95 backdrop-blur shrink-0">
+            <DialogTitle className="text-3xl font-bold text-center">
+              רשומה חדשה
+            </DialogTitle>
+          </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto p-8">
-          <form
-            id="add-record-form"
-            onSubmit={handleSubmit}
-            className="space-y-8"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {schema
-                .filter(
-                  (field, index, self) =>
-                    index === self.findIndex((t) => t.name === field.name)
-                )
-                .map((field) => (
-                  <div key={field.name} className="space-y-2">
-                    <label className="block text-sm font-bold text-gray-700 uppercase tracking-wide">
-                      {field.label}
-                    </label>
-                    {field.type === "select" ? (
-                      <select
-                        value={formData[field.name] || ""}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            [field.name]: e.target.value,
-                          })
-                        }
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-white text-black"
-                      >
-                        <option value="">Select...</option>
-                        {field.options?.map((opt, i) => (
-                          <option key={`${opt}-${i}`} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    ) : field.type === "boolean" ? (
-                      <select
-                        value={
-                          formData[field.name] === undefined
-                            ? ""
-                            : String(formData[field.name])
-                        }
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            [field.name]: e.target.value === "true",
-                          })
-                        }
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-white text-black"
-                      >
-                        <option value="">Select...</option>
-                        <option value="true">Yes</option>
-                        <option value="false">No</option>
-                      </select>
-                    ) : field.type === "textarea" ? (
-                      <textarea
-                        value={formData[field.name] || ""}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            [field.name]: e.target.value,
-                          })
-                        }
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none min-h-[120px] transition text-black"
-                        placeholder={`Enter ${field.label}...`}
-                      />
-                    ) : field.type === "radio" ? (
-                      <div className="flex flex-wrap gap-4 pt-2">
-                        {field.options?.map((opt, i) => (
-                          <label
-                            key={`${opt}-${i}`}
-                            className="flex items-center gap-3 text-black cursor-pointer bg-gray-50 px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-100 transition"
-                          >
-                            <input
-                              type="radio"
-                              name={field.name}
-                              value={opt}
-                              checked={formData[field.name] === opt}
-                              onChange={(e) =>
-                                setFormData({
-                                  ...formData,
-                                  [field.name]: e.target.value,
-                                })
-                              }
-                              className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                            />
-                            <span className="font-medium">{opt}</span>
-                          </label>
-                        ))}
-                      </div>
-                    ) : field.type === "multi-select" ? (
-                      <select
-                        multiple
-                        value={
-                          Array.isArray(formData[field.name])
-                            ? formData[field.name]
-                            : []
-                        }
-                        onChange={(e) => {
-                          const selected = Array.from(
-                            e.target.selectedOptions,
-                            (option) => option.value
-                          );
-                          setFormData({ ...formData, [field.name]: selected });
-                        }}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none min-h-[120px] transition text-black"
-                      >
-                        {field.options?.map((opt, i) => (
-                          <option key={`${opt}-${i}`} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    ) : field.type === "tags" ? (
-                      <div className="flex flex-wrap gap-2 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                        {field.options?.map((tag, i) => {
-                          const rawValue = formData[field.name];
-                          const currentTags = Array.isArray(rawValue)
-                            ? rawValue
-                            : [];
-                          const isSelected = currentTags.includes(tag);
-                          return (
-                            <button
-                              key={`${tag}-${i}`}
-                              type="button"
-                              onClick={() => {
-                                const newTags = isSelected
-                                  ? currentTags.filter((t: string) => t !== tag)
-                                  : [...currentTags, tag];
-                                setFormData({
-                                  ...formData,
-                                  [field.name]: newTags,
-                                });
-                              }}
-                              className={`px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm ${
-                                isSelected
-                                  ? "bg-blue-600 text-white shadow-blue-200"
-                                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-                              }`}
-                            >
-                              {tag}
-                            </button>
-                          );
-                        })}
-                        {(!field.options || field.options.length === 0) && (
-                          <p className="text-sm text-gray-500 italic">
-                            No tags defined in schema options.
-                          </p>
-                        )}
-                      </div>
-                    ) : field.type === "relation" && field.relationTableId ? (
-                      <div className="bg-gray-50 p-1 rounded-xl border border-gray-200">
-                        <RelationPicker
-                          tableId={field.relationTableId}
-                          value={formData[field.name]}
-                          allowMultiple={field.allowMultiple}
-                          displayField={field.displayField}
-                          onChange={async (val) => {
-                            // Update the relation field
-                            const newFormData = {
-                              ...formData,
-                              [field.name]: val,
-                            };
-                            setFormData(newFormData);
+          <div className="flex-1 overflow-y-auto w-full">
+            <form
+              id="add-record-form"
+              onSubmit={handleSubmit}
+              className="space-y-10 py-8 px-6 sm:px-10 w-full"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-12 w-full">
+                {schema
+                  .filter(
+                    (field, index, self) =>
+                      index === self.findIndex((t) => t.name === field.name)
+                  )
+                  .map((field) => (
+                    <div key={field.name} className="space-y-4">
+                      <Label className="uppercase tracking-wide text-lg font-bold text-muted-foreground">
+                        {field.label}
+                      </Label>
 
-                            // Find dependent lookup fields
-                            const lookupFields = schema.filter(
-                              (f) =>
-                                f.type === "lookup" &&
-                                f.relationField === field.name
-                            );
-
-                            if (lookupFields.length > 0) {
-                              if (val && !Array.isArray(val)) {
-                                try {
-                                  // Fetch the related record
-                                  // Assuming val is the record ID
-                                  const res = await fetch(
-                                    `/api/records/${val}`
-                                  );
-                                  if (res.ok) {
-                                    const relatedRecord = await res.json();
-                                    const updates: Record<string, any> = {};
-
-                                    lookupFields.forEach((lf) => {
-                                      if (lf.lookupField) {
-                                        updates[lf.name] =
-                                          relatedRecord.data[lf.lookupField];
-                                      }
-                                    });
-
-                                    setFormData({ ...newFormData, ...updates });
-                                  }
-                                } catch (error) {
-                                  console.error(
-                                    "Failed to fetch lookup data",
-                                    error
-                                  );
-                                }
-                              } else {
-                                // Clear lookup fields if relation is cleared or multiple
-                                const updates: Record<string, any> = {};
-                                lookupFields.forEach((lf) => {
-                                  updates[lf.name] = "";
-                                });
-                                setFormData({ ...newFormData, ...updates });
-                              }
+                      {field.type === "select" ? (
+                        <div className="relative">
+                          <select
+                            value={formData[field.name] || ""}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                [field.name]: e.target.value,
+                              })
                             }
-                          }}
+                            className="flex h-16 w-full items-center justify-between rounded-xl border border-input bg-background px-4 py-2 text-xl ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none shadow-sm"
+                          >
+                            <option value="">בחר...</option>
+                            {field.options?.map((opt, i) => (
+                              <option key={`${opt}-${i}`} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center px-4 text-gray-700">
+                            <svg
+                              className="fill-current h-6 w-6"
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 20 20"
+                            >
+                              <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                            </svg>
+                          </div>
+                        </div>
+                      ) : field.type === "boolean" ? (
+                        <div className="relative">
+                          <select
+                            value={
+                              formData[field.name] === undefined
+                                ? ""
+                                : String(formData[field.name])
+                            }
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                [field.name]: e.target.value === "true",
+                              })
+                            }
+                            className="flex h-16 w-full items-center justify-between rounded-xl border border-input bg-background px-4 py-2 text-xl ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none shadow-sm"
+                          >
+                            <option value="">בחר...</option>
+                            <option value="true">כן</option>
+                            <option value="false">לא</option>
+                          </select>
+                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center px-4 text-gray-700">
+                            <svg
+                              className="fill-current h-6 w-6"
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 20 20"
+                            >
+                              <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                            </svg>
+                          </div>
+                        </div>
+                      ) : field.type === "textarea" ? (
+                        <Textarea
+                          value={formData[field.name] || ""}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              [field.name]: e.target.value,
+                            })
+                          }
+                          className="min-h-[200px] text-xl p-4 rounded-xl resize-y shadow-sm"
+                          placeholder={`הזן ${field.label}...`}
                         />
-                      </div>
-                    ) : (
-                      <input
-                        type={
-                          field.type === "number"
-                            ? "number"
-                            : field.type === "date"
-                            ? "date"
-                            : field.type === "url"
-                            ? "url"
-                            : "text"
-                        }
-                        value={formData[field.name] || ""}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            [field.name]:
-                              field.type === "number"
-                                ? Number(e.target.value)
-                                : e.target.value,
-                          })
-                        }
-                        className={`w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-black ${
-                          field.type === "lookup" || field.type === "automation"
-                            ? "bg-gray-100 text-gray-500"
-                            : ""
-                        }`}
-                        placeholder={
-                          field.type === "lookup"
-                            ? "Read Only"
-                            : `Enter ${field.label}`
-                        }
-                        readOnly={
-                          field.type === "lookup" || field.type === "automation"
-                        }
-                      />
-                    )}
-                  </div>
-                ))}
-            </div>
-          </form>
+                      ) : field.type === "radio" ? (
+                        <div className="flex flex-wrap gap-4 pt-2">
+                          {field.options?.map((opt, i) => (
+                            <label
+                              key={`${opt}-${i}`}
+                              className="flex items-center gap-2 cursor-pointer"
+                            >
+                              <Checkbox
+                                checked={formData[field.name] === opt}
+                                onCheckedChange={() =>
+                                  setFormData({
+                                    ...formData,
+                                    [field.name]: opt,
+                                  })
+                                }
+                                className="rounded-full" // Make it look like radio
+                              />
+                              <span className="text-sm font-medium">{opt}</span>
+                            </label>
+                          ))}
+                        </div>
+                      ) : field.type === "multi-select" ? (
+                        <div className="relative">
+                          <select
+                            multiple
+                            value={
+                              Array.isArray(formData[field.name])
+                                ? formData[field.name]
+                                : []
+                            }
+                            onChange={(e) => {
+                              const selected = Array.from(
+                                e.target.selectedOptions,
+                                (option) => option.value
+                              );
+                              setFormData({
+                                ...formData,
+                                [field.name]: selected,
+                              });
+                            }}
+                            className="flex min-h-[200px] w-full items-center justify-between rounded-xl border border-input bg-background px-4 py-2 text-xl ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
+                          >
+                            {field.options?.map((opt, i) => (
+                              <option
+                                key={`${opt}-${i}`}
+                                value={opt}
+                                className="p-2"
+                              >
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : field.type === "tags" ? (
+                        <div className="flex flex-wrap gap-2 p-4 bg-muted/20 rounded-xl border border-input min-h-16 items-center">
+                          {field.options?.map((tag, i) => {
+                            const rawValue = formData[field.name];
+                            const currentTags = Array.isArray(rawValue)
+                              ? rawValue
+                              : [];
+                            const isSelected = currentTags.includes(tag);
+                            return (
+                              <Badge
+                                key={`${tag}-${i}`}
+                                variant={isSelected ? "default" : "outline"}
+                                className="text-xs py-1 px-3 cursor-pointer select-none hover:bg-primary/90"
+                                onClick={() => {
+                                  const newTags = isSelected
+                                    ? currentTags.filter(
+                                        (t: string) => t !== tag
+                                      )
+                                    : [...currentTags, tag];
+                                  setFormData({
+                                    ...formData,
+                                    [field.name]: newTags,
+                                  });
+                                }}
+                              >
+                                {tag}
+                              </Badge>
+                            );
+                          })}
+                          {(!field.options || field.options.length === 0) && (
+                            <p className="text-xs text-muted-foreground italic">
+                              לא הוגדרו תגיות.
+                            </p>
+                          )}
+                        </div>
+                      ) : field.type === "relation" && field.relationTableId ? (
+                        <div className="bg-muted/10  rounded-xl border border-input overflow-hidden">
+                          <RelationPicker
+                            tableId={field.relationTableId!}
+                            value={formData[field.name]}
+                            allowMultiple={field.allowMultiple}
+                            displayField={field.displayField}
+                            className="min-h-16 text-xl p-4 w-full"
+                            onChange={async (val) => {
+                              const newFormData = {
+                                ...formData,
+                                [field.name]: val,
+                              };
+                              setFormData(newFormData);
+
+                              const lookupFields = schema.filter(
+                                (f) =>
+                                  f.type === "lookup" &&
+                                  f.relationField === field.name
+                              );
+
+                              if (lookupFields.length > 0) {
+                                if (val && !Array.isArray(val)) {
+                                  try {
+                                    const res = await fetch(
+                                      `/api/records/${val}`
+                                    );
+                                    if (res.ok) {
+                                      const relatedRecord = await res.json();
+                                      const updates: Record<string, any> = {};
+
+                                      lookupFields.forEach((lf) => {
+                                        if (lf.lookupField) {
+                                          updates[lf.name] =
+                                            relatedRecord.data[lf.lookupField];
+                                        }
+                                      });
+
+                                      setFormData({
+                                        ...newFormData,
+                                        ...updates,
+                                      });
+                                    }
+                                  } catch (error) {
+                                    console.error(
+                                      "Failed to fetch lookup data",
+                                      error
+                                    );
+                                  }
+                                } else {
+                                  const updates: Record<string, any> = {};
+                                  lookupFields.forEach((lf) => {
+                                    updates[lf.name] = "";
+                                  });
+                                  setFormData({ ...newFormData, ...updates });
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <Input
+                          type={
+                            field.type === "number"
+                              ? "number"
+                              : field.type === "date"
+                              ? "date"
+                              : field.type === "url"
+                              ? "url"
+                              : "text"
+                          }
+                          value={formData[field.name] || ""}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              [field.name]:
+                                field.type === "number"
+                                  ? Number(e.target.value)
+                                  : e.target.value,
+                            })
+                          }
+                          className={`h-16 text-xl px-4 rounded-xl shadow-sm ${
+                            field.type === "lookup" ||
+                            field.type === "automation"
+                              ? "bg-muted text-muted-foreground cursor-not-allowed"
+                              : ""
+                          }`}
+                          placeholder={
+                            field.type === "lookup"
+                              ? "לקריאה בלבד"
+                              : `הזן ${field.label}`
+                          }
+                          readOnly={
+                            field.type === "lookup" ||
+                            field.type === "automation"
+                          }
+                        />
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </form>
+          </div>
         </div>
 
-        <div className="border-t border-gray-100 px-8 py-6 flex justify-end gap-4 bg-gray-50 rounded-b-2xl">
-          <button
-            type="button"
-            onClick={() => setIsOpen(false)}
-            className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition shadow-sm"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            form="add-record-form"
-            disabled={loading}
-            className="px-8 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition shadow-lg disabled:opacity-50 disabled:shadow-none"
-          >
-            {loading ? "Creating..." : "Create Record"}
-          </button>
+        <div className="p-6 md:p-10 border-t bg-background/95 backdrop-blur z-10 sticky bottom-0 shrink-0">
+          <DialogFooter className="gap-4 sm:justify-start w-full">
+            <Button
+              type="submit"
+              form="add-record-form"
+              disabled={loading}
+              className="gap-2 h-14 text-lg px-8 rounded-xl flex-1 md:flex-none"
+            >
+              {loading ? (
+                <>
+                  <RotateCw className="mr-2 h-5 w-5 animate-spin" />
+                  יוצר...
+                </>
+              ) : (
+                <>
+                  <Save className="h-5 w-5 ml-2" />
+                  צור רשומה
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsOpen(false)}
+              className="h-14 text-lg px-8 rounded-xl"
+            >
+              ביטול
+            </Button>
+          </DialogFooter>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

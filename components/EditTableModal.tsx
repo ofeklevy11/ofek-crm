@@ -2,6 +2,19 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Plus, Trash2, Save } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface FieldRow {
   name: string;
@@ -93,7 +106,7 @@ export default function EditTableModal({
       setFields(parsedFields);
     } catch (error) {
       console.error(error);
-      alert("Error loading table data");
+      alert("שגיאה בטעינת נתוני טבלה");
     } finally {
       setLoadingData(false);
     }
@@ -125,7 +138,9 @@ export default function EditTableModal({
       newFields[index].name === "" &&
       typeof value === "string"
     ) {
-      newFields[index].name = value.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (/^[a-zA-Z0-9 ]+$/.test(value)) {
+        newFields[index].name = value.toLowerCase().replace(/[^a-z0-9]/g, "_");
+      }
     }
 
     setFields(newFields);
@@ -139,9 +154,7 @@ export default function EditTableModal({
     const names = fields.map((f) => f.name);
     const uniqueNames = new Set(names);
     if (uniqueNames.size !== names.length) {
-      alert(
-        "Field names must be unique. Please check your field system names."
-      );
+      alert("שמות שדות מערכת חייבים להיות ייחודיים.");
       setLoading(false);
       return;
     }
@@ -184,68 +197,52 @@ export default function EditTableModal({
       onClose();
     } catch (error) {
       console.error(error);
-      alert("Error updating table");
+      alert("שגיאה בעדכון טבלה");
     } finally {
       setLoading(false);
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-8 py-6 flex justify-between items-center rounded-t-2xl">
-          <h2 className="text-2xl font-bold text-gray-900">Edit Table</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center"
-          >
-            ×
-          </button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className="max-w-4xl max-h-[90vh] overflow-y-auto"
+        dir="rtl"
+      >
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-bold">ערוך טבלה</DialogTitle>
+        </DialogHeader>
 
         {loadingData ? (
-          <div className="p-8 text-center text-gray-600">Loading...</div>
+          <div className="p-8 text-center text-muted-foreground">טוען...</div>
         ) : (
-          <form onSubmit={handleSubmit} className="p-8 space-y-8">
+          <form onSubmit={handleSubmit} className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-bold text-black mb-2">
-                  Table Name
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label className="text-sm font-bold">שם הטבלה</Label>
+                <Input
                   type="text"
                   required
                   value={tableName}
                   onChange={(e) => setTableName(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-black"
-                  placeholder="e.g. Projects"
+                  placeholder="לדוגמה: פרויקטים"
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-bold text-black mb-2">
-                  Slug
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label className="text-sm font-bold">מזהה (Slug)</Label>
+                <Input
                   type="text"
                   required
                   value={slug}
                   onChange={(e) => setSlug(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-black"
+                  className="font-mono ltr text-right"
                   placeholder="e.g. projects"
                 />
               </div>
 
-              <div className="col-span-full">
-                <label className="block text-sm font-bold text-black mb-2">
-                  Category
-                </label>
+              <div className="col-span-full space-y-2">
+                <Label className="text-sm font-bold">קטגוריה</Label>
                 <select
                   value={categoryId || ""}
                   onChange={(e) =>
@@ -253,9 +250,9 @@ export default function EditTableModal({
                       e.target.value ? Number(e.target.value) : null
                     )
                   }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-black"
+                  className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="">Uncategorized</option>
+                  <option value="">ללא קטגוריה</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -267,123 +264,140 @@ export default function EditTableModal({
 
             <div>
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold text-black">Fields</h3>
-                <button
+                <h3 className="text-lg font-bold">שדות</h3>
+                <Button
                   type="button"
                   onClick={handleAddField}
-                  className="text-sm bg-gray-100 hover:bg-gray-200 text-black px-3 py-1 rounded-lg transition font-medium"
+                  variant="secondary"
+                  size="sm"
+                  className="gap-2"
                 >
-                  + Add Field
-                </button>
+                  <Plus className="h-4 w-4" /> הוסף שדה
+                </Button>
               </div>
 
               <div className="space-y-4">
                 {fields.map((field, index) => (
                   <div
                     key={index}
-                    className="flex flex-col md:flex-row gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200 items-start"
+                    className="flex flex-col gap-4 p-4 bg-muted/30 rounded-lg border border-border"
                   >
-                    <div className="flex-1">
-                      <label className="block text-xs font-bold text-black mb-1">
-                        Label
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={field.label}
-                        onChange={(e) =>
-                          handleFieldChange(index, "label", e.target.value)
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
-                        placeholder="Field Label"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-xs font-bold text-black mb-1">
-                        System Name
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={field.name}
-                        onChange={(e) =>
-                          handleFieldChange(index, "name", e.target.value)
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm font-mono"
-                        placeholder="field_name"
-                      />
-                    </div>
-                    <div className="w-32">
-                      <label className="block text-xs font-bold text-black mb-1">
-                        Type
-                      </label>
-                      <select
-                        value={field.type}
-                        onChange={(e) =>
-                          handleFieldChange(index, "type", e.target.value)
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
-                      >
-                        <option value="text">Text</option>
-                        <option value="textarea">Textarea</option>
-                        <option value="number">Number</option>
-                        <option value="date">Date</option>
-                        <option value="boolean">Boolean</option>
-                        <option value="url">URL</option>
-                        <option value="select">Select</option>
-                        <option value="multi-select">Multi Select</option>
-                        <option value="tags">Tags</option>
-                        <option value="radio">Radio Buttons</option>
-                        <option value="relation">Relation</option>
-                        <option value="lookup">Lookup</option>
-                        <option value="automation">Automation Trigger</option>
-                      </select>
-                    </div>
-
-                    <div className="w-48">
-                      <label className="block text-xs font-bold text-black mb-1">
-                        Default Value
-                      </label>
-                      <input
-                        type="text"
-                        value={field.defaultValue || ""}
-                        onChange={(e) =>
-                          handleFieldChange(
-                            index,
-                            "defaultValue",
-                            e.target.value
-                          )
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
-                        placeholder="Default"
-                      />
-                    </div>
-
-                    {["select", "multi-select", "radio", "tags"].includes(
-                      field.type
-                    ) && (
-                      <div className="flex-1">
-                        <label className="block text-xs font-bold text-black mb-1">
-                          Options (comma separated)
-                        </label>
-                        <input
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="space-y-1">
+                        <Label className="text-xs font-bold uppercase tracking-wide">
+                          תווית (Label)
+                        </Label>
+                        <Input
                           type="text"
-                          value={field.options}
+                          required
+                          value={field.label}
                           onChange={(e) =>
-                            handleFieldChange(index, "options", e.target.value)
+                            handleFieldChange(index, "label", e.target.value)
                           }
-                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
-                          placeholder="Option 1, Option 2"
+                          placeholder="שם השדה"
                         />
                       </div>
-                    )}
+                      <div className="space-y-1">
+                        <Label className="text-xs font-bold uppercase tracking-wide">
+                          שם מערכת (Name)
+                        </Label>
+                        <Input
+                          type="text"
+                          required
+                          value={field.name}
+                          onChange={(e) =>
+                            handleFieldChange(index, "name", e.target.value)
+                          }
+                          className="font-mono text-sm"
+                          placeholder="field_name"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs font-bold uppercase tracking-wide">
+                          סוג
+                        </Label>
+                        <select
+                          value={field.type}
+                          onChange={(e) =>
+                            handleFieldChange(index, "type", e.target.value)
+                          }
+                          className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          <option value="text">טקסט</option>
+                          <option value="textarea">טקסט ארוך</option>
+                          <option value="number">מספר</option>
+                          <option value="date">תאריך</option>
+                          <option value="boolean">כן/לא</option>
+                          <option value="url">קישור (URL)</option>
+                          <option value="select">בחירה (Select)</option>
+                          <option value="multi-select">בחירה מרובה</option>
+                          <option value="tags">תגיות</option>
+                          <option value="radio">כפתורי רדיו</option>
+                          <option value="relation">קשר (Relation)</option>
+                          <option value="lookup">חיפוש (Lookup)</option>
+                          <option value="automation">טריגר אוטומציה</option>
+                        </select>
+                      </div>
+                      <div className="flex items-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => handleRemoveField(index)}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 w-full"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" /> הסר
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border/50">
+                      <div className="space-y-1">
+                        <Label className="text-xs font-bold uppercase tracking-wide">
+                          ערך ברירת מחדל
+                        </Label>
+                        <Input
+                          type="text"
+                          value={field.defaultValue || ""}
+                          onChange={(e) =>
+                            handleFieldChange(
+                              index,
+                              "defaultValue",
+                              e.target.value
+                            )
+                          }
+                          placeholder="אופציונלי"
+                        />
+                      </div>
+
+                      {["select", "multi-select", "radio", "tags"].includes(
+                        field.type
+                      ) && (
+                        <div className="space-y-1">
+                          <Label className="text-xs font-bold uppercase tracking-wide">
+                            אפשרויות (מופרדות בפסיק)
+                          </Label>
+                          <Input
+                            type="text"
+                            value={field.options}
+                            onChange={(e) =>
+                              handleFieldChange(
+                                index,
+                                "options",
+                                e.target.value
+                              )
+                            }
+                            placeholder="אפשרות 1, אפשרות 2"
+                          />
+                        </div>
+                      )}
+                    </div>
 
                     {field.type === "relation" && (
-                      <div className="flex-1 space-y-2">
-                        <div>
-                          <label className="block text-xs font-bold text-black mb-1">
-                            Related Table
-                          </label>
+                      <div className="space-y-4 pt-4 border-t border-border/50">
+                        <div className="space-y-1">
+                          <Label className="text-xs font-bold uppercase tracking-wide">
+                            טבלה מקושרת
+                          </Label>
                           <select
                             value={field.relationTableId || ""}
                             onChange={(e) =>
@@ -393,9 +407,9 @@ export default function EditTableModal({
                                 e.target.value
                               )
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
+                            className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                           >
-                            <option value="">Select a table...</option>
+                            <option value="">בחר טבלה...</option>
                             {availableTables.map((t) => (
                               <option key={t.id} value={t.id}>
                                 {t.name}
@@ -405,11 +419,11 @@ export default function EditTableModal({
                         </div>
 
                         {field.relationTableId && (
-                          <div className="space-y-2">
-                            <div>
-                              <label className="block text-xs font-bold text-black mb-1">
-                                Display Field
-                              </label>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <Label className="text-xs font-bold uppercase tracking-wide">
+                                שדה לתצוגה
+                              </Label>
                               <select
                                 value={field.displayField || ""}
                                 onChange={(e) =>
@@ -419,9 +433,9 @@ export default function EditTableModal({
                                     e.target.value
                                   )
                                 }
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
+                                className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                               >
-                                <option value="">Default (First Field)</option>
+                                <option value="">ברירת מחדל (שדה ראשון)</option>
                                 {(() => {
                                   const relatedTable = availableTables.find(
                                     (t) =>
@@ -449,37 +463,34 @@ export default function EditTableModal({
                               </select>
                             </div>
 
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={field.allowMultiple || false}
-                                onChange={(e) =>
-                                  handleFieldChange(
-                                    index,
-                                    "allowMultiple",
-                                    e.target.checked
-                                  )
-                                }
-                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
-                              />
-                              <span className="text-xs font-medium text-black">
-                                Allow Multiple
-                              </span>
-                            </label>
+                            <div className="flex items-center pt-6">
+                              <Label className="flex items-center gap-2 cursor-pointer">
+                                <Switch
+                                  checked={field.allowMultiple || false}
+                                  onCheckedChange={(checked) =>
+                                    handleFieldChange(
+                                      index,
+                                      "allowMultiple",
+                                      checked
+                                    )
+                                  }
+                                />
+                                <span className="text-sm font-medium">
+                                  בחירה מרובה
+                                </span>
+                              </Label>
+                            </div>
                           </div>
                         )}
                       </div>
                     )}
 
                     {field.type === "lookup" && (
-                      <div
-                        className="grid grid-cols-2 gap-2"
-                        style={{ flex: 2 }}
-                      >
-                        <div>
-                          <label className="block text-xs font-bold text-black mb-1">
-                            Relation Field
-                          </label>
+                      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border/50">
+                        <div className="space-y-1">
+                          <Label className="text-xs font-bold uppercase tracking-wide">
+                            שדה מקושר (Relation)
+                          </Label>
                           <select
                             value={field.relationField || ""}
                             onChange={(e) =>
@@ -489,9 +500,9 @@ export default function EditTableModal({
                                 e.target.value
                               )
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
+                            className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                           >
-                            <option value="">Select relation...</option>
+                            <option value="">בחר שדה מקושר...</option>
                             {fields
                               .filter((f) => f.type === "relation" && f.name)
                               .map((f) => (
@@ -501,10 +512,10 @@ export default function EditTableModal({
                               ))}
                           </select>
                         </div>
-                        <div>
-                          <label className="block text-xs font-bold text-black mb-1">
-                            Target Field
-                          </label>
+                        <div className="space-y-1">
+                          <Label className="text-xs font-bold uppercase tracking-wide">
+                            שדה יעד (Target)
+                          </Label>
                           <select
                             value={field.lookupField || ""}
                             onChange={(e) =>
@@ -514,9 +525,9 @@ export default function EditTableModal({
                                 e.target.value
                               )
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-black text-sm"
+                            className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                           >
-                            <option value="">Select Target Field...</option>
+                            <option value="">בחר שדה יעד...</option>
                             {(() => {
                               const relationField = fields.find(
                                 (f) => f.name === field.relationField
@@ -548,41 +559,22 @@ export default function EditTableModal({
                         </div>
                       </div>
                     )}
-
-                    <div className="pt-6">
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveField(index)}
-                        className="text-red-600 hover:text-red-800 p-2"
-                        title="Remove Field"
-                      >
-                        ✕
-                      </button>
-                    </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="flex justify-end gap-4 pt-4 border-t border-gray-200">
-              <button
-                type="button"
-                onClick={onClose}
-                className="bg-gray-100 text-black py-3 px-8 rounded-lg hover:bg-gray-200 transition font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="bg-black text-white py-3 px-8 rounded-lg hover:bg-gray-800 transition disabled:opacity-50 font-medium"
-              >
-                {loading ? "Updating..." : "Update Table"}
-              </button>
-            </div>
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={onClose}>
+                ביטול
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? "מעדכן..." : "עדכן טבלה"}
+              </Button>
+            </DialogFooter>
           </form>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,6 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Check, ChevronsUpDown, X, Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface RelationPickerProps {
   tableId: number;
@@ -8,6 +18,7 @@ interface RelationPickerProps {
   onChange: (value: any) => void;
   allowMultiple?: boolean;
   displayField?: string;
+  className?: string;
 }
 
 export default function RelationPicker({
@@ -16,17 +27,18 @@ export default function RelationPicker({
   onChange,
   allowMultiple = false,
   displayField,
+  className,
 }: RelationPickerProps) {
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isOpen, setIsOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (isOpen && records.length === 0) {
+    if (open && records.length === 0) {
       fetchRecords();
     }
-  }, [isOpen]);
+  }, [open]);
 
   // Also fetch records if we have a value but no records (to display the selected label)
   useEffect(() => {
@@ -56,7 +68,7 @@ export default function RelationPicker({
       return String(record.data[displayField]);
     }
     // Fallback to first value
-    return String(Object.values(record.data)[0] || "Untitled");
+    return String(Object.values(record.data)[0] || "ללא כותרת");
   };
 
   const filteredRecords = records
@@ -82,7 +94,7 @@ export default function RelationPicker({
       onChange(newValues);
     } else {
       onChange(recordId);
-      setIsOpen(false);
+      setOpen(false);
     }
   };
 
@@ -93,114 +105,122 @@ export default function RelationPicker({
     return value === recordId;
   };
 
-  const renderTrigger = () => {
-    if (allowMultiple) {
-      const selectedIds = Array.isArray(value) ? value : value ? [value] : [];
-      if (selectedIds.length === 0) {
-        return <span className="text-gray-500">Select records...</span>;
-      }
-      return (
-        <div className="flex flex-wrap gap-1">
-          {selectedIds.map((id: number) => {
-            const record = records.find((r) => r.id === id);
-            return (
-              <span
-                key={id}
-                className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
-              >
-                {record ? getRecordLabel(record) : `#${id}`}
-                <span
-                  className="cursor-pointer hover:text-blue-900 font-bold"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSelect(id);
-                  }}
-                >
-                  ×
-                </span>
-              </span>
-            );
-          })}
-        </div>
-      );
-    } else {
-      const selectedRecord = records.find((r) => r.id === value);
-      return (
-        <span className={selectedRecord ? "text-black" : "text-gray-500"}>
-          {selectedRecord
-            ? `Record #${selectedRecord.id} - ${getRecordLabel(selectedRecord)}`
-            : "Select a record..."}
-        </span>
-      );
-    }
-  };
-
   return (
-    <div className="relative">
-      <div
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer flex justify-between items-center min-h-[42px]"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <div className="flex-1">{renderTrigger()}</div>
-        <span className="text-gray-400 ml-2">▼</span>
-      </div>
-
-      {isOpen && (
-        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-hidden flex flex-col">
-          <div className="p-2 border-b border-gray-100">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded text-sm outline-none focus:border-blue-500 text-black"
-              placeholder="Search..."
-              autoFocus
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-          <div className="overflow-y-auto flex-1">
-            {loading ? (
-              <div className="p-4 text-center text-gray-500 text-sm">
-                Loading...
-              </div>
-            ) : filteredRecords.length === 0 ? (
-              <div className="p-4 text-center text-gray-500 text-sm">
-                No records found
-              </div>
-            ) : (
-              filteredRecords.map((record) => {
-                const selected = isSelected(record.id);
-                return (
-                  <div
-                    key={record.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSelect(record.id);
-                    }}
-                    className={`px-4 py-2 text-sm cursor-pointer hover:bg-blue-50 text-black flex items-center justify-between ${
-                      selected ? "bg-blue-50 font-medium" : ""
-                    }`}
-                  >
-                    <div>
-                      <span className="font-mono text-gray-500 me-2">
-                        #{record.id}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            "w-full justify-between h-auto min-h-[44px] py-2 px-3 hover:bg-background/90",
+            className
+          )}
+        >
+          <div className="flex flex-wrap gap-1 items-center w-full">
+            {allowMultiple
+              ? (() => {
+                  const selectedIds = Array.isArray(value)
+                    ? value
+                    : value
+                    ? [value]
+                    : [];
+                  if (selectedIds.length === 0) {
+                    return (
+                      <span className="text-muted-foreground font-normal">
+                        בחר רשומות...
                       </span>
-                      {getRecordLabel(record)}
-                    </div>
-                    {selected && <span className="text-blue-600">✓</span>}
-                  </div>
-                );
-              })
-            )}
+                    );
+                  }
+                  return selectedIds.map((id: number) => {
+                    const record = records.find((r) => r.id === id);
+                    return (
+                      <Badge
+                        key={id}
+                        variant="secondary"
+                        className="text-xs px-2 py-0.5 gap-1 hover:bg-secondary/80 bg-primary/10 text-primary border-primary/20"
+                      >
+                        {record ? getRecordLabel(record) : `#${id}`}
+                        <div
+                          className="cursor-pointer hover:text-destructive transition-colors rounded-full p-0.5"
+                          onPointerDown={(e) => {
+                            e.stopPropagation();
+                            handleSelect(id);
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </div>
+                      </Badge>
+                    );
+                  });
+                })()
+              : // Single select
+                (() => {
+                  const selectedRecord = records.find((r) => r.id === value);
+                  return (
+                    <span
+                      className={cn(
+                        "truncate font-normal",
+                        !selectedRecord && "text-muted-foreground"
+                      )}
+                    >
+                      {selectedRecord
+                        ? getRecordLabel(selectedRecord)
+                        : "בחר רשומה..."}
+                    </span>
+                  );
+                })()}
           </div>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[300px] p-0" align="start">
+        <div className="flex items-center border-b px-3" dir="rtl">
+          <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+          <input
+            className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            placeholder="חיפוש..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
-      )}
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-0"
-          onClick={() => setIsOpen(false)}
-        ></div>
-      )}
-    </div>
+        <div className="max-h-[300px] overflow-y-auto p-1" dir="rtl">
+          {loading ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">
+              טוען...
+            </div>
+          ) : filteredRecords.length === 0 ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">
+              לא נמצאו תוצאות.
+            </div>
+          ) : (
+            filteredRecords.map((record) => {
+              const selected = isSelected(record.id);
+              return (
+                <div
+                  key={record.id}
+                  onClick={() => handleSelect(record.id)}
+                  className={cn(
+                    "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+                    selected && "bg-accent text-accent-foreground"
+                  )}
+                >
+                  <Check
+                    className={cn(
+                      "ml-2 h-4 w-4",
+                      selected ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  <span>{getRecordLabel(record)}</span>
+                  <span className="mr-auto text-xs text-muted-foreground/70 font-mono">
+                    #{record.id}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

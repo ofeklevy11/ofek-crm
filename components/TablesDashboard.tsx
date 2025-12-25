@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AITableCreator from "@/components/AITableCreator";
-import { Pencil } from "lucide-react";
+import { Pencil, Plus, Sparkles, GripVertical } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -21,6 +21,17 @@ import {
   rectSortingStrategy,
 } from "@dnd-kit/sortable";
 import SortableTableCard from "@/components/SortableTableCard";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 interface Category {
   id: number;
@@ -75,7 +86,7 @@ export default function TablesDashboard({
   );
 
   const handleDragEnd = async (event: DragEndEvent) => {
-    if (!canManage) return; // Prevent drag if no permission (though UI shouldn't allow it if we disable dnd)
+    if (!canManage) return;
 
     const { active, over } = event;
 
@@ -93,13 +104,6 @@ export default function TablesDashboard({
     // Server update
     try {
       const { updateTablesOrder } = await import("@/app/actions/tables");
-      // We only need to update the order of the affected range, or all of them.
-      // For simplicity and correctness, let's update all tables in the category with new indices.
-      // Actually, since we have a global list of tables but partitioned by category,
-      // we should only reorder if they are in the same category.
-
-      // Wait, if we just swap them in the main list, their relative order changes.
-      // We need to persist the 'order' field.
       const updates = newTables.map((t, index) => ({
         id: t.id,
         order: index,
@@ -108,7 +112,6 @@ export default function TablesDashboard({
       await updateTablesOrder(updates);
     } catch (error) {
       console.error("Failed to save order", error);
-      // Revert on error?
     }
   };
 
@@ -166,7 +169,7 @@ export default function TablesDashboard({
       router.refresh();
     } catch (error) {
       console.error(error);
-      alert("Error saving category");
+      alert("שגיאה בשמירת קטגוריה");
     } finally {
       setCreatingCategory(false);
     }
@@ -184,10 +187,8 @@ export default function TablesDashboard({
     setNewCategoryName("");
   };
 
-  // Group tables by category
-  // We need to group them based on the CURRENT 'tables' state which has the correct order
   const getCategoryTables = (catId?: number | null) => {
-    if (catId === undefined) return []; // Should not happen
+    if (catId === undefined) return [];
     if (catId === null) {
       return tables.filter(
         (t) => t.categoryId === null || t.categoryId === undefined
@@ -204,59 +205,67 @@ export default function TablesDashboard({
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex justify-between items-center mb-8">
+      <div className="min-h-screen bg-muted/30 p-8" dir="rtl">
+        <div className="max-w-7xl mx-auto space-y-8">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h1 className="text-4xl font-bold text-gray-900 mb-2">Tables</h1>
-              <p className="text-gray-600">Manage your custom data tables</p>
+              <h1 className="text-4xl font-bold tracking-tight text-foreground mb-2">
+                טבלאות
+              </h1>
+              <p className="text-muted-foreground">נהל את טבלאות הנתונים שלך</p>
             </div>
             {canManage && (
-              <div className="flex gap-4">
-                <button
+              <div className="flex flex-wrap gap-3">
+                <Button
                   onClick={() => setIsAIModalOpen(true)}
-                  className="bg-white text-indigo-600 py-3 px-6 rounded-xl hover:bg-indigo-50 transition shadow-sm border border-indigo-200 font-medium flex items-center gap-2"
+                  variant="outline"
+                  className="gap-2"
                 >
-                  <span className="text-lg">✨</span> Create with AI
-                </button>
-                <button
+                  <Sparkles className="h-4 w-4 text-indigo-500" />
+                  צור עם AI
+                </Button>
+                <Button
                   onClick={() => setIsCategoryModalOpen(true)}
-                  className="bg-white text-gray-700 py-3 px-6 rounded-xl hover:bg-gray-50 transition shadow-sm border border-gray-200 font-medium"
+                  variant="outline"
+                  className="gap-2"
                 >
-                  + New Category
-                </button>
-                <Link
-                  href="/tables/new"
-                  className="bg-linear-to-r from-blue-600 to-blue-700 text-white py-3 px-6 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
-                >
-                  + Create Table
-                </Link>
+                  <Plus className="h-4 w-4" />
+                  קטגוריה חדשה
+                </Button>
+                <Button asChild>
+                  <Link href="/tables/new" className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    צור טבלה
+                  </Link>
+                </Button>
               </div>
             )}
           </div>
 
           <div className="space-y-12">
-            {/* Categories */}
             {categories.map((category) => {
               const catTables = getCategoryTables(category.id);
               return (
-                <div key={category.id}>
-                  <div className="flex items-center gap-3 mb-4">
-                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                      <span className="w-2 h-8 bg-blue-500 rounded-full"></span>
+                <div key={category.id} className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-bold flex items-center gap-2">
+                      <span className="w-1.5 h-6 bg-primary rounded-full"></span>
                       {category.name}
-                      <span className="text-sm font-normal text-gray-500 ml-2">
+                      <span className="text-sm font-normal text-muted-foreground mr-1">
                         ({catTables.length})
                       </span>
                     </h2>
                     {canManage && (
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => openEditModal(category)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                        title="Edit category name"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        title="ערוך שם קטגוריה"
                       >
-                        <Pencil size={16} />
-                      </button>
+                        <Pencil className="h-4 w-4" />
+                        <span className="sr-only">ערוך</span>
+                      </Button>
                     )}
                   </div>
 
@@ -265,7 +274,7 @@ export default function TablesDashboard({
                     strategy={rectSortingStrategy}
                     disabled={!canManage}
                   >
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pl-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {catTables.map((table) => (
                         <SortableTableCard
                           key={table.id}
@@ -275,8 +284,8 @@ export default function TablesDashboard({
                         />
                       ))}
                       {catTables.length === 0 && (
-                        <div className="col-span-full py-8 text-gray-400 italic text-sm border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center">
-                          No tables in this category
+                        <div className="col-span-full py-12 text-muted-foreground bg-muted/50 border-2 border-dashed border-muted rounded-xl flex items-center justify-center text-sm">
+                          אין טבלאות בקטגוריה זו
                         </div>
                       )}
                     </div>
@@ -285,27 +294,29 @@ export default function TablesDashboard({
               );
             })}
 
-            {/* Uncategorized */}
             {uncategorizedTables.length > 0 && (
-              <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                    <span className="w-2 h-8 bg-gray-300 rounded-full"></span>
-                    Uncategorized
-                    <span className="text-sm font-normal text-gray-500 ml-2">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-bold flex items-center gap-2">
+                    <span className="w-1.5 h-6 bg-muted-foreground/30 rounded-full"></span>
+                    ללא קטגוריה
+                    <span className="text-sm font-normal text-muted-foreground mr-1">
                       ({uncategorizedTables.length})
                     </span>
                   </h2>
                   {canManage && (
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={() =>
                         openEditModal({ id: -1, name: "Uncategorized" })
                       }
-                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                      title="Rename Uncategorized Group"
+                      className="h-8 w-8 text-muted-foreground hover:text-primary"
+                      title="שנה שם לקבוצה ללא קטגוריה"
                     >
-                      <Pencil size={16} />
-                    </button>
+                      <Pencil className="h-4 w-4" />
+                      <span className="sr-only">ערוך</span>
+                    </Button>
                   )}
                 </div>
                 <SortableContext
@@ -313,7 +324,7 @@ export default function TablesDashboard({
                   strategy={rectSortingStrategy}
                   disabled={!canManage}
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pl-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {uncategorizedTables.map((table) => (
                       <SortableTableCard
                         key={table.id}
@@ -328,28 +339,30 @@ export default function TablesDashboard({
             )}
 
             {initialTables.length === 0 && (
-              <div className="col-span-full text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-300">
-                <div className="max-w-md mx-auto">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    No tables yet
-                  </h3>
-                  <p className="text-gray-600 mb-6">
-                    Create your first table to start managing your data
-                  </p>
+              <div className="col-span-full text-center py-20 bg-background rounded-2xl border-2 border-dashed border-muted shadow-sm">
+                <div className="max-w-md mx-auto space-y-6">
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-semibold">עדיין אין טבלאות</h3>
+                    <p className="text-muted-foreground">
+                      צור את הטבלה הראשונה שלך כדי להתחיל לנהל את הנתונים שלך
+                    </p>
+                  </div>
                   {canManage && (
-                    <div className="flex justify-center gap-4">
-                      <button
+                    <div className="flex flex-col sm:flex-row justify-center gap-4">
+                      <Button
                         onClick={() => setIsAIModalOpen(true)}
-                        className="bg-white text-indigo-600 py-3 px-6 rounded-xl hover:bg-indigo-50 transition shadow-sm border border-indigo-200 font-medium flex items-center gap-2"
+                        variant="outline"
+                        className="gap-2 h-11"
                       >
-                        <span className="text-lg">✨</span> Create with AI
-                      </button>
-                      <Link
-                        href="/tables/new"
-                        className="inline-block bg-linear-to-r from-blue-600 to-blue-700 text-white py-3 px-8 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
-                      >
-                        + Create Your First Table
-                      </Link>
+                        <Sparkles className="h-4 w-4 text-indigo-500" />
+                        צור עם AI
+                      </Button>
+                      <Button asChild className="h-11">
+                        <Link href="/tables/new" className="gap-2">
+                          <Plus className="h-4 w-4" />
+                          צור טבלה חדשה
+                        </Link>
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -358,48 +371,56 @@ export default function TablesDashboard({
           </div>
         </div>
 
-        {/* Create/Edit Category Modal */}
-        {isCategoryModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-4">
-                {editingCategory ? "Edit Category" : "New Category"}
-              </h3>
-              <form onSubmit={handleSaveCategory}>
-                <input
-                  type="text"
+        <Dialog
+          open={isCategoryModalOpen}
+          onOpenChange={setIsCategoryModalOpen}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {editingCategory ? "ערוך קטגוריה" : "קטגוריה חדשה"}
+              </DialogTitle>
+              <DialogDescription>
+                {editingCategory
+                  ? "שנה את שם הקטגוריה"
+                  : "צור קטגוריה חדשה לארגון הטבלאות שלך"}
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleSaveCategory} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="categoryName">שם הקטגוריה</Label>
+                <Input
+                  id="categoryName"
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
-                  placeholder="Category Name"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mb-6"
+                  placeholder="לדוגמה: לקוחות, מכירות"
                   autoFocus
                 />
-                <div className="flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={closeCategoryModal}
-                    className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={creatingCategory || !newCategoryName.trim()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
-                  >
-                    {creatingCategory
-                      ? "Saving..."
-                      : editingCategory
-                      ? "Update Category"
-                      : "Create Category"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closeCategoryModal}
+                >
+                  ביטול
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={creatingCategory || !newCategoryName.trim()}
+                >
+                  {creatingCategory
+                    ? "שומר..."
+                    : editingCategory
+                    ? "עדכן"
+                    : "צור"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
-        {/* AI Table Creator Modal */}
         <AITableCreator
           isOpen={isAIModalOpen}
           onClose={() => setIsAIModalOpen(false)}

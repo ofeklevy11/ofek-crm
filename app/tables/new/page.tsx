@@ -3,20 +3,20 @@ import Link from "next/link";
 
 export default function NewTablePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-muted/40" dir="rtl">
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-8">
           <Link
             href="/tables"
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition"
+            className="inline-flex items-center text-primary hover:text-primary/80 font-medium mb-4 transition text-sm"
           >
-            <span className="mr-2">←</span> Back to Tables
+            <span className="ml-2">→</span> חזרה לטבלאות
           </Link>
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Create New Table
+          <h1 className="text-4xl font-bold text-foreground mb-2">
+            צור טבלה חדשה
           </h1>
-          <p className="text-gray-600">
-            Design your custom table with fields and options
+          <p className="text-muted-foreground">
+            עצב את הטבלה המותאמת אישית שלך עם שדות ואפשרויות
           </p>
         </div>
         <CreateTableForm />
