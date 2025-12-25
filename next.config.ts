@@ -1,5 +1,6 @@
 const nextConfig = {
   productionSourceMaps: false,
+  serverExternalPackages: ["puppeteer"],
   experimental: {
     turbo: {
       sourceMaps: false,
