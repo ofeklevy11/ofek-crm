@@ -211,7 +211,7 @@ export default function UsersPage() {
   const pageNumbers = getPageNumbers();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-8">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 p-8">
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -222,7 +222,7 @@ export default function UsersPage() {
           </div>
           <button
             onClick={handleCreateUser}
-            className="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-6 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
+            className="bg-linear-to-r from-blue-600 to-blue-700 text-white py-3 px-6 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
           >
             + משתמש חדש
           </button>
@@ -309,6 +309,62 @@ export default function UsersPage() {
                                       canViewAnalytics: {
                                         icon: "📊",
                                         color: "blue",
+                                      },
+                                      canViewCalendar: {
+                                        icon: "📅",
+                                        color: "red",
+                                      },
+                                      canViewFinance: {
+                                        icon: "💰",
+                                        color: "emerald",
+                                      },
+                                      canViewTasks: {
+                                        icon: "✅",
+                                        color: "teal",
+                                      },
+                                      canViewNurtureHub: {
+                                        icon: "🌱",
+                                        color: "green",
+                                      },
+                                      canViewWorkflows: {
+                                        icon: "🔀",
+                                        color: "indigo",
+                                      },
+                                      canViewServices: {
+                                        icon: "🏷️",
+                                        color: "orange",
+                                      },
+                                      canViewServiceCalls: {
+                                        icon: "🎧",
+                                        color: "rose",
+                                      },
+                                      canViewQuotes: {
+                                        icon: "📜",
+                                        color: "yellow",
+                                      },
+                                      canViewFiles: {
+                                        icon: "📁",
+                                        color: "gray",
+                                      },
+                                      canViewChat: {
+                                        icon: "💬",
+                                        color: "cyan",
+                                      },
+                                      canViewWorkers: {
+                                        icon: "👷",
+                                        color: "blue",
+                                      },
+                                      canViewUsers: {
+                                        icon: "👥",
+                                        color: "purple",
+                                      },
+                                      canViewDashboard: {
+                                        icon: "🏠",
+                                        color: "indigo",
+                                      },
+                                      canViewTables: {
+                                        icon: "🗃️",
+                                        color: "pink",
                                       },
                                       canCreateTasks: {
                                         icon: "✓",
@@ -399,7 +455,7 @@ export default function UsersPage() {
                   </p>
                   <button
                     onClick={handleCreateUser}
-                    className="inline-block bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-8 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
+                    className="inline-block bg-linear-to-r from-blue-600 to-blue-700 text-white py-3 px-8 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
                   >
                     + צור משתמש ראשון
                   </button>
@@ -452,7 +508,7 @@ export default function UsersPage() {
                         <button
                           key={pageNum}
                           onClick={() => handlePageChange(pageNum)}
-                          className={`min-w-[40px] px-3 py-2 rounded-lg font-medium transition-all duration-200 ${
+                          className={`min-w-10 px-3 py-2 rounded-lg font-medium transition-all duration-200 ${
                             isActive
                               ? "bg-blue-600 text-white shadow-md scale-105"
                               : "border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-400"

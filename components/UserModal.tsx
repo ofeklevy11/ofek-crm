@@ -295,17 +295,30 @@ export default function UserModal({
                 הרשאות נוספות
               </label>
               <div className="space-y-4 bg-gray-50 p-5 rounded-lg border border-gray-200">
-                {/* Viewing Permissions */}
+                {/* Navigation Permissions */}
                 <div className="bg-white p-4 rounded-lg border border-blue-100">
                   <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <span className="text-blue-600">👁️</span>
-                    הרשאות צפייה
+                    <span className="text-blue-600">🧭</span>
+                    הרשאות ניווט וגישה למודולים
                   </h3>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
                     {[
+                      "canViewTables",
                       "canViewAutomations",
                       "canViewAnalytics",
-                      "canViewAllTasks",
+                      "canViewCalendar",
+                      "canViewFinance",
+                      "canViewTasks",
+                      "canViewNurtureHub",
+                      "canViewWorkflows",
+                      "canViewServices",
+                      "canViewServiceCalls",
+                      "canViewQuotes",
+                      "canViewFiles",
+                      "canViewChat",
+                      "canViewWorkers",
+                      "canViewUsers",
+                      "canViewDashboard",
                     ].map((key) => {
                       const flag = USER_FLAGS.find((f) => f.key === key);
                       if (!flag) return null;
@@ -333,13 +346,14 @@ export default function UserModal({
                 <div className="bg-white p-4 rounded-lg border border-green-100">
                   <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
                     <span className="text-green-600">⚙️</span>
-                    הרשאות ניהול
+                    הרשאות ניהול ותפעול
                   </h3>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {[
+                      "canCreateTasks",
+                      "canViewAllTasks",
                       "canManageTables",
                       "canManageAnalytics",
-                      "canCreateTasks",
                     ].map((key) => {
                       const flag = USER_FLAGS.find((f) => f.key === key);
                       if (!flag) return null;
@@ -367,9 +381,9 @@ export default function UserModal({
                 <div className="bg-white p-4 rounded-lg border border-purple-100">
                   <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
                     <span className="text-purple-600">🔧</span>
-                    פעולות בטבלאות המשתמש קיבל גישה אליהן
+                    פעולות בטבלאות (שהמשתמש מורשה לצפות בהן)
                   </h3>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {[
                       "canSearchTables",
                       "canFilterTables",
@@ -528,7 +542,7 @@ export default function UserModal({
             <button
               type="submit"
               disabled={isSaving}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium disabled:opacity-50"
+              className="flex-1 px-6 py-3 bg-linear-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium disabled:opacity-50"
             >
               {isSaving ? "שומר..." : user ? "עדכן" : "צור"}
             </button>

@@ -10,7 +10,6 @@ import {
   useSensors,
   DragEndEvent,
   DragOverlay,
-  defaultDropAnimationSideEffects,
   DragStartEvent,
 } from "@dnd-kit/core";
 import {
@@ -19,18 +18,11 @@ import {
   sortableKeyboardCoordinates,
   rectSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Plus, LayoutDashboard, ArrowLeft, Trash2, X } from "lucide-react";
+import { Plus, LayoutDashboard, X } from "lucide-react";
 import AnalyticsWidget from "./dashboard/AnalyticsWidget";
 import TableWidget from "./dashboard/TableWidget";
 import { getTableViewData } from "@/app/actions/dashboard";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"; // Assuming this exists, if not I'll fallback to simple overlay
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"; // Assuming this exists
+import { hasUserFlag, User } from "@/lib/permissions";
 
 // Define Types
 type WidgetType = "ANALYTICS" | "TABLE";
@@ -45,118 +37,89 @@ interface DashboardWidget {
 interface DashboardClientProps {
   initialAnalytics: any[];
   availableTables: any[];
+  user: User;
 }
 
 export default function DashboardClient({
   initialAnalytics,
   availableTables,
+  user,
 }: DashboardClientProps) {
+  // State
   const [widgets, setWidgets] = useState<DashboardWidget[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [tableDataMap, setTableDataMap] = useState<Record<string, any>>({});
-  const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
-  const [activeId, setActiveId] = useState<string | null>(null);
-
-  // Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<WidgetType>("ANALYTICS");
-  const [selectedTable, setSelectedTable] = useState<string>("");
-  const [selectedItem, setSelectedItem] = useState<string>("");
+  const [selectedTable, setSelectedTable] = useState("");
+  const [selectedItem, setSelectedItem] = useState("");
 
-  const hasTables = availableTables && availableTables.length > 0;
-  const hasAnalytics = initialAnalytics && initialAnalytics.length > 0;
-  const hasViews = availableTables?.some((t) => t.views?.length > 0);
-  const canAddWidget = hasAnalytics || hasViews;
+  // Data State for Table Widgets
+  const [tableData, setTableData] = useState<Record<string, any[]>>({});
+  const [tableLoading, setTableLoading] = useState<Record<string, boolean>>({});
+
+  // Permissions
+  const canViewDashboard = hasUserFlag(user, "canViewDashboard");
+  // Default to true if user can view dashboard, they can customize their own dashboard
+  const canAddWidget = canViewDashboard;
+
+  // Load widgets from local storage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("dashboard_widgets");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setWidgets(parsed);
+      } catch (e) {
+        console.error("Failed to parse widgets", e);
+      }
+    }
+  }, []);
+
+  // Save widgets to local storage when changed
+  useEffect(() => {
+    localStorage.setItem("dashboard_widgets", JSON.stringify(widgets));
+  }, [widgets]);
+
+  // Fetch data for table widgets
+  useEffect(() => {
+    widgets.forEach((widget) => {
+      if (widget.type === "TABLE" && widget.tableId && widget.referenceId) {
+        if (!tableData[widget.id] && !tableLoading[widget.id]) {
+          fetchTableData(widget.id, widget.tableId, Number(widget.referenceId));
+        }
+      }
+    });
+  }, [widgets]);
+
+  const fetchTableData = async (
+    widgetId: string,
+    tableId: number,
+    viewId: number
+  ) => {
+    setTableLoading((prev) => ({ ...prev, [widgetId]: true }));
+    try {
+      const res = await getTableViewData(tableId, viewId);
+      if (res.success && res.data) {
+        setTableData((prev) => ({ ...prev, [widgetId]: res.data as any[] }));
+      }
+    } catch (err) {
+      console.error("Error fetching table data", err);
+    } finally {
+      setTableLoading((prev) => ({ ...prev, [widgetId]: false }));
+    }
+  };
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
+    useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
 
-  // Load from LocalStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("dashboard_widgets");
-    if (saved) {
-      try {
-        const parsed: DashboardWidget[] = JSON.parse(saved);
-        // Filter widgets to ensure they belong to existing tables/analytics
-        // This prevents "ghost" widgets from previous users/sessions
-        const validWidgets = parsed.filter((w) => {
-          if (w.type === "ANALYTICS") {
-            return initialAnalytics.some(
-              (a) => String(a.id) === String(w.referenceId)
-            );
-          } else if (w.type === "TABLE") {
-            const table = availableTables.find(
-              (t) => String(t.id) === String(w.tableId)
-            );
-            if (!table || !table.views) return false;
-            return table.views.some(
-              (v: any) => String(v.id) === String(w.referenceId)
-            );
-          }
-          return false;
-        });
-
-        setWidgets(validWidgets);
-      } catch (e) {
-        console.error("Failed to parse saved dashboard", e);
-        // If error, do nothing or set empty
-      }
-    } else {
-      // Default: Add some analytics if available
-      if (initialAnalytics.length > 0) {
-        setWidgets(
-          initialAnalytics.slice(0, 3).map((v) => ({
-            id: `init-${Math.random()}`,
-            type: "ANALYTICS",
-            referenceId: v.id,
-          }))
-        );
-      }
-    }
-    setIsLoaded(true);
-  }, [initialAnalytics, availableTables]); // Add dependencies to ensure valid check
-
-  // Save to LocalStorage
-  useEffect(() => {
-    if (!isLoaded) return;
-    localStorage.setItem("dashboard_widgets", JSON.stringify(widgets));
-  }, [widgets, isLoaded]);
-
-  // Fetch missing table data
-  useEffect(() => {
-    widgets.forEach(async (widget) => {
-      if (widget.type === "TABLE" && widget.tableId) {
-        const key = `${widget.tableId}-${widget.referenceId}`;
-        if (!tableDataMap[key] && !loadingMap[key]) {
-          // Fetch
-          setLoadingMap((prev) => ({ ...prev, [key]: true }));
-          const res = await getTableViewData(
-            widget.tableId,
-            Number(widget.referenceId)
-          );
-          setLoadingMap((prev) => ({ ...prev, [key]: false }));
-          if (res.success) {
-            setTableDataMap((prev) => ({ ...prev, [key]: res.data }));
-          }
-        }
-      }
-    });
-  }, [widgets, tableDataMap, loadingMap]);
-
   const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
+    // setActiveId(event.active.id);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    setActiveId(null);
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
@@ -171,24 +134,12 @@ export default function DashboardClient({
   const addWidget = () => {
     if (!selectedItem) return;
 
-    let newWidget: DashboardWidget;
-
-    if (selectedType === "ANALYTICS") {
-      newWidget = {
-        id: `widget-${Date.now()}`,
-        type: "ANALYTICS",
-        referenceId: selectedItem,
-      };
-    } else {
-      // Table
-      if (!selectedTable) return;
-      newWidget = {
-        id: `widget-${Date.now()}`,
-        type: "TABLE",
-        referenceId: Number(selectedItem),
-        tableId: Number(selectedTable),
-      };
-    }
+    const newWidget: DashboardWidget = {
+      id: crypto.randomUUID(),
+      type: selectedType,
+      referenceId: selectedItem,
+      tableId: selectedType === "TABLE" ? Number(selectedTable) : undefined,
+    };
 
     setWidgets([...widgets, newWidget]);
     setIsAddModalOpen(false);
@@ -198,31 +149,45 @@ export default function DashboardClient({
 
   const removeWidget = (id: string) => {
     setWidgets(widgets.filter((w) => w.id !== id));
+    // Clean up data
+    const newData = { ...tableData };
+    delete newData[id];
+    setTableData(newData);
   };
 
-  // Helper to find source data
   const getWidgetContent = (widget: DashboardWidget) => {
     if (widget.type === "ANALYTICS") {
-      return initialAnalytics.find((a) => a.id === widget.referenceId);
-    } else {
-      // For table, we need the meta from tables list + fetched data
-      // For rendering title/meta, we can look at availableTables
-      const table = availableTables.find((t) => t.id === widget.tableId);
-      const view = table?.views?.find(
-        (v: any) => v.id === Number(widget.referenceId)
+      // analyticsViews passed as initialAnalytics
+      const view = initialAnalytics.find(
+        (a) => String(a.id) === String(widget.referenceId)
       );
-      const fetchedData =
-        tableDataMap[`${widget.tableId}-${widget.referenceId}`];
-      return {
-        table,
-        view,
-        fetchedData,
-        isLoading: loadingMap[`${widget.tableId}-${widget.referenceId}`],
-      };
+      return view; // passed to AnalyticsWidget as 'view'
+    } else {
+      // TABLE
+      const table = availableTables.find((t) => t.id === widget.tableId);
+      const view = table?.views.find(
+        (v: any) => String(v.id) === String(widget.referenceId)
+      );
+      const fetchedData = tableData[widget.id] || [];
+      const isLoading = tableLoading[widget.id];
+      return { table, view, fetchedData, isLoading };
     }
   };
 
-  if (!isLoaded) return <div className="p-8">טוען דאשבורד...</div>;
+  const hasTables = availableTables.length > 0;
+
+  if (!canViewDashboard) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">
+          אין לך גישה לדאשבורד
+        </h2>
+        <p className="text-gray-500">
+          אנא פנה למנהל המערכת לקבלת הרשאות מתאימות
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">
@@ -231,18 +196,20 @@ export default function DashboardClient({
           <LayoutDashboard className="text-blue-600" />
           הדאשבורד שלי
         </h2>
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          disabled={!canAddWidget}
-          className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg transition shadow-sm font-medium text-sm ${
-            !canAddWidget
-              ? "opacity-50 cursor-not-allowed"
-              : "hover:bg-blue-700"
-          }`}
-        >
-          <Plus size={16} />
-          הוסף וידג׳ט
-        </button>
+        {canViewDashboard && (
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            disabled={!canAddWidget}
+            className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg transition shadow-sm font-medium text-sm ${
+              !canAddWidget
+                ? "opacity-50 cursor-not-allowed"
+                : "hover:bg-blue-700"
+            }`}
+          >
+            <Plus size={16} />
+            הוסף וידג׳ט
+          </button>
+        )}
       </div>
 
       <DndContext
@@ -260,7 +227,7 @@ export default function DashboardClient({
               const content = getWidgetContent(widget);
 
               if (widget.type === "ANALYTICS") {
-                if (!content) return null; // Logic to handle missing ref
+                if (!content) return null;
                 return (
                   <AnalyticsWidget
                     key={widget.id}
@@ -409,6 +376,11 @@ export default function DashboardClient({
                         ></div>
                       </button>
                     ))}
+                    {initialAnalytics.length === 0 && (
+                      <div className="p-4 text-center text-sm text-gray-500">
+                        לא נמצאו אנליטיקות זמינות.
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">

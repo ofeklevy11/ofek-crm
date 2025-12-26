@@ -31,39 +31,47 @@ export default async function Navbar() {
               </Link>
               {user && (
                 <>
-                  <Link href="/tables" className={linkClass}>
-                    טבלאות
-                  </Link>
-                  {user.role === "admin" && (
-                    <>
-                      <Link href="/finance" className={linkClass}>
-                        כספים
-                      </Link>
-                      <Link href="/calendar" className={linkClass}>
-                        יומן
-                      </Link>
-                    </>
+                  {hasUserFlag(user, "canViewTables") && (
+                    <Link href="/tables" className={linkClass}>
+                      טבלאות
+                    </Link>
                   )}
-                  <Link href="/tasks" className={linkClass}>
-                    משימות
-                  </Link>
-                  <Link href="/nurture-hub" className={linkClass}>
-                    טיפוח לקוחות
-                  </Link>
+                  {hasUserFlag(user, "canViewFinance") && (
+                    <Link href="/finance" className={linkClass}>
+                      כספים
+                    </Link>
+                  )}
+                  {hasUserFlag(user, "canViewCalendar") && (
+                    <Link href="/calendar" className={linkClass}>
+                      יומן
+                    </Link>
+                  )}
+                  {hasUserFlag(user, "canViewTasks") && (
+                    <Link href="/tasks" className={linkClass}>
+                      משימות
+                    </Link>
+                  )}
+                  {hasUserFlag(user, "canViewNurtureHub") && (
+                    <Link href="/nurture-hub" className={linkClass}>
+                      טיפוח לקוחות
+                    </Link>
+                  )}
                   {hasUserFlag(user, "canViewAutomations") && (
                     <Link href="/automations" className={linkClass}>
                       אוטומציות
                     </Link>
                   )}
-                  <Link href="/workflows" className={linkClass}>
-                    תהליכים
-                  </Link>
-                  {user.role === "admin" && (
+                  {hasUserFlag(user, "canViewWorkflows") && (
+                    <Link href="/workflows" className={linkClass}>
+                      תהליכים
+                    </Link>
+                  )}
+                  {hasUserFlag(user, "canViewUsers") && (
                     <Link href="/users" className={linkClass}>
                       משתמשים
                     </Link>
                   )}
-                  {user.role === "admin" && (
+                  {hasUserFlag(user, "canViewWorkers") && (
                     <Link href="/workers" className={linkClass}>
                       עובדים
                     </Link>
@@ -73,19 +81,27 @@ export default async function Navbar() {
                       אנליטיקה
                     </Link>
                   )}
-                  <Link href="/services" className={linkClass}>
-                    שירותים
-                  </Link>
-                  <Link href="/quotes" className={linkClass}>
-                    הצעות מחיר
-                  </Link>
-                  <Link href="/service" className={linkClass}>
-                    קריאות שירות
-                  </Link>
-                  <Link href="/files" className={linkClass}>
-                    קבצים
-                  </Link>
-                  <ChatNavbarLink />
+                  {hasUserFlag(user, "canViewServices") && (
+                    <Link href="/services" className={linkClass}>
+                      שירותים
+                    </Link>
+                  )}
+                  {hasUserFlag(user, "canViewQuotes") && (
+                    <Link href="/quotes" className={linkClass}>
+                      הצעות מחיר
+                    </Link>
+                  )}
+                  {hasUserFlag(user, "canViewServiceCalls") && (
+                    <Link href="/service" className={linkClass}>
+                      קריאות שירות
+                    </Link>
+                  )}
+                  {hasUserFlag(user, "canViewFiles") && (
+                    <Link href="/files" className={linkClass}>
+                      קבצים
+                    </Link>
+                  )}
+                  {hasUserFlag(user, "canViewChat") && <ChatNavbarLink />}
                 </>
               )}
             </div>

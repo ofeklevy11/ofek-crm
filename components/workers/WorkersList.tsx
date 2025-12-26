@@ -20,6 +20,7 @@ import {
   Building2,
   GraduationCap,
   Eye,
+  Plus,
 } from "lucide-react";
 import { deleteWorker } from "@/app/actions/workers";
 
@@ -69,6 +70,7 @@ interface Props {
   departmentFilter: number | null;
   onEdit: (worker: Worker) => void;
   onDelete: (id: number) => void;
+  onAdd: () => void;
 }
 
 export default function WorkersList({
@@ -79,6 +81,7 @@ export default function WorkersList({
   departmentFilter,
   onEdit,
   onDelete,
+  onAdd,
 }: Props) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -225,11 +228,21 @@ export default function WorkersList({
       <div className="text-center py-16">
         <User className="h-16 w-16 text-gray-300 mx-auto mb-4" />
         <h3 className="text-xl font-semibold text-gray-700 mb-2">אין עובדים</h3>
-        <p className="text-gray-500">
+        <p className="text-gray-500 mb-6">
           {workers.length === 0
             ? "לחץ על 'עובד חדש' להוספת העובד הראשון"
             : "לא נמצאו עובדים התואמים לסינון"}
         </p>
+
+        {workers.length === 0 && (
+          <button
+            onClick={onAdd}
+            className="inline-flex items-center gap-2 bg-linear-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-xl font-medium hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl hover:scale-[1.02]"
+          >
+            <Plus className="h-5 w-5" />
+            עובד חדש
+          </button>
+        )}
       </div>
     );
   }

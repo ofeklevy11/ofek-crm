@@ -63,7 +63,7 @@ interface OnboardingPath {
   isActive: boolean;
   estimatedDays: number | null;
   steps: OnboardingStep[];
-  _count?: { workerProgress: number };
+  _count?: { workerProgress: number; steps: number };
 }
 
 interface OnboardingStep {
@@ -228,6 +228,11 @@ export default function WorkersManager({
 
   const handleNewClick = () => {
     if (activeTab === "workers") {
+      if (departments.length === 0) {
+        setEditingDepartment(null);
+        setIsDepModalOpen(true);
+        return;
+      }
       setEditingWorker(null);
       setIsWorkerModalOpen(true);
     } else if (activeTab === "departments") {
@@ -242,7 +247,7 @@ export default function WorkersManager({
   const getNewButtonLabel = () => {
     switch (activeTab) {
       case "workers":
-        return "עובד חדש";
+        return departments.length === 0 ? "מחלקה חדשה" : "עובד חדש";
       case "departments":
         return "מחלקה חדשה";
       case "onboarding":
@@ -255,7 +260,7 @@ export default function WorkersManager({
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+          <h1 className="text-3xl md:text-4xl font-bold bg-linear-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
             ניהול עובדים
           </h1>
           <p className="text-gray-600 mt-1">
@@ -264,7 +269,7 @@ export default function WorkersManager({
         </div>
         <button
           onClick={handleNewClick}
-          className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-xl font-medium hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl hover:scale-[1.02]"
+          className="flex items-center gap-2 bg-linear-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-xl font-medium hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl hover:scale-[1.02]"
         >
           <Plus className="h-5 w-5" />
           {getNewButtonLabel()}
@@ -307,7 +312,7 @@ export default function WorkersManager({
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all ${
               activeTab === tab.id
-                ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md"
+                ? "bg-linear-to-r from-indigo-600 to-purple-600 text-white shadow-md"
                 : "bg-white/80 text-gray-700 hover:bg-white hover:shadow-md border border-gray-200"
             }`}
           >
@@ -369,22 +374,51 @@ export default function WorkersManager({
 
       {/* Content */}
       <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 overflow-visible">
-        {activeTab === "workers" && (
-          <WorkersList
-            workers={workers}
-            departments={departments}
-            searchQuery={searchQuery}
-            statusFilter={statusFilter}
-            departmentFilter={departmentFilter}
-            onEdit={(worker) => {
-              setEditingWorker(worker as Worker);
-              setIsWorkerModalOpen(true);
-            }}
-            onDelete={(id) => {
-              setWorkers(workers.filter((w) => w.id !== id));
-            }}
-          />
-        )}
+        {activeTab === "workers" &&
+          (departments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+              <div className="bg-purple-100 p-4 rounded-full mb-6 relative">
+                <div className="absolute inset-0 bg-purple-200 blur-xl opacity-50 rounded-full"></div>
+                <Building2 className="h-12 w-12 text-purple-600 relative z-10" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                טרם נוצרו מחלקות
+              </h3>
+              <p className="text-gray-600 max-w-md mb-8">
+                לפני שניתן להוסיף עובדים, יש ליצור מחלקה אחת לפחות. עובדים
+                מקושרים למחלקות ולכן שלב זה הכרחי.
+              </p>
+              <button
+                onClick={() => {
+                  setEditingDepartment(null);
+                  setIsDepModalOpen(true);
+                }}
+                className="flex items-center gap-2 bg-linear-to-r from-purple-600 to-indigo-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1"
+              >
+                <Plus className="h-6 w-6" />
+                צור מחלקה חדשה
+              </button>
+            </div>
+          ) : (
+            <WorkersList
+              workers={workers}
+              departments={departments}
+              searchQuery={searchQuery}
+              statusFilter={statusFilter}
+              departmentFilter={departmentFilter}
+              onEdit={(worker) => {
+                setEditingWorker(worker as Worker);
+                setIsWorkerModalOpen(true);
+              }}
+              onDelete={(id) => {
+                setWorkers(workers.filter((w) => w.id !== id));
+              }}
+              onAdd={() => {
+                setEditingWorker(null);
+                setIsWorkerModalOpen(true);
+              }}
+            />
+          ))}
         {activeTab === "departments" && (
           <DepartmentsList
             departments={departments}
@@ -478,7 +512,7 @@ function StatCard({
     <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-white/50 shadow-md hover:shadow-lg transition-all">
       <div className="flex items-center gap-3">
         <div
-          className={`p-2.5 rounded-lg bg-gradient-to-br ${colors[color]} text-white`}
+          className={`p-2.5 rounded-lg bg-linear-to-br ${colors[color]} text-white`}
         >
           <Icon className="h-5 w-5" />
         </div>

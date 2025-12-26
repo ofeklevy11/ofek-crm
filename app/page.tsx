@@ -52,6 +52,7 @@ export default async function Home() {
         <DashboardClient
           initialAnalytics={analyticsViews}
           availableTables={tables}
+          user={user}
         />
       </div>
     </div>

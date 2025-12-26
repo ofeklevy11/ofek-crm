@@ -16,8 +16,23 @@ export interface User {
 }
 
 export const USER_FLAGS = [
+  { key: "canViewDashboard", label: "גישה לדאשבורד ראשי" },
   { key: "canViewAutomations", label: "גישה לאוטומציות" },
+  { key: "canViewTables", label: "גישה לטבלאות (CRM)" },
   { key: "canViewAnalytics", label: "גישה לניתוח נתונים" },
+  { key: "canViewCalendar", label: "גישה ליומן" },
+  { key: "canViewFinance", label: "גישה לכספים" },
+  { key: "canViewTasks", label: "גישה למשימות" },
+  { key: "canViewNurtureHub", label: "גישה לטיפוח לקוחות (CRM)" },
+  { key: "canViewWorkflows", label: "גישה לתהליכים" },
+  { key: "canViewServices", label: "גישה לשירותים" },
+  { key: "canViewServiceCalls", label: "גישה לקריאות שירות" },
+  { key: "canViewQuotes", label: "גישה להצעות מחיר" },
+  { key: "canViewFiles", label: "גישה לקבצים" },
+  { key: "canViewChat", label: "גישה לצ׳אט" },
+  { key: "canViewWorkers", label: "גישה לניהול עובדים" },
+  { key: "canViewUsers", label: "גישה לניהול משתמשים" },
+
   { key: "canCreateTasks", label: "יצירת משימות" },
   { key: "canViewAllTasks", label: "צפייה בכל המשימות" },
   { key: "canManageTables", label: "ניהול טבלאות (יצירה/עריכה/מחיקה)" },
