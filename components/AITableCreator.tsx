@@ -11,8 +11,19 @@ import {
   X,
   ArrowRight,
   Table as TableIcon,
+  Trash2,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 interface Message {
   role: "user" | "model";
@@ -141,6 +152,34 @@ export default function AITableCreator({
     } finally {
       setLoading(false);
     }
+  };
+
+  const updateField = (index: number, updates: Partial<FieldRow>) => {
+    if (!currentSchema) return;
+    const newFields = [...currentSchema.fields];
+    newFields[index] = { ...newFields[index], ...updates };
+    setCurrentSchema({ ...currentSchema, fields: newFields });
+  };
+
+  const removeField = (index: number) => {
+    if (!currentSchema) return;
+    const newFields = currentSchema.fields.filter((_, i) => i !== index);
+    setCurrentSchema({ ...currentSchema, fields: newFields });
+  };
+
+  const addField = () => {
+    if (!currentSchema) return;
+    setCurrentSchema({
+      ...currentSchema,
+      fields: [
+        ...currentSchema.fields,
+        {
+          name: `field_${currentSchema.fields.length + 1}`,
+          label: "שדה חדש",
+          type: "text",
+        },
+      ],
+    });
   };
 
   const handleCreate = async () => {
@@ -298,57 +337,155 @@ export default function AITableCreator({
         {/* Preview Section */}
         {currentSchema && (
           <div className="flex-1 overflow-y-auto bg-card border-r border-border p-8 flex flex-col md:w-1/2 h-full">
-            <div className="mb-6 pb-6 border-b border-border">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <div className="text-xs font-bold text-primary uppercase tracking-widest mb-1">
-                    תצוגה מקדימה
-                  </div>
-                  <h3 className="text-2xl font-bold text-foreground">
-                    {currentSchema.tableName}
-                  </h3>
+            <div className="flex-1 space-y-6 mb-6 overflow-y-auto pr-2">
+              {/* Table Details */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>שם הטבלה</Label>
+                  <Input
+                    value={currentSchema.tableName}
+                    onChange={(e) =>
+                      setCurrentSchema({
+                        ...currentSchema,
+                        tableName: e.target.value,
+                      })
+                    }
+                  />
                 </div>
-                <span className="bg-muted text-muted-foreground px-3 py-1 rounded-full text-xs font-mono">
-                  {currentSchema.slug}
-                </span>
+                <div className="space-y-2">
+                  <Label>מזהה (Slug)</Label>
+                  <Input
+                    value={currentSchema.slug}
+                    onChange={(e) =>
+                      setCurrentSchema({
+                        ...currentSchema,
+                        slug: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <Label>תיאור</Label>
+                  <Input
+                    value={currentSchema.description || ""}
+                    onChange={(e) =>
+                      setCurrentSchema({
+                        ...currentSchema,
+                        description: e.target.value,
+                      })
+                    }
+                  />
+                </div>
               </div>
-              {currentSchema.description && (
-                <p className="text-muted-foreground">
-                  {currentSchema.description}
-                </p>
-              )}
-            </div>
 
-            <div className="flex-1 space-y-3 mb-6 overflow-y-auto pr-2">
-              <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
-                <TableIcon className="h-4 w-4" />
-                שדות ({currentSchema.fields.length})
-              </h4>
-              {currentSchema.fields.map((field, idx) => (
-                <div
-                  key={idx}
-                  className="bg-muted/30 border border-border rounded-lg p-3 flex items-center justify-between group hover:border-primary/30 transition"
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold text-foreground flex items-center gap-2">
+                  <TableIcon className="h-4 w-4" />
+                  שדות ({currentSchema.fields.length})
+                </h4>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={addField}
+                  className="gap-2"
                 >
-                  <div>
-                    <div className="font-medium text-foreground">
-                      {field.label}
+                  <Plus className="h-3 w-3" /> הוסף שדה
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                {currentSchema.fields.map((field, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-muted/30 border border-border rounded-lg p-4 space-y-3 group hover:border-primary/30 transition shadow-sm"
+                  >
+                    <div className="flex gap-3">
+                      <div className="flex-1 space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          שם תצוגה
+                        </Label>
+                        <Input
+                          value={field.label}
+                          onChange={(e) =>
+                            updateField(idx, { label: e.target.value })
+                          }
+                          className="h-9 bg-white"
+                        />
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          שם במערכת (אנגלית)
+                        </Label>
+                        <Input
+                          value={field.name}
+                          onChange={(e) =>
+                            updateField(idx, { name: e.target.value })
+                          }
+                          className="h-9 bg-white font-mono text-xs"
+                        />
+                      </div>
+                      <div className="w-[140px] space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          סוג שדה
+                        </Label>
+                        <Select
+                          value={field.type}
+                          onValueChange={(val) =>
+                            updateField(idx, { type: val })
+                          }
+                        >
+                          <SelectTrigger className="h-9 bg-white">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="text">טקסט</SelectItem>
+                            <SelectItem value="number">מספר</SelectItem>
+                            <SelectItem value="date">תאריך</SelectItem>
+                            <SelectItem value="boolean">כן/לא</SelectItem>
+                            <SelectItem value="select">
+                              רשימה (Select)
+                            </SelectItem>
+                            <SelectItem value="email">אימייל</SelectItem>
+                            <SelectItem value="phone">טלפון</SelectItem>
+                            <SelectItem value="url">קישור</SelectItem>
+                            <SelectItem value="currency">מטבע</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="pt-6">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeField(idx)}
+                          className="h-9 w-9 text-muted-foreground hover:text-red-500 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground font-mono">
-                      {field.name}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs bg-background text-muted-foreground border border-border px-2 py-0.5 rounded shadow-sm">
-                      {field.type}
-                    </span>
-                    {field.options && (
-                      <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded">
-                        רשימה
-                      </span>
+
+                    {field.type === "select" && (
+                      <div className="space-y-1 bg-blue-50/50 p-3 rounded-md border border-blue-100">
+                        <Label className="text-xs text-blue-700 font-medium">
+                          אפשרויות הבחירה (מופרדות בפסיקים)
+                        </Label>
+                        <Textarea
+                          value={field.options || ""}
+                          onChange={(e) =>
+                            updateField(idx, { options: e.target.value })
+                          }
+                          placeholder="אפשרות 1, אפשרות 2, אפשרות 3..."
+                          className="bg-white min-h-[60px] text-sm"
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                          הזן את כל האפשרויות שיופיעו ברשימה הנפתחת, מופרדות
+                          בפסיק.
+                        </p>
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
 
             <div className="pt-6 border-t border-border flex gap-3">

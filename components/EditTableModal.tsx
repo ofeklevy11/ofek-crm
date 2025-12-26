@@ -208,6 +208,7 @@ export default function EditTableModal({
       <DialogContent
         className="max-w-4xl max-h-[90vh] overflow-y-auto"
         dir="rtl"
+        onKeyDown={(e) => e.stopPropagation()}
       >
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">ערוך טבלה</DialogTitle>

@@ -70,6 +70,17 @@ export default function UserMenu({ user }: UserMenuProps) {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {user.company && (
+          <>
+            <div className="px-2 py-1.5 text-sm text-muted-foreground bg-muted/30 mx-1 rounded-md mb-1">
+              <span className="text-xs block mb-0.5">ארגון:</span>
+              <span className="font-medium text-foreground">
+                {user.company.name}
+              </span>
+            </div>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <div className="p-2 space-y-1">
           <div className="flex justify-between items-center px-2 py-1.5 text-sm">
             <span className="text-muted-foreground flex items-center gap-2">

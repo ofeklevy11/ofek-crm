@@ -19,7 +19,15 @@ export interface ViewConfig {
   // For filtering
   filters?: Array<{
     field: string;
-    operator: "equals" | "contains" | "includes";
+    operator:
+      | "equals"
+      | "contains"
+      | "includes"
+      | "gt"
+      | "lt"
+      | "gte"
+      | "lte"
+      | "neq";
     value: any;
   }>;
   // Date filters - NEW

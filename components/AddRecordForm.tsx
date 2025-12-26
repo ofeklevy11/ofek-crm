@@ -34,9 +34,11 @@ interface SchemaField {
 export default function AddRecordForm({
   tableId,
   schema,
+  tableName,
 }: {
   tableId: number;
   schema: SchemaField[];
+  tableName: string;
 }) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -97,7 +99,7 @@ export default function AddRecordForm({
         <div className="flex flex-col h-full w-full">
           <DialogHeader className="p-6 border-b bg-background/95 backdrop-blur shrink-0">
             <DialogTitle className="text-3xl font-bold text-center">
-              רשומה חדשה
+              רשומה חדשה בטבלת {tableName}
             </DialogTitle>
           </DialogHeader>
 
@@ -107,7 +109,7 @@ export default function AddRecordForm({
               onSubmit={handleSubmit}
               className="space-y-10 py-8 px-6 sm:px-10 w-full"
             >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-12 w-full">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 w-full">
                 {schema
                   .filter(
                     (field, index, self) =>
@@ -129,7 +131,7 @@ export default function AddRecordForm({
                                 [field.name]: e.target.value,
                               })
                             }
-                            className="flex h-16 w-full items-center justify-between rounded-xl border border-input bg-background px-4 py-2 text-xl ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none shadow-sm"
+                            className="flex h-11 w-full items-center justify-between rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-zinc-950 px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none shadow-sm"
                           >
                             <option value="">בחר...</option>
                             {field.options?.map((opt, i) => (
@@ -162,7 +164,7 @@ export default function AddRecordForm({
                                 [field.name]: e.target.value === "true",
                               })
                             }
-                            className="flex h-16 w-full items-center justify-between rounded-xl border border-input bg-background px-4 py-2 text-xl ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none shadow-sm"
+                            className="flex h-11 w-full items-center justify-between rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-zinc-950 px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none shadow-sm"
                           >
                             <option value="">בחר...</option>
                             <option value="true">כן</option>
@@ -187,7 +189,7 @@ export default function AddRecordForm({
                               [field.name]: e.target.value,
                             })
                           }
-                          className="min-h-[200px] text-xl p-4 rounded-xl resize-y shadow-sm"
+                          className="min-h-[120px] text-base p-3 rounded-md resize-y shadow-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-zinc-950 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           placeholder={`הזן ${field.label}...`}
                         />
                       ) : field.type === "radio" ? (
@@ -230,7 +232,7 @@ export default function AddRecordForm({
                                 [field.name]: selected,
                               });
                             }}
-                            className="flex min-h-[200px] w-full items-center justify-between rounded-xl border border-input bg-background px-4 py-2 text-xl ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
+                            className="flex min-h-[120px] w-full items-center justify-between rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-zinc-950 px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
                           >
                             {field.options?.map((opt, i) => (
                               <option
@@ -279,13 +281,13 @@ export default function AddRecordForm({
                           )}
                         </div>
                       ) : field.type === "relation" && field.relationTableId ? (
-                        <div className="bg-muted/10  rounded-xl border border-input overflow-hidden">
+                        <div className="bg-white dark:bg-zinc-950 rounded-xl border border-gray-300 dark:border-gray-600 overflow-hidden">
                           <RelationPicker
                             tableId={field.relationTableId!}
                             value={formData[field.name]}
                             allowMultiple={field.allowMultiple}
                             displayField={field.displayField}
-                            className="min-h-16 text-xl p-4 w-full"
+                            className="min-h-11 text-base p-3 w-full"
                             onChange={async (val) => {
                               const newFormData = {
                                 ...formData,
@@ -359,10 +361,10 @@ export default function AddRecordForm({
                                   : e.target.value,
                             })
                           }
-                          className={`h-16 text-xl px-4 rounded-xl shadow-sm ${
+                          className={`h-11 text-base px-3 rounded-md shadow-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-zinc-950 ${
                             field.type === "lookup" ||
                             field.type === "automation"
-                              ? "bg-muted text-muted-foreground cursor-not-allowed"
+                              ? "bg-muted text-muted-foreground cursor-not-allowed border-none"
                               : ""
                           }`}
                           placeholder={

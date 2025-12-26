@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import AdvancedSearch from "./AdvancedSearch";
+import { applyFilters } from "@/lib/viewProcessor";
 import {
   Table,
   TableBody,
@@ -331,7 +332,7 @@ export default function RecordTable({
     window.location.href = `/api/tables/${tableId}/export?format=${format}`;
   };
 
-  const getWinningLegendColor = (recordData: any) => {
+  const getWinningLegendColor = (record: any) => {
     const legendViews =
       views?.filter(
         (v) =>
@@ -344,8 +345,18 @@ export default function RecordTable({
     const matches: Array<{ color: string; priority: number }> = [];
 
     for (const legendView of legendViews) {
+      // Check if record matches view filters
+      const { filters, dateFilter } = legendView.config;
+      if ((filters && filters.length > 0) || dateFilter) {
+        // Construct a record object compatible with applyFilters
+        // applyFilters expects { data, createdAt, ... }
+        // The 'record' passed here is the full record object from state
+        const filtered = applyFilters([record], filters || [], dateFilter);
+        if (filtered.length === 0) continue;
+      }
+
       const { legendField, colorMappings } = legendView.config;
-      const fieldValue = recordData?.[legendField];
+      const fieldValue = record.data?.[legendField];
       const values = Array.isArray(fieldValue) ? fieldValue : [fieldValue];
 
       for (const value of values) {
@@ -364,10 +375,12 @@ export default function RecordTable({
     return matches[0].color;
   };
 
-  const getRowColorClass = (recordData: any) => {
-    if (getWinningLegendColor(recordData)) {
+  const getRowColorClass = (record: any) => {
+    if (getWinningLegendColor(record)) {
       return "";
     }
+
+    const recordData = record.data;
 
     if (
       activeBooleanFieldName &&
@@ -406,8 +419,8 @@ export default function RecordTable({
     }
   };
 
-  const getRowStyle = (recordData: any): React.CSSProperties | undefined => {
-    const color = getWinningLegendColor(recordData);
+  const getRowStyle = (record: any): React.CSSProperties | undefined => {
+    const color = getWinningLegendColor(record);
     if (color) {
       return {
         backgroundColor: `${color}33`,
@@ -554,11 +567,11 @@ export default function RecordTable({
                     />
                   </TableHead>
                   <TableHead className="w-[50px]"></TableHead>
-                  <TableHead className="w-[80px] text-right">#</TableHead>
+                  <TableHead className="w-[80px] text-center">ID</TableHead>
                   {uniqueFields.map((field) => (
                     <TableHead
                       key={field.name}
-                      className={`whitespace-nowrap text-right ${
+                      className={`whitespace-nowrap text-center ${
                         ["tags", "multi-select"].includes(field.type)
                           ? "min-w-[200px]"
                           : "min-w-[150px]"
@@ -567,7 +580,7 @@ export default function RecordTable({
                       {field.label}
                     </TableHead>
                   ))}
-                  <TableHead className="whitespace-nowrap text-right">
+                  <TableHead className="whitespace-nowrap text-center">
                     נוצר ב
                   </TableHead>
                 </TableRow>
@@ -580,11 +593,11 @@ export default function RecordTable({
                       if (el) recordRefs.current[record.id] = el;
                     }}
                     className={cn(
-                      getRowColorClass(record.data),
+                      getRowColorClass(record),
                       highlightedRecordId === record.id &&
                         "ring-2 ring-primary ring-inset bg-primary/5"
                     )}
-                    style={getRowStyle(record.data)}
+                    style={getRowStyle(record)}
                   >
                     <TableCell className="text-center">
                       <Checkbox
@@ -608,7 +621,7 @@ export default function RecordTable({
                         </Button>
                       )}
                     </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
+                    <TableCell className="font-mono text-xs text-muted-foreground text-center">
                       {record.id}
                     </TableCell>
 
@@ -621,13 +634,13 @@ export default function RecordTable({
                           setEditingField(field.name);
                         }}
                         className={cn(
-                          "align-top text-right",
+                          "align-middle text-center",
                           canEdit &&
                             "cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                         )}
                         title={canEdit ? "לחץ לעריכה" : ""}
                       >
-                        <div className="max-h-[100px] max-w-[300px] overflow-y-auto custom-scrollbar">
+                        <div className="max-h-[100px] max-w-[300px] overflow-y-auto custom-scrollbar mx-auto">
                           {(() => {
                             const val = record.data?.[field.name];
                             if (val === null || val === undefined || val === "")
@@ -800,7 +813,7 @@ export default function RecordTable({
                       </TableCell>
                     ))}
 
-                    <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                    <TableCell className="text-muted-foreground text-xs whitespace-nowrap text-center">
                       {record.createdAt
                         ? new Date(record.createdAt).toLocaleDateString("he-IL")
                         : "-"}

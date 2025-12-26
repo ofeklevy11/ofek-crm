@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AITableCreator from "@/components/AITableCreator";
@@ -67,7 +67,18 @@ export default function TablesDashboard({
     [...initialTables].sort((a, b) => (a.order || 0) - (b.order || 0))
   );
 
+  // Sync state when props change (e.g. after router.refresh())
+  useEffect(() => {
+    setTables(
+      [...initialTables].sort((a, b) => (a.order || 0) - (b.order || 0))
+    );
+  }, [initialTables]);
+
   const [categories, setCategories] = useState<Category[]>(initialCategories);
+
+  useEffect(() => {
+    setCategories(initialCategories);
+  }, [initialCategories]);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");

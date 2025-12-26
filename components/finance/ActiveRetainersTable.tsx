@@ -26,30 +26,30 @@ export default function ActiveRetainersTable({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Client
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Amount
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Next Due
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                לקוח
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
+                סכום
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                תאריך הבא
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                פעולות
               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {retainers.map((retainer) => (
               <tr key={retainer.id} className="hover:bg-gray-50 group">
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-right">
                   <div className="text-sm font-medium text-gray-900">
                     {retainer.client.name}
                   </div>
                   <div className="text-xs text-gray-500">{retainer.title}</div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-right">
                   <div className="text-sm font-semibold text-gray-900">
                     ₪{Number(retainer.amount).toLocaleString()}
                   </div>
@@ -57,25 +57,25 @@ export default function ActiveRetainersTable({
                     {retainer.frequency}
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
                   {retainer.nextDueDate
                     ? new Date(retainer.nextDueDate).toLocaleDateString("he-IL")
                     : "-"}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <td className="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
                   <div className="flex items-center justify-end gap-3">
                     <button
                       onClick={() => handleEdit(retainer)}
-                      className="text-gray-600 hover:text-blue-600 flex items-center gap-1 transition-colors bg-gray-100 hover:bg-blue-50 px-3 py-1.5 rounded-md text-xs font-medium"
+                      className="text-gray-600 hover:text-[#4f95ff] flex items-center gap-1 transition-colors bg-gray-100 hover:bg-[#4f95ff]/10 px-3 py-1.5 rounded-md text-xs font-medium"
                     >
                       <Edit2 className="w-3 h-3" />
-                      Edit
+                      ערוך
                     </button>
                     <Link
                       href={`/finance/clients/${retainer.clientId}`}
-                      className="text-blue-600 hover:text-blue-900 text-xs font-medium hover:underline"
+                      className="text-[#4f95ff] hover:text-[#4f95ff]/80 text-xs font-medium hover:underline"
                     >
-                      Manage
+                      ניהול
                     </Link>
                   </div>
                 </td>
@@ -84,7 +84,7 @@ export default function ActiveRetainersTable({
             {retainers.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                  No active retainers found.
+                  לא נמצאו ריטיינרים פעילים.
                 </td>
               </tr>
             )}

@@ -75,9 +75,13 @@ export async function addFinanceRecord(data: CreateFinanceRecordInput) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
+  console.log(
+    `[Finance] Creating record for User ${user.id} in Company ${user.companyId}`
+  );
+
   const record = await prisma.financeRecord.create({
     data: {
-      companyId: user.companyId,
+      companyId: user.companyId, // Explicitly use the authenticated user's company ID
       title: data.title,
       amount: new Prisma.Decimal(data.amount),
       type: data.type,

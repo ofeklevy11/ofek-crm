@@ -84,10 +84,23 @@ export async function createTable(data: {
       return { success: false, error: "אין לך הרשאה ליצור טבלאות" };
     }
 
+    // Ensure slug uniqueness
+    let finalSlug = slug;
+    let counter = 0;
+    while (true) {
+      const existing = await prisma.tableMeta.findFirst({
+        where: { slug: finalSlug, companyId: user.companyId },
+      });
+      if (!existing) break;
+      finalSlug = `${slug}-${Math.random().toString(36).substring(2, 7)}`;
+      counter++;
+      if (counter > 10) throw new Error("Could not generate unique slug");
+    }
+
     const table = await prisma.tableMeta.create({
       data: {
         name,
-        slug,
+        slug: finalSlug,
         schemaJson: (schemaJson || {}) as any,
         companyId: user.companyId,
         createdBy: user.id,
@@ -99,9 +112,19 @@ export async function createTable(data: {
     revalidatePath("/tables");
 
     return { success: true, data: table };
-  } catch (error) {
+  } catch (error: any) {
+    // Check if it's a unique constraint violation just in case our check missed it (race condition)
+    if (error.code === "P2002") {
+      return {
+        success: false,
+        error: "שגיאה: שם המזהה (slug) כבר קיים במערכת. אנא נסה שם אחר.",
+      };
+    }
     console.error("Error creating table:", error);
-    return { success: false, error: "Failed to create table" };
+    return {
+      success: false,
+      error: "Failed to create table: " + (error.message || "Unknown error"),
+    };
   }
 }
 

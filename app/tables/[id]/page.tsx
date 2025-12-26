@@ -146,7 +146,13 @@ export default async function TableDetailsPage({
             </div>
             <div className="flex gap-3 items-center w-full md:w-auto">
               {canSearch && <SearchInput />}
-              {canEdit && <AddRecordForm tableId={tableId} schema={schema} />}
+              {canEdit && (
+                <AddRecordForm
+                  tableId={tableId}
+                  schema={schema}
+                  tableName={table.name}
+                />
+              )}
             </div>
           </div>
         </div>

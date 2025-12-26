@@ -22,7 +22,7 @@ export default async function Navbar() {
                 href="/"
                 className="text-xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent"
               >
-                CRM למנהל
+                {user?.company?.name || "CRM למנהל"}
               </Link>
             </div>
             <div className="hidden md:flex items-center space-x-6 space-x-reverse overflow-x-auto scrollbar-hide">

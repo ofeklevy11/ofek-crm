@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 export default async function FinancePage() {
   const user = await getCurrentUser();
@@ -23,47 +24,116 @@ export default async function FinancePage() {
   }
 
   // Fetch real data from database - CRITICAL: Filter by client.companyId
-  const [transactions, activeRetainers, pendingPayments, stats] =
-    await Promise.all([
-      prisma.transaction.findMany({
-        where: {
-          client: { companyId: user.companyId },
-        },
-        include: { client: true },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-      }),
-      prisma.retainer.findMany({
-        where: {
-          status: "active",
-          client: { companyId: user.companyId },
-        },
-        include: { client: true },
-        orderBy: { nextDueDate: "asc" },
-      }),
-      prisma.oneTimePayment.findMany({
-        where: {
-          status: { in: ["pending", "overdue"] },
-          client: { companyId: user.companyId },
-        },
-        include: { client: true },
-        orderBy: { dueDate: "asc" },
-      }),
-      // Other stats if needed
-      prisma.client.count({
-        where: { companyId: user.companyId },
-      }),
-    ]);
+  const [
+    transactions,
+    activeRetainers,
+    pendingPayments,
+    clientCount,
+    transactionStats,
+  ] = await Promise.all([
+    prisma.transaction.findMany({
+      where: {
+        client: { companyId: user.companyId },
+      },
+      include: { client: true },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    }),
+    prisma.retainer.findMany({
+      where: {
+        status: "active",
+        client: { companyId: user.companyId },
+      },
+      include: { client: true },
+      orderBy: { nextDueDate: "asc" },
+    }),
+    prisma.oneTimePayment.findMany({
+      where: {
+        status: { in: ["pending", "overdue"] },
+        client: { companyId: user.companyId },
+      },
+      include: { client: true },
+      orderBy: { dueDate: "asc" },
+    }),
+    // Other stats if needed
+    prisma.client.count({
+      where: { companyId: user.companyId },
+    }),
+    // Calculate Total Paid Revenue (from OneTimePayment) for correct Collection Rate
+    prisma.oneTimePayment.aggregate({
+      _sum: { amount: true },
+      _count: { id: true }, // Get count as well
+      where: {
+        client: { companyId: user.companyId },
+        OR: [
+          {
+            status: {
+              in: [
+                "paid",
+                "completed",
+                "PAID",
+                "COMPLETED",
+                "manual-marked-paid",
+              ],
+            },
+          },
+          { paidDate: { not: null } },
+        ],
+      },
+    }),
+  ]);
 
   // Calculate totals
-  const totalRevenue = transactions
-    .filter((t) => t.status === "manual-marked-paid")
-    .reduce((sum, t) => sum + Number(t.amount), 0);
+  const totalPaidAmount = Number(transactionStats?._sum?.amount || 0);
+  const paidCount = Number(transactionStats?._count?.id || 0);
+
+  // Growth Stats Calculation (Dynamic)
+  const now = new Date();
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  // 1. New Retainers this month
+  const newRetainersThisMonth = activeRetainers.filter(
+    (r) => new Date(r.createdAt) >= firstDayOfMonth
+  ).length;
+
+  // 2. Overdue Payments Count
+  const overdueCount = pendingPayments.filter(
+    (p) =>
+      p.status === "overdue" ||
+      (p.status === "pending" && p.dueDate && new Date(p.dueDate) < now)
+  ).length;
+
+  // 3. New MRR Added this month
+  const newMrrThisMonth = activeRetainers
+    .filter((r) => new Date(r.createdAt) >= firstDayOfMonth)
+    .reduce((sum, r) => {
+      const amount = Number(r.amount);
+      const freq = r.frequency ? r.frequency.toLowerCase() : "monthly";
+      if (freq === "yearly") return sum + amount / 12;
+      return sum + amount;
+    }, 0);
+
+  // MRR Calculation
+  const mrr = activeRetainers.reduce((sum, r) => {
+    const amount = Number(r.amount);
+    const freq = r.frequency ? r.frequency.toLowerCase() : "monthly";
+    if (freq === "yearly") return sum + amount / 12;
+    if (freq === "weekly") return sum + amount * 4.33;
+    return sum + amount; // Default to monthly
+  }, 0);
 
   const outstandingDebt = pendingPayments.reduce(
     (sum, p) => sum + Number(p.amount),
     0
   );
+
+  // Rate = Paid Count / (Paid Count + Outstanding Count)
+  // User expects 50% for 1 paid and 1 unpaid.
+  const outstandingCount = pendingPayments.length;
+  const totalCount = paidCount + outstandingCount;
+
+  const collectionRate =
+    totalCount > 0 ? Math.round((paidCount / totalCount) * 100) : 0;
 
   // Serialize data (convert Decimal to number) for Client Components
   const serializedActiveRetainers = activeRetainers.map((r) => ({
@@ -77,30 +147,28 @@ export default async function FinancePage() {
   }));
 
   return (
-    <div className="p-8 space-y-8 bg-gray-50/50 min-h-screen">
+    <div className="p-8 space-y-8 bg-[#f4f8f8] min-h-screen" dir="rtl">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
-            Financial Hub
+            ניהול כספים
           </h1>
-          <p className="text-gray-500 mt-1">
-            Overview of your business finances
-          </p>
+          <p className="text-gray-500 mt-1">סקירה כללית של כספי העסק</p>
         </div>
         <div className="flex gap-3">
           <Link
             href="/finance/retainers/new"
             className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm font-medium"
           >
-            <Plus className="w-4 h-4 mr-2" />
-            New Retainer
+            <Plus className="w-4 h-4 ml-2" />
+            ריטיינר חדש
           </Link>
           <Link
             href="/finance/payments/new"
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
+            className="inline-flex items-center px-4 py-2 bg-[#4f95ff] text-white rounded-lg hover:bg-[#4f95ff]/90 transition-colors shadow-sm font-medium"
           >
-            <Plus className="w-4 h-4 mr-2" />
-            New Payment
+            <Plus className="w-4 h-4 ml-2" />
+            תשלום חדש
           </Link>
         </div>
       </div>
@@ -120,7 +188,7 @@ export default async function FinancePage() {
               </p>
             </div>
             <div className="bg-white/20 p-2 rounded-full backdrop-blur-sm">
-              <ArrowRight className="w-6 h-6 text-white" />
+              <ArrowRight className="w-6 h-6 text-white rotate-180" />
             </div>
           </div>
           {/* Background Decorations */}
@@ -129,79 +197,81 @@ export default async function FinancePage() {
         </div>
       </Link>
 
-      {/* Stats Cards */}
-      <FinancialStats
-        totalRevenue={totalRevenue}
-        outstandingDebt={outstandingDebt}
-        activeRetainers={activeRetainers.length}
-        collectionRate={98} // Placeholder for now
-      />
-
       {/* Navigation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Link
           href="/finance/clients"
-          className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all"
+          className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-[#4f95ff]/50 hover:shadow-md transition-all"
         >
           <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors">
-              <CreditCard className="w-6 h-6 text-blue-600" />
+            <div className="p-3 bg-[#4f95ff]/10 rounded-lg group-hover:bg-[#4f95ff]/20 transition-colors">
+              <CreditCard className="w-6 h-6 text-[#4f95ff]" />
             </div>
-            <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-blue-500 transition-colors" />
+            <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-[#4f95ff] transition-colors rotate-180" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900">Clients</h3>
+          <h3 className="text-lg font-semibold text-gray-900">לקוחות</h3>
           <p className="text-gray-500 text-sm mt-1">
-            Manage client profiles and history
+            ניהול תיקי לקוחות והיסטוריה
           </p>
         </Link>
         <Link
           href="/finance/retainers"
-          className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-purple-300 hover:shadow-md transition-all"
+          className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-[#a24ec1]/50 hover:shadow-md transition-all"
         >
           <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-purple-50 rounded-lg group-hover:bg-purple-100 transition-colors">
-              <Repeat className="w-6 h-6 text-purple-600" />
+            <div className="p-3 bg-[#a24ec1]/10 rounded-lg group-hover:bg-[#a24ec1]/20 transition-colors">
+              <Repeat className="w-6 h-6 text-[#a24ec1]" />
             </div>
-            <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-purple-500 transition-colors" />
+            <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-[#a24ec1] transition-colors rotate-180" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900">Retainers</h3>
+          <h3 className="text-lg font-semibold text-gray-900">ריטיינרים</h3>
           <p className="text-gray-500 text-sm mt-1">
-            {activeRetainers.length} active recurring payments
+            {activeRetainers.length} תשלומים חוזרים פעילים
           </p>
         </Link>
         <Link
           href="/finance/payments"
-          className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-green-300 hover:shadow-md transition-all"
+          className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-[#4f95ff]/50 hover:shadow-md transition-all"
         >
           <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-green-50 rounded-lg group-hover:bg-green-100 transition-colors">
-              <CreditCard className="w-6 h-6 text-green-600" />
+            <div className="p-3 bg-[#4f95ff]/10 rounded-lg group-hover:bg-[#4f95ff]/20 transition-colors">
+              <CreditCard className="w-6 h-6 text-[#4f95ff]" />
             </div>
-            <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-green-500 transition-colors" />
+            <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-[#4f95ff] transition-colors rotate-180" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900">Payments</h3>
+          <h3 className="text-lg font-semibold text-gray-900">תשלומים</h3>
           <p className="text-gray-500 text-sm mt-1">
-            {pendingPayments.length} pending one-time payments
+            {pendingPayments.length} תשלומים חד-פעמיים בהמתנה
           </p>
         </Link>
         <Link
           href="/finance/fixed-expenses"
-          className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-orange-300 hover:shadow-md transition-all"
+          className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-[#a24ec1]/50 hover:shadow-md transition-all"
         >
           <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-orange-50 rounded-lg group-hover:bg-orange-100 transition-colors">
-              <Briefcase className="w-6 h-6 text-orange-600" />
+            <div className="p-3 bg-[#a24ec1]/10 rounded-lg group-hover:bg-[#a24ec1]/20 transition-colors">
+              <Briefcase className="w-6 h-6 text-[#a24ec1]" />
             </div>
-            <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-orange-500 transition-colors" />
+            <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-[#a24ec1] transition-colors rotate-180" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900">
-            Fixed Expenses
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-900">הוצאות קבועות</h3>
           <p className="text-gray-500 text-sm mt-1">
-            Manage recurring monthly payments
+            ניהול הוצאות חודשיות קבועות
           </p>
         </Link>
       </div>
+
+      {/* Stats Cards */}
+      <FinancialStats
+        totalRevenue={mrr}
+        outstandingDebt={outstandingDebt}
+        activeRetainers={activeRetainers.length}
+        collectionRate={collectionRate}
+        newMrr={newMrrThisMonth}
+        overdueCount={overdueCount}
+        newRetainersCount={newRetainersThisMonth}
+        totalCollected={totalPaidAmount}
+      />
 
       {/* Goal Planning - Prominent Section */}
       <div className="rounded-xl overflow-hidden shadow-sm border border-indigo-100 bg-linear-to-r from-indigo-50 to-purple-50 p-1 relative group">
@@ -210,22 +280,22 @@ export default async function FinancePage() {
           className="flex items-center justify-between p-6 bg-white/60 hover:bg-white/90 rounded-lg transition-all"
         >
           <div className="flex items-center gap-6">
-            <div className="p-4 bg-indigo-100 rounded-xl group-hover:scale-110 transition-transform">
-              <TrendingUp className="w-8 h-8 text-indigo-600" />
+            <div className="p-4 bg-[#4f95ff]/10 rounded-xl group-hover:scale-110 transition-transform">
+              <TrendingUp className="w-8 h-8 text-[#4f95ff]" />
             </div>
             <div>
               <h3 className="text-2xl font-bold text-gray-900 mb-1">
-                Goal Planning & Forecasting
+                תכנון יעדים ותחזיות
               </h3>
               <p className="text-gray-600 font-medium">
-                Set monthly targets, track KPIs, and get AI-powered insights to
-                grow your business.
+                הגדר יעדים חודשיים, עקוב אחר מדדים וקבל תובנות מבוססות AI לצמיחת
+                העסק.
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-indigo-600 font-bold bg-white px-4 py-2 rounded-lg shadow-sm group-hover:shadow-md transition-all">
-            Start Planning
-            <ArrowRight className="w-5 h-5" />
+          <div className="flex items-center gap-2 text-[#4f95ff] font-bold bg-white px-4 py-2 rounded-lg shadow-sm group-hover:shadow-md transition-all">
+            התחל לתכנן
+            <ArrowRight className="w-5 h-5 rotate-180" />
           </div>
         </Link>
       </div>
@@ -235,14 +305,14 @@ export default async function FinancePage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
           <div className="p-6 border-b border-gray-200 flex justify-between items-center">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Repeat className="w-5 h-5 text-purple-600" />
-              Active Retainers
+              <Repeat className="w-5 h-5 text-[#a24ec1]" />
+              ריטיינרים פעילים
             </h2>
             <Link
               href="/finance/retainers"
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              className="text-sm text-[#4f95ff] hover:text-[#4f95ff]/80 font-medium"
             >
-              View All
+              צפה בהכל
             </Link>
           </div>
           <ActiveRetainersTable
@@ -254,14 +324,14 @@ export default async function FinancePage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
           <div className="p-6 border-b border-gray-200 flex justify-between items-center">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-orange-500" />
-              Pending Payments
+              <AlertCircle className="w-5 h-5 text-[#4f95ff]" />
+              תשלומים בהמתנה
             </h2>
             <Link
               href="/finance/payments"
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              className="text-sm text-[#4f95ff] hover:text-[#4f95ff]/80 font-medium"
             >
-              View All
+              צפה בהכל
             </Link>
           </div>
           <PendingPaymentsTable

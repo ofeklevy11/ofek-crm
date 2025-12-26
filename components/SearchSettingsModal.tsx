@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Search, Eye, Settings, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface SchemaField {
   name: string;
@@ -100,150 +101,222 @@ export default function SearchSettingsModal({
   return (
     <Dialog open={true} onOpenChange={() => onClose()}>
       <DialogContent
-        className="max-w-3xl w-full max-h-[90vh] flex flex-col p-0 overflow-hidden"
+        className="max-w-[95vw] md:max-w-[50vw] w-full max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden border-0 shadow-2xl sm:rounded-2xl"
         dir="rtl"
       >
-        <DialogHeader className="p-6 border-b bg-muted/20">
-          <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-            <Settings className="h-6 w-6 text-primary" />
-            הגדרות חיפוש מתקדם
-          </DialogTitle>
-          <p className="text-sm text-muted-foreground mt-1">
-            בחר את העמודות לחיפוש והצגת תוצאות
-          </p>
-        </DialogHeader>
+        {/* Header */}
+        <div className="bg-gradient-to-l from-blue-50/50 to-white dark:from-blue-950/20 dark:to-background border-b p-6 pb-5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm">
+              <Settings className="h-5 w-5" />
+            </div>
+            <div>
+              <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                הגדרות חיפוש מתקדם
+              </DialogTitle>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                התאם אישית את אופן החיפוש והצגת התוצאות במערכת
+              </p>
+            </div>
+          </div>
+        </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Searchable Fields */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <Search className="h-4 w-4 text-primary" />
-                  עמודות לחיפוש
-                </h3>
-                <div className="flex gap-2 text-xs">
-                  <span
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto bg-gray-50/50 dark:bg-background/50 p-6 md:p-8">
+          <div className="grid md:grid-cols-2 gap-8 h-full">
+            {/* Searchable Fields Column */}
+            <div className="flex flex-col h-full bg-white dark:bg-card border rounded-xl shadow-sm overflow-hidden">
+              <div className="p-4 border-b bg-blue-50/30 dark:bg-blue-900/10 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-md bg-blue-100/50 dark:bg-blue-800/30 text-blue-600 dark:text-blue-400">
+                    <Search className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-sm text-right">
+                      עמודות לחיפוש
+                    </h3>
+                    <p className="text-[10px] text-muted-foreground text-right">
+                      לפי אילו שדות נחפש?
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={selectAllSearchable}
-                    className="text-primary cursor-pointer hover:underline"
+                    className="h-7 text-xs px-2 hover:bg-blue-100/50 hover:text-blue-700"
                   >
-                    בחר הכל
-                  </span>
-                  <span className="text-muted-foreground">|</span>
-                  <span
+                    הכל
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={clearAllSearchable}
-                    className="text-muted-foreground cursor-pointer hover:underline"
+                    className="h-7 text-xs px-2 hover:bg-red-100/50 hover:text-red-700"
                   >
                     נקה
-                  </span>
+                  </Button>
                 </div>
               </div>
 
-              <ScrollArea className="h-64 rounded-md border p-4 bg-muted/10">
-                <div className="space-y-3">
-                  {availableFields.map((field) => (
-                    <div
-                      key={field.name}
-                      className="flex items-center space-x-2 space-x-reverse"
-                    >
-                      <Checkbox
-                        id={`search-${field.name}`}
-                        checked={searchableFields.includes(field.name)}
-                        onCheckedChange={() =>
-                          toggleSearchableField(field.name)
-                        }
-                      />
-                      <Label
-                        htmlFor={`search-${field.name}`}
-                        className="flex-1 cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              <ScrollArea className="flex-1 p-2">
+                <div className="space-y-1 p-1" dir="rtl">
+                  {availableFields.map((field) => {
+                    const isSelected = searchableFields.includes(field.name);
+                    return (
+                      <div
+                        key={field.name}
+                        onClick={() => toggleSearchableField(field.name)}
+                        className={cn(
+                          "flex items-center gap-3 p-2.5 rounded-lg border transition-all cursor-pointer group hover:shadow-sm",
+                          isSelected
+                            ? "bg-blue-50/50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800"
+                            : "bg-transparent border-transparent hover:bg-gray-50 dark:hover:bg-accent/50 hover:border-gray-200"
+                        )}
                       >
-                        <div className="flex flex-col gap-0.5">
-                          <span>{field.label}</span>
-                          <span className="text-[10px] text-muted-foreground font-mono">
+                        <Checkbox
+                          id={`search-${field.name}`}
+                          checked={isSelected}
+                          onCheckedChange={() =>
+                            toggleSearchableField(field.name)
+                          }
+                          className={cn(
+                            "transition-all data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600",
+                            isSelected ? "shadow-sm scale-110" : ""
+                          )}
+                        />
+                        <div className="flex-1 flex flex-col text-right items-start">
+                          <span
+                            className={cn(
+                              "text-sm font-medium transition-colors",
+                              isSelected
+                                ? "text-blue-700 dark:text-blue-300"
+                                : "text-gray-700 dark:text-gray-300"
+                            )}
+                          >
+                            {field.label}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground uppercase opacity-70">
                             {field.type}
                           </span>
                         </div>
-                      </Label>
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </div>
               </ScrollArea>
 
-              <div className="bg-primary/5 border border-primary/20 rounded-md p-3">
-                <p className="text-sm text-primary">
-                  <strong>{searchableFields.length}</strong> עמודות נבחרו לחיפוש
-                </p>
+              <div className="p-3 border-t bg-gray-50 dark:bg-muted/20 text-center">
+                <span className="text-xs font-medium text-muted-foreground">
+                  {searchableFields.length} נבחרו
+                </span>
               </div>
             </div>
 
-            {/* Display Fields */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <Eye className="h-4 w-4 text-green-600 dark:text-green-400" />
-                  עמודות להצגה
-                </h3>
-                <div className="flex gap-2 text-xs">
-                  <span
+            {/* Display Fields Column */}
+            <div className="flex flex-col h-full bg-white dark:bg-card border rounded-xl shadow-sm overflow-hidden">
+              <div className="p-4 border-b bg-green-50/30 dark:bg-green-900/10 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-md bg-green-100/50 dark:bg-green-800/30 text-green-600 dark:text-green-400">
+                    <Eye className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-sm text-right">
+                      עמודות להצגה
+                    </h3>
+                    <p className="text-[10px] text-muted-foreground text-right">
+                      מה נראה בתוצאות?
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={selectAllDisplay}
-                    className="text-primary cursor-pointer hover:underline"
+                    className="h-7 text-xs px-2 hover:bg-green-100/50 hover:text-green-700"
                   >
-                    בחר הכל
-                  </span>
-                  <span className="text-muted-foreground">|</span>
-                  <span
+                    הכל
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={clearAllDisplay}
-                    className="text-muted-foreground cursor-pointer hover:underline"
+                    className="h-7 text-xs px-2 hover:bg-red-100/50 hover:text-red-700"
                   >
                     נקה
-                  </span>
+                  </Button>
                 </div>
               </div>
 
-              <ScrollArea className="h-64 rounded-md border p-4 bg-muted/10">
-                <div className="space-y-3">
-                  {availableFields.map((field) => (
-                    <div
-                      key={field.name}
-                      className="flex items-center space-x-2 space-x-reverse"
-                    >
-                      <Checkbox
-                        id={`display-${field.name}`}
-                        checked={displayFields.includes(field.name)}
-                        onCheckedChange={() => toggleDisplayField(field.name)}
-                        className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600 dark:data-[state=checked]:bg-green-500"
-                      />
-                      <Label
-                        htmlFor={`display-${field.name}`}
-                        className="flex-1 cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              <ScrollArea className="flex-1 p-2">
+                <div className="space-y-1 p-1" dir="rtl">
+                  {availableFields.map((field) => {
+                    const isSelected = displayFields.includes(field.name);
+                    return (
+                      <div
+                        key={field.name}
+                        onClick={() => toggleDisplayField(field.name)}
+                        className={cn(
+                          "flex items-center gap-3 p-2.5 rounded-lg border transition-all cursor-pointer group hover:shadow-sm",
+                          isSelected
+                            ? "bg-green-50/50 border-green-200 dark:bg-green-900/20 dark:border-green-800"
+                            : "bg-transparent border-transparent hover:bg-gray-50 dark:hover:bg-accent/50 hover:border-gray-200"
+                        )}
                       >
-                        <div className="flex flex-col gap-0.5">
-                          <span>{field.label}</span>
-                          <span className="text-[10px] text-muted-foreground font-mono">
+                        <Checkbox
+                          id={`display-${field.name}`}
+                          checked={isSelected}
+                          onCheckedChange={() => toggleDisplayField(field.name)}
+                          className={cn(
+                            "transition-all data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600",
+                            isSelected ? "shadow-sm scale-110" : ""
+                          )}
+                        />
+                        <div className="flex-1 flex flex-col text-right items-start">
+                          <span
+                            className={cn(
+                              "text-sm font-medium transition-colors",
+                              isSelected
+                                ? "text-green-700 dark:text-green-300"
+                                : "text-gray-700 dark:text-gray-300"
+                            )}
+                          >
+                            {field.label}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground uppercase opacity-70">
                             {field.type}
                           </span>
                         </div>
-                      </Label>
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </div>
               </ScrollArea>
-
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-900 rounded-md p-3">
-                <p className="text-sm text-green-700 dark:text-green-300">
-                  <strong>{displayFields.length}</strong> עמודות נבחרו להצגה
-                </p>
+              <div className="p-3 border-t bg-gray-50 dark:bg-muted/20 text-center">
+                <span className="text-xs font-medium text-muted-foreground">
+                  {displayFields.length} נבחרו
+                </span>
               </div>
             </div>
           </div>
         </div>
 
-        <DialogFooter className="md:justify-start gap-2 p-6 border-t bg-muted/20">
-          <Button onClick={handleSave} className="gap-2">
+        {/* Footer */}
+        <DialogFooter className="md:justify-start gap-3 p-6 border-t bg-white dark:bg-card">
+          <Button
+            onClick={handleSave}
+            className="flex-1 md:flex-none gap-2 bg-blue-600 hover:bg-blue-700 text-white min-w-[140px] shadow-sm hover:shadow-md transition-all"
+          >
             <Settings className="h-4 w-4" />
             שמור הגדרות
           </Button>
-          <Button variant="outline" onClick={onClose}>
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="flex-1 md:flex-none hover:bg-gray-100 min-w-[100px]"
+          >
             ביטול
           </Button>
         </DialogFooter>

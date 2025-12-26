@@ -5,7 +5,14 @@ export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // Define public paths that don't require authentication
-  const publicPaths = ["/", "/login", "/api/auth/login", "/api/auth/logout"];
+  const publicPaths = [
+    "/",
+    "/login",
+    "/register",
+    "/api/auth/login",
+    "/api/auth/logout",
+    "/api/auth/register",
+  ];
 
   // Check if the path is strictly one of the public paths
   // or if it's a static asset (nextjs internals, images, etc)

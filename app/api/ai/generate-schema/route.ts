@@ -59,7 +59,7 @@ export async function POST(req: Request) {
           "name": "string (camelCase or snake_case system name, unique, ENGLISH only)",
           "label": "string (Human readable label, matches user language)",
           "type": "string (Allowed types: text, textarea, number, date, boolean, url, select, multi-select, tags, radio, relation, lookup, email, phone)",
-          "options": "string (comma separated list of options, ONLY for select, multi-select, radio, tags. Otherwise empty string)",
+          "options": "string (comma separated list of options, ONLY for select, multi-select, radio, tags. Otherwise empty string. IMPORTANT: Generate these options in HEBREW (or the user's request language), DO NOT use English keys unless explicitly asked. These options are what the user sees in the dropdown.)",
           "defaultValue": "string (optional default value)",
           "relationTableId": "number (optional, if type is relation)",
            "displayField": "string (optional, if type is relation)"

@@ -63,6 +63,11 @@ export default function DashboardClient({
   const [selectedTable, setSelectedTable] = useState<string>("");
   const [selectedItem, setSelectedItem] = useState<string>("");
 
+  const hasTables = availableTables && availableTables.length > 0;
+  const hasAnalytics = initialAnalytics && initialAnalytics.length > 0;
+  const hasViews = availableTables?.some((t) => t.views?.length > 0);
+  const canAddWidget = hasAnalytics || hasViews;
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -79,9 +84,30 @@ export default function DashboardClient({
     const saved = localStorage.getItem("dashboard_widgets");
     if (saved) {
       try {
-        setWidgets(JSON.parse(saved));
+        const parsed: DashboardWidget[] = JSON.parse(saved);
+        // Filter widgets to ensure they belong to existing tables/analytics
+        // This prevents "ghost" widgets from previous users/sessions
+        const validWidgets = parsed.filter((w) => {
+          if (w.type === "ANALYTICS") {
+            return initialAnalytics.some(
+              (a) => String(a.id) === String(w.referenceId)
+            );
+          } else if (w.type === "TABLE") {
+            const table = availableTables.find(
+              (t) => String(t.id) === String(w.tableId)
+            );
+            if (!table || !table.views) return false;
+            return table.views.some(
+              (v: any) => String(v.id) === String(w.referenceId)
+            );
+          }
+          return false;
+        });
+
+        setWidgets(validWidgets);
       } catch (e) {
         console.error("Failed to parse saved dashboard", e);
+        // If error, do nothing or set empty
       }
     } else {
       // Default: Add some analytics if available
@@ -96,7 +122,7 @@ export default function DashboardClient({
       }
     }
     setIsLoaded(true);
-  }, []); // Run once on mount
+  }, [initialAnalytics, availableTables]); // Add dependencies to ensure valid check
 
   // Save to LocalStorage
   useEffect(() => {
@@ -207,7 +233,12 @@ export default function DashboardClient({
         </h2>
         <button
           onClick={() => setIsAddModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-sm font-medium text-sm"
+          disabled={!canAddWidget}
+          className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg transition shadow-sm font-medium text-sm ${
+            !canAddWidget
+              ? "opacity-50 cursor-not-allowed"
+              : "hover:bg-blue-700"
+          }`}
         >
           <Plus size={16} />
           הוסף וידג׳ט
@@ -256,15 +287,39 @@ export default function DashboardClient({
             })}
 
             {widgets.length === 0 && (
-              <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-400 bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl">
-                <LayoutDashboard size={48} className="mb-4 opacity-20" />
-                <p>הדאשבורד שלך ריק</p>
-                <button
-                  onClick={() => setIsAddModalOpen(true)}
-                  className="mt-4 text-blue-600 font-medium hover:underline"
-                >
-                  לחץ כאן להוספת נתונים
-                </button>
+              <div className="col-span-full py-16 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 border-2 border-dashed border-gray-200 rounded-3xl text-center px-4">
+                <LayoutDashboard size={64} className="mb-6 opacity-10" />
+
+                {!hasTables ? (
+                  <div className="max-w-md space-y-2">
+                    <h3 className="text-xl font-bold text-gray-800">
+                      הגיע הזמן ליצור את הטבלה הראשונה
+                    </h3>
+                    <a
+                      href="/tables"
+                      className="inline-block mt-4 px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
+                    >
+                      עבור לטבלאות
+                    </a>
+                  </div>
+                ) : !canAddWidget ? (
+                  <div className="max-w-lg space-y-2">
+                    <p className="text-gray-500 font-medium">
+                      על מנת להוסיף ווידגט ללוח הבקרה תצטרכו ליצור תצוגה בתוך
+                      טבלה או אנליטיקה בעמוד "אנליטיקות"
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p>הדאשבורד שלך ריק</p>
+                    <button
+                      onClick={() => setIsAddModalOpen(true)}
+                      className="mt-4 text-blue-600 font-medium hover:underline"
+                    >
+                      לחץ כאן להוספת נתונים
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>

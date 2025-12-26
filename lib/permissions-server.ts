@@ -19,6 +19,12 @@ export async function getUserById(userId: number): Promise<User | null> {
         allowedWriteTableIds: true,
         permissions: true,
         tablePermissions: true,
+        company: {
+          select: {
+            name: true,
+            slug: true,
+          },
+        },
       },
     });
     // Cast to User to ensure type compatibility (Prisma Json type vs User interface)
@@ -58,6 +64,12 @@ export async function getCurrentUser(): Promise<User | null> {
         allowedWriteTableIds: true,
         permissions: true,
         tablePermissions: true,
+        company: {
+          select: {
+            name: true,
+            slug: true,
+          },
+        },
       },
     });
 

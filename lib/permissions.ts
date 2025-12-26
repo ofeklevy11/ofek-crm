@@ -9,6 +9,10 @@ export interface User {
   allowedWriteTableIds: number[];
   permissions?: Record<string, boolean>; // JSON field in DB
   tablePermissions?: Record<string, "read" | "write" | "none">; // JSON field in DB
+  company?: {
+    name: string;
+    slug: string;
+  };
 }
 
 export const USER_FLAGS = [

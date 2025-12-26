@@ -42,6 +42,7 @@ export default function AddViewModal({
 
   // Filter state for count aggregation
   const [filterField, setFilterField] = useState("");
+  const [filterOperator, setFilterOperator] = useState("equals");
   const [filterValue, setFilterValue] = useState("");
 
   // Date filter state
@@ -86,18 +87,7 @@ export default function AddViewModal({
         config.groupByField = groupByField;
         if (targetField) config.targetField = targetField;
         if (targetFields.length > 0) config.targetFields = targetFields;
-      } else if (aggregationType === "count") {
-        // For count, add filter if specified
-        if (filterField && filterValue) {
-          config.filters = [
-            {
-              field: filterField,
-              operator: "equals",
-              value: filterValue,
-            },
-          ];
-        }
-      } else {
+      } else if (aggregationType !== "count") {
         // For sum/avg, targetField is required
         config.targetField = targetField;
         if (targetFields.length > 0) config.targetFields = targetFields;
@@ -116,6 +106,21 @@ export default function AddViewModal({
           })
         );
       }
+    }
+
+    // Apply General Filters (for stats and aggregation)
+    if (
+      (viewType === "stats" || viewType === "aggregation") &&
+      filterField &&
+      filterValue
+    ) {
+      config.filters = [
+        {
+          field: filterField,
+          operator: filterOperator as any,
+          value: filterValue,
+        },
+      ];
     }
 
     // Add date filter if enabled
@@ -274,6 +279,154 @@ export default function AddViewModal({
             </div>
           )}
 
+          {/* General Filters - for Stats and Aggregation */}
+          {(viewType === "stats" || viewType === "aggregation") && (
+            <div className="border-t border-gray-200 pt-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    סינון לפי שדה (אופציונלי)
+                  </label>
+                  <select
+                    value={filterField}
+                    onChange={(e) => {
+                      setFilterField(e.target.value);
+                      setFilterValue(""); // Reset value when field changes
+                      setFilterOperator("equals"); // Reset operator
+                    }}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  >
+                    <option value="">ללא סינון נוסף</option>
+                    {schema.map((field) => (
+                      <option key={field.name} value={field.name}>
+                        {field.label} ({field.type})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {filterField
+                      ? `התצוגה תכלול רק רשומות שבשדה "${
+                          schema.find((f) => f.name === filterField)?.label
+                        }" יש את הערך שתבחר למטה`
+                      : "הצג את כל הרשומות (ללא סינון)"}
+                  </p>
+                </div>
+
+                {filterField &&
+                  (() => {
+                    const field = schema.find((f) => f.name === filterField);
+                    if (!field) return null;
+
+                    return (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          ערך לסינון <span className="text-red-500">*</span>
+                        </label>
+                        {field.type === "select" && field.options ? (
+                          <div className="relative">
+                            <select
+                              value={filterValue}
+                              onChange={(e) => setFilterValue(e.target.value)}
+                              required={!!filterField}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none"
+                            >
+                              <option value="">בחר ערך...</option>
+                              {field.options.map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center px-4 text-gray-700">
+                              <svg
+                                className="fill-current h-4 w-4"
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 20 20"
+                              >
+                                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                              </svg>
+                            </div>
+                          </div>
+                        ) : field.type === "boolean" ? (
+                          <div className="relative">
+                            <select
+                              value={filterValue}
+                              onChange={(e) => setFilterValue(e.target.value)}
+                              required={!!filterField}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none"
+                            >
+                              <option value="">בחר...</option>
+                              <option value="true">כן</option>
+                              <option value="false">לא</option>
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center px-4 text-gray-700">
+                              <svg
+                                className="fill-current h-4 w-4"
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 20 20"
+                              >
+                                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                              </svg>
+                            </div>
+                          </div>
+                        ) : field.type === "number" ? (
+                          <div className="flex gap-2">
+                            <select
+                              value={filterOperator}
+                              onChange={(e) =>
+                                setFilterOperator(e.target.value)
+                              }
+                              className="w-1/3 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
+                            >
+                              <option value="equals">שווה ל (=)</option>
+                              <option value="gt">גדול מ (&gt;)</option>
+                              <option value="lt">קטן מ (&lt;)</option>
+                              <option value="gte">גדול או שווה (&ge;)</option>
+                              <option value="lte">קטן או שווה (&le;)</option>
+                              <option value="neq">שונה מ (!=)</option>
+                            </select>
+                            <input
+                              type="number"
+                              value={filterValue}
+                              onChange={(e) => setFilterValue(e.target.value)}
+                              required={!!filterField}
+                              placeholder="מספר..."
+                              className="w-2/3 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                            />
+                          </div>
+                        ) : field.type === "date" ? (
+                          <input
+                            type="date"
+                            value={filterValue}
+                            onChange={(e) => setFilterValue(e.target.value)}
+                            required={!!filterField}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                          />
+                        ) : (
+                          <input
+                            type="text"
+                            value={filterValue}
+                            onChange={(e) => setFilterValue(e.target.value)}
+                            required={!!filterField}
+                            placeholder={`הכנס ${
+                              field.type === "text" ||
+                              field.type === "long-text"
+                                ? "טקסט"
+                                : "ערך"
+                            }...`}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                          />
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">
+                          סוג שדה: {field.type}
+                        </p>
+                      </div>
+                    );
+                  })()}
+              </div>
+            </div>
+          )}
+
           {/* Aggregation-specific options */}
           {viewType === "aggregation" && (
             <>
@@ -376,131 +529,40 @@ export default function AddViewModal({
                     </p>
                   </div>
                 </>
-              ) : aggregationType === "count" ? (
-                <div className="space-y-4">
+              ) : (
+                aggregationType !== "count" && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      שדה לפילטר (אופציונלי)
+                      שדה לחישוב <span className="text-red-500">*</span>
                     </label>
                     <select
-                      value={filterField}
-                      onChange={(e) => {
-                        setFilterField(e.target.value);
-                        setFilterValue(""); // Reset value when field changes
-                      }}
+                      value={targetField}
+                      onChange={(e) => setTargetField(e.target.value)}
+                      required
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                     >
-                      <option value="">ספירה כללית - כל הרשומות</option>
-                      {schema.map((field) => (
-                        <option key={field.name} value={field.name}>
-                          {field.label} ({field.type})
-                        </option>
-                      ))}
+                      <option value="">בחר שדה מספרי...</option>
+                      {schema
+                        .filter((f) => f.type === "number")
+                        .map((field) => (
+                          <option key={field.name} value={field.name}>
+                            {field.label}
+                          </option>
+                        ))}
                     </select>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {filterField
-                        ? `תספור רק רשומות שבשדה "${
-                            schema.find((f) => f.name === filterField)?.label
-                          }" יש את הערך שתבחר למטה`
-                        : "תספור את כל הרשומות בטבלה (ללא פילטר)"}
-                    </p>
+                    {schema.filter((f) => f.type === "number").length === 0 ? (
+                      <p className="text-xs text-red-500 mt-1">
+                        ⚠️ אין שדות מספריים בטבלה הזו. הוסף שדה מסוג "מספר"
+                        בהגדרות הטבלה כדי להשתמש בחישובים.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-1">
+                        השדה שעליו יבוצע החישוב (
+                        {aggregationType === "sum" ? "סכום" : "ממוצע"})
+                      </p>
+                    )}
                   </div>
-
-                  {filterField &&
-                    (() => {
-                      const field = schema.find((f) => f.name === filterField);
-                      if (!field) return null;
-
-                      return (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            ערך לחיפוש <span className="text-red-500">*</span>
-                          </label>
-                          {field.type === "select" && field.options ? (
-                            <select
-                              value={filterValue}
-                              onChange={(e) => setFilterValue(e.target.value)}
-                              required
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                            >
-                              <option value="">בחר ערך...</option>
-                              {field.options.map((option) => (
-                                <option key={option} value={option}>
-                                  {option}
-                                </option>
-                              ))}
-                            </select>
-                          ) : field.type === "number" ? (
-                            <input
-                              type="number"
-                              value={filterValue}
-                              onChange={(e) => setFilterValue(e.target.value)}
-                              required
-                              placeholder="הכנס מספר..."
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                            />
-                          ) : field.type === "date" ? (
-                            <input
-                              type="date"
-                              value={filterValue}
-                              onChange={(e) => setFilterValue(e.target.value)}
-                              required
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                            />
-                          ) : (
-                            <input
-                              type="text"
-                              value={filterValue}
-                              onChange={(e) => setFilterValue(e.target.value)}
-                              required
-                              placeholder={`הכנס ${
-                                field.type === "text" ||
-                                field.type === "long-text"
-                                  ? "טקסט"
-                                  : "ערך"
-                              }...`}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                            />
-                          )}
-                          <p className="text-xs text-gray-500 mt-1">
-                            סוג שדה: {field.type}
-                          </p>
-                        </div>
-                      );
-                    })()}
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    שדה לחישוב <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={targetField}
-                    onChange={(e) => setTargetField(e.target.value)}
-                    required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  >
-                    <option value="">בחר שדה מספרי...</option>
-                    {schema
-                      .filter((f) => f.type === "number")
-                      .map((field) => (
-                        <option key={field.name} value={field.name}>
-                          {field.label}
-                        </option>
-                      ))}
-                  </select>
-                  {schema.filter((f) => f.type === "number").length === 0 ? (
-                    <p className="text-xs text-red-500 mt-1">
-                      ⚠️ אין שדות מספריים בטבלה הזו. הוסף שדה מסוג "מספר"
-                      בהגדרות הטבלה כדי להשתמש בחישובים.
-                    </p>
-                  ) : (
-                    <p className="text-xs text-gray-500 mt-1">
-                      השדה שעליו יבוצע החישוב (
-                      {aggregationType === "sum" ? "סכום" : "ממוצע"})
-                    </p>
-                  )}
-                </div>
+                )
               )}
             </>
           )}
@@ -633,107 +695,109 @@ export default function AddViewModal({
             </div>
           )}
 
-          {/* Date Filter Section - for all view types */}
-          <div className="border-t border-gray-200 pt-6">
-            <div className="flex items-center justify-between mb-4">
-              <label className="block text-sm font-medium text-gray-700">
-                📅 פילטר לפי תאריך (אופציונלי)
-              </label>
-              <button
-                type="button"
-                onClick={() => setUseDateFilter(!useDateFilter)}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
-                  useDateFilter
-                    ? "bg-blue-100 text-blue-700"
-                    : "bg-gray-100 text-gray-600"
-                }`}
-              >
-                {useDateFilter ? "ON" : "OFF"}
-              </button>
-            </div>
-
-            {useDateFilter && (
-              <div className="space-y-4 bg-blue-50 p-4 rounded-lg">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    בחר שדה תאריך <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={dateField}
-                    onChange={(e) => setDateField(e.target.value)}
-                    required={useDateFilter}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  >
-                    <option value="">בחר שדה...</option>
-                    {schema
-                      .filter(
-                        (f) =>
-                          f.type === "date" ||
-                          f.name.toLowerCase().includes("date") ||
-                          f.name.toLowerCase().includes("created")
-                      )
-                      .map((field) => (
-                        <option key={field.name} value={field.name}>
-                          {field.label}
-                        </option>
-                      ))}
-                    <option value="createdAt">תאריך יצירה (createdAt)</option>
-                    <option value="updatedAt">תאריך עדכון (updatedAt)</option>
-                  </select>
-                  <p className="text-xs text-gray-600 mt-1">
-                    התצוגה תציג רק רשומות מהתקופה שנבחרה
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    טווח תאריכים
-                  </label>
-                  <select
-                    value={dateFilterType}
-                    onChange={(e) =>
-                      setDateFilterType(
-                        e.target.value as "week" | "month" | "custom" | "all"
-                      )
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  >
-                    <option value="all">🗓️ כל הזמנים (ללא פילטר)</option>
-                    <option value="week">📅 7 ימים אחרונים</option>
-                    <option value="month">📆 30 ימים אחרונים</option>
-                    <option value="custom">🔧 טווח מותאם אישית</option>
-                  </select>
-                </div>
-
-                {dateFilterType === "custom" && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        מתאריך
-                      </label>
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        עד תאריך
-                      </label>
-                      <input
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                      />
-                    </div>
-                  </div>
-                )}
+          {/* Date Filter Section - for non-stats views (stats has its own time range) */}
+          {viewType !== "stats" && (
+            <div className="border-t border-gray-200 pt-6">
+              <div className="flex items-center justify-between mb-4">
+                <label className="block text-sm font-medium text-gray-700">
+                  📅 פילטר לפי תאריך (אופציונלי)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setUseDateFilter(!useDateFilter)}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                    useDateFilter
+                      ? "bg-blue-100 text-blue-700"
+                      : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {useDateFilter ? "ON" : "OFF"}
+                </button>
               </div>
-            )}
-          </div>
+
+              {useDateFilter && (
+                <div className="space-y-4 bg-blue-50 p-4 rounded-lg">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      בחר שדה תאריך <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={dateField}
+                      onChange={(e) => setDateField(e.target.value)}
+                      required={useDateFilter}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                    >
+                      <option value="">בחר שדה...</option>
+                      {schema
+                        .filter(
+                          (f) =>
+                            f.type === "date" ||
+                            f.name.toLowerCase().includes("date") ||
+                            f.name.toLowerCase().includes("created")
+                        )
+                        .map((field) => (
+                          <option key={field.name} value={field.name}>
+                            {field.label}
+                          </option>
+                        ))}
+                      <option value="createdAt">תאריך יצירה (createdAt)</option>
+                      <option value="updatedAt">תאריך עדכון (updatedAt)</option>
+                    </select>
+                    <p className="text-xs text-gray-600 mt-1">
+                      התצוגה תציג רק רשומות מהתקופה שנבחרה
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      טווח תאריכים
+                    </label>
+                    <select
+                      value={dateFilterType}
+                      onChange={(e) =>
+                        setDateFilterType(
+                          e.target.value as "week" | "month" | "custom" | "all"
+                        )
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                    >
+                      <option value="all">🗓️ כל הזמנים (ללא פילטר)</option>
+                      <option value="week">📅 7 ימים אחרונים</option>
+                      <option value="month">📆 30 ימים אחרונים</option>
+                      <option value="custom">🔧 טווח מותאם אישית</option>
+                    </select>
+                  </div>
+
+                  {dateFilterType === "custom" && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          מתאריך
+                        </label>
+                        <input
+                          type="date"
+                          value={startDate}
+                          onChange={(e) => setStartDate(e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          עד תאריך
+                        </label>
+                        <input
+                          type="date"
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4 border-t border-gray-100">

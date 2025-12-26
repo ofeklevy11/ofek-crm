@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { Loader2, User, Mail, Lock, Building2 } from "lucide-react";
 
 export default function RegisterForm() {
   const [formData, setFormData] = useState({
@@ -15,7 +15,7 @@ export default function RegisterForm() {
     password: "",
     confirmPassword: "",
     companyName: "",
-    isNewCompany: true,
+    isNewCompany: true, // Always true for now as per logic
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -39,8 +39,8 @@ export default function RegisterForm() {
       return;
     }
 
-    if (formData.isNewCompany && !formData.companyName) {
-      setError("אנא הזן שם ארגון");
+    if (!formData.companyName) {
+      setError("אנא הזן שם חברה/ארגון");
       setLoading(false);
       return;
     }
@@ -56,7 +56,7 @@ export default function RegisterForm() {
           email: formData.email,
           password: formData.password,
           companyName: formData.companyName,
-          isNewCompany: formData.isNewCompany,
+          isNewCompany: true,
         }),
       });
 
@@ -77,138 +77,137 @@ export default function RegisterForm() {
   };
 
   return (
-    <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+    <form className="space-y-5" onSubmit={handleSubmit}>
       <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="name">שם מלא</Label>
-          <Input
-            id="name"
-            name="name"
-            type="text"
-            required
-            placeholder="שם מלא"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className="h-11"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="email">כתובת אימייל</Label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            required
-            placeholder="כתובת אימייל"
-            value={formData.email}
-            onChange={(e) =>
-              setFormData({ ...formData, email: e.target.value })
-            }
-            className="h-11"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="password">סיסמא</Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            required
-            placeholder="סיסמא (לפחות 6 תווים)"
-            value={formData.password}
-            onChange={(e) =>
-              setFormData({ ...formData, password: e.target.value })
-            }
-            className="h-11"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="confirmPassword">אימות סיסמא</Label>
-          <Input
-            id="confirmPassword"
-            name="confirmPassword"
-            type="password"
-            required
-            placeholder="אימות סיסמא"
-            value={formData.confirmPassword}
-            onChange={(e) =>
-              setFormData({ ...formData, confirmPassword: e.target.value })
-            }
-            className="h-11"
-          />
-        </div>
-
-        <div className="pt-2">
-          <Label className="mb-3 block text-base">הרשמה כ:</Label>
-          <div className="flex items-center gap-2 p-4 border rounded-lg bg-muted/50">
-            <input
-              id="newCompany"
-              name="companyType"
-              type="checkbox"
-              checked={formData.isNewCompany}
-              readOnly
-              className="h-4 w-4 text-primary focus:ring-primary border-input rounded"
-            />
-            <label
-              htmlFor="newCompany"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              ארגון חדש - אני רוצה ליצור מערכת חדשה
-            </label>
-          </div>
-        </div>
-
-        {formData.isNewCompany && (
-          <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
-            <Label htmlFor="companyName">שם הארגון</Label>
+        {/* Organization Section */}
+        <div className="bg-muted/30 p-4 rounded-xl border border-muted-foreground/10 space-y-3">
+          <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
+            <Building2 className="h-4 w-4" />
+            פרטי ארגון
+          </h3>
+          <div className="space-y-2">
+            <Label htmlFor="companyName">שם החברה / ארגון</Label>
             <Input
               id="companyName"
               name="companyName"
               type="text"
-              required={formData.isNewCompany}
-              placeholder="שם הארגון שלך"
+              required
+              placeholder="לדוגמה: אופק פתרונות תוכנה בע״מ"
               value={formData.companyName}
               onChange={(e) =>
                 setFormData({ ...formData, companyName: e.target.value })
               }
-              className="h-11"
+              className="h-11 bg-background"
             />
           </div>
-        )}
+        </div>
+
+        {/* User Section */}
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="name">שם מלא</Label>
+            <div className="relative">
+              <User className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" />
+              <Input
+                id="name"
+                name="name"
+                type="text"
+                required
+                placeholder="שם משתמש מלא"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                className="h-11 pr-10"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="email">כתובת אימייל</Label>
+            <div className="relative">
+              <Mail className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" />
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                required
+                placeholder="name@company.com"
+                value={formData.email}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
+                className="h-11 pr-10"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="password">סיסמא</Label>
+              <div className="relative">
+                <Lock className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" />
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  placeholder="******"
+                  value={formData.password}
+                  onChange={(e) =>
+                    setFormData({ ...formData, password: e.target.value })
+                  }
+                  className="h-11 pr-10"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">אימות סיסמא</Label>
+              <Input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                required
+                placeholder="******"
+                value={formData.confirmPassword}
+                onChange={(e) =>
+                  setFormData({ ...formData, confirmPassword: e.target.value })
+                }
+                className="h-11"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {error && (
-        <div className="text-destructive text-sm text-center bg-destructive/10 p-3 rounded-lg border border-destructive/20">
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm p-3 rounded-lg text-center animate-in fade-in slide-in-from-top-1">
           {error}
         </div>
       )}
 
-      <div>
-        <Button
-          type="submit"
-          disabled={loading}
-          className="w-full h-12 text-base"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              נרשם...
-            </>
-          ) : (
-            "הירשם"
-          )}
-        </Button>
-      </div>
+      <Button
+        type="submit"
+        disabled={loading}
+        className="w-full h-12 text-base font-medium bg-linear-to-r from-primary to-secondary hover:opacity-90 transition-opacity shadow-lg shadow-primary/20 mt-2"
+      >
+        {loading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            יוצר חשבון...
+          </>
+        ) : (
+          "סיום והרשמה"
+        )}
+      </Button>
 
-      <div className="text-center">
+      <div className="text-center pt-2">
         <p className="text-sm text-muted-foreground">
           כבר יש לך חשבון?{" "}
           <Link
             href="/login"
-            className="font-medium text-primary hover:text-primary/90 transition-colors"
+            className="font-medium text-primary hover:text-secondary transition-colors"
           >
             התחבר כאן
           </Link>

@@ -38,7 +38,7 @@ export function processView(
     case "aggregation":
       return processAggregationView(config, records, schema);
     case "legend":
-      return processLegendView(config);
+      return processLegendView(config, records, schema);
     case "chart":
       return processChartView(config, records, schema);
     default:
@@ -266,14 +266,59 @@ function processGroupByAggregation(
 }
 
 /**
- * Process legend views (static color/label mappings)
+ * Process legend views (static color/label mappings, enhanced with counts)
  */
-function processLegendView(config: ViewConfig): ProcessedViewData {
+function processLegendView(
+  config: ViewConfig,
+  records: TableRecord[],
+  schema: SchemaField[]
+): ProcessedViewData {
+  // Apply filters first
+  const filteredRecords = applyFilters(
+    records,
+    config.filters || [],
+    config.dateFilter
+  );
+
+  // If we have a legend field, calculate counts
+  const items = config.legendItems || [];
+
+  if (config.legendField) {
+    const fieldName = config.legendField;
+
+    // Calculate counts for each item
+    const itemsWithCounts = items.map((item) => {
+      const count = filteredRecords.filter((record) => {
+        const val = record.data?.[fieldName];
+        // Handle array values (multi-select)
+        if (Array.isArray(val)) {
+          return val.some((v) => String(v) === item.label);
+        }
+        return String(val) === item.label;
+      }).length;
+
+      return {
+        ...item,
+        count,
+      };
+    });
+
+    return {
+      type: "legend",
+      title: config.title,
+      data: {
+        items: itemsWithCounts,
+        totalCount: filteredRecords.length,
+      },
+    };
+  }
+
   return {
     type: "legend",
     title: config.title,
     data: {
-      items: config.legendItems || [],
+      items,
+      totalCount: filteredRecords.length,
     },
   };
 }
@@ -302,11 +347,19 @@ function processChartView(
 /**
  * Apply filters to records based on view configuration
  */
-function applyFilters(
+export function applyFilters(
   records: TableRecord[],
   filters: Array<{
     field: string;
-    operator: "equals" | "contains" | "includes";
+    operator:
+      | "equals"
+      | "contains"
+      | "includes"
+      | "gt"
+      | "lt"
+      | "gte"
+      | "lte"
+      | "neq";
     value: any;
   }>,
   dateFilter?: {
@@ -336,6 +389,16 @@ function applyFilters(
               return recordValue.includes(filter.value);
             }
             return recordValue === filter.value;
+          case "gt":
+            return Number(recordValue) > Number(filter.value);
+          case "lt":
+            return Number(recordValue) < Number(filter.value);
+          case "gte":
+            return Number(recordValue) >= Number(filter.value);
+          case "lte":
+            return Number(recordValue) <= Number(filter.value);
+          case "neq":
+            return recordValue !== filter.value;
           default:
             return true;
         }
