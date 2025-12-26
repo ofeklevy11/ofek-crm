@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { createProduct, updateProduct } from "@/app/actions/products";
 import { useRouter } from "next/navigation";
-// Removed sonner and UI imports
 
 interface Product {
   id: number;
@@ -81,7 +80,7 @@ export function ProductModal({
       onClose();
     } catch (error: any) {
       console.error(error);
-      alert(error.message || "Something went wrong");
+      alert(error.message || "משהו השתבש");
     } finally {
       setLoading(false);
     }
@@ -90,26 +89,25 @@ export function ProductModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center p-6 border-b">
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      dir="rtl"
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center p-6 border-b border-gray-100">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">
-              {productToEdit
-                ? "Edit Service / Product"
-                : "Add New Service / Product"}
+              {productToEdit ? "עריכת שירות / מוצר" : "הוספת שירות / מוצר חדש"}
             </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Configure your offering details.
-            </p>
+            <p className="text-sm text-gray-500 mt-1">הגדר את פרטי ההיצע שלך</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
           >
-            <span className="sr-only">Close</span>
+            <span className="sr-only">סגור</span>
             <svg
-              className="w-6 h-6"
+              className="w-5 h-5"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -124,51 +122,51 @@ export function ProductModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
-                Name
+                שם הפריט
               </label>
               <input
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] outline-none transition-all bg-white"
                 value={formData.name}
                 onChange={(e) =>
                   setFormData({ ...formData, name: e.target.value })
                 }
-                placeholder="e.g., SEO Audit"
+                placeholder="לדוגמה: בדיקת SEO"
               />
             </div>
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
-                Type
+                סוג
               </label>
               <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] outline-none transition-all bg-white"
                 value={formData.type}
                 onChange={(e) =>
                   setFormData({ ...formData, type: e.target.value })
                 }
               >
-                <option value="SERVICE">Service</option>
-                <option value="PRODUCT">Product</option>
-                <option value="PACKAGE">Package</option>
+                <option value="SERVICE">שירות</option>
+                <option value="PRODUCT">מוצר</option>
+                <option value="PACKAGE">חבילה</option>
               </select>
             </div>
           </div>
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
-              Description
+              תיאור
             </label>
             <textarea
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] outline-none transition-all bg-white resize-none"
               value={formData.description}
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
               }
-              placeholder="Internal or customer facing description..."
+              placeholder="תיאור פנימי או ללקוח..."
               rows={3}
             />
           </div>
@@ -176,15 +174,17 @@ export function ProductModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
-                Price (Revenue)
+                מחיר (הכנסה)
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-2.5 text-gray-500">₪</span>
+                <span className="absolute right-4 top-2.5 text-gray-500">
+                  ₪
+                </span>
                 <input
                   type="number"
                   step="0.01"
                   required
-                  className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full pr-10 pl-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] outline-none transition-all bg-white"
                   value={formData.price}
                   onChange={(e) =>
                     setFormData({ ...formData, price: e.target.value })
@@ -194,14 +194,16 @@ export function ProductModal({
             </div>
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
-                Cost (Expense)
+                עלות (הוצאה)
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-2.5 text-gray-500">₪</span>
+                <span className="absolute right-4 top-2.5 text-gray-500">
+                  ₪
+                </span>
                 <input
                   type="number"
                   step="0.01"
-                  className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full pr-10 pl-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] outline-none transition-all bg-white"
                   value={formData.cost}
                   onChange={(e) =>
                     setFormData({ ...formData, cost: e.target.value })
@@ -211,8 +213,8 @@ export function ProductModal({
             </div>
           </div>
 
-          <div className="bg-gray-50 p-3 rounded-md text-sm flex justify-between items-center border border-gray-100">
-            <span className="text-gray-600">Estimated Margin:</span>
+          <div className="bg-[#f4f8f8] p-4 rounded-xl text-sm flex justify-between items-center border border-gray-100">
+            <span className="text-gray-600 font-medium">רווח משוער:</span>
             <div className="font-semibold">
               {(() => {
                 const p = parseFloat(formData.price) || 0;
@@ -221,7 +223,9 @@ export function ProductModal({
                 const percent = p > 0 ? ((margin / p) * 100).toFixed(1) : 0;
                 return (
                   <span
-                    className={margin >= 0 ? "text-green-600" : "text-red-600"}
+                    className={
+                      margin >= 0 ? "text-emerald-600" : "text-rose-600"
+                    }
                   >
                     ₪{margin.toFixed(2)} ({percent}%)
                   </span>
@@ -230,24 +234,20 @@ export function ProductModal({
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <button
-              type="button"
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-              onClick={onClose}
-            >
-              Cancel
-            </button>
+          <div className="flex justify-start gap-3 pt-4 border-t border-gray-100">
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm"
+              className="px-6 py-2.5 text-sm font-medium text-white bg-[#4f95ff] rounded-xl hover:bg-[#3b82f6] disabled:opacity-50 transition-all shadow-lg hover:shadow-xl"
             >
-              {loading
-                ? "Saving..."
-                : productToEdit
-                ? "Save Changes"
-                : "Create"}
+              {loading ? "שומר..." : productToEdit ? "שמור שינויים" : "צור חדש"}
+            </button>
+            <button
+              type="button"
+              className="px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+              onClick={onClose}
+            >
+              ביטול
             </button>
           </div>
         </form>

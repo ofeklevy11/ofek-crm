@@ -4,12 +4,15 @@ import { prisma as db } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
 
-export async function getQuotes() {
+export async function getQuotes(showTrashed: boolean = false) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
   const quotes = await db.quote.findMany({
-    where: { companyId: user.companyId },
+    where: {
+      companyId: user.companyId,
+      isTrashed: showTrashed,
+    },
     include: {
       client: true,
       items: true,
@@ -90,9 +93,22 @@ export async function createQuote(data: {
     0
   );
 
+  // Get the next quote number for this company
+  const lastQuote = await db.quote.findFirst({
+    where: {
+      companyId: user.companyId,
+      quoteNumber: { not: null },
+    },
+    orderBy: { quoteNumber: "desc" },
+    select: { quoteNumber: true },
+  });
+
+  const nextQuoteNumber = (lastQuote?.quoteNumber ?? 0) + 1;
+
   const quote = await db.quote.create({
     data: {
       companyId: user.companyId,
+      quoteNumber: nextQuoteNumber,
       clientId: data.clientId,
       clientName: data.clientName,
       clientEmail: data.clientEmail,
@@ -225,12 +241,25 @@ export async function updateQuote(
   };
 }
 
-export async function deleteQuote(id: string) {
+export async function trashQuote(id: string) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  await db.quote.delete({
+  await db.quote.update({
     where: { id, companyId: user.companyId },
+    data: { isTrashed: true },
+  });
+
+  revalidatePath("/quotes");
+}
+
+export async function restoreQuote(id: string) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+
+  await db.quote.update({
+    where: { id, companyId: user.companyId },
+    data: { isTrashed: false },
   });
 
   revalidatePath("/quotes");

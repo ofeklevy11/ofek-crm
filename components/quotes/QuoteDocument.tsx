@@ -1,20 +1,53 @@
 import React from "react";
 import { Quote, Company, QuoteItem, Product, Client } from "@prisma/client";
 
+// Extend Company type with business settings
+type CompanyWithSettings = Company & {
+  businessType?: string | null;
+  taxId?: string | null;
+  businessAddress?: string | null;
+  businessWebsite?: string | null;
+  businessEmail?: string | null;
+};
+
 // Define the full type including relations
 type FullQuote = Quote & {
-  company: Company;
+  company: CompanyWithSettings;
   client: Client | null;
   items: (QuoteItem & {
     product: Product | null;
   })[];
+  quoteNumber?: number | null;
 };
 
 interface QuoteDocumentProps {
   quote: FullQuote;
 }
 
+// Helper to get business type label in Hebrew
+const getBusinessTypeLabel = (type: string | null | undefined): string => {
+  switch (type) {
+    case "exempt":
+      return "עוסק פטור";
+    case "licensed":
+      return "עוסק מורשה";
+    case "ltd":
+      return "חברה בע״מ";
+    default:
+      return "";
+  }
+};
+
+// Check if business is VAT exempt
+const isVatExempt = (type: string | null | undefined): boolean => {
+  return type === "exempt";
+};
+
 export default function QuoteDocument({ quote }: QuoteDocumentProps) {
+  const businessTypeLabel = getBusinessTypeLabel(quote.company.businessType);
+  const vatExempt = isVatExempt(quote.company.businessType);
+  const vatRate = 0.18;
+
   return (
     <div
       className="max-w-[210mm] mx-auto bg-white p-8 md:p-16 text-sm md:text-base text-right"
@@ -27,7 +60,10 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
             הצעת מחיר
           </h1>
           <p className="text-gray-500 mt-2 font-mono">
-            #{quote.id.slice(-6).toUpperCase()}
+            #
+            {quote.quoteNumber
+              ? String(quote.quoteNumber).padStart(5, "0")
+              : quote.id.slice(-6).toUpperCase()}
           </p>
           <div className="mt-4 space-y-1 text-gray-600">
             <p>
@@ -46,7 +82,11 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
           <h3 className="font-bold text-xl text-gray-900">
             {quote.company.name}
           </h3>
-          <p className="text-gray-500 text-sm">עוסק מורשה / ח.פ</p>
+          {businessTypeLabel && quote.company.taxId && (
+            <p className="text-gray-500 text-sm">
+              {businessTypeLabel} / {quote.company.taxId}
+            </p>
+          )}
         </div>
       </div>
 
@@ -74,11 +114,30 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
         </div>
         <div>
           <h4 className="font-semibold text-primary mb-3">מאת:</h4>
-          <div className="text-gray-700 space-y-1">
-            <p className="font-medium text-gray-900 text-lg">
-              {quote.company.name}
-            </p>
-            <p className="text-sm text-gray-500">מחלקת מכירות</p>
+          <div className="text-gray-700 space-y-1 bg-gray-50 p-4 rounded-lg border border-gray-100">
+            <p className="font-bold text-lg">{quote.company.name}</p>
+            {businessTypeLabel && (
+              <p className="text-sm text-gray-600">{businessTypeLabel}</p>
+            )}
+            {quote.company.taxId && (
+              <p className="text-sm">
+                {quote.company.businessType === "ltd" ? "ח.פ" : "מספר עוסק"}:{" "}
+                {quote.company.taxId}
+              </p>
+            )}
+            {quote.company.businessAddress && (
+              <p className="text-sm text-gray-500">
+                {quote.company.businessAddress}
+              </p>
+            )}
+            {quote.company.businessEmail && (
+              <p className="text-sm">{quote.company.businessEmail}</p>
+            )}
+            {quote.company.businessWebsite && (
+              <p className="text-sm text-primary">
+                {quote.company.businessWebsite}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -140,16 +199,26 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
               ₪{Number(quote.total).toLocaleString()}
             </span>
           </div>
-          <div className="flex justify-between text-gray-600">
-            <span>מע״מ (17%):</span>
-            <span className="font-mono">
-              ₪{(Number(quote.total) * 0.17).toLocaleString()}
-            </span>
-          </div>
+          {vatExempt ? (
+            <div className="flex justify-between text-gray-500 text-sm">
+              <span>פטור ממע״מ</span>
+              <span>-</span>
+            </div>
+          ) : (
+            <div className="flex justify-between text-gray-600">
+              <span>מע״מ (18%):</span>
+              <span className="font-mono">
+                ₪{(Number(quote.total) * vatRate).toLocaleString()}
+              </span>
+            </div>
+          )}
           <div className="flex justify-between border-t border-gray-200 pt-3 text-xl font-bold text-primary">
             <span>סה״כ לתשלום:</span>
             <span className="font-mono">
-              ₪{(Number(quote.total) * 1.17).toLocaleString()}
+              ₪
+              {(
+                Number(quote.total) * (vatExempt ? 1 : 1 + vatRate)
+              ).toLocaleString()}
             </span>
           </div>
         </div>
@@ -167,6 +236,21 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
             : "30 יום מיום הפקתה"}
           .
         </p>
+        {/* Business contact info in footer */}
+        {(quote.company.businessWebsite || quote.company.businessEmail) && (
+          <div className="mt-4 pt-4 border-t border-gray-100 space-y-1">
+            {quote.company.businessWebsite && (
+              <p className="text-sm text-gray-500">
+                {quote.company.businessWebsite}
+              </p>
+            )}
+            {quote.company.businessEmail && (
+              <p className="text-sm text-gray-500">
+                {quote.company.businessEmail}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -155,9 +155,40 @@
 
 /* Utility to hide scrollbar while maintaining scroll functionality */
 .scrollbar-hide {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none !important; /* IE and Edge */
+  scrollbar-width: none !important; /* Firefox */
+  overflow-x: scroll;
+  overflow-y: hidden;
 }
 .scrollbar-hide::-webkit-scrollbar {
-  display: none; /* Chrome, Safari and Opera */
+  display: none !important; /* Chrome, Safari and Opera */
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+.scrollbar-hide::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+.scrollbar-hide::-webkit-scrollbar-thumb {
+  background: transparent !important;
+}
+
+/* Top scrollbar styling */
+.scrollbar-top {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.scrollbar-top::-webkit-scrollbar {
+  height: 12px;
+}
+.scrollbar-top::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 6px;
+}
+.scrollbar-top::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #4f95ff, #a24ec1);
+  border-radius: 6px;
+}
+.scrollbar-top::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, #3b82f6, #9333ea);
 }

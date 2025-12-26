@@ -101,6 +101,10 @@ export default function RecordTable({
     null
   );
   const recordRefs = useRef<Record<number, HTMLTableRowElement>>({});
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const scrollWidthRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
 
   // Fetch related data
   useEffect(() => {
@@ -199,6 +203,26 @@ export default function RecordTable({
     }
     return true;
   });
+
+  // Sync top scrollbar width with table width
+  useEffect(() => {
+    const updateScrollWidth = () => {
+      if (tableScrollRef.current && scrollWidthRef.current) {
+        const tableWidth = tableScrollRef.current.scrollWidth;
+        scrollWidthRef.current.style.width = `${tableWidth}px`;
+      }
+    };
+
+    updateScrollWidth();
+
+    // Use ResizeObserver to detect table size changes
+    const resizeObserver = new ResizeObserver(updateScrollWidth);
+    if (tableScrollRef.current) {
+      resizeObserver.observe(tableScrollRef.current);
+    }
+
+    return () => resizeObserver.disconnect();
+  }, [records, schema]);
 
   const toggleSelectAll = () => {
     if (selectedIds.length === filteredRecords.length) {
@@ -553,7 +577,28 @@ export default function RecordTable({
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div
+            className="overflow-x-auto scrollbar-top"
+            ref={topScrollRef}
+            onScroll={() => {
+              if (tableScrollRef.current && topScrollRef.current) {
+                tableScrollRef.current.scrollLeft =
+                  topScrollRef.current.scrollLeft;
+              }
+            }}
+          >
+            <div style={{ height: "12px" }} ref={scrollWidthRef} />
+          </div>
+          <div
+            className="overflow-x-auto scrollbar-hide"
+            ref={tableScrollRef}
+            onScroll={() => {
+              if (topScrollRef.current && tableScrollRef.current) {
+                topScrollRef.current.scrollLeft =
+                  tableScrollRef.current.scrollLeft;
+              }
+            }}
+          >
             <Table>
               <TableHeader className="bg-muted/30">
                 <TableRow>

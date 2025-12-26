@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Trash, Plus, Printer, Save, ArrowLeft } from "lucide-react";
+import { Trash, Plus, Printer, Save, ArrowRight } from "lucide-react";
 import { createQuote, updateQuote } from "@/app/actions/quotes";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 // removed ui imports
 
 interface QuoteEditorProps {
@@ -131,11 +130,11 @@ export default function QuoteEditor({
     if (loading) return;
 
     if (!formData.clientName) {
-      alert("Client name is required");
+      alert("נדרש שם לקוח");
       return;
     }
     if (items.length === 0) {
-      alert("Add at least one item");
+      alert("הוסף לפחות פריט אחד");
       return;
     }
 
@@ -164,7 +163,7 @@ export default function QuoteEditor({
       if (initialQuote) {
         await updateQuote(initialQuote.id, payload);
         router.refresh();
-        alert("Quote updated successfully");
+        alert("הצעת המחיר עודכנה בהצלחה");
         setLoading(false);
       } else {
         const newQuote = await createQuote(payload);
@@ -174,28 +173,32 @@ export default function QuoteEditor({
       }
     } catch (error: any) {
       console.error(error);
-      alert("Failed to save quote: " + (error.message || "Unknown error"));
+      alert("שגיאה בשמירת ההצעה: " + (error.message || "שגיאה לא ידועה"));
       setLoading(false);
     }
   };
 
   return (
-    <div className="p-6 max-w-[1200px] mx-auto space-y-6">
+    <div className="p-6 max-w-[1200px] mx-auto space-y-6" dir="rtl">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <Link href="/quotes">
+          <a href="/quotes">
             <button className="p-2 hover:bg-gray-100 rounded-full text-gray-600">
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowRight className="w-5 h-5" />
             </button>
-          </Link>
+          </a>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-gray-900">
               {initialQuote
-                ? `Edit Quote #${initialQuote.id.slice(-6).toUpperCase()}`
-                : "New Quote"}
+                ? `עריכת הצעה #${
+                    initialQuote.quoteNumber
+                      ? String(initialQuote.quoteNumber).padStart(5, "0")
+                      : initialQuote.id.slice(-6).toUpperCase()
+                  }`
+                : "הצעת מחיר חדשה"}
             </h1>
             <p className="text-gray-500">
-              {initialQuote ? "Manage quote details" : "Draft a new proposal"}
+              {initialQuote ? "ניהול פרטי ההצעה" : "יצירת הצעה חדשה"}
             </p>
           </div>
         </div>
@@ -207,15 +210,15 @@ export default function QuoteEditor({
                 window.open(`/quotes/${initialQuote.id}/pdf`, "_blank")
               }
             >
-              <Printer className="w-4 h-4" /> Print / PDF
+              <Printer className="w-4 h-4" /> הדפסה / PDF
             </button>
           )}
           <button
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-[#4f95ff] text-white rounded-md hover:bg-[#3d7de0] font-medium transition-colors disabled:opacity-50"
             onClick={handleSave}
             disabled={loading}
           >
-            <Save className="w-4 h-4" /> {loading ? "Saving..." : "Save Quote"}
+            <Save className="w-4 h-4" /> {loading ? "שומר..." : "שמור הצעה"}
           </button>
         </div>
       </div>
@@ -223,19 +226,19 @@ export default function QuoteEditor({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <h3 className="font-semibold text-gray-900">Client Details</h3>
+            <h3 className="font-semibold text-gray-900">פרטי לקוח</h3>
           </div>
           <div className="p-6 space-y-4">
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
-                Select Client
+                בחר לקוח
               </label>
               <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                 value={formData.clientId}
                 onChange={handleClientChange}
               >
-                <option value="new">+ Create New Customer (Manual)</option>
+                <option value="new">+ לקוח חדש (הזנה ידנית)</option>
                 {clients.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -247,10 +250,10 @@ export default function QuoteEditor({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">
-                  Client Name
+                  שם לקוח
                 </label>
                 <input
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                   value={formData.clientName}
                   onChange={(e) =>
                     setFormData({ ...formData, clientName: e.target.value })
@@ -259,10 +262,10 @@ export default function QuoteEditor({
               </div>
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">
-                  Email
+                  דוא״ל
                 </label>
                 <input
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                   value={formData.clientEmail}
                   onChange={(e) =>
                     setFormData({ ...formData, clientEmail: e.target.value })
@@ -271,10 +274,10 @@ export default function QuoteEditor({
               </div>
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">
-                  Phone
+                  טלפון
                 </label>
                 <input
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                   value={formData.clientPhone}
                   onChange={(e) =>
                     setFormData({ ...formData, clientPhone: e.target.value })
@@ -283,10 +286,10 @@ export default function QuoteEditor({
               </div>
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">
-                  Address / Details
+                  כתובת / פרטים נוספים
                 </label>
                 <input
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                   value={formData.clientAddress}
                   onChange={(e) =>
                     setFormData({ ...formData, clientAddress: e.target.value })
@@ -299,33 +302,33 @@ export default function QuoteEditor({
 
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-fit">
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <h3 className="font-semibold text-gray-900">Settings & Status</h3>
+            <h3 className="font-semibold text-gray-900">הגדרות וסטטוס</h3>
           </div>
           <div className="p-6 space-y-4">
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
-                Status
+                סטטוס
               </label>
               <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                 value={formData.status}
                 onChange={(e) =>
                   setFormData({ ...formData, status: e.target.value })
                 }
               >
-                <option value="DRAFT">Draft</option>
-                <option value="SENT">Sent</option>
-                <option value="ACCEPTED">Accepted</option>
-                <option value="REJECTED">Rejected</option>
+                <option value="DRAFT">טיוטה</option>
+                <option value="SENT">נשלחה</option>
+                <option value="ACCEPTED">אושרה</option>
+                <option value="REJECTED">נדחתה</option>
               </select>
             </div>
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
-                Valid Until
+                בתוקף עד
               </label>
               <input
                 type="date"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                 value={formData.validUntil}
                 onChange={(e) =>
                   setFormData({ ...formData, validUntil: e.target.value })
@@ -335,17 +338,17 @@ export default function QuoteEditor({
 
             <div className="border-t pt-4 mt-4">
               <label className="text-sm font-medium text-gray-700">
-                Internal Profitability
+                רווחיות פנימית
               </label>
               <div className="mt-2 text-sm space-y-1 bg-gray-50 p-3 rounded-md border border-gray-100">
                 <div className="flex justify-between">
-                  <span>Revenue:</span> <span>₪{total.toFixed(2)}</span>
+                  <span>הכנסה:</span> <span>₪{total.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-red-500">
-                  <span>Est. Cost:</span> <span>₪{totalCost.toFixed(2)}</span>
+                  <span>עלות משוערת:</span> <span>₪{totalCost.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between font-bold pt-1 border-t border-gray-200 mt-1">
-                  <span>Margin:</span>
+                  <span>רווח:</span>
                   <span
                     className={margin >= 0 ? "text-green-600" : "text-red-600"}
                   >
@@ -360,7 +363,7 @@ export default function QuoteEditor({
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <h3 className="font-semibold text-gray-900">Items</h3>
+          <h3 className="font-semibold text-gray-900">פריטים</h3>
         </div>
         <div className="p-6 space-y-4">
           <div className="space-y-4">
@@ -371,10 +374,10 @@ export default function QuoteEditor({
               >
                 <div className="flex-1 space-y-2">
                   <label className="text-xs font-medium text-gray-500">
-                    Product/Service
+                    מוצר/שירות
                   </label>
                   <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none text-sm bg-white"
                     value={
                       item.productId ? item.productId.toString() : "custom"
                     }
@@ -382,7 +385,7 @@ export default function QuoteEditor({
                       updateItem(index, "productId", e.target.value)
                     }
                   >
-                    <option value="custom">Custom Item</option>
+                    <option value="custom">פריט מותאם אישית</option>
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name} - ₪{p.price}
@@ -390,8 +393,8 @@ export default function QuoteEditor({
                     ))}
                   </select>
                   <textarea
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                    placeholder="Item description"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none text-sm bg-white"
+                    placeholder="תיאור הפריט"
                     value={item.description}
                     onChange={(e) =>
                       updateItem(index, "description", e.target.value)
@@ -402,12 +405,12 @@ export default function QuoteEditor({
 
                 <div className="w-24 space-y-2">
                   <label className="text-xs font-medium text-gray-500">
-                    Qty
+                    כמות
                   </label>
                   <input
                     type="number"
                     min="1"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none text-sm bg-white"
                     value={item.quantity}
                     onChange={(e) =>
                       updateItem(index, "quantity", e.target.value)
@@ -417,12 +420,12 @@ export default function QuoteEditor({
 
                 <div className="w-32 space-y-2">
                   <label className="text-xs font-medium text-gray-500">
-                    Price (₪)
+                    מחיר (₪)
                   </label>
                   <input
                     type="number"
                     step="0.01"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none text-sm bg-white"
                     value={item.unitPrice}
                     onChange={(e) =>
                       updateItem(index, "unitPrice", e.target.value)
@@ -430,7 +433,7 @@ export default function QuoteEditor({
                   />
                 </div>
 
-                <div className="w-24 space-y-2 pt-8 text-right font-medium text-sm">
+                <div className="w-24 space-y-2 pt-8 text-left font-medium text-sm">
                   ₪{(item.quantity * item.unitPrice).toFixed(2)}
                 </div>
 
@@ -445,15 +448,15 @@ export default function QuoteEditor({
           </div>
 
           <button
-            className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-500 hover:text-blue-500 font-medium transition-all flex items-center justify-center gap-2"
+            className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-[#4f95ff] hover:text-[#4f95ff] font-medium transition-all flex items-center justify-center gap-2"
             onClick={addItem}
           >
-            <Plus className="w-4 h-4" /> Add Item
+            <Plus className="w-4 h-4" /> הוסף פריט
           </button>
 
-          <div className="flex justify-end pt-4">
+          <div className="flex justify-start pt-4">
             <div className="text-right space-y-1">
-              <div className="text-sm text-gray-500">Subtotal</div>
+              <div className="text-sm text-gray-500">סיכום ביניים</div>
               <div className="text-3xl font-bold text-gray-900">
                 ₪{total.toFixed(2)}
               </div>

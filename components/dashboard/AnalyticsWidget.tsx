@@ -4,6 +4,33 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { X, List } from "lucide-react";
 import { useState } from "react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  Cell,
+  PieChart,
+  Pie,
+  Legend,
+} from "recharts";
+
+// Chart colors for consistency
+const CHART_COLORS = [
+  "#4f46e5",
+  "#ec4899",
+  "#10b981",
+  "#f59e0b",
+  "#6366f1",
+  "#8b5cf6",
+  "#14b8a6",
+  "#f97316",
+];
 
 // Available colors for the cards (matching existing app)
 const COLOR_OPTIONS = [
@@ -124,12 +151,14 @@ interface AnalyticsWidgetProps {
   id: string; // The DND id (e.g. "analytics-123")
   view: any; // The analytics data object
   onRemove: () => void;
+  onOpenDetails?: (view: any) => void;
 }
 
 export default function AnalyticsWidget({
   id,
   view,
   onRemove,
+  onOpenDetails,
 }: AnalyticsWidgetProps) {
   const {
     attributes,
@@ -152,13 +181,19 @@ export default function AnalyticsWidget({
 
   const isAutomation = view.source === "AUTOMATION";
 
+  const isGraph = view.type === "GRAPH";
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
-      className={`relative rounded-2xl shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col justify-between aspect-square border ${currentColor.value} ${currentColor.border} group cursor-grab active:cursor-grabbing`}
+      className={`relative rounded-2xl shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col border ${
+        currentColor.value
+      } ${currentColor.border} group cursor-grab active:cursor-grabbing ${
+        isGraph ? "min-h-[350px]" : "min-h-[280px]"
+      }`}
     >
       <div className="flex justify-between items-start">
         <div className="flex-1">
@@ -183,9 +218,7 @@ export default function AnalyticsWidget({
             {view.tableName === "System" ? "מערכת" : `מקור: ${view.tableName}`}
           </p>
 
-          {!isAutomation && (
-            <ConfigDetails config={view.config} type={view.type} />
-          )}
+          {/* ConfigDetails hidden on dashboard for cleaner layout */}
         </div>
         <button
           className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-black/5 rounded-full transition-colors opacity-0 group-hover:opacity-100"
@@ -199,11 +232,126 @@ export default function AnalyticsWidget({
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col justify-center items-center my-4 cursor-grab active:cursor-grabbing">
+      <div
+        className={`flex-1 w-full flex flex-col justify-center items-center my-4 cursor-grab active:cursor-grabbing ${
+          view.type === "GRAPH" ? "min-h-[220px]" : "min-h-[100px]"
+        }`}
+      >
         {!view.stats ? (
           <div className="text-center">
             <span className="text-4xl font-bold text-gray-200">-</span>
             <p className="text-sm text-gray-400 mt-2">אין מספיק נתונים</p>
+          </div>
+        ) : view.type === "GRAPH" && view.data?.length > 0 ? (
+          <div className="w-full" style={{ height: 200 }} dir="ltr">
+            <ResponsiveContainer width="100%" height={200}>
+              {view.config?.chartType === "line" ? (
+                <LineChart data={view.data}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 10 }}
+                    interval="preserveStartEnd"
+                    stroke="#9ca3af"
+                  />
+                  <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
+                  <Tooltip
+                    contentStyle={{
+                      direction: "rtl",
+                      borderRadius: "8px",
+                      border: "none",
+                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    stroke="#4f46e5"
+                    strokeWidth={2}
+                    dot={{ fill: "#4f46e5", r: 4 }}
+                  />
+                </LineChart>
+              ) : view.config?.chartType === "pie" ? (
+                <PieChart>
+                  <Pie
+                    data={view.data}
+                    cx="40%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={75}
+                    paddingAngle={3}
+                    dataKey="value"
+                    nameKey="name"
+                    label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                    labelLine={false}
+                  >
+                    {view.data.map((entry: any, index: number) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={CHART_COLORS[index % CHART_COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      direction: "rtl",
+                      borderRadius: "8px",
+                      border: "none",
+                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                    }}
+                    formatter={(value: any, name: string) => [
+                      value.toLocaleString(),
+                      name,
+                    ]}
+                  />
+                  <Legend
+                    layout="vertical"
+                    align="right"
+                    verticalAlign="middle"
+                    iconType="circle"
+                    iconSize={12}
+                    wrapperStyle={{
+                      fontSize: "16px",
+                      direction: "rtl",
+                      paddingRight: "10px",
+                    }}
+                    formatter={(value: string) => (
+                      <span className="text-gray-700 mr-2">{value}</span>
+                    )}
+                  />
+                </PieChart>
+              ) : (
+                <BarChart data={view.data}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 10 }}
+                    interval="preserveStartEnd"
+                    stroke="#9ca3af"
+                  />
+                  <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
+                  <Tooltip
+                    cursor={{ fill: "#f3f4f6" }}
+                    contentStyle={{
+                      direction: "rtl",
+                      borderRadius: "8px",
+                      border: "none",
+                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                    }}
+                    formatter={(value: any) => [
+                      value.toLocaleString(),
+                      view.stats.subMetric,
+                    ]}
+                  />
+                  <Bar
+                    dataKey="value"
+                    fill="#4f46e5"
+                    radius={[4, 4, 0, 0]}
+                    barSize={32}
+                  />
+                </BarChart>
+              )}
+            </ResponsiveContainer>
           </div>
         ) : view.stats.mainMetric ? (
           <div className="text-center w-full">
@@ -212,17 +360,22 @@ export default function AnalyticsWidget({
             </div>
             <p className="text-sm text-gray-500">{view.stats.label || "ערך"}</p>
             {view.stats.subMetric && (
-              <p className="text-xs text-gray-400 mt-1" dir="ltr">
+              <p className="text-xs text-gray-400 mt-1" dir="rtl">
                 {view.stats.subMetric}
               </p>
             )}
           </div>
-        ) : (
+        ) : view.stats.averageDuration ? (
           <div className="text-center">
             <div className="text-3xl font-bold text-blue-600 mb-2">
               {view.stats.averageDuration}
             </div>
             <p className="text-sm text-gray-500">ממוצע זמן</p>
+          </div>
+        ) : (
+          <div className="text-center">
+            <span className="text-4xl font-bold text-gray-200">-</span>
+            <p className="text-sm text-gray-400 mt-2">אין מספיק נתונים</p>
           </div>
         )}
       </div>
@@ -231,8 +384,24 @@ export default function AnalyticsWidget({
         <span>מבוסס על:</span>
         <div className="flex items-center gap-2">
           <span className="font-medium bg-black/5 px-2 py-1 rounded-full">
-            {view.stats?.totalRecords || view.data.length} רשומות
+            {view.stats?.totalRecords || view.data?.length || 0} רשומות
           </span>
+          {/* Only show list icon for non-graph analytics */}
+          {view.type !== "GRAPH" &&
+            (view.data?.length > 0 || view.stats?.totalRecords > 0) &&
+            onOpenDetails && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenDetails(view);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="p-1 hover:bg-black/5 rounded-full transition-colors text-blue-600"
+                title="צפה ברשימה המלאה"
+              >
+                <List size={20} />
+              </button>
+            )}
         </div>
       </div>
     </div>

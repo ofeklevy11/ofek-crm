@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   DndContext,
   closestCenter,
@@ -21,7 +21,15 @@ import {
 import { Plus, LayoutDashboard, X } from "lucide-react";
 import AnalyticsWidget from "./dashboard/AnalyticsWidget";
 import TableWidget from "./dashboard/TableWidget";
+import AnalyticsDetailsModal from "./AnalyticsDetailsModal";
 import { getTableViewData } from "@/app/actions/dashboard";
+import {
+  getDashboardWidgets,
+  addDashboardWidget,
+  removeDashboardWidget,
+  updateDashboardWidgetOrder,
+  migrateDashboardWidgets,
+} from "@/app/actions/dashboard-widgets";
 import { hasUserFlag, User } from "@/lib/permissions";
 
 // Define Types
@@ -52,6 +60,9 @@ export default function DashboardClient({
   const [selectedTable, setSelectedTable] = useState("");
   const [selectedItem, setSelectedItem] = useState("");
 
+  // Analytics Details Modal State
+  const [selectedView, setSelectedView] = useState<any | null>(null);
+
   // Data State for Table Widgets
   const [tableData, setTableData] = useState<Record<string, any[]>>({});
   const [tableLoading, setTableLoading] = useState<Record<string, boolean>>({});
@@ -61,23 +72,52 @@ export default function DashboardClient({
   // Default to true if user can view dashboard, they can customize their own dashboard
   const canAddWidget = canViewDashboard;
 
-  // Load widgets from local storage on mount
+  // Track initialization to prevent duplicate loading
+  const isInitialized = useRef(false);
+
+  // Load widgets from database on mount
   useEffect(() => {
-    const saved = localStorage.getItem("dashboard_widgets");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setWidgets(parsed);
-      } catch (e) {
-        console.error("Failed to parse widgets", e);
+    if (isInitialized.current) return;
+    isInitialized.current = true;
+
+    async function loadWidgets() {
+      // First, try to migrate any existing localStorage widgets
+      const saved = localStorage.getItem("dashboard_widgets");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const migrationData = parsed.map((w: any) => ({
+              widgetType: w.type as "ANALYTICS" | "TABLE",
+              referenceId: String(w.referenceId),
+              tableId: w.tableId,
+            }));
+            const migrationRes = await migrateDashboardWidgets(migrationData);
+            if (migrationRes.success && migrationRes.migrated) {
+              // Clear localStorage after successful migration
+              localStorage.removeItem("dashboard_widgets");
+            }
+          }
+        } catch (e) {
+          console.error("Failed to migrate widgets", e);
+        }
+      }
+
+      // Load widgets from database
+      const res = await getDashboardWidgets();
+      if (res.success && res.data) {
+        const dbWidgets: DashboardWidget[] = res.data.map((w: any) => ({
+          id: w.id,
+          type: w.widgetType as WidgetType,
+          referenceId: w.referenceId,
+          tableId: w.tableId,
+        }));
+        setWidgets(dbWidgets);
       }
     }
-  }, []);
 
-  // Save widgets to local storage when changed
-  useEffect(() => {
-    localStorage.setItem("dashboard_widgets", JSON.stringify(widgets));
-  }, [widgets]);
+    loadWidgets();
+  }, []);
 
   // Fetch data for table widgets
   useEffect(() => {
@@ -119,40 +159,59 @@ export default function DashboardClient({
     // setActiveId(event.active.id);
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
       setWidgets((items) => {
         const oldIndex = items.findIndex((i) => i.id === active.id);
         const newIndex = items.findIndex((i) => i.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
+        const newItems = arrayMove(items, oldIndex, newIndex);
+
+        // Update order in database
+        updateDashboardWidgetOrder(newItems.map((w) => w.id));
+
+        return newItems;
       });
     }
   };
 
-  const addWidget = () => {
+  const handleAddWidget = async () => {
     if (!selectedItem) return;
 
-    const newWidget: DashboardWidget = {
-      id: crypto.randomUUID(),
-      type: selectedType,
+    const widgetData = {
+      widgetType: selectedType,
       referenceId: selectedItem,
       tableId: selectedType === "TABLE" ? Number(selectedTable) : undefined,
     };
 
-    setWidgets([...widgets, newWidget]);
+    // Add to database
+    const res = await addDashboardWidget(widgetData);
+    if (res.success && res.data) {
+      const newWidget: DashboardWidget = {
+        id: res.data.id,
+        type: res.data.widgetType as WidgetType,
+        referenceId: res.data.referenceId,
+        tableId: res.data.tableId ?? undefined,
+      };
+      setWidgets([...widgets, newWidget]);
+    }
+
     setIsAddModalOpen(false);
     setSelectedItem("");
     setSelectedTable("");
   };
 
-  const removeWidget = (id: string) => {
-    setWidgets(widgets.filter((w) => w.id !== id));
-    // Clean up data
-    const newData = { ...tableData };
-    delete newData[id];
-    setTableData(newData);
+  const handleRemoveWidget = async (id: string) => {
+    // Remove from database
+    const res = await removeDashboardWidget(id);
+    if (res.success) {
+      setWidgets(widgets.filter((w) => w.id !== id));
+      // Clean up data
+      const newData = { ...tableData };
+      delete newData[id];
+      setTableData(newData);
+    }
   };
 
   const getWidgetContent = (widget: DashboardWidget) => {
@@ -228,13 +287,19 @@ export default function DashboardClient({
 
               if (widget.type === "ANALYTICS") {
                 if (!content) return null;
+                const isGraph = content.type === "GRAPH";
                 return (
-                  <AnalyticsWidget
+                  <div
                     key={widget.id}
-                    id={widget.id}
-                    view={content}
-                    onRemove={() => removeWidget(widget.id)}
-                  />
+                    className={isGraph ? "sm:col-span-2" : ""}
+                  >
+                    <AnalyticsWidget
+                      id={widget.id}
+                      view={content}
+                      onRemove={() => handleRemoveWidget(widget.id)}
+                      onOpenDetails={(view) => setSelectedView(view)}
+                    />
+                  </div>
                 );
               } else {
                 const { table, view, fetchedData, isLoading } = content as any;
@@ -247,7 +312,7 @@ export default function DashboardClient({
                     tableName={table.name}
                     data={fetchedData}
                     isLoading={isLoading}
-                    onRemove={() => removeWidget(widget.id)}
+                    onRemove={() => handleRemoveWidget(widget.id)}
                   />
                 );
               }
@@ -458,7 +523,7 @@ export default function DashboardClient({
                 </button>
                 <button
                   disabled={!selectedItem}
-                  onClick={addWidget}
+                  onClick={handleAddWidget}
                   className="flex-1 py-2.5 text-white bg-blue-600 rounded-xl hover:bg-blue-700 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   הוסף לדאשבורד
@@ -468,6 +533,15 @@ export default function DashboardClient({
           </div>
         )}
       </DndContext>
+
+      {/* Analytics Details Modal */}
+      <AnalyticsDetailsModal
+        isOpen={!!selectedView}
+        onClose={() => setSelectedView(null)}
+        title={selectedView?.ruleName || "פרטי אנליטיקה"}
+        tableName={selectedView?.tableName || ""}
+        data={selectedView?.data || []}
+      />
     </div>
   );
 }

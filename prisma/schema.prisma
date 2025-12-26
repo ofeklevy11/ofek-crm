@@ -13,6 +13,13 @@ model Company {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
+  // Business settings for quotes
+  businessType    String?   // "exempt" (עוסק פטור), "licensed" (עוסק מורשה), "ltd" (חברה בע"מ)
+  taxId           String?   // ח.פ / מספר עוסק
+  businessAddress String?   // כתובת העסק
+  businessWebsite String?   // קישור לאתר (אופציונלי)
+  businessEmail   String?   // אימייל עסקי (אופציונלי)
+  
   users               User[]
   tables              TableMeta[]
   records             Record[]
@@ -573,6 +580,7 @@ model Product {
 model Quote {
   id          String   @id @default(cuid())
   companyId   Int
+  quoteNumber Int?     // Incremental number per company (e.g., 00001, 00002)
   
   clientId        Int?
   clientName      String
@@ -583,6 +591,7 @@ model Quote {
   
   total           Decimal  @db.Decimal(10, 2)
   status          String   @default("DRAFT") // DRAFT, SENT, ACCEPTED, REJECTED
+  isTrashed       Boolean  @default(false)   // Soft delete - move to trash
   
   validUntil      DateTime?
   createdAt       DateTime @default(now())
@@ -592,7 +601,9 @@ model Quote {
   client          Client?  @relation(fields: [clientId], references: [id])
   items           QuoteItem[]
 
+  @@unique([companyId, quoteNumber]) // Ensure unique quote number per company
   @@index([companyId])
+  @@index([companyId, isTrashed])
 }
 
 model QuoteItem {
@@ -1160,4 +1171,22 @@ model NurtureSubscriber {
   @@index([nurtureListId])
   @@index([email])
   @@index([phone])
+}
+
+// Dashboard Widget Configuration - stores user's dashboard layout
+model DashboardWidget {
+  id          String   @id @default(cuid())
+  userId      Int
+  
+  widgetType  String   // 'ANALYTICS' | 'TABLE'
+  referenceId String   // ID of the analytics view or table view
+  tableId     Int?     // Only for TABLE type widgets
+  
+  order       Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, order])
 }

@@ -8,9 +8,14 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  Trash2,
+  RotateCcw,
+  Eye,
+  Edit,
+  MoreHorizontal,
+  Archive,
 } from "lucide-react";
-import Link from "next/link";
-import { deleteQuote } from "@/app/actions/quotes";
+import { trashQuote, restoreQuote } from "@/app/actions/quotes";
 import { useRouter } from "next/navigation";
 
 const formatMoney = (amount: number) => {
@@ -20,21 +25,38 @@ const formatMoney = (amount: number) => {
   }).format(amount);
 };
 
-export default function QuotesPageClient({ quotes }: { quotes: any[] }) {
+interface Props {
+  quotes: any[];
+  showTrashed: boolean;
+}
+
+export default function QuotesPageClient({ quotes, showTrashed }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
+  const handleTrash = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("Are you sure you want to delete this quote?")) {
-      await deleteQuote(id);
+    if (confirm("האם להעביר הצעת מחיר זו לפח?")) {
+      setLoadingId(id);
+      await trashQuote(id);
       router.refresh();
+      setLoadingId(null);
     }
+  };
+
+  const handleRestore = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLoadingId(id);
+    await restoreQuote(id);
+    router.refresh();
+    setLoadingId(null);
   };
 
   const filteredQuotes = quotes.filter(
     (q) =>
       q.clientName.toLowerCase().includes(search.toLowerCase()) ||
+      (q.quoteNumber && String(q.quoteNumber).includes(search)) ||
       (q.id && q.id.includes(search))
   );
 
@@ -42,99 +64,240 @@ export default function QuotesPageClient({ quotes }: { quotes: any[] }) {
     switch (status) {
       case "DRAFT":
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-            <Clock className="w-3 h-3 mr-1" /> Draft
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+            <Clock className="w-3 h-3 ml-1" /> טיוטה
           </span>
         );
       case "SENT":
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            <FileText className="w-3 h-3 mr-1" /> Sent
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+            <FileText className="w-3 h-3 ml-1" /> נשלחה
           </span>
         );
       case "ACCEPTED":
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-            <CheckCircle className="w-3 h-3 mr-1" /> Accepted
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+            <CheckCircle className="w-3 h-3 ml-1" /> אושרה
           </span>
         );
       case "REJECTED":
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-            <XCircle className="w-3 h-3 mr-1" /> Rejected
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+            <XCircle className="w-3 h-3 ml-1" /> נדחתה
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
             {status}
           </span>
         );
     }
   };
 
+  const formatQuoteNumber = (quote: any) => {
+    if (quote.quoteNumber) {
+      return `#${String(quote.quoteNumber).padStart(5, "0")}`;
+    }
+    return `#${quote.id.slice(-6).toUpperCase()}`;
+  };
+
   return (
-    <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
+    <div className="p-6 space-y-6 max-w-[1600px] mx-auto" dir="rtl">
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-            Quotes
+            {showTrashed ? "פח זבל - הצעות מחיר" : "הצעות מחיר"}
           </h1>
           <p className="text-gray-500 mt-1">
-            Manage and track your price proposals.
+            {showTrashed
+              ? "הצעות מחיר שהועברו לפח זבל. הצעות אלה נשמרות לצמיתות."
+              : "ניהול ומעקב אחר הצעות המחיר שלך."}
           </p>
         </div>
-        <Link href="/quotes/new">
-          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium transition-colors shadow-sm">
-            <Plus className="w-4 h-4" /> Create Quote
-          </button>
-        </Link>
+        <div className="flex gap-2">
+          {showTrashed ? (
+            <a href="/quotes">
+              <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 font-medium transition-colors">
+                <RotateCcw className="w-4 h-4" /> חזרה להצעות
+              </button>
+            </a>
+          ) : (
+            <>
+              <a href="/quotes?trash=true">
+                <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 font-medium transition-colors">
+                  <Archive className="w-4 h-4" /> פח זבל
+                </button>
+              </a>
+              <a href="/quotes/new">
+                <button className="flex items-center gap-2 px-4 py-2 bg-[#4f95ff] text-white rounded-md hover:bg-[#3d7de0] font-medium transition-colors shadow-sm">
+                  <Plus className="w-4 h-4" /> הצעת מחיר חדשה
+                </button>
+              </a>
+            </>
+          )}
+        </div>
       </div>
 
+      {/* Search */}
       <div className="flex gap-4 items-center">
-        <div className="relative max-w-sm w-full">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+        <div className="relative max-w-md w-full">
+          <Search className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
           <input
-            placeholder="Search quotes..."
-            className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+            placeholder="חיפוש לפי שם לקוח או מספר הצעה..."
+            className="w-full pr-9 pl-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <div className="text-sm text-gray-500">
+          {filteredQuotes.length} הצעות מחיר
+        </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filteredQuotes.map((quote) => (
-          <div
-            key={quote.id}
-            className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer p-6"
-            onClick={() => router.push(`/quotes/${quote.id}`)}
-          >
-            <div className="flex items-center justify-between pb-4 mb-2">
-              <span className="text-sm font-medium text-gray-500">
-                #{quote.id.slice(-6).toUpperCase()}
-              </span>
-              {getStatusBadge(quote.status)}
-            </div>
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                מספר הצעה
+              </th>
+              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                לקוח
+              </th>
+              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                סכום
+              </th>
+              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                סטטוס
+              </th>
+              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                תאריך יצירה
+              </th>
+              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                בתוקף עד
+              </th>
+              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                פעולות
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {filteredQuotes.map((quote) => (
+              <tr
+                key={quote.id}
+                className="hover:bg-gray-50 transition-colors cursor-pointer"
+                onClick={() => router.push(`/quotes/${quote.id}`)}
+              >
+                <td className="px-6 py-4">
+                  <span className="font-mono font-medium text-gray-900">
+                    {formatQuoteNumber(quote)}
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {quote.clientName}
+                    </p>
+                    {quote.clientEmail && (
+                      <p className="text-sm text-gray-500">
+                        {quote.clientEmail}
+                      </p>
+                    )}
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <span className="font-semibold text-gray-900">
+                    {formatMoney(Number(quote.total))}
+                  </span>
+                  <p className="text-xs text-gray-500">
+                    {quote.items?.length || 0} פריטים
+                  </p>
+                </td>
+                <td className="px-6 py-4">{getStatusBadge(quote.status)}</td>
+                <td className="px-6 py-4 text-gray-600">
+                  {new Date(quote.createdAt).toLocaleDateString("he-IL")}
+                </td>
+                <td className="px-6 py-4 text-gray-600">
+                  {quote.validUntil
+                    ? new Date(quote.validUntil).toLocaleDateString("he-IL")
+                    : "-"}
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/quotes/${quote.id}`);
+                      }}
+                      className="p-2 text-gray-500 hover:text-[#4f95ff] hover:bg-blue-50 rounded-md transition-colors"
+                      title="עריכה"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(`/quotes/${quote.id}/pdf`, "_blank");
+                      }}
+                      className="p-2 text-gray-500 hover:text-[#4f95ff] hover:bg-blue-50 rounded-md transition-colors"
+                      title="תצוגה מקדימה"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    {showTrashed ? (
+                      <button
+                        onClick={(e) => handleRestore(quote.id, e)}
+                        disabled={loadingId === quote.id}
+                        className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors disabled:opacity-50"
+                        title="שחזור"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={(e) => handleTrash(quote.id, e)}
+                        disabled={loadingId === quote.id}
+                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+                        title="העבר לפח"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
-            <div className="flex justify-between items-end">
-              <div>
-                <div className="text-2xl font-bold text-gray-900">
-                  {formatMoney(Number(quote.total))}
-                </div>
-                <p className="text-sm font-medium text-gray-800 mt-1">
-                  {quote.clientName}
-                </p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {new Date(quote.createdAt).toLocaleDateString()}
-                </p>
-              </div>
-            </div>
-          </div>
-        ))}
+        {/* Empty State */}
         {filteredQuotes.length === 0 && (
-          <div className="col-span-full text-center py-12 text-gray-500 bg-gray-50/50 rounded-xl border border-dashed border-gray-300">
-            No quotes found. Create your first one!
+          <div className="text-center py-16 px-6">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+              {showTrashed ? (
+                <Archive className="w-8 h-8 text-gray-400" />
+              ) : (
+                <FileText className="w-8 h-8 text-gray-400" />
+              )}
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-1">
+              {showTrashed ? "פח הזבל ריק" : "אין הצעות מחיר"}
+            </h3>
+            <p className="text-gray-500 mb-4">
+              {showTrashed
+                ? "לא הועברו הצעות מחיר לפח הזבל."
+                : "צור את הצעת המחיר הראשונה שלך כדי להתחיל."}
+            </p>
+            {!showTrashed && (
+              <a href="/quotes/new">
+                <button className="inline-flex items-center gap-2 px-4 py-2 bg-[#4f95ff] text-white rounded-md hover:bg-[#3d7de0] font-medium transition-colors">
+                  <Plus className="w-4 h-4" /> הצעת מחיר חדשה
+                </button>
+              </a>
+            )}
           </div>
         )}
       </div>

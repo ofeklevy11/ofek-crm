@@ -20,7 +20,14 @@ export default async function EditQuotePage({
   ]);
 
   if (!quote) {
-    return <div>Quote not found</div>;
+    return (
+      <div
+        className="flex items-center justify-center min-h-[400px] text-gray-500"
+        dir="rtl"
+      >
+        הצעת המחיר לא נמצאה
+      </div>
+    );
   }
 
   const plainProducts = products.map((product) => ({

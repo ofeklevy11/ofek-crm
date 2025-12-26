@@ -37,12 +37,12 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
     const margin = price - cost;
     const marginPercent = price > 0 ? (margin / price) * 100 : 0;
 
-    let color = "text-green-600";
+    let color = "text-emerald-600";
 
     if (marginPercent < 10) {
-      color = "text-red-600";
+      color = "text-rose-600";
     } else if (marginPercent < 30) {
-      color = "text-yellow-600";
+      color = "text-amber-600";
     }
 
     return { margin, marginPercent, color };
@@ -61,40 +61,53 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
     }
   };
 
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case "SERVICE":
+        return "שירות";
+      case "PRODUCT":
+        return "מוצר";
+      case "PACKAGE":
+        return "חבילה";
+      default:
+        return type;
+    }
+  };
+
   return (
-    <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
+    <div className="p-8 space-y-8 max-w-[1600px] mx-auto text-right" dir="rtl">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-            Services & Products
+          <h1 className="text-4xl font-bold tracking-tight text-gray-900">
+            שירותים ומוצרים
           </h1>
-          <p className="text-gray-500 mt-1">
-            Manage your offerings and analyze profitability.
+          <p className="text-gray-500 mt-2 text-lg">
+            ניהול הקטלוג העסקי וניתוח רווחיות
           </p>
         </div>
         <button
           onClick={handleAddNew}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium transition-colors shadow-sm"
+          className="flex items-center gap-2 px-6 py-3 bg-[#4f95ff] text-white rounded-xl hover:bg-[#3b82f6] font-medium transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
         >
-          <Plus className="w-4 h-4" /> Add New
+          <Plus className="w-5 h-5" /> הוסף חדש
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Quick Stats */}
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
           <h3 className="text-sm font-medium text-gray-500 mb-2">
-            Total Offerings
+            סה״כ פריטים בקטלוג
           </h3>
-          <div className="text-3xl font-bold text-gray-900">
+          <div className="text-4xl font-bold text-gray-900">
             {products.length}
           </div>
         </div>
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
           <h3 className="text-sm font-medium text-gray-500 mb-2">
-            Avg. Profit Margin
+            ממוצע רווח גולמי
           </h3>
-          <div className="text-3xl font-bold text-gray-900">
+          <div className="text-4xl font-bold text-[#a24ec1]">
             {(() => {
               if (products.length === 0) return "0%";
               const totalMargin = products.reduce((acc, p) => {
@@ -107,11 +120,11 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
             })()}
           </div>
         </div>
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
           <h3 className="text-sm font-medium text-gray-500 mb-2">
-            Top Performer
+            הפריט הרווחי ביותר
           </h3>
-          <div className="text-xl font-bold text-gray-900 truncate">
+          <div className="text-xl font-bold text-gray-900 truncate" dir="rtl">
             {products.length > 0
               ? products.reduce((prev, current) =>
                   Number(current.price) - Number(current.cost || 0) >
@@ -124,26 +137,30 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Catalog</h3>
-          <p className="text-sm text-gray-500">
-            A detailed list of all your services, products, and packages.
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-gray-100 bg-gray-50/30">
+          <h3 className="text-xl font-semibold text-gray-900">קטלוג</h3>
+          <p className="text-sm text-gray-500 mt-1">
+            רשימה מפורטת של כל השירותים, המוצרים והחבילות שלך
           </p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 text-gray-600 border-b border-gray-200">
+          <table className="w-full text-right text-sm">
+            <thead className="bg-[#f4f8f8] text-gray-600">
               <tr>
-                <th className="px-6 py-3 font-medium">Name</th>
-                <th className="px-6 py-3 font-medium">Type</th>
-                <th className="px-6 py-3 font-medium">Price</th>
-                <th className="px-6 py-3 font-medium">Cost</th>
-                <th className="px-6 py-3 font-medium">Profit / Margin</th>
-                <th className="px-6 py-3 font-medium w-[100px]">Actions</th>
+                <th className="px-6 py-4 font-medium first:rounded-tr-lg">
+                  שם הפריט
+                </th>
+                <th className="px-6 py-4 font-medium">סוג</th>
+                <th className="px-6 py-4 font-medium">מחיר מחירון</th>
+                <th className="px-6 py-4 font-medium">עלות מוערכת</th>
+                <th className="px-6 py-4 font-medium">רווח / אחוז רווח</th>
+                <th className="px-6 py-4 font-medium w-[100px] last:rounded-tl-lg">
+                  פעולות
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-100">
               {products.map((product) => {
                 const price = Number(product.price);
                 const cost = Number(product.cost || 0);
@@ -155,11 +172,11 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
                 return (
                   <tr
                     key={product.id}
-                    className="hover:bg-gray-50/50 transition-colors"
+                    className="hover:bg-[#f4f8f8]/50 transition-colors group"
                   >
                     <td className="px-6 py-4 font-medium text-gray-900">
                       <div className="flex flex-col">
-                        <span>{product.name}</span>
+                        <span className="text-base">{product.name}</span>
                         {product.description && (
                           <span className="text-xs text-gray-500 truncate max-w-[200px]">
                             {product.description}
@@ -168,15 +185,15 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#f4f8f8] text-gray-700 border border-gray-200">
                         {getTypeIcon(product.type)}
-                        {product.type}
+                        {getTypeLabel(product.type)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-gray-900">
+                    <td className="px-6 py-4 text-gray-900 font-medium">
                       {formatMoney(price)}
                     </td>
-                    <td className="px-6 py-4 text-gray-600">
+                    <td className="px-6 py-4 text-gray-500">
                       {cost > 0 ? formatMoney(cost) : "-"}
                     </td>
                     <td className="px-6 py-4">
@@ -196,7 +213,7 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
                     </td>
                     <td className="px-6 py-4">
                       <button
-                        className="p-2 text-gray-400 hover:text-gray-900 transition-colors rounded-full hover:bg-gray-100"
+                        className="p-2 text-gray-400 hover:text-[#4f95ff] transition-all rounded-full hover:bg-blue-50"
                         onClick={() => handleEdit(product)}
                       >
                         <Edit className="w-4 h-4" />
@@ -209,9 +226,17 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-6 py-12 text-center text-gray-500"
+                    className="px-6 py-16 text-center text-gray-500 bg-gray-50/20"
                   >
-                    No services found. Add your first service to get started.
+                    <div>
+                      <Package className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                      <p className="text-lg font-medium text-gray-900">
+                        אין פריטים בקטלוג
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        הוסף את השירות או המוצר הראשון שלך כדי להתחיל
+                      </p>
+                    </div>
                   </td>
                 </tr>
               )}
