@@ -212,12 +212,12 @@ export function Calendar() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white">
+    <div className="flex flex-col h-screen bg-white" dir="rtl">
       {/* Floating Create Button */}
       <button
         onClick={handleCreateEvent}
         className="fixed bottom-8 start-8 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 z-40"
-        aria-label="Create event"
+        aria-label="צור אירוע"
       >
         <svg
           className="w-6 h-6"

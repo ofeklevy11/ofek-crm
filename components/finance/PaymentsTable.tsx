@@ -30,11 +30,7 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
   };
 
   const handleDelete = async (id: string) => {
-    if (
-      !confirm(
-        "Are you sure you want to delete this payment? This action cannot be undone."
-      )
-    )
+    if (!confirm("האם אתה בטוח שברצונך למחוק תשלום זה? לא ניתן לבטל פעולה זו."))
       return;
 
     setDeletingId(id);
@@ -57,11 +53,11 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "paid":
-        return <CheckCircle className="w-4 h-4 text-green-600" />;
+        return <CheckCircle className="w-4 h-4 text-[#4f95ff]" />;
       case "overdue":
-        return <XCircle className="w-4 h-4 text-red-600" />;
+        return <XCircle className="w-4 h-4 text-[#a24ec1]" />;
       case "pending":
-        return <Clock className="w-4 h-4 text-yellow-600" />;
+        return <Clock className="w-4 h-4 text-gray-500" />;
       default:
         return null;
     }
@@ -70,11 +66,11 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "paid":
-        return "bg-green-100 text-green-800";
+        return "bg-[#4f95ff]/10 text-[#4f95ff]";
       case "overdue":
-        return "bg-red-100 text-red-800";
+        return "bg-[#a24ec1]/10 text-[#a24ec1]";
       case "pending":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-gray-100 text-gray-800";
       case "cancelled":
         return "bg-gray-100 text-gray-800";
       default:
@@ -86,28 +82,28 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
     <>
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+          <thead className="bg-[#f4f8f8]">
             <tr>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Client
+                לקוח
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Title
+                כותרת
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Amount
+                סכום
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Due Date
+                תאריך יעד
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Paid Date
+                תאריך תשלום
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
+                סטטוס
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
+                פעולות
               </th>
             </tr>
           </thead>
@@ -120,7 +116,7 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
                 <td className="px-6 py-4 whitespace-nowrap">
                   <Link
                     href={`/finance/clients/${payment.clientId}`}
-                    className="text-sm font-medium text-blue-600 hover:text-blue-900 hover:underline"
+                    className="text-sm font-medium text-[#4f95ff] hover:text-blue-900 hover:underline"
                   >
                     {payment.client.name}
                   </Link>
@@ -132,14 +128,16 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
                   ₪{Number(payment.amount).toLocaleString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
-                  <div className="flex items-center gap-1 justify-end">
+                  <div className="flex items-center gap-1 justify-start">
+                    {" "}
+                    {/* RTL: justify-start for dates usually nice if text-right, but actually numeric/dates align right in RTL so justify-start might be wrong, justify-end? No, table cell is text-right. So content aligns right. flex defaults to row, so justify-start is Right in RTL? No, flex follows direction. In RTL, justify-start is Right. */}
                     <Calendar className="w-3 h-3" />
                     {new Date(payment.dueDate).toLocaleDateString("he-IL")}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
                   {payment.paidDate ? (
-                    <div className="flex items-center gap-1 justify-end text-green-600">
+                    <div className="flex items-center gap-1 justify-start text-[#4f95ff]">
                       <Calendar className="w-3 h-3" />
                       {new Date(payment.paidDate).toLocaleDateString("he-IL")}
                     </div>
@@ -154,30 +152,38 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
                     )}`}
                   >
                     {getStatusIcon(payment.status)}
-                    {payment.status}
+                    {payment.status === "paid"
+                      ? "שולם"
+                      : payment.status === "overdue"
+                      ? "באיחור"
+                      : payment.status === "pending"
+                      ? "ממתין"
+                      : payment.status === "cancelled"
+                      ? "בוטל"
+                      : payment.status}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex items-center justify-start gap-2">
                     <Link
                       href={`/finance/clients/${payment.clientId}`}
-                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                      title="View Client"
+                      className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
+                      title="צפה בלקוח"
                     >
                       <Eye className="w-4 h-4" />
                     </Link>
                     <button
                       onClick={() => handleEdit(payment)}
-                      className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all"
-                      title="Edit Payment"
+                      className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
+                      title="ערוך תשלום"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(payment.id)}
                       disabled={deletingId === payment.id}
-                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
-                      title="Delete Payment"
+                      className="p-2 text-gray-600 hover:text-[#a24ec1] hover:bg-purple-50 rounded-lg transition-all disabled:opacity-50"
+                      title="מחק תשלום"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -188,8 +194,7 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
             {payments.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
-                  No one-time payments found. Create your first payment to get
-                  started.
+                  לא נמצאו תשלומים. צור את התשלום הראשון שלך.
                 </td>
               </tr>
             )}

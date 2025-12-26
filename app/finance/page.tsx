@@ -175,14 +175,14 @@ export default async function FinancePage() {
 
       {/* NEW: Unified Ledger Navigation Card */}
       <Link href="/finance/income-expenses" className="block group">
-        <div className="bg-linear-to-r from-indigo-600 to-purple-600 rounded-xl p-6 text-white shadow-lg shadow-indigo-200 transition-all transform group-hover:scale-[1.01] group-hover:shadow-xl relative overflow-hidden">
+        <div className="bg-linear-to-r from-[#4f95ff] to-[#a24ec1] rounded-xl p-6 text-white shadow-lg shadow-blue-200 transition-all transform group-hover:scale-[1.01] group-hover:shadow-xl relative overflow-hidden">
           <div className="relative z-10 flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold flex items-center gap-2">
                 <Wallet className="w-6 h-6" />
                 דוח הוצאות והכנסות
               </h2>
-              <p className="text-indigo-100 mt-1 max-w-xl">
+              <p className="text-blue-50 mt-1 max-w-xl">
                 נהל את כל התזרים העסקי שלך במקום אחד. מסך מרכז למעקב אחר הכנסות,
                 הוצאות ורווח נקי.
               </p>
@@ -274,7 +274,7 @@ export default async function FinancePage() {
       />
 
       {/* Goal Planning - Prominent Section */}
-      <div className="rounded-xl overflow-hidden shadow-sm border border-indigo-100 bg-linear-to-r from-indigo-50 to-purple-50 p-1 relative group">
+      <div className="rounded-xl overflow-hidden shadow-sm border border-[#4f95ff]/20 bg-linear-to-r from-[#4f95ff]/5 to-[#a24ec1]/5 p-1 relative group">
         <Link
           href="/finance/goals"
           className="flex items-center justify-between p-6 bg-white/60 hover:bg-white/90 rounded-lg transition-all"

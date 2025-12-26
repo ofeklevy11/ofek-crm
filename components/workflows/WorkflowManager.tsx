@@ -179,7 +179,44 @@ export function WorkflowManager({
                   </button>
                 </div>
 
-                <WorkflowBoard workflow={activeWorkflow} />
+                <WorkflowBoard
+                  workflow={activeWorkflow}
+                  onStageCreated={(newStage: WorkflowStage) => {
+                    setWorkflows((prev) =>
+                      prev.map((w) =>
+                        w.id === newStage.workflowId
+                          ? { ...w, stages: [...w.stages, newStage] }
+                          : w
+                      )
+                    );
+                  }}
+                  onStageUpdated={(updatedStage: WorkflowStage) => {
+                    setWorkflows((prev) =>
+                      prev.map((w) =>
+                        w.id === updatedStage.workflowId
+                          ? {
+                              ...w,
+                              stages: w.stages.map((s) =>
+                                s.id === updatedStage.id ? updatedStage : s
+                              ),
+                            }
+                          : w
+                      )
+                    );
+                  }}
+                  onStageDeleted={(stageId: number) => {
+                    setWorkflows((prev) =>
+                      prev.map((w) =>
+                        w.id === activeWorkflow.id
+                          ? {
+                              ...w,
+                              stages: w.stages.filter((s) => s.id !== stageId),
+                            }
+                          : w
+                      )
+                    );
+                  }}
+                />
 
                 {/* Demo section kept for reference but could be removed */}
                 {/* <div className="border-t border-gray-100 pt-8">

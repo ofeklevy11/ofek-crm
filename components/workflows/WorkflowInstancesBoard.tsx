@@ -196,11 +196,13 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
               {/* Progress Ring or Bar could go here */}
               <div className="text-right">
                 <div className="text-2xl font-bold text-indigo-600">
-                  {Math.round(
-                    (selectedInstance.completedStages.length /
-                      selectedInstance.workflow.stages.length) *
-                      100
-                  )}
+                  {selectedInstance.workflow.stages.length > 0
+                    ? Math.round(
+                        (selectedInstance.completedStages.length /
+                          selectedInstance.workflow.stages.length) *
+                          100
+                      )
+                    : 0}
                   %
                 </div>
                 <div className="text-xs text-gray-400">הושלם</div>
@@ -371,18 +373,32 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
               <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 mb-4">
                 <FileText size={32} />
               </div>
-              <h3 className="text-lg font-medium text-gray-900">
-                אין תהליכים פעילים
-              </h3>
-              <p className="text-gray-500 mt-1">
-                התחל תהליך חדש כדי לראות אותו כאן
-              </p>
-              <button
-                onClick={() => setIsCreateModalOpen(true)}
-                className="mt-4 text-indigo-600 font-medium hover:underline"
-              >
-                צור תהליך עכשיו
-              </button>
+              {workflows.length === 0 ? (
+                <>
+                  <h3 className="text-lg font-medium text-gray-900">
+                    לא קיימות תבניות תהליך
+                  </h3>
+                  <p className="text-gray-500 mt-1 max-w-sm mx-auto">
+                    על מנת ליצור תהליך, יש לבנות תחילה תבנית תהליך בלשונית
+                    "הגדרת תבניות"
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-medium text-gray-900">
+                    אין תהליכים פעילים
+                  </h3>
+                  <p className="text-gray-500 mt-1">
+                    התחל תהליך חדש כדי לראות אותו כאן
+                  </p>
+                  <button
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="mt-4 text-indigo-600 font-medium hover:underline"
+                  >
+                    צור תהליך עכשיו
+                  </button>
+                </>
+              )}
             </div>
           ) : (
             instances.map((inst) => (
@@ -434,11 +450,13 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                   <div className="flex justify-between text-xs text-gray-500 mb-1">
                     <span>התקדמות</span>
                     <span>
-                      {Math.round(
-                        (inst.completedStages.length /
-                          inst.workflow.stages.length) *
-                          100
-                      )}
+                      {inst.workflow.stages.length > 0
+                        ? Math.round(
+                            (inst.completedStages.length /
+                              inst.workflow.stages.length) *
+                              100
+                          )
+                        : 0}
                       %
                     </span>
                   </div>
@@ -447,9 +465,11 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                       className="h-full bg-indigo-500 rounded-full transition-all duration-500"
                       style={{
                         width: `${
-                          (inst.completedStages.length /
-                            inst.workflow.stages.length) *
-                          100
+                          inst.workflow.stages.length > 0
+                            ? (inst.completedStages.length /
+                                inst.workflow.stages.length) *
+                              100
+                            : 0
                         }%`,
                       }}
                     />
@@ -491,21 +511,36 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                   סוג תהליך
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {workflows.map((w) => (
-                    <button
-                      key={w.id}
-                      onClick={() =>
-                        setNewForm({ ...newForm, workflowId: w.id.toString() })
-                      }
-                      className={`p-3 rounded-lg border text-right transition-all ${
-                        newForm.workflowId === w.id.toString()
-                          ? "border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
-                    >
-                      <div className="font-medium text-sm">{w.name}</div>
-                    </button>
-                  ))}
+                  {workflows.map((w) => {
+                    const isEmpty = w.stages.length === 0;
+                    return (
+                      <button
+                        key={w.id}
+                        disabled={isEmpty}
+                        onClick={() =>
+                          !isEmpty &&
+                          setNewForm({
+                            ...newForm,
+                            workflowId: w.id.toString(),
+                          })
+                        }
+                        className={`p-3 rounded-lg border text-right transition-all flex flex-col justify-center ${
+                          isEmpty
+                            ? "opacity-50 cursor-not-allowed bg-gray-100 border-gray-200"
+                            : newForm.workflowId === w.id.toString()
+                            ? "border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                      >
+                        <div className="font-medium text-sm">{w.name}</div>
+                        {isEmpty && (
+                          <span className="text-xs text-red-500 mt-1">
+                            (תבנית ריקה)
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               <div>

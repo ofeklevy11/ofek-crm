@@ -14,7 +14,7 @@ export default async function FixedExpensesPage() {
   const expenses = await getFixedExpenses();
 
   return (
-    <div className="min-h-screen bg-gray-50/50 p-8">
+    <div className="min-h-screen bg-[#f4f8f8] p-8" dir="rtl">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -24,7 +24,7 @@ export default async function FixedExpensesPage() {
               className="inline-flex items-center text-sm text-gray-500 hover:text-gray-900 mb-2 transition-colors"
             >
               <ArrowRight className="w-4 h-4 ml-1" />
-              חזרה לפיננסים
+              חזרה למרכז הפיננסי
             </Link>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
               הוצאות קבועות
@@ -53,7 +53,7 @@ export default async function FixedExpensesPage() {
             <div className="h-10 w-px bg-gray-200" />
             <div className="text-right">
               <p className="text-sm text-gray-500 font-medium">הוצאות פעילות</p>
-              <p className="text-2xl font-bold text-blue-600">
+              <p className="text-2xl font-bold text-[#4f95ff]">
                 {expenses.filter((e: any) => e.status === "ACTIVE").length}
               </p>
             </div>

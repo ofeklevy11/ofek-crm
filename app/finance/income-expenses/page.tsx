@@ -11,7 +11,7 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   Wallet,
-  TrendingUp,
+  ArrowRight,
   HandCoins,
 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
@@ -62,15 +62,22 @@ export default async function IncomeExpensesPage() {
   }));
 
   return (
-    <div className="min-h-screen bg-gray-50/50 p-8 space-y-8">
+    <div className="min-h-screen bg-[#f4f8f8] p-8 space-y-8" dir="rtl">
       {/* Header & Actions */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
+          <Link
+            href="/finance"
+            className="inline-flex items-center text-sm text-gray-500 hover:text-gray-900 mb-2 transition-colors"
+          >
+            <ArrowRight className="w-4 h-4 ml-1" />
+            חזרה למרכז הפיננסי
+          </Link>
           <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
             הכנסות והוצאות
           </h1>
           <p className="text-gray-500 mt-1">
-            ניהול תزרימי המזומנים של העסק במקום אחד
+            ניהול תזרימי המזומנים של העסק במקום אחד
           </p>
         </div>
         <div className="flex gap-3">
@@ -79,7 +86,7 @@ export default async function IncomeExpensesPage() {
           <Link href="/finance/collect">
             <Button
               variant="outline"
-              className="gap-2 bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800 shadow-sm"
+              className="gap-2 bg-white border-[#a24ec1] text-[#a24ec1] hover:bg-purple-50 hover:text-[#a24ec1] shadow-sm"
             >
               <HandCoins className="w-4 h-4" />
               איסוף נתונים דינמי
@@ -91,7 +98,7 @@ export default async function IncomeExpensesPage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-6 border-l-4 border-l-green-500 shadow-sm hover:shadow-md transition-shadow">
+        <Card className="p-6 border-l-4 border-l-[#4f95ff] shadow-sm hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-gray-500">סה״כ הכנסות</p>
@@ -99,13 +106,13 @@ export default async function IncomeExpensesPage() {
                 ₪{stats.income.toLocaleString()}
               </h3>
             </div>
-            <div className="p-3 bg-green-50 rounded-lg">
-              <ArrowUpCircle className="w-6 h-6 text-green-600" />
+            <div className="p-3 bg-[#4f95ff]/10 rounded-lg">
+              <ArrowUpCircle className="w-6 h-6 text-[#4f95ff]" />
             </div>
           </div>
         </Card>
 
-        <Card className="p-6 border-l-4 border-l-red-500 shadow-sm hover:shadow-md transition-shadow">
+        <Card className="p-6 border-l-4 border-l-[#a24ec1] shadow-sm hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-gray-500">סה״כ הוצאות</p>
@@ -113,26 +120,26 @@ export default async function IncomeExpensesPage() {
                 ₪{stats.expense.toLocaleString()}
               </h3>
             </div>
-            <div className="p-3 bg-red-50 rounded-lg">
-              <ArrowDownCircle className="w-6 h-6 text-red-600" />
+            <div className="p-3 bg-[#a24ec1]/10 rounded-lg">
+              <ArrowDownCircle className="w-6 h-6 text-[#a24ec1]" />
             </div>
           </div>
         </Card>
 
-        <Card className="p-6 border-l-4 border-l-indigo-500 shadow-sm hover:shadow-md transition-shadow bg-indigo-50/50">
+        <Card className="p-6 border-l-4 border-l-gray-500 shadow-sm hover:shadow-md transition-shadow bg-gray-50">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-gray-500">רווח נקי</p>
               <h3
                 className={`text-3xl font-bold mt-2 ${
-                  stats.profit >= 0 ? "text-indigo-900" : "text-red-600"
+                  stats.profit >= 0 ? "text-[#4f95ff]" : "text-[#a24ec1]"
                 }`}
               >
                 ₪{stats.profit.toLocaleString()}
               </h3>
             </div>
-            <div className="p-3 bg-indigo-100 rounded-lg">
-              <Wallet className="w-6 h-6 text-indigo-600" />
+            <div className="p-3 bg-gray-200 rounded-lg">
+              <Wallet className="w-6 h-6 text-gray-600" />
             </div>
           </div>
         </Card>

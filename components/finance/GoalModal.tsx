@@ -36,7 +36,6 @@ import {
   Calendar,
   CheckSquare,
   Search,
-  ListFilter,
 } from "lucide-react";
 import {
   MetricType,
@@ -262,20 +261,20 @@ export default function GoalModal({
   };
 
   const PreviewBanner = () => (
-    <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between animate-in fade-in transition-all">
+    <div className="mt-4 p-3 bg-[#4f95ff]/10 border border-[#4f95ff]/20 rounded-lg flex items-center justify-between animate-in fade-in transition-all">
       <div className="flex items-center gap-2">
-        <div className="p-1.5 bg-blue-100 rounded-md">
+        <div className="p-1.5 bg-[#4f95ff]/20 rounded-md">
           {isPreviewLoading ? (
-            <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+            <Loader2 className="w-4 h-4 text-[#4f95ff] animate-spin" />
           ) : (
-            <Check className="w-4 h-4 text-blue-600" />
+            <Check className="w-4 h-4 text-[#4f95ff]" />
           )}
         </div>
         <div>
-          <span className="text-xs text-blue-600 font-medium uppercase tracking-wider block">
+          <span className="text-xs text-[#4f95ff] font-medium uppercase tracking-wider block">
             נכון להיום
           </span>
-          <span className="text-sm text-blue-900 font-bold">
+          <span className="text-sm text-gray-900 font-bold">
             {isPreviewLoading
               ? "מחשב..."
               : `${
@@ -285,7 +284,7 @@ export default function GoalModal({
         </div>
       </div>
       {!isPreviewLoading && previewValue === 0 && (
-        <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-1 rounded border border-amber-200">
+        <span className="text-xs text-[#a24ec1] font-medium bg-[#a24ec1]/10 px-2 py-1 rounded border border-[#a24ec1]/20">
           תוצאה: 0
         </span>
       )}
@@ -352,9 +351,9 @@ export default function GoalModal({
               setStep(2);
             }}
             className={cn(
-              "flex flex-col items-center p-4 rounded-xl border-2 transition-all hover:border-indigo-500 hover:bg-indigo-50",
+              "flex flex-col items-center p-4 rounded-xl border-2 transition-all hover:border-[#4f95ff] hover:bg-blue-50",
               formData.metricType === m.type
-                ? "border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600"
+                ? "border-[#4f95ff] bg-blue-50 ring-1 ring-[#4f95ff]"
                 : "border-gray-200 bg-white"
             )}
             type="button"
@@ -363,7 +362,7 @@ export default function GoalModal({
               className={cn(
                 "p-2 rounded-full mb-2",
                 formData.metricType === m.type
-                  ? "bg-indigo-200 text-indigo-700"
+                  ? "bg-[#4f95ff]/20 text-[#4f95ff]"
                   : "bg-gray-100 text-gray-600"
               )}
             >
@@ -412,7 +411,7 @@ export default function GoalModal({
                 className={cn(
                   "flex-1 py-1.5 text-sm font-medium rounded-md transition-all",
                   formData.targetType === "COUNT"
-                    ? "bg-white text-indigo-700 shadow-sm ring-1 ring-black/5"
+                    ? "bg-white text-[#4f95ff] shadow-sm ring-1 ring-black/5"
                     : "text-gray-500 hover:text-gray-700"
                 )}
               >
@@ -426,7 +425,7 @@ export default function GoalModal({
                 className={cn(
                   "flex-1 py-1.5 text-sm font-medium rounded-md transition-all",
                   formData.targetType === "SUM"
-                    ? "bg-white text-indigo-700 shadow-sm ring-1 ring-black/5"
+                    ? "bg-white text-[#4f95ff] shadow-sm ring-1 ring-black/5"
                     : "text-gray-500 hover:text-gray-700"
                 )}
               >
@@ -438,7 +437,7 @@ export default function GoalModal({
           {/* REVENUE SOURCE SELECTOR */}
           {formData.metricType === "REVENUE" && (
             <div className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-100">
-              <Label className="text-indigo-900 font-semibold">
+              <Label className="text-[#a24ec1] font-semibold">
                 מקור הכנסה לחישוב
               </Label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -449,7 +448,7 @@ export default function GoalModal({
                     "flex flex-col items-center justify-center gap-1 p-2 rounded-md border text-sm font-medium transition-all h-20",
                     formData.filters?.source === "TRANSACTIONS" ||
                       !formData.filters?.source
-                      ? "bg-white border-indigo-500 text-indigo-700 shadow-sm ring-1 ring-indigo-500"
+                      ? "bg-white border-[#4f95ff] text-[#4f95ff] shadow-sm ring-1 ring-[#4f95ff]"
                       : "border-gray-200 text-gray-600 hover:bg-white"
                   )}
                 >
@@ -466,7 +465,7 @@ export default function GoalModal({
                   className={cn(
                     "flex flex-col items-center justify-center gap-1 p-2 rounded-md border text-sm font-medium transition-all h-20",
                     formData.filters?.source === "FINANCE_RECORD"
-                      ? "bg-white border-indigo-500 text-indigo-700 shadow-sm ring-1 ring-indigo-500"
+                      ? "bg-white border-[#4f95ff] text-[#4f95ff] shadow-sm ring-1 ring-[#4f95ff]"
                       : "border-gray-200 text-gray-600 hover:bg-white"
                   )}
                 >
@@ -486,7 +485,7 @@ export default function GoalModal({
                   className={cn(
                     "flex flex-col items-center justify-center gap-1 p-2 rounded-md border text-sm font-medium transition-all h-20",
                     formData.filters?.source === "TABLE"
-                      ? "bg-white border-indigo-500 text-indigo-700 shadow-sm ring-1 ring-indigo-500"
+                      ? "bg-white border-[#4f95ff] text-[#4f95ff] shadow-sm ring-1 ring-[#4f95ff]"
                       : "border-gray-200 text-gray-600 hover:bg-white"
                   )}
                 >
@@ -499,7 +498,7 @@ export default function GoalModal({
               {formData.filters?.source === "FINANCE_RECORD" && (
                 <div className="space-y-3 pt-2 animate-in fade-in slide-in-from-top-2 bg-white p-3 rounded border border-gray-100">
                   <p className="text-sm text-gray-600 flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
+                    <Check className="w-4 h-4 text-[#4f95ff]" />
                     המערכת תסכום אוטומטית את כל ה<strong>הכנסות</strong> ממודול
                     הכנסות והוצאות.
                   </p>
@@ -662,7 +661,7 @@ export default function GoalModal({
           <PreviewBanner />
 
           <Button
-            className="w-full bg-indigo-600"
+            className="w-full bg-[#4f95ff] hover:bg-blue-600"
             onClick={() => setStep(3)}
             type="button"
           >
@@ -676,7 +675,7 @@ export default function GoalModal({
   const renderStep3 = () => (
     <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 pt-2">
       <div className="space-y-2">
-        <Label className="text-lg font-bold text-indigo-700">
+        <Label className="text-lg font-bold text-[#a24ec1]">
           {formData.targetType === "SUM" ? "סכום היעד" : "כמות היעד"}
         </Label>
         <div className="relative">
@@ -739,7 +738,7 @@ export default function GoalModal({
           חזרה
         </Button>
         <Button
-          className="flex-[2] bg-green-600 hover:bg-green-700 font-bold"
+          className="flex-2 bg-[#a24ec1] hover:bg-[#8e3dab] font-bold"
           onClick={handleSubmit}
           disabled={loading}
           type="button"
@@ -764,13 +763,16 @@ export default function GoalModal({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger || (
-          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200">
+          <Button className="bg-[#4f95ff] hover:bg-[#3d7ccc] text-white shadow-lg shadow-blue-200">
             <Plus className="w-4 h-4 mr-2" />
             יעד חדש
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent
+        className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-lg"
+        dir="rtl"
+      >
         <DialogHeader className="mb-2">
           <DialogTitle className="text-xl text-center md:text-right">
             {title}

@@ -29,7 +29,7 @@ export function DayView({
     <div className="flex flex-col h-full overflow-hidden bg-white">
       {/* Header Row */}
       <div className="flex border-b border-gray-200">
-        <div className="w-16 shrink-0 border-r border-gray-100 bg-white" />{" "}
+        <div className="w-16 shrink-0 border-l border-gray-100 bg-white" />{" "}
         {/* Time column spacer */}
         <div className="flex-1 py-3 text-center">
           <div
@@ -53,10 +53,10 @@ export function DayView({
       <div className="flex-1 overflow-y-auto">
         <div className="flex relative min-h-[600px]">
           {/* Time Column */}
-          <div className="w-16 shrink-0 border-r border-gray-100 bg-white select-none">
+          <div className="w-16 shrink-0 border-l border-gray-100 bg-white select-none">
             {timeSlots.map((time, index) => (
               <div key={index} className="h-14 relative">
-                <span className="absolute -top-2.5 right-2 text-xs text-gray-400">
+                <span className="absolute -top-2.5 left-2 text-xs text-gray-400">
                   {time}
                 </span>
               </div>
@@ -99,7 +99,7 @@ export function DayView({
                   }rem`,
                 }}
               >
-                <div className="absolute -left-1.5 -top-1.5 w-3 h-3 bg-red-500 rounded-full" />
+                <div className="absolute -right-1.5 -top-1.5 w-3 h-3 bg-red-500 rounded-full" />
               </div>
             )}
           </div>

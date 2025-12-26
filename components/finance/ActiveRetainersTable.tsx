@@ -9,6 +9,20 @@ interface ActiveRetainersTableProps {
   retainers: any[];
 }
 
+const getFrequencyLabel = (freq: string) => {
+  switch (freq?.toLowerCase()) {
+    case "monthly":
+      return "חודשי";
+    case "quarterly":
+      return "רבעוני";
+    case "annually":
+    case "yearly":
+      return "שנתי";
+    default:
+      return freq;
+  }
+};
+
 export default function ActiveRetainersTable({
   retainers,
 }: ActiveRetainersTableProps) {
@@ -54,7 +68,7 @@ export default function ActiveRetainersTable({
                     ₪{Number(retainer.amount).toLocaleString()}
                   </div>
                   <div className="text-xs text-gray-500 capitalize">
-                    {retainer.frequency}
+                    {getFrequencyLabel(retainer.frequency)}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">

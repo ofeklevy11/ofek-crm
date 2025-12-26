@@ -7,9 +7,7 @@ import {
   Trash2,
   Search,
   Calendar,
-  DollarSign,
   Briefcase,
-  AlertCircle,
 } from "lucide-react";
 import {
   createFixedExpense,
@@ -99,14 +97,14 @@ export default function FixedExpensesTable({
       // Optimistic update could be added here, but router.refresh() handles the re-fetch
     } catch (error) {
       console.error("Failed to save expense:", error);
-      alert("Failed to save expense. Please try again.");
+      alert("נכשל בשמירת ההוצאה. אנא נסה שוב.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this expense?")) return;
+    if (!confirm("האם אתה בטוח שברצונך למחוק הוצאה זו?")) return;
 
     try {
       await deleteFixedExpense(id);
@@ -124,17 +122,17 @@ export default function FixedExpensesTable({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir="rtl">
       {/* Header Actions */}
       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100">
         <div className="relative w-72">
           {/* Search could be implemented here */}
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
             <Search className="h-5 w-5 text-gray-400" />
           </div>
           <input
             type="text"
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:bg-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
+            className="block w-full pr-10 pl-3 py-2 border border-gray-300 rounded-lg leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#4f95ff] focus:border-[#4f95ff] sm:text-sm transition-colors text-right"
             placeholder="חיפוש הוצאות..."
             onChange={(e) => {
               // Client side filter logic if needed
@@ -143,7 +141,7 @@ export default function FixedExpensesTable({
         </div>
         <button
           onClick={() => handleOpenModal()}
-          className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all transform hover:scale-105"
+          className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-[#4f95ff] hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4f95ff] transition-all transform hover:scale-105"
         >
           <Plus className="ml-2 -mr-1 h-5 w-5" />
           הוסף הוצאה חדשה
@@ -166,7 +164,7 @@ export default function FixedExpensesTable({
             <div className="mt-6">
               <button
                 onClick={() => handleOpenModal()}
-                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-[#4f95ff] hover:bg-blue-600"
               >
                 <Plus className="ml-2 -mr-1 h-5 w-5" />
                 הוסף הוצאה
@@ -177,12 +175,12 @@ export default function FixedExpensesTable({
           initialExpenses.map((expense) => (
             <div
               key={expense.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200 overflow-hidden group"
+              className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200 overflow-hidden group text-right"
             >
               <div className="p-6">
                 <div className="flex justify-between items-start">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                    <div className="p-2 bg-[#4f95ff]/10 text-[#4f95ff] rounded-lg">
                       <Briefcase className="w-6 h-6" />
                     </div>
                     <div>
@@ -197,10 +195,10 @@ export default function FixedExpensesTable({
                       </p>
                     </div>
                   </div>
-                  <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex space-x-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => handleOpenModal(expense)}
-                      className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                      className="p-1.5 text-gray-400 hover:text-[#4f95ff] transition-colors"
                       title="ערוך"
                     >
                       <Pencil className="w-4 h-4" />
@@ -216,22 +214,22 @@ export default function FixedExpensesTable({
                 </div>
 
                 <div className="mt-6 pt-4 border-t border-gray-100 flex justify-between items-center">
+                  <div className="flex items-center gap-1 text-gray-900 font-bold text-xl">
+                    <span>₪{expense.amount.toLocaleString()}</span>
+                  </div>
                   <div
                     className="flex items-center gap-2 text-gray-600"
                     title="יום תשלום"
                   >
-                    <Calendar className="w-4 h-4" />
                     <span className="text-sm font-medium">
                       {frequencyLabels[expense.frequency] || expense.frequency}
                       {expense.payDay ? ` (${expense.payDay} בחודש)` : ""}
                     </span>
-                  </div>
-                  <div className="flex items-center gap-1 text-gray-900 font-bold text-xl">
-                    <span>₪{expense.amount.toLocaleString()}</span>
+                    <Calendar className="w-4 h-4" />
                   </div>
                 </div>
               </div>
-              <div className="h-1 bg-linear-to-r from-blue-500 to-indigo-600 w-full" />
+              <div className="h-1 bg-linear-to-r from-[#4f95ff] to-[#a24ec1] w-full" />
             </div>
           ))
         )}
@@ -258,10 +256,10 @@ export default function FixedExpensesTable({
               &#8203;
             </span>
             <div className="relative inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-right overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6 ml-auto mr-auto">
-              <div className="absolute top-0 right-0 pt-4 pr-4">
+              <div className="absolute top-0 left-0 pt-4 pl-4">
                 <button
                   type="button"
-                  className="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4f95ff]"
                   onClick={() => setIsModalOpen(false)}
                 >
                   <span className="sr-only">סגור</span>
@@ -304,7 +302,7 @@ export default function FixedExpensesTable({
                           name="title"
                           id="title"
                           required
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#4f95ff] focus:border-[#4f95ff] sm:text-sm"
                           placeholder="לדוגמה: רואה חשבון"
                           value={formData.title}
                           onChange={(e) =>
@@ -328,7 +326,7 @@ export default function FixedExpensesTable({
                             required
                             min="0"
                             step="0.01"
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#4f95ff] focus:border-[#4f95ff] sm:text-sm"
                             placeholder="0.00"
                             value={formData.amount}
                             onChange={(e) =>
@@ -350,7 +348,7 @@ export default function FixedExpensesTable({
                             type="text"
                             name="category"
                             id="category"
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#4f95ff] focus:border-[#4f95ff] sm:text-sm"
                             placeholder="שירותים/תוכנה..."
                             value={formData.category}
                             onChange={(e) =>
@@ -374,7 +372,7 @@ export default function FixedExpensesTable({
                           <select
                             id="frequency"
                             name="frequency"
-                            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-[#4f95ff] focus:border-[#4f95ff] sm:text-sm rounded-md"
                             value={formData.frequency}
                             onChange={(e) =>
                               setFormData({
@@ -402,7 +400,7 @@ export default function FixedExpensesTable({
                             id="payDay"
                             min="1"
                             max="31"
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#4f95ff] focus:border-[#4f95ff] sm:text-sm"
                             placeholder="1-31"
                             value={formData.payDay}
                             onChange={(e) =>
@@ -426,7 +424,7 @@ export default function FixedExpensesTable({
                           id="description"
                           name="description"
                           rows={3}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#4f95ff] focus:border-[#4f95ff] sm:text-sm"
                           placeholder="תיאור נוסף..."
                           value={formData.description}
                           onChange={(e) =>
@@ -438,17 +436,17 @@ export default function FixedExpensesTable({
                         />
                       </div>
 
-                      <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                      <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse gap-3">
                         <button
                           type="submit"
                           disabled={isSubmitting}
-                          className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                          className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-[#4f95ff] text-base font-medium text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4f95ff] sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
                         >
                           {isSubmitting ? "שומר..." : "שמור"}
                         </button>
                         <button
                           type="button"
-                          className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto sm:text-sm"
+                          className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4f95ff] sm:mt-0 sm:w-auto sm:text-sm"
                           onClick={() => setIsModalOpen(false)}
                         >
                           ביטול

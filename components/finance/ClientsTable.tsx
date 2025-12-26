@@ -16,7 +16,7 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
   const handleDelete = async (id: number) => {
     if (
       !confirm(
-        "Are you sure you want to delete this client? This will also delete all associated retainers and payments. This action cannot be undone."
+        "האם אתה בטוח שברצונך למחוק לקוח זה? פעולה זו תמחק גם את הריטיינרים והתשלומים המקושרים. לא ניתן לבטל פעולה זו."
       )
     )
       return;
@@ -41,22 +41,22 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+        <thead className="bg-[#f4f8f8]">
           <tr>
             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Name
+              שם
             </th>
             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Contact
+              פרטי קשר
             </th>
             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Active Retainers
+              ריטיינרים פעילים
             </th>
             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Outstanding
+              חוב פתוח
             </th>
             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Actions
+              פעולות
             </th>
           </tr>
         </thead>
@@ -98,13 +98,13 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
                   )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#4f95ff]/10 text-[#4f95ff]">
                     {client.retainers.length}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium text-center">
                   {outstanding > 0 ? (
-                    <span className="text-red-600">
+                    <span className="text-[#a24ec1]">
                       ₪{outstanding.toLocaleString()}
                     </span>
                   ) : (
@@ -115,23 +115,23 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
                   <div className="flex items-center justify-center gap-2">
                     <Link
                       href={`/finance/clients/${client.id}`}
-                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                      title="View Client"
+                      className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
+                      title="צפה בלקוח"
                     >
                       <Eye className="w-4 h-4" />
                     </Link>
                     <Link
                       href={`/finance/clients/${client.id}/edit`}
-                      className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all"
-                      title="Edit Client"
+                      className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
+                      title="ערוך לקוח"
                     >
                       <Edit2 className="w-4 h-4" />
                     </Link>
                     <button
                       onClick={() => handleDelete(client.id)}
                       disabled={deletingId === client.id}
-                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
-                      title="Delete Client"
+                      className="p-2 text-gray-600 hover:text-[#a24ec1] hover:bg-purple-50 rounded-lg transition-all disabled:opacity-50"
+                      title="מחק לקוח"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -143,7 +143,7 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
           {clients.length === 0 && (
             <tr>
               <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                No clients found. Start by adding your first client.
+                לא נמצאו לקוחות. התחל בהוספת הלקוח הראשון שלך.
               </td>
             </tr>
           )}

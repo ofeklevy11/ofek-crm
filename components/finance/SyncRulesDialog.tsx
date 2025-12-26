@@ -17,7 +17,7 @@ export default function SyncRulesDialog({ rules }: { rules: any[] }) {
       <DialogTrigger asChild>
         <Button
           variant="outline"
-          className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+          className="gap-2 border-[#a24ec1] text-[#a24ec1] hover:bg-purple-50"
         >
           <Settings className="w-4 h-4" />
           ניהול חוקי איסוף

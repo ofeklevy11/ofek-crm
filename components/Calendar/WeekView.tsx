@@ -38,7 +38,7 @@ export function WeekView({
     <div className="flex flex-col h-full overflow-hidden bg-white">
       {/* Header Row */}
       <div className="flex border-b border-gray-200">
-        <div className="w-16 shrink-0 border-r border-gray-100 bg-white" />{" "}
+        <div className="w-16 shrink-0 border-l border-gray-100 bg-white" />{" "}
         {/* Time column spacer */}
         <div className="flex flex-1">
           {weekDates.map((date, index) => {
@@ -46,7 +46,7 @@ export function WeekView({
             return (
               <div
                 key={index}
-                className="flex-1 py-3 text-center border-r border-gray-100 last:border-r-0"
+                className="flex-1 py-3 text-center border-l border-gray-100 last:border-l-0"
               >
                 <div
                   className={`text-xs font-medium mb-1 ${
@@ -74,10 +74,10 @@ export function WeekView({
       <div className="flex-1 overflow-y-auto">
         <div className="flex relative min-h-[600px]">
           {/* Time Column */}
-          <div className="w-16 shrink-0 border-r border-gray-100 bg-white select-none">
+          <div className="w-16 shrink-0 border-l border-gray-100 bg-white select-none">
             {timeSlots.map((time, index) => (
               <div key={index} className="h-14 relative">
-                <span className="absolute -top-2.5 right-2 text-xs text-gray-400">
+                <span className="absolute -top-2.5 left-2 text-xs text-gray-400">
                   {time}
                 </span>
               </div>
@@ -90,7 +90,7 @@ export function WeekView({
             {weekDates.map((date, dayIndex) => (
               <div
                 key={dayIndex}
-                className="flex-1 border-r border-gray-100 last:border-r-0 relative h-[calc(24*3.5rem)]"
+                className="flex-1 border-l border-gray-100 last:border-l-0 relative h-[calc(24*3.5rem)]"
               >
                 {/* Clickable Time Slots background */}
                 {timeSlots.map((_, hourIndex) => (

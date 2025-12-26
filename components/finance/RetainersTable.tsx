@@ -23,9 +23,7 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
 
   const handleDelete = async (id: string) => {
     if (
-      !confirm(
-        "Are you sure you want to delete this retainer? This action cannot be undone."
-      )
+      !confirm("האם אתה בטוח שברצונך למחוק ריטיינר זה? לא ניתן לבטל פעולה זו.")
     )
       return;
 
@@ -49,13 +47,26 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
-        return "bg-green-100 text-green-800";
+        return "bg-[#4f95ff]/10 text-[#4f95ff]";
       case "paused":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-gray-100 text-gray-800";
       case "cancelled":
-        return "bg-red-100 text-red-800";
+        return "bg-[#a24ec1]/10 text-[#a24ec1]";
       default:
         return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getFrequencyLabel = (freq: string) => {
+    switch (freq) {
+      case "monthly":
+        return "חודשי";
+      case "quarterly":
+        return "רבעוני";
+      case "annually":
+        return "שנתי";
+      default:
+        return freq;
     }
   };
 
@@ -63,28 +74,28 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
     <>
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+          <thead className="bg-[#f4f8f8]">
             <tr>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Client
+                לקוח
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Title
+                כותרת
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Amount
+                סכום
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Frequency
+                תדירות
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Next Due
+                תשלום הבא
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
+                סטטוס
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
+                פעולות
               </th>
             </tr>
           </thead>
@@ -97,7 +108,7 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
                 <td className="px-6 py-4 whitespace-nowrap">
                   <Link
                     href={`/finance/clients/${retainer.clientId}`}
-                    className="text-sm font-medium text-blue-600 hover:text-blue-900 hover:underline"
+                    className="text-sm font-medium text-[#4f95ff] hover:text-blue-900 hover:underline"
                   >
                     {retainer.client.name}
                   </Link>
@@ -108,12 +119,12 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 text-right">
                   ₪{Number(retainer.amount).toLocaleString()}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right capitalize">
-                  {retainer.frequency}
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
+                  {getFrequencyLabel(retainer.frequency)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
                   {retainer.nextDueDate ? (
-                    <div className="flex items-center gap-1 justify-end">
+                    <div className="flex items-center gap-1 justify-start">
                       <Calendar className="w-3 h-3" />
                       {new Date(retainer.nextDueDate).toLocaleDateString(
                         "he-IL"
@@ -129,30 +140,36 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
                       retainer.status
                     )}`}
                   >
-                    {retainer.status}
+                    {retainer.status === "active"
+                      ? "פעיל"
+                      : retainer.status === "paused"
+                      ? "מושהה"
+                      : retainer.status === "cancelled"
+                      ? "מבוטל"
+                      : retainer.status}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex items-center justify-start gap-2">
                     <Link
                       href={`/finance/clients/${retainer.clientId}`}
-                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                      title="View Client"
+                      className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
+                      title="צפה בלקוח"
                     >
                       <Eye className="w-4 h-4" />
                     </Link>
                     <button
                       onClick={() => handleEdit(retainer)}
-                      className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all"
-                      title="Edit Retainer"
+                      className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
+                      title="ערוך ריטיינר"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(retainer.id)}
                       disabled={deletingId === retainer.id}
-                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
-                      title="Delete Retainer"
+                      className="p-2 text-gray-600 hover:text-[#a24ec1] hover:bg-purple-50 rounded-lg transition-all disabled:opacity-50"
+                      title="מחק ריטיינר"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -163,7 +180,7 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
             {retainers.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
-                  No retainers found. Create your first retainer to get started.
+                  לא נמצאו ריטיינרים. צור את הריטיינר הראשון שלך.
                 </td>
               </tr>
             )}

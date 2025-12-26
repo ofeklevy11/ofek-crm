@@ -45,11 +45,11 @@ export default async function CollectDataPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50/50 p-8 space-y-8">
+    <div className="min-h-screen bg-[#f4f8f8] p-8 space-y-8" dir="rtl">
       <div className="max-w-4xl mx-auto">
         <Link
           href="/finance/income-expenses"
-          className="inline-flex items-center text-sm text-gray-500 hover:text-indigo-600 mb-6"
+          className="inline-flex items-center text-sm text-gray-500 hover:text-[#4f95ff] mb-6 transition-colors"
         >
           <ArrowRight className="w-4 h-4 ml-1" /> חזרה לדוח הפיננסי
         </Link>

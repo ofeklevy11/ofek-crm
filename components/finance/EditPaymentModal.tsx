@@ -61,7 +61,7 @@ export default function EditPaymentModal({
       router.refresh();
       onClose();
     } catch (err) {
-      setError("Failed to update payment");
+      setError("שגיאה בעדכון התשלום");
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -69,11 +69,7 @@ export default function EditPaymentModal({
   };
 
   const handleDelete = async () => {
-    if (
-      !confirm(
-        "Are you sure you want to delete this payment? This action cannot be undone."
-      )
-    )
+    if (!confirm("האם אתה בטוח שברצונך למחוק תשלום זה? לא ניתן לבטל פעולה זו."))
       return;
 
     setIsLoading(true);
@@ -87,7 +83,7 @@ export default function EditPaymentModal({
       router.refresh();
       onClose();
     } catch (err) {
-      setError("Failed to delete payment");
+      setError("שגיאה במחיקת התשלום");
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -95,10 +91,13 @@ export default function EditPaymentModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      dir="rtl"
+    >
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden text-right">
         <div className="flex justify-between items-center p-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">Edit Payment</h2>
+          <h2 className="text-lg font-semibold text-gray-900">עריכת תשלום</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
@@ -116,7 +115,7 @@ export default function EditPaymentModal({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Title
+              כותרת
             </label>
             <input
               type="text"
@@ -132,7 +131,7 @@ export default function EditPaymentModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Amount (₪)
+                סכום (₪)
               </label>
               <input
                 type="number"
@@ -148,7 +147,7 @@ export default function EditPaymentModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Due Date
+                תאריך יעד
               </label>
               <input
                 type="date"
@@ -164,7 +163,7 @@ export default function EditPaymentModal({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Status
+              סטטוס
             </label>
             <select
               value={formData.status}
@@ -173,16 +172,16 @@ export default function EditPaymentModal({
               }
               className="w-full rounded-lg border border-gray-300 p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
             >
-              <option value="pending">Pending</option>
-              <option value="paid">Paid</option>
-              <option value="overdue">Overdue</option>
-              <option value="cancelled">Cancelled</option>
+              <option value="pending">ממתין</option>
+              <option value="paid">שולם</option>
+              <option value="overdue">באיחור</option>
+              <option value="cancelled">בוטל</option>
             </select>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notes
+              הערות
             </label>
             <textarea
               value={formData.notes}
@@ -201,7 +200,7 @@ export default function EditPaymentModal({
               className="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1"
             >
               <Trash2 className="w-4 h-4" />
-              Delete
+              מחק
             </button>
             <div className="flex gap-3">
               <button
@@ -209,19 +208,19 @@ export default function EditPaymentModal({
                 onClick={onClose}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
               >
-                Cancel
+                ביטול
               </button>
               <button
                 type="submit"
                 disabled={isLoading}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                className="px-4 py-2 text-sm font-medium text-white bg-[#4f95ff] rounded-lg hover:bg-blue-600 flex items-center gap-2"
               >
                 {isLoading ? (
-                  "Saving..."
+                  "שומר..."
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    Save Changes
+                    שמור שינויים
                   </>
                 )}
               </button>

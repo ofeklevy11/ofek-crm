@@ -71,36 +71,36 @@ export default function AddTransactionModal() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="font-bold shadow-lg shadow-indigo-200">
+        <Button className="font-bold bg-[#4f95ff] hover:bg-blue-600 shadow-lg shadow-blue-200">
           <Plus className="w-4 h-4 mr-2" />
           הוסף תנועה
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px]" dir="rtl">
         <DialogHeader>
-          <DialogTitle>הוספת תנועה חדשה</DialogTitle>
+          <DialogTitle className="text-right">הוספת תנועה חדשה</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4 py-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>סוג תנועה</Label>
+              <Label className="text-right block">סוג תנועה</Label>
               <Select
                 value={formData.type}
                 onValueChange={(val) =>
                   setFormData((p) => ({ ...p, type: val }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="text-right" dir="rtl">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent dir="rtl">
                   <SelectItem value="INCOME">הכנסה (+)</SelectItem>
                   <SelectItem value="EXPENSE">הוצאה (-)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>תאריך</Label>
+              <Label className="text-right block">תאריך</Label>
               <Input
                 type="date"
                 required
@@ -108,12 +108,13 @@ export default function AddTransactionModal() {
                 onChange={(e) =>
                   setFormData((p) => ({ ...p, date: e.target.value }))
                 }
+                className="text-right"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label>תיאור / כותרת</Label>
+            <Label className="text-right block">תיאור / כותרת</Label>
             <Input
               placeholder="למשל: תשלום ספקים, מכירה ללקוח..."
               required
@@ -121,12 +122,13 @@ export default function AddTransactionModal() {
               onChange={(e) =>
                 setFormData((p) => ({ ...p, title: e.target.value }))
               }
+              className="text-right"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>סכום (₪)</Label>
+              <Label className="text-right block">סכום (₪)</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -136,21 +138,27 @@ export default function AddTransactionModal() {
                 onChange={(e) =>
                   setFormData((p) => ({ ...p, amount: e.target.value }))
                 }
+                className="text-right"
               />
             </div>
             <div className="space-y-2">
-              <Label>קטגוריה (אופציונלי)</Label>
+              <Label className="text-right block">קטגוריה (אופציונלי)</Label>
               <Input
                 placeholder="שיווק, משרד, וכו'"
                 value={formData.category}
                 onChange={(e) =>
                   setFormData((p) => ({ ...p, category: e.target.value }))
                 }
+                className="text-right"
               />
             </div>
           </div>
 
-          <Button type="submit" disabled={loading} className="w-full mt-2">
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full mt-2 bg-[#a24ec1] hover:bg-[#8e3dab]"
+          >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (

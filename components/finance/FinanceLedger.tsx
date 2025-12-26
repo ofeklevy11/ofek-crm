@@ -84,7 +84,10 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div
+      className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
+      dir="rtl"
+    >
       {/* Header & Filters */}
       <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
         <h3 className="font-bold text-gray-800 flex items-center gap-2">
@@ -110,8 +113,8 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
             className={cn(
               "px-3 py-1 text-xs font-medium rounded-md transition-all",
               filter === "INCOME"
-                ? "bg-white shadow-sm text-green-700"
-                : "text-gray-500 hover:text-green-700"
+                ? "bg-white shadow-sm text-[#4f95ff]"
+                : "text-gray-500 hover:text-[#4f95ff]"
             )}
           >
             הכנסות
@@ -121,8 +124,8 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
             className={cn(
               "px-3 py-1 text-xs font-medium rounded-md transition-all",
               filter === "EXPENSE"
-                ? "bg-white shadow-sm text-red-700"
-                : "text-gray-500 hover:text-red-700"
+                ? "bg-white shadow-sm text-[#a24ec1]"
+                : "text-gray-500 hover:text-[#a24ec1]"
             )}
           >
             הוצאות
@@ -134,12 +137,12 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[100px]">תאריך</TableHead>
-              <TableHead>תיאור</TableHead>
-              <TableHead>קטגוריה</TableHead>
-              <TableHead>לקוח משויך</TableHead>
-              <TableHead>מקור</TableHead>
-              <TableHead className="text-right">סכום</TableHead>
+              <TableHead className="w-[100px] text-right">תאריך</TableHead>
+              <TableHead className="text-right">תיאור</TableHead>
+              <TableHead className="text-right">קטגוריה</TableHead>
+              <TableHead className="text-right">לקוח משויך</TableHead>
+              <TableHead className="text-right">מקור</TableHead>
+              <TableHead className="text-left">סכום</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
@@ -156,16 +159,16 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
             ) : (
               filteredRecords.map((record) => (
                 <TableRow key={record.id} className="group hover:bg-gray-50/50">
-                  <TableCell className="font-medium text-gray-600">
+                  <TableCell className="font-medium text-gray-600 text-right">
                     {format(new Date(record.date), "dd/MM/yyyy")}
                   </TableCell>
-                  <TableCell className="font-medium text-gray-900">
+                  <TableCell className="font-medium text-gray-900 text-right">
                     <div className="flex items-center gap-2">
                       {record.title}
                       {record.syncRule?.sourceType === "TABLE" && (
                         <div
                           title={`סונכרן אוטומטית מהטבלה: ${record.syncRule.name}`}
-                          className="text-blue-500"
+                          className="text-[#4f95ff]"
                         >
                           <TableIcon className="w-4 h-4" />
                         </div>
@@ -175,7 +178,7 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
                       {record.category}
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-right">
                     {record.category && (
                       <Badge
                         variant="outline"
@@ -185,14 +188,14 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-gray-500 text-sm">
+                  <TableCell className="text-gray-500 text-sm text-right">
                     {record.client?.name || "-"}
                   </TableCell>
-                  <TableCell className="text-gray-500 text-sm">
+                  <TableCell className="text-gray-500 text-sm text-right">
                     {record.syncRule?.name ? (
                       <Badge
                         variant="outline"
-                        className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200"
+                        className="text-xs font-normal bg-[#4f95ff]/10 text-[#4f95ff] border-[#4f95ff]/20"
                       >
                         {record.syncRule.name}
                       </Badge>
@@ -200,13 +203,13 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
                       <span className="text-gray-400">ידני</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-left">
                     <span
                       className={cn(
                         "font-bold flex items-center justify-end gap-1",
                         record.type === "INCOME"
-                          ? "text-green-600"
-                          : "text-red-600"
+                          ? "text-[#4f95ff]"
+                          : "text-[#a24ec1]"
                       )}
                     >
                       {record.type === "INCOME" ? (
@@ -223,7 +226,7 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
                       size="icon"
                       disabled={isDeleting === record.id}
                       onClick={() => setDeleteRecord(record)}
-                      className="h-8 w-8 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
+                      className="h-8 w-8 text-gray-400 hover:text-[#a24ec1] opacity-0 group-hover:opacity-100 transition-all"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -239,11 +242,11 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
         open={!!deleteRecord}
         onOpenChange={(open) => !open && setDeleteRecord(null)}
       >
-        <DialogContent>
+        <DialogContent dir="rtl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-right">
               {deleteRecord?.syncRule?.sourceType === "TABLE" ? (
-                <span className="text-red-600 flex items-center gap-2">
+                <span className="text-[#a24ec1] flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5" />
                   אזהרה חמורה: מחיקת תנועה מסונכרנת
                 </span>
@@ -251,9 +254,9 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
                 "מחיקת תנועה"
               )}
             </DialogTitle>
-            <DialogDescription className="pt-2 space-y-2">
+            <DialogDescription className="pt-2 space-y-2 text-right">
               {deleteRecord?.syncRule?.sourceType === "TABLE" ? (
-                <div className="bg-red-50 p-4 rounded-md border border-red-100 text-red-800">
+                <div className="bg-[#a24ec1]/10 p-4 rounded-md border border-[#a24ec1]/20 text-[#a24ec1]">
                   <p className="font-bold flex items-center gap-2 mb-2">
                     <AlertTriangle className="w-5 h-5" />
                     פעולה קריטית!
@@ -281,6 +284,11 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
               }
               onClick={confirmDelete}
               disabled={isDeleting !== null}
+              className={cn(
+                deleteRecord?.syncRule?.sourceType === "TABLE"
+                  ? "bg-[#a24ec1] hover:bg-purple-700"
+                  : "bg-[#4f95ff] hover:bg-blue-600"
+              )}
             >
               {isDeleting ? "מוחק..." : "אשר מחיקה"}
             </Button>

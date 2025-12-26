@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 export default function EditClientPage({
@@ -46,7 +46,7 @@ export default function EditClientPage({
       });
     } catch (err) {
       console.error(err);
-      setError("Failed to load client");
+      setError("נכשל בטעינת לקוח");
     } finally {
       setIsLoading(false);
     }
@@ -70,7 +70,7 @@ export default function EditClientPage({
       router.refresh();
     } catch (err) {
       console.error(err);
-      setError("Failed to update client");
+      setError("נכשל בעדכון לקוח");
     } finally {
       setIsSaving(false);
     }
@@ -78,28 +78,34 @@ export default function EditClientPage({
 
   if (isLoading) {
     return (
-      <div className="p-8 space-y-8 bg-gray-50/50 min-h-screen">
+      <div
+        className="p-8 space-y-8 bg-[#f4f8f8] min-h-screen text-right"
+        dir="rtl"
+      >
         <div className="text-center py-12">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
-          <p className="mt-4 text-gray-600">Loading client...</p>
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-[#4f95ff] border-r-transparent"></div>
+          <p className="mt-4 text-gray-600">טוען לקוח...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8 space-y-8 bg-gray-50/50 min-h-screen">
+    <div
+      className="p-8 space-y-8 bg-[#f4f8f8] min-h-screen text-right"
+      dir="rtl"
+    >
       <div>
         <Link
           href={`/finance/clients/${clientId}`}
           className="inline-flex items-center text-sm text-gray-500 hover:text-gray-900 mb-4"
         >
-          <ArrowLeft className="w-4 h-4 mr-1" /> Back to Client
+          <ArrowRight className="w-4 h-4 ml-1" /> חזרה ללקוח
         </Link>
         <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
-          Edit Client
+          עריכת לקוח
         </h1>
-        <p className="text-gray-500 mt-1">Update client information</p>
+        <p className="text-gray-500 mt-1">עדכון פרטי הלקוח</p>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-2xl">
@@ -112,7 +118,7 @@ export default function EditClientPage({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Name <span className="text-red-500">*</span>
+              שם מלא <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -127,7 +133,7 @@ export default function EditClientPage({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Email
+              אימייל
             </label>
             <input
               type="email"
@@ -141,7 +147,7 @@ export default function EditClientPage({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Phone
+              טלפון
             </label>
             <input
               type="tel"
@@ -155,7 +161,7 @@ export default function EditClientPage({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Company
+              חברה
             </label>
             <input
               type="text"
@@ -169,7 +175,7 @@ export default function EditClientPage({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Notes
+              הערות
             </label>
             <textarea
               value={formData.notes}
@@ -186,19 +192,19 @@ export default function EditClientPage({
               href={`/finance/clients/${clientId}`}
               className="flex-1 px-6 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-center"
             >
-              Cancel
+              ביטול
             </Link>
             <button
               type="submit"
               disabled={isSaving}
-              className="flex-1 px-6 py-3 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              className="flex-1 px-6 py-3 text-sm font-medium text-white bg-[#4f95ff] rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {isSaving ? (
-                "Saving..."
+                "שומר..."
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  Save Changes
+                  שמור שינויים
                 </>
               )}
             </button>

@@ -10,33 +10,43 @@ import { useRouter } from "next/navigation";
 
 interface WorkflowBoardProps {
   workflow: Workflow & { stages: WorkflowStage[] };
+  onStageCreated?: (stage: WorkflowStage) => void;
+  onStageUpdated?: (stage: WorkflowStage) => void;
+  onStageDeleted?: (stageId: number) => void;
 }
 
-export function WorkflowBoard({ workflow }: WorkflowBoardProps) {
+export function WorkflowBoard({
+  workflow,
+  onStageCreated,
+  onStageUpdated,
+  onStageDeleted,
+}: WorkflowBoardProps) {
   const [selectedStage, setSelectedStage] = useState<WorkflowStage | null>(
     null
   );
+  const [isCreatingStage, setIsCreatingStage] = useState(false);
   const router = useRouter();
 
-  const handleCreateStage = async () => {
-    const name = prompt("שם השלב החדש:");
-    if (!name) return;
+  const handleCreateStage = () => {
+    setIsCreatingStage(true);
+  };
 
+  const handleSaveNewStage = async (stageData: any) => {
     try {
       // @ts-ignore
-      await createStage(workflow.id, {
-        name,
-        color: "gray",
-        icon: "Circle",
-        details: {
-          whatHappens: "תיאור קצר של מה קורה בשלב זה...",
-          systemActions: ["פעולה 1", "פעולה 2"],
-          goals: "מטרת השלב הזה היא...",
-          conditions: [],
-        },
+      const newStage = await createStage(workflow.id, {
+        name: stageData.name,
+        color: stageData.color,
+        icon: stageData.icon,
+        description: stageData.description,
+        details: stageData.details,
       });
-      // In a real app we'd optimistic update here, but router refresh is safer for now
-      router.refresh();
+
+      if (onStageCreated) {
+        onStageCreated(newStage);
+      } else {
+        router.refresh();
+      }
     } catch (error) {
       console.error(error);
       alert("שגיאה ביצירת שלב");
@@ -114,6 +124,16 @@ export function WorkflowBoard({ workflow }: WorkflowBoardProps) {
         stage={selectedStage}
         isOpen={!!selectedStage}
         onClose={() => setSelectedStage(null)}
+        onUpdate={onStageUpdated}
+        onDelete={onStageDeleted}
+      />
+
+      <StageDetailModal
+        stage={null}
+        isOpen={isCreatingStage}
+        onClose={() => setIsCreatingStage(false)}
+        isCreating={true}
+        onSave={handleSaveNewStage}
       />
     </div>
   );

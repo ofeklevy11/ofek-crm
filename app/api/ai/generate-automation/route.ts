@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     
     The JSON must strictly follow this format:
     {
-      "name": "string (descriptive name for the automation, in Hebrew if request is Hebrew)",
+      "name": "string (descriptive name for the automation, ALWAYS in Hebrew)",
       "triggerType": "string (one of: 'NEW_RECORD', 'RECORD_FIELD_CHANGE', 'TASK_STATUS_CHANGE', 'MULTI_EVENT_DURATION')",
       "triggerConfig": {
         // REQUIRED for ALL types (except TASK_STATUS_CHANGE, but recommended):
@@ -102,6 +102,7 @@ export async function POST(req: Request) {
     6. Return ONLY the JSON object. No markdown or explanations.
     7. ALWAYS find the most relevant table ID from the Context and put it in triggerConfig.tableId.
     8. Look CAREFULLY at the 'Columns' list for each table in CONTEXT to find the correct columnId. Do NOT guess column IDs or names. Use the exact ID provided in the column list (e.g. 'fld_xxxxx'). IF you cannot find the column ID, try to find the closest match by name but prefer ID.
+    9. All text content (names, titles, messages) MUST be in Hebrew.
     `;
 
     const response = await fetch(

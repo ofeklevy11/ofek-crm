@@ -415,9 +415,25 @@ export default function CustomerListManager({
     setIsSaving(true);
     try {
       const ruleData = {
-        name: `Nurture Auto-Add: ${
+        name: `הוספה לרשימת ${
+          listSlug === "birthday"
+            ? "יום הולדת"
+            : listSlug === "referral"
+            ? "חבר מביא חבר"
+            : listSlug === "upsell"
+            ? "מכירות חוזרות"
+            : listSlug === "winback"
+            ? "שימור לקוחות"
+            : listSlug === "vip"
+            ? "לקוחות VIP"
+            : listSlug === "review"
+            ? "ביקורות"
+            : listSlug === "renewal"
+            ? "חידושים"
+            : listSlug
+        }: ${
           autoConfig.trigger === "record_created" ? "רשומה חדשה" : "שינוי סטטוס"
-        } - ${getTableName(autoConfig.tableId)}`,
+        } ב-${getTableName(autoConfig.tableId)}`,
         triggerType:
           autoConfig.trigger === "record_created"
             ? "NEW_RECORD"

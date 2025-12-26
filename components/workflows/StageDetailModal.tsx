@@ -40,6 +40,10 @@ interface StageDetailModalProps {
   stage: WorkflowStage | null;
   isOpen: boolean;
   onClose: () => void;
+  isCreating?: boolean;
+  onSave?: (data: any) => Promise<void>;
+  onUpdate?: (stage: WorkflowStage) => void;
+  onDelete?: (stageId: number) => void;
 }
 
 // ----------------------------------------------------------------------
@@ -254,7 +258,10 @@ function ActionSelectionModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+    <div
+      className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200"
+      style={{ margin: 0 }}
+    >
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <div className="flex items-center gap-2">
@@ -1117,6 +1124,10 @@ export function StageDetailModal({
   stage,
   isOpen,
   onClose,
+  isCreating = false,
+  onSave,
+  onUpdate,
+  onDelete,
 }: StageDetailModalProps) {
   const router = useRouter();
   const [formData, setFormData] = useState<any>(null);
@@ -1170,10 +1181,23 @@ export function StageDetailModal({
         conditions: Array.isArray(details.conditions) ? details.conditions : [],
       });
       setIsEditing(false);
+    } else if (isCreating) {
+      setFormData({
+        name: "",
+        color: "blue",
+        icon: "Circle",
+        whatHappens: "",
+        systemActions: [],
+        goals: "",
+        conditions: [],
+      });
+      setIsEditing(true);
     }
-  }, [stage]);
+  }, [stage, isCreating]);
 
-  if (!stage || !formData) return null;
+  if (!isOpen) return null;
+  if (!stage && !isCreating) return null;
+  if (!formData && isOpen) return null; // Wait for initialization
 
   const handleSave = async () => {
     try {
@@ -1182,20 +1206,42 @@ export function StageDetailModal({
         return;
       }
 
-      await updateStage(stage.id, {
+      const details = {
+        whatHappens: formData.whatHappens,
+        systemActions: formData.systemActions,
+        goals: formData.goals,
+        conditions: formData.conditions,
+      };
+
+      if (isCreating && onSave) {
+        await onSave({
+          name: formData.name,
+          color: formData.color,
+          icon: formData.icon,
+          description: formData.whatHappens,
+          details,
+        });
+        onClose();
+        return;
+      }
+
+      // @ts-ignore
+      const updatedStage = await updateStage(stage!.id, {
         name: formData.name,
         color: formData.color,
         icon: formData.icon,
         description: formData.whatHappens,
-        details: {
-          whatHappens: formData.whatHappens,
-          systemActions: formData.systemActions,
-          goals: formData.goals,
-          conditions: formData.conditions,
-        },
+        details,
       });
+
+      if (onUpdate) {
+        // Optimistic update via callback
+        // @ts-ignore
+        onUpdate(updatedStage);
+      } else {
+        router.refresh();
+      }
       setIsEditing(false);
-      router.refresh();
       onClose();
     } catch (error) {
       console.error("Failed to save stage:", error);
@@ -1204,11 +1250,18 @@ export function StageDetailModal({
   };
 
   const handleDelete = async () => {
+    if (!stage) return;
     if (confirm("האם אתה בטוח שברצונך למחוק שלב זה?")) {
       try {
         await deleteStage(stage.id);
+
+        if (onDelete) {
+          onDelete(stage.id);
+        } else {
+          router.refresh();
+        }
+
         onClose();
-        router.refresh();
       } catch (error) {
         console.error("Failed to delete stage:", error);
         alert("שגיאה במחיקת השלב");
@@ -1492,12 +1545,31 @@ export function StageDetailModal({
                 מחק שלב
               </button>
               <button
-                onClick={() => setIsEditing(true)}
-                className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm shadow-indigo-200"
+                onClick={() => (isCreating ? onClose() : setIsEditing(true))}
+                className={`flex items-center gap-2 bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm shadow-indigo-200 ${
+                  isCreating ? "hidden" : ""
+                }`}
               >
                 <Edit2 size={16} />
                 ערוך הגדרות
               </button>
+              {isCreating && (
+                <div className="flex gap-2 w-full justify-end">
+                  <button
+                    onClick={onClose}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-900 text-sm font-medium"
+                  >
+                    ביטול
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm shadow-indigo-200"
+                  >
+                    <Plus size={16} />
+                    צור שלב
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>

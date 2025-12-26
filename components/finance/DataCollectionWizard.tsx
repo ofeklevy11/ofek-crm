@@ -147,7 +147,7 @@ export default function DataCollectionWizard({
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
+    <div className="max-w-2xl mx-auto space-y-8" dir="rtl">
       {/* Progress Steps */}
       <div className="flex justify-between items-center px-8 relative">
         <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-gray-200 -z-10" />
@@ -156,7 +156,7 @@ export default function DataCollectionWizard({
             key={s}
             className={`w-10 h-10 rounded-full flex items-center justify-center font-bold border-2 transition-colors bg-white ${
               step >= s
-                ? "border-indigo-600 text-indigo-600"
+                ? "border-[#4f95ff] text-[#4f95ff]"
                 : "border-gray-300 text-gray-400"
             }`}
           >
@@ -165,7 +165,7 @@ export default function DataCollectionWizard({
         ))}
       </div>
 
-      <Card className="p-6 shadow-lg border-indigo-100 min-h-[400px]">
+      <Card className="p-6 shadow-lg border-blue-100 min-h-[400px]">
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in">
             <div className="text-center mb-4">
@@ -181,7 +181,7 @@ export default function DataCollectionWizard({
                   onClick={() => setSourceType("TABLE")}
                   className={`flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all ${
                     sourceType === "TABLE"
-                      ? "bg-white shadow-sm text-indigo-600"
+                      ? "bg-white shadow-sm text-[#4f95ff]"
                       : "text-gray-500 hover:text-gray-700"
                   }`}
                 >
@@ -191,7 +191,7 @@ export default function DataCollectionWizard({
                   onClick={() => setSourceType("TRANSACTIONS")}
                   className={`flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all ${
                     sourceType === "TRANSACTIONS"
-                      ? "bg-white shadow-sm text-indigo-600"
+                      ? "bg-white shadow-sm text-[#4f95ff]"
                       : "text-gray-500 hover:text-gray-700"
                   }`}
                 >
@@ -212,6 +212,7 @@ export default function DataCollectionWizard({
                         ? "למשל: ייבוא לידים כהכנסה"
                         : "למשל: סנכרון תשלומים מהמערכת"
                     }
+                    className="text-right"
                   />
                 </div>
 
@@ -224,7 +225,7 @@ export default function DataCollectionWizard({
                       }
                       className={`p-3 rounded-lg border-2 font-bold transition-all text-sm ${
                         formData.targetType === "INCOME"
-                          ? "border-green-500 bg-green-50 text-green-700"
+                          ? "border-[#4f95ff] bg-blue-50 text-[#4f95ff]"
                           : "border-gray-200"
                       }`}
                     >
@@ -236,7 +237,7 @@ export default function DataCollectionWizard({
                       }
                       className={`p-3 rounded-lg border-2 font-bold transition-all text-sm ${
                         formData.targetType === "EXPENSE"
-                          ? "border-red-500 bg-red-50 text-red-700"
+                          ? "border-[#a24ec1] bg-purple-50 text-[#a24ec1]"
                           : "border-gray-200"
                       }`}
                     >
@@ -254,10 +255,10 @@ export default function DataCollectionWizard({
                         setFormData((p) => ({ ...p, sourceId: val }))
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="text-right" dir="rtl">
                         <SelectValue placeholder="בחר טבלה..." />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent dir="rtl">
                         {tables.map((t) => (
                           <SelectItem key={t.id} value={t.id.toString()}>
                             {t.name}
@@ -285,6 +286,7 @@ export default function DataCollectionWizard({
                   !formData.name ||
                   (sourceType === "TABLE" && !formData.sourceId)
                 }
+                className="bg-[#4f95ff] hover:bg-blue-600"
               >
                 {sourceType === "TABLE" ? "המשך למיפוי" : "המשך לסיכום"}{" "}
                 <ArrowLeft className="w-4 h-4 mr-2" />
@@ -316,7 +318,7 @@ export default function DataCollectionWizard({
             ) : (
               <div className="grid gap-6">
                 <div className="space-y-2">
-                  <Label className="text-indigo-600 font-bold">
+                  <Label className="text-[#a24ec1] font-bold">
                     עמודת סכום (מספרים בלבד)
                   </Label>
                   <Select
@@ -328,10 +330,10 @@ export default function DataCollectionWizard({
                       }))
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="text-right" dir="rtl">
                       <SelectValue placeholder="בחר עמודת מחיר..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent dir="rtl">
                       {numberColumns.length > 0 ? (
                         numberColumns.map((c) => (
                           <SelectItem key={c.key} value={c.key}>
@@ -359,10 +361,10 @@ export default function DataCollectionWizard({
                         }))
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="text-right" dir="rtl">
                         <SelectValue placeholder="תאריך יצירה (ברירת מחדל)" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent dir="rtl">
                         {currentColumns.map((c) => (
                           <SelectItem key={c.key} value={c.key}>
                             {c.name}
@@ -383,10 +385,10 @@ export default function DataCollectionWizard({
                         }))
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="text-right" dir="rtl">
                         <SelectValue placeholder="בחר..." />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent dir="rtl">
                         {currentColumns.map((c) => (
                           <SelectItem key={c.key} value={c.key}>
                             {c.name}
@@ -433,10 +435,10 @@ export default function DataCollectionWizard({
                           }))
                         }
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="text-right" dir="rtl">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent dir="rtl">
                           <SelectItem value="static">
                             ערך קבוע (מומלץ)
                           </SelectItem>
@@ -463,6 +465,7 @@ export default function DataCollectionWizard({
                               },
                             }))
                           }
+                          className="text-right"
                         />
                       ) : (
                         <div className="p-2 bg-gray-100 rounded text-sm text-gray-500 border">
@@ -482,6 +485,7 @@ export default function DataCollectionWizard({
               <Button
                 onClick={() => setStep(3)}
                 disabled={!formData.mapping.amountField}
+                className="bg-[#4f95ff] hover:bg-blue-600"
               >
                 הבא: סיכום והרצה <ArrowLeft className="w-4 h-4 mr-2" />
               </Button>
@@ -491,8 +495,8 @@ export default function DataCollectionWizard({
 
         {step === 3 && (
           <div className="space-y-6 animate-in fade-in flex flex-col items-center justify-center text-center py-8">
-            <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4">
-              <Database className="w-8 h-8 text-indigo-600" />
+            <div className="w-16 h-16 bg-[#4f95ff]/10 rounded-full flex items-center justify-center mb-4">
+              <Database className="w-8 h-8 text-[#4f95ff]" />
             </div>
             <h2 className="text-2xl font-bold">מוכן לסנכרון!</h2>
 
@@ -514,8 +518,8 @@ export default function DataCollectionWizard({
                 <span
                   className={`font-bold ${
                     formData.targetType === "INCOME"
-                      ? "text-green-600"
-                      : "text-red-600"
+                      ? "text-[#4f95ff]"
+                      : "text-[#a24ec1]"
                   }`}
                 >
                   {formData.targetType === "INCOME" ? "הכנסות" : "הוצאות"}
@@ -532,7 +536,7 @@ export default function DataCollectionWizard({
                 חזרה
               </Button>
               <Button
-                className="flex-2 bg-indigo-600 hover:bg-indigo-700 text-lg py-6"
+                className="flex-2 bg-[#4f95ff] hover:bg-blue-600 text-lg py-6"
                 onClick={handleCreateAndRun}
                 disabled={loading}
               >

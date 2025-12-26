@@ -110,7 +110,10 @@ export default function ActiveSyncRules({ rules }: { rules: any[] }) {
     );
 
   return (
-    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div
+      className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500"
+      dir="rtl"
+    >
       <h2 className="text-xl font-bold text-gray-900">חוקי איסוף פעילים</h2>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-1">
         {rules.map((rule) => {
@@ -121,17 +124,17 @@ export default function ActiveSyncRules({ rules }: { rules: any[] }) {
               key={rule.id}
               className={`p-4 flex flex-col justify-between border-l-4 transition-all ${
                 isEditing
-                  ? "border-l-blue-500 bg-blue-50/30"
-                  : "border-l-indigo-500 hover:shadow-md"
+                  ? "border-l-[#4f95ff] bg-blue-50/30"
+                  : "border-l-[#a24ec1] hover:shadow-md"
               }`}
             >
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-start gap-3 w-full">
-                  <div className="p-2 bg-indigo-50 rounded-lg shrink-0">
+                  <div className="p-2 bg-[#4f95ff]/10 rounded-lg shrink-0">
                     {rule.sourceType === "TABLE" ? (
-                      <Database className="w-5 h-5 text-indigo-600" />
+                      <Database className="w-5 h-5 text-[#4f95ff]" />
                     ) : (
-                      <CreditCard className="w-5 h-5 text-indigo-600" />
+                      <CreditCard className="w-5 h-5 text-[#4f95ff]" />
                     )}
                   </div>
                   <div className="w-full">
@@ -150,7 +153,7 @@ export default function ActiveSyncRules({ rules }: { rules: any[] }) {
                             onClick={() => setEditType("INCOME")}
                             className={`text-xs px-2 py-1 rounded border ${
                               editType === "INCOME"
-                                ? "bg-green-100 border-green-500 text-green-700 font-bold"
+                                ? "bg-blue-50 border-[#4f95ff] text-[#4f95ff] font-bold"
                                 : "bg-white"
                             }`}
                           >
@@ -160,7 +163,7 @@ export default function ActiveSyncRules({ rules }: { rules: any[] }) {
                             onClick={() => setEditType("EXPENSE")}
                             className={`text-xs px-2 py-1 rounded border ${
                               editType === "EXPENSE"
-                                ? "bg-red-100 border-red-500 text-red-700 font-bold"
+                                ? "bg-purple-50 border-[#a24ec1] text-[#a24ec1] font-bold"
                                 : "bg-white"
                             }`}
                           >
@@ -180,8 +183,8 @@ export default function ActiveSyncRules({ rules }: { rules: any[] }) {
                           <span
                             className={`font-medium ${
                               rule.targetType === "INCOME"
-                                ? "text-green-600"
-                                : "text-red-600"
+                                ? "text-[#4f95ff]"
+                                : "text-[#a24ec1]"
                             }`}
                           >
                             {rule.targetType === "INCOME" ? "הכנסות" : "הוצאות"}
@@ -219,7 +222,7 @@ export default function ActiveSyncRules({ rules }: { rules: any[] }) {
                     </Button>
                     <Button
                       size="sm"
-                      className="h-8 bg-blue-600 hover:bg-blue-700"
+                      className="h-8 bg-[#4f95ff] hover:bg-blue-600"
                       onClick={() => saveEdit(rule.id)}
                     >
                       <Save className="w-3 h-3 mr-1" /> שמור שינויים
@@ -246,7 +249,7 @@ export default function ActiveSyncRules({ rules }: { rules: any[] }) {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                      className="h-8 border-[#a24ec1] text-[#a24ec1] hover:bg-purple-50"
                       onClick={() => handleRun(rule.id)}
                       disabled={loadingId === rule.id}
                     >

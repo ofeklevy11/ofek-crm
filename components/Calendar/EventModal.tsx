@@ -103,11 +103,14 @@ export function EventModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
+      dir="rtl"
+    >
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">
-            {event ? "Edit Event" : "New Event"}
+            {event ? "ערוך אירוע" : "אירוע חדש"}
           </h2>
           <button
             onClick={handleClose}
@@ -135,7 +138,7 @@ export function EventModal({
               htmlFor="title"
               className="block text-sm font-medium text-gray-700 mb-1"
             >
-              Title
+              כותרת
             </label>
             <input
               type="text"
@@ -152,7 +155,7 @@ export function EventModal({
               htmlFor="description"
               className="block text-sm font-medium text-gray-700 mb-1"
             >
-              Description
+              תיאור
             </label>
             <textarea
               id="description"
@@ -169,7 +172,7 @@ export function EventModal({
                 htmlFor="startDate"
                 className="block text-sm font-medium text-gray-700 mb-1"
               >
-                Start Date
+                תאריך התחלה
               </label>
               <input
                 type="date"
@@ -185,7 +188,7 @@ export function EventModal({
                 htmlFor="startTime"
                 className="block text-sm font-medium text-gray-700 mb-1"
               >
-                Start Time
+                שעת התחלה
               </label>
               <input
                 type="time"
@@ -204,7 +207,7 @@ export function EventModal({
                 htmlFor="endDate"
                 className="block text-sm font-medium text-gray-700 mb-1"
               >
-                End Date
+                תאריך סיום
               </label>
               <input
                 type="date"
@@ -220,7 +223,7 @@ export function EventModal({
                 htmlFor="endTime"
                 className="block text-sm font-medium text-gray-700 mb-1"
               >
-                End Time
+                שעת סיום
               </label>
               <input
                 type="time"
@@ -235,7 +238,7 @@ export function EventModal({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Color
+              צבע
             </label>
             <div className="flex gap-2">
               {defaultEventColors.map((c) => (
@@ -264,22 +267,22 @@ export function EventModal({
                 }}
                 className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
               >
-                Delete
+                מחק
               </button>
             )}
-            <div className="flex gap-2 ml-auto">
+            <div className="flex gap-2 mr-auto">
               <button
                 type="button"
                 onClick={handleClose}
                 className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
               >
-                Cancel
+                ביטול
               </button>
               <button
                 type="submit"
                 className="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
               >
-                {event ? "Save" : "Create"}
+                {event ? "שמור" : "צור"}
               </button>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import TransactionsTable from "@/components/finance/TransactionsTable";
-import { ArrowLeft, Mail, Phone, Building } from "lucide-react";
+import { ArrowLeft, ArrowRight, Mail, Phone, Building } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
@@ -57,21 +57,37 @@ export default async function ClientOverviewPage({
     id: t.id,
     client: { id: client.id, name: client.name },
     relatedType: t.relatedType,
-    title: t.notes || `${t.relatedType} payment`,
+    title: t.notes || `${t.relatedType === "retainer" ? "ריטיינר" : "תשלום"}`,
     amount: Number(t.amount),
     dueDate: t.attemptDate.toISOString().split("T")[0],
     status: t.status,
     paidDate: t.paidDate?.toISOString().split("T")[0],
   }));
 
+  const getFrequencyLabel = (freq: string) => {
+    switch (freq) {
+      case "monthly":
+        return "חודשי";
+      case "quarterly":
+        return "רבעוני";
+      case "annually":
+        return "שנתי";
+      default:
+        return freq;
+    }
+  };
+
   return (
-    <div className="p-8 space-y-8 bg-gray-50/50 min-h-screen">
+    <div
+      className="p-8 space-y-8 bg-[#f4f8f8] min-h-screen text-right"
+      dir="rtl"
+    >
       <div>
         <Link
-          href="/finance"
+          href="/finance/clients"
           className="inline-flex items-center text-sm text-gray-500 hover:text-gray-900 mb-4"
         >
-          <ArrowLeft className="w-4 h-4 mr-1" /> Back to Financial Hub
+          <ArrowRight className="w-4 h-4 ml-1" /> חזרה ללקוחות
         </Link>
         <div className="flex justify-between items-start">
           <div>
@@ -96,9 +112,9 @@ export default async function ClientOverviewPage({
               )}
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-sm text-gray-500">Outstanding Debt</div>
-            <div className="text-2xl font-bold text-red-600">
+          <div className="text-left">
+            <div className="text-sm text-gray-500">חוב פתוח</div>
+            <div className="text-2xl font-bold text-[#a24ec1]">
               ₪{stats.outstanding.toLocaleString()}
             </div>
           </div>
@@ -110,7 +126,7 @@ export default async function ClientOverviewPage({
         <div className="space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h3 className="font-semibold text-gray-900 mb-4">
-              Active Retainers
+              ריטיינרים פעילים
             </h3>
             <div className="space-y-4">
               {activeRetainers.map((retainer) => (
@@ -122,19 +138,21 @@ export default async function ClientOverviewPage({
                     <div className="font-medium text-gray-900">
                       {retainer.title}
                     </div>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                      {retainer.status}
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#4f95ff]/10 text-[#4f95ff]">
+                      {retainer.status === "active" ? "פעיל" : retainer.status}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">{retainer.frequency}</span>
+                    <span className="text-gray-500">
+                      {getFrequencyLabel(retainer.frequency)}
+                    </span>
                     <span className="font-semibold text-gray-900">
                       ₪{Number(retainer.amount).toLocaleString()}
                     </span>
                   </div>
                   {retainer.nextDueDate && (
                     <div className="mt-2 text-xs text-gray-500">
-                      Next due:{" "}
+                      תשלום הבא:{" "}
                       {new Date(retainer.nextDueDate).toLocaleDateString(
                         "he-IL"
                       )}
@@ -143,15 +161,15 @@ export default async function ClientOverviewPage({
                 </div>
               ))}
               {activeRetainers.length === 0 && (
-                <p className="text-sm text-gray-500">No active retainers.</p>
+                <p className="text-sm text-gray-500">אין ריטיינרים פעילים.</p>
               )}
             </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="font-semibold text-gray-900 mb-4">Client Notes</h3>
+            <h3 className="font-semibold text-gray-900 mb-4">הערות לקוח</h3>
             <p className="text-sm text-gray-600 whitespace-pre-wrap">
-              {client.notes || "No notes available."}
+              {client.notes || "אין הערות זמינות."}
             </p>
           </div>
         </div>

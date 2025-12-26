@@ -1,17 +1,17 @@
-export const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+export const daysOfWeek = ["א'", "ב'", "ג'", "ד'", "ה'", "ו'", "ש'"];
 export const monthNames = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
+  "ינואר",
+  "פברואר",
+  "מרץ",
+  "אפריל",
+  "מאי",
+  "יוני",
+  "יולי",
+  "אוגוסט",
+  "ספטמבר",
+  "אוקטובר",
+  "נובמבר",
+  "דצמבר",
 ];
 
 export function getStartOfWeek(date: Date): Date {
@@ -54,9 +54,7 @@ export function isSameDay(d1: Date, d2: Date): boolean {
 export function getTimeSlots(): string[] {
   const slots = [];
   for (let i = 0; i < 24; i++) {
-    slots.push(
-      `${i === 0 ? "12" : i > 12 ? i - 12 : i} ${i < 12 ? "AM" : "PM"}`
-    );
+    slots.push(`${i.toString().padStart(2, "0")}:00`);
   }
   return slots;
 }

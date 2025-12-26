@@ -30,7 +30,10 @@ export function CalendarHeader({
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   return (
-    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white">
+    <div
+      className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white"
+      dir="rtl"
+    >
       <div className="flex items-center gap-6">
         <h1 className="text-2xl font-semibold text-gray-800 min-w-[180px]">
           {formatMonthYear(currentDate)}
@@ -41,33 +44,10 @@ export function CalendarHeader({
           {/* Month Navigation */}
           <div className="flex items-center gap-1 px-2 py-1 bg-gray-50 rounded-lg border border-gray-200">
             <button
-              onClick={onPrevMonth}
-              className="p-1.5 hover:bg-gray-200 rounded transition-colors"
-              aria-label="Previous Month"
-              title="Previous Month"
-            >
-              <svg
-                className="w-4 h-4 text-gray-600"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2.5}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-            </button>
-            <span className="text-xs font-medium text-gray-500 px-1">
-              Month
-            </span>
-            <button
               onClick={onNextMonth}
               className="p-1.5 hover:bg-gray-200 rounded transition-colors"
-              aria-label="Next Month"
-              title="Next Month"
+              aria-label="חודש הבא"
+              title="חודש הבא"
             >
               <svg
                 className="w-4 h-4 text-gray-600"
@@ -80,6 +60,27 @@ export function CalendarHeader({
                   strokeLinejoin="round"
                   strokeWidth={2.5}
                   d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+            <span className="text-xs font-medium text-gray-500 px-1">חודש</span>
+            <button
+              onClick={onPrevMonth}
+              className="p-1.5 hover:bg-gray-200 rounded transition-colors"
+              aria-label="חודש קודם"
+              title="חודש קודם"
+            >
+              <svg
+                className="w-4 h-4 text-gray-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2.5}
+                  d="M15 19l-7-7 7-7"
                 />
               </svg>
             </button>
@@ -88,33 +89,10 @@ export function CalendarHeader({
           {/* Day/Week Navigation */}
           <div className="flex items-center gap-1 px-2 py-1 bg-gray-50 rounded-lg border border-gray-200">
             <button
-              onClick={onPrev}
-              className="p-1.5 hover:bg-gray-200 rounded transition-colors"
-              aria-label={view === "day" ? "Previous Day" : "Previous Week"}
-              title={view === "day" ? "Previous Day" : "Previous Week"}
-            >
-              <svg
-                className="w-4 h-4 text-gray-600"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2.5}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-            </button>
-            <span className="text-xs font-medium text-gray-500 px-1">
-              {view === "day" ? "Day" : "Week"}
-            </span>
-            <button
               onClick={onNext}
               className="p-1.5 hover:bg-gray-200 rounded transition-colors"
-              aria-label={view === "day" ? "Next Day" : "Next Week"}
-              title={view === "day" ? "Next Day" : "Next Week"}
+              aria-label={view === "day" ? "יום הבא" : "שבוע הבא"}
+              title={view === "day" ? "יום הבא" : "שבוע הבא"}
             >
               <svg
                 className="w-4 h-4 text-gray-600"
@@ -127,6 +105,29 @@ export function CalendarHeader({
                   strokeLinejoin="round"
                   strokeWidth={2.5}
                   d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+            <span className="text-xs font-medium text-gray-500 px-1">
+              {view === "day" ? "יום" : "שבוע"}
+            </span>
+            <button
+              onClick={onPrev}
+              className="p-1.5 hover:bg-gray-200 rounded transition-colors"
+              aria-label={view === "day" ? "יום קודם" : "שבוע קודם"}
+              title={view === "day" ? "יום קודם" : "שבוע קודם"}
+            >
+              <svg
+                className="w-4 h-4 text-gray-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2.5}
+                  d="M15 19l-7-7 7-7"
                 />
               </svg>
             </button>
@@ -137,7 +138,7 @@ export function CalendarHeader({
             onClick={onToday}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
           >
-            Today
+            היום
           </button>
 
           {/* Date Picker Button */}
@@ -207,7 +208,7 @@ export function CalendarHeader({
               : "text-gray-500 hover:text-gray-700"
           }`}
         >
-          Day
+          יום
         </button>
         <button
           onClick={() => onViewChange("week")}
@@ -217,7 +218,7 @@ export function CalendarHeader({
               : "text-gray-500 hover:text-gray-700"
           }`}
         >
-          Week
+          שבוע
         </button>
       </div>
     </div>
