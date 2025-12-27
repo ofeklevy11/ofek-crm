@@ -119,3 +119,69 @@ export async function createNotification(data: {
 
 // For use in internal automation
 export const sendNotification = createNotification;
+
+/**
+ * Create notification for a specific company (for use in automations/cron jobs without session)
+ */
+export async function createNotificationForCompany(data: {
+  companyId: number;
+  userId: number;
+  title: string;
+  message?: string;
+  link?: string;
+}) {
+  try {
+    // Verify that target userId belongs to the company
+    const targetUser = await prisma.user.findFirst({
+      where: { id: data.userId, companyId: data.companyId },
+    });
+
+    if (!targetUser) {
+      console.warn(
+        `[createNotificationForCompany] Target user ${data.userId} not found in company ${data.companyId}`
+      );
+      return { success: false, error: "User not in company" };
+    }
+
+    const notification = await prisma.notification.create({
+      data: {
+        companyId: data.companyId,
+        userId: data.userId,
+        title: data.title,
+        message: data.message,
+        link: data.link,
+      },
+    });
+    console.log(
+      `[Notification] Created notification #${notification.id} for user ${data.userId} (Company ${data.companyId})`
+    );
+    return { success: true, data: notification };
+  } catch (error) {
+    console.error("Error creating notification:", error);
+    return { success: false, error: "Failed to create notification" };
+  }
+}
+
+export async function markAllAsRead() {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    await prisma.notification.updateMany({
+      where: {
+        userId: user.id,
+        read: false,
+      },
+      data: {
+        read: true,
+      },
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error marking all notifications as read:", error);
+    return { success: false, error: "Failed to mark all as read" };
+  }
+}

@@ -128,6 +128,7 @@ export default function CustomerListManager({
   const [postAddActions, setPostAddActions] = useState({
     sendNotification: true,
     notifyUserId: "",
+    notifyTitle: "לקוח חדש ברשימה",
     notifyMessage: "לקוח חדש נוסף לרשימה!",
   });
   const [users, setUsers] = useState<{ id: number; name: string }[]>([]);
@@ -466,6 +467,7 @@ export default function CustomerListManager({
           notifyUserId: postAddActions.notifyUserId
             ? parseInt(postAddActions.notifyUserId)
             : undefined,
+          notifyTitle: postAddActions.notifyTitle,
           notifyMessage: postAddActions.notifyMessage,
         },
       };
@@ -533,6 +535,7 @@ export default function CustomerListManager({
     setPostAddActions({
       sendNotification: ac.sendNotification !== false,
       notifyUserId: ac.notifyUserId ? String(ac.notifyUserId) : "",
+      notifyTitle: ac.notifyTitle || "לקוח חדש ברשימה",
       notifyMessage: ac.notifyMessage || "לקוח חדש נוסף לרשימה!",
     });
   };
@@ -604,6 +607,7 @@ export default function CustomerListManager({
                     setPostAddActions({
                       sendNotification: true,
                       notifyUserId: "",
+                      notifyTitle: "לקוח חדש ברשימה",
                       notifyMessage: "לקוח חדש נוסף לרשימה!",
                     });
                   }}
@@ -766,6 +770,7 @@ export default function CustomerListManager({
                     setPostAddActions({
                       sendNotification: true,
                       notifyUserId: "",
+                      notifyTitle: "לקוח חדש ברשימה",
                       notifyMessage: "לקוח חדש נוסף לרשימה!",
                     });
                   }}
@@ -1129,9 +1134,27 @@ export default function CustomerListManager({
 
                               <div className="space-y-1">
                                 <Label className="text-xs text-blue-800">
+                                  כותרת ההתראה
+                                </Label>
+                                <Input
+                                  type="text"
+                                  className="w-full h-9 rounded-md border border-blue-200 bg-white px-2 text-sm"
+                                  value={postAddActions.notifyTitle}
+                                  onChange={(e) =>
+                                    setPostAddActions({
+                                      ...postAddActions,
+                                      notifyTitle: e.target.value,
+                                    })
+                                  }
+                                  placeholder="לקוח חדש ברשימה"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <Label className="text-xs text-blue-800">
                                   תוכן ההתראה
                                 </Label>
-                                <input
+                                <Input
                                   type="text"
                                   className="w-full h-9 rounded-md border border-blue-200 bg-white px-2 text-sm"
                                   value={postAddActions.notifyMessage}
@@ -1173,6 +1196,7 @@ export default function CustomerListManager({
                     setPostAddActions({
                       sendNotification: true,
                       notifyUserId: "",
+                      notifyTitle: "לקוח חדש ברשימה",
                       notifyMessage: "לקוח חדש נוסף לרשימה!",
                     });
                   }}

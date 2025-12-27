@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { uploadFiles } from "@/lib/uploadthing";
 import { UploadCloud, X, File as FileIcon, RefreshCw } from "lucide-react";
-import { saveFileMetadata } from "@/app/actions/storage"; // We use client side save as fallback/primary now
+import { saveFileMetadata } from "@/app/actions/storage";
 import { useRouter } from "next/navigation";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
@@ -31,7 +31,7 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  // Reset state when dialod closes
+  // Reset state when dialog closes
   useEffect(() => {
     if (!open) {
       setFiles([]);
@@ -80,7 +80,7 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
       }
     } catch (e: any) {
       console.error("Upload error:", e);
-      alert(`Upload failed: ${e.message}`);
+      alert(`העלאה נכשלה: ${e.message}`);
       setIsStuck(true);
       setIsUploading(false);
     }
@@ -108,7 +108,7 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
       setIsUploading(false);
     } catch (e: any) {
       console.error("Error saving file metadata:", e);
-      alert(`File uploaded to server but failed to save record: ${e.message}`);
+      alert(`הקובץ הועלה לשרת אך נכשלה שמירת הרשומה: ${e.message}`);
       setIsUploading(false);
     }
   };
@@ -150,18 +150,18 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all duration-200">
+        <Button className="gap-2 bg-[#a24ec1] hover:bg-[#a24ec1]/90 text-white shadow-sm transition-all duration-200">
           <UploadCloud className="h-4 w-4" />
-          Upload File
+          העלאת קובץ
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[500px]" dir="rtl">
+        <DialogHeader className="text-right">
           <DialogTitle className="text-xl font-semibold">
-            Upload Files
+            העלאת קבצים
           </DialogTitle>
-          <DialogDescription>
-            Drag and drop files here or click to browse. Max size: 8MB.
+          <DialogDescription className="text-right">
+            גרור ושחרר קבצים כאן או לחץ לעיון. גודל מקסימלי: 8MB.
           </DialogDescription>
         </DialogHeader>
 
@@ -171,7 +171,7 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
             className={cn(
               "relative border-2 border-dashed rounded-xl p-8 transition-all duration-200 flex flex-col items-center justify-center cursor-pointer bg-muted/30 hover:bg-muted/50",
               isDragOver
-                ? "border-indigo-500 bg-indigo-50/50"
+                ? "border-[#4f95ff] bg-blue-50/50"
                 : "border-muted-foreground/25",
               isUploading && "pointer-events-none opacity-50"
             )}
@@ -188,25 +188,25 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
               onChange={handleFileSelect}
             />
 
-            <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center mb-4">
-              <UploadCloud className="w-6 h-6 text-indigo-600" />
+            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+              <UploadCloud className="w-6 h-6 text-[#4f95ff]" />
             </div>
 
             <p className="text-sm font-medium text-foreground">
-              Click to select or drag files here
+              לחץ לבחירה או גרור קבצים לכאן
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Supports Images, PDF, Text, Audio
+              תומך בתמונות, PDF, טקסט, שמע
             </p>
           </div>
 
           {/* File List */}
           {files.length > 0 && (
             <div className="space-y-3">
-              <h4 className="text-sm font-medium text-muted-foreground">
-                Selected Files
+              <h4 className="text-sm font-medium text-muted-foreground text-right">
+                קבצים שנבחרו
               </h4>
-              <div className="max-h-[200px] overflow-y-auto space-y-2 pr-2">
+              <div className="max-h-[200px] overflow-y-auto space-y-2 pl-2">
                 {files.map((file, idx) => (
                   <div
                     key={idx}
@@ -216,7 +216,7 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
                       <div className="p-2 bg-muted rounded-md">
                         <FileIcon className="w-4 h-4 text-primary" />
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 text-right">
                         <p className="text-sm font-medium truncate">
                           {file.name}
                         </p>
@@ -248,25 +248,23 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
           {isUploading && (
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-indigo-600">
-                  {uploadProgress >= 100 ? "Processing..." : "Uploading..."}
+                <span className="text-[#4f95ff]">
+                  {uploadProgress >= 100 ? "מעבד..." : "מעלה..."}
                 </span>
                 <span>{Math.round(uploadProgress)}%</span>
               </div>
               <Progress value={uploadProgress} className="h-2" />
               {isStuck && (
                 <div className="pt-2 flex flex-col gap-2 items-center text-center animate-in fade-in slide-in-from-top-2 duration-300">
-                  <p className="text-xs text-amber-600">
-                    Waiting for server...
-                  </p>
+                  <p className="text-xs text-amber-600">ממתין לשרת...</p>
                   <Button
                     variant="secondary"
                     size="sm"
                     onClick={handleManualRefresh}
                     className="w-full"
                   >
-                    <RefreshCw className="w-3 h-3 mr-2" />
-                    Finish & Refresh
+                    <RefreshCw className="w-3 h-3 ml-2" />
+                    סיום ורענון
                   </Button>
                 </div>
               )}
@@ -280,17 +278,17 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
               onClick={() => setOpen(false)}
               disabled={isUploading && !isStuck}
             >
-              Cancel
+              ביטול
             </Button>
             <Button
               onClick={handleUpload}
               disabled={files.length === 0 || (isUploading && !isStuck)}
-              className="bg-indigo-600 hover:bg-indigo-700 w-32"
+              className="bg-[#a24ec1] hover:bg-[#a24ec1]/90 w-32"
             >
               {isUploading ? (
-                "Uploading..."
+                "מעלה..."
               ) : (
-                <>Upload {files.length > 0 && `(${files.length})`}</>
+                <>העלה {files.length > 0 && `(${files.length})`}</>
               )}
             </Button>
           </div>

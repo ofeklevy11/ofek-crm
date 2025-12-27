@@ -65,8 +65,8 @@ export default function TicketModal({
       });
 
       toast({
-        title: "Success",
-        description: "Ticket created successfully",
+        title: "הצלחה",
+        description: "הקריאה נוצרה בהצלחה",
       });
 
       onOpenChange(false);
@@ -80,8 +80,8 @@ export default function TicketModal({
       });
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to create ticket",
+        title: "שגיאה",
+        description: "שגיאה ביצירת הקריאה",
         variant: "destructive",
       });
     } finally {
@@ -91,82 +91,91 @@ export default function TicketModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Create New Ticket</DialogTitle>
-          <DialogDescription>
-            Open a new support ticket or service request.
+      <DialogContent className="sm:max-w-[500px]" dir="rtl">
+        <DialogHeader className="text-right">
+          <DialogTitle className="text-[#000000]">פתיחת קריאה חדשה</DialogTitle>
+          <DialogDescription className="text-right">
+            פתח קריאת שירות חדשה או בקשה לעזרה.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="title">Subject</Label>
+            <Label htmlFor="title" className="text-right block">
+              נושא
+            </Label>
             <Input
               id="title"
-              placeholder="e.g. Broken Printer"
+              placeholder="לדוגמה: מדפסת מקולקלת"
               value={formData.title}
               onChange={(e) =>
                 setFormData((d) => ({ ...d, title: e.target.value }))
               }
               required
+              className="text-right"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="type">Type</Label>
+              <Label htmlFor="type" className="text-right block">
+                סוג
+              </Label>
               <Select
                 value={formData.type}
                 onValueChange={(val) =>
                   setFormData((d) => ({ ...d, type: val }))
                 }
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
+                <SelectTrigger className="text-right" dir="rtl">
+                  <SelectValue placeholder="בחר סוג" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="SERVICE">Service</SelectItem>
-                  <SelectItem value="COMPLAINT">Complaint</SelectItem>
-                  <SelectItem value="RETENTION">Retention</SelectItem>
-                  <SelectItem value="OTHER">Other</SelectItem>
+                <SelectContent dir="rtl">
+                  <SelectItem value="SERVICE">שירות</SelectItem>
+                  <SelectItem value="COMPLAINT">תלונה</SelectItem>
+                  <SelectItem value="RETENTION">שימור</SelectItem>
+                  <SelectItem value="OTHER">אחר</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="priority">Priority</Label>
+              <Label htmlFor="priority" className="text-right block">
+                עדיפות
+              </Label>
               <Select
                 value={formData.priority}
                 onValueChange={(val) =>
                   setFormData((d) => ({ ...d, priority: val }))
                 }
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select priority" />
+                <SelectTrigger className="text-right" dir="rtl">
+                  <SelectValue placeholder="בחר עדיפות" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="LOW">Low</SelectItem>
-                  <SelectItem value="MEDIUM">Medium</SelectItem>
-                  <SelectItem value="HIGH">High</SelectItem>
-                  <SelectItem value="CRITICAL">Critical</SelectItem>
+                <SelectContent dir="rtl">
+                  <SelectItem value="LOW">נמוך</SelectItem>
+                  <SelectItem value="MEDIUM">בינוני</SelectItem>
+                  <SelectItem value="HIGH">גבוה</SelectItem>
+                  <SelectItem value="CRITICAL">קריטי</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="client">Client</Label>
+            <Label htmlFor="client" className="text-right block">
+              לקוח
+            </Label>
             <Select
               value={formData.clientId}
               onValueChange={(val) =>
                 setFormData((d) => ({ ...d, clientId: val }))
               }
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Select client" />
+              <SelectTrigger className="text-right" dir="rtl">
+                <SelectValue placeholder="בחר לקוח" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent dir="rtl">
                 {clients.map((client) => (
                   <SelectItem key={client.id} value={client.id.toString()}>
                     {client.name}
@@ -177,18 +186,20 @@ export default function TicketModal({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="assignee">Assignee (Optional)</Label>
+            <Label htmlFor="assignee" className="text-right block">
+              נציג מטפל (אופציונלי)
+            </Label>
             <Select
               value={formData.assigneeId}
               onValueChange={(val) =>
                 setFormData((d) => ({ ...d, assigneeId: val }))
               }
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Unassigned" />
+              <SelectTrigger className="text-right" dir="rtl">
+                <SelectValue placeholder="לא משויך" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">Unassigned</SelectItem>
+              <SelectContent dir="rtl">
+                <SelectItem value="0">לא משויך</SelectItem>
                 {users.map((user) => (
                   <SelectItem key={user.id} value={user.id.toString()}>
                     {user.name}
@@ -199,29 +210,36 @@ export default function TicketModal({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description" className="text-right block">
+              תיאור
+            </Label>
             <Textarea
               id="description"
-              placeholder="Detailed description of the issue..."
+              placeholder="תיאור מפורט של הבעיה..."
               rows={4}
               value={formData.description}
               onChange={(e) =>
                 setFormData((d) => ({ ...d, description: e.target.value }))
               }
+              className="text-right"
             />
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-row-reverse sm:justify-start gap-2">
+            <Button
+              type="submit"
+              disabled={loading}
+              className="bg-[#4f95ff] hover:bg-blue-600 text-white"
+            >
+              {loading && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+              צור קריאה
+            </Button>
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
             >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading} className="bg-slate-900">
-              {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Create Ticket
+              ביטול
             </Button>
           </DialogFooter>
         </form>

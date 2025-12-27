@@ -205,7 +205,7 @@ export async function calculateMultiEventDuration(
       const remainingMinutes = diffMinutes % 60;
       const remainingSeconds = diffSeconds % 60;
 
-      const durationString = `${diffDays}d ${remainingHours}h ${remainingMinutes}m ${remainingSeconds}s`;
+      const durationString = `${diffDays} ימים ${remainingHours} שעות ${remainingMinutes} דקות ${remainingSeconds} שניות`;
 
       deltas.push({
         from: currentEvent.eventName,
@@ -228,7 +228,7 @@ export async function calculateMultiEventDuration(
     const totalRemainingMinutes = totalMinutes % 60;
     const totalRemainingSeconds = totalDurationSeconds % 60;
 
-    const totalDurationString = `${totalDays}d ${totalRemainingHours}h ${totalRemainingMinutes}m ${totalRemainingSeconds}s`;
+    const totalDurationString = `${totalDays} ימים ${totalRemainingHours} שעות ${totalRemainingMinutes} דקות ${totalRemainingSeconds} שניות`;
 
     const weightedScore =
       deltas.length > 0 ? totalDurationSeconds / deltas.length : 0;

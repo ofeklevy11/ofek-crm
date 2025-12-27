@@ -40,6 +40,7 @@ model Company {
   quotes              Quote[]
   tickets             Ticket[]
   slaPolicies         SlaPolicy[]
+  slaBreaches         SlaBreach[]
   
   folders             Folder[]
   files               File[]
@@ -92,6 +93,7 @@ model User {
   
   company              Company       @relation(fields: [companyId], references: [id])
   ticketComments       TicketComment[]
+  ticketActivityLogs   TicketActivityLog[]
   
   @@index([companyId])
 }
@@ -640,9 +642,12 @@ model Ticket {
   
   tags        String[]
   
-  slaDueDate  DateTime?
-  
+  slaDueDate          DateTime?  // Deadline for resolving the ticket
+  slaResponseDueDate  DateTime?  // Deadline for first response (move to IN_PROGRESS)
+
   comments    TicketComment[]
+  breaches    SlaBreach[]
+  activityLogs TicketActivityLog[]
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -669,6 +674,29 @@ model TicketComment {
   updatedAt DateTime @updatedAt
 }
 
+// Tracks all changes made to tickets for audit trail
+model TicketActivityLog {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  
+  fieldName   String   // e.g., "status", "priority", "type", "assignee", "client"
+  fieldLabel  String   // Hebrew label for display, e.g., "סטטוס", "עדיפות"
+  oldValue    String?  // Previous value (as string)
+  newValue    String?  // New value (as string)
+  oldLabel    String?  // Hebrew label for old value
+  newLabel    String?  // Hebrew label for new value
+  
+  createdAt DateTime @default(now())
+  
+  @@index([ticketId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
 model SlaPolicy {
   id          Int      @id @default(autoincrement())
   companyId   Int
@@ -681,6 +709,27 @@ model SlaPolicy {
   company     Company  @relation(fields: [companyId], references: [id])
   
   @@unique([companyId, priority])
+}
+
+model SlaBreach {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  ticketId    Int
+  
+  priority    String   // Priority at the time of breach
+  slaDueDate  DateTime // Expected time that was missed
+  breachType  String   @default("RESOLVE") // RESPONSE or RESOLVE
+  breachedAt  DateTime @default(now())
+  
+  status      String   @default("PENDING") // PENDING, REVIEWED, ACKNOWLEDGED
+  notes       String?
+  
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  company     Company  @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
+  @@index([ticketId])
+  @@index([breachedAt])
 }
 
 model Folder {

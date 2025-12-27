@@ -41,14 +41,14 @@ export function FileCard({
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this file?")) return;
+    if (!confirm("האם אתה בטוח שברצונך למחוק קובץ זה?")) return;
 
     setIsDeleting(true);
     try {
       await deleteFile(file.id);
     } catch (error) {
       console.error(error);
-      alert("Failed to delete file");
+      alert("נכשל במחיקת הקובץ");
     } finally {
       setIsDeleting(false);
     }
@@ -57,12 +57,12 @@ export function FileCard({
   const getIcon = (size: "sm" | "md" = "md") => {
     const className = size === "sm" ? "w-4 h-4" : "w-6 h-6";
     if (file.type.includes("image"))
-      return <ImageIcon className={cn(className, "text-purple-600")} />;
+      return <ImageIcon className={cn(className, "text-[#a24ec1]")} />;
     if (file.type.includes("pdf"))
-      return <FileText className={cn(className, "text-red-600")} />;
+      return <FileText className={cn(className, "text-red-500")} />;
     if (file.type.includes("audio"))
-      return <Music className={cn(className, "text-yellow-600")} />;
-    return <FileIcon className={cn(className, "text-gray-600")} />;
+      return <Music className={cn(className, "text-[#4f95ff]")} />;
+    return <FileIcon className={cn(className, "text-gray-500")} />;
   };
 
   const formatSize = (bytes: number) => {
@@ -74,7 +74,7 @@ export function FileCard({
   };
 
   const formatDate = (date: string | Date) => {
-    return new Date(date).toLocaleDateString("en-US", {
+    return new Date(date).toLocaleDateString("he-IL", {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -91,32 +91,32 @@ export function FileCard({
           <MoreVertical className="w-4 h-4 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={align}>
-        <DropdownMenuItem asChild>
+      <DropdownMenuContent align={align} className="text-right" dir="rtl">
+        <DropdownMenuItem asChild className="gap-2">
           <a
             href={file.url}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center"
           >
-            <ExternalLink className="w-4 h-4 mr-2" />
-            Open
+            <ExternalLink className="w-4 h-4 ml-2" />
+            פתח
           </a>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
+        <DropdownMenuItem asChild className="gap-2">
           <a href={file.url} download className="flex items-center">
-            <Download className="w-4 h-4 mr-2" />
-            Download
+            <Download className="w-4 h-4 ml-2" />
+            הורד
           </a>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          className="text-destructive focus:text-destructive"
+          className="text-destructive focus:text-destructive gap-2"
           onClick={handleDelete}
           disabled={isDeleting}
         >
-          <Trash2 className="w-4 h-4 mr-2" />
-          Delete
+          <Trash2 className="w-4 h-4 ml-2" />
+          מחק
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -133,14 +133,27 @@ export function FileCard({
         }}
         onDragEnd={onDragEnd}
         className={cn(
-          "group relative p-4 border rounded-xl hover:bg-muted/50 transition-all bg-card flex flex-col justify-between cursor-grab active:cursor-grabbing",
+          "group relative p-4 border rounded-xl hover:bg-muted/50 transition-all bg-card flex flex-col justify-between cursor-grab active:cursor-grabbing text-right",
           isDragging && "opacity-50 scale-95 ring-2 ring-primary"
         )}
+        dir="rtl"
       >
         <div className="flex items-start justify-between">
           <div className="p-2 rounded-lg bg-muted">{getIcon()}</div>
           <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-            <ActionsMenu />
+            <ActionsMenu align="start" />
+            {/* Using align start (which is right in RTL usually) because we inverted flex? 
+                Actually justify-between pushes first child to right, second to left in RTL?
+                No, in RTL: start is right, end is left.
+                justify-between: first child at start (right), second child at end (left).
+                So icon is on right, actions on left.
+                So menu should align to the left side of the trigger possibly?
+                If the trigger is on the left edge, align="start" (right) means it goes RIGHTWARDS (off screen?).
+                align="end" (left) means it goes LEFTWARDS (into screen).
+                Actually in shadcn/radix:
+                align="start" aligns with the start edge (left in LTR, right in RTL?)
+                Let's stick to default or 'end' usually works.
+            */}
           </div>
         </div>
 
@@ -167,9 +180,10 @@ export function FileCard({
         }}
         onDragEnd={onDragEnd}
         className={cn(
-          "group flex items-center gap-4 p-4 border rounded-xl hover:bg-muted/50 transition-all bg-card cursor-grab active:cursor-grabbing",
+          "group flex items-center gap-4 p-4 border rounded-xl hover:bg-muted/50 transition-all bg-card cursor-grab active:cursor-grabbing text-right",
           isDragging && "opacity-50 scale-[0.98] ring-2 ring-primary"
         )}
+        dir="rtl"
       >
         <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
 
@@ -180,15 +194,15 @@ export function FileCard({
             {file.name}
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {file.type.split("/")[1]?.toUpperCase() || "FILE"}
+            {file.type.split("/")[1]?.toUpperCase() || "קובץ"}
           </p>
         </div>
 
-        <div className="text-sm text-muted-foreground w-20 text-right shrink-0">
+        <div className="text-sm text-muted-foreground w-20 text-left shrink-0">
           {formatSize(file.size)}
         </div>
 
-        <div className="text-sm text-muted-foreground w-28 shrink-0">
+        <div className="text-sm text-muted-foreground w-28 shrink-0 text-left">
           {formatDate(file.createdAt)}
         </div>
 
@@ -210,9 +224,10 @@ export function FileCard({
         }}
         onDragEnd={onDragEnd}
         className={cn(
-          "group grid grid-cols-12 gap-4 px-4 py-3 hover:bg-muted/30 transition-all cursor-grab active:cursor-grabbing items-center",
+          "group grid grid-cols-12 gap-4 px-4 py-3 hover:bg-muted/30 transition-all cursor-grab active:cursor-grabbing items-center text-right",
           isDragging && "opacity-50 bg-primary/10"
         )}
+        dir="rtl"
       >
         <div className="col-span-6 flex items-center gap-3 min-w-0">
           <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
@@ -222,11 +237,11 @@ export function FileCard({
           </span>
         </div>
 
-        <div className="col-span-2 text-sm text-muted-foreground">
+        <div className="col-span-2 text-sm text-muted-foreground text-left">
           {formatSize(file.size)}
         </div>
 
-        <div className="col-span-3 text-sm text-muted-foreground">
+        <div className="col-span-3 text-sm text-muted-foreground text-left">
           {formatDate(file.createdAt)}
         </div>
 

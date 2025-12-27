@@ -35,7 +35,7 @@ export function CreateFolderModal({ currentFolderId }: CreateFolderModalProps) {
       setName("");
     } catch (error) {
       console.error("Failed to create folder:", error);
-      alert("Failed to create folder");
+      alert("נכשל ביצירת התיקייה");
     } finally {
       setLoading(false);
     }
@@ -44,36 +44,46 @@ export function CreateFolderModal({ currentFolderId }: CreateFolderModalProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
+        <Button
+          variant="outline"
+          className="gap-2 border-[#4f95ff] text-[#4f95ff] hover:bg-[#4f95ff]/10"
+        >
           <FolderPlus className="h-4 w-4" />
-          New Folder
+          תיקייה חדשה
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] text-right" dir="rtl">
         <DialogHeader>
-          <DialogTitle>Create New Folder</DialogTitle>
+          <DialogTitle>יצירת תיקייה חדשה</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Folder Name</Label>
+            <Label htmlFor="name" className="text-right block">
+              שם התיקייה
+            </Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Contracts"
+              placeholder="לדוגמה: חוזים"
               autoFocus
+              className="text-right"
             />
           </div>
-          <DialogFooter>
+          <DialogFooter className="mr-auto flex gap-2">
             <Button
               type="button"
               variant="ghost"
               onClick={() => setOpen(false)}
             >
-              Cancel
+              ביטול
             </Button>
-            <Button type="submit" disabled={loading || !name}>
-              {loading ? "Creating..." : "Create Folder"}
+            <Button
+              type="submit"
+              disabled={loading || !name}
+              className="bg-[#4f95ff] hover:bg-[#4f95ff]/90 text-white"
+            >
+              {loading ? "יוצר..." : "צור תיקייה"}
             </Button>
           </DialogFooter>
         </form>

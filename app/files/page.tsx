@@ -17,12 +17,14 @@ export default async function FilesPage({ searchParams }: PageProps) {
   const data = await getStorageData(folderId);
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto py-8" dir="rtl">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Files Library</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your agreements, policies, and assets professionally.
+          <h1 className="text-3xl font-bold tracking-tight text-black">
+            ספריית קבצים
+          </h1>
+          <p className="text-gray-500 mt-1">
+            נהל את המסמכים, המדיניות והנכסים שלך בצורה מקצועית.
           </p>
         </div>
         <div className="flex gap-2">

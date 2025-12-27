@@ -3,19 +3,32 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
-import { createNotification } from "@/app/actions/notifications";
+import {
+  createNotification,
+  createNotificationForCompany,
+} from "@/app/actions/notifications";
+import { createTicketActivityLogs } from "@/app/actions/ticket-activity-logs";
 
 export async function getTickets() {
   const user = await getCurrentUser();
   if (!user) return [];
 
   return await prisma.ticket.findMany({
-    where: { companyId: user.companyId },
+    where: {
+      companyId: user.companyId,
+      status: { not: "CLOSED" }, // Exclude closed tickets - they appear in archive
+    },
     include: {
       assignee: { select: { id: true, name: true, email: true } },
       client: { select: { id: true, name: true, email: true, company: true } },
       creator: { select: { id: true, name: true } },
       comments: {
+        include: {
+          user: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      },
+      activityLogs: {
         include: {
           user: { select: { id: true, name: true } },
         },
@@ -36,13 +49,53 @@ export async function createTicket(data: {
   assigneeId?: number;
   tags?: string[];
   slaDueDate?: Date;
+  slaResponseDueDate?: Date;
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
+  // Auto-calculate SLA dates if not provided
+  let calculatedSlaDueDate = data.slaDueDate;
+  let calculatedSlaResponseDueDate = data.slaResponseDueDate;
+
+  if (data.priority) {
+    const slaPolicy = await prisma.slaPolicy.findUnique({
+      where: {
+        companyId_priority: {
+          companyId: user.companyId,
+          priority: data.priority,
+        },
+      },
+    });
+
+    if (slaPolicy) {
+      // Calculate resolve time (slaDueDate)
+      if (!calculatedSlaDueDate && slaPolicy.resolveTimeMinutes) {
+        calculatedSlaDueDate = new Date(
+          Date.now() + slaPolicy.resolveTimeMinutes * 60 * 1000
+        );
+        console.log(
+          `[SLA] Auto-calculated slaDueDate for priority ${data.priority}: ${calculatedSlaDueDate}`
+        );
+      }
+
+      // Calculate response time (slaResponseDueDate)
+      if (!calculatedSlaResponseDueDate && slaPolicy.responseTimeMinutes) {
+        calculatedSlaResponseDueDate = new Date(
+          Date.now() + slaPolicy.responseTimeMinutes * 60 * 1000
+        );
+        console.log(
+          `[SLA] Auto-calculated slaResponseDueDate for priority ${data.priority}: ${calculatedSlaResponseDueDate}`
+        );
+      }
+    }
+  }
+
   const ticket = await prisma.ticket.create({
     data: {
       ...data,
+      slaDueDate: calculatedSlaDueDate,
+      slaResponseDueDate: calculatedSlaResponseDueDate,
       companyId: user.companyId,
       creatorId: user.id,
     },
@@ -55,8 +108,8 @@ export async function createTicket(data: {
     try {
       await createNotification({
         userId: data.assigneeId,
-        title: "New Ticket Assigned",
-        message: `You have been assigned to ticket #${ticket.id}: ${ticket.title}`,
+        title: "קריאה חדשה הוקצתה לך",
+        message: `הוקצית לקריאה #${ticket.id}: ${ticket.title}`,
         link: `/service`,
       });
     } catch (error) {
@@ -76,7 +129,7 @@ export async function updateTicket(
     status?: string;
     priority?: string;
     type?: string;
-    clientId?: number;
+    clientId?: number | null;
     assigneeId?: number;
     tags?: string[];
     slaDueDate?: Date;
@@ -85,10 +138,99 @@ export async function updateTicket(
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
+  const currentTicket = await prisma.ticket.findUnique({
+    where: { id, companyId: user.companyId },
+    select: {
+      status: true,
+      title: true,
+      priority: true,
+      type: true,
+      assigneeId: true,
+      clientId: true,
+      description: true,
+      createdAt: true,
+    },
+  });
+
+  if (!currentTicket) throw new Error("Ticket not found");
+
+  // Check if priority is being changed - if so, recalculate SLA dates
+  let updateData = { ...data };
+
+  if (data.priority && data.priority !== currentTicket.priority) {
+    console.log(
+      `[SLA] Priority change detected for ticket ${id}: ${currentTicket.priority} -> ${data.priority}`
+    );
+
+    // Get the SLA policy for the new priority
+    const slaPolicy = await prisma.slaPolicy.findUnique({
+      where: {
+        companyId_priority: {
+          companyId: user.companyId,
+          priority: data.priority,
+        },
+      },
+    });
+
+    if (slaPolicy) {
+      // Calculate new SLA dates based on NOW (current time)
+      // This ensures the SLA timing starts fresh from the priority change
+      const now = Date.now();
+
+      if (slaPolicy.resolveTimeMinutes) {
+        updateData.slaDueDate = new Date(
+          now + slaPolicy.resolveTimeMinutes * 60 * 1000
+        );
+        console.log(
+          `[SLA] Recalculated slaDueDate for new priority ${data.priority}: ${updateData.slaDueDate}`
+        );
+      }
+
+      // Also update response due date if the ticket is still OPEN
+      const newStatus = data.status || currentTicket.status;
+      if (newStatus === "OPEN" && slaPolicy.responseTimeMinutes) {
+        (updateData as any).slaResponseDueDate = new Date(
+          now + slaPolicy.responseTimeMinutes * 60 * 1000
+        );
+        console.log(
+          `[SLA] Recalculated slaResponseDueDate for new priority ${
+            data.priority
+          }: ${(updateData as any).slaResponseDueDate}`
+        );
+      }
+    } else {
+      console.log(
+        `[SLA] No SLA policy found for priority ${data.priority}, clearing SLA dates`
+      );
+      // If there's no SLA policy for the new priority, clear the SLA dates
+      updateData.slaDueDate = undefined;
+      (updateData as any).slaResponseDueDate = undefined;
+    }
+  }
+
   const ticket = await prisma.ticket.update({
     where: { id, companyId: user.companyId },
-    data,
+    data: updateData,
   });
+
+  // Create activity logs for tracked changes
+  try {
+    await createTicketActivityLogs(id, user.id, currentTicket, data);
+  } catch (e) {
+    console.error("Failed to create ticket activity logs", e);
+  }
+
+  if (currentTicket && data.status && data.status !== currentTicket.status) {
+    processTicketStatusChange(
+      ticket.id,
+      user.companyId,
+      ticket.title,
+      currentTicket.status,
+      data.status
+    ).catch((e) =>
+      console.error("Failed to process ticket status automation", e)
+    );
+  }
 
   if (data.assigneeId) {
     console.log(
@@ -143,6 +285,63 @@ export async function addTicketComment(
 
   revalidatePath("/service");
   return comment;
+}
+
+export async function updateTicketComment(commentId: number, content: string) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+
+  // Find the comment and verify permissions
+  const comment = await prisma.ticketComment.findUnique({
+    where: { id: commentId },
+    include: {
+      ticket: { select: { companyId: true } },
+    },
+  });
+
+  if (!comment || comment.ticket.companyId !== user.companyId) {
+    throw new Error("Unauthorized");
+  }
+
+  // Only the author or admin can edit
+  if (comment.userId !== user.id && user.role !== "admin") {
+    throw new Error("רק מי ששלח את ההודעה או מנהל יכול לערוך");
+  }
+
+  await prisma.ticketComment.update({
+    where: { id: commentId },
+    data: { content },
+  });
+
+  revalidatePath("/service");
+}
+
+export async function deleteTicketComment(commentId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+
+  // Find the comment and verify permissions
+  const comment = await prisma.ticketComment.findUnique({
+    where: { id: commentId },
+    include: {
+      ticket: { select: { companyId: true } },
+    },
+  });
+
+  if (!comment || comment.ticket.companyId !== user.companyId) {
+    throw new Error("Unauthorized");
+  }
+
+  // Only the author or admin can delete
+  if (comment.userId !== user.id && user.role !== "admin") {
+    throw new Error("רק מי ששלח את ההודעה או מנהל יכול למחוק");
+  }
+
+  await prisma.ticketComment.delete({
+    where: { id: commentId },
+  });
+
+  revalidatePath("/service");
 }
 
 export async function getSlaPolicies() {
@@ -206,4 +405,153 @@ export async function deleteTicket(id: number) {
   });
 
   revalidatePath("/service");
+}
+
+// Helper to translate ticket statuses to Hebrew
+function translateStatus(status: string): string {
+  const statusMap: Record<string, string> = {
+    OPEN: "פתוח",
+    IN_PROGRESS: "בטיפול",
+    WAITING: "ממתין",
+    RESOLVED: "טופל",
+    CLOSED: "סגור",
+  };
+  return statusMap[status] || status;
+}
+
+export async function getTicketStats() {
+  const user = await getCurrentUser();
+  if (!user)
+    return {
+      open: 0,
+      inProgress: 0,
+      waiting: 0,
+      closed: 0,
+      breached: 0,
+    };
+
+  const stats = await prisma.$transaction([
+    // Open
+    prisma.ticket.count({
+      where: { companyId: user.companyId, status: "OPEN" },
+    }),
+    // In Progress
+    prisma.ticket.count({
+      where: { companyId: user.companyId, status: "IN_PROGRESS" },
+    }),
+    // Waiting
+    prisma.ticket.count({
+      where: { companyId: user.companyId, status: "WAITING" },
+    }),
+    // Closed (Total closed tickets generally)
+    prisma.ticket.count({
+      where: { companyId: user.companyId, status: "CLOSED" },
+    }),
+    // Breached (Active breaches)
+    prisma.slaBreach.count({
+      where: {
+        companyId: user.companyId,
+        status: "PENDING", // Only uncleared breaches
+      },
+    }),
+  ]);
+
+  return {
+    open: stats[0],
+    inProgress: stats[1],
+    waiting: stats[2],
+    closed: stats[3],
+    breached: stats[4],
+  };
+}
+
+async function processTicketStatusChange(
+  ticketId: number,
+  companyId: number, // Added companyId
+  ticketTitle: string,
+  fromStatus: string,
+  toStatus: string
+) {
+  console.log(
+    `[Automation] Processing status change for Ticket #${ticketId} (Company ${companyId}): ${fromStatus} -> ${toStatus}`
+  );
+
+  try {
+    const rules = await prisma.automationRule.findMany({
+      where: {
+        companyId, // Filter by company!
+        isActive: true,
+        triggerType: "TICKET_STATUS_CHANGE",
+      },
+    });
+
+    console.log(
+      `[Automation] Found ${rules.length} active rules for company ${companyId}`
+    );
+
+    // Translate statuses to Hebrew for display
+    const fromStatusHebrew = translateStatus(fromStatus);
+    const toStatusHebrew = translateStatus(toStatus);
+
+    for (const rule of rules) {
+      const triggerConfig = rule.triggerConfig as any;
+      console.log(
+        `[Automation] Checking Rule #${rule.id}: ${rule.name}`,
+        triggerConfig
+      );
+
+      // Check "From Status" condition
+      if (
+        triggerConfig.fromStatus &&
+        triggerConfig.fromStatus !== "any" &&
+        triggerConfig.fromStatus !== fromStatus
+      ) {
+        console.log(
+          `[Automation] Rule #${rule.id} skipped: fromStatus mismatch (${triggerConfig.fromStatus} != ${fromStatus})`
+        );
+        continue;
+      }
+
+      // Check "To Status" condition
+      if (
+        triggerConfig.toStatus &&
+        triggerConfig.toStatus !== "any" &&
+        triggerConfig.toStatus !== toStatus
+      ) {
+        console.log(
+          `[Automation] Rule #${rule.id} skipped: toStatus mismatch (${triggerConfig.toStatus} != ${toStatus})`
+        );
+        continue;
+      }
+
+      console.log(`[Automation] Rule #${rule.id} MATCHED! Executing action...`);
+
+      if (rule.actionType === "SEND_NOTIFICATION") {
+        const actionConfig = rule.actionConfig as any;
+        if (actionConfig.recipientId) {
+          const message = (
+            actionConfig.messageTemplate ||
+            "הקריאה {ticketTitle} עברה לסטטוס {toStatus}"
+          )
+            .replace("{ticketTitle}", ticketTitle)
+            .replace("{ticketId}", String(ticketId))
+            .replace("{fromStatus}", fromStatusHebrew)
+            .replace("{toStatus}", toStatusHebrew);
+
+          await createNotificationForCompany({
+            companyId,
+            userId: actionConfig.recipientId,
+            title: actionConfig.titleTemplate || "עדכון בקריאת שירות",
+            message,
+            link: `/service`,
+          });
+          console.log(
+            `[Automation] Notification sent to valid user associated with company ${companyId}`
+          );
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error processing ticket status change automations:", error);
+  }
 }

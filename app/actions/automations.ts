@@ -497,8 +497,8 @@ export async function processViewAutomations(
             try {
               const result = await sendNotification({
                 userId: actionConfig.recipientId,
-                title: actionConfig.titleTemplate || "View Alert",
-                message: (actionConfig.messageTemplate || "Trigger Met")
+                title: actionConfig.titleTemplate || "התראת תצוגה",
+                message: (actionConfig.messageTemplate || "התנאי התקיים")
                   .replace("{value}", String(currentVal))
                   .replace("{threshold}", String(threshold)),
                 link: "/analytics",
@@ -517,7 +517,7 @@ export async function processViewAutomations(
           const actionConfig = rule.actionConfig as ActionConfig;
           try {
             const taskData: any = {
-              title: actionConfig.title || "Automated Task",
+              title: actionConfig.title || "משימה אוטומטית",
               description: actionConfig.description,
               status: actionConfig.status || "todo",
             };
@@ -596,10 +596,10 @@ export async function processTaskStatusChange(
         if (actionConfig.recipientId) {
           await sendNotification({
             userId: actionConfig.recipientId,
-            title: actionConfig.titleTemplate || "Task Updated",
+            title: actionConfig.titleTemplate || "עדכון משימה",
             message: (
               actionConfig.messageTemplate ||
-              "Task {taskTitle} moved to {toStatus}"
+              "המשימה {taskTitle} עברה לסטטוס {toStatus}"
             )
               .replace("{taskTitle}", taskTitle)
               .replace("{fromStatus}", fromStatus)
@@ -672,9 +672,9 @@ export async function processNewRecordTrigger(
         if (actionConfig.recipientId) {
           await sendNotification({
             userId: actionConfig.recipientId,
-            title: actionConfig.titleTemplate || "New Record Created",
+            title: actionConfig.titleTemplate || "נוצרה רשומה חדשה",
             message: (
-              actionConfig.messageTemplate || "New record in {tableName}"
+              actionConfig.messageTemplate || "רשומה חדשה בטבלה {tableName}"
             ).replace("{tableName}", tableName),
             link: `/tables/${tableId}`,
           });
@@ -712,12 +712,12 @@ export async function processNewRecordTrigger(
               const notifyTo = actionConfig.notifyUserId || rule.createdBy;
               const notifyMsg = actionConfig.notifyMessage
                 ? actionConfig.notifyMessage.replace("{name}", name)
-                : `Lead ${name} was automatically added to list "${actionConfig.listId}".`;
+                : `הליד ${name} נוסף אוטומטית לרשימה "${actionConfig.listId}".`;
 
               if (actionConfig.sendNotification !== false && notifyTo) {
                 await sendNotification({
                   userId: notifyTo,
-                  title: "Added to Nurture List",
+                  title: actionConfig.notifyTitle || "נוסף לרשימת תפוצה",
                   message: notifyMsg,
                   link: `/nurture-hub`,
                 });

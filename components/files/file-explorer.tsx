@@ -5,7 +5,7 @@ import { FolderCard } from "./folder-card";
 import { FileCard } from "./file-card";
 import { Button } from "@/components/ui/button";
 import {
-  ChevronRight,
+  ChevronLeft, // RTL -> Left
   Home,
   LayoutGrid,
   List,
@@ -55,48 +55,48 @@ const FILE_FILTERS: {
 }[] = [
   {
     id: "all",
-    label: "All Files",
-    icon: <Files className="w-4 h-4" />,
+    label: "כל הקבצים",
+    icon: <Files className="w-4 h-4 ml-2" />,
     color: "text-gray-600",
   },
   {
     id: "folders",
-    label: "Folders",
-    icon: <Folder className="w-4 h-4" />,
-    color: "text-blue-600",
+    label: "תיקיות",
+    icon: <Folder className="w-4 h-4 ml-2" />,
+    color: "text-[#4f95ff]", // Blue
   },
   {
     id: "images",
-    label: "Images",
-    icon: <Image className="w-4 h-4" />,
-    color: "text-purple-600",
+    label: "תמונות",
+    icon: <Image className="w-4 h-4 ml-2" />,
+    color: "text-[#a24ec1]", // Purple
     match: (type) => type.includes("image"),
   },
   {
     id: "pdf",
     label: "PDF",
-    icon: <FileText className="w-4 h-4" />,
+    icon: <FileText className="w-4 h-4 ml-2" />,
     color: "text-red-600",
     match: (type) => type.includes("pdf"),
   },
   {
     id: "audio",
-    label: "Audio",
-    icon: <Music className="w-4 h-4" />,
-    color: "text-yellow-600",
+    label: "שמע",
+    icon: <Music className="w-4 h-4 ml-2" />,
+    color: "text-[#4f95ff]",
     match: (type) => type.includes("audio"),
   },
   {
     id: "video",
-    label: "Video",
-    icon: <FileVideo className="w-4 h-4" />,
+    label: "וידאו",
+    icon: <FileVideo className="w-4 h-4 ml-2" />,
     color: "text-pink-600",
     match: (type) => type.includes("video"),
   },
   {
     id: "documents",
-    label: "Documents",
-    icon: <FileCode className="w-4 h-4" />,
+    label: "מסמכים",
+    icon: <FileCode className="w-4 h-4 ml-2" />,
     color: "text-green-600",
     match: (type) =>
       type.includes("text") ||
@@ -107,8 +107,8 @@ const FILE_FILTERS: {
   },
   {
     id: "other",
-    label: "Other",
-    icon: <File className="w-4 h-4" />,
+    label: "אחר",
+    icon: <File className="w-4 h-4 ml-2" />,
     color: "text-gray-500",
     match: (type) => true, // Catches everything else
   },
@@ -207,7 +207,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
         await moveFileToFolder(draggedFileId, targetFolderId);
         router.refresh();
       } catch (error: any) {
-        alert(`Failed to move file: ${error.message}`);
+        alert(`העברת הקובץ נכשלה: ${error.message}`);
       }
     }
     setDraggedFileId(null);
@@ -220,7 +220,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
         await moveFileToFolder(draggedFileId, targetFolderId);
         router.refresh();
       } catch (error: any) {
-        alert(`Failed to move file: ${error.message}`);
+        alert(`העברת הקובץ נכשלה: ${error.message}`);
       }
     }
     setDraggedFileId(null);
@@ -228,28 +228,28 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
 
   const viewModes: { mode: ViewMode; icon: React.ReactNode; label: string }[] =
     [
-      { mode: "grid", icon: <LayoutGrid className="w-4 h-4" />, label: "Grid" },
-      { mode: "list", icon: <List className="w-4 h-4" />, label: "List" },
+      { mode: "grid", icon: <LayoutGrid className="w-4 h-4" />, label: "רשת" },
+      { mode: "list", icon: <List className="w-4 h-4" />, label: "רשימה" },
       {
         mode: "compact",
         icon: <Table2 className="w-4 h-4" />,
-        label: "Compact",
+        label: "דחוס",
       },
     ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir="rtl">
       {/* Location Banner - Shows when inside a folder */}
       {breadcrumbs.length > 0 && (
         <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl border border-blue-100 dark:border-blue-900">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
-              <Folder className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg text-[#4f95ff]">
+              <Folder className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Current Location</p>
+              <p className="text-xs text-muted-foreground">מיקום נוכחי</p>
               <h2 className="text-lg font-semibold text-foreground">
-                {breadcrumbs[breadcrumbs.length - 1]?.name || "Files"}
+                {breadcrumbs[breadcrumbs.length - 1]?.name || "קבצים"}
               </h2>
             </div>
           </div>
@@ -257,10 +257,10 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
             <Button
               variant="outline"
               size="sm"
-              className="gap-2 bg-white dark:bg-gray-900 hover:bg-gray-50"
+              className="gap-2 bg-white dark:bg-gray-900 hover:bg-gray-50 text-[#4f95ff] border-[#4f95ff]/20"
             >
               <Home className="w-4 h-4" />
-              Back to Library
+              חזרה לספרייה
             </Button>
           </Link>
         </div>
@@ -288,13 +288,14 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
               handleDropOnBreadcrumb(null);
             }}
           >
-            <Home className="w-4 h-4" />
-            <span>All Files</span>
+            <Home className="w-4 h-4 ml-1" />
+            <span>כל הקבצים</span>
           </Link>
 
           {breadcrumbs.map((crumb, index) => (
             <div key={crumb.id} className="flex items-center">
-              <ChevronRight className="w-4 h-4 text-muted-foreground/50" />
+              <ChevronLeft className="w-4 h-4 text-muted-foreground/50" />{" "}
+              {/* RTL Chevron */}
               <Link
                 href={`/files?folderId=${crumb.id}`}
                 className={cn(
@@ -316,7 +317,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
                   }
                 }}
               >
-                <Folder className="w-4 h-4" />
+                <Folder className="w-4 h-4 ml-1" />
                 <span>{crumb.name}</span>
               </Link>
             </div>
@@ -346,9 +347,9 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
           </div>
 
           {/* Storage Usage */}
-          <div className="w-48">
+          <div className="w-48 text-right">
             <div className="flex justify-between text-xs mb-1">
-              <span>Storage</span>
+              <span>אחסון בשימוש</span>
               <span
                 className={usagePercent > 90 ? "text-red-500 font-bold" : ""}
               >
@@ -357,9 +358,10 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
             </div>
             <Progress
               value={usagePercent}
-              className={`h-2 ${
-                usagePercent > 90 ? "bg-red-100 [&>div]:bg-red-500" : ""
-              }`}
+              className={cn(
+                "h-2 bg-white [&>div]:bg-[#a24ec1] rotate-180",
+                usagePercent > 90 && "bg-red-100 [&>div]:bg-red-500"
+              )}
             />
           </div>
         </div>
@@ -384,7 +386,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
               className={cn(
                 "h-9 gap-2 transition-all",
                 isActive
-                  ? "bg-primary text-primary-foreground shadow-md"
+                  ? "bg-[#4f95ff] text-white shadow-md border-[#4f95ff]"
                   : "hover:bg-muted/80",
                 !isActive && filter.color
               )}
@@ -396,7 +398,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
                 className={cn(
                   "min-w-[20px] h-5 flex items-center justify-center rounded-full text-xs font-medium px-1.5",
                   isActive
-                    ? "bg-primary-foreground/20 text-primary-foreground"
+                    ? "bg-white/20 text-white"
                     : "bg-muted text-muted-foreground"
                 )}
               >
@@ -408,7 +410,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
       </div>
 
       {/* Content */}
-      <div>
+      <div className="min-h-[200px]">
         {filteredFolders.length === 0 && filteredFiles.length === 0 ? (
           <div className="text-center py-20">
             <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -424,19 +426,18 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
             </div>
             <h3 className="text-lg font-medium">
               {fileFilter === "all"
-                ? "This folder is empty"
+                ? "התיקייה ריקה"
                 : fileFilter === "folders"
-                ? "No folders found"
-                : `No ${
-                    FILE_FILTERS.find(
-                      (f) => f.id === fileFilter
-                    )?.label.toLowerCase() || "files"
-                  } found`}
+                ? "לא נמצאו תיקיות"
+                : `לא נמצאו ${
+                    FILE_FILTERS.find((f) => f.id === fileFilter)?.label ||
+                    "קבצים"
+                  }`}
             </h3>
             <p className="text-muted-foreground">
               {fileFilter === "all"
-                ? "Start by uploading files or creating a folder."
-                : "Try selecting a different filter."}
+                ? "התחל על ידי העלאת קבצים או יצירת תיקייה חדשה."
+                : "נסה לבחור סינון אחר."}
             </p>
           </div>
         ) : (
@@ -497,10 +498,10 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
             {viewMode === "compact" && (
               <div className="border rounded-lg overflow-hidden">
                 {/* Header */}
-                <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-muted/50 text-sm font-medium text-muted-foreground border-b">
-                  <div className="col-span-6">Name</div>
-                  <div className="col-span-2">Size</div>
-                  <div className="col-span-3">Modified</div>
+                <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-muted/50 text-sm font-medium text-muted-foreground border-b text-right">
+                  <div className="col-span-6">שם</div>
+                  <div className="col-span-2">גודל</div>
+                  <div className="col-span-3">תאריך שינוי</div>
                   <div className="col-span-1"></div>
                 </div>
                 {/* Items */}

@@ -2,7 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { Bell } from "lucide-react";
-import { getNotifications, markAsRead } from "@/app/actions/notifications";
+import {
+  getNotifications,
+  markAsRead,
+  markAllAsRead,
+} from "@/app/actions/notifications";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -65,6 +69,12 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
     }
   };
 
+  const handleMarkAllAsRead = async () => {
+    // Optimistic update
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    await markAllAsRead();
+  };
+
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
@@ -84,6 +94,14 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
       <DropdownMenuContent className="w-80 p-0" align="end" forceMount>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-muted/30">
           <h3 className="font-semibold text-sm">התראות</h3>
+          {unreadCount > 0 && (
+            <button
+              onClick={handleMarkAllAsRead}
+              className="text-xs text-primary hover:underline hover:text-primary/80 transition-colors"
+            >
+              סמן הכל כנקרא
+            </button>
+          )}
           <Link
             href="/notifications"
             className="text-xs text-primary hover:underline hover:text-primary/80 transition-colors"

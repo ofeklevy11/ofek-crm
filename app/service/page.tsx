@@ -1,5 +1,9 @@
 // Service Page
-import { getTickets, getSlaPolicies } from "@/app/actions/tickets";
+import {
+  getTickets,
+  getSlaPolicies,
+  getTicketStats,
+} from "@/app/actions/tickets";
 import { getClients } from "@/app/actions/clients";
 import ServicePageClient from "./client";
 import { getCurrentUser } from "@/lib/permissions-server";
@@ -12,10 +16,11 @@ export default async function ServicePage() {
     redirect("/login");
   }
 
-  const [tickets, clients, slaPolicies] = await Promise.all([
+  const [tickets, clients, slaPolicies, stats] = await Promise.all([
     getTickets(),
     getClients(),
     getSlaPolicies(),
+    getTicketStats(),
   ]);
 
   const users = await prisma.user.findMany({
@@ -29,6 +34,8 @@ export default async function ServicePage() {
       users={users}
       clients={clients}
       initialSlaPolicies={slaPolicies}
+      ticketStats={stats}
+      currentUser={{ id: user.id, role: user.role }}
     />
   );
 }
