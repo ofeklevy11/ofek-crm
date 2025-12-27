@@ -238,8 +238,8 @@ export async function updateTicket(
     );
     await createNotification({
       userId: data.assigneeId,
-      title: "Ticket Assigned to You",
-      message: `You have been assigned to ticket #${ticket.id}: ${ticket.title}`,
+      title: "קריאה הוקצתה לך",
+      message: `הוקצתה לך קריאה #${ticket.id}: ${ticket.title}`,
       link: `/service`,
     });
   }
@@ -277,8 +277,8 @@ export async function addTicketComment(
     );
     await createNotification({
       userId: ticket.assigneeId,
-      title: "New Comment on Ticket",
-      message: `${user.name} commented on ticket #${ticket.id}: ${ticket.title}`,
+      title: "תגובה חדשה בקריאה",
+      message: `${user.name} הגיב בקריאה #${ticket.id}: ${ticket.title}`,
       link: `/service`,
     });
   }

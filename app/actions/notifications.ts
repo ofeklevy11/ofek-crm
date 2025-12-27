@@ -185,3 +185,62 @@ export async function markAllAsRead() {
     return { success: false, error: "Failed to mark all as read" };
   }
 }
+
+export async function deleteNotification(notificationId: number) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Verify ownership
+    const notification = await prisma.notification.findFirst({
+      where: {
+        id: notificationId,
+        userId: user.id,
+      },
+    });
+
+    if (!notification) {
+      return {
+        success: false,
+        error: "Notification not found or unauthorized",
+      };
+    }
+
+    await prisma.notification.delete({
+      where: {
+        id: notificationId,
+      },
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting notification:", error);
+    return { success: false, error: "Failed to delete notification" };
+  }
+}
+
+export async function deleteNotifications(notificationIds: number[]) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Verify ownership for all notifications implicitly by including userId in the deleteMany query
+    const result = await prisma.notification.deleteMany({
+      where: {
+        id: {
+          in: notificationIds,
+        },
+        userId: user.id,
+      },
+    });
+
+    return { success: true, count: result.count };
+  } catch (error) {
+    console.error("Error deleting notifications:", error);
+    return { success: false, error: "Failed to delete notifications" };
+  }
+}
