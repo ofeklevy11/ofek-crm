@@ -81,6 +81,9 @@ export async function DELETE(
       prisma.oneTimePayment.deleteMany({
         where: { clientId },
       }),
+      prisma.financeRecord.deleteMany({
+        where: { clientId },
+      }),
       prisma.client.delete({
         where: { id: clientId },
       }),

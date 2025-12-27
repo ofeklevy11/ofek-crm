@@ -19,6 +19,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getSyncRules } from "@/app/actions/finance-sync";
 import SyncRulesDialog from "@/components/finance/SyncRulesDialog";
+import { processFixedExpenses } from "@/app/actions/fixed-expenses";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Info } from "lucide-react";
 
 async function getFinanceStats(companyId: number) {
   const records = await prisma.financeRecord.findMany({
@@ -39,6 +42,9 @@ async function getFinanceStats(companyId: number) {
 export default async function IncomeExpensesPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+
+  // Ensure fixed expenses are generated up to date
+  await processFixedExpenses();
 
   // Fetch stats and existing rules
   const [stats, rules] = await Promise.all([
@@ -95,6 +101,19 @@ export default async function IncomeExpensesPage() {
           <AddTransactionModal />
         </div>
       </div>
+
+      <Alert
+        className="bg-blue-50/50 border-blue-100 text-blue-900 shadow-sm"
+        dir="rtl"
+      >
+        <Info className="h-4 w-4 stroke-blue-600" />
+        <AlertTitle className="mr-2 font-bold mb-1">סנכרון נתונים</AlertTitle>
+        <AlertDescription className="mr-2 text-blue-800/90 leading-relaxed">
+          הנתונים המוצגים מבוססים על חוקי האיסוף הפעילים. כדי לוודא שכל הנתונים
+          עדכניים (כולל עסקאות שבוצעו לאחרונה), מומלץ להיכנס ל"ניהול חוקי איסוף"
+          ולהריץ סנכרון.
+        </AlertDescription>
+      </Alert>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -185,6 +185,50 @@ export default function EditRetainerModal({
               </select>
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                תזמון תשלום
+              </label>
+              <div className="flex gap-2 mb-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const today = new Date();
+                    setFormData({
+                      ...formData,
+                      nextDueDate: today.toISOString().split("T")[0],
+                    });
+                  }}
+                  className="flex-1 py-2 px-3 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  התחל מיידית (היום)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const today = new Date();
+                    const freq = formData.frequency;
+                    switch (freq) {
+                      case "monthly":
+                        today.setMonth(today.getMonth() + 1);
+                        break;
+                      case "quarterly":
+                        today.setMonth(today.getMonth() + 3);
+                        break;
+                      case "annually":
+                        today.setFullYear(today.getFullYear() + 1);
+                        break;
+                    }
+                    setFormData({
+                      ...formData,
+                      nextDueDate: today.toISOString().split("T")[0],
+                    });
+                  }}
+                  className="flex-1 py-2 px-3 text-xs bg-gray-50 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  התחל מחזור הבא
+                </button>
+              </div>
+
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 תשלום הבא
               </label>
@@ -196,6 +240,9 @@ export default function EditRetainerModal({
                 }
                 className="w-full rounded-lg border border-gray-300 p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
               />
+              <p className="mt-1 text-xs text-gray-500">
+                החישוב מתבצע החל מתאריך זה.
+              </p>
             </div>
           </div>
 

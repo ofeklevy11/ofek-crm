@@ -22,6 +22,9 @@ import {
   ArrowLeft,
   CreditCard,
   Table as TableIcon,
+  ChevronLeft,
+  Settings2,
+  ArrowDownToLine,
 } from "lucide-react";
 import { createSyncRule, runSyncRule } from "@/app/actions/finance-sync";
 import { useToast } from "@/hooks/use-toast";
@@ -147,179 +150,253 @@ export default function DataCollectionWizard({
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8" dir="rtl">
+    <div className="w-full space-y-8" dir="rtl">
       {/* Progress Steps */}
-      <div className="flex justify-between items-center px-8 relative">
-        <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-gray-200 -z-10" />
-        {[1, 2, 3].map((s) => (
-          <div
-            key={s}
-            className={`w-10 h-10 rounded-full flex items-center justify-center font-bold border-2 transition-colors bg-white ${
-              step >= s
-                ? "border-[#4f95ff] text-[#4f95ff]"
-                : "border-gray-300 text-gray-400"
-            }`}
-          >
-            {step > s ? <Check className="w-5 h-5" /> : s}
-          </div>
-        ))}
+      <div className="relative">
+        <div className="absolute left-0 right-0 top-1/2 h-1 bg-gray-100 -z-10 rounded-full" />
+        <div
+          className="absolute left-0 right-0 top-1/2 h-1 bg-gradient-to-l from-[#4f95ff] to-[#a24ec1] -z-10 rounded-full transition-all duration-500 ease-out"
+          style={{ width: `${((step - 1) / 2) * 100}%` }}
+        />
+
+        <div className="flex justify-between items-center px-2">
+          {[1, 2, 3].map((s) => {
+            const isActive = step >= s;
+            const isCurrent = step === s;
+
+            return (
+              <div key={s} className="flex flex-col items-center gap-2">
+                <div
+                  className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg border-4 transition-all duration-300 shadow-sm ${
+                    isActive
+                      ? "border-[#4f95ff] bg-white text-[#4f95ff] shadow-[#4f95ff]/20"
+                      : "border-white bg-gray-50 text-gray-300"
+                  } ${isCurrent ? "scale-110 ring-4 ring-[#4f95ff]/10" : ""}`}
+                >
+                  {step > s ? <Check className="w-6 h-6" /> : s}
+                </div>
+                <div
+                  className={`text-xs font-medium transition-colors ${
+                    isActive ? "text-[#4f95ff]" : "text-gray-300"
+                  }`}
+                >
+                  {s === 1
+                    ? "בחירת מקור"
+                    : s === 2
+                    ? "מיפוי נתונים"
+                    : "סיכום והרצה"}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      <Card className="p-6 shadow-lg border-blue-100 min-h-[400px]">
+      <Card className="p-8 rounded-3xl border border-white/50 shadow-xl shadow-gray-200/40 bg-white/80 backdrop-blur-sm min-h-[500px] flex flex-col relative overflow-hidden">
+        {/* Background blobs */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 rounded-full blur-3xl -z-10 -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-50/50 rounded-full blur-3xl -z-10 translate-y-1/2 -translate-x-1/2" />
+
         {step === 1 && (
-          <div className="space-y-6 animate-in fade-in">
-            <div className="text-center mb-4">
-              <h2 className="text-2xl font-bold text-gray-900">
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 flex-1 flex flex-col">
+            <div className="text-center">
+              <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">
                 בחר מקור נתונים
               </h2>
-              <p className="text-gray-500">מהיכן נאסוף את הנתונים הפיננסיים?</p>
+              <p className="text-gray-500 mt-2 text-lg">
+                מהיכן ברצונך לייבא נתונים פיננסיים?
+              </p>
             </div>
 
-            <div className="w-full">
-              <div className="grid w-full grid-cols-2 mb-6 bg-gray-100 p-1 rounded-lg">
-                <button
-                  onClick={() => setSourceType("TABLE")}
-                  className={`flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all ${
+            <div className="grid grid-cols-2 gap-6">
+              <div
+                onClick={() => setSourceType("TABLE")}
+                className={`cursor-pointer group relative p-6 rounded-2xl border-2 transition-all duration-300 flex flex-col items-center gap-4 text-center hover:shadow-lg ${
+                  sourceType === "TABLE"
+                    ? "border-[#4f95ff] bg-blue-50/30 shadow-md ring-2 ring-[#4f95ff]/20"
+                    : "border-gray-100 bg-white hover:border-gray-200"
+                }`}
+              >
+                <div
+                  className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-colors ${
                     sourceType === "TABLE"
-                      ? "bg-white shadow-sm text-[#4f95ff]"
-                      : "text-gray-500 hover:text-gray-700"
+                      ? "bg-[#4f95ff] text-white"
+                      : "bg-gray-100 text-gray-400 group-hover:bg-gray-200 group-hover:text-gray-600"
                   }`}
                 >
-                  <TableIcon className="w-4 h-4" /> טבלה מותאמת
-                </button>
-                <button
-                  onClick={() => setSourceType("TRANSACTIONS")}
-                  className={`flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all ${
-                    sourceType === "TRANSACTIONS"
-                      ? "bg-white shadow-sm text-[#4f95ff]"
-                      : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  <CreditCard className="w-4 h-4" /> מערכת תשלומים (CRM)
-                </button>
+                  <TableIcon className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3
+                    className={`font-bold text-lg ${
+                      sourceType === "TABLE" ? "text-gray-900" : "text-gray-600"
+                    }`}
+                  >
+                    טבלה מותאמת
+                  </h3>
+                  <p className="text-sm text-gray-400 mt-1">
+                    ייבוא מטבלאות המערכת (לידים, לקוחות, וכו')
+                  </p>
+                </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>שם לחוק האיסוף</Label>
-                  <Input
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData((p) => ({ ...p, name: e.target.value }))
-                    }
-                    placeholder={
-                      sourceType === "TABLE"
-                        ? "למשל: ייבוא לידים כהכנסה"
-                        : "למשל: סנכרון תשלומים מהמערכת"
-                    }
-                    className="text-right"
-                  />
+              <div
+                onClick={() => setSourceType("TRANSACTIONS")}
+                className={`cursor-pointer group relative p-6 rounded-2xl border-2 transition-all duration-300 flex flex-col items-center gap-4 text-center hover:shadow-lg ${
+                  sourceType === "TRANSACTIONS"
+                    ? "border-[#a24ec1] bg-purple-50/30 shadow-md ring-2 ring-[#a24ec1]/20"
+                    : "border-gray-100 bg-white hover:border-gray-200"
+                }`}
+              >
+                <div
+                  className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-colors ${
+                    sourceType === "TRANSACTIONS"
+                      ? "bg-[#a24ec1] text-white"
+                      : "bg-gray-100 text-gray-400 group-hover:bg-gray-200 group-hover:text-gray-600"
+                  }`}
+                >
+                  <CreditCard className="w-8 h-8" />
                 </div>
-
-                <div className="space-y-2">
-                  <Label>סוג תנועה</Label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <button
-                      onClick={() =>
-                        setFormData((p) => ({ ...p, targetType: "INCOME" }))
-                      }
-                      className={`p-3 rounded-lg border-2 font-bold transition-all text-sm ${
-                        formData.targetType === "INCOME"
-                          ? "border-[#4f95ff] bg-blue-50 text-[#4f95ff]"
-                          : "border-gray-200"
-                      }`}
-                    >
-                      הכנסות
-                    </button>
-                    <button
-                      onClick={() =>
-                        setFormData((p) => ({ ...p, targetType: "EXPENSE" }))
-                      }
-                      className={`p-3 rounded-lg border-2 font-bold transition-all text-sm ${
-                        formData.targetType === "EXPENSE"
-                          ? "border-[#a24ec1] bg-purple-50 text-[#a24ec1]"
-                          : "border-gray-200"
-                      }`}
-                    >
-                      הוצאות
-                    </button>
-                  </div>
+                <div>
+                  <h3
+                    className={`font-bold text-lg ${
+                      sourceType === "TRANSACTIONS"
+                        ? "text-gray-900"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    מערכת תשלומים
+                  </h3>
+                  <p className="text-sm text-gray-400 mt-1">
+                    ייבוא אוטומטי של עסקאות בסטטוס "שולם" + ריטיינר בסטטוס
+                    "שולם"
+                  </p>
                 </div>
-
-                {sourceType === "TABLE" && (
-                  <div className="space-y-2">
-                    <Label>בחר טבלת מקור</Label>
-                    <Select
-                      value={formData.sourceId}
-                      onValueChange={(val) =>
-                        setFormData((p) => ({ ...p, sourceId: val }))
-                      }
-                    >
-                      <SelectTrigger className="text-right" dir="rtl">
-                        <SelectValue placeholder="בחר טבלה..." />
-                      </SelectTrigger>
-                      <SelectContent dir="rtl">
-                        {tables.map((t) => (
-                          <SelectItem key={t.id} value={t.id.toString()}>
-                            {t.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {sourceType === "TRANSACTIONS" && (
-                  <div className="bg-blue-50 text-blue-800 p-4 rounded-lg text-sm border border-blue-200 mt-4">
-                    <p className="font-bold mb-1">איסוף אוטומטי</p>
-                    המערכת תסרוק את כל העסקאות בסטטוס "שולם" ותוסיף אותן לדוח
-                    הפיננסי באופן אוטומטי.
-                  </div>
-                )}
               </div>
             </div>
 
-            <div className="flex justify-end pt-4">
+            <div className="space-y-6 max-w-lg mx-auto w-full pt-4">
+              <div className="space-y-2">
+                <Label className="text-base">שם לחוק האיסוף</Label>
+                <Input
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, name: e.target.value }))
+                  }
+                  placeholder={
+                    sourceType === "TABLE"
+                      ? "למשל: ייבוא לידים כהכנסה"
+                      : "למשל: סנכרון תשלומים מהמערכת"
+                  }
+                  className="text-right h-12 text-lg bg-gray-50/50 border-gray-200 focus:border-[#4f95ff] focus:ring-[#4f95ff]/20 transition-all"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-base">הנתונים יישמרו כ:</Label>
+                <div className="grid grid-cols-2 gap-4 p-1 bg-gray-100 rounded-xl">
+                  <button
+                    onClick={() =>
+                      setFormData((p) => ({ ...p, targetType: "INCOME" }))
+                    }
+                    className={`py-3 px-4 rounded-lg font-bold transition-all text-sm flex items-center justify-center gap-2 ${
+                      formData.targetType === "INCOME"
+                        ? "bg-white text-[#4f95ff] shadow-sm"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    <ArrowDownToLine className="w-4 h-4 rotate-180" /> הכנסות
+                  </button>
+                  <button
+                    onClick={() =>
+                      setFormData((p) => ({ ...p, targetType: "EXPENSE" }))
+                    }
+                    className={`py-3 px-4 rounded-lg font-bold transition-all text-sm flex items-center justify-center gap-2 ${
+                      formData.targetType === "EXPENSE"
+                        ? "bg-white text-[#a24ec1] shadow-sm"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    <ArrowDownToLine className="w-4 h-4" /> הוצאות
+                  </button>
+                </div>
+              </div>
+
+              {sourceType === "TABLE" && (
+                <div className="space-y-2">
+                  <Label className="text-base">בחר טבלת מקור</Label>
+                  <Select
+                    value={formData.sourceId}
+                    onValueChange={(val) =>
+                      setFormData((p) => ({ ...p, sourceId: val }))
+                    }
+                  >
+                    <SelectTrigger
+                      className="text-right h-12 bg-gray-50/50 border-gray-200"
+                      dir="rtl"
+                    >
+                      <SelectValue placeholder="בחר טבלה..." />
+                    </SelectTrigger>
+                    <SelectContent dir="rtl" className="max-h-[300px]">
+                      {tables.map((t) => (
+                        <SelectItem key={t.id} value={t.id.toString()}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1" />
+
+            <div className="flex justify-end pt-8">
               <Button
                 onClick={() => setStep(sourceType === "TABLE" ? 2 : 3)}
                 disabled={
                   !formData.name ||
                   (sourceType === "TABLE" && !formData.sourceId)
                 }
-                className="bg-[#4f95ff] hover:bg-blue-600"
+                className="bg-[#4f95ff] hover:bg-blue-600 text-white rounded-full px-8 py-6 text-lg shadow-lg shadow-blue-500/20 transition-all hover:scale-105"
               >
                 {sourceType === "TABLE" ? "המשך למיפוי" : "המשך לסיכום"}{" "}
-                <ArrowLeft className="w-4 h-4 mr-2" />
+                <ChevronLeft className="w-5 h-5 mr-2" />
               </Button>
             </div>
           </div>
         )}
 
         {step === 2 && sourceType === "TABLE" && (
-          <div className="space-y-6 animate-in fade-in">
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 flex-1 flex flex-col">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900">מיפוי שדות</h2>
-              <p className="text-gray-500">
-                בחר אילו עמודות מייצגות את הסכום והתאריך
+              <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">
+                מיפוי נתונים
+              </h2>
+              <p className="text-gray-500 mt-2 text-lg">
+                התאם את העמודות בטבלה לשדות הפיננסיים
               </p>
             </div>
 
             {currentColumns.length === 0 ? (
-              <div className="text-center p-8 bg-red-50 text-red-600 rounded-lg">
-                <p className="font-bold">לא נמצאו עמודות בטבלה זו.</p>
+              <div className="text-center p-12 bg-red-50 text-red-600 rounded-3xl border border-red-100">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Database className="w-6 h-6 text-red-600" />
+                </div>
+                <p className="font-bold text-lg">לא נמצאו עמודות בטבלה זו.</p>
                 <Button
                   variant="outline"
-                  className="mt-4"
+                  className="mt-6 border-red-200 text-red-600 hover:bg-red-100 hover:text-red-700"
                   onClick={() => setStep(1)}
                 >
-                  חזרה
+                  חזרה לבחירת טבלה
                 </Button>
               </div>
             ) : (
-              <div className="grid gap-6">
-                <div className="space-y-2">
-                  <Label className="text-[#a24ec1] font-bold">
-                    עמודת סכום (מספרים בלבד)
+              <div className="space-y-6 max-w-2xl mx-auto w-full">
+                <div className="space-y-2 p-6 bg-blue-50/50 rounded-2xl border border-blue-100">
+                  <Label className="text-[#4f95ff] font-bold text-lg flex items-center gap-2">
+                    <Database className="w-4 h-4" /> עמודת סכום (חובה)
                   </Label>
                   <Select
                     value={formData.mapping.amountField}
@@ -330,8 +407,11 @@ export default function DataCollectionWizard({
                       }))
                     }
                   >
-                    <SelectTrigger className="text-right" dir="rtl">
-                      <SelectValue placeholder="בחר עמודת מחיר..." />
+                    <SelectTrigger
+                      className="text-right h-12 bg-white border-blue-200"
+                      dir="rtl"
+                    >
+                      <SelectValue placeholder="בחר עמודת מספרים..." />
                     </SelectTrigger>
                     <SelectContent dir="rtl">
                       {numberColumns.length > 0 ? (
@@ -341,7 +421,7 @@ export default function DataCollectionWizard({
                           </SelectItem>
                         ))
                       ) : (
-                        <div className="p-2 text-sm text-gray-500 text-center">
+                        <div className="p-4 text-sm text-gray-500 text-center">
                           אין עמודות מספריות בטבלה זו
                         </div>
                       )}
@@ -349,9 +429,11 @@ export default function DataCollectionWizard({
                   </Select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label>עמודת תאריך</Label>
+                    <Label className="text-base text-gray-600">
+                      תאריך העסקה
+                    </Label>
                     <Select
                       value={formData.mapping.dateField}
                       onValueChange={(val) =>
@@ -361,7 +443,10 @@ export default function DataCollectionWizard({
                         }))
                       }
                     >
-                      <SelectTrigger className="text-right" dir="rtl">
+                      <SelectTrigger
+                        className="text-right h-12 bg-gray-50 border-gray-200"
+                        dir="rtl"
+                      >
                         <SelectValue placeholder="תאריך יצירה (ברירת מחדל)" />
                       </SelectTrigger>
                       <SelectContent dir="rtl">
@@ -375,7 +460,9 @@ export default function DataCollectionWizard({
                   </div>
 
                   <div className="space-y-2">
-                    <Label>כותרת/תיאור</Label>
+                    <Label className="text-base text-gray-600">
+                      תיאור/כותרת
+                    </Label>
                     <Select
                       value={formData.mapping.titleField}
                       onValueChange={(val) =>
@@ -385,8 +472,11 @@ export default function DataCollectionWizard({
                         }))
                       }
                     >
-                      <SelectTrigger className="text-right" dir="rtl">
-                        <SelectValue placeholder="בחר..." />
+                      <SelectTrigger
+                        className="text-right h-12 bg-gray-50 border-gray-200"
+                        dir="rtl"
+                      >
+                        <SelectValue placeholder="בחר עמודת תיאור..." />
                       </SelectTrigger>
                       <SelectContent dir="rtl">
                         {currentColumns.map((c) => (
@@ -399,127 +489,146 @@ export default function DataCollectionWizard({
                   </div>
                 </div>
 
-                <div className="space-y-2 pt-4 border-t mt-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Label className="font-bold text-gray-700">
-                      סיווג לקטגוריה (אופציונלי)
+                <div className="pt-6 border-t border-gray-100">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Label className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                      <Settings2 className="w-5 h-5 text-[#a24ec1]" /> סיווג
+                      קטגוריה
                     </Label>
                   </div>
 
-                  <div className="bg-blue-50 text-blue-800 p-3 rounded-md text-xs mb-3 space-y-1">
-                    <p>
-                      <strong>מה זה קטגוריה?</strong> זהו התיוג שיופיע בדוח
-                      הפיננסי (למשל: "מכירות", "שיווק", "משכורות").
-                    </p>
-                    <ul className="list-disc list-inside pr-1">
-                      <li>
-                        <strong>ערך קבוע:</strong> כל הרשומות יקבלו את אותה
-                        קטגוריה (למשל, כולן "מכירות").
-                      </li>
-                      <li>
-                        <strong>מעמודה:</strong> הקטגוריה תיקח את השם שלה מתוך
-                        עמודה בטבלה (למשל, עמודת "מקור הליד" תסווג כ-"פייסבוק"
-                        או "גוגל").
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="flex gap-2 items-start">
-                    <div className="w-1/3">
-                      <Select
-                        value={formData.mapping.categoryField}
-                        onValueChange={(val) =>
-                          setFormData((p) => ({
-                            ...p,
-                            mapping: { ...p.mapping, categoryField: val },
-                          }))
-                        }
-                      >
-                        <SelectTrigger className="text-right" dir="rtl">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent dir="rtl">
-                          <SelectItem value="static">
-                            ערך קבוע (מומלץ)
-                          </SelectItem>
-                          {currentColumns.map((c) => (
-                            <SelectItem key={c.key} value={c.key}>
-                              לפי עמודה: {c.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex-1">
-                      {formData.mapping.categoryField === "static" ? (
-                        <Input
-                          placeholder="הזן שם קטגוריה (למשל: מכירות)"
-                          value={formData.mapping.categoryValue}
-                          onChange={(e) =>
+                  <div className="grid gap-4">
+                    <div className="flex gap-4 items-start">
+                      <div className="w-1/3 space-y-2">
+                        <Label className="text-xs text-gray-400">
+                          שיטת סיווג
+                        </Label>
+                        <Select
+                          value={formData.mapping.categoryField}
+                          onValueChange={(val) =>
                             setFormData((p) => ({
                               ...p,
-                              mapping: {
-                                ...p.mapping,
-                                categoryValue: e.target.value,
-                              },
+                              mapping: { ...p.mapping, categoryField: val },
                             }))
                           }
-                          className="text-right"
-                        />
-                      ) : (
-                        <div className="p-2 bg-gray-100 rounded text-sm text-gray-500 border">
-                          הקטגוריה תיקבע אוטומטית לפי הערך בעמודה שנבחרה.
-                        </div>
-                      )}
+                        >
+                          <SelectTrigger
+                            className="text-right h-11 bg-white"
+                            dir="rtl"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent dir="rtl">
+                            <SelectItem value="static">ערך קבוע</SelectItem>
+                            {currentColumns.map((c) => (
+                              <SelectItem key={c.key} value={c.key}>
+                                לפי עמודה: {c.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="flex-1 space-y-2">
+                        <Label className="text-xs text-gray-400">
+                          {formData.mapping.categoryField === "static"
+                            ? "שם הקטגוריה"
+                            : "מידע"}
+                        </Label>
+                        {formData.mapping.categoryField === "static" ? (
+                          <Input
+                            placeholder="למשל: מכירות, שיווק..."
+                            value={formData.mapping.categoryValue}
+                            onChange={(e) =>
+                              setFormData((p) => ({
+                                ...p,
+                                mapping: {
+                                  ...p.mapping,
+                                  categoryValue: e.target.value,
+                                },
+                              }))
+                            }
+                            className="text-right h-11 bg-white"
+                          />
+                        ) : (
+                          <div className="h-11 px-3 flex items-center bg-gray-50 rounded-md text-sm text-gray-500 border border-gray-200">
+                            הקטגוריה תיקבע לפי הערך בעמודה שנבחרה
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="flex justify-between pt-4">
-              <Button variant="ghost" onClick={() => setStep(1)}>
+            <div className="flex-1" />
+
+            <div className="flex justify-between pt-8">
+              <Button
+                variant="ghost"
+                onClick={() => setStep(1)}
+                className="text-gray-500 hover:text-gray-800"
+              >
                 חזרה
               </Button>
               <Button
                 onClick={() => setStep(3)}
                 disabled={!formData.mapping.amountField}
-                className="bg-[#4f95ff] hover:bg-blue-600"
+                className="bg-[#4f95ff] hover:bg-blue-600 text-white rounded-full px-8 py-6 text-lg shadow-lg shadow-blue-500/20 transition-all hover:scale-105"
               >
-                הבא: סיכום והרצה <ArrowLeft className="w-4 h-4 mr-2" />
+                הבא: סיכום <ChevronLeft className="w-5 h-5 mr-2" />
               </Button>
             </div>
           </div>
         )}
 
         {step === 3 && (
-          <div className="space-y-6 animate-in fade-in flex flex-col items-center justify-center text-center py-8">
-            <div className="w-16 h-16 bg-[#4f95ff]/10 rounded-full flex items-center justify-center mb-4">
-              <Database className="w-8 h-8 text-[#4f95ff]" />
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col items-center justify-center text-center py-8">
+            <div className="w-24 h-24 bg-gradient-to-tr from-[#4f95ff] to-[#a24ec1] rounded-full flex items-center justify-center mb-6 shadow-xl shadow-purple-500/30 text-white animate-pulse">
+              <Database className="w-10 h-10" />
             </div>
-            <h2 className="text-2xl font-bold">מוכן לסנכרון!</h2>
 
-            <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm w-full max-w-sm text-right space-y-2">
-              <div className="flex justify-between">
-                <span className="text-gray-500">שם החוק:</span>
-                <span className="font-medium">{formData.name}</span>
+            <div className="space-y-2">
+              <h2 className="text-3xl font-extrabold text-gray-900">
+                הכל מוכן!
+              </h2>
+              <p className="text-gray-500 text-lg">
+                אנא וודא את הפרטים לפני הפעלת החוק
+              </p>
+            </div>
+
+            <div className="bg-gray-50/80 p-6 rounded-2xl border border-gray-200 w-full max-w-md text-right space-y-4 shadow-inner">
+              <div className="flex justify-between items-center py-2 border-b border-gray-200/50">
+                <span className="text-gray-500 flex items-center gap-2">
+                  <Settings2 className="w-4 h-4" /> שם החוק
+                </span>
+                <span className="font-bold text-gray-900">{formData.name}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">מקור:</span>
-                <span className="font-medium">
+              <div className="flex justify-between items-center py-2 border-b border-gray-200/50">
+                <span className="text-gray-500 flex items-center gap-2">
+                  {sourceType === "TABLE" ? (
+                    <TableIcon className="w-4 h-4" />
+                  ) : (
+                    <CreditCard className="w-4 h-4" />
+                  )}{" "}
+                  מקור
+                </span>
+                <span className="font-medium text-gray-900">
                   {sourceType === "TABLE"
                     ? selectedTable?.name
-                    : "מערכת תשלומים"}
+                    : "מערכת תשלומים וריטיינרים"}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">סוג יעד:</span>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-gray-500 flex items-center gap-2">
+                  <ArrowDownToLine className="w-4 h-4" /> סוג יעד
+                </span>
                 <span
-                  className={`font-bold ${
+                  className={`font-bold px-3 py-1 rounded-full text-sm ${
                     formData.targetType === "INCOME"
-                      ? "text-[#4f95ff]"
-                      : "text-[#a24ec1]"
+                      ? "bg-blue-100 text-[#4f95ff]"
+                      : "bg-purple-100 text-[#a24ec1]"
                   }`}
                 >
                   {formData.targetType === "INCOME" ? "הכנסות" : "הוצאות"}
@@ -527,23 +636,23 @@ export default function DataCollectionWizard({
               </div>
             </div>
 
-            <div className="flex gap-4 pt-6 w-full">
+            <div className="flex gap-4 pt-8 w-full max-w-md">
               <Button
                 variant="outline"
-                className="flex-1"
+                className="flex-1 py-6 rounded-xl border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                 onClick={() => setStep(sourceType === "TABLE" ? 2 : 1)}
               >
-                חזרה
+                חזרה לתיקון
               </Button>
               <Button
-                className="flex-2 bg-[#4f95ff] hover:bg-blue-600 text-lg py-6"
+                className="flex-[2] bg-gradient-to-r from-[#4f95ff] to-[#a24ec1] hover:opacity-90 text-white text-lg py-6 rounded-xl shadow-lg shadow-purple-500/25 transition-all hover:scale-[1.02]"
                 onClick={handleCreateAndRun}
                 disabled={loading}
               >
                 {loading ? (
                   <Loader2 className="w-6 h-6 animate-spin mr-2" />
                 ) : (
-                  <Play className="w-6 h-6 mr-2" />
+                  <Play className="w-6 h-6 mr-2 fill-current" />
                 )}
                 {loading ? "מבצע איסוף נתונים..." : "צור והפעל חוק"}
               </Button>

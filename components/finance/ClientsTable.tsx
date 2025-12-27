@@ -62,10 +62,27 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {clients.map((client) => {
-            const outstanding = client.oneTimePayments.reduce(
+            const oneTimeDebt = client.oneTimePayments.reduce(
               (sum: number, payment: any) => sum + Number(payment.amount),
               0
             );
+
+            const retainerDebt = client.retainers.reduce(
+              (sum: number, retainer: any) => {
+                const nextDueDate = retainer.nextDueDate
+                  ? new Date(retainer.nextDueDate)
+                  : null;
+                const isOverdue = nextDueDate && nextDueDate < new Date();
+
+                if (isOverdue) {
+                  return sum + Number(retainer.amount);
+                }
+                return sum;
+              },
+              0
+            );
+
+            const outstanding = oneTimeDebt + retainerDebt;
 
             return (
               <tr

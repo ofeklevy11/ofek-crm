@@ -24,6 +24,11 @@ export default async function ClientOverviewPage({
         orderBy: { createdAt: "desc" },
         take: 20,
       },
+      financeRecords: {
+        where: { type: "INCOME" },
+        orderBy: { date: "desc" },
+        take: 20,
+      },
     },
   });
 
@@ -43,9 +48,15 @@ export default async function ClientOverviewPage({
   );
 
   // Calculate total paid
-  const totalPaid = client.transactions
+  const totalPaidTransactions = client.transactions
     .filter((t) => t.status === "manual-marked-paid")
     .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  const totalPaidFinanceRecords = client.financeRecords
+    .filter((r) => r.status === "COMPLETED" && r.type === "INCOME")
+    .reduce((sum, r) => sum + Number(r.amount), 0);
+
+  const totalPaid = totalPaidTransactions + totalPaidFinanceRecords;
 
   const stats = {
     totalPaid,
@@ -63,6 +74,23 @@ export default async function ClientOverviewPage({
     status: t.status,
     paidDate: t.paidDate?.toISOString().split("T")[0],
   }));
+
+  const formattedFinanceRecords = client.financeRecords.map((r) => ({
+    id: 1000000 + r.id, // Offset ID to avoid collision
+    client: { id: client.id, name: client.name },
+    relatedType: "income",
+    title: r.title || "הכנסה",
+    amount: Number(r.amount),
+    dueDate: r.date.toISOString().split("T")[0],
+    status: r.status === "COMPLETED" ? "paid" : r.status.toLowerCase(),
+    paidDate: r.date.toISOString().split("T")[0],
+  }));
+
+  const allTransactions = [...formattedTransactions, ...formattedFinanceRecords]
+    .sort(
+      (a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()
+    )
+    .slice(0, 50);
 
   const getFrequencyLabel = (freq: string) => {
     switch (freq) {
@@ -176,7 +204,7 @@ export default async function ClientOverviewPage({
 
         {/* Right Column: Transaction History */}
         <div className="lg:col-span-2">
-          <TransactionsTable transactions={formattedTransactions} />
+          <TransactionsTable transactions={allTransactions} />
         </div>
       </div>
     </div>

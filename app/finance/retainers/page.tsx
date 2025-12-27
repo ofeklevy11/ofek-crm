@@ -20,16 +20,8 @@ export default async function RetainersPage({
   const currentPage = Number(page) || 1;
   const pageSize = 30;
 
-  // CRITICAL: Filter by client.companyId
-  const totalRetainers = await prisma.retainer.count({
-    where: {
-      client: { companyId: user.companyId },
-    },
-  });
-  const totalPages = Math.ceil(totalRetainers / pageSize);
-
-  // CRITICAL: Filter by client.companyId
-  const retainers = await prisma.retainer.findMany({
+  // Fetch ALL retainers to sort correctly by status (since Prisma can't easy-sort enums in custom order)
+  const allRetainers = await prisma.retainer.findMany({
     where: {
       client: { companyId: user.companyId },
     },
@@ -37,13 +29,33 @@ export default async function RetainersPage({
       client: true,
     },
     orderBy: { createdAt: "desc" },
-    skip: (currentPage - 1) * pageSize,
-    take: pageSize,
   });
 
-  const activeRetainers = retainers.filter((r) => r.status === "active");
-  const pausedRetainers = retainers.filter((r) => r.status === "paused");
-  const cancelledRetainers = retainers.filter((r) => r.status === "cancelled");
+  // Sort: Active -> Paused -> Cancelled
+  const statusOrder: Record<string, number> = {
+    active: 0,
+    paused: 1,
+    cancelled: 2,
+  };
+
+  const sortedRetainers = allRetainers.sort((a, b) => {
+    const orderA = statusOrder[a.status] ?? 99;
+    const orderB = statusOrder[b.status] ?? 99;
+    if (orderA !== orderB) return orderA - orderB;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
+  const totalPages = Math.ceil(sortedRetainers.length / pageSize);
+  const currentRetainers = sortedRetainers.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  const activeRetainers = sortedRetainers.filter((r) => r.status === "active");
+  const pausedRetainers = sortedRetainers.filter((r) => r.status === "paused");
+  const cancelledRetainers = sortedRetainers.filter(
+    (r) => r.status === "cancelled"
+  );
 
   return (
     <div className="p-8 space-y-8 bg-[#f4f8f8] min-h-screen" dir="rtl">
@@ -85,14 +97,14 @@ export default async function RetainersPage({
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="text-sm text-gray-500">ריטיינרים מבוטלים</div>
+          <div className="text-sm text-gray-500">ריטיינרים לא פעילים</div>
           <div className="text-3xl font-bold text-[#a24ec1] mt-2">
             {cancelledRetainers.length}
           </div>
         </div>
       </div>
 
-      <RetainersTable retainers={retainers} />
+      <RetainersTable retainers={currentRetainers} />
 
       <Pagination totalPages={totalPages} />
     </div>

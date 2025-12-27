@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { format } from "date-fns";
+import { format, isFuture } from "date-fns";
 import { he } from "date-fns/locale";
 import {
   ArrowDown,
@@ -9,6 +9,7 @@ import {
   Trash2,
   Filter,
   Table as TableIcon,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,6 +45,7 @@ interface FinanceRecord {
   status: string;
   client?: { name: string } | null;
   syncRule?: { sourceType: string; name: string } | null;
+  originId?: string | null;
 }
 
 interface FinanceLedgerProps {
@@ -165,6 +167,15 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
                   <TableCell className="font-medium text-gray-900 text-right">
                     <div className="flex items-center gap-2">
                       {record.title}
+                      {isFuture(new Date(record.date)) && (
+                        <Badge
+                          variant="secondary"
+                          className="bg-purple-100 text-purple-700 hover:bg-purple-100 text-[10px] px-1.5 h-5 gap-1 shadow-none border-0 whitespace-nowrap"
+                        >
+                          <Calendar className="w-3 h-3" />
+                          עתידי
+                        </Badge>
+                      )}
                       {record.syncRule?.sourceType === "TABLE" && (
                         <div
                           title={`סונכרן אוטומטית מהטבלה: ${record.syncRule.name}`}
@@ -189,7 +200,11 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
                     )}
                   </TableCell>
                   <TableCell className="text-gray-500 text-sm text-right">
-                    {record.client?.name || "-"}
+                    {record.client?.name ||
+                      (record.syncRule?.sourceType === "TRANSACTIONS" &&
+                      record.title.includes("ריטיינר")
+                        ? record.title.split(": ")[1]?.split(" (")[0] || "-"
+                        : "-")}
                   </TableCell>
                   <TableCell className="text-gray-500 text-sm text-right">
                     {record.syncRule?.name ? (
@@ -198,6 +213,13 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
                         className="text-xs font-normal bg-[#4f95ff]/10 text-[#4f95ff] border-[#4f95ff]/20"
                       >
                         {record.syncRule.name}
+                      </Badge>
+                    ) : record.originId?.startsWith("fixed_") ? (
+                      <Badge
+                        variant="outline"
+                        className="text-xs font-normal bg-gray-100 text-gray-600 border-gray-200"
+                      >
+                        הוצאה קבועה
                       </Badge>
                     ) : (
                       <span className="text-gray-400">ידני</span>

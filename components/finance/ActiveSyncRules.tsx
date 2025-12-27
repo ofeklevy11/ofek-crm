@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import {
   Trash2,
   RefreshCw,
@@ -10,70 +9,54 @@ import {
   Database,
   CreditCard,
   Edit2,
-  Save,
-  X,
+  MoreVertical,
+  Calendar,
+  ShieldAlert,
 } from "lucide-react";
-import {
-  deleteSyncRule,
-  runSyncRule,
-  updateSyncRule,
-} from "@/app/actions/finance-sync";
+import { deleteSyncRule, runSyncRule } from "@/app/actions/finance-sync";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export default function ActiveSyncRules({ rules }: { rules: any[] }) {
   const { toast } = useToast();
   const [loadingId, setLoadingId] = useState<number | null>(null);
-  const [editingId, setEditingId] = useState<number | null>(null);
-
-  // Edit state
-  const [editName, setEditName] = useState("");
-  const [editType, setEditType] = useState<"INCOME" | "EXPENSE">("INCOME");
-
-  const startEdit = (rule: any) => {
-    setEditingId(rule.id);
-    setEditName(rule.name);
-    setEditType(rule.targetType);
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditName("");
-  };
-
-  const saveEdit = async (id: number) => {
-    try {
-      await updateSyncRule(id, { name: editName, targetType: editType });
-      toast({ title: "החוק עודכן בהצלחה" });
-      setEditingId(null);
-    } catch (e) {
-      toast({ title: "שגיאה בעדכון", variant: "destructive" });
-    }
-  };
+  const [showEditBlocker, setShowEditBlocker] = useState(false);
 
   const handleRun = async (id: number) => {
     setLoadingId(id);
     try {
       const res = await runSyncRule(id);
-      if (res.stats.created > 0) {
+      const { created, updated, skippedError } = res.stats;
+
+      if (created > 0 || (updated && updated > 0)) {
         toast({
           title: "סנכרון הושלם בהצלחה",
-          description: `נוצרו ${res.stats.created} רשומות חדשות. (${res.stats.skippedExists} דולגו כי קיימים כבר)`,
+          description: `נוצרו ${created} חדשים, עודכנו ${updated || 0} קיימים.`,
         });
-      } else if (res.stats.skippedError > 0) {
+      } else if (skippedError > 0) {
         toast({
           title: "זוהו שגיאות בסנכרון",
-          description: `נכשלו: ${
-            res.stats.skippedError
-          } רשומות. שגיאה ראשונה: ${res.stats.errors[0] || "שגיאה לא ידועה"}`,
+          description: `נכשלו: ${skippedError} רשומות.`,
           variant: "destructive",
         });
       } else {
         toast({
-          title: "לא נמצאו נתונים חדשים",
-          description: `נסרקו ${res.stats.scanned} רשומות. ${res.stats.skippedExists} כבר קיימות במערכת.`,
+          title: "הנתונים עדכניים",
+          description: "לא נמצאו רשומות חדשות או שינויים.",
         });
       }
     } catch (e) {
@@ -110,163 +93,146 @@ export default function ActiveSyncRules({ rules }: { rules: any[] }) {
     );
 
   return (
-    <div
-      className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500"
-      dir="rtl"
-    >
-      <h2 className="text-xl font-bold text-gray-900">חוקי איסוף פעילים</h2>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-1">
+    <>
+      <div
+        className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500"
+        dir="rtl"
+      >
         {rules.map((rule) => {
-          const isEditing = editingId === rule.id;
-
           return (
-            <Card
+            <div
               key={rule.id}
-              className={`p-4 flex flex-col justify-between border-l-4 transition-all ${
-                isEditing
-                  ? "border-l-[#4f95ff] bg-blue-50/30"
-                  : "border-l-[#a24ec1] hover:shadow-md"
-              }`}
+              className="group relative p-4 rounded-xl border border-gray-100 bg-white hover:border-[#4f95ff]/30 hover:shadow-md transition-all duration-200"
             >
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-start gap-3 w-full">
-                  <div className="p-2 bg-[#4f95ff]/10 rounded-lg shrink-0">
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`p-2 rounded-lg shrink-0 ${
+                      rule.sourceType === "TABLE"
+                        ? "bg-blue-50 text-[#4f95ff]"
+                        : "bg-purple-50 text-[#a24ec1]"
+                    }`}
+                  >
                     {rule.sourceType === "TABLE" ? (
-                      <Database className="w-5 h-5 text-[#4f95ff]" />
+                      <Database className="w-4 h-4" />
                     ) : (
-                      <CreditCard className="w-5 h-5 text-[#4f95ff]" />
+                      <CreditCard className="w-4 h-4" />
                     )}
                   </div>
-                  <div className="w-full">
-                    {isEditing ? (
-                      <div className="space-y-3 mb-2">
-                        <div>
-                          <Label>שם החוק</Label>
-                          <Input
-                            value={editName}
-                            onChange={(e) => setEditName(e.target.value)}
-                            className="bg-white h-8"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setEditType("INCOME")}
-                            className={`text-xs px-2 py-1 rounded border ${
-                              editType === "INCOME"
-                                ? "bg-blue-50 border-[#4f95ff] text-[#4f95ff] font-bold"
-                                : "bg-white"
-                            }`}
-                          >
-                            הכנסות
-                          </button>
-                          <button
-                            onClick={() => setEditType("EXPENSE")}
-                            className={`text-xs px-2 py-1 rounded border ${
-                              editType === "EXPENSE"
-                                ? "bg-purple-50 border-[#a24ec1] text-[#a24ec1] font-bold"
-                                : "bg-white"
-                            }`}
-                          >
-                            הוצאות
-                          </button>
-                        </div>
-                        <div className="bg-blue-50 border border-blue-100 p-2 rounded text-xs text-blue-700 mt-2">
-                          <p className="font-semibold mb-1">שים לב:</p>
-                          לא ניתן לערוך את המקור או המיפוי בחוק קיים. כדי לשנות,
-                          יש ליצור חוק חדש.
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <h3 className="font-bold text-gray-900">{rule.name}</h3>
-                        <p className="text-sm text-gray-500">
-                          <span
-                            className={`font-medium ${
-                              rule.targetType === "INCOME"
-                                ? "text-[#4f95ff]"
-                                : "text-[#a24ec1]"
-                            }`}
-                          >
-                            {rule.targetType === "INCOME" ? "הכנסות" : "הוצאות"}
-                          </span>{" "}
-                          •
-                          {rule.sourceType === "TABLE"
-                            ? ` מטבלה #${rule.sourceId}`
-                            : " ממערכת התשלומים"}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          רץ לאחרונה:{" "}
-                          {rule.lastRunAt
-                            ? format(
-                                new Date(rule.lastRunAt),
-                                "dd/MM/yyyy HH:mm"
-                              )
-                            : "מעולם לא"}
-                        </p>
-                      </>
-                    )}
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-sm leading-tight">
+                      {rule.name}
+                    </h3>
+                    <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                      {rule.sourceType === "TABLE"
+                        ? `טבלה #${rule.sourceId}`
+                        : "מערכת תשלומים וריטיינרים"}
+                    </div>
                   </div>
+                </div>
+
+                <DropdownMenu dir="rtl">
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 -ml-2 text-gray-400 hover:text-gray-600"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setShowEditBlocker(true)}>
+                      <Edit2 className="w-4 h-4 ml-2" /> עריכה
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleDelete(rule.id)}
+                      className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4 ml-2" /> מחיקה
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              <div className="flex items-center justify-between mt-3 pl-1">
+                <Badge
+                  variant="secondary"
+                  className={`font-normal ${
+                    rule.targetType === "INCOME"
+                      ? "bg-blue-50 text-[#4f95ff] hover:bg-blue-100"
+                      : "bg-purple-50 text-[#a24ec1] hover:bg-purple-100"
+                  }`}
+                >
+                  {rule.targetType === "INCOME" ? "הכנסות" : "הוצאות"}
+                </Badge>
+
+                <div
+                  className="text-xs text-gray-400 flex items-center gap-1"
+                  title="ריצה אחרונה"
+                >
+                  <Calendar className="w-3 h-3" />
+                  {rule.lastRunAt
+                    ? format(new Date(rule.lastRunAt), "dd/MM")
+                    : "-"}
                 </div>
               </div>
 
-              <div className="flex gap-2 justify-end border-t pt-3 mt-2">
-                {isEditing ? (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-gray-500"
-                      onClick={cancelEdit}
-                    >
-                      <X className="w-3 h-3 mr-1" /> ביטול
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="h-8 bg-[#4f95ff] hover:bg-blue-600"
-                      onClick={() => saveEdit(rule.id)}
-                    >
-                      <Save className="w-3 h-3 mr-1" /> שמור שינויים
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-gray-400 hover:text-gray-600"
-                      onClick={() => startEdit(rule)}
-                    >
-                      <Edit2 className="w-3 h-3 mr-1" /> ערוך
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="h-8"
-                      onClick={() => handleDelete(rule.id)}
-                    >
-                      <Trash2 className="w-3 h-3 mr-1" /> מחק
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 border-[#a24ec1] text-[#a24ec1] hover:bg-purple-50"
-                      onClick={() => handleRun(rule.id)}
-                      disabled={loadingId === rule.id}
-                    >
-                      {loadingId === rule.id ? (
-                        <RefreshCw className="w-3 h-3 animate-spin mr-1" />
-                      ) : (
-                        <Play className="w-3 h-3 mr-1" />
-                      )}
-                      {loadingId === rule.id ? "..." : "הרץ"}
-                    </Button>
-                  </>
-                )}
+              <div className="mt-4 pt-3 border-t border-gray-50">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-9 border-[#a24ec1]/20 text-[#a24ec1] hover:bg-purple-50 hover:text-[#a24ec1] hover:border-[#a24ec1]"
+                  onClick={() => handleRun(rule.id)}
+                  disabled={loadingId === rule.id}
+                >
+                  {loadingId === rule.id ? (
+                    <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                  ) : (
+                    <Play className="w-4 h-4 mr-2 fill-current" />
+                  )}
+                  {loadingId === rule.id ? "מסנכרן..." : "הרץ סנכרון כעת"}
+                </Button>
               </div>
-            </Card>
+            </div>
           );
         })}
       </div>
-    </div>
+
+      <Dialog open={showEditBlocker} onOpenChange={setShowEditBlocker}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader className="space-y-4">
+            <DialogTitle className="text-center text-xl font-bold flex flex-col items-center gap-3">
+              <div className="p-4 rounded-full bg-red-50 text-red-500 shadow-sm ring-1 ring-red-100">
+                <ShieldAlert className="w-8 h-8" />
+              </div>
+              <span className="text-gray-900">לא ניתן לערוך חוק פעיל</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-center space-y-4 py-2 px-2 text-gray-600">
+            <p className="leading-relaxed">
+              חוקי איסוף פעילים הם הלב של מערכת הדוחות הכספיים שלך.
+            </p>
+            <p className="leading-relaxed">
+              שינוי הגדרות של חוק קיים בזמן אמת עלול לשבש את היסטוריית הנתונים,
+              ליצור כפילויות לא רצויות ולפגוע באמינות דוח ההכנסות וההוצאות.
+            </p>
+            <div className="bg-blue-50/80 border border-blue-100 p-4 rounded-xl text-sm text-blue-700 mt-2 shadow-sm">
+              <strong>המלצה:</strong> אם ברצונך לשנות לוגיקה, עדיף למחוק את החוק
+              הקיים וליצור חדש, או להוסיף חוק חדש במקביל.
+            </div>
+          </div>
+          <DialogFooter className="sm:justify-center mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowEditBlocker(false)}
+              className="min-w-[140px] border-gray-300 hover:bg-gray-50 font-medium"
+            >
+              הבנתי, תודה
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

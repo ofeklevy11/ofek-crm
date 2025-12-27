@@ -13,6 +13,7 @@ import {
   createFixedExpense,
   updateFixedExpense,
   deleteFixedExpense,
+  markFixedExpensePaid,
 } from "@/app/actions/fixed-expenses";
 import { useRouter } from "next/navigation";
 
@@ -26,6 +27,10 @@ interface FixedExpense {
   category: string | null;
   description: string | null;
   status: string;
+  startDate?: string; // ISO Date string or Date object
+  pendingCount?: number;
+  paidFutureCount?: number;
+  nextPaymentDate?: string;
 }
 
 export default function FixedExpensesTable({
@@ -43,8 +48,17 @@ export default function FixedExpensesTable({
     payDay: "",
     category: "",
     description: "",
+    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+      .toISOString()
+      .split("T")[0], // Default to 1st of month
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentExpense, setPaymentExpense] = useState<FixedExpense | null>(
+    null
+  );
+  const [paymentCount, setPaymentCount] = useState(1);
+
   const router = useRouter();
 
   const handleOpenModal = (expense?: FixedExpense) => {
@@ -57,6 +71,9 @@ export default function FixedExpensesTable({
         payDay: expense.payDay?.toString() || "",
         category: expense.category || "",
         description: expense.description || "",
+        startDate: expense.startDate
+          ? new Date(expense.startDate).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
       });
     } else {
       setEditingId(null);
@@ -67,6 +84,9 @@ export default function FixedExpensesTable({
         payDay: "",
         category: "",
         description: "",
+        startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+          .toISOString()
+          .split("T")[0],
       });
     }
     setIsModalOpen(true);
@@ -84,6 +104,9 @@ export default function FixedExpensesTable({
         payDay: formData.payDay ? parseInt(formData.payDay) : undefined,
         category: formData.category || undefined,
         description: formData.description || undefined,
+        startDate: formData.startDate
+          ? new Date(formData.startDate)
+          : undefined,
       };
 
       if (editingId) {
@@ -114,6 +137,29 @@ export default function FixedExpensesTable({
     }
   };
 
+  const handleOpenPaymentModal = (expense: FixedExpense) => {
+    setPaymentExpense(expense);
+    setPaymentCount(expense.pendingCount || 1);
+    setIsSubmitting(false); // Reset in case
+    setPaymentModalOpen(true);
+  };
+
+  const handlePaymentSubmit = async () => {
+    if (!paymentExpense) return;
+    setIsSubmitting(true);
+    try {
+      await markFixedExpensePaid(paymentExpense.id, paymentCount);
+      setPaymentModalOpen(false);
+      setPaymentExpense(null);
+      router.refresh();
+    } catch (error) {
+      console.error("Failed to mark paid:", error);
+      alert("שגיאה בביצוע הפעולה.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const frequencyLabels: Record<string, string> = {
     MONTHLY: "חודשי",
     YEARLY: "שנתי",
@@ -123,6 +169,23 @@ export default function FixedExpensesTable({
 
   return (
     <div className="space-y-6" dir="rtl">
+      <div className="bg-blue-50 border-r-4 border-blue-400 p-4 mb-4 rounded-md">
+        <div className="flex">
+          <div className="flex-shrink-0 ml-3">
+            <Briefcase className="h-5 w-5 text-blue-400" />
+          </div>
+          <div className="flex-1 md:flex md:justify-between">
+            <p className="text-sm text-blue-700">
+              כל הוצאה קבועה תתווסף לדו"ח הוצאות והכנסות ברגע שתסמנו שההוצאה
+              שולמה בהצלחה.
+              <br />
+              תאריך חיוב הבא מחושב אוטומטית לפי תדירות ההוצאה ותאריך ההתחלה. אם
+              שילמתם מראש, תאריך החיוב הבא יתעדכן בהתאם.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Header Actions */}
       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100">
         <div className="relative w-72">
@@ -175,9 +238,9 @@ export default function FixedExpensesTable({
           initialExpenses.map((expense) => (
             <div
               key={expense.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200 overflow-hidden group text-right"
+              className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200 overflow-hidden group text-right flex flex-col"
             >
-              <div className="p-6">
+              <div className="p-6 flex-1">
                 <div className="flex justify-between items-start">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-[#4f95ff]/10 text-[#4f95ff] rounded-lg">
@@ -228,7 +291,66 @@ export default function FixedExpensesTable({
                     <Calendar className="w-4 h-4" />
                   </div>
                 </div>
+
+                {/* Status & Actions */}
+                <div className="mt-4 flex items-center justify-between">
+                  <div className="text-sm">
+                    {(expense.pendingCount || 0) > 0 ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        ממתין לתשלום: {expense.pendingCount}
+                      </span>
+                    ) : (
+                      <div className="flex flex-col items-start gap-1">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          שולם
+                        </span>
+                        {(expense.paidFutureCount || 0) > 0 && (
+                          <span className="text-xs text-green-600 font-medium whitespace-nowrap">
+                            שולם עד:{" "}
+                            {expense.nextPaymentDate
+                              ? new Date(
+                                  expense.nextPaymentDate
+                                ).toLocaleDateString("he-IL")
+                              : "-"}
+                            <br />({expense.paidFutureCount} תשלומים עתידיים)
+                          </span>
+                        )}
+                        {!expense.paidFutureCount &&
+                          expense.pendingCount === 0 &&
+                          expense.nextPaymentDate && (
+                            <span className="text-xs text-gray-400 mt-1">
+                              תשלום הבא:{" "}
+                              {new Date(
+                                expense.nextPaymentDate
+                              ).toLocaleDateString("he-IL")}
+                            </span>
+                          )}
+                      </div>
+                    )}
+                    {expense.nextPaymentDate &&
+                      (expense.pendingCount || 0) > 0 && (
+                        <div className="mt-1">
+                          <span className="text-xs text-gray-400">
+                            תשלום הבא:{" "}
+                            {new Date(
+                              expense.nextPaymentDate
+                            ).toLocaleDateString("he-IL")}
+                          </span>
+                        </div>
+                      )}
+                  </div>
+
+                  <button
+                    onClick={() => handleOpenPaymentModal(expense)}
+                    className="text-xs bg-[#4f95ff] text-white px-3 py-1 rounded-md hover:bg-blue-600 transition-colors shadow-sm font-medium"
+                  >
+                    {expense.pendingCount && expense.pendingCount > 0
+                      ? "סמן כשולם"
+                      : "הוסף תשלום עתידי"}
+                  </button>
+                </div>
               </div>
+
               <div className="h-1 bg-linear-to-r from-[#4f95ff] to-[#a24ec1] w-full" />
             </div>
           ))
@@ -414,6 +536,73 @@ export default function FixedExpensesTable({
                       </div>
 
                       <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label
+                            htmlFor="startDate"
+                            className="block text-sm font-medium text-gray-700"
+                          >
+                            תאריך התחלה לחישוב
+                          </label>
+                          <div className="flex gap-2 text-xs">
+                            <button
+                              type="button"
+                              className="text-[#4f95ff] hover:underline"
+                              onClick={() => {
+                                const now = new Date();
+                                // Set to 1st of current month
+                                const d = new Date(
+                                  now.getFullYear(),
+                                  now.getMonth(),
+                                  1,
+                                  12
+                                ); // Noon to avoid timezone issues
+                                setFormData({
+                                  ...formData,
+                                  startDate: d.toISOString().split("T")[0],
+                                });
+                              }}
+                            >
+                              התחל חיוב החודש
+                            </button>
+                            <span className="text-gray-300">|</span>
+                            <button
+                              type="button"
+                              className="text-[#4f95ff] hover:underline"
+                              onClick={() => {
+                                const now = new Date();
+                                // Set to 1st of next month
+                                const d = new Date(
+                                  now.getFullYear(),
+                                  now.getMonth() + 1,
+                                  1,
+                                  12
+                                );
+                                setFormData({
+                                  ...formData,
+                                  startDate: d.toISOString().split("T")[0],
+                                });
+                              }}
+                            >
+                              התחל חיוב חודש הבא
+                            </button>
+                          </div>
+                        </div>
+                        <input
+                          type="date"
+                          name="startDate"
+                          id="startDate"
+                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#4f95ff] focus:border-[#4f95ff] sm:text-sm"
+                          value={formData.startDate}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              startDate: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+
+                      <div>
                         <label
                           htmlFor="description"
                           className="block text-sm font-medium text-gray-700"
@@ -455,6 +644,102 @@ export default function FixedExpensesTable({
                     </form>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {paymentModalOpen && paymentExpense && (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          aria-labelledby="payment-modal-title"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              aria-hidden="true"
+              onClick={() => setPaymentModalOpen(false)}
+            ></div>
+            <span
+              className="hidden sm:inline-block sm:align-middle sm:h-screen"
+              aria-hidden="true"
+            >
+              &#8203;
+            </span>
+            <div className="relative inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-right overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full sm:p-6 ml-auto mr-auto">
+              <div className="text-center sm:text-right">
+                <h3
+                  className="text-lg leading-6 font-medium text-gray-900"
+                  id="payment-modal-title"
+                >
+                  אישור תשלום - {paymentExpense?.title}
+                </h3>
+                <div className="mt-2 text-right">
+                  <p className="text-sm text-gray-500">
+                    ישנם {paymentExpense?.pendingCount} תשלומים הממתינים לטיפול.
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    ניתן לבחור כמות גדולה יותר כדי לשלם עבור חודשים עתידיים.
+                  </p>
+                </div>
+
+                <div className="mt-4">
+                  <label
+                    htmlFor="paymentCount"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    מספר תשלומים מבוקש:
+                  </label>
+                  <div className="flex items-center gap-2 justify-center sm:justify-start">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPaymentCount(Math.max(1, paymentCount - 1))
+                      }
+                      className="p-2 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+                    >
+                      -
+                    </button>
+                    <span className="text-xl font-bold w-12 text-center">
+                      {paymentCount}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentCount(paymentCount + 1)}
+                      className="p-2 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">
+                    סה"כ לתשלום: ₪
+                    {(
+                      (paymentExpense?.amount || 0) * paymentCount
+                    ).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3 sm:grid-flow-row-dense">
+                <button
+                  type="button"
+                  onClick={handlePaymentSubmit}
+                  disabled={isSubmitting}
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-[#4f95ff] text-base font-medium text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4f95ff] sm:col-start-2 sm:text-sm disabled:opacity-50"
+                >
+                  {isSubmitting ? "מבצע..." : "אשר תשלום"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentModalOpen(false)}
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4f95ff] sm:mt-0 sm:col-start-1 sm:text-sm"
+                >
+                  ביטול
+                </button>
               </div>
             </div>
           </div>

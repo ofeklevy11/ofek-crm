@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Edit2 } from "lucide-react";
 import EditRetainerModal from "./EditRetainerModal";
+import RetainerPaymentModal from "./RetainerPaymentModal";
 
 interface ActiveRetainersTableProps {
   retainers: any[];
@@ -28,10 +29,18 @@ export default function ActiveRetainersTable({
 }: ActiveRetainersTableProps) {
   const [selectedRetainer, setSelectedRetainer] = useState<any>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [paymentModalData, setPaymentModalData] = useState<{
+    retainer: any;
+    count: number;
+  } | null>(null);
 
   const handleEdit = (retainer: any) => {
     setSelectedRetainer(retainer);
     setIsEditModalOpen(true);
+  };
+
+  const handlePaymentClick = (retainer: any, overdueCount: number) => {
+    setPaymentModalData({ retainer, count: overdueCount });
   };
 
   return (
@@ -78,6 +87,68 @@ export default function ActiveRetainersTable({
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
                   <div className="flex items-center justify-end gap-3">
+                    {(() => {
+                      if (!retainer.nextDueDate) return null;
+                      const nextDue = new Date(retainer.nextDueDate);
+                      const now = new Date();
+
+                      // Calculate overdue count
+                      let overdueCount = 0;
+                      if (nextDue <= now) {
+                        let current = new Date(nextDue);
+                        while (current <= now && overdueCount < 50) {
+                          overdueCount++;
+                          switch (retainer.frequency) {
+                            case "monthly":
+                              current.setMonth(current.getMonth() + 1);
+                              break;
+                            case "quarterly":
+                              current.setMonth(current.getMonth() + 3);
+                              break;
+                            case "annually":
+                            case "yearly":
+                              current.setFullYear(current.getFullYear() + 1);
+                              break;
+                            default:
+                              current.setMonth(current.getMonth() + 1);
+                          }
+                        }
+                      }
+
+                      return (
+                        <div className="flex flex-col items-end gap-2">
+                          {overdueCount > 0 ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 whitespace-nowrap">
+                              ממתין לתשלום: {overdueCount}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">
+                              שולם
+                            </span>
+                          )}
+
+                          <button
+                            onClick={() =>
+                              handlePaymentClick(
+                                retainer,
+                                Math.max(1, overdueCount)
+                              )
+                            }
+                            className="bg-[#4f95ff] text-white hover:bg-blue-600 px-3 py-1.5 rounded-md text-xs font-medium shadow-sm transition-all whitespace-nowrap"
+                            title={
+                              overdueCount > 0
+                                ? `סמן תשלום כשולם (${overdueCount} ממתינים)`
+                                : "קבלת תשלומים קדימה"
+                            }
+                          >
+                            {overdueCount > 0
+                              ? "סמן כשולם"
+                              : "קבלת תשלומים קדימה"}
+                          </button>
+                        </div>
+                      );
+                    })()}
+
                     <button
                       onClick={() => handleEdit(retainer)}
                       className="text-gray-600 hover:text-[#4f95ff] flex items-center gap-1 transition-colors bg-gray-100 hover:bg-[#4f95ff]/10 px-3 py-1.5 rounded-md text-xs font-medium"
@@ -111,6 +182,15 @@ export default function ActiveRetainersTable({
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
       />
+
+      {paymentModalData && (
+        <RetainerPaymentModal
+          isOpen={!!paymentModalData}
+          onClose={() => setPaymentModalData(null)}
+          retainer={paymentModalData.retainer}
+          overdueCount={paymentModalData.count}
+        />
+      )}
     </>
   );
 }

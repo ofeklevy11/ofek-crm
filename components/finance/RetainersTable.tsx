@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Edit2, Trash2, Eye, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
 import EditRetainerModal from "./EditRetainerModal";
+import RetainerPaymentModal from "./RetainerPaymentModal";
 
 interface RetainersTableProps {
   retainers: any[];
@@ -15,10 +16,18 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
   const [selectedRetainer, setSelectedRetainer] = useState<any>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [paymentModalData, setPaymentModalData] = useState<{
+    retainer: any;
+    count: number;
+  } | null>(null);
 
   const handleEdit = (retainer: any) => {
     setSelectedRetainer(retainer);
     setIsEditModalOpen(true);
+  };
+
+  const handlePaymentClick = (retainer: any, overdueCount: number) => {
+    setPaymentModalData({ retainer, count: overdueCount });
   };
 
   const handleDelete = async (id: string) => {
@@ -145,12 +154,74 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
                       : retainer.status === "paused"
                       ? "מושהה"
                       : retainer.status === "cancelled"
-                      ? "מבוטל"
+                      ? "לא פעיל"
                       : retainer.status}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
-                  <div className="flex items-center justify-start gap-2">
+                  <div className="flex items-center justify-end gap-2">
+                    {(() => {
+                      if (!retainer.nextDueDate) return null;
+                      const nextDue = new Date(retainer.nextDueDate);
+                      const now = new Date();
+
+                      // Calculate overdue count
+                      let overdueCount = 0;
+                      if (nextDue <= now) {
+                        let current = new Date(nextDue);
+                        // Limit to 50 to prevent infinite loops on bad data
+                        while (current <= now && overdueCount < 50) {
+                          overdueCount++;
+                          switch (retainer.frequency) {
+                            case "monthly":
+                              current.setMonth(current.getMonth() + 1);
+                              break;
+                            case "quarterly":
+                              current.setMonth(current.getMonth() + 3);
+                              break;
+                            case "annually":
+                            case "yearly":
+                              current.setFullYear(current.getFullYear() + 1);
+                              break;
+                            default:
+                              current.setMonth(current.getMonth() + 1);
+                          }
+                        }
+                      }
+
+                      return (
+                        <div className="flex flex-col items-end gap-1">
+                          {overdueCount > 0 ? (
+                            <span className="text-[10px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full border border-red-100 whitespace-nowrap">
+                              ממתין לתשלום: {overdueCount}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full border border-green-100 whitespace-nowrap">
+                              שולם
+                            </span>
+                          )}
+                          <button
+                            onClick={() =>
+                              handlePaymentClick(
+                                retainer,
+                                Math.max(1, overdueCount)
+                              )
+                            }
+                            className="bg-[#4f95ff] text-white hover:bg-blue-600 px-2 py-1 rounded-md text-xs font-medium shadow-sm transition-all whitespace-nowrap min-w-[100px]"
+                            title={
+                              overdueCount > 0
+                                ? `סמן תשלום כשולם (${overdueCount} ממתינים)`
+                                : "קבלת תשלומים קדימה"
+                            }
+                          >
+                            {overdueCount > 0
+                              ? "סמן כשולם"
+                              : "קבלת תשלומים קדימה"}
+                          </button>
+                        </div>
+                      );
+                    })()}
+
                     <Link
                       href={`/finance/clients/${retainer.clientId}`}
                       className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
@@ -193,6 +264,15 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
       />
+
+      {paymentModalData && (
+        <RetainerPaymentModal
+          isOpen={!!paymentModalData}
+          onClose={() => setPaymentModalData(null)}
+          retainer={paymentModalData.retainer}
+          overdueCount={paymentModalData.count}
+        />
+      )}
     </>
   );
 }

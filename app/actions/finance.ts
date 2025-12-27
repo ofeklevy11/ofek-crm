@@ -66,6 +66,7 @@ export async function createRetainer(data: {
   amount: number;
   frequency: string;
   startDate: string;
+  paymentMode?: "prepaid" | "postpaid";
   notes?: string;
 }) {
   try {
@@ -73,7 +74,15 @@ export async function createRetainer(data: {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
 
-    const { title, clientId, amount, frequency, startDate, notes } = data;
+    const {
+      title,
+      clientId,
+      amount,
+      frequency,
+      startDate,
+      paymentMode,
+      notes,
+    } = data;
 
     // Verify client belongs to company
     const client = await prisma.client.findUnique({
@@ -87,16 +96,19 @@ export async function createRetainer(data: {
     const start = new Date(startDate);
     const nextDueDate = new Date(start);
 
-    switch (frequency) {
-      case "monthly":
-        nextDueDate.setMonth(nextDueDate.getMonth() + 1);
-        break;
-      case "quarterly":
-        nextDueDate.setMonth(nextDueDate.getMonth() + 3);
-        break;
-      case "annually":
-        nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
-        break;
+    // If postpaid (default), add one interval. If prepaid, start immediately.
+    if (paymentMode !== "prepaid") {
+      switch (frequency) {
+        case "monthly":
+          nextDueDate.setMonth(nextDueDate.getMonth() + 1);
+          break;
+        case "quarterly":
+          nextDueDate.setMonth(nextDueDate.getMonth() + 3);
+          break;
+        case "annually":
+          nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
+          break;
+      }
     }
 
     const retainer = await prisma.retainer.create({
@@ -186,6 +198,15 @@ export async function deleteRetainer(id: number) {
     if (!existing || existing.client.companyId !== user.companyId) {
       return { success: false, error: "Unauthorized" };
     }
+
+    await prisma.oneTimePayment.deleteMany({
+      where: {
+        AND: [
+          { clientId: existing.clientId },
+          { notes: { contains: `ריטיינר #${id}` } },
+        ],
+      },
+    });
 
     await prisma.retainer.delete({
       where: { id },

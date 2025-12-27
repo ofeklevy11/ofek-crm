@@ -69,6 +69,7 @@ export async function runSyncRule(ruleId: number) {
   let stats = {
     scanned: 0,
     created: 0,
+    updated: 0,
     skippedExists: 0,
     skippedError: 0,
     errors: [] as string[],
@@ -95,6 +96,7 @@ export async function runSyncRule(ruleId: number) {
           record.createdAt
         );
         if (res.status === "created") stats.created++;
+        else if (res.status === "updated") stats.updated++;
         else if (res.status === "exists") stats.skippedExists++;
         else {
           stats.skippedError++;
@@ -110,6 +112,7 @@ export async function runSyncRule(ruleId: number) {
           client: { companyId: user.companyId },
           status: { in: ["manual-marked-paid", "paid", "Pd", "PAID"] }, // Support various paid statuses
         },
+        include: { client: true },
       });
 
       // 2. Fetch from OneTimePayments (The main payment system)
@@ -118,6 +121,7 @@ export async function runSyncRule(ruleId: number) {
           client: { companyId: user.companyId },
           status: { in: ["paid", "PAID"] }, // Ensure we catch 'paid' status
         },
+        include: { client: true },
       });
 
       stats.scanned = transactions.length + payments.length;
@@ -137,11 +141,13 @@ export async function runSyncRule(ruleId: number) {
               amount,
               date,
               category: "System Transaction",
+              clientId: t.clientId,
             },
             user.companyId
           );
 
           if (res === "created") stats.created++;
+          else if (res === "updated") stats.updated++;
           else stats.skippedExists++;
         } else {
           stats.skippedError++;
@@ -163,16 +169,68 @@ export async function runSyncRule(ruleId: number) {
               amount,
               date,
               category: "Payment System",
+              clientId: p.clientId,
             },
-            user.companyId
+            user.companyId,
+            "INCOME" // Force Income for Client Payments
           );
 
           if (res === "created") stats.created++;
+          else if (res === "updated") stats.updated++;
           else stats.skippedExists++;
         } else {
           stats.skippedError++;
         }
       }
+    }
+
+    // --- GARBAGE COLLECTION ---
+    // Remove FinanceRecords linked to this rule whose source no longer exists.
+    // 1. Get all originIds processed in this run
+    const currentOriginIds: string[] = [];
+
+    if (rule.sourceType === "TABLE" && rule.sourceId) {
+      const records = await prisma.record.findMany({
+        where: { tableId: rule.sourceId, companyId: user.companyId },
+        select: { id: true },
+      });
+      records.forEach((r) => currentOriginIds.push(r.id.toString()));
+    } else if (rule.sourceType === "TRANSACTIONS") {
+      // Fetch fresh lists matching the criteria used above
+      const transactions = await prisma.transaction.findMany({
+        where: {
+          client: { companyId: user.companyId },
+          status: { in: ["manual-marked-paid", "paid", "Pd", "PAID"] },
+        },
+        select: { id: true },
+      });
+      transactions.forEach((t) => currentOriginIds.push(`trans_${t.id}`));
+
+      const payments = await prisma.oneTimePayment.findMany({
+        where: {
+          client: { companyId: user.companyId },
+          status: { in: ["paid", "PAID"] },
+        },
+        select: { id: true },
+      });
+      payments.forEach((p) => currentOriginIds.push(`payment_${p.id}`));
+    }
+
+    if (currentOriginIds.length > 0) {
+      await prisma.financeRecord.deleteMany({
+        where: {
+          syncRuleId: rule.id,
+          originId: { notIn: currentOriginIds },
+        },
+      });
+    } else if (
+      currentOriginIds.length === 0 &&
+      (rule.sourceType === "TRANSACTIONS" || rule.sourceType === "TABLE")
+    ) {
+      // If no source items found, delete ALL records for this rule (source was emptied)
+      await prisma.financeRecord.deleteMany({
+        where: { syncRuleId: rule.id },
+      });
     }
 
     // Update last run time
@@ -197,9 +255,16 @@ export async function runSyncRule(ruleId: number) {
 async function createFinanceRecord(
   rule: any,
   originId: string,
-  data: { title: string; amount: number; date: Date; category: string },
-  companyId: number
-): Promise<"created" | "exists"> {
+  data: {
+    title: string;
+    amount: number;
+    date: Date;
+    category: string;
+    clientId?: number;
+  },
+  companyId: number,
+  forcedType?: "INCOME" | "EXPENSE"
+): Promise<"created" | "exists" | "updated"> {
   const exists = await prisma.financeRecord.findUnique({
     where: {
       syncRuleId_originId: {
@@ -215,16 +280,44 @@ async function createFinanceRecord(
         companyId: companyId,
         title: data.title,
         amount: data.amount,
-        type: rule.targetType,
+        type: forcedType || rule.targetType,
         category: data.category,
         date: data.date,
         status: "COMPLETED",
         syncRuleId: rule.id,
         originId: originId,
+        clientId: data.clientId,
       },
     });
     return "created";
+  } else {
+    // Check if update is needed
+    // Normalize dates for comparison (ignoring slight time diffs if they are just date imports, but here we compare strict)
+    // We strictly compare amount, title, type.
+    const isDifferent =
+      Number(exists.amount) !== data.amount ||
+      exists.title !== data.title ||
+      exists.type !== (forcedType || rule.targetType) ||
+      exists.category !== data.category ||
+      exists.date.getTime() !== data.date.getTime() ||
+      (data.clientId && exists.clientId !== data.clientId);
+
+    if (isDifferent) {
+      await prisma.financeRecord.update({
+        where: { id: exists.id },
+        data: {
+          title: data.title,
+          amount: data.amount,
+          type: forcedType || rule.targetType,
+          category: data.category,
+          date: data.date,
+          clientId: data.clientId, // Update client ID if changed/missing
+        },
+      });
+      return "updated";
+    }
   }
+
   return "exists";
 }
 
@@ -235,7 +328,10 @@ async function processTableRecord(
   mapping: SyncMapping,
   companyId: number,
   defaultDate: Date
-): Promise<{ status: "created" | "exists" | "error"; error?: string }> {
+): Promise<{
+  status: "created" | "exists" | "updated" | "error";
+  error?: string;
+}> {
   const rawAmount = data[mapping.amountField];
 
   // If amount field is missing in data, it's a mapping error

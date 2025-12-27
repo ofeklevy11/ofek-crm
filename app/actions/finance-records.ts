@@ -28,6 +28,14 @@ export async function getFinanceRecords(filters?: {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
+  // Trigger automatic processing of fixed expenses
+  try {
+    const { processFixedExpenses } = await import("./fixed-expenses");
+    await processFixedExpenses();
+  } catch (e) {
+    console.error("[Finance] Auto-process fixed expenses failed:", e);
+  }
+
   const where: Prisma.FinanceRecordWhereInput = {
     companyId: user.companyId,
     ...(filters?.type && { type: filters.type }),

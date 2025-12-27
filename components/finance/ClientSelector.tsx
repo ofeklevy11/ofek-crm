@@ -127,9 +127,13 @@ export default function ClientSelector({
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="flex-1 flex items-center justify-between px-4 py-2 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition-colors"
+          className="flex-1 flex items-center justify-between px-4 py-3 border border-gray-200 rounded-xl bg-white hover:bg-gray-50 focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] transition-all text-sm"
         >
-          <span className={selectedClient ? "text-gray-900" : "text-gray-500"}>
+          <span
+            className={
+              selectedClient ? "text-gray-900 font-medium" : "text-gray-500"
+            }
+          >
             {selectedClient ? selectedClient.name : "בחר לקוח מטבלה קיימת"}
           </span>
           <Search className="w-4 h-4 text-gray-400" />
@@ -138,120 +142,127 @@ export default function ClientSelector({
           <button
             type="button"
             onClick={handleClear}
-            className="px-3 py-2 border border-gray-300 rounded-lg bg-white hover:bg-red-50 hover:border-red-300 transition-colors"
+            className="px-3 py-2 border border-red-100 rounded-xl bg-white hover:bg-red-50 hover:border-red-200 transition-colors group"
           >
-            <X className="w-4 h-4 text-gray-500 hover:text-red-600" />
+            <X className="w-4 h-4 text-gray-400 group-hover:text-red-500" />
           </button>
         )}
       </div>
 
       {/* Dropdown Panel */}
       {isOpen && (
-        <div className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg">
-          {/* Table Selection */}
-          <div className="p-3 border-b border-gray-200 bg-gray-50">
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              בחר טבלת מקור
-            </label>
-            <div className="relative">
-              <Database className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <select
-                value={activeTableSlug}
-                onChange={(e) => handleTableChange(e.target.value)}
-                disabled={isLoadingTables}
-                className="w-full pr-10 pl-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-              >
-                {isLoadingTables ? (
-                  <option>טוען טבלאות...</option>
-                ) : tables.length === 0 ? (
-                  <option value="">אין טבלאות זמינות</option>
-                ) : (
-                  tables.map((table) => (
-                    <option key={table.id} value={table.slug}>
-                      {table.name}
-                    </option>
-                  ))
-                )}
-              </select>
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setIsOpen(false)}
+          />
+          <div className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+            {/* Table Selection */}
+            <div className="p-3 border-b border-gray-100 bg-gray-50/50">
+              <label className="block text-xs font-semibold text-gray-500 mb-1.5 px-1">
+                בחר טבלת מקור
+              </label>
+              <div className="relative">
+                <Database className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <select
+                  value={activeTableSlug}
+                  onChange={(e) => handleTableChange(e.target.value)}
+                  disabled={isLoadingTables}
+                  className="w-full pr-10 pl-4 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] bg-white transition-colors"
+                >
+                  {isLoadingTables ? (
+                    <option>טוען טבלאות...</option>
+                  ) : tables.length === 0 ? (
+                    <option value="">אין טבלאות זמינות</option>
+                  ) : (
+                    tables.map((table) => (
+                      <option key={table.id} value={table.slug}>
+                        {table.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+            </div>
+
+            {/* Search Box */}
+            <div className="p-3 border-b border-gray-100">
+              <div className="relative">
+                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="חפש לקוח..."
+                  className="w-full pr-10 pl-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] text-sm transition-colors"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Results List */}
+            <div className="max-h-60 overflow-y-auto custom-scrollbar">
+              {isLoading ? (
+                <div className="p-8 text-center text-gray-500">
+                  <div className="animate-spin rounded-full h-6 w-6 border-2 border-gray-200 border-t-[#4f95ff] mx-auto"></div>
+                  <p className="mt-2 text-xs font-medium">טוען לקוחות...</p>
+                </div>
+              ) : clients.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <p className="text-sm">
+                    {searchQuery ? "לא נמצאו תוצאות" : "התחל להקליד לחיפוש"}
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {clients.map((client) => (
+                    <button
+                      key={client.id}
+                      type="button"
+                      onClick={() => handleSelectClient(client)}
+                      className="w-full px-4 py-3 text-right hover:bg-gray-50 transition-colors group"
+                    >
+                      <div className="font-medium text-sm text-gray-900 group-hover:text-[#4f95ff] transition-colors">
+                        {client.name}
+                      </div>
+                      {/* Display extra fields if available to help identify */}
+                      {Object.entries(client.data)
+                        .slice(0, 3)
+                        .map(([key, value]) => {
+                          if (
+                            key !== "c_name" &&
+                            typeof value === "string" &&
+                            value.length < 50
+                          ) {
+                            return (
+                              <div
+                                key={key}
+                                className="text-xs text-gray-500 mt-1 truncate"
+                              >
+                                {key}: {value}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-3 py-2 bg-gray-50 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400">
+              <span>{clients.length} רשומות</span>
+              {activeTableSlug && (
+                <span className="bg-gray-200/50 px-1.5 py-0.5 rounded">
+                  {tables.find((t) => t.slug === activeTableSlug)?.name ||
+                    activeTableSlug}
+                </span>
+              )}
             </div>
           </div>
-
-          {/* Search Box */}
-          <div className="p-3 border-b border-gray-200">
-            <div className="relative">
-              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="חפש לקוח..."
-                className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                autoFocus
-              />
-            </div>
-          </div>
-
-          {/* Results List */}
-          <div className="max-h-64 overflow-y-auto">
-            {isLoading ? (
-              <div className="p-4 text-center text-gray-500">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-2 text-sm">טוען לקוחות...</p>
-              </div>
-            ) : clients.length === 0 ? (
-              <div className="p-4 text-center text-gray-500">
-                <p className="text-sm">לא נמצאו לקוחות (או לא נבחרה טבלה)</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {clients.map((client) => (
-                  <button
-                    key={client.id}
-                    type="button"
-                    onClick={() => handleSelectClient(client)}
-                    className="w-full px-4 py-3 text-right hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="font-medium text-gray-900">
-                      {client.name}
-                    </div>
-                    {/* Display extra fields if available to help identify */}
-                    {Object.entries(client.data)
-                      .slice(0, 3)
-                      .map(([key, value]) => {
-                        if (
-                          key !== "c_name" &&
-                          typeof value === "string" &&
-                          value.length < 50
-                        ) {
-                          return (
-                            <div
-                              key={key}
-                              className="text-xs text-gray-500 mt-1 truncate"
-                            >
-                              {key}: {value}
-                            </div>
-                          );
-                        }
-                        return null;
-                      })}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="p-3 bg-gray-50 border-t border-gray-200">
-            <p className="text-xs text-gray-500 text-center">
-              {clients.length} רשומות נמצאו
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Overlay to close dropdown when clicking outside */}
-      {isOpen && (
-        <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+        </>
       )}
     </div>
   );

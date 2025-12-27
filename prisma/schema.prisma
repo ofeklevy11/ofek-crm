@@ -881,6 +881,7 @@ model FixedExpense {
   category    String?
   description String?
   status      String   @default("ACTIVE") // ACTIVE, PAUSED
+  startDate   DateTime @default(now())
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
