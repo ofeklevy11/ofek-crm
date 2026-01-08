@@ -394,8 +394,8 @@ export async function calculateViewStats(view: any) {
         config.yAxisMeasure === "count"
           ? "סה״כ רשומות"
           : config.yAxisMeasure === "avg"
-          ? "ממוצע כולל"
-          : "סכום כולל",
+            ? "ממוצע כולל"
+            : "סכום כולל",
       label: config.chartType || "Graph",
       rawMetric: totalValue,
     };
@@ -543,7 +543,7 @@ export async function getAnalyticsData() {
           orderBy: { createdAt: "desc" },
         });
 
-        items = multiEventDurations.map((d) => {
+        items = multiEventDurations.map((d: any) => {
           // ... simplify title logic repeated ...
           let title = "Unknown";
           if (d.task) title = d.task.title;
@@ -621,7 +621,7 @@ export async function getAnalyticsData() {
           orderBy: { createdAt: "desc" },
         });
 
-        items = durations.map((d) => {
+        items = durations.map((d: any) => {
           let title = "Unknown";
           if (d.task) title = d.task.title;
           else if (d.record) {
