@@ -30,7 +30,8 @@ function formatSecondsToHebrew(totalSeconds: number): string {
   const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  const parts = [];
+  /* const parts: string[] = [];  // Explicit type added */
+  const parts: string[] = [];
   if (days > 0) parts.push(`${days} ${days === 1 ? "יום" : "ימים"}`);
   if (hours > 0) parts.push(`${hours} ${hours === 1 ? "שעה" : "שעות"}`);
   if (minutes > 0) parts.push(`${minutes} ${minutes === 1 ? "דקה" : "דקות"}`);
@@ -506,7 +507,7 @@ export async function getAnalyticsData() {
       where: { companyId: user.companyId },
     });
 
-    const views = [];
+    const views: any[] = [];
 
     // --- Process Automation Rules ---
     for (const rule of rules) {
@@ -582,7 +583,7 @@ export async function getAnalyticsData() {
         });
 
         // Calculate Stats
-        let stats = null;
+        let stats: any = null;
         if (items.length > 0) {
           const totalSeconds = items.reduce(
             (acc, item) => acc + item.totalDurationSeconds,
@@ -653,7 +654,7 @@ export async function getAnalyticsData() {
           };
         });
 
-        let stats = null;
+        let stats: any = null;
         if (items.length > 0) {
           const totalSeconds = items.reduce(
             (acc, item) => acc + item.durationSeconds,

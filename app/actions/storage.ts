@@ -70,7 +70,7 @@ export async function getStorageData(folderId: number | null) {
   let breadcrumbs: { id: number; name: string }[] = [];
   let current = currentFolder;
   if (current) {
-    const crumbs = [];
+    const crumbs: { id: number; name: string }[] = [];
     while (current) {
       crumbs.unshift({ id: current.id, name: current.name });
       if (current.parentId) {
