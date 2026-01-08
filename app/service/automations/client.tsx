@@ -24,7 +24,7 @@ import {
   toggleAutomationRule,
   deleteAutomationRule,
 } from "@/app/actions/automations";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
@@ -47,11 +47,28 @@ export default function ServiceAutomationsClient({
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<any>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Sync local state when initialAutomations changes (after router.refresh())
   useEffect(() => {
     setAutomations(initialAutomations);
   }, [initialAutomations]);
+
+  // Handle editId from URL parameter (when navigating from other automation page)
+  useEffect(() => {
+    const editId = searchParams.get("editId");
+    if (editId) {
+      const ruleToEdit = initialAutomations.find(
+        (r) => r.id === Number(editId)
+      );
+      if (ruleToEdit) {
+        setEditingRule(ruleToEdit);
+        setModalOpen(true);
+        // Clear the URL parameter after opening the modal
+        router.replace("/service/automations", { scroll: false });
+      }
+    }
+  }, [searchParams, initialAutomations, router]);
 
   // Filter only Service related automations (TICKET_STATUS_CHANGE, SLA_BREACH)
   const filteredAutomations = automations.filter((rule) => {

@@ -70,6 +70,15 @@ export default function AutomationsList({
       return;
     }
 
+    // Handle Service automations - navigate to service automations page
+    if (
+      rule.triggerType === "SLA_BREACH" ||
+      rule.triggerType === "TICKET_STATUS_CHANGE"
+    ) {
+      router.push(`/service/automations?editId=${rule.id}`);
+      return;
+    }
+
     if (rule.triggerType === "MULTI_EVENT_DURATION") {
       setEditingRule(rule);
       setIsMultiEventModalOpen(true);
