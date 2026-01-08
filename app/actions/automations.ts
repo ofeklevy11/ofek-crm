@@ -280,7 +280,7 @@ async function applyRetroactiveAutomation(rule: any) {
       }
 
       if (endLog && !startLog) {
-        const createLog = logs.find((l) => l.action === "CREATE");
+        const createLog = logs.find((l: any) => l.action === "CREATE");
         if (createLog) {
           const createData = createLog.diffJson as any;
           if (createData && createData[columnId] !== undefined) {
