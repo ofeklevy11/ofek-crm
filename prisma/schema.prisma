@@ -1262,3 +1262,8 @@ model DashboardWidget {
   @@index([userId])
   @@index([userId, order])
 }
+
+model TestCiCdPipieline {
+  id Int @id @default(autoincrement())
+}
+

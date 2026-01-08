@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
+    "postbuild": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy; fi",
     "start": "next start",
     "lint": "eslint",
     "init-views": "npx tsx scripts/init-view-orders.ts",
