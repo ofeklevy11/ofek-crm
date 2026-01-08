@@ -1263,7 +1263,7 @@ model DashboardWidget {
   @@index([userId, order])
 }
 
-model TestCiCdPipieline {
+
+model TestCiCdPipeline2 {
   id Int @id @default(autoincrement())
 }
-
