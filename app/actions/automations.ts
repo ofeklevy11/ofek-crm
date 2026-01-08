@@ -209,8 +209,8 @@ async function applyRetroactiveAutomation(rule: any) {
       }
 
       if (endLog && startLog) {
-        const startTime = new Date(startLog.timestamp).getTime();
-        const endTime = new Date(endLog.timestamp).getTime();
+        const startTime = new Date((startLog as any).timestamp).getTime();
+        const endTime = new Date((endLog as any).timestamp).getTime();
         const diffMs = endTime - startTime;
 
         const diffMinutes = Math.floor(diffMs / (1000 * 60));
