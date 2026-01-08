@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
+// import { Prisma } from "@prisma/client";
 
 export type FinanceRecordType = "INCOME" | "EXPENSE";
 
@@ -36,7 +36,7 @@ export async function getFinanceRecords(filters?: {
     console.error("[Finance] Auto-process fixed expenses failed:", e);
   }
 
-  const where: Prisma.FinanceRecordWhereInput = {
+  const where: any = {
     companyId: user.companyId,
     ...(filters?.type && { type: filters.type }),
     ...(filters?.startDate &&
@@ -91,7 +91,7 @@ export async function addFinanceRecord(data: CreateFinanceRecordInput) {
     data: {
       companyId: user.companyId, // Explicitly use the authenticated user's company ID
       title: data.title,
-      amount: new Prisma.Decimal(data.amount),
+      amount: data.amount,
       type: data.type,
       category: data.category,
       date: data.date,

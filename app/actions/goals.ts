@@ -3,11 +3,10 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
-
-// Use Prisma.Decimal instead of importing Decimal directly
-type Decimal = Prisma.Decimal;
-const Decimal = Prisma.Decimal;
+// import { Prisma } from "@prisma/client";
+// Use number for Decimal fields
+// type Decimal = Prisma.Decimal;
+// const Decimal = Prisma.Decimal;
 
 export type MetricType =
   | "REVENUE" // Total income (Paid transactions OR Table Sum OR Finance Record)
@@ -105,7 +104,7 @@ export async function createGoal(data: GoalFormData) {
       companyId: user.companyId,
       name: data.name,
       metricType: data.metricType,
-      targetValue: new Decimal(data.targetValue),
+      targetValue: data.targetValue,
       periodType: data.periodType,
       startDate: data.startDate,
       endDate: data.endDate,

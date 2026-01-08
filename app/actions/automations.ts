@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+// import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { sendNotification } from "./notifications";
 import { processMultiEventDurationTrigger } from "./multi-event-automations";
@@ -136,9 +136,9 @@ export async function createAutomationRule(data: {
       data: {
         name: data.name,
         triggerType: data.triggerType,
-        triggerConfig: data.triggerConfig as Prisma.InputJsonValue,
+        triggerConfig: data.triggerConfig as any,
         actionType: data.actionType,
-        actionConfig: data.actionConfig as Prisma.InputJsonValue,
+        actionConfig: data.actionConfig as any,
         folderId: folderId ?? null,
 
         createdBy: currentUser.id,
@@ -347,9 +347,9 @@ export async function updateAutomationRule(
       data: {
         name: data.name,
         triggerType: data.triggerType,
-        triggerConfig: data.triggerConfig as Prisma.InputJsonValue,
+        triggerConfig: data.triggerConfig as any,
         actionType: data.actionType,
-        actionConfig: data.actionConfig as Prisma.InputJsonValue,
+        actionConfig: data.actionConfig as any,
       },
     });
     revalidatePath("/automations");
