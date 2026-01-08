@@ -4,11 +4,59 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { render } from "@react-email/render";
 import QuoteDocument from "@/components/quotes/QuoteDocument";
 import React from "react";
-// @ts-ignore
-import puppeteer from "puppeteer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+// Helper function to get browser instance
+async function getBrowser() {
+  // Check if we're on Vercel (serverless environment)
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    // For Vercel, we need to use puppeteer-core with @sparticuz/chromium
+    // If these packages are not installed, this will fail gracefully
+    try {
+      const chromium = await import("@sparticuz/chromium").then(
+        (m) => m.default
+      );
+      const puppeteerCore = await import("puppeteer-core").then(
+        (m) => m.default
+      );
+
+      return await puppeteerCore.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: true,
+      });
+    } catch (e) {
+      console.error("Failed to load serverless chromium:", e);
+      throw new Error(
+        "PDF generation is not available in this environment. Please install @sparticuz/chromium and puppeteer-core for Vercel deployment."
+      );
+    }
+  } else {
+    // For local development, use regular puppeteer
+    try {
+      const puppeteer = await import("puppeteer").then((m) => m.default);
+      return await puppeteer.launch({
+        channel: "chrome",
+        headless: true,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+        ],
+      });
+    } catch (e) {
+      console.error("Failed to load puppeteer:", e);
+      throw new Error(
+        "PDF generation requires puppeteer to be installed locally."
+      );
+    }
+  }
+}
 
 export async function GET(
   req: NextRequest,
@@ -38,8 +86,6 @@ export async function GET(
   }
 
   // Render the component to HTML using React.createElement
-  // Render the component to HTML using React.createElement
-  // We cast quote to any to assume it matches the props, as Prisma include is correct
   const componentHtml = await render(
     React.createElement(QuoteDocument, { quote: quote as any })
   );
@@ -64,16 +110,7 @@ export async function GET(
   `;
 
   try {
-    const browser = await puppeteer.launch({
-      channel: "chrome",
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-      ],
-    });
+    const browser = await getBrowser();
     const page = await browser.newPage();
 
     // Set content and wait for load

@@ -1,17 +1,17 @@
-const nextConfig = {
-  /* productionSourceMaps: false, // Removed as it caused an unrecognized key error */
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
-  serverExternalPackages: ["puppeteer"],
-  /* experimental: {
-    turbo: {
-      sourceMaps: false,
-    },
-  }, */
+  serverExternalPackages: [
+    "puppeteer",
+    "puppeteer-core",
+    "@sparticuz/chromium",
+  ],
   images: {
     remotePatterns: [
       {
@@ -43,4 +43,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+export default nextConfig;
