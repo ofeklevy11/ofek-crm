@@ -27,10 +27,7 @@ export default function ViewTextModal({
 }: ViewTextModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        className="max-w-4xl w-full h-[80vh] flex flex-col p-0"
-        dir="rtl"
-      >
+      <DialogContent className="max-w-4xl w-full h-[80vh] flex flex-col p-0">
         <div className="p-6 border-b">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">{title}</DialogTitle>

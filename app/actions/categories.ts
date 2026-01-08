@@ -7,7 +7,11 @@ import { canManageTables } from "@/lib/permissions";
 
 export async function getCategories() {
   try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
     const categories = await prisma.tableCategory.findMany({
+      where: { companyId: user.companyId },
       orderBy: { createdAt: "asc" },
       include: {
         tables: {
@@ -34,7 +38,10 @@ export async function createCategory(name: string) {
     }
 
     const category = await prisma.tableCategory.create({
-      data: { name },
+      data: {
+        name,
+        companyId: user.companyId,
+      },
     });
 
     revalidatePath("/");
@@ -58,8 +65,9 @@ export async function updateCategory(id: number, name: string) {
       return { success: false, error: "Name is required" };
     }
 
+    // Ensure category belongs to company
     const category = await prisma.tableCategory.update({
-      where: { id },
+      where: { id, companyId: user.companyId },
       data: { name },
     });
 
@@ -81,7 +89,7 @@ export async function deleteCategory(id: number) {
     }
 
     await prisma.tableCategory.delete({
-      where: { id },
+      where: { id, companyId: user.companyId },
     });
 
     revalidatePath("/");
@@ -107,12 +115,18 @@ export async function convertUncategorizedToCategory(name: string) {
 
     // 1. Create the new category
     const category = await prisma.tableCategory.create({
-      data: { name },
+      data: {
+        name,
+        companyId: user.companyId,
+      },
     });
 
-    // 2. Update all uncategorized tables to belong to this new category
+    // 2. Update all uncategorized tables belonging to THIS company
     await prisma.tableMeta.updateMany({
-      where: { categoryId: null },
+      where: {
+        companyId: user.companyId,
+        categoryId: null,
+      },
       data: { categoryId: category.id },
     });
 

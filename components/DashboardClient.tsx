@@ -121,7 +121,7 @@ export default function DashboardClient({
   const [selectedView, setSelectedView] = useState<any | null>(null);
 
   // Data State for Table Widgets
-  const [tableData, setTableData] = useState<Record<string, any[]>>({});
+  const [tableData, setTableData] = useState<Record<string, any>>({});
   const [tableLoading, setTableLoading] = useState<Record<string, boolean>>({});
 
   // Permissions
@@ -196,7 +196,7 @@ export default function DashboardClient({
     try {
       const res = await getTableViewData(tableId, viewId);
       if (res.success && res.data) {
-        setTableData((prev) => ({ ...prev, [widgetId]: res.data as any[] }));
+        setTableData((prev) => ({ ...prev, [widgetId]: res.data }));
       }
     } catch (err) {
       console.error("Error fetching table data", err);

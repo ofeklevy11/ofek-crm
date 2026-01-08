@@ -120,7 +120,7 @@ export async function createGoal(data: GoalFormData) {
   });
 
   revalidatePath("/finance/goals");
-  return goal;
+  return { ...goal, targetValue: Number(goal.targetValue) };
 }
 
 // Archive/Restore Goal

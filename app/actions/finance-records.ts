@@ -103,7 +103,7 @@ export async function addFinanceRecord(data: CreateFinanceRecordInput) {
 
   revalidatePath("/finance/income-expenses");
   revalidatePath("/finance");
-  return record;
+  return { ...record, amount: Number(record.amount) };
 }
 
 // Delete a record

@@ -200,7 +200,7 @@ export default function ActiveSyncRules({ rules }: { rules: any[] }) {
       </div>
 
       <Dialog open={showEditBlocker} onOpenChange={setShowEditBlocker}>
-        <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader className="space-y-4">
             <DialogTitle className="text-center text-xl font-bold flex flex-col items-center gap-3">
               <div className="p-4 rounded-full bg-red-50 text-red-500 shadow-sm ring-1 ring-red-100">

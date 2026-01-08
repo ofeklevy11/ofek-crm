@@ -167,8 +167,8 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
                     record.type === "INCOME"
                       ? "bg-green-50/50 hover:bg-green-100/50"
                       : record.type === "EXPENSE"
-                      ? "bg-red-50/50 hover:bg-red-100/50"
-                      : "hover:bg-gray-50/50"
+                        ? "bg-red-50/50 hover:bg-red-100/50"
+                        : "hover:bg-gray-50/50"
                   )}
                 >
                   <TableCell className="font-medium text-gray-600 text-right">
@@ -274,7 +274,7 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
         open={!!deleteRecord}
         onOpenChange={(open) => !open && setDeleteRecord(null)}
       >
-        <DialogContent dir="rtl">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-right">
               {deleteRecord?.syncRule?.sourceType === "TABLE" ? (

@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { sendNotification } from "./notifications";
 import { processMultiEventDurationTrigger } from "./multi-event-automations";
@@ -135,16 +136,13 @@ export async function createAutomationRule(data: {
       data: {
         name: data.name,
         triggerType: data.triggerType,
-        triggerConfig: data.triggerConfig,
+        triggerConfig: data.triggerConfig as Prisma.InputJsonValue,
         actionType: data.actionType,
-        actionConfig: data.actionConfig,
-        folderId: folderId,
-        creator: {
-          connect: { id: currentUser.id },
-        },
-        company: {
-          connect: { id: currentUser.companyId },
-        },
+        actionConfig: data.actionConfig as Prisma.InputJsonValue,
+        folderId: folderId ?? null,
+
+        createdBy: currentUser.id,
+        companyId: currentUser.companyId,
       },
     });
 
@@ -337,14 +335,21 @@ export async function updateAutomationRule(
   }
 ) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return { success: false, error: "Authentication required" };
+    }
+
     const rule = await prisma.automationRule.update({
-      where: { id },
+      where: { id, companyId: currentUser.companyId },
       data: {
         name: data.name,
         triggerType: data.triggerType,
-        triggerConfig: data.triggerConfig,
+        triggerConfig: data.triggerConfig as Prisma.InputJsonValue,
         actionType: data.actionType,
-        actionConfig: data.actionConfig,
+        actionConfig: data.actionConfig as Prisma.InputJsonValue,
       },
     });
     revalidatePath("/automations");
@@ -357,8 +362,15 @@ export async function updateAutomationRule(
 
 export async function deleteAutomationRule(id: number) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return { success: false, error: "Authentication required" };
+    }
+
     await prisma.automationRule.delete({
-      where: { id },
+      where: { id, companyId: currentUser.companyId },
     });
     revalidatePath("/automations");
     return { success: true };
@@ -370,8 +382,15 @@ export async function deleteAutomationRule(id: number) {
 
 export async function toggleAutomationRule(id: number, isActive: boolean) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return { success: false, error: "Authentication required" };
+    }
+
     await prisma.automationRule.update({
-      where: { id },
+      where: { id, companyId: currentUser.companyId },
       data: { isActive },
     });
     revalidatePath("/automations");

@@ -181,11 +181,7 @@ export function FolderCard({
                     <MoreVertical className="w-4 h-4 text-muted-foreground" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="text-right"
-                  dir="rtl"
-                >
+                <DropdownMenuContent align="end" className="text-right">
                   <DropdownMenuItem
                     onClick={openRenameDialog}
                     className="gap-2"
@@ -226,7 +222,7 @@ export function FolderCard({
 
         {/* Rename Dialog - Outside Link */}
         <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
-          <DialogContent className="sm:max-w-[400px] text-right" dir="rtl">
+          <DialogContent className="sm:max-w-[400px] text-right">
             <DialogHeader>
               <DialogTitle>שינוי שם תיקייה</DialogTitle>
             </DialogHeader>
@@ -320,7 +316,7 @@ export function FolderCard({
                   <MoreVertical className="w-4 h-4 text-muted-foreground" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="text-right" dir="rtl">
+              <DropdownMenuContent align="end" className="text-right">
                 <DropdownMenuItem onClick={openRenameDialog} className="gap-2">
                   <Pencil className="w-4 h-4 ml-2" />
                   שנה שם
@@ -349,7 +345,7 @@ export function FolderCard({
 
         {/* Rename Dialog - Outside Link */}
         <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
-          <DialogContent className="sm:max-w-[400px] text-right" dir="rtl">
+          <DialogContent className="sm:max-w-[400px] text-right">
             <DialogHeader>
               <DialogTitle>שינוי שם תיקייה</DialogTitle>
             </DialogHeader>
@@ -440,11 +436,7 @@ export function FolderCard({
                     <MoreVertical className="w-4 h-4 text-muted-foreground" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="text-right"
-                  dir="rtl"
-                >
+                <DropdownMenuContent align="end" className="text-right">
                   <DropdownMenuItem
                     onClick={openRenameDialog}
                     className="gap-2"
@@ -477,7 +469,7 @@ export function FolderCard({
 
         {/* Rename Dialog - Outside Link */}
         <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
-          <DialogContent className="sm:max-w-[400px] text-right" dir="rtl">
+          <DialogContent className="sm:max-w-[400px] text-right">
             <DialogHeader>
               <DialogTitle>שינוי שם תיקייה</DialogTitle>
             </DialogHeader>

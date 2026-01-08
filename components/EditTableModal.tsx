@@ -207,7 +207,6 @@ export default function EditTableModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className="max-w-4xl max-h-[90vh] overflow-y-auto"
-        dir="rtl"
         onKeyDown={(e) => e.stopPropagation()}
       >
         <DialogHeader>

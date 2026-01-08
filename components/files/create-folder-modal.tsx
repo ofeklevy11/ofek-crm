@@ -52,7 +52,7 @@ export function CreateFolderModal({ currentFolderId }: CreateFolderModalProps) {
           תיקייה חדשה
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px] text-right" dir="rtl">
+      <DialogContent className="sm:max-w-[425px] text-right">
         <DialogHeader>
           <DialogTitle>יצירת תיקייה חדשה</DialogTitle>
         </DialogHeader>

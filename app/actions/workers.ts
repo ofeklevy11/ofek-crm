@@ -140,7 +140,9 @@ export async function getWorkers(filters?: {
         include: {
           path: {
             include: {
-              _count: { select: { steps: true } },
+              department: true,
+              steps: true,
+              _count: { select: { steps: true, workerProgress: true } },
             },
           },
           stepProgress: true,
@@ -253,7 +255,7 @@ export async function updateWorker(
 
   const worker = await prisma.worker.update({
     where: { id },
-    data,
+    data: data as any,
   });
 
   revalidatePath("/workers");
@@ -295,7 +297,7 @@ export async function getOnboardingPaths(departmentId?: number) {
       department: true,
       steps: { orderBy: { order: "asc" } },
       _count: {
-        select: { workerProgress: true },
+        select: { workerProgress: true, steps: true },
       },
     },
     orderBy: { name: "asc" },
@@ -474,7 +476,7 @@ export async function updateOnboardingStep(
 
   const step = await prisma.onboardingStep.update({
     where: { id },
-    data,
+    data: data as any,
   });
 
   revalidatePath("/workers");

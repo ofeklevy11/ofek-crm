@@ -15,17 +15,18 @@ export default async function Navbar() {
   return (
     <nav className="bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 border-b border-border/40 sticky top-0 z-50">
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex items-center flex-1 min-w-0 gap-8">
-            <div className="shrink-0 flex items-center">
-              <Link
-                href="/"
-                className="text-xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent"
-              >
-                {user?.company?.name || "CRM למנהל"}
-              </Link>
-            </div>
-            <div className="hidden md:flex items-center space-x-6 space-x-reverse overflow-x-auto scrollbar-hide">
+        <div className="flex items-center justify-between h-16">
+          <div className="shrink-0 flex items-center">
+            <Link
+              href="/"
+              className="text-xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent"
+            >
+              {user?.company?.name || "CRM למנהל"}
+            </Link>
+          </div>
+
+          <div className="hidden md:flex items-center justify-center flex-1 px-8">
+            <div className="flex items-center space-x-6 space-x-reverse overflow-x-auto scrollbar-hide py-2">
               <Link href="/" className={linkClass}>
                 לוח בקרה
               </Link>
@@ -106,7 +107,8 @@ export default async function Navbar() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-4">
+
+          <div className="flex items-center gap-4 shrink-0">
             {user ? (
               <>
                 <NotificationBell userId={user.id} />

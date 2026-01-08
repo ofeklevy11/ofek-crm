@@ -24,7 +24,10 @@ export async function getRetainers() {
       },
       orderBy: { createdAt: "desc" },
     });
-    return { success: true, data: retainers };
+    return {
+      success: true,
+      data: retainers.map((r) => ({ ...r, amount: Number(r.amount) })),
+    };
   } catch (error) {
     console.error("Error fetching retainers:", error);
     return { success: false, error: "Failed to fetch retainers" };
@@ -53,7 +56,10 @@ export async function getRetainerById(id: number) {
       return { success: false, error: "Unauthorized" };
     }
 
-    return { success: true, data: retainer };
+    return {
+      success: true,
+      data: { ...retainer, amount: Number(retainer.amount) },
+    };
   } catch (error) {
     console.error("Error fetching retainer:", error);
     return { success: false, error: "Failed to fetch retainer" };
@@ -128,7 +134,10 @@ export async function createRetainer(data: {
     revalidatePath("/finance/retainers");
     revalidatePath("/");
 
-    return { success: true, data: retainer };
+    return {
+      success: true,
+      data: { ...retainer, amount: Number(retainer.amount) },
+    };
   } catch (error) {
     console.error("Error creating retainer:", error);
     return { success: false, error: "Failed to create retainer" };
@@ -176,7 +185,10 @@ export async function updateRetainer(
     revalidatePath("/finance/retainers");
     revalidatePath("/");
 
-    return { success: true, data: retainer };
+    return {
+      success: true,
+      data: { ...retainer, amount: Number(retainer.amount) },
+    };
   } catch (error) {
     console.error("Error updating retainer:", error);
     return { success: false, error: "Failed to update retainer" };
@@ -240,7 +252,10 @@ export async function getPayments() {
       },
       orderBy: { createdAt: "desc" },
     });
-    return { success: true, data: payments };
+    return {
+      success: true,
+      data: payments.map((p) => ({ ...p, amount: Number(p.amount) })),
+    };
   } catch (error) {
     console.error("Error fetching payments:", error);
     return { success: false, error: "Failed to fetch payments" };
@@ -268,7 +283,10 @@ export async function getPaymentById(id: number) {
       return { success: false, error: "Unauthorized" };
     }
 
-    return { success: true, data: payment };
+    return {
+      success: true,
+      data: { ...payment, amount: Number(payment.amount) },
+    };
   } catch (error) {
     console.error("Error fetching payment:", error);
     return { success: false, error: "Failed to fetch payment" };
@@ -312,7 +330,10 @@ export async function createPayment(data: {
     revalidatePath("/finance/payments");
     revalidatePath("/");
 
-    return { success: true, data: payment };
+    return {
+      success: true,
+      data: { ...payment, amount: Number(payment.amount) },
+    };
   } catch (error) {
     console.error("Error creating payment:", error);
     return { success: false, error: "Failed to create payment" };
@@ -395,7 +416,10 @@ export async function updatePayment(
     revalidatePath("/finance/income-expenses");
     revalidatePath("/");
 
-    return { success: true, data: payment };
+    return {
+      success: true,
+      data: { ...payment, amount: Number(payment.amount) },
+    };
   } catch (error) {
     console.error("Error updating payment:", error);
     return { success: false, error: "Failed to update payment" };

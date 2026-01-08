@@ -10,11 +10,22 @@ async function main() {
 
   console.log(`Updating/Creating admin user: ${email}...`);
 
+  // Ensure a default company exists
+  const company = await prisma.company.upsert({
+    where: { slug: "default" },
+    update: {},
+    create: {
+      name: "Default Company",
+      slug: "default",
+    },
+  });
+
   const user = await prisma.user.upsert({
     where: { email },
     update: {
       passwordHash: hashedPassword,
       role: "admin",
+      companyId: company.id,
     },
     create: {
       email,
@@ -22,6 +33,7 @@ async function main() {
       passwordHash: hashedPassword,
       role: "admin",
       allowedWriteTableIds: [],
+      companyId: company.id,
     },
   });
 

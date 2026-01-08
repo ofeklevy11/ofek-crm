@@ -1,61 +1,28 @@
 // app/api/tables/[id]/export/route.ts
-import { NextResponse } from "next/server";
-import * as PrismaModule from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 
-const prisma: any =
-  (PrismaModule as any).prisma ?? (PrismaModule as any).default ?? PrismaModule;
-
-type ContextParams = { params?: { id?: string; tableId?: string } };
-
-export async function GET(req: Request, context: ContextParams) {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
+    const { id } = await params;
+
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // DEBUG: dump incoming context and url
-    console.log("EXPORT ROUTE CALLED");
-
-    // 1) try params from framework
-    const paramsObj = context?.params ?? {};
-    const pId = paramsObj?.id ?? paramsObj?.tableId;
-
-    // 2) try query string
-    const url = new URL(req.url);
-    const qId = url.searchParams.get("id") ?? url.searchParams.get("tableId");
-
-    // 3) last resort: parse path with regex to extract number part after /api/tables/
-    const pathMatch = url.pathname.match(/\/api\/tables\/([^/]+)\/export/);
-    const pathId = pathMatch ? pathMatch[1] : null;
-
-    // choose candidate in order: params -> query -> path
-    const candidate = pId ?? qId ?? pathId ?? null;
-
-    // if candidate might include non-numeric stuff (UUID etc), try to parseInt
-    let tableIdNum: number | null = null;
-    if (candidate !== null && candidate !== undefined) {
-      // if numeric string or numeric-like, parse to number
-      const asNum = Number(candidate);
-      if (!Number.isNaN(asNum)) {
-        tableIdNum = asNum;
-      } else {
-        // maybe candidate is like "2" wrapped or "id=2", try extracting digits
-        const digitsMatch = String(candidate).match(/(\d+)/);
-        if (digitsMatch) {
-          tableIdNum = Number(digitsMatch[1]);
-        }
-      }
-    }
-
+    const tableIdNum = Number(id);
     if (!tableIdNum || Number.isNaN(tableIdNum)) {
       return NextResponse.json({ error: "Invalid table ID" }, { status: 400 });
     }
 
+    const url = new URL(req.url);
     const format = (url.searchParams.get("format") || "csv").toLowerCase();
 
-    // Fetch table and records - FILTERED BY COMPANY
     const table = await prisma.tableMeta.findFirst({
       where: {
         id: tableIdNum,
@@ -64,7 +31,6 @@ export async function GET(req: Request, context: ContextParams) {
     });
 
     if (!table) {
-      console.error("Table not found or access denied id:", tableIdNum);
       return NextResponse.json(
         { error: "Table not found", id: tableIdNum },
         { status: 404 }
@@ -74,83 +40,63 @@ export async function GET(req: Request, context: ContextParams) {
     const records = await prisma.record.findMany({
       where: {
         tableId: tableIdNum,
-        companyId: user.companyId, // Extra safety, although table check implies it
+        companyId: user.companyId,
       },
       orderBy: { createdAt: "desc" },
     });
 
-    // try to parse schemaJson if string
     let schema: any[] = [];
     try {
       if (!table.schemaJson) schema = [];
       else if (typeof table.schemaJson === "string")
         schema = JSON.parse(table.schemaJson);
-      else schema = table.schemaJson;
-    } catch (e) {
-      console.warn("schemaJson parse failed, using fallback", e);
+      else schema = table.schemaJson as any;
+    } catch {
       schema = [];
     }
 
-    // build headers (if no schema, take keys from first record.data)
     let headers: string[] = [];
-    if (schema && schema.length > 0)
+    if (schema.length > 0)
       headers = schema.map((f: any) => f.label ?? f.name ?? "field");
     else if (records.length > 0) headers = Object.keys(records[0].data || {});
-    else headers = [];
 
     const includeCreatedAt = true;
-    if (includeCreatedAt) headers = [...headers, "Created At"];
+    if (includeCreatedAt) headers.push("Created At");
 
     const BOM = "\uFEFF";
     let content = "";
 
     if (format === "csv") {
-      const delimiter = ",";
       const rows = records.map((record: any) => {
         const data = record.data || {};
-        const values =
-          schema && schema.length > 0
-            ? schema.map((field: any) => {
-                const v = data[field.name];
-                const s = v === null || v === undefined ? "" : String(v);
-                return `"${s.replace(/"/g, '""')}"`;
-              })
-            : headers
-                .slice(0, includeCreatedAt ? -1 : headers.length)
-                .map((h) => {
-                  const v = data[h];
-                  const s = v === null || v === undefined ? "" : String(v);
-                  return `"${s.replace(/"/g, '""')}"`;
-                });
-
-        if (includeCreatedAt)
-          values.push(`"${new Date(record.createdAt).toLocaleString()}"`);
-        return values.join(delimiter);
+        const values = headers.map((h) => {
+          if (h === "Created At")
+            return `"${new Date(record.createdAt).toLocaleString()}"`;
+          const v = data[h];
+          return `"${String(v ?? "").replace(/"/g, '""')}"`;
+        });
+        return values.join(",");
       });
 
-      content = BOM + [headers.join(delimiter), ...rows].join("\n");
+      content = BOM + [headers.join(","), ...rows].join("\n");
     } else {
-      // txt tab delimited
-      const delimiter = "\t";
       const rows = records.map((record: any) => {
         const data = record.data || {};
-        const values =
-          schema && schema.length > 0
-            ? schema.map((field: any) => String(data[field.name] ?? ""))
-            : headers
-                .slice(0, includeCreatedAt ? -1 : headers.length)
-                .map((h) => String(data[h] ?? ""));
-        if (includeCreatedAt)
-          values.push(new Date(record.createdAt).toLocaleString());
-        return values.join(delimiter);
+        const values = headers.map((h) =>
+          h === "Created At"
+            ? new Date(record.createdAt).toLocaleString()
+            : String(data[h] ?? "")
+        );
+        return values.join("\t");
       });
 
-      content = BOM + [headers.join(delimiter), ...rows].join("\n");
+      content = BOM + [headers.join("\t"), ...rows].join("\n");
     }
 
     const safeName = (table.name || `table_${tableIdNum}`)
       .replace(/[^a-z0-9]/gi, "_")
       .toLowerCase();
+
     const filename = `${safeName}_export_${new Date()
       .toISOString()
       .slice(0, 10)}.${format}`;
@@ -165,7 +111,6 @@ export async function GET(req: Request, context: ContextParams) {
       },
     });
   } catch (err) {
-    console.error("EXPORT fatal error:", err);
     return NextResponse.json(
       { error: "Export failed", details: String(err) },
       { status: 500 }

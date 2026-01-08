@@ -8,10 +8,16 @@ export async function getProducts() {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  return db.product.findMany({
+  const products = await db.product.findMany({
     where: { companyId: user.companyId },
     orderBy: { name: "asc" },
   });
+
+  return products.map((p) => ({
+    ...p,
+    price: Number(p.price),
+    cost: p.cost ? Number(p.cost) : null,
+  }));
 }
 
 export async function createProduct(data: {
@@ -36,7 +42,11 @@ export async function createProduct(data: {
   });
 
   revalidatePath("/services");
-  return product;
+  return {
+    ...product,
+    price: Number(product.price),
+    cost: product.cost ? Number(product.cost) : null,
+  };
 }
 
 export async function updateProduct(
@@ -59,7 +69,11 @@ export async function updateProduct(
   });
 
   revalidatePath("/services");
-  return product;
+  return {
+    ...product,
+    price: Number(product.price),
+    cost: product.cost ? Number(product.cost) : null,
+  };
 }
 
 export async function deleteProduct(id: number) {

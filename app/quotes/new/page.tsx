@@ -28,8 +28,8 @@ export default async function NewQuotePage() {
 
   const plainProducts = products.map((product) => ({
     ...product,
-    price: product.price.toNumber(),
-    cost: product.cost ? product.cost.toNumber() : null,
+    price: product.price,
+    cost: product.cost ?? null,
   }));
 
   return <QuoteEditor products={plainProducts} clients={clients} />;

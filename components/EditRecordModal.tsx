@@ -175,10 +175,7 @@ export default function EditRecordModal({
       onOpenChange={(val) => !val && handleClose()}
       modal={true}
     >
-      <DialogContent
-        className="max-w-xl w-full max-h-[90vh] overflow-y-auto"
-        dir="rtl"
-      >
+      <DialogContent className="max-w-xl w-full max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             עריכת רשומה{" "}
@@ -421,10 +418,10 @@ export default function EditRecordModal({
                         field.type === "number"
                           ? "number"
                           : field.type === "date"
-                          ? "date"
-                          : field.type === "url"
-                          ? "url"
-                          : "text"
+                            ? "date"
+                            : field.type === "url"
+                              ? "url"
+                              : "text"
                       }
                       value={formData[field.name] || ""}
                       onChange={(e) =>

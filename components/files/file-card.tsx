@@ -91,7 +91,7 @@ export function FileCard({
           <MoreVertical className="w-4 h-4 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={align} className="text-right" dir="rtl">
+      <DropdownMenuContent align={align} className="text-right">
         <DropdownMenuItem asChild className="gap-2">
           <a
             href={file.url}

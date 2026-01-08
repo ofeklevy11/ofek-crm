@@ -1,11 +1,11 @@
 const nextConfig = {
-  productionSourceMaps: false,
+  /* productionSourceMaps: false, // Removed as it caused an unrecognized key error */
   serverExternalPackages: ["puppeteer"],
-  experimental: {
+  /* experimental: {
     turbo: {
       sourceMaps: false,
     },
-  },
+  }, */
   images: {
     remotePatterns: [
       {

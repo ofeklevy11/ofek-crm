@@ -247,7 +247,15 @@ export default function OnboardingPathModal({
         estimatedMinutes: newStep.estimatedMinutes || undefined,
         isRequired: newStep.isRequired ?? true,
       });
-      setSteps([...steps, savedStep]);
+      setSteps([
+        ...steps,
+        {
+          ...savedStep,
+          onCompleteActions: savedStep.onCompleteActions as unknown as
+            | OnCompleteAction[]
+            | undefined,
+        },
+      ]);
     } else {
       const tempStep: OnboardingStep = {
         id: -Date.now(),

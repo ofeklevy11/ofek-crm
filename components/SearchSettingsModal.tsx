@@ -100,10 +100,7 @@ export default function SearchSettingsModal({
 
   return (
     <Dialog open={true} onOpenChange={() => onClose()}>
-      <DialogContent
-        className="max-w-[95vw] md:max-w-[50vw] w-full max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden border-0 shadow-2xl sm:rounded-2xl"
-        dir="rtl"
-      >
+      <DialogContent className="max-w-[95vw] md:max-w-[50vw] w-full max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden border-0 shadow-2xl sm:rounded-2xl">
         {/* Header */}
         <div className="bg-gradient-to-l from-blue-50/50 to-white dark:from-blue-950/20 dark:to-background border-b p-6 pb-5">
           <div className="flex items-center gap-3 mb-2">

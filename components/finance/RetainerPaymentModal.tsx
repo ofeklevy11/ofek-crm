@@ -97,7 +97,7 @@ export default function RetainerPaymentModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md" dir="rtl">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader className="space-y-4">
           <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mb-2">
             <CreditCard className="w-6 h-6 text-[#4f95ff]" />

@@ -155,7 +155,7 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
           העלאת קובץ
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]" dir="rtl">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader className="text-right">
           <DialogTitle className="text-xl font-semibold">
             העלאת קבצים

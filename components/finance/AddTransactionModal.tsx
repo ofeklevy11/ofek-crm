@@ -76,7 +76,7 @@ export default function AddTransactionModal() {
           הוסף תנועה
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]" dir="rtl">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="text-right">הוספת תנועה חדשה</DialogTitle>
         </DialogHeader>

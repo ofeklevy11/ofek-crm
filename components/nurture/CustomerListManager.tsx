@@ -420,18 +420,18 @@ export default function CustomerListManager({
           listSlug === "birthday"
             ? "יום הולדת"
             : listSlug === "referral"
-            ? "חבר מביא חבר"
-            : listSlug === "upsell"
-            ? "מכירות חוזרות"
-            : listSlug === "winback"
-            ? "שימור לקוחות"
-            : listSlug === "vip"
-            ? "לקוחות VIP"
-            : listSlug === "review"
-            ? "ביקורות"
-            : listSlug === "renewal"
-            ? "חידושים"
-            : listSlug
+              ? "חבר מביא חבר"
+              : listSlug === "upsell"
+                ? "מכירות חוזרות"
+                : listSlug === "winback"
+                  ? "שימור לקוחות"
+                  : listSlug === "vip"
+                    ? "לקוחות VIP"
+                    : listSlug === "review"
+                      ? "ביקורות"
+                      : listSlug === "renewal"
+                        ? "חידושים"
+                        : listSlug
         }: ${
           autoConfig.trigger === "record_created" ? "רשומה חדשה" : "שינוי סטטוס"
         } ב-${getTableName(autoConfig.tableId)}`,
@@ -589,7 +589,7 @@ export default function CustomerListManager({
 
       {/* Automation Dialog */}
       <Dialog open={automationOpen} onOpenChange={setAutomationOpen}>
-        <DialogContent className="sm:max-w-[550px]" dir="rtl">
+        <DialogContent className="sm:max-w-[550px]">
           <DialogHeader className="text-right">
             <DialogTitle className="flex items-center gap-2">
               {autoViewMode !== "list" && (
@@ -620,8 +620,8 @@ export default function CustomerListManager({
                 {autoViewMode === "list"
                   ? "אוטומציות לרשימה זו"
                   : autoViewMode === "create"
-                  ? "יצירת אוטומציה חדשה"
-                  : "עריכת אוטומציה"}
+                    ? "יצירת אוטומציה חדשה"
+                    : "עריכת אוטומציה"}
               </span>
             </DialogTitle>
             <DialogDescription>

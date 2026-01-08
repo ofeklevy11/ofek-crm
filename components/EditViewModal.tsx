@@ -185,10 +185,7 @@ export default function EditViewModal({
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        className="max-w-3xl max-h-[90vh] overflow-y-auto flex flex-col p-0 gap-0"
-        dir="rtl"
-      >
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto flex flex-col p-0 gap-0">
         <DialogHeader className="p-6 border-b bg-muted/20 pb-4">
           <DialogTitle className="text-2xl font-bold">עריכת תצוגה</DialogTitle>
           <p className="text-sm text-muted-foreground mt-1">
