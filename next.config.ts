@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
     "puppeteer",
     "puppeteer-core",
     "@sparticuz/chromium",
+    "pg",
+    "@prisma/adapter-pg",
+    "@prisma/client",
+    "bcryptjs",
   ],
   images: {
     remotePatterns: [
