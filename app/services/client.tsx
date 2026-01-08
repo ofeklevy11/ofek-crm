@@ -78,7 +78,7 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
     <div className="p-8 space-y-8 max-w-[1600px] mx-auto text-right" dir="rtl">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight text-gray-900">
+          <h1 className="text-4xl font-bold tracking-tight  text-gray-900">
             שירותים ומוצרים
           </h1>
           <p className="text-gray-500 mt-2 text-lg">
