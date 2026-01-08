@@ -64,6 +64,7 @@ export interface GoalWithProgress {
   criticalThreshold: number;
   status: "ON_TRACK" | "WARNING" | "CRITICAL" | "EXCEEDED";
   isActive: boolean;
+  isArchived: boolean;
   notes: string | null;
   daysRemaining: number;
   projectedValue: number;
@@ -112,6 +113,7 @@ export async function createGoal(data: GoalFormData) {
       criticalThreshold: data.criticalThreshold ?? 50,
       notes: data.notes ?? null,
       isActive: true,
+      isArchived: false,
       filters: data.filters as any,
       targetType: data.targetType as any,
     },
@@ -119,6 +121,20 @@ export async function createGoal(data: GoalFormData) {
 
   revalidatePath("/finance/goals");
   return goal;
+}
+
+// Archive/Restore Goal
+export async function toggleGoalArchive(id: number, isArchived: boolean) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+
+  await prisma.goal.update({
+    where: { id, companyId: user.companyId },
+    data: { isArchived },
+  });
+
+  revalidatePath("/finance/goals");
+  revalidatePath("/finance/goals/archive");
 }
 
 // Utility to build dynamic where clause based on time period
@@ -366,18 +382,12 @@ function generateRecommendation(
   ).toLocaleString()} ${unit} ליום כדי לעמוד ביעד.`;
 }
 
-export async function getGoalsWithProgress(): Promise<GoalWithProgress[]> {
-  const user = await getCurrentUser();
-  if (!user) {
-    throw new Error("Unauthorized");
-  }
-
-  const goals = await prisma.goal.findMany({
-    where: { companyId: user.companyId },
-    orderBy: [{ isActive: "desc" }, { endDate: "asc" }],
-  });
-
-  const goalsWithProgress: GoalWithProgress[] = await Promise.all(
+// Internal helper to calculate progress for a list of goals
+async function enrichGoalsWithProgress(
+  goals: any[],
+  companyId: number
+): Promise<GoalWithProgress[]> {
+  return Promise.all(
     goals.map(async (goal) => {
       const filters = ((goal as any).filters as GoalFilters) || {};
       const targetType = (goal as any).targetType || "COUNT";
@@ -385,7 +395,7 @@ export async function getGoalsWithProgress(): Promise<GoalWithProgress[]> {
       const currentValue = await calculateMetricValue(
         goal.metricType,
         targetType,
-        user.companyId,
+        companyId,
         goal.startDate,
         goal.endDate,
         filters
@@ -446,6 +456,7 @@ export async function getGoalsWithProgress(): Promise<GoalWithProgress[]> {
         criticalThreshold: goal.criticalThreshold,
         status,
         isActive: goal.isActive,
+        isArchived: (goal as any).isArchived ?? false,
         notes: goal.notes,
         daysRemaining,
         projectedValue: finalProjected,
@@ -453,8 +464,58 @@ export async function getGoalsWithProgress(): Promise<GoalWithProgress[]> {
       };
     })
   );
+}
 
-  return goalsWithProgress;
+export async function getGoalsWithProgress(): Promise<GoalWithProgress[]> {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+
+  // Type cast for 'isArchived' because it might not be in generated types yet
+  const where: any = { companyId: user.companyId, isArchived: false };
+
+  const goals = await prisma.goal.findMany({
+    where,
+    orderBy: [{ order: "asc" }, { createdAt: "desc" }],
+  });
+
+  return enrichGoalsWithProgress(goals, user.companyId);
+}
+
+export async function getArchivedGoals(): Promise<GoalWithProgress[]> {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+
+  // Type cast for 'isArchived'
+  const where: any = { companyId: user.companyId, isArchived: true };
+
+  const goals = await prisma.goal.findMany({
+    where,
+    orderBy: [{ endDate: "desc" }],
+  });
+
+  return enrichGoalsWithProgress(goals, user.companyId);
+}
+
+export async function updateGoalOrder(goalIds: number[]) {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+
+  // Use a transaction to update all goals
+  const updates = goalIds.map((id, index) =>
+    prisma.goal.update({
+      where: { id, companyId: user.companyId },
+      data: { order: index },
+    })
+  );
+
+  await prisma.$transaction(updates);
+  revalidatePath("/finance/goals");
 }
 
 export async function getGoalCreationData() {

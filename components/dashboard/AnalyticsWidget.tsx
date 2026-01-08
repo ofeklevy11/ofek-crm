@@ -60,6 +60,12 @@ const KEY_MAPPING: Record<string, string> = {
   dueDate: "תאריך יעד",
   createdAt: "נוצר ב",
   updatedAt: "עודכן ב",
+  leadStatus: "סטטוס ליד",
+  source: "מקור",
+  type: "סוג",
+  lead: "ליד",
+  isClosed: "נסגר",
+  // Common Values translation
   todo: "לביצוע",
   in_progress: "בטיפול",
   waiting_client: "ממתין",
@@ -89,14 +95,19 @@ function ConfigDetails({ config, type }: { config: any; type: string }) {
   const renderFilter = (filter: any, label?: string) => {
     if (!filter || Object.keys(filter).length === 0) return null;
     return (
-      <div className="flex flex-wrap gap-1 items-center bg-white/50 rounded-md px-2 py-1 border border-black/5">
-        {label && <span className="text-gray-500 text-xs ml-1">{label}:</span>}
+      <div className="flex flex-wrap gap-1.5 items-center mt-2">
+        {label && (
+          <span className="text-gray-400 text-[10px] font-medium uppercase tracking-wider ml-1">
+            {label}
+          </span>
+        )}
         {Object.entries(filter).map(([key, val]) => (
           <span
             key={key}
-            className="text-gray-700 text-xs font-medium bg-white border border-gray-200 px-1.5 rounded"
+            className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-50 text-gray-600 border border-gray-100"
           >
-            {translate(key)}: {translate(String(val))}
+            <span className="opacity-60 ml-1">{translate(key)}:</span>
+            <span>{translate(String(val))}</span>
           </span>
         ))}
       </div>
@@ -116,29 +127,33 @@ function ConfigDetails({ config, type }: { config: any; type: string }) {
       text = `${start} - ${end}`;
     }
     return (
-      <div className="flex items-center gap-1 mt-1">
-        <span className="text-gray-500 text-xs">זמן:</span>
-        <span className="text-blue-600 text-xs font-medium bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-          {text}
+      <div className="flex items-center gap-2 mt-2">
+        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+          זמן
         </span>
+        <div className="flex items-center gap-1.5 text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100">
+          <span className="font-medium">{text}</span>
+        </div>
       </div>
     );
   };
 
   return (
-    <div className="flex flex-col gap-1.5 mt-2 w-full">
+    <div className="flex flex-col gap-1 w-full mt-2">
       {type === "COUNT" && renderFilter(config.filter)}
       {type === "CONVERSION" && (
-        <>
+        <div className="flex flex-col gap-1">
           {renderFilter(config.totalFilter, "סה״כ")}
           {renderFilter(config.successFilter, "הצלחה")}
-        </>
+        </div>
       )}
       {renderDateRange()}
       {config.groupByField && (
-        <div className="flex items-center gap-1">
-          <span className="text-gray-500 text-xs">קבץ לפי:</span>
-          <span className="text-indigo-600 text-xs font-semibold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+        <div className="flex items-center gap-2 mt-2">
+          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+            קבץ לפי
+          </span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-100">
             {translate(config.groupByField)}
           </span>
         </div>
@@ -176,12 +191,28 @@ export default function AnalyticsWidget({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const currentColor =
-    COLOR_OPTIONS.find((c) => c.value === view.color) || COLOR_OPTIONS[0];
+  const getAccentClass = (bgVal: string) => {
+    switch (bgVal) {
+      case "bg-red-50":
+        return "bg-red-500";
+      case "bg-yellow-50":
+        return "bg-yellow-500";
+      case "bg-green-50":
+        return "bg-green-500";
+      case "bg-blue-50":
+        return "bg-blue-500";
+      case "bg-purple-50":
+        return "bg-purple-500";
+      case "bg-pink-50":
+        return "bg-pink-500";
+      default:
+        return "bg-gray-200";
+    }
+  };
 
   const isAutomation = view.source === "AUTOMATION";
-
   const isGraph = view.type === "GRAPH";
+  const accentClass = getAccentClass(view.color);
 
   return (
     <div
@@ -189,203 +220,218 @@ export default function AnalyticsWidget({
       style={style}
       {...attributes}
       {...listeners}
-      className={`relative rounded-2xl shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col border ${
-        currentColor.value
-      } ${currentColor.border} group cursor-grab active:cursor-grabbing ${
+      className={`group relative flex flex-col justify-between h-full bg-white rounded-2xl shadow-sm hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300 border border-gray-100 overflow-hidden cursor-grab active:cursor-grabbing ${
         isGraph ? "min-h-[350px]" : "min-h-[280px]"
       }`}
     >
-      <div className="flex justify-between items-start">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                isAutomation
-                  ? "bg-indigo-100 text-indigo-700 border-indigo-200"
-                  : "bg-orange-100 text-orange-700 border-orange-200"
-              }`}
-            >
-              {isAutomation ? "אוטומציה" : "אנליטיקה"}
-            </span>
-          </div>
-          <h3
-            className="text-lg font-semibold text-gray-900 line-clamp-2"
-            title={view.ruleName}
-          >
-            {view.ruleName}
-          </h3>
-          <p className="text-sm text-gray-500 mt-1">
-            {view.tableName === "System" ? "מערכת" : `מקור: ${view.tableName}`}
-          </p>
+      {/* Top Accent Line */}
+      <div className={`h-1.5 w-full shrink-0 ${accentClass}`} />
 
-          {/* ConfigDetails hidden on dashboard for cleaner layout */}
-        </div>
-        <button
-          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-black/5 rounded-full transition-colors opacity-0 group-hover:opacity-100"
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            onRemove();
-          }}
-          title="הסר מהדאשבורד"
-        >
-          <X size={16} />
-        </button>
-      </div>
-
-      <div
-        className={`flex-1 w-full flex flex-col justify-center items-center my-4 cursor-grab active:cursor-grabbing ${
-          view.type === "GRAPH" ? "min-h-[220px]" : "min-h-[100px]"
-        }`}
-      >
-        {!view.stats ? (
-          <div className="text-center">
-            <span className="text-4xl font-bold text-gray-200">-</span>
-            <p className="text-sm text-gray-400 mt-2">אין מספיק נתונים</p>
-          </div>
-        ) : view.type === "GRAPH" && view.data?.length > 0 ? (
-          <div className="w-full" style={{ height: 200 }} dir="ltr">
-            <ResponsiveContainer width="100%" height={200}>
-              {view.config?.chartType === "line" ? (
-                <LineChart data={view.data}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 10 }}
-                    interval="preserveStartEnd"
-                    stroke="#9ca3af"
-                  />
-                  <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                  <Tooltip
-                    contentStyle={{
-                      direction: "rtl",
-                      borderRadius: "8px",
-                      border: "none",
-                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#4f46e5"
-                    strokeWidth={2}
-                    dot={{ fill: "#4f46e5", r: 4 }}
-                  />
-                </LineChart>
-              ) : view.config?.chartType === "pie" ? (
-                <PieChart>
-                  <Pie
-                    data={view.data}
-                    cx="40%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={75}
-                    paddingAngle={3}
-                    dataKey="value"
-                    nameKey="name"
-                    label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
-                    labelLine={false}
-                  >
-                    {view.data.map((entry: any, index: number) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={CHART_COLORS[index % CHART_COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      direction: "rtl",
-                      borderRadius: "8px",
-                      border: "none",
-                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                    }}
-                    formatter={(value: any, name: string) => [
-                      value.toLocaleString(),
-                      name,
-                    ]}
-                  />
-                  <Legend
-                    layout="vertical"
-                    align="right"
-                    verticalAlign="middle"
-                    iconType="circle"
-                    iconSize={12}
-                    wrapperStyle={{
-                      fontSize: "16px",
-                      direction: "rtl",
-                      paddingRight: "10px",
-                    }}
-                    formatter={(value: string) => (
-                      <span className="text-gray-700 mr-2">{value}</span>
-                    )}
-                  />
-                </PieChart>
-              ) : (
-                <BarChart data={view.data}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 10 }}
-                    interval="preserveStartEnd"
-                    stroke="#9ca3af"
-                  />
-                  <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                  <Tooltip
-                    cursor={{ fill: "#f3f4f6" }}
-                    contentStyle={{
-                      direction: "rtl",
-                      borderRadius: "8px",
-                      border: "none",
-                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                    }}
-                    formatter={(value: any) => [
-                      value.toLocaleString(),
-                      view.stats.subMetric,
-                    ]}
-                  />
-                  <Bar
-                    dataKey="value"
-                    fill="#4f46e5"
-                    radius={[4, 4, 0, 0]}
-                    barSize={32}
-                  />
-                </BarChart>
+      <div className="p-5 flex-1 flex flex-col">
+        {/* Header */}
+        <div className="flex justify-between items-start">
+          <div className="flex-1 overflow-hidden">
+            <div className="flex items-center gap-2 mb-2">
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                  isAutomation
+                    ? "bg-indigo-50 text-indigo-700 border-indigo-100"
+                    : "bg-gray-50 text-gray-600 border-gray-100"
+                }`}
+              >
+                {isAutomation ? "אוטומציה" : "אנליטיקה"}
+              </span>
+              {isGraph && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-pink-50 text-pink-700 border-pink-100">
+                  גרף
+                </span>
               )}
-            </ResponsiveContainer>
-          </div>
-        ) : view.stats.mainMetric ? (
-          <div className="text-center w-full">
-            <div className="text-4xl font-bold text-blue-600 mb-2 truncate px-2">
-              {view.stats.mainMetric}
             </div>
-            <p className="text-sm text-gray-500">{view.stats.label || "ערך"}</p>
-            {view.stats.subMetric && (
-              <p className="text-xs text-gray-400 mt-1" dir="rtl">
-                {view.stats.subMetric}
+            <h3
+              className="text-lg font-bold text-gray-900 line-clamp-2 leading-tight"
+              title={view.ruleName}
+            >
+              {view.ruleName}
+            </h3>
+            <p className="text-xs text-gray-400 mt-1 font-medium truncate">
+              {view.tableName === "System"
+                ? "מערכת"
+                : `מקור: ${view.tableName}`}
+            </p>
+
+            {/* ConfigDetails hidden on dashboard for cleaner layout unless needed, keeping as per original */}
+          </div>
+
+          <button
+            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            title="הסר מהדאשבורד"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div
+          className={`flex-1 w-full flex flex-col justify-center items-center my-4 ${
+            view.type === "GRAPH" ? "min-h-[220px]" : "min-h-[100px]"
+          }`}
+        >
+          {!view.stats ? (
+            <div className="text-center opacity-50">
+              <span className="text-4xl font-light text-gray-300">-</span>
+              <p className="text-xs text-gray-400 mt-2">אין נתונים</p>
+            </div>
+          ) : view.type === "GRAPH" && view.data?.length > 0 ? (
+            <div className="w-full" style={{ height: 250 }} dir="ltr">
+              <ResponsiveContainer width="100%" height={250}>
+                {view.config?.chartType === "line" ? (
+                  <LineChart data={view.data}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 10 }}
+                      interval="preserveStartEnd"
+                      stroke="#9ca3af"
+                    />
+                    <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
+                    <Tooltip
+                      contentStyle={{
+                        direction: "rtl",
+                        borderRadius: "8px",
+                        border: "none",
+                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#4f46e5"
+                      strokeWidth={2}
+                      dot={{ fill: "#4f46e5", r: 4 }}
+                    />
+                  </LineChart>
+                ) : view.config?.chartType === "pie" ? (
+                  <PieChart margin={{ top: 20, bottom: 20 }}>
+                    <Pie
+                      data={view.data}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={4}
+                      dataKey="value"
+                      nameKey="name"
+                      label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                      labelLine={false}
+                    >
+                      {view.data.map((entry: any, index: number) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={CHART_COLORS[index % CHART_COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        direction: "rtl",
+                        borderRadius: "8px",
+                        border: "none",
+                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                      }}
+                      formatter={(value: any, name: string) => [
+                        value.toLocaleString(),
+                        name,
+                      ]}
+                    />
+                    <Legend
+                      layout="vertical"
+                      align="right"
+                      verticalAlign="middle"
+                      iconType="circle"
+                      iconSize={8}
+                      wrapperStyle={{
+                        fontSize: "12px",
+                        direction: "rtl",
+                        right: 0,
+                      }}
+                    />
+                  </PieChart>
+                ) : (
+                  <BarChart data={view.data}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 10 }}
+                      interval="preserveStartEnd"
+                      stroke="#9ca3af"
+                    />
+                    <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
+                    <Tooltip
+                      cursor={{ fill: "#f9fafb" }}
+                      contentStyle={{
+                        direction: "rtl",
+                        borderRadius: "8px",
+                        border: "none",
+                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                      }}
+                      formatter={(value: any) => [
+                        value.toLocaleString(),
+                        view.stats.subMetric,
+                      ]}
+                    />
+                    <Bar
+                      dataKey="value"
+                      fill="#4f46e5"
+                      radius={[4, 4, 0, 0]}
+                      barSize={32}
+                    />
+                  </BarChart>
+                )}
+              </ResponsiveContainer>
+            </div>
+          ) : view.stats.mainMetric ? (
+            <div className="text-center w-full">
+              <div className="text-5xl font-extrabold text-gray-900 mb-1 tracking-tight truncate px-2 leading-none">
+                {view.stats.mainMetric}
+              </div>
+              <p className="text-sm font-medium text-gray-500">
+                {view.stats.label || "ערך"}
               </p>
-            )}
-          </div>
-        ) : view.stats.averageDuration ? (
-          <div className="text-center">
-            <div className="text-3xl font-bold text-blue-600 mb-2">
-              {view.stats.averageDuration}
+              {view.stats.subMetric && (
+                <p
+                  className="text-xs font-medium text-gray-400 mt-1 font-mono"
+                  dir="rtl"
+                >
+                  {view.stats.subMetric}
+                </p>
+              )}
             </div>
-            <p className="text-sm text-gray-500">ממוצע זמן</p>
-          </div>
-        ) : (
-          <div className="text-center">
-            <span className="text-4xl font-bold text-gray-200">-</span>
-            <p className="text-sm text-gray-400 mt-2">אין מספיק נתונים</p>
-          </div>
-        )}
+          ) : view.stats.averageDuration ? (
+            <div className="text-center w-full">
+              <div className="text-4xl font-bold text-gray-900 mb-2 truncate">
+                {view.stats.averageDuration}
+              </div>
+              <p className="text-sm text-gray-500">ממוצע זמן</p>
+            </div>
+          ) : (
+            <div className="text-center opacity-50">
+              <span className="text-4xl font-light text-gray-300">-</span>
+              <p className="text-xs text-gray-400 mt-2">אין נתונים</p>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="border-t border-black/5 pt-4 flex justify-between items-center text-sm text-gray-500">
-        <span>מבוסס על:</span>
+      {/* Footer */}
+      <div className="border-t border-gray-100 bg-gray-50/50 px-5 py-3 flex justify-between items-center text-xs text-gray-400 transition-colors group-hover:bg-gray-50">
+        <span className="font-medium">
+          {view.stats?.totalRecords || view.data?.length || 0} רשומות
+        </span>
         <div className="flex items-center gap-2">
-          <span className="font-medium bg-black/5 px-2 py-1 rounded-full">
-            {view.stats?.totalRecords || view.data?.length || 0} רשומות
-          </span>
           {/* Only show list icon for non-graph analytics */}
           {view.type !== "GRAPH" &&
             (view.data?.length > 0 || view.stats?.totalRecords > 0) &&
@@ -396,10 +442,13 @@ export default function AnalyticsWidget({
                   onOpenDetails(view);
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
-                className="p-1 hover:bg-black/5 rounded-full transition-colors text-blue-600"
+                className="group/list p-1.5 hover:bg-white hover:shadow-sm rounded-full transition-all text-blue-600 border border-transparent hover:border-blue-100"
                 title="צפה ברשימה המלאה"
               >
-                <List size={20} />
+                <List
+                  size={16}
+                  className="group-hover/list:scale-110 transition-transform"
+                />
               </button>
             )}
         </div>

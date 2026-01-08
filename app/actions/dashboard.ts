@@ -2,15 +2,17 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { getGoalsWithProgress } from "@/app/actions/goals";
 import { getAnalyticsData } from "@/app/actions/analytics";
 import { getTables } from "@/app/actions/tables";
 import { getViewsForTable } from "@/app/actions/views";
 import { processView } from "@/lib/viewProcessor";
 
 export async function getDashboardInitialData() {
-  const [analyticsRes, tablesRes] = await Promise.all([
+  const [analyticsRes, tablesRes, goals] = await Promise.all([
     getAnalyticsData(),
     getTables(),
+    getGoalsWithProgress(),
   ]);
 
   const analyticsViews =
@@ -30,6 +32,7 @@ export async function getDashboardInitialData() {
   return {
     analyticsViews,
     tables: tablesWithViews,
+    goals,
   };
 }
 
@@ -38,10 +41,12 @@ export async function getTableViewData(tableId: number, viewId: number) {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
 
-    const table = await prisma.tableMeta.findUnique({
-      where: { id: tableId },
+    // CRITICAL: Filter by companyId
+    const table = await prisma.tableMeta.findFirst({
+      where: { id: tableId, companyId: user.companyId },
       include: {
         records: {
+          where: { companyId: user.companyId },
           orderBy: { createdAt: "desc" },
           take: 1000,
         },
@@ -50,8 +55,9 @@ export async function getTableViewData(tableId: number, viewId: number) {
 
     if (!table) return { success: false, error: "Table not found" };
 
-    const view = await prisma.view.findUnique({
-      where: { id: viewId },
+    // Verify view belongs to this table
+    const view = await prisma.view.findFirst({
+      where: { id: viewId, tableId },
     });
 
     if (!view) return { success: false, error: "View not found" };

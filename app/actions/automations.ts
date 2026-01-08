@@ -77,6 +77,60 @@ export async function createAutomationRule(data: {
       return { success: false, error: "Authentication required" };
     }
 
+    let folderId: number | null = (data as any).folderId || null;
+
+    // Auto-assign folder for specific triggers if no folder provided
+    if (!folderId) {
+      if (
+        data.triggerType === "TICKET_STATUS_CHANGE" ||
+        data.triggerType === "SLA_BREACH"
+      ) {
+        const folderName = "אוטומציות שירות"; // Service Automations
+        const folder = await prisma.viewFolder.findFirst({
+          where: {
+            companyId: currentUser.companyId,
+            name: folderName,
+            type: "AUTOMATION",
+          },
+        });
+
+        if (folder) {
+          folderId = folder.id;
+        } else {
+          const newFolder = await prisma.viewFolder.create({
+            data: {
+              companyId: currentUser.companyId,
+              name: folderName,
+              type: "AUTOMATION",
+            },
+          });
+          folderId = newFolder.id;
+        }
+      } else if (data.triggerType === "TASK_STATUS_CHANGE") {
+        const folderName = "אוטומציות משימות"; // Task Automations
+        const folder = await prisma.viewFolder.findFirst({
+          where: {
+            companyId: currentUser.companyId,
+            name: folderName,
+            type: "AUTOMATION",
+          },
+        });
+
+        if (folder) {
+          folderId = folder.id;
+        } else {
+          const newFolder = await prisma.viewFolder.create({
+            data: {
+              companyId: currentUser.companyId,
+              name: folderName,
+              type: "AUTOMATION",
+            },
+          });
+          folderId = newFolder.id;
+        }
+      }
+    }
+
     const rule = await prisma.automationRule.create({
       data: {
         name: data.name,
@@ -84,6 +138,7 @@ export async function createAutomationRule(data: {
         triggerConfig: data.triggerConfig,
         actionType: data.actionType,
         actionConfig: data.actionConfig,
+        folderId: folderId,
         creator: {
           connect: { id: currentUser.id },
         },

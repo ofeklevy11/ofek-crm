@@ -160,7 +160,17 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
               </TableRow>
             ) : (
               filteredRecords.map((record) => (
-                <TableRow key={record.id} className="group hover:bg-gray-50/50">
+                <TableRow
+                  key={record.id}
+                  className={cn(
+                    "group transition-colors",
+                    record.type === "INCOME"
+                      ? "bg-green-50/50 hover:bg-green-100/50"
+                      : record.type === "EXPENSE"
+                      ? "bg-red-50/50 hover:bg-red-100/50"
+                      : "hover:bg-gray-50/50"
+                  )}
+                >
                   <TableCell className="font-medium text-gray-600 text-right">
                     {format(new Date(record.date), "dd/MM/yyyy")}
                   </TableCell>

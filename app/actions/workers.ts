@@ -75,6 +75,12 @@ export async function updateDepartment(
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
+  // CRITICAL: Verify department belongs to user's company
+  const existing = await prisma.department.findFirst({
+    where: { id, companyId: user.companyId },
+  });
+  if (!existing) throw new Error("Department not found or access denied");
+
   const department = await prisma.department.update({
     where: { id },
     data,
@@ -88,9 +94,15 @@ export async function deleteDepartment(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
+  // CRITICAL: Verify department belongs to user's company
+  const existing = await prisma.department.findFirst({
+    where: { id, companyId: user.companyId },
+  });
+  if (!existing) throw new Error("Department not found or access denied");
+
   // Check if department has workers
   const workersCount = await prisma.worker.count({
-    where: { departmentId: id },
+    where: { departmentId: id, companyId: user.companyId },
   });
 
   if (workersCount > 0) {
@@ -233,6 +245,12 @@ export async function updateWorker(
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
+  // CRITICAL: Verify worker belongs to user's company
+  const existing = await prisma.worker.findFirst({
+    where: { id, companyId: user.companyId },
+  });
+  if (!existing) throw new Error("Worker not found or access denied");
+
   const worker = await prisma.worker.update({
     where: { id },
     data,
@@ -245,6 +263,12 @@ export async function updateWorker(
 export async function deleteWorker(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+
+  // CRITICAL: Verify worker belongs to user's company
+  const existing = await prisma.worker.findFirst({
+    where: { id, companyId: user.companyId },
+  });
+  if (!existing) throw new Error("Worker not found or access denied");
 
   await prisma.worker.delete({
     where: { id },
@@ -344,6 +368,12 @@ export async function updateOnboardingPath(
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
+  // CRITICAL: Verify path belongs to user's company before update
+  const existing = await prisma.onboardingPath.findFirst({
+    where: { id, companyId: user.companyId },
+  });
+  if (!existing) throw new Error("Onboarding path not found or access denied");
+
   // If setting as default, unset other defaults for this department
   if (data.isDefault) {
     const currentPath = await prisma.onboardingPath.findUnique({
@@ -375,6 +405,12 @@ export async function updateOnboardingPath(
 export async function deleteOnboardingPath(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+
+  // CRITICAL: Verify path belongs to user's company before deletion
+  const existing = await prisma.onboardingPath.findFirst({
+    where: { id, companyId: user.companyId },
+  });
+  if (!existing) throw new Error("Onboarding path not found or access denied");
 
   await prisma.onboardingPath.delete({
     where: { id },

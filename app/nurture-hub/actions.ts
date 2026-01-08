@@ -23,7 +23,16 @@ export async function getDataSources(): Promise<DataSource[]> {
   ];
 
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return sources; // Return only system sources if not authenticated
+    }
+
+    // CRITICAL: Filter tables by companyId for multi-tenancy
     const tables = await prisma.tableMeta.findMany({
+      where: { companyId: currentUser.companyId },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     });
@@ -48,20 +57,32 @@ export async function getDataSourceRecords(
 ): Promise<DataRecord[]> {
   let records: DataRecord[] = [];
 
+  // Get current user for multi-tenancy filtering
+  const { getCurrentUser } = await import("@/lib/permissions-server");
+  const currentUser = await getCurrentUser();
+
+  if (!currentUser) {
+    return records; // Return empty if not authenticated
+  }
+
   // Helper to filter by query
   // Note: Prisma string filter 'contains' is case-insensitive with mode: 'insensitive' (Postgres)
 
   if (sourceId === "clients") {
     try {
+      // CRITICAL: Filter clients by companyId for multi-tenancy
       const clients = await prisma.client.findMany({
-        where: query
-          ? {
-              OR: [
-                { name: { contains: query, mode: "insensitive" } },
-                { email: { contains: query, mode: "insensitive" } },
-              ],
-            }
-          : {},
+        where: {
+          companyId: currentUser.companyId,
+          ...(query
+            ? {
+                OR: [
+                  { name: { contains: query, mode: "insensitive" } },
+                  { email: { contains: query, mode: "insensitive" } },
+                ],
+              }
+            : {}),
+        },
         take: 50,
       });
 
@@ -77,15 +98,19 @@ export async function getDataSourceRecords(
     }
   } else if (sourceId === "users") {
     try {
+      // CRITICAL: Filter users by companyId for multi-tenancy
       const users = await prisma.user.findMany({
-        where: query
-          ? {
-              OR: [
-                { name: { contains: query, mode: "insensitive" } },
-                { email: { contains: query, mode: "insensitive" } },
-              ],
-            }
-          : {},
+        where: {
+          companyId: currentUser.companyId,
+          ...(query
+            ? {
+                OR: [
+                  { name: { contains: query, mode: "insensitive" } },
+                  { email: { contains: query, mode: "insensitive" } },
+                ],
+              }
+            : {}),
+        },
         take: 50,
       });
       records = users.map((u) => ({
@@ -102,8 +127,12 @@ export async function getDataSourceRecords(
     const tableId = parseInt(sourceId);
     if (!isNaN(tableId)) {
       try {
+        // CRITICAL: Filter records by companyId for multi-tenancy
         const dbRecords = await prisma.record.findMany({
-          where: { tableId },
+          where: {
+            tableId,
+            companyId: currentUser.companyId,
+          },
           take: 100,
         });
 
@@ -198,17 +227,29 @@ export async function getTableFields(
 // Get raw records from a dynamic table (for custom field mapping in import)
 export async function getRawTableRecords(tableId: string) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return []; // Return empty if not authenticated
+    }
+
     const id = parseInt(tableId);
     if (isNaN(id)) return [];
 
+    // CRITICAL: Filter records by companyId for multi-tenancy
     const dbRecords = await prisma.record.findMany({
-      where: { tableId: id },
+      where: {
+        tableId: id,
+        companyId: currentUser.companyId,
+      },
       take: 100,
     });
 
     // Return records with flattened data for easy access
     return dbRecords.map((r) => ({
       id: r.id.toString(),
+
       ...(r.data as any), // Spread all data fields
       _rawData: r.data, // Keep reference to raw data
     }));

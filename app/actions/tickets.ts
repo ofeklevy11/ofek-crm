@@ -39,6 +39,37 @@ export async function getTickets() {
   });
 }
 
+// On-demand loading of ticket details with comments and activity logs
+export async function getTicketDetails(ticketId: number) {
+  const user = await getCurrentUser();
+  if (!user) return null;
+
+  return await prisma.ticket.findFirst({
+    where: {
+      id: ticketId,
+      companyId: user.companyId,
+    },
+    include: {
+      assignee: { select: { id: true, name: true, email: true } },
+      client: { select: { id: true, name: true, email: true, company: true } },
+      creator: { select: { id: true, name: true } },
+      comments: {
+        include: {
+          user: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      },
+      activityLogs: {
+        include: {
+          user: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 50, // Limit activity logs for performance
+      },
+    },
+  });
+}
+
 export async function createTicket(data: {
   title: string;
   description?: string;
@@ -430,24 +461,14 @@ export async function getTicketStats() {
       breached: 0,
     };
 
-  const stats = await prisma.$transaction([
-    // Open
-    prisma.ticket.count({
-      where: { companyId: user.companyId, status: "OPEN" },
+  // OPTIMIZED: Use groupBy to get all status counts in a single query
+  // instead of 5 separate count queries
+  const [statusCounts, breachCount] = await Promise.all([
+    prisma.ticket.groupBy({
+      by: ["status"],
+      where: { companyId: user.companyId },
+      _count: { status: true },
     }),
-    // In Progress
-    prisma.ticket.count({
-      where: { companyId: user.companyId, status: "IN_PROGRESS" },
-    }),
-    // Waiting
-    prisma.ticket.count({
-      where: { companyId: user.companyId, status: "WAITING" },
-    }),
-    // Closed (Total closed tickets generally)
-    prisma.ticket.count({
-      where: { companyId: user.companyId, status: "CLOSED" },
-    }),
-    // Breached (Active breaches)
     prisma.slaBreach.count({
       where: {
         companyId: user.companyId,
@@ -456,12 +477,18 @@ export async function getTicketStats() {
     }),
   ]);
 
+  // Convert groupBy results to a map for easy lookup
+  const countMap: Record<string, number> = {};
+  statusCounts.forEach((item) => {
+    countMap[item.status] = item._count.status;
+  });
+
   return {
-    open: stats[0],
-    inProgress: stats[1],
-    waiting: stats[2],
-    closed: stats[3],
-    breached: stats[4],
+    open: countMap["OPEN"] || 0,
+    inProgress: countMap["IN_PROGRESS"] || 0,
+    waiting: countMap["WAITING"] || 0,
+    closed: countMap["CLOSED"] || 0,
+    breached: breachCount,
   };
 }
 

@@ -58,24 +58,33 @@ export default async function TableDetailsPage({
   let totalCount = 0;
 
   if (q) {
-    // RAW QUERY: Be careful, but since we verified table ownership, filtering by tableId is safer.
-    // However, it's better to verify table's company again if possible, but tableId check above is usually enough for id-based constraints.
-    // The previous check "prisma.tableMeta.findFirst" ensures that 'tableId' belongs to the user's company.
-    // So any record with this tableId is implicitly in the same company (assuming data integrity).
-    // Still, adding "companyId" to record filter is safest.
+    // Raw query with ILIKE on JSON data
+    // OPTIMIZATION: Added LIMIT to prevent full table scans on large tables
+    // The new composite index [tableId, companyId, createdAt DESC] helps with ordering
+    // Note: For very large tables (100K+ records), consider implementing
+    // a dedicated search solution (e.g., PostgreSQL Full-Text Search or Elasticsearch)
 
-    // Note: raw query is harder to filter companyId if it's not indexed or easy to access, but Record has companyId column.
-    // Let's modify the raw query to include companyId
+    // First, get the total count for pagination (limited to improve performance)
+    const countResult = await prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT COUNT(*) as count FROM "Record"
+      WHERE "tableId" = ${tableId}
+      AND "companyId" = ${user.companyId}
+      AND "data"::text ILIKE ${`%${q}%`}
+      LIMIT 1000
+    `;
+    totalCount = Math.min(Number(countResult[0]?.count || 0), 1000);
+
+    // Get paginated IDs with OFFSET/LIMIT for efficiency
     const rawRecords = await prisma.$queryRaw<{ id: number }[]>`
       SELECT id FROM "Record"
       WHERE "tableId" = ${tableId}
       AND "companyId" = ${user.companyId}
       AND "data"::text ILIKE ${`%${q}%`}
+      ORDER BY "createdAt" DESC
+      LIMIT ${pageSize}
+      OFFSET ${(currentPage - 1) * pageSize}
     `;
-    totalCount = rawRecords.length;
-    const ids = rawRecords
-      .map((r: { id: number }) => r.id)
-      .slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const ids = rawRecords.map((r: { id: number }) => r.id);
 
     records = await prisma.record.findMany({
       where: { id: { in: ids } },

@@ -6,9 +6,21 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
-    const table = await prisma.tableMeta.findUnique({
-      where: { id: parseInt(id) },
+
+    // CRITICAL: Filter by companyId
+    const table = await prisma.tableMeta.findFirst({
+      where: {
+        id: parseInt(id),
+        companyId: user.companyId,
+      },
       include: {
         _count: {
           select: { records: true },
@@ -35,9 +47,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { getCurrentUser, canManageTables } = await import(
-      "@/lib/permissions"
-    );
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const { canManageTables } = await import("@/lib/permissions");
     const user = await getCurrentUser();
 
     if (!user) {
@@ -55,9 +66,12 @@ export async function PATCH(
     const body = await request.json();
     const { name, slug, schemaJson } = body;
 
-    // Check if table exists
-    const existingTable = await prisma.tableMeta.findUnique({
-      where: { id: parseInt(id) },
+    // CRITICAL: Check if table exists AND belongs to company
+    const existingTable = await prisma.tableMeta.findFirst({
+      where: {
+        id: parseInt(id),
+        companyId: user.companyId,
+      },
     });
 
     if (!existingTable) {
@@ -90,9 +104,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { getCurrentUser, canManageTables } = await import(
-      "@/lib/permissions"
-    );
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const { canManageTables } = await import("@/lib/permissions");
     const user = await getCurrentUser();
 
     if (!user) {
@@ -108,9 +121,12 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // Check if table exists
-    const existingTable = await prisma.tableMeta.findUnique({
-      where: { id: parseInt(id) },
+    // CRITICAL: Check if table exists AND belongs to company
+    const existingTable = await prisma.tableMeta.findFirst({
+      where: {
+        id: parseInt(id),
+        companyId: user.companyId,
+      },
     });
 
     if (!existingTable) {

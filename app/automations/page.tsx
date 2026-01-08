@@ -19,17 +19,22 @@ export default async function AutomationsPage() {
     redirect("/");
   }
 
-  const [rulesResponse, usersResponse, tables] = await Promise.all([
-    getAutomationRules(),
-    getUsers(),
-    prisma.tableMeta.findMany({
-      select: { id: true, name: true, schemaJson: true },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+  const [rulesResponse, usersResponse, tables, foldersResponse] =
+    await Promise.all([
+      getAutomationRules(),
+      getUsers(),
+      prisma.tableMeta.findMany({
+        select: { id: true, name: true, schemaJson: true },
+        orderBy: { name: "asc" },
+      }),
+      import("@/app/actions/folders").then((mod) =>
+        mod.getFolders("AUTOMATION")
+      ),
+    ]);
 
   const rules = rulesResponse.success ? rulesResponse.data : [];
   const users = usersResponse.success ? usersResponse.data : [];
+  const folders = foldersResponse.success ? foldersResponse.data : [];
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
@@ -48,6 +53,7 @@ export default async function AutomationsPage() {
         initialRules={rules as any[]}
         users={users as any[]}
         tables={tables}
+        folders={folders}
         currentUserId={user.id}
       />
     </div>

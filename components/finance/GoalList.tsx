@@ -1,6 +1,26 @@
-import { GoalWithProgress } from "@/app/actions/goals";
+"use client";
+
+import { useEffect, useState } from "react";
+import { GoalWithProgress, updateGoalOrder } from "@/app/actions/goals";
 import GoalCard from "./GoalCard";
 import { AlertCircle } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface GoalListProps {
   goals: GoalWithProgress[];
@@ -8,7 +28,86 @@ interface GoalListProps {
   tables: any[];
 }
 
+function SortableGoalItem({
+  goal,
+  metrics,
+  tables,
+}: {
+  goal: GoalWithProgress;
+  metrics: any[];
+  tables: any[];
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: goal.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : "auto",
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={`touch-none ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+    >
+      <div className="pointer-events-auto">
+        {/* GoalCard handles its own pointer events for buttons, but dragging starts on non-interactive areas if configured correctly.
+             However, dnd-kit listeners on the parent div usually capturing all pointer events.
+             We might need a drag handle or rely on sensors safe-guards.
+             PointerSensor with distance constraint is usually best for mixed content.
+         */}
+        <GoalCard goal={goal} metrics={metrics} tables={tables} />
+      </div>
+    </div>
+  );
+}
+
 export default function GoalList({ goals, metrics, tables }: GoalListProps) {
+  const [items, setItems] = useState<GoalWithProgress[]>(goals);
+
+  useEffect(() => {
+    setItems(goals);
+  }, [goals]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Require 8px movement before drag starts to allow klicks
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setItems((prev) => {
+        const oldIndex = prev.findIndex((i) => i.id === active.id);
+        const newIndex = prev.findIndex((i) => i.id === over.id);
+        const newItems = arrayMove(prev, oldIndex, newIndex);
+
+        // Optimistic update done, iterate and send to server
+        updateGoalOrder(newItems.map((g) => g.id));
+
+        return newItems;
+      });
+    }
+  };
+
   if (goals.length === 0) {
     return (
       <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
@@ -26,13 +125,29 @@ export default function GoalList({ goals, metrics, tables }: GoalListProps) {
   }
 
   return (
-    <div
-      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6"
-      dir="rtl"
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
     >
-      {goals.map((goal) => (
-        <GoalCard key={goal.id} goal={goal} metrics={metrics} tables={tables} />
-      ))}
-    </div>
+      <SortableContext
+        items={items.map((i) => i.id)}
+        strategy={rectSortingStrategy}
+      >
+        <div
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6"
+          dir="rtl"
+        >
+          {items.map((goal) => (
+            <SortableGoalItem
+              key={goal.id}
+              goal={goal}
+              metrics={metrics}
+              tables={tables}
+            />
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
   );
 }

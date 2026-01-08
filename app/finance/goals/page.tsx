@@ -2,10 +2,10 @@ import { getGoalsWithProgress, getGoalCreationData } from "@/app/actions/goals";
 import GoalList from "@/components/finance/GoalList";
 import GoalModal from "@/components/finance/GoalModal";
 import { getCurrentUser } from "@/lib/permissions-server";
-import { Target, TrendingUp } from "lucide-react";
+import { Target, TrendingUp, ArrowRight, Archive } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default async function GoalsPage() {
   const user = await getCurrentUser();
@@ -51,6 +51,27 @@ export default async function GoalsPage() {
       available: true,
       icon: "📝",
     },
+    {
+      type: "TASKS",
+      name: "משימות",
+      description: "השלמת משימות",
+      available: true,
+      icon: "✅",
+    },
+    {
+      type: "RECORDS",
+      name: "רשומות",
+      description: "יעדי הזנת נתונים",
+      available: true,
+      icon: "📊",
+    },
+    {
+      type: "CALENDAR",
+      name: "פגישות ויומן",
+      description: "אירועים ביומן",
+      available: true,
+      icon: "📅",
+    },
   ];
 
   return (
@@ -61,7 +82,7 @@ export default async function GoalsPage() {
       <div>
         <Link
           href="/finance"
-          className="inline-flex items-center text-sm text-gray-500 hover:text-gray-900 mb-2 transition-colors"
+          className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-2 transition-colors"
         >
           <ArrowRight className="w-4 h-4 ml-1" />
           חזרה למרכז הפיננסי
@@ -72,12 +93,23 @@ export default async function GoalsPage() {
               <Target className="w-8 h-8 text-[#4f95ff]" />
               תכנון יעדים
             </h1>
-            <p className="text-gray-500 mt-2 text-lg">
+            <p className="text-gray-600 mt-2 text-lg">
               מעקב אחר מדדים עסקיים, תחזיות צמיחה ועמידה ביעדים.
             </p>
           </div>
 
-          <GoalModal metrics={metrics} tables={tables} clients={clients} />
+          <div className="flex gap-3">
+            <Link href="/finance/goals/archive">
+              <Button
+                variant="outline"
+                className="gap-2 bg-white hover:bg-gray-50"
+              >
+                <Archive className="w-4 h-4" />
+                ארכיון
+              </Button>
+            </Link>
+            <GoalModal metrics={metrics} tables={tables} clients={clients} />
+          </div>
         </div>
       </div>
 

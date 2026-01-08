@@ -133,7 +133,7 @@ export default function RenewalAutomationPage() {
       className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20"
       dir="rtl"
     >
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-12">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 relative">
         <div className="flex items-center gap-4 mb-8">
           <Link
             href="/nurture-hub"
@@ -151,34 +151,25 @@ export default function RenewalAutomationPage() {
             </p>
           </div>
           <div className="mr-auto flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
-              <span
-                className={cn(
-                  "w-2.5 h-2.5 rounded-full",
-                  isEnabled ? "bg-green-500" : "bg-slate-300"
-                )}
-              ></span>
-              <span className="text-sm font-medium text-slate-600">
-                {isEnabled ? "פעיל" : "לא פעיל"}
-              </span>
-              <button
-                onClick={() => setIsEnabled(!isEnabled)}
-                className="mr-2 text-xs text-indigo-600 hover:underline"
-              >
-                {isEnabled ? "השבת" : "הפעל"}
-              </button>
+            <div className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-full text-sm font-medium border border-slate-200 flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              בקרוב...
             </div>
-            <Button
-              onClick={handleSave}
-              className="bg-indigo-600 hover:bg-indigo-700"
-            >
-              <Save className="w-4 h-4 ml-2" />
-              שמור שינויים
-            </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Coming Soon Overlay */}
+        <div className="absolute inset-0 z-50 flex items-start justify-center pt-40 pointer-events-none">
+          <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-2xl border border-indigo-100 text-center max-w-sm mx-4">
+            <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mx-auto mb-3">
+              <Clock className="w-6 h-6 text-indigo-400" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-1">בקרוב...</h3>
+            <p className="text-sm text-slate-500">מודול זה נמצא בפיתוח</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 grayscale opacity-50 pointer-events-none select-none">
           <div className="lg:col-span-2 space-y-6">
             {/* Customer List Management */}
             <Card>

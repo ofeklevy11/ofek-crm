@@ -191,7 +191,7 @@ export default function GoalModal({
         targetValue: Number(existingGoal.targetValue),
         filters: existingGoal.filters || {},
       });
-      setStep(1);
+      setStep(2);
     } else if (open && !existingGoal) {
       setStep(1);
       setFormData({
@@ -351,9 +351,9 @@ export default function GoalModal({
               setStep(2);
             }}
             className={cn(
-              "flex flex-col items-center p-4 rounded-xl border-2 transition-all hover:border-[#4f95ff] hover:bg-blue-50",
+              "flex flex-col items-center p-4 rounded-xl border-2 transition-all hover:border-[#4f95ff] hover:bg-[#4f95ff]/5",
               formData.metricType === m.type
-                ? "border-[#4f95ff] bg-blue-50 ring-1 ring-[#4f95ff]"
+                ? "border-[#4f95ff] bg-[#4f95ff]/5 ring-1 ring-[#4f95ff]"
                 : "border-gray-200 bg-white"
             )}
             type="button"
@@ -369,7 +369,7 @@ export default function GoalModal({
               <m.icon className="w-6 h-6" />
             </div>
             <span className="font-bold text-gray-900 text-sm">{m.label}</span>
-            <span className="text-xs text-gray-500 mt-1 text-center">
+            <span className="text-xs text-gray-600 mt-1 text-center">
               {m.desc}
             </span>
           </button>
@@ -377,7 +377,7 @@ export default function GoalModal({
       </div>
 
       <div className="pt-2 border-t border-gray-100 mt-2">
-        <p className="text-xs text-gray-400 text-center flex items-center justify-center gap-1">
+        <p className="text-xs text-gray-600 text-center flex items-center justify-center gap-1">
           <TrendingDown className="w-3 h-3" />
           יעדי הוצאות וצמצום עלויות - בקרוב
         </p>
@@ -402,7 +402,7 @@ export default function GoalModal({
         <div className="space-y-4">
           {/* --- TARGET TYPE TOGGLE --- */}
           {showSumOption && (
-            <div className="bg-gray-50 p-1 rounded-lg flex border border-gray-200">
+            <div className="bg-[#f4f8f8] p-1 rounded-lg flex border border-gray-200">
               <button
                 type="button"
                 onClick={() =>
@@ -412,7 +412,7 @@ export default function GoalModal({
                   "flex-1 py-1.5 text-sm font-medium rounded-md transition-all",
                   formData.targetType === "COUNT"
                     ? "bg-white text-[#4f95ff] shadow-sm ring-1 ring-black/5"
-                    : "text-gray-500 hover:text-gray-700"
+                    : "text-gray-600 hover:text-gray-900"
                 )}
               >
                 כמות (יחידות)
@@ -426,7 +426,7 @@ export default function GoalModal({
                   "flex-1 py-1.5 text-sm font-medium rounded-md transition-all",
                   formData.targetType === "SUM"
                     ? "bg-white text-[#4f95ff] shadow-sm ring-1 ring-black/5"
-                    : "text-gray-500 hover:text-gray-700"
+                    : "text-gray-600 hover:text-gray-900"
                 )}
               >
                 ערך כספי (סכום)
@@ -436,7 +436,7 @@ export default function GoalModal({
 
           {/* REVENUE SOURCE SELECTOR */}
           {formData.metricType === "REVENUE" && (
-            <div className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-100">
+            <div className="space-y-3 p-4 bg-[#f4f8f8] rounded-lg border border-gray-100">
               <Label className="text-[#a24ec1] font-semibold">
                 מקור הכנסה לחישוב
               </Label>
@@ -521,7 +521,7 @@ export default function GoalModal({
           {(formData.metricType === "RECORDS" ||
             (formData.metricType === "REVENUE" &&
               formData.filters?.source === "TABLE")) && (
-            <div className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-100 animate-in fade-in slide-in-from-top-2">
+            <div className="space-y-3 p-4 bg-[#f4f8f8] rounded-lg border border-gray-100 animate-in fade-in slide-in-from-top-2">
               <div className="space-y-1">
                 <Label>בחר טבלה</Label>
                 <Select
@@ -582,7 +582,7 @@ export default function GoalModal({
 
           {/* CALENDAR SETTINGS */}
           {formData.metricType === "CALENDAR" && (
-            <div className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-100 animate-in fade-in slide-in-from-top-2">
+            <div className="space-y-3 p-4 bg-[#f4f8f8] rounded-lg border border-gray-100 animate-in fade-in slide-in-from-top-2">
               <div className="space-y-1">
                 <Label>סינון שם/תיאור אירוע (אופציונלי)</Label>
                 <div className="relative">
@@ -596,7 +596,7 @@ export default function GoalModal({
                     }
                   />
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-600">
                   השאר ריק כדי לספור את כל האירועים ביומן בטווח הזמן הנבחר.
                 </p>
               </div>
@@ -605,7 +605,7 @@ export default function GoalModal({
 
           {/* TASKS SETTINGS */}
           {formData.metricType === "TASKS" && (
-            <div className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-100 animate-in fade-in slide-in-from-top-2">
+            <div className="space-y-3 p-4 bg-[#f4f8f8] rounded-lg border border-gray-100 animate-in fade-in slide-in-from-top-2">
               <div className="space-y-1">
                 <Label>סטטוס משימה</Label>
                 <Select
@@ -660,13 +660,23 @@ export default function GoalModal({
 
           <PreviewBanner />
 
-          <Button
-            className="w-full bg-[#4f95ff] hover:bg-blue-600"
-            onClick={() => setStep(3)}
-            type="button"
-          >
-            המשך <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setStep(1)}
+              type="button"
+            >
+              חזרה
+            </Button>
+            <Button
+              className="flex-[2] bg-[#4f95ff] hover:bg-blue-600"
+              onClick={() => setStep(3)}
+              type="button"
+            >
+              המשך <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -747,7 +757,8 @@ export default function GoalModal({
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
             <>
-              צור יעד <Check className="w-4 h-4 ml-2" />
+              {existingGoal ? "עדכן יעד" : "צור יעד"}{" "}
+              <Check className="w-4 h-4 ml-2" />
             </>
           )}
         </Button>
@@ -755,8 +766,8 @@ export default function GoalModal({
     </div>
   );
 
-  let title = "הגדרת יעד חדש";
-  if (step === 2) title = "הגדרות מתקדמות";
+  let title = existingGoal ? "עריכת יעד" : "הגדרת יעד חדש";
+  if (step === 2) title = existingGoal ? "עריכת הגדרות" : "הגדרות מתקדמות";
   if (step === 3) title = "יעדים וזמנים";
 
   return (

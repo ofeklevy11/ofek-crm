@@ -18,9 +18,10 @@ import {
   sortableKeyboardCoordinates,
   rectSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Plus, LayoutDashboard, X } from "lucide-react";
+import { Plus, LayoutDashboard, X, Target, Trash2 } from "lucide-react";
 import AnalyticsWidget from "./dashboard/AnalyticsWidget";
 import TableWidget from "./dashboard/TableWidget";
+import GoalWidget from "./dashboard/GoalWidget";
 import AnalyticsDetailsModal from "./AnalyticsDetailsModal";
 import { getTableViewData } from "@/app/actions/dashboard";
 import {
@@ -31,9 +32,10 @@ import {
   migrateDashboardWidgets,
 } from "@/app/actions/dashboard-widgets";
 import { hasUserFlag, User } from "@/lib/permissions";
+import { GoalWithProgress } from "@/app/actions/goals";
 
 // Define Types
-type WidgetType = "ANALYTICS" | "TABLE";
+type WidgetType = "ANALYTICS" | "TABLE" | "GOAL";
 
 interface DashboardWidget {
   id: string; // Unique ID for this instance on dashboard
@@ -45,12 +47,67 @@ interface DashboardWidget {
 interface DashboardClientProps {
   initialAnalytics: any[];
   availableTables: any[];
+  availableGoals: GoalWithProgress[];
   user: User;
 }
+
+// Static metrics definition for GoalCard
+const GOAL_METRICS = [
+  {
+    type: "REVENUE",
+    name: "הכנסות",
+    description: "סה״כ כסף שנכנס",
+    available: true,
+    icon: "💰",
+  },
+  {
+    type: "RETAINERS",
+    name: "ריטיינרים",
+    description: "הכנסות חוזרות",
+    available: true,
+    icon: "💼",
+  },
+  {
+    type: "LEADS",
+    name: "לידים",
+    description: "לקוחות חדשים",
+    available: true,
+    icon: "👥",
+  },
+  {
+    type: "QUOTES",
+    name: "הצעות מחיר",
+    description: "הצעות וסגירות",
+    available: true,
+    icon: "📝",
+  },
+  {
+    type: "TASKS",
+    name: "משימות",
+    description: "השלמת משימות",
+    available: true,
+    icon: "✅",
+  },
+  {
+    type: "RECORDS",
+    name: "רשומות",
+    description: "יעדי הזנת נתונים",
+    available: true,
+    icon: "📊",
+  },
+  {
+    type: "CALENDAR",
+    name: "פגישות ויומן",
+    description: "אירועים ביומן",
+    available: true,
+    icon: "📅",
+  },
+];
 
 export default function DashboardClient({
   initialAnalytics,
   availableTables,
+  availableGoals,
   user,
 }: DashboardClientProps) {
   // State
@@ -186,6 +243,7 @@ export default function DashboardClient({
     };
 
     // Add to database
+    // @ts-ignore - TS might complain about GOAL mismatch unless restarted, but backend types are updated
     const res = await addDashboardWidget(widgetData);
     if (res.success && res.data) {
       const newWidget: DashboardWidget = {
@@ -216,11 +274,15 @@ export default function DashboardClient({
 
   const getWidgetContent = (widget: DashboardWidget) => {
     if (widget.type === "ANALYTICS") {
-      // analyticsViews passed as initialAnalytics
       const view = initialAnalytics.find(
         (a) => String(a.id) === String(widget.referenceId)
       );
-      return view; // passed to AnalyticsWidget as 'view'
+      return view;
+    } else if (widget.type === "GOAL") {
+      const goal = availableGoals.find(
+        (g) => String(g.id) === String(widget.referenceId)
+      );
+      return goal;
     } else {
       // TABLE
       const table = availableTables.find((t) => t.id === widget.tableId);
@@ -234,6 +296,7 @@ export default function DashboardClient({
   };
 
   const hasTables = availableTables.length > 0;
+  // const hasGoals = availableGoals.length > 0; // Not explicitly used but good context
 
   if (!canViewDashboard) {
     return (
@@ -287,7 +350,8 @@ export default function DashboardClient({
 
               if (widget.type === "ANALYTICS") {
                 if (!content) return null;
-                const isGraph = content.type === "GRAPH";
+                const view = content as any;
+                const isGraph = view.type === "GRAPH";
                 return (
                   <div
                     key={widget.id}
@@ -295,11 +359,24 @@ export default function DashboardClient({
                   >
                     <AnalyticsWidget
                       id={widget.id}
-                      view={content}
+                      view={view}
                       onRemove={() => handleRemoveWidget(widget.id)}
                       onOpenDetails={(view) => setSelectedView(view)}
                     />
                   </div>
+                );
+              } else if (widget.type === "GOAL") {
+                if (!content) return null;
+                const goal = content as GoalWithProgress;
+                return (
+                  <GoalWidget
+                    key={widget.id}
+                    id={widget.id}
+                    goal={goal}
+                    metrics={GOAL_METRICS}
+                    tables={availableTables}
+                    onRemove={() => handleRemoveWidget(widget.id)}
+                  />
                 );
               } else {
                 const { table, view, fetchedData, isLoading } = content as any;
@@ -322,19 +399,7 @@ export default function DashboardClient({
               <div className="col-span-full py-16 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 border-2 border-dashed border-gray-200 rounded-3xl text-center px-4">
                 <LayoutDashboard size={64} className="mb-6 opacity-10" />
 
-                {!hasTables ? (
-                  <div className="max-w-md space-y-2">
-                    <h3 className="text-xl font-bold text-gray-800">
-                      הגיע הזמן ליצור את הטבלה הראשונה
-                    </h3>
-                    <a
-                      href="/tables"
-                      className="inline-block mt-4 px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
-                    >
-                      עבור לטבלאות
-                    </a>
-                  </div>
-                ) : !canAddWidget ? (
+                {!canAddWidget ? (
                   <div className="max-w-lg space-y-2">
                     <p className="text-gray-500 font-medium">
                       על מנת להוסיף ווידגט ללוח הבקרה תצטרכו ליצור תצוגה בתוך
@@ -364,7 +429,10 @@ export default function DashboardClient({
         {/* Add Widget Modal Overlay */}
         {isAddModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto"
+              dir="rtl"
+            >
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-lg font-bold">הוספת וידג׳ט לדאשבורד</h3>
                 <button
@@ -397,6 +465,19 @@ export default function DashboardClient({
                     </button>
                     <button
                       className={`flex-1 py-2 text-sm font-medium rounded-md transition ${
+                        selectedType === "GOAL"
+                          ? "bg-white shadow text-blue-600"
+                          : "text-gray-500 hover:text-gray-700"
+                      }`}
+                      onClick={() => {
+                        setSelectedType("GOAL");
+                        setSelectedItem("");
+                      }}
+                    >
+                      יעדים
+                    </button>
+                    <button
+                      className={`flex-1 py-2 text-sm font-medium rounded-md transition ${
                         selectedType === "TABLE"
                           ? "bg-white shadow text-blue-600"
                           : "text-gray-500 hover:text-gray-700"
@@ -412,7 +493,7 @@ export default function DashboardClient({
                 </div>
 
                 {/* Content Selection */}
-                {selectedType === "ANALYTICS" ? (
+                {selectedType === "ANALYTICS" && (
                   <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
                     {initialAnalytics.map((a) => (
                       <button
@@ -447,7 +528,47 @@ export default function DashboardClient({
                       </div>
                     )}
                   </div>
-                ) : (
+                )}
+
+                {selectedType === "GOAL" && (
+                  <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                    {availableGoals.map((g) => (
+                      <button
+                        key={g.id}
+                        onClick={() => setSelectedItem(String(g.id))}
+                        className={`w-full text-right p-3 hover:bg-blue-50 transition flex items-center justify-between group ${
+                          selectedItem === String(g.id)
+                            ? "bg-blue-50 ring-1 ring-blue-500"
+                            : ""
+                        }`}
+                      >
+                        <div>
+                          <div className="font-medium text-gray-800">
+                            {g.name}
+                          </div>
+                          <div className="text-xs text-gray-500 flex items-center gap-1">
+                            <Target className="w-3 h-3" />
+                            {g.metricType}
+                          </div>
+                        </div>
+                        <div
+                          className={`w-4 h-4 rounded-full border border-gray-300 ${
+                            selectedItem === String(g.id)
+                              ? "bg-blue-600 border-blue-600"
+                              : ""
+                          }`}
+                        ></div>
+                      </button>
+                    ))}
+                    {availableGoals.length === 0 && (
+                      <div className="p-4 text-center text-sm text-gray-500">
+                        לא נמצאו יעדים זמינים.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {selectedType === "TABLE" && (
                   <div className="space-y-3">
                     <div>
                       <label className="block text-xs font-semibold text-gray-500 mb-1">

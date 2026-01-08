@@ -30,9 +30,9 @@ export async function POST(request: Request) {
       if (recordIds.length > 0) {
         const { canWriteTable } = await import("@/lib/permissions");
 
-        // Check permission on the first record (assuming all belong to same table or user has general access)
-        const firstRecord = await prisma.record.findUnique({
-          where: { id: Number(recordIds[0]) },
+        // SECURITY: Check permission and verify record belongs to user's company
+        const firstRecord = await prisma.record.findFirst({
+          where: { id: Number(recordIds[0]), companyId: currentUser.companyId },
           select: { tableId: true },
         });
 
@@ -46,17 +46,24 @@ export async function POST(request: Request) {
               { status: 403 }
             );
           }
+        } else {
+          return NextResponse.json(
+            { error: "Record not found or access denied" },
+            { status: 404 }
+          );
         }
       }
 
       // Log before delete or after? After is better but we lose data.
       // For bulk delete, we might just log IDs.
 
+      // SECURITY: Filter by companyId to prevent cross-tenant deletion
       const count = await prisma.record.deleteMany({
         where: {
           id: {
             in: recordIds.map((id: any) => Number(id)),
           },
+          companyId: currentUser.companyId,
         },
       });
 

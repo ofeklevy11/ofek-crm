@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 
 interface DashboardWidgetInput {
-  widgetType: "ANALYTICS" | "TABLE";
+  widgetType: "ANALYTICS" | "TABLE" | "GOAL";
   referenceId: string;
   tableId?: number;
 }

@@ -39,7 +39,7 @@ export default async function Home() {
   }
 
   // Fetch Dashboard Data
-  const { analyticsViews, tables } = await getDashboardInitialData();
+  const { analyticsViews, tables, goals } = await getDashboardInitialData();
 
   return (
     <div className="min-h-screen bg-muted/40 p-8" dir="rtl">
@@ -54,6 +54,7 @@ export default async function Home() {
         <DashboardClient
           initialAnalytics={analyticsViews}
           availableTables={tables}
+          availableGoals={goals}
           user={user}
         />
       </div>

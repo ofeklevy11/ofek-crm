@@ -66,18 +66,27 @@ export async function GET(
       console.error("Invalid schema JSON", e);
     }
 
-    // Get all records from the table - FILTERED BY COMPANY
-    const allRecords = await prisma.record.findMany({
-      where: {
-        tableId: tableId,
-        companyId: user.companyId,
-      },
-      orderBy: { createdAt: "desc" },
-      take: 200,
-    });
+    // OPTIMIZED: Use raw SQL with ILIKE to filter directly in DB
+    // instead of fetching 200 records and filtering in memory
+    // This is much more efficient for large tables
+    const searchPattern = `%${searchQuery}%`;
 
-    // Filter records based on search query in specified fields
-    const filteredRecords = allRecords.filter((record) => {
+    // Build SQL query that searches in specified JSON fields
+    // Using @> for JSONB containment or casting to text for ILIKE
+    const rawRecords = await prisma.$queryRaw<
+      { id: number; data: any; createdAt: Date }[]
+    >`
+      SELECT id, data, "createdAt" FROM "Record"
+      WHERE "tableId" = ${tableId}
+      AND "companyId" = ${user.companyId}
+      AND "data"::text ILIKE ${searchPattern}
+      ORDER BY "createdAt" DESC
+      LIMIT ${limit * 2}
+    `;
+
+    // Filter to ensure we only match specified search fields
+    // (the raw query is broader, so we refine here with minimal data)
+    const filteredRecords = rawRecords.filter((record) => {
       let data = record.data as any;
 
       if (typeof data === "string") {

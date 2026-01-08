@@ -30,6 +30,7 @@ const nurturePaths = [
     bg: "bg-pink-500/10",
     stats: "30% אחוזי המרה",
     href: "/nurture-hub/birthday",
+    comingSoon: true,
   },
   {
     id: "referral",
@@ -42,6 +43,7 @@ const nurturePaths = [
     bg: "bg-blue-500/10",
     stats: "גידול אורגני",
     href: "/nurture-hub/referral",
+    comingSoon: true,
   },
   {
     id: "upsell",
@@ -54,6 +56,7 @@ const nurturePaths = [
     bg: "bg-emerald-500/10",
     stats: "+15% להכנסות",
     href: "/nurture-hub/upsell",
+    comingSoon: true,
   },
   {
     id: "review",
@@ -66,6 +69,7 @@ const nurturePaths = [
     bg: "bg-amber-500/10",
     stats: "שיפור מוניטין",
     href: "/nurture-hub/review",
+    comingSoon: true,
   },
   {
     id: "renewal",
@@ -78,6 +82,7 @@ const nurturePaths = [
     bg: "bg-cyan-500/10",
     stats: "מניעת נטישה",
     href: "/nurture-hub/renewal",
+    comingSoon: true,
   },
   {
     id: "winback",
@@ -90,6 +95,7 @@ const nurturePaths = [
     bg: "bg-slate-500/10",
     stats: "הזדמנות שנייה",
     href: "/nurture-hub/winback",
+    comingSoon: true,
   },
   {
     id: "vip",
@@ -102,7 +108,7 @@ const nurturePaths = [
     bg: "bg-amber-500/10",
     stats: "לקוחות זהב",
     href: "/nurture-hub/vip",
-    // comingSoon removed
+    comingSoon: true,
   },
 ];
 
@@ -191,7 +197,8 @@ export default function NurtureHubPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {nurturePaths.map((path, index) => {
             const isComingSoon = (path as any).comingSoon;
-            const CardWrapper = isComingSoon ? "div" : Link;
+            // Updated to always be Link
+            const CardWrapper = Link;
 
             return (
               <CardWrapper
@@ -199,8 +206,8 @@ export default function NurtureHubPage() {
                 key={path.id}
                 className={cn(
                   "group relative block",
-                  isComingSoon &&
-                    "cursor-not-allowed grayscale-[0.5] opacity-90"
+                  // Removed cursor-not-allowed to allow clicking
+                  isComingSoon && "grayscale-[0.5] opacity-90"
                 )}
                 onMouseEnter={() => !isComingSoon && setHoveredCard(path.id)}
                 onMouseLeave={() => setHoveredCard(null)}
@@ -209,8 +216,8 @@ export default function NurtureHubPage() {
                 <div
                   className={cn(
                     "relative h-full bg-white rounded-3xl p-8 transition-all duration-300 border border-slate-100 overflow-hidden",
-                    !isComingSoon &&
-                      "hover:shadow-[0_20px_50px_rgba(0,0,0,0.1)] hover:-translate-y-2",
+                    // Use standard hover effect even if coming soon, or maybe slightly different
+                    "hover:shadow-[0_20px_50px_rgba(0,0,0,0.1)] hover:-translate-y-2",
                     isComingSoon && "bg-slate-50/50",
                     "flex flex-col justify-between"
                   )}
@@ -273,13 +280,13 @@ export default function NurtureHubPage() {
                         !isComingSoon && "group-hover:text-indigo-600"
                       )}
                     >
-                      {isComingSoon ? "בפיתוח..." : "הגדר מסלול"}
+                      {isComingSoon ? "בפיתוח... (לחץ לצפייה)" : "הגדר מסלול"}
                     </span>
                     <div
                       className={cn(
                         "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300",
                         isComingSoon
-                          ? "bg-slate-100 text-slate-300"
+                          ? "bg-slate-100 text-slate-300 group-hover:bg-slate-200 group-hover:text-slate-500"
                           : "bg-slate-50 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transform group-hover:rotate-180"
                       )}
                     >

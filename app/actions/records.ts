@@ -17,8 +17,12 @@ export async function getRecordsByTableId(tableId: number) {
       return { success: false, error: "אין לך הרשאה לצפות בטבלה זו" };
     }
 
+    // CRITICAL: Filter records by companyId for multi-tenancy
     const records = await prisma.record.findMany({
-      where: { tableId },
+      where: {
+        tableId,
+        companyId: user.companyId,
+      },
       orderBy: { createdAt: "desc" },
     });
     return { success: true, data: records };

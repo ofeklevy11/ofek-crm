@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const clientId = parseInt(id);
 
-    const client = await prisma.client.findUnique({
-      where: { id: clientId },
+    // CRITICAL: Filter by companyId
+    const client = await prisma.client.findFirst({
+      where: { id: clientId, companyId: user.companyId },
       include: {
         retainers: true,
         oneTimePayments: true,
@@ -37,9 +44,23 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const clientId = parseInt(id);
     const data = await request.json();
+
+    // CRITICAL: Verify client belongs to user's company
+    const existingClient = await prisma.client.findFirst({
+      where: { id: clientId, companyId: user.companyId },
+    });
+
+    if (!existingClient) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
 
     const updatedClient = await prisma.client.update({
       where: { id: clientId },
@@ -67,8 +88,22 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const clientId = parseInt(id);
+
+    // CRITICAL: Verify client belongs to user's company
+    const existingClient = await prisma.client.findFirst({
+      where: { id: clientId, companyId: user.companyId },
+    });
+
+    if (!existingClient) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
 
     // Delete all related records first (cascade delete)
     await prisma.$transaction([

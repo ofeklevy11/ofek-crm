@@ -3,5 +3,5 @@ import { ourFileRouter } from "./core";
 
 export const { GET, POST } = createRouteHandler({
   router: ourFileRouter,
-  config: { isDev: true },
+  config: { isDev: process.env.NODE_ENV === "development" },
 });

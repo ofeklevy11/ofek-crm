@@ -114,6 +114,9 @@ model Message {
   company    Company  @relation(fields: [companyId], references: [id])
   
   @@index([companyId])
+  @@index([senderId, receiverId, createdAt(sort: Desc)]) // For DM queries
+  @@index([groupId, createdAt(sort: Desc)])              // For group message queries
+  @@index([receiverId, read])                            // For unread counts
 }
 
 model Group {
@@ -171,6 +174,7 @@ model AutomationRule {
   company       Company     @relation(fields: [companyId], references: [id])
   
   @@index([companyId])
+  @@index([companyId, isActive, triggerType]) // For filtering active rules by trigger type
 }
 
 model Notification {
@@ -186,6 +190,7 @@ model Notification {
   company   Company  @relation(fields: [companyId], references: [id])
   
   @@index([companyId])
+  @@index([userId, read, createdAt(sort: Desc)]) // For user's unread notifications
 }
 
 model TableMeta {
@@ -257,6 +262,8 @@ model Record {
   multiEventDurations MultiEventDuration[]
   
   @@index([companyId])
+  @@index([tableId, companyId, createdAt(sort: Desc)]) // Composite index for table pagination
+  @@index([tableId, companyId])                        // For record filtering
 }
 
 model Attachment {
@@ -355,6 +362,8 @@ model Retainer {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   client      Client    @relation(fields: [clientId], references: [id])
+  
+  @@index([clientId]) // Foreign key index for client lookups
 }
 
 model OneTimePayment {
@@ -369,6 +378,8 @@ model OneTimePayment {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   client    Client    @relation(fields: [clientId], references: [id])
+  
+  @@index([clientId]) // Foreign key index for client lookups
 }
 
 model Transaction {
@@ -387,6 +398,8 @@ model Transaction {
   updatedAt   DateTime  @updatedAt
   user        User?     @relation(fields: [attemptedBy], references: [id])
   client      Client    @relation(fields: [clientId], references: [id])
+  
+  @@index([clientId]) // Foreign key index for client lookups
 }
 
 model PaymentMethodInternal {
@@ -484,6 +497,7 @@ model ViewFolder {
   id        Int      @id @default(autoincrement())
   companyId Int
   name      String
+  type      String   @default("ANALYTICS") // "ANALYTICS" | "AUTOMATION"
   order     Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -606,6 +620,7 @@ model Quote {
   @@unique([companyId, quoteNumber]) // Ensure unique quote number per company
   @@index([companyId])
   @@index([companyId, isTrashed])
+  @@index([companyId, isTrashed, createdAt(sort: Desc)]) // For listing non-trashed quotes
 }
 
 model QuoteItem {
@@ -655,6 +670,7 @@ model Ticket {
   company     Company  @relation(fields: [companyId], references: [id])
   
   @@index([companyId])
+  @@index([companyId, status])       // For filtering tickets by status
   @@index([clientId])
   @@index([assigneeId])
 }
@@ -672,6 +688,8 @@ model TicketComment {
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  
+  @@index([ticketId, createdAt(sort: Desc)]) // For loading comments in order
 }
 
 // Tracks all changes made to tickets for audit trail
@@ -799,6 +817,8 @@ model Goal {
   criticalThreshold  Int @default(50)   // % - Critical alert when below this
   
   isActive    Boolean  @default(true)
+  isArchived  Boolean  @default(false)
+  order       Int      @default(0)
   notes       String?
   
   createdAt   DateTime @default(now())
@@ -807,8 +827,10 @@ model Goal {
   company     Company  @relation(fields: [companyId], references: [id])
   
   @@index([companyId])
+  @@index([companyId, isActive, endDate]) // For listing active goals sorted by end date
   @@index([metricType])
   @@index([startDate, endDate])
+  @@index([companyId, order]) // For sorting by custom order
 }
 
 // DEDICATED FINANCE MODULE

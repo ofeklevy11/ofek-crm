@@ -29,36 +29,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
 
-    // Get all records from the table - FILTERED BY COMPANY
-    let records = await prisma.record.findMany({
-      where: { tableId: table.id, companyId: user.companyId },
-      select: {
-        id: true,
-        data: true,
-      },
-    });
+    // OPTIMIZED: Use raw SQL with ILIKE when searching to filter at DB level
+    // instead of fetching all records and filtering in memory
+    let records: { id: number; data: any }[];
 
-    // Filter records based on search query if provided
     if (searchQuery) {
-      records = records.filter((record) => {
-        let data = record.data as any;
-
-        // Ensure data is an object
-        if (typeof data === "string") {
-          try {
-            data = JSON.parse(data);
-          } catch (e) {
-            return false;
-          }
-        }
-
-        // Search in all string fields
-        return Object.values(data).some((value) => {
-          if (typeof value === "string") {
-            return value.toLowerCase().includes(searchQuery.toLowerCase());
-          }
-          return false;
-        });
+      const searchPattern = `%${searchQuery}%`;
+      records = await prisma.$queryRaw<{ id: number; data: any }[]>`
+        SELECT id, data FROM "Record"
+        WHERE "tableId" = ${table.id}
+        AND "companyId" = ${user.companyId}
+        AND "data"::text ILIKE ${searchPattern}
+        ORDER BY "createdAt" DESC
+        LIMIT 100
+      `;
+    } else {
+      records = await prisma.record.findMany({
+        where: { tableId: table.id, companyId: user.companyId },
+        select: {
+          id: true,
+          data: true,
+        },
+        orderBy: { createdAt: "desc" },
+        take: 100,
       });
     }
 

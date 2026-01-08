@@ -35,13 +35,13 @@ export async function createWorkflowInstance(data: {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  // Fetch the workflow to find the first stage
-  const workflow = await prisma.workflow.findUnique({
-    where: { id: data.workflowId },
+  // Fetch the workflow to find the first stage - VERIFY COMPANY OWNERSHIP
+  const workflow = await prisma.workflow.findFirst({
+    where: { id: data.workflowId, companyId: user.companyId },
     include: { stages: { orderBy: { order: "asc" }, take: 1 } },
   });
 
-  if (!workflow) throw new Error("Workflow not found");
+  if (!workflow) throw new Error("Workflow not found or access denied");
 
   const instance = await prisma.workflowInstance.create({
     data: {
@@ -68,14 +68,15 @@ export async function updateWorkflowInstanceStage(
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  const instance = await prisma.workflowInstance.findUnique({
-    where: { id: instanceId },
+  // CRITICAL: Verify instance belongs to user's company
+  const instance = await prisma.workflowInstance.findFirst({
+    where: { id: instanceId, companyId: user.companyId },
     include: {
       workflow: { include: { stages: { orderBy: { order: "asc" } } } },
     },
   });
 
-  if (!instance) throw new Error("Instance not found");
+  if (!instance) throw new Error("Instance not found or access denied");
 
   // Logic for checkbox:
   // If completed is true, we add stageId to completedStages.
@@ -132,6 +133,13 @@ export async function updateWorkflowInstanceStage(
 export async function deleteWorkflowInstance(instanceId: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+
+  // CRITICAL: Verify instance belongs to user's company before deletion
+  const instance = await prisma.workflowInstance.findFirst({
+    where: { id: instanceId, companyId: user.companyId },
+  });
+
+  if (!instance) throw new Error("Instance not found or access denied");
 
   await prisma.workflowInstance.delete({
     where: { id: instanceId },

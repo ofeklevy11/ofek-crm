@@ -41,8 +41,14 @@ export async function getTasks() {
 
 export async function getTaskById(id: string) {
   try {
-    const task = await prisma.task.findUnique({
-      where: { id },
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // SECURITY: Filter by companyId to prevent cross-tenant access
+    const task = await prisma.task.findFirst({
+      where: { id, companyId: user.companyId },
       include: {
         assignee: {
           select: {
@@ -151,9 +157,14 @@ export async function updateTask(
       updateData.dueDate = data.dueDate ? new Date(data.dueDate) : null;
     }
 
-    // Fetch old task to get previous status
-    const existingTask = await prisma.task.findUnique({
-      where: { id },
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // SECURITY: Fetch task with companyId filter to prevent cross-tenant access
+    const existingTask = await prisma.task.findFirst({
+      where: { id, companyId: user.companyId },
       include: {
         assignee: {
           select: {
@@ -169,10 +180,7 @@ export async function updateTask(
       return { success: false, error: "Task not found" };
     }
 
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, error: "Unauthorized" };
-    }
+    // User already fetched above for security check
 
     const canViewAll =
       user.role === "admin" || hasUserFlag(user, "canViewAllTasks");
@@ -258,6 +266,15 @@ export async function deleteTask(id: string) {
 
     if (!canDelete) {
       return { success: false, error: "אין לך הרשאה למחוק משימות" };
+    }
+
+    // SECURITY: Verify task belongs to user's company before deletion
+    const existingTask = await prisma.task.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+
+    if (!existingTask) {
+      return { success: false, error: "Task not found" };
     }
 
     await prisma.task.delete({

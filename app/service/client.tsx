@@ -120,6 +120,8 @@ export default function ServicePageClient({
     ).length,
   };
 
+  const [activeDragTicket, setActiveDragTicket] = useState<any>(null);
+
   const handleDragEnd = async (event: DragEndEvent) => {
     setActiveDragTicket(null);
     const { active, over } = event;
@@ -150,8 +152,6 @@ export default function ServicePageClient({
       }
     }
   };
-
-  const [activeDragTicket, setActiveDragTicket] = useState<any>(null);
 
   const onDragStart = (event: DragStartEvent) => {
     const ticketId = event.active.id as number;
