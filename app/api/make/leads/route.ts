@@ -3,6 +3,17 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
+    // 1. Authentication Check
+    const secret = process.env.MAKE_WEBHOOK_SECRET;
+    const authHeader = req.headers.get("x-api-secret");
+
+    if (!secret || authHeader !== secret) {
+      return NextResponse.json(
+        { error: "Unauthorized: Invalid or missing secret key" },
+        { status: 401 }
+      );
+    }
+
     const body = await req.json();
 
     // Extract table identifier and other system fields if necessary
