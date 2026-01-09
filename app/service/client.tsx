@@ -620,6 +620,7 @@ function TicketList({
             <th className="px-4 py-3 font-medium">נציג מטפל</th>
             <th className="px-4 py-3 font-medium">עדיפות</th>
             <th className="px-4 py-3 font-medium">נוצר בתאריך</th>
+            <th className="px-4 py-3 font-medium">עודכן בתאריך</th>
             <th className="px-4 py-3 font-medium w-10"></th>
           </tr>
         </thead>
@@ -668,6 +669,11 @@ function TicketList({
               </td>
               <td className="px-4 py-3 text-slate-500">
                 {format(new Date(ticket.createdAt), "d MMM, yyyy", {
+                  locale: he,
+                })}
+              </td>
+              <td className="px-4 py-3 text-slate-500">
+                {format(new Date(ticket.updatedAt), "d MMM, yyyy", {
                   locale: he,
                 })}
               </td>

@@ -102,6 +102,12 @@ export default async function Navbar() {
                       קבצים
                     </Link>
                   )}
+                  <Link
+                    href="/guides"
+                    className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[#4f95ff]/10 to-[#a24ec1]/10 hover:from-[#4f95ff]/20 hover:to-[#a24ec1]/20 text-[#a24ec1] text-sm font-medium border border-[#a24ec1]/20 transition-all whitespace-nowrap shadow-sm hover:shadow-md"
+                  >
+                    מדריכים
+                  </Link>
                   {hasUserFlag(user, "canViewChat") && <ChatNavbarLink />}
                 </>
               )}

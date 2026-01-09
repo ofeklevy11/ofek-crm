@@ -274,7 +274,12 @@ export default function RecordTable({
       return;
     }
 
-    const headers = ["ID", ...uniqueFields.map((f) => f.label), "Created At"];
+    const headers = [
+      "ID",
+      ...uniqueFields.map((f) => f.label),
+      "Created At",
+      "Updated At",
+    ];
     const csvContent = [headers.join(";")]
       .concat(
         recordsToExport.map((record) => {
@@ -286,6 +291,7 @@ export default function RecordTable({
               return `"${stringVal.replace(/"/g, '""')}"`;
             }),
             new Date(record.createdAt).toLocaleDateString(),
+            new Date(record.updatedAt).toLocaleDateString(),
           ];
           return row.join(";");
         })
@@ -320,7 +326,12 @@ export default function RecordTable({
       return;
     }
 
-    const headers = ["ID", ...uniqueFields.map((f) => f.label), "Created At"];
+    const headers = [
+      "ID",
+      ...uniqueFields.map((f) => f.label),
+      "Created At",
+      "Updated At",
+    ];
     const txtContent = [headers.join("\t")]
       .concat(
         recordsToExport.map((record) => {
@@ -331,6 +342,7 @@ export default function RecordTable({
               return String(val ?? "");
             }),
             new Date(record.createdAt).toLocaleDateString(),
+            new Date(record.updatedAt).toLocaleDateString(),
           ];
           return row.join("\t");
         })
@@ -628,6 +640,9 @@ export default function RecordTable({
                   <TableHead className="whitespace-nowrap text-center">
                     נוצר ב
                   </TableHead>
+                  <TableHead className="whitespace-nowrap text-center">
+                    עודכן בתאריך
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -861,6 +876,11 @@ export default function RecordTable({
                     <TableCell className="text-muted-foreground text-xs whitespace-nowrap text-center">
                       {record.createdAt
                         ? new Date(record.createdAt).toLocaleDateString("he-IL")
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs whitespace-nowrap text-center">
+                      {record.updatedAt
+                        ? new Date(record.updatedAt).toLocaleDateString("he-IL")
                         : "-"}
                     </TableCell>
                   </TableRow>

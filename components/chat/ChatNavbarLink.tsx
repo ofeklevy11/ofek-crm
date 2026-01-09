@@ -28,11 +28,11 @@ export default function ChatNavbarLink() {
   return (
     <Link
       href="/chat"
-      className="border-transparent text-black hover:border-gray-300 hover:text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium relative"
+      className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[#4f95ff]/10 to-blue-400/10 hover:from-[#4f95ff]/20 hover:to-blue-400/20 text-[#4f95ff] text-sm font-medium border border-[#4f95ff]/20 transition-all whitespace-nowrap shadow-sm hover:shadow-md flex items-center gap-2"
     >
       Chat
       {totalUnread > 0 && (
-        <span className="ml-1.5 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+        <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
           {totalUnread > 99 ? "99+" : totalUnread}
         </span>
       )}
