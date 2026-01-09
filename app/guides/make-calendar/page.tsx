@@ -19,11 +19,11 @@ export default function MakeCalendarGuide() {
   };
 
   const jsonExample = `{
-  "title": "פגישה עם לקוח - {{1.name}}",
-  "description": "טלפון: {{1.phone}}\\nנושא הפגישה: {{1.subject}}",
+  "title": "כותרת חופשית לבחירתכם",
+  "description": "תיאור חופשי לבחירתכם",
   "email": "your-email@example.com", 
-  "start_time": "2024-02-25T14:00:00",
-  "end_time": "2024-02-25T15:00:00",
+  "start_time": "2026-01-01T12:00:00+02:00",
+  "end_time": "2026-01-01T13:00:00+02:00",
   "color": "blue"
 }`;
 
@@ -170,11 +170,22 @@ export default function MakeCalendarGuide() {
             </h2>
             <Card>
               <CardContent className="pt-6 space-y-4">
+                <Alert className="bg-amber-100 border-amber-200 text-amber-900">
+                  <Info className="h-4 w-4 text-amber-700" />
+                  <AlertDescription className="font-bold">
+                    שימו לב: מומלץ להוסיף <code>+02:00</code> בסוף התאריך כדי
+                    לוודא שהשעה תואמת לשעון ישראל.
+                    <br />
+                    לדוגמה: <code>2026-01-01T12:00:00+02:00</code> יבטיח שהפגישה
+                    תהיה ב-12:00 בדיוק.
+                  </AlertDescription>
+                </Alert>
+
                 <Alert className="bg-blue-50 border-blue-200 text-blue-900">
                   <Info className="h-4 w-4 text-blue-600" />
                   <AlertDescription className="font-bold">
                     פורמט תאריכים: יש להקפיד על פורמט ISO-8601 מלא. לדוגמה:
-                    2024-02-25T14:30:00 (תאריך ושעה מופרדים ב-T)
+                    2026-01-01T12:00:00 (תאריך ושעה מופרדים ב-T)
                   </AlertDescription>
                 </Alert>
 

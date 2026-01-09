@@ -107,8 +107,8 @@ function GeneratorContent() {
           title: "כותרת חופשית לבחירתכם",
           description: "תיאור חופשי לבחירתכם",
           email: currentUserEmail || "admin@example.com",
-          start_time: "2026-01-01T12:00:00",
-          end_time: "2026-01-01T12:00:00",
+          start_time: "2026-01-01T12:00:00+02:00",
+          end_time: "2026-01-01T13:00:00+02:00",
           color: "blue",
         },
         null,
@@ -309,6 +309,19 @@ function GeneratorContent() {
                           שים לב: ערכי status ו-priority חייבים להיות באותיות
                           קטנות בלבד (lowercase)! שימוש באותיות גדולות יגרום
                           לשגיאה או להתעלמות מהערך.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {mode === "CALENDAR" && (
+                      <Alert className="bg-amber-100 border-amber-200 text-amber-900 mb-4">
+                        <Info className="h-4 w-4 text-amber-700" />
+                        <AlertDescription className="font-bold">
+                          שימו לב: מומלץ להוסיף <code>+02:00</code> בסוף התאריך
+                          כדי לוודא שהשעה תואמת לשעון ישראל.
+                          <br />
+                          לדוגמה: <code>2026-01-01T12:00:00+02:00</code> יבטיח
+                          שהפגישה תהיה ב-12:00 בדיוק.
                         </AlertDescription>
                       </Alert>
                     )}
