@@ -18,6 +18,7 @@ export function middleware(request: NextRequest) {
   // or if it's a static asset (nextjs internals, images, etc)
   if (
     publicPaths.includes(path) ||
+    path.startsWith("/api/make/") || // Allow Make webhooks to bypass cookie auth
     path.startsWith("/_next") ||
     path.startsWith("/static") ||
     path.includes(".") // naive check for files like favicon.ico, images
