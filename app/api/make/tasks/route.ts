@@ -62,7 +62,10 @@ export async function POST(req: Request) {
         status,
         priority,
         assigneeId: user.id, // Assign to the user found by email
-        dueDate: due_date ? new Date(due_date) : undefined,
+        dueDate:
+          due_date && due_date !== "YYYY-MM-DD" && !isNaN(Date.parse(due_date))
+            ? new Date(due_date)
+            : undefined,
       },
     });
 
