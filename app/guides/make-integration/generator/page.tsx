@@ -107,8 +107,8 @@ function GeneratorContent() {
           title: "כותרת חופשית לבחירתכם",
           description: "תיאור חופשי לבחירתכם",
           email: currentUserEmail || "admin@example.com",
-          start_time: "2026-01-01T12:00:00+02:00",
-          end_time: "2026-01-01T13:00:00+02:00",
+          start_time: "2026-01-01T12:00:00",
+          end_time: "2026-01-01T13:00:00",
           color: "blue",
         },
         null,
@@ -173,11 +173,8 @@ function GeneratorContent() {
       <main className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="flex items-center gap-2 mb-6 text-slate-500 hover:text-slate-800 transition-colors w-fit">
           <ArrowLeft className="w-4 h-4" />{" "}
-          <Link
-            href="/guides/make-integration"
-            className="flex items-center gap-2"
-          >
-            חזרה למדריך
+          <Link href="/guides" className="flex items-center gap-2">
+            חזרה למדריכים
           </Link>
         </div>
 
@@ -314,16 +311,25 @@ function GeneratorContent() {
                     )}
 
                     {mode === "CALENDAR" && (
-                      <Alert className="bg-amber-100 border-amber-200 text-amber-900 mb-4">
-                        <Info className="h-4 w-4 text-amber-700" />
-                        <AlertDescription className="font-bold">
-                          שימו לב: מומלץ להוסיף <code>+02:00</code> בסוף התאריך
-                          כדי לוודא שהשעה תואמת לשעון ישראל.
-                          <br />
-                          לדוגמה: <code>2026-01-01T12:00:00+02:00</code> יבטיח
-                          שהפגישה תהיה ב-12:00 בדיוק.
-                        </AlertDescription>
-                      </Alert>
+                      <div className="space-y-4 mb-4">
+                        <Alert className="bg-amber-100 border-amber-200 text-amber-900">
+                          <Info className="h-4 w-4 text-amber-700" />
+                          <AlertDescription className="font-bold">
+                            שימו לב: פורמט התאריך הוא ISO-8601 (שנה-חודש-יום).
+                            <br />
+                            לדוגמה: 2026-01-01T12:00:00 מייצג את ה-1 בינואר 2026
+                            בשעה 12:00 בצהריים.
+                          </AlertDescription>
+                        </Alert>
+
+                        <Alert className="bg-red-50 border-red-200 text-red-900">
+                          <Info className="h-4 w-4 text-red-600" />
+                          <AlertDescription className="font-bold">
+                            שדה email הוא קריטי! בלי אימייל תקין של משתמש קיים
+                            במערכת, הבקשה תיכשל.
+                          </AlertDescription>
+                        </Alert>
+                      </div>
                     )}
 
                     {/* JSON Section */}

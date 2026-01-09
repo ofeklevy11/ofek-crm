@@ -22,8 +22,8 @@ export default function MakeCalendarGuide() {
   "title": "כותרת חופשית לבחירתכם",
   "description": "תיאור חופשי לבחירתכם",
   "email": "your-email@example.com", 
-  "start_time": "2026-01-01T12:00:00+02:00",
-  "end_time": "2026-01-01T13:00:00+02:00",
+  "start_time": "2026-01-01T12:00:00",
+  "end_time": "2026-01-01T13:00:00",
   "color": "blue"
 }`;
 
@@ -173,11 +173,10 @@ export default function MakeCalendarGuide() {
                 <Alert className="bg-amber-100 border-amber-200 text-amber-900">
                   <Info className="h-4 w-4 text-amber-700" />
                   <AlertDescription className="font-bold">
-                    שימו לב: מומלץ להוסיף <code>+02:00</code> בסוף התאריך כדי
-                    לוודא שהשעה תואמת לשעון ישראל.
+                    שימו לב: פורמט התאריך הוא ISO-8601 (שנה-חודש-יום).
                     <br />
-                    לדוגמה: <code>2026-01-01T12:00:00+02:00</code> יבטיח שהפגישה
-                    תהיה ב-12:00 בדיוק.
+                    לדוגמה: 2026-01-01T12:00:00 מייצג את ה-1 בינואר 2026 בשעה
+                    12:00 בצהריים.
                   </AlertDescription>
                 </Alert>
 
