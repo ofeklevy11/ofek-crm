@@ -5,7 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowRight, Workflow } from "lucide-react";
+import { ArrowRight, Workflow, CheckSquare, Calendar } from "lucide-react";
 import Link from "next/link";
 
 export default function GuidesPage() {
@@ -18,6 +18,24 @@ export default function GuidesPage() {
       href: "/guides/make-integration",
       color: "text-purple-500",
       bgColor: "bg-purple-100",
+    },
+    {
+      title: "יצירת משימות אוטומטית",
+      description:
+        "למד כיצד לפתוח משימות בלוח המשימות ישירות מאוטומציות חיצוניות.",
+      icon: CheckSquare,
+      href: "/guides/make-tasks",
+      color: "text-blue-500",
+      bgColor: "bg-blue-100",
+    },
+    {
+      title: "יצירת אירועים ביומן",
+      description:
+        "למד כיצד ליצור פגישות ואירועים בלוח השנה באופן אוטומטי מכל מקור חיצוני.",
+      icon: Calendar,
+      href: "/guides/make-calendar",
+      color: "text-orange-500",
+      bgColor: "bg-orange-100",
     },
     // Future guides can be added here
   ];

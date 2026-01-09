@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { getTables } from "@/app/actions/tables";
+import { getCurrentAuthUser } from "@/app/actions/auth";
 import {
   Card,
   CardContent,
@@ -17,7 +19,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Copy, Check, ArrowLeft, Loader2, Database } from "lucide-react"; // ArrowLeft instead of ArrowRight for RTL back button
+import {
+  Copy,
+  Check,
+  ArrowLeft,
+  Loader2,
+  Database,
+  Info,
+  Calendar,
+} from "lucide-react";
 import Link from "next/link";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -29,28 +39,44 @@ interface SchemaField {
   // include other props if needed
 }
 
-export default function MakeRequestGenerator() {
+function GeneratorContent() {
+  const searchParams = useSearchParams();
+  const initialModeParam = searchParams.get("mode")?.toUpperCase();
+  const initialMode =
+    initialModeParam === "TASK" || initialModeParam === "CALENDAR"
+      ? (initialModeParam as "TASK" | "CALENDAR")
+      : "TABLE";
+
   const [tables, setTables] = useState<any[]>([]);
   const [selectedTableSlug, setSelectedTableSlug] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
 
-  const [mode, setMode] = useState<"TABLE" | "TASK">("TABLE");
+  const [mode, setMode] = useState<"TABLE" | "TASK" | "CALENDAR">(initialMode);
 
   useEffect(() => {
-    async function loadTables() {
+    async function loadData() {
       try {
-        const result = await getTables();
-        if (result.success && result.data) {
-          setTables(result.data);
+        const [tablesResult, userResult] = await Promise.all([
+          getTables(),
+          getCurrentAuthUser(),
+        ]);
+
+        if (tablesResult.success && tablesResult.data) {
+          setTables(tablesResult.data);
+        }
+
+        if (userResult.success && userResult.data) {
+          setCurrentUserEmail(userResult.data.email);
         }
       } catch (e) {
-        console.error("Failed to load tables", e);
+        console.error("Failed to load data", e);
       } finally {
         setLoading(false);
       }
     }
-    loadTables();
+    loadData();
   }, []);
 
   const handleCopy = (text: string) => {
@@ -66,9 +92,24 @@ export default function MakeRequestGenerator() {
           title: "משימה חדשה מאוטומציה",
           email: "{{1.email}}", // Required to identify user
           description: "{{1.description}}",
-          status: "OPEN",
-          priority: "MEDIUM",
+          status: "todo",
+          priority: "medium",
           due_date: "YYYY-MM-DD",
+        },
+        null,
+        2
+      );
+    }
+
+    if (mode === "CALENDAR") {
+      return JSON.stringify(
+        {
+          title: "כותרת חופשית לבחירתכם",
+          description: "תיאור חופשי לבחירתכם",
+          email: currentUserEmail || "admin@example.com",
+          start_time: "2026-01-01T12:00:00",
+          end_time: "2026-01-01T12:00:00",
+          color: "blue",
         },
         null,
         2
@@ -114,15 +155,24 @@ export default function MakeRequestGenerator() {
 
   const jsonOutput = generateJson();
 
+  const getApiUrl = () => {
+    switch (mode) {
+      case "TABLE":
+        return "https://your-domain.com/api/make/leads";
+      case "TASK":
+        return "https://your-domain.com/api/make/tasks";
+      case "CALENDAR":
+        return "https://your-domain.com/api/make/calendar";
+      default:
+        return "";
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50" dir="rtl">
       <main className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="flex items-center gap-2 mb-6 text-slate-500 hover:text-slate-800 transition-colors w-fit">
           <ArrowLeft className="w-4 h-4" />{" "}
-          {/* Should point right in RTL? No, left is 'back' usually, but in RTL typically arrow pointing to start of flow (right) is forward. standard back icons usually point 'backwards'. In RTL 'back' is Right. Let's start with ArrowRight for 'Back' in RTL if we strictly follow direction or just 'ArrowRight' logic. Actually, lucide-react ArrowRight points -> . In RTL layout, back is usually ->. Let's check typical usage. 
-           Wait, system instruction says dir="rtl".
-           Most RTL interfaces use right arrow for back.
-           */}
           <Link
             href="/guides/make-integration"
             className="flex items-center gap-2"
@@ -162,23 +212,41 @@ export default function MakeRequestGenerator() {
             >
               יצירת משימת מערכת
             </button>
+            <button
+              onClick={() => setMode("CALENDAR")}
+              className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
+                mode === "CALENDAR"
+                  ? "bg-white text-orange-600 shadow-sm"
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              יצירת אירוע יומן
+            </button>
           </div>
         </div>
 
         <Card className="border-slate-200 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              {mode === "TABLE" ? (
+              {mode === "TABLE" && (
                 <Database className="w-5 h-5 text-blue-600" />
-              ) : (
-                <Check className="w-5 h-5 text-purple-600" />
               )}
-              {mode === "TABLE" ? "בחר טבלה" : "הגדרות משימה"}
+              {mode === "TASK" && <Check className="w-5 h-5 text-purple-600" />}
+              {mode === "CALENDAR" && (
+                <Calendar className="w-5 h-5 text-orange-600" />
+              )}
+              {mode === "TABLE"
+                ? "בחר טבלה"
+                : mode === "TASK"
+                  ? "הגדרות משימה"
+                  : "הגדרות יומן"}
             </CardTitle>
             <CardDescription>
               {mode === "TABLE"
                 ? "בחר את הטבלה אליה תרצה להכניס נתונים. המערכת תזהה אוטומטית את העמודות."
-                : "מבנה קבוע ליצירת משימות במערכת המשימות הראשית."}
+                : mode === "TASK"
+                  ? "מבנה קבוע ליצירת משימות במערכת המשימות הראשית."
+                  : "מבנה קבוע ליצירת אירועים ביומן הפגישות."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -209,7 +277,9 @@ export default function MakeRequestGenerator() {
                   </Select>
                 )}
 
-                {(selectedTableSlug || mode === "TASK") && (
+                {(selectedTableSlug ||
+                  mode === "TASK" ||
+                  mode === "CALENDAR") && (
                   <div className="animate-in fade-in slide-in-from-top-4 duration-300 space-y-6">
                     {/* URL Section */}
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
@@ -220,24 +290,28 @@ export default function MakeRequestGenerator() {
                         className="flex items-center gap-2 bg-white border border-slate-300 rounded px-3 py-2 font-mono text-sm text-slate-600 break-all"
                         dir="ltr"
                       >
-                        <span className="flex-1">
-                          https://your-domain.com/api/make/
-                          {mode === "TABLE" ? "leads" : "tasks"}
-                        </span>
+                        <span className="flex-1">{getApiUrl()}</span>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6"
-                          onClick={() =>
-                            handleCopy(
-                              `https://your-domain.com/api/make/${mode === "TABLE" ? "leads" : "tasks"}`
-                            )
-                          }
+                          onClick={() => handleCopy(getApiUrl())}
                         >
                           <Copy className="w-3 h-3" />
                         </Button>
                       </div>
                     </div>
+
+                    {mode === "TASK" && (
+                      <Alert className="bg-red-50 border-red-200 text-red-900 mb-4">
+                        <Info className="h-4 w-4 text-red-600" />
+                        <AlertDescription className="font-bold">
+                          שים לב: ערכי status ו-priority חייבים להיות באותיות
+                          קטנות בלבד (lowercase)! שימוש באותיות גדולות יגרום
+                          לשגיאה או להתעלמות מהערך.
+                        </AlertDescription>
+                      </Alert>
+                    )}
 
                     {/* JSON Section */}
                     <div>
@@ -279,14 +353,59 @@ export default function MakeRequestGenerator() {
                             <code>{"{{1.email}}"}</code>). וודא שהם תואמים
                             לטריגר שלך ב-Scenario.
                           </>
-                        ) : (
+                        ) : mode === "TASK" ? (
                           <>
                             שים לב: השדה <code>email</code> הוא <b>חובה</b> כדי
                             לזהות את המשתמש וליצור את המשימה תחתיו.
                           </>
+                        ) : (
+                          <>
+                            שים לב: השדה <code>email</code> נשאב אוטומטית
+                            מהמשתמש המחובר, אך ניתן לעריכה ידנית אם תרצו לשייך
+                            למשתמש אחר.
+                          </>
                         )}
                       </AlertDescription>
                     </Alert>
+
+                    {mode === "TASK" && (
+                      <div
+                        className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4"
+                        dir="ltr"
+                      >
+                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-sm">
+                          <span className="font-bold block mb-2 text-slate-700">
+                            Status Options:
+                          </span>
+                          <ul className="space-y-1 text-slate-600 font-mono">
+                            <li>
+                              <span className="text-blue-600 font-bold">
+                                todo
+                              </span>{" "}
+                              - Default
+                            </li>
+                            <li>in_progress</li>
+                            <li>waiting_client</li>
+                            <li>completed_month</li>
+                          </ul>
+                        </div>
+                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-sm">
+                          <span className="font-bold block mb-2 text-slate-700">
+                            Priority Options:
+                          </span>
+                          <ul className="space-y-1 text-slate-600 font-mono">
+                            <li>low</li>
+                            <li>
+                              <span className="text-purple-600 font-bold">
+                                medium
+                              </span>{" "}
+                              - Default
+                            </li>
+                            <li>high</li>
+                          </ul>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -295,5 +414,19 @@ export default function MakeRequestGenerator() {
         </Card>
       </main>
     </div>
+  );
+}
+
+export default function MakeRequestGenerator() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        </div>
+      }
+    >
+      <GeneratorContent />
+    </Suspense>
   );
 }
