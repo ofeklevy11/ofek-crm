@@ -51,7 +51,11 @@ function GeneratorContent() {
   const [selectedTableSlug, setSelectedTableSlug] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  /* State for User Context */
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
+  const [currentUserCompanyId, setCurrentUserCompanyId] = useState<
+    number | null
+  >(null);
 
   const [mode, setMode] = useState<"TABLE" | "TASK" | "CALENDAR">(initialMode);
 
@@ -69,6 +73,7 @@ function GeneratorContent() {
 
         if (userResult.success && userResult.data) {
           setCurrentUserEmail(userResult.data.email);
+          setCurrentUserCompanyId(userResult.data.companyId);
         }
       } catch (e) {
         console.error("Failed to load data", e);
@@ -86,9 +91,12 @@ function GeneratorContent() {
   };
 
   const generateJson = () => {
+    const companyId = currentUserCompanyId || 1; // Fallback to 1 if not loaded, but should be loaded
+
     if (mode === "TASK") {
       return JSON.stringify(
         {
+          company_id: companyId,
           title: "משימה חדשה מאוטומציה",
           email: "{{1.email}}", // Required to identify user
           description: "{{1.description}}",
@@ -104,6 +112,7 @@ function GeneratorContent() {
     if (mode === "CALENDAR") {
       return JSON.stringify(
         {
+          company_id: companyId,
           title: "כותרת חופשית לבחירתכם",
           description: "תיאור חופשי לבחירתכם",
           email: currentUserEmail || "admin@example.com",
@@ -134,6 +143,7 @@ function GeneratorContent() {
 
     const jsonObj: Record<string, any> = {
       table_slug: table.slug,
+      company_id: companyId,
     };
 
     schema.forEach((field) => {

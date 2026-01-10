@@ -21,6 +21,7 @@ export default function MakeIntegrationGuide() {
 
   const jsonExample = `{
   "table_slug": "leads-2024",
+  "company_id": 1,
   "name": "{{1.full_name}}",
   "phone": "{{1.phone_number}}",
   "email": "{{1.email}}",
@@ -86,9 +87,16 @@ export default function MakeIntegrationGuide() {
                     .
                   </li>
                   <li>
+                    <strong>מפתח חברה (Company API Key):</strong> מפתח ייחודי
+                    לזיהוי החברה שלך. יש להוסיפו ב-Header.
+                  </li>
+                  <li>
+                    <strong>מזהה חברה (Company ID):</strong> מספר מזהה של החברה
+                    שלך במערכת (חובה בכל בקשה).
+                  </li>
+                  <li>
                     <strong>מזהה הטבלה (Table Slug):</strong> השם הייחודי של
-                    הטבלה אליה תרצה להכניס נתונים. ניתן למצוא אותו ב-Prisma
-                    Studio או בהגדרות הטבלה.
+                    הטבלה אליה תרצה להכניס נתונים.
                   </li>
                 </ul>
               </CardContent>
@@ -149,7 +157,7 @@ export default function MakeIntegrationGuide() {
                       <Info className="h-4 w-4 text-amber-600" />
                       <AlertTitle>חובה להוסיף!</AlertTitle>
                       <AlertDescription>
-                        בלי ה-Header הזה הבקשה תיחסם (שגיאה 401).
+                        בלי ה-Headers האלו הבקשה תיחסם (שגיאה 401).
                       </AlertDescription>
                     </Alert>
                     <div className="bg-slate-900 text-slate-50 p-4 rounded-lg font-mono text-sm">
@@ -157,10 +165,16 @@ export default function MakeIntegrationGuide() {
                         <span>Name</span>
                         <span>Value</span>
                       </div>
-                      <div className="flex justify-between border-t border-slate-700 pt-2">
+                      <div className="flex justify-between border-t border-slate-700 pt-2 pb-2">
                         <span className="text-cyan-400">x-api-secret</span>
                         <span className="text-green-400">
                           Your-Secret-Password
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-t border-slate-700 pt-2">
+                        <span className="text-cyan-400">x-company-api-key</span>
+                        <span className="text-green-400">
+                          your-company-api-key
                         </span>
                       </div>
                     </div>
@@ -184,9 +198,8 @@ export default function MakeIntegrationGuide() {
                   בשדה <strong>Request content</strong>, עליך להדביק את מבנה
                   ה-JSON הבא.
                   <br />
-                  הקפד להחליף את ה-<code>table_slug</code> בשם הטבלה האמיתי שלך,
-                  ואת הערכים המסולסלים <code>{"{{...}}"}</code> במשתנים הסגולים
-                  של Make.
+                  הקפד להחליף את ה-<code>table_slug</code> ואת ה-
+                  <code>company_id</code> בערכים האמיתיים שלך.
                 </p>
 
                 <div className="relative">
@@ -217,16 +230,15 @@ export default function MakeIntegrationGuide() {
                   <h4 className="font-semibold mb-2">דגשים חשובים:</h4>
                   <ul className="list-disc list-inside text-sm text-slate-600 space-y-1">
                     <li>
-                      המפתח <code>table_slug</code> הוא חובה.
+                      המפתחות <code>table_slug</code> ו-<code>company_id</code>{" "}
+                      הם <b>חובה</b>.
                     </li>
                     <li>
                       שאר המפתחות (כמו <code>name</code>, <code>email</code>)
-                      חייבים להיות תואמים לשמות המערכת (System Name) של העמודות
-                      ב-CRM.
+                      חייבים להיות תואמים לשמות המערכת של העמודות ב-CRM.
                     </li>
                     <li>
-                      אם תוסיף שדה שלא קיים ב-CRM, הוא יישמר בנתונים אבל לא יוצג
-                      בטבלה הראשית (אלא אם תוסיף לו עמודה).
+                      נתונים שלא תואמים עמודות קיימות יישמרו אך לא יוצגו בטבלה.
                     </li>
                   </ul>
                 </div>

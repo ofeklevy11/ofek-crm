@@ -23,7 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { LogOut, User as UserIcon, BadgeCheck } from "lucide-react";
+import { LogOut, User as UserIcon, BadgeCheck, Settings } from "lucide-react";
 
 export default function UserMenu({ user }: UserMenuProps) {
   if (!user) return null;
@@ -81,6 +81,17 @@ export default function UserMenu({ user }: UserMenuProps) {
             <DropdownMenuSeparator />
           </>
         )}
+
+        <DropdownMenuItem asChild>
+          <Link
+            href="/profile"
+            className="cursor-pointer gap-2 w-full flex items-center"
+          >
+            <Settings className="w-4 h-4" />
+            <span>פרופיל הגדרות</span>
+          </Link>
+        </DropdownMenuItem>
+
         <div className="p-2 space-y-1">
           <div className="flex justify-between items-center px-2 py-1.5 text-sm">
             <span className="text-muted-foreground flex items-center gap-2">

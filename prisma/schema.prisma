@@ -33,7 +33,7 @@ model Company {
   analyticsViews      AnalyticsView[]
   viewFolders         ViewFolder[]
   tableCategories     TableCategory[]
-
+  
   workflows           Workflow[]
   workflowInstances   WorkflowInstance[]
   products            Product[]
@@ -58,6 +58,8 @@ model Company {
 
   // Nurture Hub
   nurtureLists        NurtureList[]
+
+  apiKeys             ApiKey[]
 }
 
 model User {
@@ -90,12 +92,32 @@ model User {
   
   assignedTaskSheets   TaskSheet[]   @relation("TaskSheetAssignee")
   createdTaskSheets    TaskSheet[]   @relation("TaskSheetCreator")
+  createdApiKeys       ApiKey[]      @relation("KeyCreator")
   
   company              Company       @relation(fields: [companyId], references: [id])
   ticketComments       TicketComment[]
   ticketActivityLogs   TicketActivityLog[]
   
   @@index([companyId])
+}
+
+model ApiKey {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  key       String   @unique
+  name      String   // Description/Name for the key (e.g. "Zapier Main")
+  isActive  Boolean  @default(true)
+  
+  createdBy Int
+  creator   User     @relation("KeyCreator", fields: [createdBy], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company  @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@index([key])
 }
 
 model Message {
@@ -197,7 +219,7 @@ model TableMeta {
   id         Int      @id @default(autoincrement())
   companyId  Int
   name       String
-  slug       String   @unique
+  slug       String
   createdBy  Int
   schemaJson Json
   createdAt  DateTime @default(now())
@@ -211,6 +233,7 @@ model TableMeta {
   company    Company  @relation(fields: [companyId], references: [id])
   
   @@index([companyId])
+  @@unique([companyId, slug])
 }
 
 model TableCategory {
