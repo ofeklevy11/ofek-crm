@@ -22,6 +22,7 @@ import {
   GripVertical,
   AlertTriangle,
   Archive,
+  Info,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import TicketModal from "./ticket-modal";
@@ -172,6 +174,13 @@ export default function ServicePageClient({
           <p className="text-slate-600 mt-1 text-sm">
             ניהול קריאות שירות, שימור לקוחות ואוטומציות SLA במקום אחד.
           </p>
+          <Alert className="mt-4 bg-blue-50/50 border-blue-100 text-blue-900 w-fit py-2 items-center">
+            <Info className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-xs font-medium">
+              על מנת להפעיל את הSLA נצרך להפעיל cron jobs ועל מנת להפעיל cron
+              job צריך לשדרג מ-Hobby ל-Pro ב-Vercel
+            </AlertDescription>
+          </Alert>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/service/sla-breaches">
