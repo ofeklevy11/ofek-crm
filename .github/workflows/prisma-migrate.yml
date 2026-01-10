@@ -2,12 +2,11 @@ name: Prisma Migrate (Production)
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 concurrency:
-  group: prisma-migrate-production
-  cancel-in-progress: false
+  group: prisma-migrate
+  cancel-in-progress: true
 
 jobs:
   migrate:
