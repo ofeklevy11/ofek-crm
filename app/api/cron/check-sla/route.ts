@@ -14,14 +14,11 @@ import { checkSlaBreaches } from "@/app/actions/sla-check";
  */
 export async function GET(request: Request) {
   // Optional: Security check for production
-  const { searchParams } = new URL(request.url);
-  const key = searchParams.get("key");
-
-  // Uncomment and set your secret in production:
-  // const CRON_SECRET = process.env.CRON_SECRET;
-  // if (CRON_SECRET && key !== CRON_SECRET) {
-  //   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  // }
+  // Security: Verify CRON_SECRET check from Vercel
+  const authHeader = request.headers.get("authorization");
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   console.log("[CRON] SLA check triggered at", new Date().toISOString());
 

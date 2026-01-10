@@ -19,6 +19,7 @@ export function middleware(request: NextRequest) {
   if (
     publicPaths.includes(path) ||
     path.startsWith("/api/make/") || // Allow Make webhooks to bypass cookie auth
+    path.startsWith("/api/cron/") || // Allow Cron jobs to bypass cookie auth (secured in route)
     path.startsWith("/_next") ||
     path.startsWith("/static") ||
     path.includes(".") // naive check for files like favicon.ico, images

@@ -32,6 +32,7 @@ export const USER_FLAGS = [
   { key: "canViewChat", label: "גישה לצ׳אט" },
   { key: "canViewWorkers", label: "גישה לניהול עובדים" },
   { key: "canViewUsers", label: "גישה לניהול משתמשים" },
+  { key: "canViewGuides", label: "גישה למדריכים" },
 
   { key: "canCreateTasks", label: "יצירת משימות" },
   { key: "canViewAllTasks", label: "צפייה בכל המשימות" },

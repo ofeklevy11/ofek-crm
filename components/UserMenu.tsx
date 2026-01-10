@@ -1,10 +1,3 @@
-// "use client"; // Not needed if using Shadcn which is client side by default mostly? No, DropdownMenuTrigger is client. But UserMenu needs to be client?
-// Wait, UserMenu.tsx previously had "use client". I removed it in the full replacement?
-// Ah, the replacement content started with imports, but the original file had "use client" at line 1.
-// I replaced from line 11. So lines 1-10 are still there.
-// Lines 3 was `import { useState, useRef, useEffect } from "react";`
-// I need to clean up imports.
-
 "use client";
 
 import { User } from "@/lib/permissions";
@@ -99,13 +92,6 @@ export default function UserMenu({ user }: UserMenuProps) {
               תפקיד
             </span>
             <span className="font-medium">{getRoleLabel(user.role)}</span>
-          </div>
-          <div className="flex justify-between items-center px-2 py-1.5 text-sm">
-            <span className="text-muted-foreground flex items-center gap-2">
-              <UserIcon className="w-4 h-4" />
-              מזהה
-            </span>
-            <span className="font-mono text-xs">{user.id}</span>
           </div>
         </div>
         <DropdownMenuSeparator />
