@@ -173,7 +173,7 @@ export default function AddViewModal({
           {/* View Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              שם התצוגה <span className="text-red-500">*</span>
+              שם התצוגה <span className="text-red-600">*</span>
             </label>
             <input
               type="text"
