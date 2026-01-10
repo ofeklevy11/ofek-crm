@@ -129,7 +129,7 @@ export default function AIAnalyticsCreator({
       setGeneratedView(data.view);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "שגיאה ביצירת התצוגה. אנא נסה שוב.");
+      setError(err.message || "שגיאה ביצירת התצוגה אנא נסה שוב.");
     } finally {
       setLoading(false);
     }
