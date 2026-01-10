@@ -50,7 +50,7 @@ export default function AlertDialog({
               onConfirm();
             }}
             className={
-              isDestructive ? "bg-red-600 hover:bg-red-700 text-white" : ""
+              isDestructive ? "bg-red-600 hover:bg-red-600 text-white" : ""
             }
           >
             {confirmText}
