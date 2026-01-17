@@ -32,7 +32,7 @@ import { processMultiEventDurationTrigger } from "./multi-event-automations";
 
 ```typescript
   } catch (error) {
-    console.error("Error processing record update automations:", error);
+    console.error("Error processing record update automations", error);
   }
 }
 ```
