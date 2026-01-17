@@ -21,7 +21,7 @@ export default async function Home() {
             <div className="space-y-6">
               <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-blue-50 text-[#4f95ff] rounded-full text-sm font-semibold w-fit">
                 <Zap className="w-4 h-4" />
-                <span>מערכת חכמה לניהול העסק</span>
+                <span>מערכת CRM חכמה לניהול העסק</span>
               </div>
 
               <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight">
