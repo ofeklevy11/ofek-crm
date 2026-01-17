@@ -76,6 +76,7 @@ model User {
   tablePermissions     Json?         @default("{}") // { [tableId]: "read" | "write" }
   auditLogs            AuditLog[]
   records              Record[]      @relation("CreatedBy")
+  updatedRecords       Record[]      @relation("UpdatedBy")
   tables               TableMeta[]   @relation("CreatedBy")
   transactions         Transaction[]
   notifications        Notification[]
@@ -278,9 +279,11 @@ model Record {
   attachments Attachment[]
   auditLogs   AuditLog[]
   creator     User?        @relation("CreatedBy", fields: [createdBy], references: [id])
+  updater     User?        @relation("UpdatedBy", fields: [updatedBy], references: [id])
   table       TableMeta    @relation("TableRecords", fields: [tableId], references: [id])
   company     Company      @relation(fields: [companyId], references: [id])
   
+  files       File[]
   statusDurations StatusDuration[]
   multiEventDurations MultiEventDuration[]
   
@@ -808,8 +811,12 @@ model File {
   folder    Folder?  @relation(fields: [folderId], references: [id])
   company   Company  @relation(fields: [companyId], references: [id])
 
+  recordId  Int?
+  record    Record?  @relation(fields: [recordId], references: [id], onDelete: SetNull)
+
   @@index([companyId])
   @@index([folderId])
+  @@index([recordId])
 }
 
 // Goal Planning Module

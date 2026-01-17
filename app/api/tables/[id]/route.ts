@@ -133,6 +133,25 @@ export async function DELETE(
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
 
+    // Check for associated files
+    const fileCount = await prisma.file.count({
+      where: {
+        record: {
+          tableId: parseInt(id),
+        },
+      },
+    });
+
+    if (fileCount > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "לא ניתן למחוק את הטבלה כיוון שיש רשומות עם קבצים מצורפים. יש למחוק את הקבצים תחילה (מספריית הקבצים או מהרשומות).",
+        },
+        { status: 400 }
+      );
+    }
+
     // Delete all records first
     await prisma.record.deleteMany({
       where: { tableId: parseInt(id) },
@@ -144,8 +163,18 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error deleting table:", error);
+    if (error.code === "P2003") {
+      return NextResponse.json(
+        {
+          error:
+            "לא ניתן למחוק את הטבלה כיוון שיש לה קבצים מצורפים / לינקים (Attachments) או מידע מקושר אחר. יש למחוק את הלינקים והרשומות באופן ידני לפני מחיקת הטבלה.",
+        },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to delete table" },
       { status: 500 }

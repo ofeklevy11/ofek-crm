@@ -38,8 +38,12 @@ export async function GET(
       orderBy: { createdAt: "desc" },
       include: {
         creator: {
-          select: { name: true, email: true },
+          select: { id: true, name: true, email: true },
         },
+        updater: {
+          select: { id: true, name: true, email: true },
+        },
+        attachments: true,
       },
     });
 
@@ -93,6 +97,14 @@ export async function POST(
         companyId: currentUser.companyId,
         data: data || {},
         createdBy: currentUser.id,
+        attachments: {
+          create: body.attachments?.map((att: any) => ({
+            filename: att.filename,
+            url: att.url,
+            size: 0,
+            uploadedBy: currentUser.id,
+          })),
+        },
       },
     });
 

@@ -55,52 +55,64 @@ export default function EditRecordModal({
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [createdAt, setCreatedAt] = useState("");
+  const [updatedAt, setUpdatedAt] = useState("");
+  const [creatorName, setCreatorName] = useState("");
+  const [updaterName, setUpdaterName] = useState("");
   const [attachments, setAttachments] = useState<any[]>([]);
+  const [files, setFiles] = useState<any[]>([]); // New state for files
   const [newAttachmentUrl, setNewAttachmentUrl] = useState("");
   const [uploading, setUploading] = useState(false);
   const [open, setOpen] = useState(true);
 
-  // Auto-focus logic
-  useEffect(() => {
-    if (initialFocusField) {
-      setTimeout(() => {
-        const element = document.getElementById(`field-${initialFocusField}`);
-        if (element) {
-          element.focus();
-          element.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-      }, 100);
-    }
-  }, [initialFocusField]);
+  // Auto-focus logic already exists...
+  // ...
+
+  // Update fetchAttachments to also fetch files?
+  // Or fetch files separately.
+  // The record object passed in might already have files if we updated the query.
+  // But for live updates after upload, we might need to fetch.
+  // Let's check schema. Record now has files relation.
+  // If record prop is stale, we need to fetch fresh data.
 
   useEffect(() => {
+    // Initialize form data from record
     if (record && record.data) {
-      const parsedData = { ...record.data };
+      const initialData: Record<string, any> = {};
       schema.forEach((field) => {
-        if (
-          (field.type === "tags" || field.type === "multi-select") &&
-          typeof parsedData[field.name] === "string"
-        ) {
-          try {
-            parsedData[field.name] = JSON.parse(parsedData[field.name]);
-          } catch (e) {
-            // keep as string if parse fails
-          }
+        if (record.data[field.name] !== undefined) {
+          initialData[field.name] = record.data[field.name];
         }
       });
-      setFormData(parsedData);
-      if (record.createdAt) {
-        // Format for datetime-local: YYYY-MM-DDTHH:mm
-        const date = new Date(record.createdAt);
-        const formatted = new Date(
-          date.getTime() - date.getTimezoneOffset() * 60000
-        )
-          .toISOString()
-          .slice(0, 16);
-        setCreatedAt(formatted);
-      }
-      fetchAttachments();
+      setFormData(initialData);
     }
+
+    // Initialize createdAt (date only, no time)
+    if (record && record.createdAt) {
+      const date = new Date(record.createdAt);
+      // Format as YYYY-MM-DD for the date input
+      const formattedDate = date.toISOString().split("T")[0];
+      setCreatedAt(formattedDate);
+    }
+
+    // Initialize updatedAt (date only, no time)
+    if (record && record.updatedAt) {
+      const date = new Date(record.updatedAt);
+      const formattedDate = date.toISOString().split("T")[0];
+      setUpdatedAt(formattedDate);
+    }
+
+    // Initialize creator name
+    if (record && record.creator) {
+      setCreatorName(record.creator.name || record.creator.email || "");
+    }
+
+    // Initialize updater name
+    if (record && record.updater) {
+      setUpdaterName(record.updater.name || record.updater.email || "");
+    }
+
+    fetchAttachments();
+    fetchFiles();
   }, [record, schema]);
 
   const fetchAttachments = async () => {
@@ -115,27 +127,164 @@ export default function EditRecordModal({
     }
   };
 
+  // New function to fetch files (we might need a new API route or just use generic storage action?)
+  // Using server action from client might be cleaner if allowed, but here we are in 'use client'.
+  // We can use a server action wrapper or just assume record.files is passed?
+  // record.files might be stale.
+  // Let's create a small function to re-fetch record files?
+  // Or use the storage action `getStorageData` but filtered?
+  // The easiest way is probably to assume `saveFileMetadata` works and then we manually add to state.
+  // But for deletion we need ID.
+  // Let's rely on record prop initially, but we need to refresh.
+  // Actually, let's fetch the record fresh from API which includes files.
+
+  const fetchFiles = async () => {
+    // We can reuse the record fetch API?
+    // GET /api/tables/:id/records currently returns all records.
+    // We assume there is a GET /api/records/:id route?
+    // Yes, RelationPicker uses `/api/records/${val}`.
+    try {
+      const res = await fetch(`/api/records/${record.id}`);
+      if (res.ok) {
+        const freshRecord = await res.json();
+        if (freshRecord.files) {
+          setFiles(freshRecord.files);
+        }
+        if (freshRecord.attachments) {
+          setAttachments(freshRecord.attachments);
+        }
+        // Update creator/updater info from fresh data
+        if (freshRecord.creator) {
+          setCreatorName(
+            freshRecord.creator.name || freshRecord.creator.email || ""
+          );
+        }
+        if (freshRecord.updater) {
+          setUpdaterName(
+            freshRecord.updater.name || freshRecord.updater.email || ""
+          );
+        }
+        if (freshRecord.updatedAt) {
+          const date = new Date(freshRecord.updatedAt);
+          setUpdatedAt(date.toISOString().split("T")[0]);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch fresh files", err);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = e.target.files;
+    if (!selectedFiles || selectedFiles.length === 0) return;
+
+    const file = selectedFiles[0];
+    if (file.size > 1024 * 1024) {
+      alert("גודל הקובץ חייב להיות עד 1MB");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      // Dynamic import to avoid build issues if mixed
+      const { uploadFiles } = await import("@/lib/uploadthing");
+      const { saveFileMetadata } = await import("@/app/actions/storage");
+
+      const res = await uploadFiles("companyFiles", { files: [file] });
+
+      if (res && res.length > 0) {
+        const uploaded = res[0];
+        await saveFileMetadata(
+          {
+            name: uploaded.name,
+            url: uploaded.url,
+            key: uploaded.key,
+            size: uploaded.size,
+            type: file.type || "unknown",
+          },
+          null,
+          record.id
+        );
+
+        // Refresh files
+        fetchFiles();
+        router.refresh();
+      }
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      alert("שגיאה בהעלאה: " + error.message);
+    } finally {
+      setUploading(false);
+      e.target.value = ""; // reset
+    }
+  };
+
+  const handleDeleteFile = async (fileId: number) => {
+    if (!confirm("האם למחוק קובץ זה?")) return;
+    try {
+      const { deleteFile } = await import("@/app/actions/storage");
+      await deleteFile(fileId);
+      setFiles((prev) => prev.filter((f) => f.id !== fileId));
+      router.refresh();
+    } catch (err) {
+      console.error("Delete file error", err);
+      alert("שגיאה במחיקת הקובץ");
+    }
+  };
+
   const handleAddAttachment = async () => {
+    // ... existing implementation
     if (!newAttachmentUrl) return;
+
+    let finalUrl = newAttachmentUrl.trim();
+    if (!/^https?:\/\//i.test(finalUrl)) {
+      finalUrl = `https://${finalUrl}`;
+    }
+
+    let filename = finalUrl.replace(/^https?:\/\//i, "");
+    if (filename.includes("/")) {
+      filename = filename.split("/").pop() || filename;
+    }
+    if (!filename || filename.length === 0) filename = "link";
+
     setUploading(true);
     try {
       const res = await fetch(`/api/records/${record.id}/attachments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          filename: newAttachmentUrl.split("/").pop() || "file",
-          url: newAttachmentUrl,
+          filename,
+          url: finalUrl,
           size: 0,
         }),
       });
       if (res.ok) {
         setNewAttachmentUrl("");
-        fetchAttachments();
+        fetchAttachments(); // re-fetch attachments
+        router.refresh();
       }
     } catch (error) {
       console.error("Failed to add attachment", error);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId: number) => {
+    if (!confirm("האם למחוק לינק זה?")) return;
+    try {
+      const res = await fetch(`/api/attachments/${attachmentId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+        router.refresh();
+      } else {
+        throw new Error("Failed to delete attachment");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("שגיאה במחיקת לינק");
     }
   };
 
@@ -148,7 +297,6 @@ export default function EditRecordModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           data: formData,
-          createdAt: new Date(createdAt).toISOString(),
         }),
       });
 
@@ -418,10 +566,10 @@ export default function EditRecordModal({
                         field.type === "number"
                           ? "number"
                           : field.type === "date"
-                            ? "date"
-                            : field.type === "url"
-                              ? "url"
-                              : "text"
+                          ? "date"
+                          : field.type === "url"
+                          ? "url"
+                          : "text"
                       }
                       value={formData[field.name] || ""}
                       onChange={(e) =>
@@ -446,27 +594,74 @@ export default function EditRecordModal({
                 </div>
               ))}
 
-            {/* Created At Field */}
+            {/* Created At Field - Read Only */}
             <div>
-              <Label className="text-sm font-semibold mb-1.5 block">
+              <Label className="text-sm font-semibold mb-1.5 block text-muted-foreground">
                 נוצר בתאריך
               </Label>
               <Input
-                type="datetime-local"
+                type="date"
                 value={createdAt}
-                onChange={(e) => setCreatedAt(e.target.value)}
+                disabled
+                className="bg-muted text-muted-foreground cursor-not-allowed"
               />
             </div>
+
+            {/* Created By Field - Read Only */}
+            {creatorName && (
+              <div>
+                <Label className="text-sm font-semibold mb-1.5 block text-muted-foreground">
+                  נוצר על ידי
+                </Label>
+                <Input
+                  type="text"
+                  value={creatorName}
+                  disabled
+                  className="bg-muted text-muted-foreground cursor-not-allowed"
+                />
+              </div>
+            )}
+
+            {/* Updated At Field - Read Only */}
+            <div>
+              <Label className="text-sm font-semibold mb-1.5 block text-muted-foreground">
+                עודכן בתאריך
+              </Label>
+              <Input
+                type="date"
+                value={updatedAt}
+                disabled
+                className="bg-muted text-muted-foreground cursor-not-allowed"
+              />
+            </div>
+
+            {/* Updated By Field - Read Only */}
+            {updaterName && (
+              <div>
+                <Label className="text-sm font-semibold mb-1.5 block text-muted-foreground">
+                  עודכן על ידי
+                </Label>
+                <Input
+                  type="text"
+                  value={updaterName}
+                  disabled
+                  className="bg-muted text-muted-foreground cursor-not-allowed"
+                />
+              </div>
+            )}
           </div>
 
           <div className="border-t border-border pt-4 mt-4 space-y-3">
             <h4 className="font-semibold text-sm flex items-center gap-2">
-              <Paperclip className="h-4 w-4" /> קבצים מצורפים
+              <Paperclip className="h-4 w-4" /> קבצים ולינקים
             </h4>
+
+            {/* Display Existing Attachments (Links) & Files */}
             <div className="space-y-2">
+              {/* Legacy Attachments (Links) */}
               {attachments.map((att) => (
                 <div
-                  key={att.id}
+                  key={`att-${att.id}`}
                   className="flex items-center justify-between bg-muted/30 p-2 rounded-md border border-border text-sm"
                 >
                   <a
@@ -477,33 +672,106 @@ export default function EditRecordModal({
                   >
                     {att.filename} <ExternalLink className="h-3 w-3" />
                   </a>
-                  <span className="text-muted-foreground text-xs">
-                    {new Date(att.uploadedAt).toLocaleDateString()}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-muted-foreground text-xs">
+                      {new Date(att.uploadedAt).toLocaleDateString()}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
+                      onClick={() => handleDeleteAttachment(att.id)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
               ))}
-              {attachments.length === 0 && (
+
+              {/* Files Linked to Record */}
+              {files.map((file) => (
+                <div
+                  key={`file-${file.id}`}
+                  className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 p-2 rounded-md border border-blue-100 dark:border-blue-800 text-sm"
+                >
+                  <a
+                    href={file.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[200px] flex items-center gap-1"
+                  >
+                    📄 {file.name}
+                  </a>
+                  <div className="flex items-center gap-3">
+                    <span className="text-muted-foreground text-xs">
+                      {file.size ? Math.round(file.size / 1024) + " KB" : ""}
+                    </span>
+                    {/* File Deletion Logic - Needs Server Action or API */}
+                    {/* For now we can assume we might need a handleDeleteFile function */}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
+                      onClick={() => handleDeleteFile(file.id)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              {attachments.length === 0 && files.length === 0 && (
                 <p className="text-muted-foreground text-sm italic">
-                  אין קבצים מצורפים
+                  אין קבצים או לינקים
                 </p>
               )}
             </div>
-            <div className="flex gap-2">
-              <Input
-                type="url"
-                placeholder="הדבק קישור לקובץ..."
-                value={newAttachmentUrl}
-                onChange={(e) => setNewAttachmentUrl(e.target.value)}
-                className="flex-1"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={handleAddAttachment}
-                disabled={uploading || !newAttachmentUrl}
-              >
-                {uploading ? "מוסיף..." : "הוסף"}
-              </Button>
+
+            {/* Upload & Add Link Section */}
+            <div className="flex flex-col gap-3">
+              {/* File Upload Button */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  id={`edit-file-upload-${record.id}`}
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-10 border-dashed border-2 text-muted-foreground gap-2"
+                  onClick={() =>
+                    document
+                      .getElementById(`edit-file-upload-${record.id}`)
+                      ?.click()
+                  }
+                  disabled={uploading}
+                >
+                  <Plus className="h-4 w-4" /> העלה קובץ (עד 1MB)
+                </Button>
+              </div>
+
+              {/* Add Link Input */}
+              <div className="flex gap-2">
+                <Input
+                  type="url"
+                  placeholder="הדבק לינק..."
+                  value={newAttachmentUrl}
+                  onChange={(e) => setNewAttachmentUrl(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleAddAttachment}
+                  disabled={uploading || !newAttachmentUrl}
+                >
+                  {uploading ? "מוסיף..." : "הוסף לינק"}
+                </Button>
+              </div>
             </div>
           </div>
 

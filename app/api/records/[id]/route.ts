@@ -2,6 +2,60 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const recordId = parseInt(id);
+
+    if (isNaN(recordId)) {
+      return NextResponse.json({ error: "Invalid record ID" }, { status: 400 });
+    }
+
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    // CRITICAL: Filter by companyId
+    const record = await prisma.record.findFirst({
+      where: {
+        id: recordId,
+        companyId: currentUser.companyId,
+      },
+      include: {
+        creator: {
+          select: { id: true, name: true, email: true },
+        },
+        updater: {
+          select: { id: true, name: true, email: true },
+        },
+        files: true,
+        attachments: true,
+      },
+    });
+
+    if (!record) {
+      return NextResponse.json({ error: "Record not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(record);
+  } catch (error) {
+    console.error("Error fetching record:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch record" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

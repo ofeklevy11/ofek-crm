@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { uploadFiles } from "@/lib/uploadthing";
+import { saveFileMetadata } from "@/app/actions/storage";
 import RelationPicker from "./RelationPicker";
 import {
   Dialog,
@@ -16,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Plus, X, Save, RotateCw } from "lucide-react";
+import { Plus, X, Save, RotateCw, Trash2 } from "lucide-react";
 
 interface SchemaField {
   name: string;
@@ -44,6 +46,11 @@ export default function AddRecordForm({
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<Record<string, any>>({});
+  // Enhanced state for files and links
+  const [attachmentsData, setAttachmentsData] = useState<
+    Array<{ url: string; filename: string; isLink: boolean; file?: File }>
+  >([]);
+  const [newAttachmentUrl, setNewAttachmentUrl] = useState("");
 
   // Initialize default values when opening
   const handleOpen = () => {
@@ -54,22 +61,125 @@ export default function AddRecordForm({
       }
     });
     setFormData(defaults);
+    setAttachmentsData([]);
+    setNewAttachmentUrl("");
     setIsOpen(true);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    if (file.size > 1024 * 1024) {
+      alert("הקובץ גדול מדי (מקסימום 1MB)");
+      return;
+    }
+    setAttachmentsData((prev) => [
+      ...prev,
+      {
+        url: "", // Will be filled after upload
+        filename: file.name,
+        isLink: false,
+        file: file,
+      },
+    ]);
+    // Reset input
+    e.target.value = "";
+  };
+
+  const handleAddAttachment = () => {
+    if (!newAttachmentUrl) return;
+
+    let finalUrl = newAttachmentUrl.trim();
+    // Regex to check if protocol exists
+    if (!/^https?:\/\//i.test(finalUrl)) {
+      finalUrl = `https://${finalUrl}`;
+    }
+
+    // Simple filename extraction
+    // Remove protocol for filename display if needed, or just take the host/path
+    let filename = finalUrl.replace(/^https?:\/\//i, "");
+    if (filename.includes("/")) {
+      filename = filename.split("/").pop() || filename;
+    }
+    // Fallback if empty/weird
+    if (!filename || filename.length === 0) filename = "link";
+
+    setAttachmentsData((prev) => [
+      ...prev,
+      { url: finalUrl, filename, isLink: true },
+    ]);
+    setNewAttachmentUrl("");
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachmentsData((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
+      // 1. Create the record first to get an ID
+      // We'll send attachments (links) directly here if the API continues to support it in the same call
+      // Or we create record first then add files.
+      // Based on current implementation, API accepts attachments array.
+      // We will filter out purely file-based attachments for now, and handle them after record creation?
+      // Actually, standard attachments (links) are just {url, filename}.
+      // Files need to be uploaded to storage, then saved as File (and maybe Attachment if we keep using it for links?)
+
+      const links = attachmentsData
+        .filter((a) => a.isLink)
+        .map((a) => ({ url: a.url, filename: a.filename }));
+
       const res = await fetch(`/api/tables/${tableId}/records`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           data: formData,
+          attachments: links, // Only legacy links sent here initially
         }),
       });
 
       if (!res.ok) throw new Error("Failed to create record");
+
+      const newRecord = await res.json();
+
+      // 2. Handle File Uploads
+      const filesToUpload = attachmentsData.filter((a) => !a.isLink && a.file);
+      if (filesToUpload.length > 0) {
+        // Upload sequentially or parallel? Parallel is fine.
+        // Note: using client-side uploadFiles
+        const validFiles = filesToUpload
+          .map((a) => a.file)
+          .filter((f): f is File => !!f);
+
+        if (validFiles.length > 0) {
+          const uploadRes = await uploadFiles("companyFiles", {
+            files: validFiles,
+          });
+
+          // Now save metadata linked to this record
+          // We need to map upload results back to the record
+          if (uploadRes && uploadRes.length > 0) {
+            await Promise.all(
+              uploadRes.map((uploaded) =>
+                saveFileMetadata(
+                  {
+                    name: uploaded.name,
+                    url: uploaded.url,
+                    key: uploaded.key,
+                    size: uploaded.size,
+                    type: "unknown", // We could get type from original file if needed
+                  },
+                  null,
+                  newRecord.id
+                )
+              )
+            );
+          }
+        }
+      }
 
       setFormData({});
       setIsOpen(false);
@@ -107,7 +217,7 @@ export default function AddRecordForm({
             <form
               id="add-record-form"
               onSubmit={handleSubmit}
-              className="space-y-10 py-8 px-6 sm:px-10 w-full"
+              className="space-y-10 py-8 px-6 sm:px-10 w-full pb-48"
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 w-full">
                 {schema
@@ -380,6 +490,174 @@ export default function AddRecordForm({
                       )}
                     </div>
                   ))}
+              </div>
+
+              {/* Attachments Section */}
+              <div className="mt-8 border-t pt-6">
+                <Label className="uppercase tracking-wide text-lg font-bold text-muted-foreground mb-4 block">
+                  קבצים ולינקים
+                </Label>
+
+                {/* Two Column Layout */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Files Column */}
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                      <span className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                        📄
+                      </span>
+                      קבצים
+                    </h4>
+
+                    {/* Uploaded Files List */}
+                    <div className="space-y-2">
+                      {attachmentsData
+                        .filter((att) => !att.isLink)
+                        .map((att, i) => {
+                          const originalIndex = attachmentsData.findIndex(
+                            (a) => a === att
+                          );
+                          return (
+                            <div
+                              key={i}
+                              className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg"
+                            >
+                              <div className="flex items-center gap-2 overflow-hidden">
+                                <span className="truncate text-sm">
+                                  {(att as any).file?.name || att.filename}
+                                  {(att as any).file?.size && (
+                                    <span className="text-muted-foreground mr-1">
+                                      (
+                                      {Math.round(
+                                        (att as any).file.size / 1024
+                                      )}{" "}
+                                      KB)
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeAttachment(originalIndex)}
+                                className="text-destructive hover:bg-destructive/10 h-7 w-7 p-0"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          );
+                        })}
+                    </div>
+
+                    {/* File Upload Area */}
+                    <div
+                      className="border-2 border-dashed border-blue-200 dark:border-blue-700 rounded-xl p-6 flex flex-col items-center justify-center gap-3 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors cursor-pointer group"
+                      onClick={() =>
+                        document
+                          .getElementById("add-record-file-upload")
+                          ?.click()
+                      }
+                    >
+                      <input
+                        type="file"
+                        id="add-record-file-upload"
+                        className="hidden"
+                        onChange={handleFileSelect}
+                      />
+                      <div className="p-3 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full group-hover:scale-110 transition-transform">
+                        <Plus className="w-6 h-6" />
+                      </div>
+                      <div className="text-center">
+                        <span className="text-sm font-semibold text-blue-700 dark:text-blue-300 block">
+                          לחץ להעלאת קובץ
+                        </span>
+                        <span className="text-xs text-blue-500 dark:text-blue-400 mt-1 block">
+                          עד 1MB
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Links Column */}
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                      <span className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                        🔗
+                      </span>
+                      לינקים
+                    </h4>
+
+                    {/* Added Links List */}
+                    <div className="space-y-2">
+                      {attachmentsData
+                        .filter((att) => att.isLink)
+                        .map((att, i) => {
+                          const originalIndex = attachmentsData.findIndex(
+                            (a) => a === att
+                          );
+                          return (
+                            <div
+                              key={i}
+                              className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg"
+                            >
+                              <div className="flex items-center gap-2 overflow-hidden flex-1">
+                                <a
+                                  href={att.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-purple-600 dark:text-purple-400 hover:underline truncate text-sm"
+                                >
+                                  {att.filename || att.url}
+                                </a>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeAttachment(originalIndex)}
+                                className="text-destructive hover:bg-destructive/10 h-7 w-7 p-0"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          );
+                        })}
+                    </div>
+
+                    {/* Add Link Input */}
+                    <div className="border-2 border-dashed border-purple-200 dark:border-purple-700 rounded-xl p-4 space-y-3">
+                      <div className="text-center">
+                        <span className="text-sm font-semibold text-purple-700 dark:text-purple-300 block">
+                          הוסף לינק חיצוני
+                        </span>
+                      </div>
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          placeholder="הדבק לינק כאן..."
+                          value={newAttachmentUrl}
+                          onChange={(e) => setNewAttachmentUrl(e.target.value)}
+                          className="h-10 text-sm bg-white dark:bg-zinc-950 flex-1"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddAttachment();
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleAddAttachment}
+                          className="h-10 px-4 font-medium bg-purple-100 hover:bg-purple-200 text-purple-700 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 dark:text-purple-300"
+                          disabled={!newAttachmentUrl}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </form>
           </div>

@@ -75,8 +75,8 @@ export function FileCard({
 
   const formatDate = (date: string | Date) => {
     return new Date(date).toLocaleDateString("he-IL", {
-      month: "short",
       day: "numeric",
+      month: "long",
       year: "numeric",
     });
   };
@@ -142,18 +142,6 @@ export function FileCard({
           <div className="p-2 rounded-lg bg-muted">{getIcon()}</div>
           <div className="opacity-0 group-hover:opacity-100 transition-opacity">
             <ActionsMenu align="start" />
-            {/* Using align start (which is right in RTL usually) because we inverted flex? 
-                Actually justify-between pushes first child to right, second to left in RTL?
-                No, in RTL: start is right, end is left.
-                justify-between: first child at start (right), second child at end (left).
-                So icon is on right, actions on left.
-                So menu should align to the left side of the trigger possibly?
-                If the trigger is on the left edge, align="start" (right) means it goes RIGHTWARDS (off screen?).
-                align="end" (left) means it goes LEFTWARDS (into screen).
-                Actually in shadcn/radix:
-                align="start" aligns with the start edge (left in LTR, right in RTL?)
-                Let's stick to default or 'end' usually works.
-            */}
           </div>
         </div>
 
@@ -162,8 +150,26 @@ export function FileCard({
             {file.name}
           </h3>
           <p className="text-xs text-muted-foreground mt-1">
-            {formatSize(file.size)} • {formatDate(file.createdAt)}
+            {formatSize(file.size)}
           </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {formatDate(file.createdAt)}
+          </p>
+          <div className="mt-2 text-xs">
+            <span className="text-muted-foreground">מקור: </span>
+            {(file as any).record ? (
+              <a
+                href={`/tables/${(file as any).record.tableId}?q=&page=1`}
+                className="text-primary hover:underline inline-flex items-center gap-1"
+              >
+                רשומה #{(file as any).record.recordNumber} בטבלת{" "}
+                {(file as any).record.tableName}
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            ) : (
+              <span className="text-muted-foreground">ידנית</span>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -196,6 +202,21 @@ export function FileCard({
           <p className="text-xs text-muted-foreground mt-0.5">
             {file.type.split("/")[1]?.toUpperCase() || "קובץ"}
           </p>
+          <div className="text-xs mt-1 flex items-center gap-1">
+            <span className="text-muted-foreground">מקור:</span>
+            {(file as any).record ? (
+              <a
+                href={`/tables/${(file as any).record.tableId}`}
+                className="text-primary hover:underline flex items-center gap-1"
+              >
+                רשומה #{(file as any).record.recordNumber} בטבלת{" "}
+                {(file as any).record.tableName}
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            ) : (
+              <span className="text-muted-foreground">ידנית</span>
+            )}
+          </div>
         </div>
 
         <div className="text-sm text-muted-foreground w-20 text-left shrink-0">
@@ -232,9 +253,23 @@ export function FileCard({
         <div className="col-span-6 flex items-center gap-3 min-w-0">
           <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
           {getIcon("sm")}
-          <span className="truncate font-medium" title={file.name}>
-            {file.name}
-          </span>
+          <div className="flex flex-col min-w-0">
+            <span className="truncate font-medium" title={file.name}>
+              {file.name}
+            </span>
+            {(file as any).record ? (
+              <a
+                href={`/tables/${(file as any).record.tableId}`}
+                className="text-xs text-primary hover:underline flex items-center gap-1"
+              >
+                רשומה #{(file as any).record.recordNumber} בטבלת{" "}
+                {(file as any).record.tableName}
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            ) : (
+              <span className="text-xs text-muted-foreground">מקור: ידנית</span>
+            )}
+          </div>
         </div>
 
         <div className="col-span-2 text-sm text-muted-foreground text-left">

@@ -55,6 +55,13 @@ export async function getStorageData(folderId: number | null) {
         companyId: user.companyId,
         folderId: folderId,
       },
+      include: {
+        record: {
+          include: {
+            table: true,
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
     }),
     prisma.file.aggregate({
@@ -99,10 +106,19 @@ export async function getStorageData(folderId: number | null) {
     };
   });
 
-  const serializedFiles = files.map((f) => ({
+  const serializedFiles = files.map((f: any) => ({
     ...f,
     createdAt: f.createdAt.toISOString(),
     updatedAt: f.updatedAt.toISOString(),
+    // Keep record info if exists, or null for manually uploaded files
+    record: f.record
+      ? {
+          id: f.record.id,
+          tableId: f.record.tableId,
+          tableName: f.record.table?.name,
+          recordNumber: f.record.id, // Use record ID as the record number for display
+        }
+      : null,
   }));
 
   return {
@@ -155,7 +171,8 @@ export async function saveFileMetadata(
     size: number;
     type: string;
   },
-  folderId: number | null
+  folderId: number | null,
+  recordId?: number
 ) {
   console.log("Saving file metadata start:", fileData.name);
   const user = await getCurrentUser();
@@ -169,6 +186,7 @@ export async function saveFileMetadata(
       data: {
         ...fileData,
         folderId,
+        recordId,
         companyId: user.companyId,
       },
     });

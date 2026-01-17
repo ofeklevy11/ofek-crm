@@ -1,6 +1,9 @@
 "use client";
 
+import { uploadFiles } from "@/lib/uploadthing";
+import { saveFileMetadata } from "@/app/actions/storage";
 import { useState, useEffect, useRef } from "react";
+
 import { useRouter } from "next/navigation";
 import AdvancedSearch from "./AdvancedSearch";
 import { applyFilters } from "@/lib/viewProcessor";
@@ -20,6 +23,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Edit2,
@@ -29,7 +38,12 @@ import {
   Search,
   Check,
   FileDown,
+  File as FileIcon,
   MoreHorizontal,
+  Paperclip,
+  ExternalLink,
+  Link,
+  Plus,
 } from "lucide-react";
 import EditRecordModal from "./EditRecordModal";
 import ViewTextModal from "./ViewTextModal";
@@ -105,6 +119,107 @@ export default function RecordTable({
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const scrollWidthRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+
+  // State for link input popover
+  const [linkInputRecordId, setLinkInputRecordId] = useState<number | null>(
+    null
+  );
+  const [newLinkUrl, setNewLinkUrl] = useState("");
+
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    recordId: number
+  ) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    if (file.size > 1 * 1024 * 1024) {
+      alert("גודל הקובץ חייב להיות עד 1MB");
+      e.target.value = ""; // Reset input
+      return;
+    }
+
+    try {
+      console.log("Uploading file for record:", recordId);
+
+      const res = await uploadFiles("companyFiles", {
+        files: [file],
+      });
+
+      if (res && res.length > 0) {
+        const uploaded = res[0];
+        await saveFileMetadata(
+          {
+            name: uploaded.name,
+            url: uploaded.url,
+            key: uploaded.key,
+            size: uploaded.size,
+            type: file.type || "unknown",
+          },
+          null, // No folder (root)
+          recordId
+        );
+        router.refresh();
+      }
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      alert("שגיאה בהעלאת הקובץ: " + error.message);
+    } finally {
+      e.target.value = ""; // Reset input
+    }
+  };
+
+  const handleAddLink = async (recordId: number) => {
+    if (!newLinkUrl.trim()) return;
+
+    let finalUrl = newLinkUrl.trim();
+    // Add protocol if missing
+    if (!/^https?:\/\//i.test(finalUrl)) {
+      finalUrl = `https://${finalUrl}`;
+    }
+
+    // Extract filename from URL
+    let filename = finalUrl.replace(/^https?:\/\//i, "");
+    if (filename.includes("/")) {
+      filename = filename.split("/").pop() || filename;
+    }
+    if (!filename || filename.length === 0) filename = "link";
+
+    try {
+      const res = await fetch(`/api/records/${recordId}/attachments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: finalUrl,
+          filename: filename,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to add link");
+
+      const newAttachment = await res.json();
+
+      // Update local state
+      setRecords((prevRecords) =>
+        prevRecords.map((r) => {
+          if (r.id === recordId) {
+            return {
+              ...r,
+              attachments: [...(r.attachments || []), newAttachment],
+            };
+          }
+          return r;
+        })
+      );
+
+      setNewLinkUrl("");
+      setLinkInputRecordId(null);
+    } catch (error) {
+      console.error(error);
+      alert("שגיאה בהוספת הלינק");
+    }
+  };
 
   // Fetch related data
   useEffect(() => {
@@ -260,6 +375,42 @@ export default function RecordTable({
       alert("שגיאה במחיקת רשומות");
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (
+    e: React.MouseEvent,
+    recordId: number,
+    attachmentId: number
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm("האם למחוק לינק זה?")) return;
+
+    try {
+      const res = await fetch(`/api/attachments/${attachmentId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("Failed to delete attachment");
+
+      setRecords((prevRecords) =>
+        prevRecords.map((r) => {
+          if (r.id === recordId) {
+            return {
+              ...r,
+              attachments: r.attachments.filter(
+                (a: any) => a.id !== attachmentId
+              ),
+            };
+          }
+          return r;
+        })
+      );
+    } catch (error) {
+      console.error(error);
+      alert("שגיאה במחיקת לינק");
     }
   };
 
@@ -638,6 +789,9 @@ export default function RecordTable({
                     </TableHead>
                   ))}
                   <TableHead className="whitespace-nowrap text-center">
+                    קבצים ולינקים
+                  </TableHead>
+                  <TableHead className="whitespace-nowrap text-center">
                     נוצר ב
                   </TableHead>
                   <TableHead className="whitespace-nowrap text-center">
@@ -872,6 +1026,140 @@ export default function RecordTable({
                         </div>
                       </TableCell>
                     ))}
+
+                    <TableCell className="text-center align-middle">
+                      <div className="flex flex-col gap-1 items-center justify-center min-w-[150px]">
+                        {/* Legacy Attachments */}
+                        {record.attachments?.map((att: any) => (
+                          <div
+                            key={`att-${att.id}`}
+                            className="flex items-center gap-2 text-xs bg-muted px-2 py-1 rounded-md max-w-[200px] w-full justify-between group"
+                          >
+                            <a
+                              href={att.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 truncate hover:underline text-blue-600 w-full"
+                              title={att.filename}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Paperclip className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{att.filename}</span>
+                            </a>
+                            {canEdit && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 hover:bg-destructive/10 hover:text-destructive"
+                                onClick={(e) =>
+                                  handleDeleteAttachment(e, record.id, att.id)
+                                }
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+
+                        {/* New Files */}
+                        {record.files?.map((file: any) => (
+                          <div
+                            key={`file-${file.id}`}
+                            className="flex items-center gap-2 text-xs bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-md max-w-[200px] w-full justify-between group"
+                          >
+                            <a
+                              href={file.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 truncate hover:underline text-blue-600 dark:text-blue-400 w-full"
+                              title={file.name}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <FileIcon className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{file.name}</span>
+                            </a>
+                            {/* File deletion not implemented in table view yet, relying on /files page or future request */}
+                          </div>
+                        ))}
+
+                        {/* Upload Button */}
+                        {canEdit && (
+                          <div className="mt-1 w-full flex flex-col gap-1">
+                            <input
+                              type="file"
+                              id={`file-upload-${record.id}`}
+                              className="hidden"
+                              onChange={(e) => handleFileUpload(e, record.id)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <label
+                              htmlFor={`file-upload-${record.id}`}
+                              className="cursor-pointer inline-flex items-center justify-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors border border-dashed border-muted-foreground/30 px-2 py-1 rounded-sm w-full hover:bg-muted/50"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Paperclip className="h-3 w-3" />
+                              <span>העלה קובץ (עד 1MB)</span>
+                            </label>
+
+                            {/* Add Link Button/Input */}
+                            {linkInputRecordId === record.id ? (
+                              <div
+                                className="flex gap-1 items-center w-full"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Input
+                                  placeholder="הדבק לינק..."
+                                  value={newLinkUrl}
+                                  onChange={(e) =>
+                                    setNewLinkUrl(e.target.value)
+                                  }
+                                  className="h-7 text-[10px] flex-1 min-w-0"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      handleAddLink(record.id);
+                                    }
+                                    if (e.key === "Escape") {
+                                      setLinkInputRecordId(null);
+                                      setNewLinkUrl("");
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-7 px-2 text-[10px]"
+                                  onClick={() => handleAddLink(record.id)}
+                                  disabled={!newLinkUrl.trim()}
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="inline-flex items-center justify-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors border border-dashed border-muted-foreground/30 px-2 py-1 rounded-sm w-full hover:bg-muted/50"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLinkInputRecordId(record.id);
+                                  setNewLinkUrl("");
+                                }}
+                              >
+                                <Link className="h-3 w-3" />
+                                <span>הוסף לינק</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {!record.attachments?.length &&
+                          !record.files?.length &&
+                          !canEdit && (
+                            <span className="text-muted-foreground/30">-</span>
+                          )}
+                      </div>
+                    </TableCell>
 
                     <TableCell className="text-muted-foreground text-xs whitespace-nowrap text-center">
                       {record.createdAt

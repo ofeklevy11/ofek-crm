@@ -90,7 +90,8 @@ export default async function TableDetailsPage({
       where: { id: { in: ids } },
       orderBy: { createdAt: "desc" },
       include: {
-        _count: { select: { attachments: true } },
+        attachments: true,
+        files: true,
       },
     });
   } else {
@@ -110,7 +111,8 @@ export default async function TableDetailsPage({
       skip: (currentPage - 1) * pageSize,
       take: pageSize,
       include: {
-        _count: { select: { attachments: true } },
+        attachments: true,
+        files: true,
       },
     });
   }

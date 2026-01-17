@@ -54,12 +54,15 @@ export default function TableCard({
         method: "DELETE",
       });
 
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed using default error");
+      }
 
       router.push("/tables"); // ← מונע רינדורים כפולים
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Error deleting table");
+      alert(error.message || "Error deleting table");
     } finally {
       setIsDeleteDialogOpen(false);
       setIsDeleting(false);
