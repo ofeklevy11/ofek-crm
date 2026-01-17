@@ -34,6 +34,8 @@ jobs:
 
             - name: Run Prisma Migrations
               run: npx prisma migrate deploy
+              env:
+                DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
             - name: Deploy Project Artifacts
               run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
