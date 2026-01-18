@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function getNotifications(
   userId?: number, // Deprecated argument, we use session user now
-  limit: number | null = 20
+  limit: number | null = 20,
 ) {
   try {
     const user = await getCurrentUser();
@@ -94,7 +94,7 @@ export async function createNotification(data: {
 
     if (!targetUser) {
       console.warn(
-        `[createNotification] Target user ${data.userId} not found in company ${currentUser.companyId}`
+        `[createNotification] Target user ${data.userId} not found in company ${currentUser.companyId}`,
       );
       // return { success: false, error: "Target user not found" }; // Or just fail silently?
       // Let's proceed only if found to maintain isolation.
@@ -110,6 +110,19 @@ export async function createNotification(data: {
         link: data.link,
       },
     });
+
+    // --- REALTIME UPDATE ---
+    try {
+      const { redisPublisher } = await import("@/lib/redis");
+      await redisPublisher.publish(
+        `user:${data.userId}:notifications`,
+        JSON.stringify(notification),
+      );
+    } catch (err) {
+      console.error("Redis Publish Error", err);
+    }
+    // -----------------------
+
     return { success: true, data: notification };
   } catch (error) {
     console.error("Error creating notification:", error);
@@ -138,7 +151,7 @@ export async function createNotificationForCompany(data: {
 
     if (!targetUser) {
       console.warn(
-        `[createNotificationForCompany] Target user ${data.userId} not found in company ${data.companyId}`
+        `[createNotificationForCompany] Target user ${data.userId} not found in company ${data.companyId}`,
       );
       return { success: false, error: "User not in company" };
     }
@@ -152,8 +165,21 @@ export async function createNotificationForCompany(data: {
         link: data.link,
       },
     });
+
+    // --- REALTIME UPDATE ---
+    try {
+      const { redisPublisher } = await import("@/lib/redis");
+      await redisPublisher.publish(
+        `user:${data.userId}:notifications`,
+        JSON.stringify(notification),
+      );
+    } catch (err) {
+      console.error("Redis Publish Error", err);
+    }
+    // -----------------------
+
     console.log(
-      `[Notification] Created notification #${notification.id} for user ${data.userId} (Company ${data.companyId})`
+      `[Notification] Created notification #${notification.id} for user ${data.userId} (Company ${data.companyId})`,
     );
     return { success: true, data: notification };
   } catch (error) {

@@ -10,7 +10,7 @@ export async function updateGroup(
   groupId: number,
   name: string,
   imageUrl: string,
-  memberIds: number[]
+  memberIds: number[],
 ) {
   const currentUser = await getCurrentUser();
   if (!currentUser) throw new Error("Not authenticated");
@@ -135,7 +135,7 @@ export async function getUsers() {
     const lastMsg = recentMessages.find(
       (m) =>
         (m.senderId === user.id && m.receiverId === currentUser.id) ||
-        (m.senderId === currentUser.id && m.receiverId === user.id)
+        (m.senderId === currentUser.id && m.receiverId === user.id),
     );
     return {
       ...user,
@@ -159,7 +159,7 @@ export async function getUsers() {
 export async function createGroup(
   name: string,
   imageUrl: string,
-  memberIds: number[]
+  memberIds: number[],
 ) {
   const currentUser = await getCurrentUser();
   if (!currentUser) throw new Error("Not authenticated");
@@ -295,6 +295,18 @@ export async function sendMessage(receiverId: number, content: string) {
       receiverId,
     },
   });
+
+  // --- REALTIME UPDATE ---
+  try {
+    const { redisPublisher } = await import("@/lib/redis");
+    await redisPublisher.publish(
+      `user:${receiverId}:chat`,
+      JSON.stringify({ type: "new-message", senderId: currentUser.id }),
+    );
+  } catch (err) {
+    console.error("Redis Publish Error", err);
+  }
+  // -----------------------
 
   revalidatePath("/chat");
 }

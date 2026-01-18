@@ -13,6 +13,7 @@ import {
   sendGroupMessage,
   getUnreadCounts,
 } from "@/app/actions/chat";
+import { useRealtime } from "@/hooks/use-realtime";
 
 type User = {
   id: number;
@@ -101,31 +102,47 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
   }, []);
 
   // Poll for new messages and unread counts every 5 seconds
+  /* REMOVED POLLING
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        // Fetch new messages if chat is open
-        if (selectedUser) {
-          const data = await getMessages(selectedUser.id);
-          setMessages(data);
-          // If we are looking at the chat, mark as read again to clear any new incoming
-          await markAsRead(selectedUser.id, "user");
-        } else if (selectedGroup) {
-          const data = await getGroupMessages(selectedGroup.id);
-          setMessages(data);
-          await markAsRead(selectedGroup.id, "group");
-        }
+     // ...
+     const interval = setInterval(...)
+     return () => clearInterval(interval);
+  }, [selectedUser, selectedGroup]); 
+  */
 
-        // Always fetch unread counts to update badges
-        const unreadData = await getUnreadCounts();
-        setUnreadCounts(unreadData);
-      } catch (err) {
-        console.error(err);
+  // Realtime Subscription
+  useRealtime(currentUser.id, async (msg) => {
+    // 1. New Message
+    if (
+      msg.channel === `user:${currentUser.id}:chat` &&
+      msg.data.type === "new-message"
+    ) {
+      // If current chat is open with the sender
+      if (selectedUser && msg.data.senderId === selectedUser.id) {
+        const data = await getMessages(selectedUser.id);
+        setMessages(data);
+        await markAsRead(selectedUser.id, "user");
+      } else if (selectedGroup) {
+        // If group logic is here, check group ID (msg.data.groupId)
+        // Currently we just refetch if ANY message comes for now or refine logic.
+        // To keep it simple and robust:
+        const data = await getGroupMessages(selectedGroup.id);
+        setMessages(data);
+        await markAsRead(selectedGroup.id, "group");
       }
-    }, 5000);
 
-    return () => clearInterval(interval);
-  }, [selectedUser, selectedGroup]);
+      // Always update unread counts
+      const unreadData = await getUnreadCounts();
+      setUnreadCounts(unreadData);
+    }
+
+    // 2. Notification (Optional: Check if we want to show chat badge update on notification too?)
+    if (msg.channel === `user:${currentUser.id}:notifications`) {
+      // Maybe just update unread counts just in case system notifications relate to chat
+      const unreadData = await getUnreadCounts();
+      setUnreadCounts(unreadData);
+    }
+  });
 
   // Fetch messages when selectedUser or selectedGroup changes
   useEffect(() => {
@@ -191,7 +208,7 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
       const newGroup = await createGroup(
         newGroupName,
         newGroupImage,
-        selectedMemberIds
+        selectedMemberIds,
       );
       setGroups([...groups, newGroup as unknown as Group]);
       setIsCreateGroupModalOpen(false);
@@ -216,7 +233,7 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
         selectedGroup.id,
         editGroupName,
         editGroupImage,
-        editMemberIds
+        editMemberIds,
       );
 
       // Refresh groups logic roughly
@@ -249,13 +266,13 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
       setEditMemberIds((prev) =>
         prev.includes(userId)
           ? prev.filter((id) => id !== userId)
-          : [...prev, userId]
+          : [...prev, userId],
       );
     } else {
       setSelectedMemberIds((prev) =>
         prev.includes(userId)
           ? prev.filter((id) => id !== userId)
-          : [...prev, userId]
+          : [...prev, userId],
       );
     }
   };

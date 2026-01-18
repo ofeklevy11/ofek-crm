@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRealtime } from "@/hooks/use-realtime";
 import { Bell } from "lucide-react";
 import {
   getNotifications,
@@ -50,17 +51,32 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
     }
   };
 
+  /* POLLING REMOVED
   useEffect(() => {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
     return () => clearInterval(interval);
   }, [userId]);
+  */
+
+  // Initial Fetch
+  useEffect(() => {
+    fetchNotifications();
+  }, [userId]);
+
+  // Realtime Subscription
+  const { isConnected } = useRealtime(userId, (msg) => {
+    if (msg.channel === `user:${userId}:notifications`) {
+      // Add new notification to state
+      setNotifications((prev) => [msg.data, ...prev]);
+    }
+  });
 
   const handleNotificationClick = async (notification: Notification) => {
     if (!notification.read) {
       await markAsRead(notification.id);
       setNotifications((prev) =>
-        prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+        prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n)),
       );
     }
     setIsOpen(false);
@@ -126,7 +142,7 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
                   key={notification.id}
                   className={cn(
                     "relative px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer group",
-                    !notification.read && "bg-primary/5"
+                    !notification.read && "bg-primary/5",
                   )}
                   onClick={() => handleNotificationClick(notification)}
                 >
@@ -136,7 +152,7 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
                         "text-sm font-medium leading-none",
                         !notification.read
                           ? "text-foreground"
-                          : "text-muted-foreground"
+                          : "text-muted-foreground",
                       )}
                     >
                       {notification.title}
@@ -144,7 +160,7 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
                     <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                       {new Date(notification.createdAt).toLocaleTimeString(
                         "he-IL",
-                        { hour: "2-digit", minute: "2-digit" }
+                        { hour: "2-digit", minute: "2-digit" },
                       )}
                     </span>
                   </div>

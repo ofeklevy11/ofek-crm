@@ -110,7 +110,9 @@ export default async function Navbar() {
                       מדריכים
                     </Link>
                   )}
-                  {hasUserFlag(user, "canViewChat") && <ChatNavbarLink />}
+                  {hasUserFlag(user, "canViewChat") && (
+                    <ChatNavbarLink userId={user.id} />
+                  )}
                 </>
               )}
             </div>
