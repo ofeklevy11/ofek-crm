@@ -20,7 +20,7 @@ export async function getTables() {
 
     // Filter tables based on user permissions
     const allowedTables = tables.filter((table) =>
-      canReadTable(user, table.id)
+      canReadTable(user, table.id),
     );
 
     return { success: true, data: allowedTables };
@@ -135,7 +135,7 @@ export async function updateTable(
     slug?: string;
     schemaJson?: Record<string, unknown>;
     categoryId?: number | null;
-  }
+  },
 ) {
   try {
     const updateData: any = {};
@@ -259,7 +259,7 @@ export async function searchInTable(tableId: number, searchTerm: string) {
 }
 
 export async function updateTablesOrder(
-  updates: { id: number; order: number }[]
+  updates: { id: number; order: number }[],
 ) {
   try {
     // Check perms
@@ -272,7 +272,7 @@ export async function updateTablesOrder(
       prisma.tableMeta.update({
         where: { id: update.id },
         data: { order: update.order },
-      })
+      }),
     );
 
     await prisma.$transaction(transaction);
@@ -281,5 +281,102 @@ export async function updateTablesOrder(
   } catch (error) {
     console.error("Error updating table order:", error);
     return { success: false, error: "Failed to update table order" };
+  }
+}
+
+export async function duplicateTable(id: number) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    if (!canManageTables(user)) {
+      return { success: false, error: "אין לך הרשאה לשכפל טבלאות" };
+    }
+
+    // CRITICAL: Filter by companyId for multi-tenancy
+    const originalTable = await prisma.tableMeta.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
+      include: {
+        records: true,
+        views: true,
+      },
+    });
+
+    if (!originalTable) {
+      return { success: false, error: "Table not found" };
+    }
+
+    // Generate unique slug with "-copy" suffix
+    let baseSlug = `${originalTable.slug}-copy`;
+    let finalSlug = baseSlug;
+    let counter = 0;
+
+    while (true) {
+      const existing = await prisma.tableMeta.findFirst({
+        where: { slug: finalSlug, companyId: user.companyId },
+      });
+      if (!existing) break;
+      counter++;
+      finalSlug = `${baseSlug}-${counter}`;
+      if (counter > 100) throw new Error("Could not generate unique slug");
+    }
+
+    // Generate new name with " copy" suffix
+    const newName = `${originalTable.name} copy${counter > 0 ? ` ${counter}` : ""}`;
+
+    // Create the new table
+    const newTable = await prisma.tableMeta.create({
+      data: {
+        name: newName,
+        slug: finalSlug,
+        schemaJson: originalTable.schemaJson as any,
+        companyId: user.companyId,
+        createdBy: user.id,
+        categoryId: originalTable.categoryId,
+        order: originalTable.order,
+      },
+    });
+
+    // Duplicate all records
+    if (originalTable.records.length > 0) {
+      await prisma.record.createMany({
+        data: originalTable.records.map((record) => ({
+          tableId: newTable.id,
+          companyId: user.companyId,
+          data: record.data as any,
+          createdBy: user.id,
+        })),
+      });
+    }
+
+    // Duplicate all views
+    if (originalTable.views.length > 0) {
+      await prisma.view.createMany({
+        data: originalTable.views.map((view) => ({
+          tableId: newTable.id,
+          name: view.name,
+          slug: view.slug,
+          config: view.config as any,
+          isEnabled: view.isEnabled,
+          order: view.order,
+        })),
+      });
+    }
+
+    revalidatePath("/");
+    revalidatePath("/tables");
+
+    return { success: true, data: newTable };
+  } catch (error: any) {
+    console.error("Error duplicating table:", error);
+    return {
+      success: false,
+      error: "Failed to duplicate table: " + (error.message || "Unknown error"),
+    };
   }
 }

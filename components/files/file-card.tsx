@@ -1,6 +1,6 @@
 "use client";
 
-import { deleteFile } from "@/app/actions/storage";
+import { deleteFile, updateFile } from "@/app/actions/storage";
 import { File as FileModel } from "@prisma/client";
 import {
   FileText,
@@ -12,8 +12,11 @@ import {
   Download,
   ExternalLink,
   GripVertical,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +25,32 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
+
+// Secure download function that uses API route
+const downloadFile = async (fileId: number, fileName: string) => {
+  try {
+    const response = await fetch(`/api/files/${fileId}/download`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to download file");
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  } catch (error) {
+    console.error("Download error:", error);
+    alert("שגיאה בהורדת הקובץ");
+  }
+};
 
 interface FileCardProps {
   file: FileModel;
@@ -39,6 +68,12 @@ export function FileCard({
   isDragging = false,
 }: FileCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editDisplayName, setEditDisplayName] = useState(
+    (file as any).displayName || "",
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const router = useRouter();
 
   const handleDelete = async () => {
     if (!confirm("האם אתה בטוח שברצונך למחוק קובץ זה?")) return;
@@ -51,6 +86,22 @@ export function FileCard({
       alert("נכשל במחיקת הקובץ");
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleSaveDisplayName = async () => {
+    setIsSaving(true);
+    try {
+      await updateFile(file.id, {
+        displayName: editDisplayName.trim() || null,
+      });
+      setIsEditing(false);
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+      alert("נכשל בשמירת השם");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -103,11 +154,27 @@ export function FileCard({
             פתח
           </a>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild className="gap-2">
-          <a href={file.url} download className="flex items-center">
-            <Download className="w-4 h-4 ml-2" />
-            הורד
-          </a>
+        <DropdownMenuItem
+          className="gap-2 cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            downloadFile(file.id, (file as any).displayName || file.name);
+          }}
+        >
+          <Download className="w-4 h-4 ml-2" />
+          הורד
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="gap-2"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditDisplayName((file as any).displayName || "");
+            setIsEditing(true);
+          }}
+        >
+          <Pencil className="w-4 h-4 ml-2" />
+          ערוך שם
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -126,7 +193,7 @@ export function FileCard({
   if (viewMode === "grid") {
     return (
       <div
-        draggable
+        draggable={!isEditing}
         onDragStart={(e) => {
           e.dataTransfer.effectAllowed = "move";
           onDragStart?.();
@@ -134,7 +201,8 @@ export function FileCard({
         onDragEnd={onDragEnd}
         className={cn(
           "group relative p-4 border rounded-xl hover:bg-muted/50 transition-all bg-card flex flex-col justify-between cursor-grab active:cursor-grabbing text-right",
-          isDragging && "opacity-50 scale-95 ring-2 ring-primary"
+          isDragging && "opacity-50 scale-95 ring-2 ring-primary",
+          isEditing && "cursor-default",
         )}
         dir="rtl"
       >
@@ -145,32 +213,105 @@ export function FileCard({
           </div>
         </div>
 
-        <div className="mt-4">
-          <h3 className="font-medium truncate" title={file.name}>
-            {file.name}
-          </h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            {formatSize(file.size)}
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {formatDate(file.createdAt)}
-          </p>
-          <div className="mt-2 text-xs">
-            <span className="text-muted-foreground">מקור: </span>
-            {(file as any).record ? (
-              <a
-                href={`/tables/${(file as any).record.tableId}?q=&page=1`}
-                className="text-primary hover:underline inline-flex items-center gap-1"
+        {isEditing ? (
+          // Edit Mode
+          <div className="mt-4 space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">
+                שם לתצוגה:
+              </label>
+              <input
+                type="text"
+                placeholder={file.name}
+                value={editDisplayName}
+                onChange={(e) => setEditDisplayName(e.target.value)}
+                className="w-full text-sm border border-input rounded-md px-2 py-1.5 bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveDisplayName();
+                  if (e.key === "Escape") setIsEditing(false);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                שם מקורי: {file.name}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsEditing(false)}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-muted text-muted-foreground rounded-md hover:bg-muted/80 transition-colors"
+                disabled={isSaving}
               >
-                רשומה #{(file as any).record.recordNumber} בטבלת{" "}
-                {(file as any).record.tableName}
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            ) : (
-              <span className="text-muted-foreground">ידנית</span>
-            )}
+                <X className="w-3 h-3" />
+                ביטול
+              </button>
+              <button
+                onClick={handleSaveDisplayName}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                disabled={isSaving}
+              >
+                <Check className="w-3 h-3" />
+                {isSaving ? "שומר..." : "שמור"}
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          // Normal Mode
+          <>
+            <div className="mt-4">
+              <h3
+                className="font-medium truncate"
+                title={(file as any).displayName || file.name}
+              >
+                {(file as any).displayName || file.name}
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                {formatSize(file.size)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {formatDate(file.createdAt)}
+              </p>
+              <div className="mt-2 text-xs">
+                <span className="text-muted-foreground">מקור: </span>
+                {(file as any).record ? (
+                  <a
+                    href={`/tables/${(file as any).record.tableId}?q=&page=1`}
+                    className="text-primary hover:underline inline-flex items-center gap-1"
+                  >
+                    רשומה #{(file as any).record.recordNumber} בטבלת{" "}
+                    {(file as any).record.tableName}
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">ידנית</span>
+                )}
+              </div>
+            </div>
+
+            {/* Direct action buttons */}
+            <div className="mt-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <a
+                href={file.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-primary/10 text-primary rounded-md hover:bg-primary/20 transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+                פתח
+              </a>
+              <button
+                type="button"
+                onClick={() =>
+                  downloadFile(file.id, (file as any).displayName || file.name)
+                }
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-[#4f95ff]/10 text-[#4f95ff] rounded-md hover:bg-[#4f95ff]/20 transition-colors"
+              >
+                <Download className="w-3 h-3" />
+                הורד
+              </button>
+            </div>
+          </>
+        )}
       </div>
     );
   }
@@ -187,7 +328,7 @@ export function FileCard({
         onDragEnd={onDragEnd}
         className={cn(
           "group flex items-center gap-4 p-4 border rounded-xl hover:bg-muted/50 transition-all bg-card cursor-grab active:cursor-grabbing text-right",
-          isDragging && "opacity-50 scale-[0.98] ring-2 ring-primary"
+          isDragging && "opacity-50 scale-[0.98] ring-2 ring-primary",
         )}
         dir="rtl"
       >
@@ -196,8 +337,11 @@ export function FileCard({
         <div className="p-2 rounded-lg bg-muted shrink-0">{getIcon()}</div>
 
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium truncate" title={file.name}>
-            {file.name}
+          <h3
+            className="font-medium truncate"
+            title={(file as any).displayName || file.name}
+          >
+            {(file as any).displayName || file.name}
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
             {file.type.split("/")[1]?.toUpperCase() || "קובץ"}
@@ -227,6 +371,29 @@ export function FileCard({
           {formatDate(file.createdAt)}
         </div>
 
+        {/* Direct action buttons */}
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          <a
+            href={file.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+            title="פתח"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </a>
+          <button
+            type="button"
+            onClick={() =>
+              downloadFile(file.id, (file as any).displayName || file.name)
+            }
+            className="p-1.5 rounded-md bg-[#4f95ff]/10 text-[#4f95ff] hover:bg-[#4f95ff]/20 transition-colors"
+            title="הורד"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+        </div>
+
         <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <ActionsMenu />
         </div>
@@ -246,7 +413,7 @@ export function FileCard({
         onDragEnd={onDragEnd}
         className={cn(
           "group grid grid-cols-12 gap-4 px-4 py-3 hover:bg-muted/30 transition-all cursor-grab active:cursor-grabbing items-center text-right",
-          isDragging && "opacity-50 bg-primary/10"
+          isDragging && "opacity-50 bg-primary/10",
         )}
         dir="rtl"
       >
@@ -254,8 +421,11 @@ export function FileCard({
           <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
           {getIcon("sm")}
           <div className="flex flex-col min-w-0">
-            <span className="truncate font-medium" title={file.name}>
-              {file.name}
+            <span
+              className="truncate font-medium"
+              title={(file as any).displayName || file.name}
+            >
+              {(file as any).displayName || file.name}
             </span>
             {(file as any).record ? (
               <a

@@ -4,13 +4,13 @@ import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
     const recordId = parseInt(id);
     const body = await request.json();
-    const { filename, url, size } = body;
+    const { filename, url, size, displayName } = body;
 
     if (isNaN(recordId)) {
       return NextResponse.json({ error: "Invalid record ID" }, { status: 400 });
@@ -22,7 +22,7 @@ export async function POST(
     if (!currentUser) {
       return NextResponse.json(
         { error: "Authentication required" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -44,6 +44,7 @@ export async function POST(
         filename,
         url,
         size: size || 0,
+        displayName: displayName?.trim() || null,
         uploadedBy: currentUser.id,
       },
     });
@@ -53,14 +54,14 @@ export async function POST(
     console.error("Error adding attachment:", error);
     return NextResponse.json(
       { error: "Failed to add attachment" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -98,7 +99,7 @@ export async function GET(
     console.error("Error fetching attachments:", error);
     return NextResponse.json(
       { error: "Failed to fetch attachments" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

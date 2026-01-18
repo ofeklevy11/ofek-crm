@@ -48,9 +48,16 @@ export default function AddRecordForm({
   const [formData, setFormData] = useState<Record<string, any>>({});
   // Enhanced state for files and links
   const [attachmentsData, setAttachmentsData] = useState<
-    Array<{ url: string; filename: string; isLink: boolean; file?: File }>
+    Array<{
+      url: string;
+      filename: string;
+      displayName?: string;
+      isLink: boolean;
+      file?: File;
+    }>
   >([]);
   const [newAttachmentUrl, setNewAttachmentUrl] = useState("");
+  const [newAttachmentName, setNewAttachmentName] = useState("");
 
   // Initialize default values when opening
   const handleOpen = () => {
@@ -63,6 +70,7 @@ export default function AddRecordForm({
     setFormData(defaults);
     setAttachmentsData([]);
     setNewAttachmentUrl("");
+    setNewAttachmentName("");
     setIsOpen(true);
   };
 
@@ -97,19 +105,23 @@ export default function AddRecordForm({
     }
 
     // Simple filename extraction
-    // Remove protocol for filename display if needed, or just take the host/path
     let filename = finalUrl.replace(/^https?:\/\//i, "");
     if (filename.includes("/")) {
       filename = filename.split("/").pop() || filename;
     }
-    // Fallback if empty/weird
     if (!filename || filename.length === 0) filename = "link";
 
     setAttachmentsData((prev) => [
       ...prev,
-      { url: finalUrl, filename, isLink: true },
+      {
+        url: finalUrl,
+        filename,
+        displayName: newAttachmentName.trim() || undefined,
+        isLink: true,
+      },
     ]);
     setNewAttachmentUrl("");
+    setNewAttachmentName("");
   };
 
   const removeAttachment = (index: number) => {
@@ -130,7 +142,11 @@ export default function AddRecordForm({
 
       const links = attachmentsData
         .filter((a) => a.isLink)
-        .map((a) => ({ url: a.url, filename: a.filename }));
+        .map((a) => ({
+          url: a.url,
+          filename: a.filename,
+          displayName: a.displayName || null,
+        }));
 
       const res = await fetch(`/api/tables/${tableId}/records`, {
         method: "POST",
@@ -173,9 +189,9 @@ export default function AddRecordForm({
                     type: "unknown", // We could get type from original file if needed
                   },
                   null,
-                  newRecord.id
-                )
-              )
+                  newRecord.id,
+                ),
+              ),
             );
           }
         }
@@ -223,7 +239,7 @@ export default function AddRecordForm({
                 {schema
                   .filter(
                     (field, index, self) =>
-                      index === self.findIndex((t) => t.name === field.name)
+                      index === self.findIndex((t) => t.name === field.name),
                   )
                   .map((field) => (
                     <div key={field.name} className="space-y-4">
@@ -335,7 +351,7 @@ export default function AddRecordForm({
                             onChange={(e) => {
                               const selected = Array.from(
                                 e.target.selectedOptions,
-                                (option) => option.value
+                                (option) => option.value,
                               );
                               setFormData({
                                 ...formData,
@@ -371,7 +387,7 @@ export default function AddRecordForm({
                                 onClick={() => {
                                   const newTags = isSelected
                                     ? currentTags.filter(
-                                        (t: string) => t !== tag
+                                        (t: string) => t !== tag,
                                       )
                                     : [...currentTags, tag];
                                   setFormData({
@@ -408,14 +424,14 @@ export default function AddRecordForm({
                               const lookupFields = schema.filter(
                                 (f) =>
                                   f.type === "lookup" &&
-                                  f.relationField === field.name
+                                  f.relationField === field.name,
                               );
 
                               if (lookupFields.length > 0) {
                                 if (val && !Array.isArray(val)) {
                                   try {
                                     const res = await fetch(
-                                      `/api/records/${val}`
+                                      `/api/records/${val}`,
                                     );
                                     if (res.ok) {
                                       const relatedRecord = await res.json();
@@ -436,7 +452,7 @@ export default function AddRecordForm({
                                   } catch (error) {
                                     console.error(
                                       "Failed to fetch lookup data",
-                                      error
+                                      error,
                                     );
                                   }
                                 } else {
@@ -456,10 +472,10 @@ export default function AddRecordForm({
                             field.type === "number"
                               ? "number"
                               : field.type === "date"
-                              ? "date"
-                              : field.type === "url"
-                              ? "url"
-                              : "text"
+                                ? "date"
+                                : field.type === "url"
+                                  ? "url"
+                                  : "text"
                           }
                           value={formData[field.name] || ""}
                           onChange={(e) =>
@@ -515,7 +531,7 @@ export default function AddRecordForm({
                         .filter((att) => !att.isLink)
                         .map((att, i) => {
                           const originalIndex = attachmentsData.findIndex(
-                            (a) => a === att
+                            (a) => a === att,
                           );
                           return (
                             <div
@@ -529,7 +545,7 @@ export default function AddRecordForm({
                                     <span className="text-muted-foreground mr-1">
                                       (
                                       {Math.round(
-                                        (att as any).file.size / 1024
+                                        (att as any).file.size / 1024,
                                       )}{" "}
                                       KB)
                                     </span>
@@ -594,7 +610,7 @@ export default function AddRecordForm({
                         .filter((att) => att.isLink)
                         .map((att, i) => {
                           const originalIndex = attachmentsData.findIndex(
-                            (a) => a === att
+                            (a) => a === att,
                           );
                           return (
                             <div
@@ -607,8 +623,9 @@ export default function AddRecordForm({
                                   target="_blank"
                                   rel="noreferrer"
                                   className="text-purple-600 dark:text-purple-400 hover:underline truncate text-sm"
+                                  title={att.url}
                                 >
-                                  {att.filename || att.url}
+                                  {att.displayName || att.filename || att.url}
                                 </a>
                               </div>
                               <Button
@@ -632,6 +649,12 @@ export default function AddRecordForm({
                           הוסף לינק חיצוני
                         </span>
                       </div>
+                      <Input
+                        placeholder="שם הלינק (אופציונלי)"
+                        value={newAttachmentName}
+                        onChange={(e) => setNewAttachmentName(e.target.value)}
+                        className="h-10 text-sm bg-white dark:bg-zinc-950"
+                      />
                       <div className="flex gap-2 items-center">
                         <Input
                           placeholder="הדבק לינק כאן..."

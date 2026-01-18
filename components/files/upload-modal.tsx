@@ -24,6 +24,9 @@ interface UploadFileModalProps {
 export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
   const [open, setOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  const [fileDisplayNames, setFileDisplayNames] = useState<
+    Record<number, string>
+  >({});
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -35,6 +38,7 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
   useEffect(() => {
     if (!open) {
       setFiles([]);
+      setFileDisplayNames({});
       setUploadProgress(0);
       setIsUploading(false);
       setIsStuck(false);
@@ -89,7 +93,7 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
   const saveMetadata = async (uploadedFiles: any[]) => {
     try {
       await Promise.all(
-        uploadedFiles.map((file) =>
+        uploadedFiles.map((file, index) =>
           saveFileMetadata(
             {
               name: file.name,
@@ -97,10 +101,11 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
               key: file.key,
               size: file.size,
               type: file.type || "unknown",
+              displayName: fileDisplayNames[index] || undefined,
             },
-            currentFolderId
-          )
-        )
+            currentFolderId,
+          ),
+        ),
       );
 
       setOpen(false);
@@ -145,6 +150,17 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
 
   const removeFile = (index: number) => {
     setFiles(files.filter((_, i) => i !== index));
+    // Update display names indices
+    const newDisplayNames: Record<number, string> = {};
+    Object.keys(fileDisplayNames).forEach((key) => {
+      const idx = parseInt(key);
+      if (idx < index) {
+        newDisplayNames[idx] = fileDisplayNames[idx];
+      } else if (idx > index) {
+        newDisplayNames[idx - 1] = fileDisplayNames[idx];
+      }
+    });
+    setFileDisplayNames(newDisplayNames);
   };
 
   return (
@@ -173,7 +189,7 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
               isDragOver
                 ? "border-[#4f95ff] bg-blue-50/50"
                 : "border-muted-foreground/25",
-              isUploading && "pointer-events-none opacity-50"
+              isUploading && "pointer-events-none opacity-50",
             )}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
@@ -210,34 +226,58 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
                 {files.map((file, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center justify-between p-3 bg-card border rounded-lg shadow-sm"
+                    className="flex flex-col gap-2 p-3 bg-card border rounded-lg shadow-sm"
                   >
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      <div className="p-2 bg-muted rounded-md">
-                        <FileIcon className="w-4 h-4 text-primary" />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 overflow-hidden flex-1">
+                        <div className="p-2 bg-muted rounded-md shrink-0">
+                          <FileIcon className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="min-w-0 text-right flex-1">
+                          <p
+                            className="text-sm font-medium truncate"
+                            title={file.name}
+                          >
+                            {file.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {(file.size / 1024).toFixed(1)} KB
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0 text-right">
-                        <p className="text-sm font-medium truncate">
-                          {file.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {(file.size / 1024).toFixed(1)} KB
-                        </p>
-                      </div>
+                      {!isUploading && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFile(idx);
+                          }}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
-                    {!isUploading && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFile(idx);
-                        }}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    )}
+                    {/* Custom Display Name Input */}
+                    <div className="flex items-center gap-2 bg-muted/50 rounded-md p-2">
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        שם לתצוגה:
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="השאר ריק לשימוש בשם המקורי..."
+                        value={fileDisplayNames[idx] || ""}
+                        onChange={(e) =>
+                          setFileDisplayNames((prev) => ({
+                            ...prev,
+                            [idx]: e.target.value,
+                          }))
+                        }
+                        className="text-sm w-full bg-white dark:bg-zinc-900 border border-input rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        disabled={isUploading}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>

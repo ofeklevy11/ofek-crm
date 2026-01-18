@@ -23,6 +23,9 @@ import {
   RotateCw,
   Paperclip,
   ExternalLink,
+  Pencil,
+  X,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -61,8 +64,18 @@ export default function EditRecordModal({
   const [attachments, setAttachments] = useState<any[]>([]);
   const [files, setFiles] = useState<any[]>([]); // New state for files
   const [newAttachmentUrl, setNewAttachmentUrl] = useState("");
+  const [newAttachmentName, setNewAttachmentName] = useState("");
   const [uploading, setUploading] = useState(false);
   const [open, setOpen] = useState(true);
+
+  // State for editing existing link
+  const [editingLinkId, setEditingLinkId] = useState<number | null>(null);
+  const [editLinkUrl, setEditLinkUrl] = useState("");
+  const [editLinkName, setEditLinkName] = useState("");
+
+  // State for editing existing file
+  const [editingFileId, setEditingFileId] = useState<number | null>(null);
+  const [editFileName, setEditFileName] = useState("");
 
   // Auto-focus logic already exists...
   // ...
@@ -156,12 +169,12 @@ export default function EditRecordModal({
         // Update creator/updater info from fresh data
         if (freshRecord.creator) {
           setCreatorName(
-            freshRecord.creator.name || freshRecord.creator.email || ""
+            freshRecord.creator.name || freshRecord.creator.email || "",
           );
         }
         if (freshRecord.updater) {
           setUpdaterName(
-            freshRecord.updater.name || freshRecord.updater.email || ""
+            freshRecord.updater.name || freshRecord.updater.email || "",
           );
         }
         if (freshRecord.updatedAt) {
@@ -203,7 +216,7 @@ export default function EditRecordModal({
             type: file.type || "unknown",
           },
           null,
-          record.id
+          record.id,
         );
 
         // Refresh files
@@ -233,7 +246,6 @@ export default function EditRecordModal({
   };
 
   const handleAddAttachment = async () => {
-    // ... existing implementation
     if (!newAttachmentUrl) return;
 
     let finalUrl = newAttachmentUrl.trim();
@@ -256,15 +268,54 @@ export default function EditRecordModal({
           filename,
           url: finalUrl,
           size: 0,
+          displayName: newAttachmentName.trim() || null,
         }),
       });
       if (res.ok) {
         setNewAttachmentUrl("");
+        setNewAttachmentName("");
         fetchAttachments(); // re-fetch attachments
         router.refresh();
       }
     } catch (error) {
       console.error("Failed to add attachment", error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleUpdateAttachment = async (attachmentId: number) => {
+    if (!editLinkUrl.trim()) return;
+
+    let finalUrl = editLinkUrl.trim();
+    if (!/^https?:\/\//i.test(finalUrl)) {
+      finalUrl = `https://${finalUrl}`;
+    }
+
+    setUploading(true);
+    try {
+      const res = await fetch(`/api/attachments/${attachmentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: finalUrl,
+          displayName: editLinkName.trim() || null,
+        }),
+      });
+
+      if (res.ok) {
+        const updatedAttachment = await res.json();
+        setAttachments((prev) =>
+          prev.map((a) => (a.id === attachmentId ? updatedAttachment : a)),
+        );
+        setEditingLinkId(null);
+        setEditLinkUrl("");
+        setEditLinkName("");
+        router.refresh();
+      }
+    } catch (error) {
+      console.error("Failed to update attachment", error);
+      alert("שגיאה בעדכון הלינק");
     } finally {
       setUploading(false);
     }
@@ -285,6 +336,38 @@ export default function EditRecordModal({
     } catch (error) {
       console.error(error);
       alert("שגיאה במחיקת לינק");
+    }
+  };
+
+  const handleUpdateFile = async (fileId: number) => {
+    setUploading(true);
+    try {
+      const res = await fetch(`/api/files/${fileId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          displayName: editFileName.trim() || null,
+        }),
+      });
+
+      if (res.ok) {
+        const updatedFile = await res.json();
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === fileId
+              ? { ...f, displayName: updatedFile.displayName }
+              : f,
+          ),
+        );
+        setEditingFileId(null);
+        setEditFileName("");
+        router.refresh();
+      }
+    } catch (error) {
+      console.error("Failed to update file", error);
+      alert("שגיאה בעדכון שם הקובץ");
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -338,7 +421,7 @@ export default function EditRecordModal({
             {schema
               .filter(
                 (field, index, self) =>
-                  index === self.findIndex((t) => t.name === field.name)
+                  index === self.findIndex((t) => t.name === field.name),
               )
               .map((field) => (
                 <div key={field.name}>
@@ -456,7 +539,7 @@ export default function EditRecordModal({
                         onChange={(e) => {
                           const selected = Array.from(
                             e.target.selectedOptions,
-                            (option) => option.value
+                            (option) => option.value,
                           );
                           setFormData({ ...formData, [field.name]: selected });
                         }}
@@ -522,7 +605,7 @@ export default function EditRecordModal({
                           const lookupFields = schema.filter(
                             (f) =>
                               f.type === "lookup" &&
-                              f.relationField === field.name
+                              f.relationField === field.name,
                           );
 
                           if (lookupFields.length > 0) {
@@ -545,7 +628,7 @@ export default function EditRecordModal({
                               } catch (error) {
                                 console.error(
                                   "Failed to fetch lookup data",
-                                  error
+                                  error,
                                 );
                               }
                             } else {
@@ -566,10 +649,10 @@ export default function EditRecordModal({
                         field.type === "number"
                           ? "number"
                           : field.type === "date"
-                          ? "date"
-                          : field.type === "url"
-                          ? "url"
-                          : "text"
+                            ? "date"
+                            : field.type === "url"
+                              ? "url"
+                              : "text"
                       }
                       value={formData[field.name] || ""}
                       onChange={(e) =>
@@ -662,30 +745,109 @@ export default function EditRecordModal({
               {attachments.map((att) => (
                 <div
                   key={`att-${att.id}`}
-                  className="flex items-center justify-between bg-muted/30 p-2 rounded-md border border-border text-sm"
+                  className="bg-muted/30 p-2 rounded-md border border-border text-sm"
                 >
-                  <a
-                    href={att.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline truncate max-w-[200px] flex items-center gap-1"
-                  >
-                    {att.filename} <ExternalLink className="h-3 w-3" />
-                  </a>
-                  <div className="flex items-center gap-3">
-                    <span className="text-muted-foreground text-xs">
-                      {new Date(att.uploadedAt).toLocaleDateString()}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
-                      onClick={() => handleDeleteAttachment(att.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
+                  {editingLinkId === att.id ? (
+                    // Edit mode
+                    <div className="flex flex-col gap-2">
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">
+                          שם הלינק (אופציונלי)
+                        </Label>
+                        <Input
+                          placeholder="שם לתצוגה..."
+                          value={editLinkName}
+                          onChange={(e) => setEditLinkName(e.target.value)}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">
+                          כתובת URL
+                        </Label>
+                        <Input
+                          placeholder="https://..."
+                          value={editLinkUrl}
+                          onChange={(e) => setEditLinkUrl(e.target.value)}
+                          className="h-8 text-sm"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleUpdateAttachment(att.id);
+                            }
+                            if (e.key === "Escape") {
+                              setEditingLinkId(null);
+                              setEditLinkUrl("");
+                              setEditLinkName("");
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditingLinkId(null);
+                            setEditLinkUrl("");
+                            setEditLinkName("");
+                          }}
+                        >
+                          <X className="h-4 w-4 mr-1" /> ביטול
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => handleUpdateAttachment(att.id)}
+                          disabled={!editLinkUrl.trim() || uploading}
+                        >
+                          <Check className="h-4 w-4 mr-1" /> שמור
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    // Display mode
+                    <div className="flex items-center justify-between">
+                      <a
+                        href={att.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline truncate max-w-[200px] flex items-center gap-1"
+                        title={att.url}
+                      >
+                        {att.displayName || att.filename}{" "}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground text-xs">
+                          {new Date(att.uploadedAt).toLocaleDateString()}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 hover:bg-primary/10 hover:text-primary text-muted-foreground"
+                          onClick={() => {
+                            setEditingLinkId(att.id);
+                            setEditLinkUrl(att.url);
+                            setEditLinkName(att.displayName || "");
+                          }}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
+                          onClick={() => handleDeleteAttachment(att.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
 
@@ -693,32 +855,100 @@ export default function EditRecordModal({
               {files.map((file) => (
                 <div
                   key={`file-${file.id}`}
-                  className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 p-2 rounded-md border border-blue-100 dark:border-blue-800 text-sm"
+                  className="flex flex-col gap-2 bg-blue-50 dark:bg-blue-900/20 p-2 rounded-md border border-blue-100 dark:border-blue-800 text-sm"
                 >
-                  <a
-                    href={file.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[200px] flex items-center gap-1"
-                  >
-                    📄 {file.name}
-                  </a>
-                  <div className="flex items-center gap-3">
-                    <span className="text-muted-foreground text-xs">
-                      {file.size ? Math.round(file.size / 1024) + " KB" : ""}
-                    </span>
-                    {/* File Deletion Logic - Needs Server Action or API */}
-                    {/* For now we can assume we might need a handleDeleteFile function */}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
-                      onClick={() => handleDeleteFile(file.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
+                  {editingFileId === file.id ? (
+                    // Edit Mode
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          שם:
+                        </span>
+                        <Input
+                          placeholder={file.name}
+                          value={editFileName}
+                          onChange={(e) => setEditFileName(e.target.value)}
+                          className="h-7 text-sm flex-1"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleUpdateFile(file.id);
+                            if (e.key === "Escape") {
+                              setEditingFileId(null);
+                              setEditFileName("");
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7"
+                          onClick={() => {
+                            setEditingFileId(null);
+                            setEditFileName("");
+                          }}
+                          disabled={uploading}
+                        >
+                          <X className="h-3 w-3 mr-1" />
+                          ביטול
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-7"
+                          onClick={() => handleUpdateFile(file.id)}
+                          disabled={uploading}
+                        >
+                          <Check className="h-3 w-3 mr-1" />
+                          {uploading ? "שומר..." : "שמור"}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    // Normal Mode
+                    <div className="flex items-center justify-between">
+                      <a
+                        href={file.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[200px] flex items-center gap-1"
+                        title={file.url}
+                      >
+                        📄 {(file as any).displayName || file.name}
+                      </a>
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground text-xs">
+                          {file.size
+                            ? Math.round(file.size / 1024) + " KB"
+                            : ""}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 hover:bg-blue-200 dark:hover:bg-blue-800 text-muted-foreground"
+                          onClick={() => {
+                            setEditFileName((file as any).displayName || "");
+                            setEditingFileId(file.id);
+                          }}
+                          title="ערוך שם"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
+                          onClick={() => handleDeleteFile(file.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
 
@@ -755,22 +985,36 @@ export default function EditRecordModal({
               </div>
 
               {/* Add Link Input */}
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2">
                 <Input
-                  type="url"
-                  placeholder="הדבק לינק..."
-                  value={newAttachmentUrl}
-                  onChange={(e) => setNewAttachmentUrl(e.target.value)}
-                  className="flex-1"
+                  type="text"
+                  placeholder="שם הלינק (אופציונלי)"
+                  value={newAttachmentName}
+                  onChange={(e) => setNewAttachmentName(e.target.value)}
                 />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleAddAttachment}
-                  disabled={uploading || !newAttachmentUrl}
-                >
-                  {uploading ? "מוסיף..." : "הוסף לינק"}
-                </Button>
+                <div className="flex gap-2">
+                  <Input
+                    type="url"
+                    placeholder="הדבק לינק..."
+                    value={newAttachmentUrl}
+                    onChange={(e) => setNewAttachmentUrl(e.target.value)}
+                    className="flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddAttachment();
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleAddAttachment}
+                    disabled={uploading || !newAttachmentUrl}
+                  >
+                    {uploading ? "מוסיף..." : "הוסף לינק"}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

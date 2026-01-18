@@ -293,14 +293,15 @@ model Record {
 }
 
 model Attachment {
-  id         Int      @id @default(autoincrement())
-  recordId   Int
-  filename   String
-  url        String
-  size       Int
-  uploadedBy Int
-  uploadedAt DateTime @default(now())
-  record     Record   @relation(fields: [recordId], references: [id])
+  id          Int      @id @default(autoincrement())
+  recordId    Int
+  filename    String
+  url         String
+  size        Int
+  displayName String?  // Optional custom display name for links
+  uploadedBy  Int
+  uploadedAt  DateTime @default(now())
+  record      Record   @relation(fields: [recordId], references: [id])
 }
 
 model AuditLog {
@@ -795,15 +796,16 @@ model Folder {
 }
 
 model File {
-  id        Int      @id @default(autoincrement())
-  companyId Int
-  folderId  Int?
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  folderId    Int?
 
-  name      String
-  url       String
-  key       String   
-  size      Int      
-  type      String   
+  name        String
+  displayName String?  // Optional custom display name
+  url         String
+  key         String   
+  size        Int      
+  type        String   
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

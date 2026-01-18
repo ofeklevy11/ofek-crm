@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 
 export async function moveFileToFolder(
   fileId: number,
-  targetFolderId: number | null
+  targetFolderId: number | null,
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
@@ -170,9 +170,10 @@ export async function saveFileMetadata(
     key: string;
     size: number;
     type: string;
+    displayName?: string;
   },
   folderId: number | null,
-  recordId?: number
+  recordId?: number,
 ) {
   console.log("Saving file metadata start:", fileData.name);
   const user = await getCurrentUser();
@@ -184,17 +185,47 @@ export async function saveFileMetadata(
   try {
     const newFile = await prisma.file.create({
       data: {
-        ...fileData,
+        name: fileData.name,
+        url: fileData.url,
+        key: fileData.key,
+        size: fileData.size,
+        type: fileData.type,
+        displayName: fileData.displayName || null,
         folderId,
         recordId,
         companyId: user.companyId,
       },
     });
     console.log("File saved to DB:", newFile.id);
+    return newFile;
   } catch (error) {
     console.error("Error saving to DB:", error);
     throw error;
   }
+
+  revalidatePath("/files");
+}
+
+export async function updateFile(
+  fileId: number,
+  data: { displayName?: string | null },
+) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+
+  // Verify file belongs to user's company
+  const file = await prisma.file.findFirst({
+    where: { id: fileId, companyId: user.companyId },
+  });
+
+  if (!file) throw new Error("File not found");
+
+  await prisma.file.update({
+    where: { id: fileId },
+    data: {
+      displayName: data.displayName?.trim() || null,
+    },
+  });
 
   revalidatePath("/files");
 }

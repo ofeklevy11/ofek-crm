@@ -35,13 +35,15 @@ export default function CreateTableForm() {
   const [slug, setSlug] = useState("");
   const [availableTables, setAvailableTables] = useState<TableOption[]>([]);
   const [categories, setCategories] = useState<{ id: number; name: string }[]>(
-    []
+    [],
   );
   const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [users, setUsers] = useState<any[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
-      const { getTables, getCategories } = await import("@/app/actions");
+      const { getTables, getCategories, getUsers } =
+        await import("@/app/actions");
 
       const tablesResult = await getTables();
       if (tablesResult.success) {
@@ -51,6 +53,11 @@ export default function CreateTableForm() {
       const categoriesResult = await getCategories();
       if (categoriesResult.success) {
         setCategories(categoriesResult.data!);
+      }
+
+      const usersResult = await getUsers();
+      if (usersResult.success) {
+        setUsers(usersResult.data!);
       }
     };
     loadData();
@@ -82,7 +89,7 @@ export default function CreateTableForm() {
   const handleFieldChange = (
     index: number,
     key: keyof FieldRow,
-    value: string | boolean
+    value: string | boolean,
   ) => {
     const newFields = [...fields];
     (newFields[index][key] as any) = value;
@@ -100,6 +107,12 @@ export default function CreateTableForm() {
       if (/^[a-zA-Z0-9 ]+$/.test(value)) {
         newFields[index].name = value.toLowerCase().replace(/[^a-z0-9]/g, "_");
       }
+    }
+
+    // Auto-populate options for record_owner
+    if (key === "type" && value === "record_owner") {
+      newFields[index].options = users.map((u) => u.name).join(", ");
+      newFields[index].defaultValue = "";
     }
 
     setFields(newFields);
@@ -122,16 +135,22 @@ export default function CreateTableForm() {
       // Construct schema from fields
       const schemaJson = fields.map((f) => ({
         name: f.name,
-        type: f.type,
+        type: f.type === "record_owner" ? "select" : f.type,
         label: f.label,
-        options: ["select", "multi-select", "radio", "tags"].includes(f.type)
+        options: [
+          "select",
+          "multi-select",
+          "radio",
+          "tags",
+          "record_owner",
+        ].includes(f.type)
           ? Array.from(
               new Set(
                 f.options
                   .split(",")
                   .map((o) => o.trim())
-                  .filter(Boolean)
-              )
+                  .filter(Boolean),
+              ),
             )
           : undefined,
         relationTableId: f.relationTableId
@@ -297,6 +316,9 @@ export default function CreateTableForm() {
                     <option value="date">תאריך</option>
                     <option value="boolean">כן/לא</option>
                     <option value="url">קישור (URL)</option>
+                    <option value="record_owner">
+                      אחראי רשומה (Record Owner)
+                    </option>
                     <option value="select">בחירה (Select)</option>
                     <option value="multi-select">בחירה מרובה</option>
                     <option value="tags">תגיות</option>
@@ -333,9 +355,13 @@ export default function CreateTableForm() {
                 />
               </div>
 
-              {["select", "multi-select", "radio", "tags"].includes(
-                field.type
-              ) && (
+              {[
+                "select",
+                "multi-select",
+                "radio",
+                "tags",
+                "record_owner",
+              ].includes(field.type) && (
                 <div className="mt-4 pt-4 border-t border-border/50">
                   <Label className="text-xs font-bold uppercase tracking-wide mb-2 block">
                     אפשרויות (מופרדות בפסיקים)
@@ -366,7 +392,7 @@ export default function CreateTableForm() {
                         handleFieldChange(
                           index,
                           "relationTableId",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -392,7 +418,7 @@ export default function CreateTableForm() {
                             handleFieldChange(
                               index,
                               "displayField",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -400,7 +426,7 @@ export default function CreateTableForm() {
                           <option value="">ברירת מחדל (שדה ראשון)</option>
                           {(() => {
                             const relatedTable = availableTables.find(
-                              (t) => t.id === Number(field.relationTableId)
+                              (t) => t.id === Number(field.relationTableId),
                             );
                             if (!relatedTable?.schemaJson) return null;
 
@@ -456,7 +482,7 @@ export default function CreateTableForm() {
                         handleFieldChange(
                           index,
                           "relationField",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -485,11 +511,11 @@ export default function CreateTableForm() {
                       <option value="">בחר שדה יעד...</option>
                       {(() => {
                         const relationField = fields.find(
-                          (f) => f.name === field.relationField
+                          (f) => f.name === field.relationField,
                         );
                         if (!relationField?.relationTableId) return null;
                         const relatedTable = availableTables.find(
-                          (t) => t.id === Number(relationField.relationTableId)
+                          (t) => t.id === Number(relationField.relationTableId),
                         );
                         if (!relatedTable?.schemaJson) return null;
 

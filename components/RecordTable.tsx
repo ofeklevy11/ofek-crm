@@ -1,7 +1,7 @@
 "use client";
 
 import { uploadFiles } from "@/lib/uploadthing";
-import { saveFileMetadata } from "@/app/actions/storage";
+import { saveFileMetadata, updateFile } from "@/app/actions/storage";
 import { useState, useEffect, useRef } from "react";
 
 import { useRouter } from "next/navigation";
@@ -44,6 +44,8 @@ import {
   ExternalLink,
   Link,
   Plus,
+  Pencil,
+  X,
 } from "lucide-react";
 import EditRecordModal from "./EditRecordModal";
 import ViewTextModal from "./ViewTextModal";
@@ -100,7 +102,7 @@ export default function RecordTable({
   const [isDeleting, setIsDeleting] = useState(false);
   const [editingRecord, setEditingRecord] = useState<any | null>(null);
   const [editingField, setEditingField] = useState<string | undefined>(
-    undefined
+    undefined,
   );
   // Dynamic filters
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -112,7 +114,7 @@ export default function RecordTable({
   } | null>(null);
   const [relatedData, setRelatedData] = useState<Record<string, any>>({});
   const [highlightedRecordId, setHighlightedRecordId] = useState<number | null>(
-    null
+    null,
   );
   const recordRefs = useRef<Record<number, HTMLTableRowElement>>({});
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -122,13 +124,23 @@ export default function RecordTable({
 
   // State for link input popover
   const [linkInputRecordId, setLinkInputRecordId] = useState<number | null>(
-    null
+    null,
   );
   const [newLinkUrl, setNewLinkUrl] = useState("");
+  const [newLinkName, setNewLinkName] = useState("");
+
+  // State for editing existing link
+  const [editingLinkId, setEditingLinkId] = useState<number | null>(null);
+  const [editLinkUrl, setEditLinkUrl] = useState("");
+  const [editLinkName, setEditLinkName] = useState("");
+
+  // State for editing existing file
+  const [editingFileId, setEditingFileId] = useState<number | null>(null);
+  const [editFileName, setEditFileName] = useState("");
 
   const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
-    recordId: number
+    recordId: number,
   ) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -158,7 +170,7 @@ export default function RecordTable({
             type: file.type || "unknown",
           },
           null, // No folder (root)
-          recordId
+          recordId,
         );
         router.refresh();
       }
@@ -193,6 +205,7 @@ export default function RecordTable({
         body: JSON.stringify({
           url: finalUrl,
           filename: filename,
+          displayName: newLinkName.trim() || null,
         }),
       });
 
@@ -210,10 +223,11 @@ export default function RecordTable({
             };
           }
           return r;
-        })
+        }),
       );
 
       setNewLinkUrl("");
+      setNewLinkName("");
       setLinkInputRecordId(null);
     } catch (error) {
       console.error(error);
@@ -221,11 +235,87 @@ export default function RecordTable({
     }
   };
 
+  const handleUpdateLink = async (recordId: number, attachmentId: number) => {
+    if (!editLinkUrl.trim()) return;
+
+    let finalUrl = editLinkUrl.trim();
+    // Add protocol if missing
+    if (!/^https?:\/\//i.test(finalUrl)) {
+      finalUrl = `https://${finalUrl}`;
+    }
+
+    try {
+      const res = await fetch(`/api/attachments/${attachmentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: finalUrl,
+          displayName: editLinkName.trim() || null,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to update link");
+
+      const updatedAttachment = await res.json();
+
+      // Update local state
+      setRecords((prevRecords) =>
+        prevRecords.map((r) => {
+          if (r.id === recordId) {
+            return {
+              ...r,
+              attachments: r.attachments.map((a: any) =>
+                a.id === attachmentId ? updatedAttachment : a,
+              ),
+            };
+          }
+          return r;
+        }),
+      );
+
+      setEditingLinkId(null);
+      setEditLinkUrl("");
+      setEditLinkName("");
+    } catch (error) {
+      console.error(error);
+      alert("שגיאה בעדכון הלינק");
+    }
+  };
+
+  const handleUpdateFile = async (recordId: number, fileId: number) => {
+    try {
+      await updateFile(fileId, { displayName: editFileName.trim() || null });
+
+      // Update local state
+      setRecords((prevRecords) =>
+        prevRecords.map((r) => {
+          if (r.id === recordId) {
+            return {
+              ...r,
+              files: r.files?.map((f: any) =>
+                f.id === fileId
+                  ? { ...f, displayName: editFileName.trim() || null }
+                  : f,
+              ),
+            };
+          }
+          return r;
+        }),
+      );
+
+      setEditingFileId(null);
+      setEditFileName("");
+    } catch (error) {
+      console.error(error);
+      alert("שגיאה בעדכון שם הקובץ");
+    }
+  };
+
   // Fetch related data
   useEffect(() => {
     const fetchRelatedData = async () => {
       const relationFields = schema.filter(
-        (f) => f.type === "relation" && f.relationTableId
+        (f) => f.type === "relation" && f.relationTableId,
       );
       const newRelatedData: Record<string, any> = {};
 
@@ -234,7 +324,7 @@ export default function RecordTable({
           if (!field.relationTableId) return;
           try {
             const res = await fetch(
-              `/api/tables/${field.relationTableId}/records`
+              `/api/tables/${field.relationTableId}/records`,
             );
             if (res.ok) {
               const data = await res.json();
@@ -247,10 +337,10 @@ export default function RecordTable({
           } catch (error) {
             console.error(
               `Failed to fetch related table ${field.relationTableId}`,
-              error
+              error,
             );
           }
-        })
+        }),
       );
 
       setRelatedData(newRelatedData);
@@ -284,7 +374,7 @@ export default function RecordTable({
 
   const uniqueFields = schema.filter(
     (field, index, self) =>
-      index === self.findIndex((t) => t.name === field.name)
+      index === self.findIndex((t) => t.name === field.name),
   );
 
   const statusField = schema.find(
@@ -292,18 +382,18 @@ export default function RecordTable({
       f.name.toLowerCase() === "status" ||
       f.label === "סטטוס" ||
       f.label.toLowerCase() === "status" ||
-      f.label.includes("סטטוס")
+      f.label.includes("סטטוס"),
   );
   const statusFieldName = statusField?.name;
 
   const activeBooleanFieldName = schema.find(
     (f) =>
       f.type === "boolean" &&
-      (f.name.toLowerCase().includes("active") || f.label.includes("פעיל"))
+      (f.name.toLowerCase().includes("active") || f.label.includes("פעיל")),
   )?.name;
 
   const filterableFields = schema.filter(
-    (f) => f.type === "select" || f.type === "multi-select"
+    (f) => f.type === "select" || f.type === "multi-select",
   );
 
   const filteredRecords = records.filter((record) => {
@@ -381,7 +471,7 @@ export default function RecordTable({
   const handleDeleteAttachment = async (
     e: React.MouseEvent,
     recordId: number,
-    attachmentId: number
+    attachmentId: number,
   ) => {
     e.preventDefault();
     e.stopPropagation();
@@ -401,12 +491,12 @@ export default function RecordTable({
             return {
               ...r,
               attachments: r.attachments.filter(
-                (a: any) => a.id !== attachmentId
+                (a: any) => a.id !== attachmentId,
               ),
             };
           }
           return r;
-        })
+        }),
       );
     } catch (error) {
       console.error(error);
@@ -445,7 +535,7 @@ export default function RecordTable({
             new Date(record.updatedAt).toLocaleDateString(),
           ];
           return row.join(";");
-        })
+        }),
       )
       .join("\n");
 
@@ -458,7 +548,7 @@ export default function RecordTable({
     link.href = url;
     link.setAttribute(
       "download",
-      `export_${new Date().toISOString().split("T")[0]}.csv`
+      `export_${new Date().toISOString().split("T")[0]}.csv`,
     );
     document.body.appendChild(link);
     link.click();
@@ -496,7 +586,7 @@ export default function RecordTable({
             new Date(record.updatedAt).toLocaleDateString(),
           ];
           return row.join("\t");
-        })
+        }),
       )
       .join("\n");
 
@@ -509,7 +599,7 @@ export default function RecordTable({
     link.href = url;
     link.setAttribute(
       "download",
-      `export_${new Date().toISOString().split("T")[0]}.txt`
+      `export_${new Date().toISOString().split("T")[0]}.txt`,
     );
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
@@ -526,7 +616,7 @@ export default function RecordTable({
           v.isEnabled &&
           v.config?.type === "legend" &&
           v.config?.legendField &&
-          v.config?.colorMappings
+          v.config?.colorMappings,
       ) || [];
 
     const matches: Array<{ color: string; priority: number }> = [];
@@ -645,8 +735,8 @@ export default function RecordTable({
                       records
                         .map((r) => r.data?.[field.name])
                         .filter(Boolean)
-                        .flatMap((val) => (Array.isArray(val) ? val : [val]))
-                    )
+                        .flatMap((val) => (Array.isArray(val) ? val : [val])),
+                    ),
                   ).sort();
 
                   return (
@@ -809,7 +899,7 @@ export default function RecordTable({
                     className={cn(
                       getRowColorClass(record),
                       highlightedRecordId === record.id &&
-                        "ring-2 ring-primary ring-inset bg-primary/5"
+                        "ring-2 ring-primary ring-inset bg-primary/5",
                     )}
                     style={getRowStyle(record)}
                   >
@@ -850,7 +940,7 @@ export default function RecordTable({
                         className={cn(
                           "align-middle text-center",
                           canEdit &&
-                            "cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                            "cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors",
                         )}
                         title={canEdit ? "לחץ לעריכה" : ""}
                       >
@@ -946,7 +1036,7 @@ export default function RecordTable({
                                           >
                                             {v}
                                           </Badge>
-                                        )
+                                        ),
                                       )}
                                     </div>
                                   );
@@ -987,7 +1077,7 @@ export default function RecordTable({
                                             e.stopPropagation();
                                             if (relatedTableId) {
                                               router.push(
-                                                `/tables/${relatedTableId}`
+                                                `/tables/${relatedTableId}`,
                                               );
                                             }
                                           }}
@@ -1006,7 +1096,7 @@ export default function RecordTable({
                                       e.stopPropagation();
                                       if (relatedTableId) {
                                         router.push(
-                                          `/tables/${relatedTableId}`
+                                          `/tables/${relatedTableId}`,
                                         );
                                       }
                                     }}
@@ -1033,30 +1123,116 @@ export default function RecordTable({
                         {record.attachments?.map((att: any) => (
                           <div
                             key={`att-${att.id}`}
-                            className="flex items-center gap-2 text-xs bg-muted px-2 py-1 rounded-md max-w-[200px] w-full justify-between group"
+                            className="flex flex-col gap-1 text-xs bg-muted px-2 py-1 rounded-md max-w-[200px] w-full group"
                           >
-                            <a
-                              href={att.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1 truncate hover:underline text-blue-600 w-full"
-                              title={att.filename}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Paperclip className="h-3 w-3 shrink-0" />
-                              <span className="truncate">{att.filename}</span>
-                            </a>
-                            {canEdit && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 hover:bg-destructive/10 hover:text-destructive"
-                                onClick={(e) =>
-                                  handleDeleteAttachment(e, record.id, att.id)
-                                }
+                            {editingLinkId === att.id ? (
+                              // Edit mode
+                              <div
+                                className="flex flex-col gap-1 w-full"
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
+                                <Input
+                                  placeholder="שם הלינק (אופציונלי)"
+                                  value={editLinkName}
+                                  onChange={(e) =>
+                                    setEditLinkName(e.target.value)
+                                  }
+                                  className="h-6 text-[10px] w-full"
+                                />
+                                <Input
+                                  placeholder="כתובת URL"
+                                  value={editLinkUrl}
+                                  onChange={(e) =>
+                                    setEditLinkUrl(e.target.value)
+                                  }
+                                  className="h-6 text-[10px] w-full"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      handleUpdateLink(record.id, att.id);
+                                    }
+                                    if (e.key === "Escape") {
+                                      setEditingLinkId(null);
+                                      setEditLinkUrl("");
+                                      setEditLinkName("");
+                                    }
+                                  }}
+                                />
+                                <div className="flex gap-1 justify-end">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-5 px-1 text-[10px]"
+                                    onClick={() => {
+                                      setEditingLinkId(null);
+                                      setEditLinkUrl("");
+                                      setEditLinkName("");
+                                    }}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="h-5 px-2 text-[10px]"
+                                    onClick={() =>
+                                      handleUpdateLink(record.id, att.id)
+                                    }
+                                    disabled={!editLinkUrl.trim()}
+                                  >
+                                    <Check className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              // Display mode
+                              <div className="flex items-center justify-between w-full">
+                                <a
+                                  href={att.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 truncate hover:underline text-blue-600 flex-1 min-w-0"
+                                  title={att.url}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Paperclip className="h-3 w-3 shrink-0" />
+                                  <span className="truncate">
+                                    {att.displayName || att.filename}
+                                  </span>
+                                </a>
+                                {canEdit && (
+                                  <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-5 w-5 hover:bg-primary/10 hover:text-primary"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingLinkId(att.id);
+                                        setEditLinkUrl(att.url);
+                                        setEditLinkName(att.displayName || "");
+                                      }}
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-5 w-5 hover:bg-destructive/10 hover:text-destructive"
+                                      onClick={(e) =>
+                                        handleDeleteAttachment(
+                                          e,
+                                          record.id,
+                                          att.id,
+                                        )
+                                      }
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
                         ))}
@@ -1065,20 +1241,92 @@ export default function RecordTable({
                         {record.files?.map((file: any) => (
                           <div
                             key={`file-${file.id}`}
-                            className="flex items-center gap-2 text-xs bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-md max-w-[200px] w-full justify-between group"
+                            className="flex flex-col gap-1 text-xs bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-md max-w-[200px] w-full"
                           >
-                            <a
-                              href={file.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1 truncate hover:underline text-blue-600 dark:text-blue-400 w-full"
-                              title={file.name}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <FileIcon className="h-3 w-3 shrink-0" />
-                              <span className="truncate">{file.name}</span>
-                            </a>
-                            {/* File deletion not implemented in table view yet, relying on /files page or future request */}
+                            {editingFileId === file.id ? (
+                              // Edit Mode
+                              <div
+                                className="flex flex-col gap-1"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Input
+                                  placeholder={file.name}
+                                  value={editFileName}
+                                  onChange={(e) =>
+                                    setEditFileName(e.target.value)
+                                  }
+                                  className="h-6 text-[10px]"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter")
+                                      handleUpdateFile(record.id, file.id);
+                                    if (e.key === "Escape") {
+                                      setEditingFileId(null);
+                                      setEditFileName("");
+                                    }
+                                  }}
+                                />
+                                <div className="flex gap-1">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-5 px-1 text-[10px]"
+                                    onClick={() => {
+                                      setEditingFileId(null);
+                                      setEditFileName("");
+                                    }}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="h-5 px-2 text-[10px]"
+                                    onClick={() =>
+                                      handleUpdateFile(record.id, file.id)
+                                    }
+                                  >
+                                    <Check className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              // Normal Mode
+                              <div className="flex items-center justify-between group">
+                                <a
+                                  href={file.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 truncate hover:underline text-blue-600 dark:text-blue-400 flex-1"
+                                  title={file.url}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <FileIcon className="h-3 w-3 shrink-0" />
+                                  <span className="truncate">
+                                    {file.displayName || file.name}
+                                  </span>
+                                </a>
+                                {canEdit && (
+                                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-5 w-5 hover:bg-blue-200 dark:hover:bg-blue-800"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditFileName(file.displayName || "");
+                                        setEditingFileId(file.id);
+                                      }}
+                                      title="ערוך שם"
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         ))}
 
@@ -1104,37 +1352,61 @@ export default function RecordTable({
                             {/* Add Link Button/Input */}
                             {linkInputRecordId === record.id ? (
                               <div
-                                className="flex gap-1 items-center w-full"
+                                className="flex flex-col gap-1 w-full"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <Input
-                                  placeholder="הדבק לינק..."
-                                  value={newLinkUrl}
+                                  placeholder="שם הלינק (אופציונלי)"
+                                  value={newLinkName}
                                   onChange={(e) =>
-                                    setNewLinkUrl(e.target.value)
+                                    setNewLinkName(e.target.value)
                                   }
-                                  className="h-7 text-[10px] flex-1 min-w-0"
-                                  autoFocus
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      e.preventDefault();
-                                      handleAddLink(record.id);
+                                  className="h-7 text-[10px] w-full"
+                                />
+                                <div className="flex gap-1 items-center w-full">
+                                  <Input
+                                    placeholder="הדבק לינק..."
+                                    value={newLinkUrl}
+                                    onChange={(e) =>
+                                      setNewLinkUrl(e.target.value)
                                     }
-                                    if (e.key === "Escape") {
+                                    className="h-7 text-[10px] flex-1 min-w-0"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        handleAddLink(record.id);
+                                      }
+                                      if (e.key === "Escape") {
+                                        setLinkInputRecordId(null);
+                                        setNewLinkUrl("");
+                                        setNewLinkName("");
+                                      }
+                                    }}
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-1"
+                                    onClick={() => {
                                       setLinkInputRecordId(null);
                                       setNewLinkUrl("");
-                                    }
-                                  }}
-                                />
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  className="h-7 px-2 text-[10px]"
-                                  onClick={() => handleAddLink(record.id)}
-                                  disabled={!newLinkUrl.trim()}
-                                >
-                                  <Plus className="h-3 w-3" />
-                                </Button>
+                                      setNewLinkName("");
+                                    }}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="h-7 px-2 text-[10px]"
+                                    onClick={() => handleAddLink(record.id)}
+                                    disabled={!newLinkUrl.trim()}
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                </div>
                               </div>
                             ) : (
                               <button
@@ -1144,6 +1416,7 @@ export default function RecordTable({
                                   e.stopPropagation();
                                   setLinkInputRecordId(record.id);
                                   setNewLinkUrl("");
+                                  setNewLinkName("");
                                 }}
                               >
                                 <Link className="h-3 w-3" />

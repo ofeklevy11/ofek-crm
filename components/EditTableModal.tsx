@@ -54,9 +54,10 @@ export default function EditTableModal({
   const [fields, setFields] = useState<FieldRow[]>([]);
   const [availableTables, setAvailableTables] = useState<TableOption[]>([]);
   const [categories, setCategories] = useState<{ id: number; name: string }[]>(
-    []
+    [],
   );
   const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [users, setUsers] = useState<any[]>([]);
 
   useEffect(() => {
     fetch("/api/tables")
@@ -68,6 +69,11 @@ export default function EditTableModal({
       .then((res) => res.json())
       .then((data) => setCategories(data))
       .catch((err) => console.error("Failed to load categories", err));
+
+    fetch("/api/users")
+      .then((res) => res.json())
+      .then((data) => setUsers(data))
+      .catch((err) => console.error("Failed to load users", err));
   }, []);
 
   useEffect(() => {
@@ -128,7 +134,7 @@ export default function EditTableModal({
   const handleFieldChange = (
     index: number,
     key: keyof FieldRow,
-    value: string | boolean
+    value: string | boolean,
   ) => {
     const newFields = [...fields];
     (newFields[index][key] as any) = value;
@@ -141,6 +147,12 @@ export default function EditTableModal({
       if (/^[a-zA-Z0-9 ]+$/.test(value)) {
         newFields[index].name = value.toLowerCase().replace(/[^a-z0-9]/g, "_");
       }
+    }
+
+    // Auto-populate options for record_owner
+    if (key === "type" && value === "record_owner") {
+      newFields[index].options = users.map((u) => u.name).join(", ");
+      newFields[index].defaultValue = "";
     }
 
     setFields(newFields);
@@ -162,9 +174,15 @@ export default function EditTableModal({
     try {
       const schemaJson = fields.map((f) => ({
         name: f.name,
-        type: f.type,
+        type: f.type === "record_owner" ? "select" : f.type,
         label: f.label,
-        options: ["select", "multi-select", "radio", "tags"].includes(f.type)
+        options: [
+          "select",
+          "multi-select",
+          "radio",
+          "tags",
+          "record_owner",
+        ].includes(f.type)
           ? f.options
               .split(",")
               .map((o) => o.trim())
@@ -247,7 +265,7 @@ export default function EditTableModal({
                   value={categoryId || ""}
                   onChange={(e) =>
                     setCategoryId(
-                      e.target.value ? Number(e.target.value) : null
+                      e.target.value ? Number(e.target.value) : null,
                     )
                   }
                   className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -329,6 +347,9 @@ export default function EditTableModal({
                           <option value="date">תאריך</option>
                           <option value="boolean">כן/לא</option>
                           <option value="url">קישור (URL)</option>
+                          <option value="record_owner">
+                            אחראי רשומה (Record Owner)
+                          </option>
                           <option value="select">בחירה (Select)</option>
                           <option value="multi-select">בחירה מרובה</option>
                           <option value="tags">תגיות</option>
@@ -362,16 +383,20 @@ export default function EditTableModal({
                             handleFieldChange(
                               index,
                               "defaultValue",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           placeholder="אופציונלי"
                         />
                       </div>
 
-                      {["select", "multi-select", "radio", "tags"].includes(
-                        field.type
-                      ) && (
+                      {[
+                        "select",
+                        "multi-select",
+                        "radio",
+                        "tags",
+                        "record_owner",
+                      ].includes(field.type) && (
                         <div className="space-y-1">
                           <Label className="text-xs font-bold uppercase tracking-wide">
                             אפשרויות (מופרדות בפסיק)
@@ -383,7 +408,7 @@ export default function EditTableModal({
                               handleFieldChange(
                                 index,
                                 "options",
-                                e.target.value
+                                e.target.value,
                               )
                             }
                             placeholder="אפשרות 1, אפשרות 2"
@@ -404,7 +429,7 @@ export default function EditTableModal({
                               handleFieldChange(
                                 index,
                                 "relationTableId",
-                                e.target.value
+                                e.target.value,
                               )
                             }
                             className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -430,7 +455,7 @@ export default function EditTableModal({
                                   handleFieldChange(
                                     index,
                                     "displayField",
-                                    e.target.value
+                                    e.target.value,
                                   )
                                 }
                                 className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -439,7 +464,7 @@ export default function EditTableModal({
                                 {(() => {
                                   const relatedTable = availableTables.find(
                                     (t) =>
-                                      t.id === Number(field.relationTableId)
+                                      t.id === Number(field.relationTableId),
                                   );
                                   if (!relatedTable?.schemaJson) return null;
 
@@ -471,7 +496,7 @@ export default function EditTableModal({
                                     handleFieldChange(
                                       index,
                                       "allowMultiple",
-                                      checked
+                                      checked,
                                     )
                                   }
                                 />
@@ -497,7 +522,7 @@ export default function EditTableModal({
                               handleFieldChange(
                                 index,
                                 "relationField",
-                                e.target.value
+                                e.target.value,
                               )
                             }
                             className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -522,7 +547,7 @@ export default function EditTableModal({
                               handleFieldChange(
                                 index,
                                 "lookupField",
-                                e.target.value
+                                e.target.value,
                               )
                             }
                             className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -530,12 +555,13 @@ export default function EditTableModal({
                             <option value="">בחר שדה יעד...</option>
                             {(() => {
                               const relationField = fields.find(
-                                (f) => f.name === field.relationField
+                                (f) => f.name === field.relationField,
                               );
                               if (!relationField?.relationTableId) return null;
                               const relatedTable = availableTables.find(
                                 (t) =>
-                                  t.id === Number(relationField.relationTableId)
+                                  t.id ===
+                                  Number(relationField.relationTableId),
                               );
                               if (!relatedTable?.schemaJson) return null;
 

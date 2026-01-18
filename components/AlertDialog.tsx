@@ -16,7 +16,7 @@ interface AlertDialogProps {
   onClose: () => void;
   onConfirm: () => void;
   title: string;
-  description: string;
+  description: React.ReactNode | string;
   confirmText?: string;
   cancelText?: string;
   isDestructive?: boolean;

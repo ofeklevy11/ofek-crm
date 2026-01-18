@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import EditTableModal from "./EditTableModal";
 import AlertDialog from "./AlertDialog";
-import { User, Pencil, Trash2 } from "lucide-react";
+import { User, Pencil, Trash2, Copy } from "lucide-react";
+import { duplicateTable } from "@/app/actions/tables";
 
 interface TableCardProps {
   table: {
@@ -28,7 +29,9 @@ export default function TableCard({
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDuplicating, setIsDuplicating] = useState(false);
 
   // ---------------------------
   // Handlers
@@ -44,6 +47,32 @@ export default function TableCard({
     e.preventDefault();
     e.stopPropagation();
     setIsDeleteDialogOpen(true);
+  };
+
+  const handleDuplicateClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDuplicateDialogOpen(true);
+  };
+
+  const handleConfirmDuplicate = async () => {
+    setIsDuplicating(true);
+
+    try {
+      const result = await duplicateTable(table.id);
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to duplicate table");
+      }
+
+      router.refresh();
+    } catch (error: any) {
+      console.error(error);
+      alert(error.message || "Error duplicating table");
+    } finally {
+      setIsDuplicateDialogOpen(false);
+      setIsDuplicating(false);
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -125,9 +154,25 @@ export default function TableCard({
               onPointerDown={(e) => e.stopPropagation()}
               className="bg-background text-muted-foreground hover:text-primary p-2 rounded-lg shadow-sm border border-border hover:border-primary transition"
               title="ערוך טבלה"
-              disabled={isDeleting}
+              disabled={isDeleting || isDuplicating}
             >
               <Pencil size={16} />
+            </button>
+          )}
+
+          {canEdit && (
+            <button
+              onClick={handleDuplicateClick}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="bg-background text-muted-foreground hover:text-purple-500 p-2 rounded-lg shadow-sm border border-border hover:border-purple-500 transition disabled:opacity-50"
+              title="שכפל טבלה"
+              disabled={isDeleting || isDuplicating}
+            >
+              {isDuplicating ? (
+                <span className="animate-spin w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full block"></span>
+              ) : (
+                <Copy size={16} />
+              )}
             </button>
           )}
 
@@ -137,7 +182,7 @@ export default function TableCard({
               onPointerDown={(e) => e.stopPropagation()}
               className="bg-background text-muted-foreground hover:text-destructive p-2 rounded-lg shadow-sm border border-border hover:border-destructive transition disabled:opacity-50"
               title="מחק טבלה"
-              disabled={isDeleting}
+              disabled={isDeleting || isDuplicating}
             >
               {isDeleting ? (
                 <span className="animate-spin w-4 h-4 border-2 border-destructive border-t-transparent rounded-full block"></span>
@@ -170,6 +215,27 @@ export default function TableCard({
         confirmText="Delete"
         cancelText="Cancel"
         isDestructive
+      />
+
+      {/* Duplicate Dialog */}
+      <AlertDialog
+        isOpen={isDuplicateDialogOpen}
+        onClose={() => setIsDuplicateDialogOpen(false)}
+        onConfirm={handleConfirmDuplicate}
+        title="שכפול טבלה"
+        description={
+          <div className="space-y-3">
+            <p>
+              האם אתה בטוח שברצונך לשכפל את הטבלה "{table.name}"? הטבלה החדשה
+              תכלול את כל {table._count.records} הרשומות והתצוגות.
+            </p>
+            <div className="text-destructive font-medium bg-destructive/10 p-3 rounded-md border border-destructive/20 text-sm">
+              ⚠️ שים לב: קבצים ולינקים המצורפים לרשומות לא ישוכפלו בטבלה החדשה.
+            </div>
+          </div>
+        }
+        confirmText="שכפל"
+        cancelText="ביטול"
       />
     </>
   );

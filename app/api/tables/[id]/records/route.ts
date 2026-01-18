@@ -5,7 +5,7 @@ import { processNewRecordTrigger } from "@/app/actions/automations";
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -52,14 +52,14 @@ export async function GET(
     console.error("Error fetching records:", error);
     return NextResponse.json(
       { error: "Failed to fetch records" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -79,7 +79,7 @@ export async function POST(
     if (!currentUser) {
       return NextResponse.json(
         { error: "Authentication required" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -87,7 +87,7 @@ export async function POST(
     if (!canWriteTable(currentUser, tableId)) {
       return NextResponse.json(
         { error: "You don't have permission to write to this table" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -102,6 +102,7 @@ export async function POST(
             filename: att.filename,
             url: att.url,
             size: 0,
+            displayName: att.displayName || null,
             uploadedBy: currentUser.id,
           })),
         },
@@ -119,7 +120,7 @@ export async function POST(
     if (table) {
       // Don't await strictly to not block response
       processNewRecordTrigger(tableId, table.name, record.id).catch(
-        console.error
+        console.error,
       );
     }
 
@@ -128,7 +129,7 @@ export async function POST(
     console.error("Error creating record:", error);
     return NextResponse.json(
       { error: "Failed to create record" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
