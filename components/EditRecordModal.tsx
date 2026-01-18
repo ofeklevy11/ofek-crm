@@ -406,7 +406,7 @@ export default function EditRecordModal({
       onOpenChange={(val) => !val && handleClose()}
       modal={true}
     >
-      <DialogContent className="max-w-xl w-full max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[95vw] w-full max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             עריכת רשומה{" "}
@@ -417,14 +417,19 @@ export default function EditRecordModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {schema
               .filter(
                 (field, index, self) =>
                   index === self.findIndex((t) => t.name === field.name),
               )
               .map((field) => (
-                <div key={field.name}>
+                <div
+                  key={field.name}
+                  className={
+                    field.type === "textarea" ? "col-span-1 md:col-span-2" : ""
+                  }
+                >
                   <Label className="text-sm font-semibold mb-1.5 block">
                     {field.label}
                   </Label>
