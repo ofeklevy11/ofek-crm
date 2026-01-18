@@ -58,6 +58,8 @@ interface SchemaField {
   options?: string[];
   relationTableId?: number;
   displayField?: string;
+  min?: number;
+  max?: number;
 }
 
 interface RecordTableProps {
@@ -1104,6 +1106,45 @@ export default function RecordTable({
                                   >
                                     {getLabel(val)}
                                   </Badge>
+                                );
+
+                              case "score":
+                                const scoreVal = Number(val);
+                                const min = field.min || 0;
+                                const max = field.max || 10;
+                                if (isNaN(scoreVal))
+                                  return (
+                                    <span className="text-muted-foreground">
+                                      -
+                                    </span>
+                                  );
+
+                                const percentage =
+                                  max === 0
+                                    ? 0
+                                    : Math.min(
+                                        Math.max((scoreVal / max) * 100, 0),
+                                        100,
+                                      );
+
+                                let colorClass = "bg-red-500";
+                                if (percentage >= 66)
+                                  colorClass = "bg-green-500";
+                                else if (percentage >= 33)
+                                  colorClass = "bg-orange-500";
+
+                                return (
+                                  <div className="w-full flex items-center gap-2">
+                                    <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
+                                      <div
+                                        className={`h-full ${colorClass}`}
+                                        style={{ width: `${percentage}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-xs font-mono w-8 text-left">
+                                      {scoreVal}
+                                    </span>
+                                  </div>
                                 );
                               default:
                                 return (

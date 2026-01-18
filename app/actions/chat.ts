@@ -373,6 +373,24 @@ export async function markAsRead(id: number, type: "user" | "group" = "user") {
     });
   }
 
+  // --- REALTIME UPDATE ---
+  try {
+    const { redisPublisher } = await import("@/lib/redis");
+    // Notify the current user's clients that they have read messages
+    // This allows the Navbar or other tabs to update their unread counts immediately
+    await redisPublisher.publish(
+      `user:${currentUser.id}:chat`,
+      JSON.stringify({
+        type: "messages-read",
+        entityId: id,
+        entityType: type,
+      }),
+    );
+  } catch (err) {
+    console.error("Redis Publish Error (markAsRead)", err);
+  }
+  // -----------------------
+
   revalidatePath("/chat");
 }
 

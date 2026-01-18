@@ -55,6 +55,12 @@ export default function ChatNavbarLink({ userId }: ChatNavbarLinkProps) {
       // Or optimistically increment.
       // Let's re-fetch for accuracy as it's fast and reliable.
       fetchUnread();
+    } else if (
+      msg.channel === `user:${userId}:chat` &&
+      msg.data.type === "messages-read"
+    ) {
+      // Refresh count when messages are marked as read elsewhere (or by ChatInterface)
+      fetchUnread();
     }
   });
 

@@ -61,16 +61,20 @@ export default function TablesDashboard({
   canManage = false,
 }: TablesDashboardProps) {
   const router = useRouter();
+  const [openModalsCount, setOpenModalsCount] = useState(0);
+
+  const onModalOpen = () => setOpenModalsCount((c) => c + 1);
+  const onModalClose = () => setOpenModalsCount((c) => Math.max(0, c - 1));
 
   // Sort tables by order initially
   const [tables, setTables] = useState<Table[]>(
-    [...initialTables].sort((a, b) => (a.order || 0) - (b.order || 0))
+    [...initialTables].sort((a, b) => (a.order || 0) - (b.order || 0)),
   );
 
   // Sync state when props change (e.g. after router.refresh())
   useEffect(() => {
     setTables(
-      [...initialTables].sort((a, b) => (a.order || 0) - (b.order || 0))
+      [...initialTables].sort((a, b) => (a.order || 0) - (b.order || 0)),
     );
   }, [initialTables]);
 
@@ -81,6 +85,9 @@ export default function TablesDashboard({
   }, [initialCategories]);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+
+  const isAnyModalOpen =
+    openModalsCount > 0 || isCategoryModalOpen || isAIModalOpen;
   const [newCategoryName, setNewCategoryName] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -93,7 +100,7 @@ export default function TablesDashboard({
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -134,14 +141,13 @@ export default function TablesDashboard({
     try {
       if (editingCategory) {
         if (editingCategory.id === -1) {
-          const { convertUncategorizedToCategory } = await import(
-            "@/app/actions"
-          );
+          const { convertUncategorizedToCategory } =
+            await import("@/app/actions");
           const result = await convertUncategorizedToCategory(newCategoryName);
 
           if (!result.success) {
             throw new Error(
-              result.error || "Failed to convert uncategorized tables"
+              result.error || "Failed to convert uncategorized tables",
             );
           }
 
@@ -150,7 +156,7 @@ export default function TablesDashboard({
           const { updateCategory } = await import("@/app/actions");
           const result = await updateCategory(
             editingCategory.id,
-            newCategoryName
+            newCategoryName,
           );
 
           if (!result.success) {
@@ -159,8 +165,8 @@ export default function TablesDashboard({
 
           setCategories(
             categories.map((c) =>
-              c.id === editingCategory.id ? result.data! : c
-            )
+              c.id === editingCategory.id ? result.data! : c,
+            ),
           );
         }
       } else {
@@ -202,7 +208,7 @@ export default function TablesDashboard({
     if (catId === undefined) return [];
     if (catId === null) {
       return tables.filter(
-        (t) => t.categoryId === null || t.categoryId === undefined
+        (t) => t.categoryId === null || t.categoryId === undefined,
       );
     }
     return tables.filter((t) => t.categoryId === catId);
@@ -283,7 +289,6 @@ export default function TablesDashboard({
                   <SortableContext
                     items={catTables.map((t) => t.id)}
                     strategy={rectSortingStrategy}
-                    disabled={!canManage}
                   >
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {catTables.map((table) => (
@@ -292,6 +297,9 @@ export default function TablesDashboard({
                           table={table}
                           canDelete={canManage}
                           canEdit={canManage}
+                          disabled={!canManage || isAnyModalOpen}
+                          onModalOpen={onModalOpen}
+                          onModalClose={onModalClose}
                         />
                       ))}
                       {catTables.length === 0 && (
@@ -333,7 +341,6 @@ export default function TablesDashboard({
                 <SortableContext
                   items={uncategorizedTables.map((t) => t.id)}
                   strategy={rectSortingStrategy}
-                  disabled={!canManage}
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {uncategorizedTables.map((table) => (
@@ -342,6 +349,9 @@ export default function TablesDashboard({
                         table={table}
                         canDelete={canManage}
                         canEdit={canManage}
+                        disabled={!canManage || isAnyModalOpen}
+                        onModalOpen={onModalOpen}
+                        onModalClose={onModalClose}
                       />
                     ))}
                   </div>
@@ -424,8 +434,8 @@ export default function TablesDashboard({
                   {creatingCategory
                     ? "שומר..."
                     : editingCategory
-                    ? "עדכן"
-                    : "צור"}
+                      ? "עדכן"
+                      : "צור"}
                 </Button>
               </DialogFooter>
             </form>

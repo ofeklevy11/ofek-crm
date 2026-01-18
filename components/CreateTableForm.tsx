@@ -5,7 +5,14 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, ArrowRight, Save } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  ArrowRight,
+  Save,
+  ArrowUp,
+  ArrowDown,
+} from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +27,8 @@ interface FieldRow {
   defaultValue?: string;
   allowMultiple?: boolean; // For relation (many-to-many)
   displayField?: string; // For relation (which field to show in picker)
+  min?: string; // For score
+  max?: string; // For score
 }
 
 interface TableOption {
@@ -83,6 +92,21 @@ export default function CreateTableForm() {
   const handleRemoveField = (index: number) => {
     const newFields = [...fields];
     newFields.splice(index, 1);
+    setFields(newFields);
+  };
+
+  const handleMoveField = (index: number, direction: "up" | "down") => {
+    if (direction === "up" && index === 0) return;
+    if (direction === "down" && index === fields.length - 1) return;
+
+    const newFields = [...fields];
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+
+    [newFields[index], newFields[targetIndex]] = [
+      newFields[targetIndex],
+      newFields[index],
+    ];
+
     setFields(newFields);
   };
 
@@ -160,7 +184,10 @@ export default function CreateTableForm() {
         lookupField: f.lookupField,
         defaultValue: f.defaultValue,
         allowMultiple: f.allowMultiple,
+        allowMultiple: f.allowMultiple,
         displayField: f.displayField,
+        min: f.type === "score" ? Number(f.min) || 0 : undefined,
+        max: f.type === "score" ? Number(f.max) || 10 : undefined,
       }));
 
       const { createTable } = await import("@/app/actions");
@@ -326,14 +353,39 @@ export default function CreateTableForm() {
                     <option value="relation">קשר (Relation)</option>
                     <option value="lookup">חיפוש (Lookup)</option>
                     <option value="automation">טריגר אוטומציה</option>
+                    <option value="score">ניקוד (מדידה)</option>
                   </select>
                 </div>
-                <div className="lg:col-span-1 flex items-end">
+                <div className="lg:col-span-1 flex items-end gap-2">
+                  <div className="flex bg-muted rounded-md border border-input p-0.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleMoveField(index, "up")}
+                      disabled={index === 0}
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-background rounded-sm"
+                      title="הזז למעלה"
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleMoveField(index, "down")}
+                      disabled={index === fields.length - 1}
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-background rounded-sm"
+                      title="הזז למטה"
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </Button>
+                  </div>
                   <Button
                     type="button"
                     variant="ghost"
                     onClick={() => handleRemoveField(index)}
-                    className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 border border-destructive/20 gap-2"
+                    className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10 border border-destructive/20 gap-2 h-10"
                   >
                     <Trash2 className="h-4 w-4" />
                     הסר
@@ -354,6 +406,37 @@ export default function CreateTableForm() {
                   placeholder="אופציונלי"
                 />
               </div>
+
+              {field.type === "score" && (
+                <div className="mt-4 pt-4 border-t border-border/50 grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wide">
+                      ערך מינימום
+                    </Label>
+                    <Input
+                      type="number"
+                      value={field.min || ""}
+                      onChange={(e) =>
+                        handleFieldChange(index, "min", e.target.value)
+                      }
+                      placeholder="1"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wide">
+                      ערך מקסימום
+                    </Label>
+                    <Input
+                      type="number"
+                      value={field.max || ""}
+                      onChange={(e) =>
+                        handleFieldChange(index, "max", e.target.value)
+                      }
+                      placeholder="10"
+                    />
+                  </div>
+                </div>
+              )}
 
               {[
                 "select",

@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Plus, X, Save, RotateCw, Trash2 } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
 
 interface SchemaField {
   name: string;
@@ -31,6 +32,8 @@ interface SchemaField {
   defaultValue?: string;
   allowMultiple?: boolean;
   displayField?: string;
+  min?: number | string;
+  max?: number | string;
 }
 
 export default function AddRecordForm({
@@ -464,6 +467,41 @@ export default function AddRecordForm({
                                 }
                               }
                             }}
+                          />
+                        </div>
+                      ) : field.type === "score" ? (
+                        <div className="space-y-4 pt-2 px-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-muted-foreground font-mono">
+                              {field.min || 0}
+                            </span>
+                            <div className="flex flex-col items-center">
+                              <span className="text-2xl font-bold text-primary">
+                                {formData[field.name] !== undefined
+                                  ? formData[field.name]
+                                  : Number(field.min || 0)}
+                              </span>
+                            </div>
+                            <span className="text-xs text-muted-foreground font-mono">
+                              {field.max || 10}
+                            </span>
+                          </div>
+                          <Slider
+                            value={[
+                              formData[field.name] !== undefined
+                                ? Number(formData[field.name])
+                                : Number(field.min || 0),
+                            ]}
+                            min={Number(field.min || 0)}
+                            max={Number(field.max || 10)}
+                            step={1}
+                            onValueChange={(vals) =>
+                              setFormData({
+                                ...formData,
+                                [field.name]: vals[0],
+                              })
+                            }
+                            className="py-2 cursor-pointer"
                           />
                         </div>
                       ) : (

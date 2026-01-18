@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2, Save } from "lucide-react";
+import { Plus, Trash2, Save, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface FieldRow {
@@ -27,6 +27,8 @@ interface FieldRow {
   defaultValue?: string;
   allowMultiple?: boolean;
   displayField?: string;
+  min?: string;
+  max?: string;
 }
 
 interface TableOption {
@@ -107,7 +109,10 @@ export default function EditTableModal({
         lookupField: field.lookupField,
         defaultValue: field.defaultValue,
         allowMultiple: field.allowMultiple,
+
         displayField: field.displayField,
+        min: field.min ? String(field.min) : undefined,
+        max: field.max ? String(field.max) : undefined,
       }));
       setFields(parsedFields);
     } catch (error) {
@@ -128,6 +133,21 @@ export default function EditTableModal({
   const handleRemoveField = (index: number) => {
     const newFields = [...fields];
     newFields.splice(index, 1);
+    setFields(newFields);
+  };
+
+  const handleMoveField = (index: number, direction: "up" | "down") => {
+    if (direction === "up" && index === 0) return;
+    if (direction === "down" && index === fields.length - 1) return;
+
+    const newFields = [...fields];
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+
+    [newFields[index], newFields[targetIndex]] = [
+      newFields[targetIndex],
+      newFields[index],
+    ];
+
     setFields(newFields);
   };
 
@@ -196,6 +216,8 @@ export default function EditTableModal({
         defaultValue: f.defaultValue,
         allowMultiple: f.allowMultiple,
         displayField: f.displayField,
+        min: f.type === "score" ? Number(f.min) || 0 : undefined,
+        max: f.type === "score" ? Number(f.max) || 10 : undefined,
       }));
 
       const res = await fetch(`/api/tables/${tableId}`, {
@@ -357,14 +379,39 @@ export default function EditTableModal({
                           <option value="relation">קשר (Relation)</option>
                           <option value="lookup">חיפוש (Lookup)</option>
                           <option value="automation">טריגר אוטומציה</option>
+                          <option value="score">ניקוד (מדידה)</option>
                         </select>
                       </div>
-                      <div className="flex items-end">
+                      <div className="flex items-end gap-2">
+                        <div className="flex bg-muted rounded-md border border-input p-0.5">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleMoveField(index, "up")}
+                            disabled={index === 0}
+                            className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-background rounded-sm"
+                            title="הזז למעלה"
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleMoveField(index, "down")}
+                            disabled={index === fields.length - 1}
+                            className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-background rounded-sm"
+                            title="הזז למטה"
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                        </div>
                         <Button
                           type="button"
                           variant="ghost"
                           onClick={() => handleRemoveField(index)}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10 w-full"
+                          className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10 border border-destructive/20 h-10"
                         >
                           <Trash2 className="h-4 w-4 mr-2" /> הסר
                         </Button>
@@ -389,6 +436,37 @@ export default function EditTableModal({
                           placeholder="אופציונלי"
                         />
                       </div>
+
+                      {field.type === "score" && (
+                        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border/50">
+                          <div className="space-y-1">
+                            <Label className="text-xs font-bold uppercase tracking-wide">
+                              ערך מינימום
+                            </Label>
+                            <Input
+                              type="number"
+                              value={field.min || ""}
+                              onChange={(e) =>
+                                handleFieldChange(index, "min", e.target.value)
+                              }
+                              placeholder="1"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs font-bold uppercase tracking-wide">
+                              ערך מקסימום
+                            </Label>
+                            <Input
+                              type="number"
+                              value={field.max || ""}
+                              onChange={(e) =>
+                                handleFieldChange(index, "max", e.target.value)
+                              }
+                              placeholder="10"
+                            />
+                          </div>
+                        </div>
+                      )}
 
                       {[
                         "select",

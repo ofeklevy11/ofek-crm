@@ -13,6 +13,8 @@ import {
   Table as TableIcon,
   Trash2,
   Plus,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -167,6 +169,23 @@ export default function AITableCreator({
     setCurrentSchema({ ...currentSchema, fields: newFields });
   };
 
+  const moveField = (index: number, direction: "up" | "down") => {
+    if (!currentSchema) return;
+    if (direction === "up" && index === 0) return;
+    if (direction === "down" && index === currentSchema.fields.length - 1)
+      return;
+
+    const newFields = [...currentSchema.fields];
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+
+    [newFields[index], newFields[targetIndex]] = [
+      newFields[targetIndex],
+      newFields[index],
+    ];
+
+    setCurrentSchema({ ...currentSchema, fields: newFields });
+  };
+
   const addField = () => {
     if (!currentSchema) return;
     setCurrentSchema({
@@ -236,7 +255,7 @@ export default function AITableCreator({
             "flex flex-col flex-1 h-full",
             currentSchema
               ? "md:w-1/2 border-b md:border-b-0 md:border-l border-border"
-              : "w-full"
+              : "w-full",
           )}
         >
           <div className="p-6 border-b border-border bg-muted/30 flex justify-between items-center">
@@ -265,7 +284,7 @@ export default function AITableCreator({
                   key={i}
                   className={cn(
                     "flex",
-                    msg.role === "user" ? "justify-end" : "justify-start"
+                    msg.role === "user" ? "justify-end" : "justify-start",
                   )}
                 >
                   <div
@@ -273,7 +292,7 @@ export default function AITableCreator({
                       "max-w-[80%] rounded-2xl px-5 py-3.5 shadow-sm text-sm",
                       msg.role === "user"
                         ? "bg-primary text-primary-foreground rounded-bl-none"
-                        : "bg-card border border-border text-foreground rounded-br-none"
+                        : "bg-card border border-border text-foreground rounded-br-none",
                     )}
                   >
                     {msg.content}
@@ -452,7 +471,29 @@ export default function AITableCreator({
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="pt-6">
+                      <div className="pt-6 flex gap-1">
+                        <div className="flex bg-muted rounded-md border border-input p-0.5 h-9 items-center">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => moveField(idx, "up")}
+                            disabled={idx === 0}
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-background rounded-sm"
+                            title="הזז למעלה"
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => moveField(idx, "down")}
+                            disabled={idx === currentSchema.fields.length - 1}
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-background rounded-sm"
+                            title="הזז למטה"
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                        </div>
                         <Button
                           variant="ghost"
                           size="icon"

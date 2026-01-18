@@ -9,12 +9,18 @@ interface SortableTableCardProps {
   table: any;
   canDelete?: boolean;
   canEdit?: boolean;
+  disabled?: boolean;
+  onModalOpen?: () => void;
+  onModalClose?: () => void;
 }
 
 export default function SortableTableCard({
   table,
   canDelete,
   canEdit,
+  disabled,
+  onModalOpen,
+  onModalClose,
 }: SortableTableCardProps) {
   const {
     attributes,
@@ -29,6 +35,7 @@ export default function SortableTableCard({
       type: "Table",
       table,
     },
+    disabled,
   });
 
   const style = {
@@ -40,7 +47,13 @@ export default function SortableTableCard({
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <TableCard table={table} canDelete={canDelete} canEdit={canEdit} />
+      <TableCard
+        table={table}
+        canDelete={canDelete}
+        canEdit={canEdit}
+        onModalOpen={onModalOpen}
+        onModalClose={onModalClose}
+      />
     </div>
   );
 }

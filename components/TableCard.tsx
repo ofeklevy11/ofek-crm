@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import EditTableModal from "./EditTableModal";
 import AlertDialog from "./AlertDialog";
@@ -18,12 +18,16 @@ interface TableCardProps {
   };
   canDelete?: boolean;
   canEdit?: boolean;
+  onModalOpen?: () => void;
+  onModalClose?: () => void;
 }
 
 export default function TableCard({
   table,
   canDelete = false,
   canEdit = false,
+  onModalOpen,
+  onModalClose,
 }: TableCardProps) {
   const router = useRouter();
 
@@ -32,6 +36,17 @@ export default function TableCard({
   const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
+
+  // Monitor any open modal
+  const isAnyModalOpen =
+    isEditModalOpen || isDeleteDialogOpen || isDuplicateDialogOpen;
+
+  useEffect(() => {
+    if (isAnyModalOpen) {
+      onModalOpen?.();
+      return () => onModalClose?.();
+    }
+  }, [isAnyModalOpen, onModalOpen, onModalClose]);
 
   // ---------------------------
   // Handlers
