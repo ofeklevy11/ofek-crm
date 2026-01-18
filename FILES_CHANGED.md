@@ -4,7 +4,7 @@
 
 ### Documentation
 
-1. `MULTI_TENANCY_SUMMARY.md` - סיכום כללי של כל השינויים
+1. `MULTI_TENANCY_SUMMARY.md` - סיכום כללי של כל השינויים.
 2. `MULTI_TENANCY_GUIDE.md` - מדריך מפורט ליישום multi-tenancy בכל הקוד
 3. `COMMANDS_TO_RUN.md` - פקודות שלב אחר שלב להרצה
 
