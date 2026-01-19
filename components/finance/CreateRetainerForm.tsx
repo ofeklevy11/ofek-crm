@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Calendar as CalendarIcon, Repeat, Info } from "lucide-react";
 import ClientSelector from "./ClientSelector";
 
@@ -14,10 +14,39 @@ interface Client {
 
 export default function CreateRetainerForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isNewClientMode, setIsNewClientMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+
+  // Auto-select client from URL parameter
+  useEffect(() => {
+    const clientId = searchParams.get("clientId");
+    if (clientId) {
+      const fetchClient = async () => {
+        try {
+          const response = await fetch(`/api/finance/clients/${clientId}`);
+          if (response.ok) {
+            const clientData = await response.json();
+            setSelectedClient({
+              id: clientData.id,
+              name: clientData.name,
+              data: {
+                email: clientData.email,
+                phone: clientData.phone,
+                company: clientData.company,
+              },
+              tableSlug: "finance-clients",
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching client details:", error);
+        }
+      };
+      fetchClient();
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -36,45 +65,51 @@ export default function CreateRetainerForm() {
     let financeClientId: number;
 
     try {
-      let clientData;
-
-      if (isNewClientMode) {
-        clientData = {
-          name: formData.get("newClientName") as string,
-          email: (formData.get("newClientEmail") as string) || null,
-          phone: (formData.get("newClientPhone") as string) || null,
-          company: (formData.get("newClientCompany") as string) || null,
-          notes: "Created manually during retainer creation",
-        };
+      // If the client is selected from existing finance clients, use their ID directly
+      if (!isNewClientMode && selectedClient?.tableSlug === "finance-clients") {
+        financeClientId = selectedClient.id;
       } else {
-        // Check if client already exists or create new one based on selection
-        clientData = {
-          name: selectedClient!.name,
-          email: selectedClient!.data["email"] || null,
-          phone:
-            selectedClient!.data["phone-number"] ||
-            selectedClient!.data["phone"] ||
-            null,
-          company: selectedClient!.data["company"] || null,
-          notes: `Imported from ${selectedClient!.tableSlug} (Record ID: ${
-            selectedClient!.id
-          })`,
-        };
+        // Otherwise create a new client (either manually or imported from a table)
+        let clientData;
+
+        if (isNewClientMode) {
+          clientData = {
+            name: formData.get("newClientName") as string,
+            email: (formData.get("newClientEmail") as string) || null,
+            phone: (formData.get("newClientPhone") as string) || null,
+            company: (formData.get("newClientCompany") as string) || null,
+            notes: "Created manually during retainer creation",
+          };
+        } else {
+          // Check if client already exists or create new one based on selection
+          clientData = {
+            name: selectedClient!.name,
+            email: selectedClient!.data["email"] || null,
+            phone:
+              selectedClient!.data["phone-number"] ||
+              selectedClient!.data["phone"] ||
+              null,
+            company: selectedClient!.data["company"] || null,
+            notes: `Imported from ${selectedClient!.tableSlug} (Record ID: ${
+              selectedClient!.id
+            })`,
+          };
+        }
+
+        // Create/Get finance client
+        const clientResponse = await fetch("/api/finance/clients", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(clientData),
+        });
+
+        if (!clientResponse.ok) {
+          throw new Error("Failed to create client in finance system");
+        }
+
+        const createdClient = await clientResponse.json();
+        financeClientId = createdClient.id;
       }
-
-      // Create/Get finance client
-      const clientResponse = await fetch("/api/finance/clients", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(clientData),
-      });
-
-      if (!clientResponse.ok) {
-        throw new Error("Failed to create client in finance system");
-      }
-
-      const createdClient = await clientResponse.json();
-      financeClientId = createdClient.id;
 
       // Import actions
       const { createRetainer } = await import("@/app/actions");

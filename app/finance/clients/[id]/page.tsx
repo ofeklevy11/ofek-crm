@@ -40,11 +40,11 @@ export default async function ClientOverviewPage({
 
   // Calculate outstanding debt
   const outstandingPayments = client.oneTimePayments.filter(
-    (p) => p.status === "pending" || p.status === "overdue"
+    (p) => p.status === "pending" || p.status === "overdue",
   );
   const outstanding = outstandingPayments.reduce(
     (sum, payment) => sum + Number(payment.amount),
-    0
+    0,
   );
 
   // Calculate total paid
@@ -88,7 +88,7 @@ export default async function ClientOverviewPage({
 
   const allTransactions = [...formattedTransactions, ...formattedFinanceRecords]
     .sort(
-      (a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()
+      (a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime(),
     )
     .slice(0, 50);
 
@@ -140,10 +140,29 @@ export default async function ClientOverviewPage({
               )}
             </div>
           </div>
-          <div className="text-left">
-            <div className="text-sm text-gray-500">חוב פתוח</div>
-            <div className="text-2xl font-bold text-[#a24ec1]">
-              ₪{stats.outstanding.toLocaleString()}
+          <div className="flex flex-col md:flex-row items-end gap-6 bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+            <div className="text-left px-2">
+              <div className="text-sm font-medium text-gray-500 mb-1">
+                חוב פתוח
+              </div>
+              <div className="text-3xl font-bold text-[#a24ec1]">
+                ₪{stats.outstanding.toLocaleString()}
+              </div>
+            </div>
+            <div className="h-10 w-px bg-gray-200 hidden md:block" />
+            <div className="flex gap-3 w-full md:w-auto">
+              <Link
+                href={`/finance/retainers/new?clientId=${client.id}`}
+                className="flex-1 md:flex-none inline-flex justify-center items-center px-5 py-3 border border-gray-200 bg-white text-gray-700 shadow-sm text-sm font-bold rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4f95ff]"
+              >
+                + ריטיינר חדש
+              </Link>
+              <Link
+                href={`/finance/payments/new?clientId=${client.id}`}
+                className="flex-1 md:flex-none inline-flex justify-center items-center px-5 py-3 border border-transparent shadow-sm text-sm font-bold rounded-xl text-white bg-[#4f95ff] hover:bg-[#3d84ff] transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4f95ff]"
+              >
+                + תשלום חדש
+              </Link>
             </div>
           </div>
         </div>
@@ -182,7 +201,7 @@ export default async function ClientOverviewPage({
                     <div className="mt-2 text-xs text-gray-500">
                       תשלום הבא:{" "}
                       {new Date(retainer.nextDueDate).toLocaleDateString(
-                        "he-IL"
+                        "he-IL",
                       )}
                     </div>
                   )}
