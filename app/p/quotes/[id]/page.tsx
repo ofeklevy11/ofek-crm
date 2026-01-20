@@ -20,7 +20,7 @@ export default async function PublicQuoteDownloadPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  console.log("Public Quote Page: starting render");
+  console.log("Public  Quote Page: starting render");
   const resolvedParams = await params;
   console.log("Public Quote Page: params resolved", resolvedParams);
 
