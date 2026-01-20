@@ -1,0 +1,269 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+  <head>
+    <meta charset="UTF-8" />
+    <title>הצעת מחיר</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Heebo", sans-serif;
+        margin: 0;
+        padding: 40px;
+        direction: rtl;
+        text-align: right;
+        color: #333;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        border-bottom: 2px solid rgba(79, 149, 255, 0.2);
+        padding-bottom: 30px;
+        margin-bottom: 30px;
+      }
+      .title-section h1 {
+        color: #4f95ff;
+        font-size: 32px;
+        margin: 0 0 10px 0;
+      }
+      .quote-number {
+        font-family: monospace;
+        color: #666;
+        font-size: 16px;
+      }
+      .company-details h3 {
+        font-size: 20px;
+        margin: 0 0 5px 0;
+      }
+      .grid-container {
+        display: flex;
+        gap: 40px;
+        margin-bottom: 40px;
+      }
+      .col {
+        flex: 1;
+      }
+      .info-box {
+        background-color: #f9fafb;
+        border: 1px solid #e5e7eb;
+        padding: 20px;
+        border-radius: 8px;
+      }
+      .info-box p {
+        margin: 5px 0;
+        font-size: 14px;
+      }
+      .section-title {
+        color: #7c3aed; /* Purple/Secondary */
+        font-size: 16px;
+        font-weight: bold;
+        margin-bottom: 10px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 30px;
+      }
+      th {
+        background-color: rgba(79, 149, 255, 0.1);
+        color: #4f95ff;
+        padding: 12px;
+        text-align: right;
+        font-weight: bold;
+      }
+      td {
+        padding: 12px;
+        border-bottom: 1px solid #eee;
+        vertical-align: top;
+      }
+      .text-center {
+        text-align: center;
+      }
+      .text-left {
+        text-align: left;
+      }
+      .totals-section {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .totals-box {
+        width: 300px;
+        background-color: #f9fafb;
+        padding: 20px;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+      }
+      .total-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        font-size: 14px;
+      }
+      .grand-total {
+        border-top: 1px solid #ddd;
+        padding-top: 10px;
+        font-weight: bold;
+        font-size: 18px;
+        color: #4f95ff;
+      }
+      .footer {
+        margin-top: 50px;
+        text-align: center;
+        font-size: 12px;
+        color: #888;
+      }
+      .footer-highlight {
+        color: #4f95ff;
+        font-weight: bold;
+        font-size: 14px;
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Header -->
+    <div class="header">
+      <div class="title-section">
+        <h1>הצעת מחיר</h1>
+        <div class="quote-number">#{{ quote_number }}</div>
+        <div style="margin-top: 15px; font-size: 14px">
+          <div><strong>תאריך הפקה:</strong> {{ created_at }}</div>
+          {% if valid_until %}
+          <div><strong>בתוקף עד:</strong> {{ valid_until }}</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="company-details" style="text-align: left">
+        <h3>{{ company_name }}</h3>
+        {% if company_tax_id %}
+        <div style="font-size: 14px; color: #666">
+          {{ company_business_type_label }} / {{ company_tax_id }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Info Grids -->
+    <div class="grid-container">
+      <div class="col">
+        <div class="section-title">עבור:</div>
+        <div class="info-box">
+          <p style="font-weight: bold; font-size: 16px">{{ client_name }}</p>
+          {% if client_tax_id %}
+          <p>ח.פ / ת.ז: {{ client_tax_id }}</p>
+          {% endif %} {% if client_email %}
+          <p>{{ client_email }}</p>
+          {% endif %} {% if client_phone %}
+          <p>{{ client_phone }}</p>
+          {% endif %} {% if client_address %}
+          <p style="white-space: pre-wrap; margin-top: 10px; color: #666">
+            {{ client_address }}
+          </p>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col">
+        <div class="section-title">מאת:</div>
+        <div class="info-box">
+          <p style="font-weight: bold; font-size: 16px">{{ company_name }}</p>
+          {% if company_business_type_label %}
+          <p>{{ company_business_type_label }}</p>
+          {% endif %} {% if company_tax_id %}
+          <p>
+            {% if company_business_type == 'ltd' %}ח.פ{% else %}מספר עוסק{%
+            endif %}: {{ company_tax_id }}
+          </p>
+          {% endif %} {% if company_address %}
+          <p>{{ company_address }}</p>
+          {% endif %} {% if company_email %}
+          <p>{{ company_email }}</p>
+          {% endif %} {% if company_website %}
+          <p style="color: #4f95ff">{{ company_website }}</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Items Table -->
+    <table>
+      <thead>
+        <tr>
+          <th style="border-radius: 0 8px 8px 0; width: 40%">תיאור</th>
+          <th class="text-center" style="width: 15%">כמות</th>
+          <th class="text-left" style="width: 20%">מחיר יחידה</th>
+          <th class="text-left" style="border-radius: 8px 0 0 8px; width: 25%">
+            סה״כ
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td>
+            <div style="font-weight: bold">{{ item.name }}</div>
+            <div
+              style="
+                font-size: 12px;
+                color: #666;
+                white-space: pre-wrap;
+                margin-top: 4px;
+              "
+            >
+              {{ item.description }}
+            </div>
+          </td>
+          <td class="text-center">{{ item.quantity }}</td>
+          <td class="text-left">₪{{ item.unit_price }}</td>
+          <td class="text-left" style="font-weight: bold">₪{{ item.total }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Totals -->
+    <div class="totals-section">
+      <div class="totals-box">
+        <div class="total-row">
+          <span>סיכום ביניים:</span>
+          <span>₪{{ subtotal }}</span>
+        </div>
+
+        {% if is_vat_exempt %}
+        <div class="total-row" style="color: #888">
+          <span>פטור ממע״מ</span>
+          <span>-</span>
+        </div>
+        {% else %}
+        <div class="total-row">
+          <span>מע״מ (18%):</span>
+          <span>₪{{ vat_amount }}</span>
+        </div>
+        {% endif %}
+
+        <div class="total-row grand-total">
+          <span>סה״כ לתשלום:</span>
+          <span>₪{{ grand_total }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-highlight">תודה שבחרתם בנו!</div>
+      <p>
+        מסמך זה הינו הצעת מחיר ואינו מהווה חשבונית מס.<br />
+        ההצעה בתוקף עד {{ valid_until | default: "30 יום מיום הפקתה" }}.
+      </p>
+      {% if company_website or company_email %}
+      <div
+        style="border-top: 1px solid #eee; margin-top: 15px; padding-top: 15px"
+      >
+        {{ company_website }} {% if company_website and company_email %} | {%
+        endif %} {{ company_email }}
+      </div>
+      {% endif %}
+    </div>
+  </body>
+</html>

@@ -5,15 +5,6 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   // eslint config is removed as it is deprecated in next.config.ts
-  serverExternalPackages: [
-    "puppeteer",
-    "puppeteer-core",
-    "@sparticuz/chromium",
-    "pg",
-    "@prisma/adapter-pg",
-    "@prisma/client",
-    "bcryptjs",
-  ],
   images: {
     remotePatterns: [
       {

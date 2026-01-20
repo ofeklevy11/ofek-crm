@@ -1,64 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
-import { render } from "@react-email/render";
-import QuoteDocument from "@/components/quotes/QuoteDocument";
-import React from "react";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 60; // Allow time for PDF Monkey polling
 
-// Helper function to get browser instance
-async function getBrowser() {
-  // Check if we're on Vercel (serverless environment)
-  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
-    // For Vercel, we need to use puppeteer-core with @sparticuz/chromium
-    try {
-      const chromium = await import("@sparticuz/chromium").then(
-        (m) => m.default,
-      );
-      const puppeteerCore = await import("puppeteer-core").then(
-        (m) => m.default,
-      );
+const PDFMONKEY_API_KEY = process.env.PDFMONKEY_API_KEY;
+const PDFMONKEY_TEMPLATE_ID = process.env.PDFMONKEY_TEMPLATE_ID;
 
-      // Optional: Load specific fonts if needed
-      // await chromium.font("https://raw.githack.com/googlefonts/noto-cjk/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf");
+// Helper to format currency
+const formatCurrency = (amount: number | string | null | undefined) => {
+  if (amount == null) return "0.00";
+  return Number(amount).toLocaleString("he-IL", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
 
-      return await puppeteerCore.launch({
-        args: [...chromium.args, "--disable-web-security", "--no-sandbox"],
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-      });
-    } catch (e) {
-      console.error("Failed to load serverless chromium:", e);
-      throw new Error(
-        "PDF generation is not available in this environment. Please install @sparticuz/chromium and puppeteer-core for Vercel deployment.",
-      );
-    }
-  } else {
-    // For local development, use regular puppeteer
-    try {
-      const puppeteer = await import("puppeteer").then((m) => m.default);
-      return await puppeteer.launch({
-        channel: "chrome",
-        headless: true,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-gpu",
-        ],
-      });
-    } catch (e) {
-      console.error("Failed to load puppeteer:", e);
-      throw new Error(
-        "PDF generation requires puppeteer to be installed locally.",
-      );
-    }
-  }
-}
+// Helper to format dates
+const formatDate = (date: Date | string | null) => {
+  if (!date) return "";
+  return new Date(date).toLocaleDateString("he-IL");
+};
 
 export async function GET(
   req: NextRequest,
@@ -68,6 +32,15 @@ export async function GET(
   const user = await getCurrentUser();
   if (!user) {
     return new NextResponse("Unauthorized", { status: 401 });
+  }
+
+  // Check configuration
+  if (!PDFMONKEY_API_KEY || !PDFMONKEY_TEMPLATE_ID) {
+    console.error("Missing PDF Monkey configuration");
+    return new NextResponse(
+      "PDF generation configuration is missing. Please contact support.",
+      { status: 500 },
+    );
   }
 
   const quote = await prisma.quote.findUnique({
@@ -87,69 +60,133 @@ export async function GET(
     return new NextResponse("Quote not found", { status: 404 });
   }
 
-  // Render the component to HTML using React.createElement
-  const componentHtml = await render(
-    React.createElement(QuoteDocument, { quote: quote as any }),
-  );
+  // Prepare Data for PDF Monkey
+  const vatRate = 0.18;
+  const isVatExempt = quote.company.businessType === "exempt";
+  const subtotal = Number(quote.total);
+  const vatAmount = subtotal * vatRate;
+  const grandTotal = isVatExempt ? subtotal : subtotal + vatAmount;
 
-  // Wrap in a full HTML document with Tailwind CDN for styling
-  const fullHtml = `
-    <!DOCTYPE html>
-    <html dir="rtl" lang="he">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <script src="https://cdn.tailwindcss.com"></script>
-      <script>
-        tailwind.config = {
-          theme: {
-            extend: {
-              colors: {
-                primary: '#4f95ff',
-                secondary: '#a24ec1',
-              }
-            }
-          }
-        }
-      </script>
-      <style>
-        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap');
-        body { font-family: 'Heebo', sans-serif; }
-      </style>
-    </head>
-    <body class="bg-white">
-      ${componentHtml}
-    </body>
-    </html>
-  `;
+  // Map business type to label
+  let businessTypeLabel = "";
+  switch (quote.company.businessType) {
+    case "exempt":
+      businessTypeLabel = "עוסק פטור";
+      break;
+    case "licensed":
+      businessTypeLabel = "עוסק מורשה";
+      break;
+    case "ltd":
+      businessTypeLabel = "חברה בע״מ";
+      break;
+  }
 
-  let browser = null;
+  const payload = {
+    quote_number: quote.quoteNumber
+      ? String(quote.quoteNumber).padStart(5, "0")
+      : quote.id.slice(-6).toUpperCase(),
+    created_at: formatDate(quote.createdAt),
+    valid_until: formatDate(quote.validUntil),
+
+    // Company (Sender)
+    company_name: quote.company.name,
+    company_business_type: quote.company.businessType,
+    company_business_type_label: businessTypeLabel,
+    company_tax_id: quote.company.taxId,
+    company_address: quote.company.businessAddress,
+    company_email: quote.company.businessEmail,
+    company_website: quote.company.businessWebsite,
+
+    // Client (Receiver)
+    client_name: quote.clientName,
+    client_tax_id: quote.clientTaxId,
+    client_email: quote.clientEmail,
+    client_phone: quote.clientPhone,
+    client_address: quote.clientAddress,
+
+    // Items
+    items: quote.items.map((item) => ({
+      name: item.product?.name || "פריט כללי",
+      description: item.description,
+      quantity: item.quantity,
+      unit_price: formatCurrency(item.unitPrice),
+      total: formatCurrency(Number(item.quantity) * Number(item.unitPrice)),
+    })),
+
+    // Totals
+    subtotal: formatCurrency(subtotal),
+    is_vat_exempt: isVatExempt,
+    vat_amount: formatCurrency(vatAmount),
+    grand_total: formatCurrency(grandTotal),
+  };
 
   try {
-    browser = await getBrowser();
-    const page = await browser.newPage();
-
-    // Set content and wait for load
-    // networkidle0 is important for Tailwind CDN to finish applying styles
-    await page.setContent(fullHtml, {
-      waitUntil: "networkidle0",
-      timeout: 60000,
-    });
-
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      margin: {
-        top: "20px",
-        bottom: "20px",
-        left: "20px",
-        right: "20px",
+    // 1. Create Document
+    const createRes = await fetch("https://api.pdfmonkey.io/api/v1/documents", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${PDFMONKEY_API_KEY}`,
       },
+      body: JSON.stringify({
+        document: {
+          document_template_id: PDFMONKEY_TEMPLATE_ID,
+          payload: payload,
+          status: "pending", // Explicitly ask for creation
+        },
+      }),
     });
 
-    await browser.close();
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      console.error("PDF Monkey Create Error:", errText);
+      throw new Error(`PDF Provider Error: ${createRes.statusText}`);
+    }
 
-    return new NextResponse(pdfBuffer as any, {
+    const createData = await createRes.json();
+    const documentId = createData.document.id;
+    let downloadUrl = createData.document.download_url;
+    let status = createData.document.status;
+
+    // 2. Poll for completion if not ready
+    let attempts = 0;
+    while (status !== "success" && attempts < 15) {
+      // Try for ~15-20 seconds
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      const checkRes = await fetch(
+        `https://api.pdfmonkey.io/api/v1/documents/${documentId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${PDFMONKEY_API_KEY}`,
+          },
+        },
+      );
+
+      if (!checkRes.ok) throw new Error("Failed to check document status");
+
+      const checkData = await checkRes.json();
+      status = checkData.document.status;
+      downloadUrl = checkData.document.download_url;
+
+      if (status === "failure") {
+        throw new Error("PDF Generation failed on provider side");
+      }
+
+      attempts++;
+    }
+
+    if (status !== "success" || !downloadUrl) {
+      throw new Error("PDF Generation timed out");
+    }
+
+    // 3. Fetch the actual PDF content
+    const pdfRes = await fetch(downloadUrl);
+    if (!pdfRes.ok) throw new Error("Failed to download generated PDF");
+
+    const pdfBuffer = await pdfRes.arrayBuffer();
+
+    return new NextResponse(pdfBuffer, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="quote-${quote.id.slice(
@@ -163,15 +200,6 @@ export async function GET(
       stack: error.stack,
       name: error.name,
     });
-
-    // Attempt to close browser if it was opened but failed later
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (e) {
-        console.error("Error closing browser after failure:", e);
-      }
-    }
 
     return new NextResponse(`Failed to generate PDF: ${error.message}`, {
       status: 500,
