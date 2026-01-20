@@ -52,9 +52,17 @@ export default function BusinessSettingsRequired({ initialSettings }: Props) {
       return;
     }
 
+    const finalFormData = { ...formData };
+    if (
+      finalFormData.businessWebsite &&
+      !/^https?:\/\//i.test(finalFormData.businessWebsite)
+    ) {
+      finalFormData.businessWebsite = `https://${finalFormData.businessWebsite}`;
+    }
+
     setLoading(true);
     try {
-      await updateBusinessSettings(formData);
+      await updateBusinessSettings(finalFormData);
       router.refresh();
     } catch (error) {
       console.error(error);
@@ -210,13 +218,22 @@ export default function BusinessSettingsRequired({ initialSettings }: Props) {
                 <span className="text-gray-400 text-xs">(אופציונלי)</span>
               </label>
               <input
-                type="url"
+                type="text"
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] outline-none bg-white transition-all"
                 placeholder="לדוגמה: https://www.example.co.il"
                 value={formData.businessWebsite}
                 onChange={(e) =>
                   setFormData({ ...formData, businessWebsite: e.target.value })
                 }
+                onBlur={(e) => {
+                  const val = e.target.value.trim();
+                  if (val && !/^https?:\/\//i.test(val)) {
+                    setFormData({
+                      ...formData,
+                      businessWebsite: `https://${val}`,
+                    });
+                  }
+                }}
               />
             </div>
 

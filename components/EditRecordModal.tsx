@@ -378,11 +378,26 @@ export default function EditRecordModal({
     e.preventDefault();
     setLoading(true);
     try {
+      // Sanitize URL fields
+      const finalData = { ...formData };
+      schema.forEach((field) => {
+        if (
+          field.type === "url" &&
+          finalData[field.name] &&
+          typeof finalData[field.name] === "string"
+        ) {
+          const val = finalData[field.name].trim();
+          if (val && !/^https?:\/\//i.test(val)) {
+            finalData[field.name] = `https://${val}`;
+          }
+        }
+      });
+
       const res = await fetch(`/api/records/${record.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          data: formData,
+          data: finalData,
         }),
       });
 
@@ -696,9 +711,7 @@ export default function EditRecordModal({
                           ? "number"
                           : field.type === "date"
                             ? "date"
-                            : field.type === "url"
-                              ? "url"
-                              : "text"
+                            : "text"
                       }
                       value={formData[field.name] || ""}
                       onChange={(e) =>
@@ -710,6 +723,17 @@ export default function EditRecordModal({
                               : e.target.value,
                         })
                       }
+                      onBlur={(e) => {
+                        if (field.type === "url" && e.target.value) {
+                          let val = e.target.value.trim();
+                          if (val && !/^https?:\/\//i.test(val)) {
+                            setFormData({
+                              ...formData,
+                              [field.name]: `https://${val}`,
+                            });
+                          }
+                        }
+                      }}
                       className={
                         field.type === "lookup" || field.type === "automation"
                           ? "bg-muted text-muted-foreground cursor-not-allowed"

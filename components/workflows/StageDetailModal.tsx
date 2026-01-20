@@ -1193,7 +1193,7 @@ export function StageDetailModal({
       });
       setIsEditing(true);
     }
-  }, [stage, isCreating]);
+  }, [stage, isCreating, isOpen]);
 
   if (!isOpen) return null;
   if (!stage && !isCreating) return null;

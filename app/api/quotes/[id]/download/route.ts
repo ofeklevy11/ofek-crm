@@ -14,25 +14,27 @@ async function getBrowser() {
   // Check if we're on Vercel (serverless environment)
   if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
     // For Vercel, we need to use puppeteer-core with @sparticuz/chromium
-    // If these packages are not installed, this will fail gracefully
     try {
       const chromium = await import("@sparticuz/chromium").then(
-        (m) => m.default
+        (m) => m.default,
       );
       const puppeteerCore = await import("puppeteer-core").then(
-        (m) => m.default
+        (m) => m.default,
       );
 
+      // Optional: Load specific fonts if needed
+      // await chromium.font("https://raw.githack.com/googlefonts/noto-cjk/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf");
+
       return await puppeteerCore.launch({
-        args: chromium.args,
+        args: [...chromium.args, "--disable-web-security", "--no-sandbox"],
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
-        headless: true,
+        headless: chromium.headless,
       });
     } catch (e) {
       console.error("Failed to load serverless chromium:", e);
       throw new Error(
-        "PDF generation is not available in this environment. Please install @sparticuz/chromium and puppeteer-core for Vercel deployment."
+        "PDF generation is not available in this environment. Please install @sparticuz/chromium and puppeteer-core for Vercel deployment.",
       );
     }
   } else {
@@ -52,7 +54,7 @@ async function getBrowser() {
     } catch (e) {
       console.error("Failed to load puppeteer:", e);
       throw new Error(
-        "PDF generation requires puppeteer to be installed locally."
+        "PDF generation requires puppeteer to be installed locally.",
       );
     }
   }
@@ -60,7 +62,7 @@ async function getBrowser() {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const resolvedParams = await params;
   const user = await getCurrentUser();
@@ -87,7 +89,7 @@ export async function GET(
 
   // Render the component to HTML using React.createElement
   const componentHtml = await render(
-    React.createElement(QuoteDocument, { quote: quote as any })
+    React.createElement(QuoteDocument, { quote: quote as any }),
   );
 
   // Wrap in a full HTML document with Tailwind CDN for styling
@@ -98,6 +100,18 @@ export async function GET(
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <script src="https://cdn.tailwindcss.com"></script>
+      <script>
+        tailwind.config = {
+          theme: {
+            extend: {
+              colors: {
+                primary: '#4f95ff',
+                secondary: '#a24ec1',
+              }
+            }
+          }
+        }
+      </script>
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap');
         body { font-family: 'Heebo', sans-serif; }
@@ -109,12 +123,18 @@ export async function GET(
     </html>
   `;
 
+  let browser = null;
+
   try {
-    const browser = await getBrowser();
+    browser = await getBrowser();
     const page = await browser.newPage();
 
     // Set content and wait for load
-    await page.setContent(fullHtml, { waitUntil: "load", timeout: 30000 });
+    // networkidle0 is important for Tailwind CDN to finish applying styles
+    await page.setContent(fullHtml, {
+      waitUntil: "networkidle0",
+      timeout: 60000,
+    });
 
     const pdfBuffer = await page.pdf({
       format: "A4",
@@ -133,7 +153,7 @@ export async function GET(
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="quote-${quote.id.slice(
-          -6
+          -6,
         )}.pdf"`,
       },
     });
@@ -143,6 +163,16 @@ export async function GET(
       stack: error.stack,
       name: error.name,
     });
+
+    // Attempt to close browser if it was opened but failed later
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {
+        console.error("Error closing browser after failure:", e);
+      }
+    }
+
     return new NextResponse(`Failed to generate PDF: ${error.message}`, {
       status: 500,
     });

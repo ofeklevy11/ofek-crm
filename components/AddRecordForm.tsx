@@ -135,6 +135,21 @@ export default function AddRecordForm({
     e.preventDefault();
     setLoading(true);
     try {
+      // Sanitize URL fields
+      const finalData = { ...formData };
+      schema.forEach((field) => {
+        if (
+          field.type === "url" &&
+          finalData[field.name] &&
+          typeof finalData[field.name] === "string"
+        ) {
+          const val = finalData[field.name].trim();
+          if (val && !/^https?:\/\//i.test(val)) {
+            finalData[field.name] = `https://${val}`;
+          }
+        }
+      });
+
       // 1. Create the record first to get an ID
       // We'll send attachments (links) directly here if the API continues to support it in the same call
       // Or we create record first then add files.
@@ -155,7 +170,7 @@ export default function AddRecordForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          data: formData,
+          data: finalData,
           attachments: links, // Only legacy links sent here initially
         }),
       });
@@ -511,9 +526,7 @@ export default function AddRecordForm({
                               ? "number"
                               : field.type === "date"
                                 ? "date"
-                                : field.type === "url"
-                                  ? "url"
-                                  : "text"
+                                : "text"
                           }
                           value={formData[field.name] || ""}
                           onChange={(e) =>
@@ -525,6 +538,17 @@ export default function AddRecordForm({
                                   : e.target.value,
                             })
                           }
+                          onBlur={(e) => {
+                            if (field.type === "url" && e.target.value) {
+                              let val = e.target.value.trim();
+                              if (val && !/^https?:\/\//i.test(val)) {
+                                setFormData({
+                                  ...formData,
+                                  [field.name]: `https://${val}`,
+                                });
+                              }
+                            }
+                          }}
                           className={`h-11 text-base px-3 rounded-md shadow-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-zinc-950 ${
                             field.type === "lookup" ||
                             field.type === "automation"

@@ -19,9 +19,12 @@ export default async function Navbar() {
           <div className="shrink-0 flex items-center">
             <Link
               href="/"
-              className="text-xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent"
+              className="text-lg font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent whitespace-nowrap"
             >
-              {user?.company?.name || "CRM למנהל"}
+              {(() => {
+                const name = user?.company?.name || "CRM למנהל";
+                return name.length > 30 ? `${name.slice(0, 30)}...` : name;
+              })()}
             </Link>
           </div>
 
