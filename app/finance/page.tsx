@@ -93,14 +93,14 @@ export default async function FinancePage() {
 
   // 1. New Retainers this month
   const newRetainersThisMonth = activeRetainers.filter(
-    (r) => new Date(r.createdAt) >= firstDayOfMonth
+    (r) => new Date(r.createdAt) >= firstDayOfMonth,
   ).length;
 
   // 2. Overdue Payments Count
   const overdueCount = pendingPayments.filter(
     (p) =>
       p.status === "overdue" ||
-      (p.status === "pending" && p.dueDate && new Date(p.dueDate) < now)
+      (p.status === "pending" && p.dueDate && new Date(p.dueDate) < now),
   ).length;
 
   // 3. New MRR Added this month
@@ -124,7 +124,7 @@ export default async function FinancePage() {
 
   const outstandingDebt = pendingPayments.reduce(
     (sum, p) => sum + Number(p.amount),
-    0
+    0,
   );
 
   // Rate = Paid Count / (Paid Count + Outstanding Count)
@@ -134,6 +134,32 @@ export default async function FinancePage() {
 
   const collectionRate =
     totalCount > 0 ? Math.round((paidCount / totalCount) * 100) : 0;
+
+  // Churn Rate Calculation
+  // All retainers moved to "cancelled" are considered churn.
+  // Formula: Cancelled / (Active + Cancelled) * 100
+  // We need to fetch count of cancelled retainers first.
+  const cancelledRetainersCount = await prisma.retainer.count({
+    where: {
+      status: "cancelled",
+      client: { companyId: user.companyId },
+    },
+  });
+
+  const totalRetainersForChurn =
+    activeRetainers.length + cancelledRetainersCount;
+  const churnRate =
+    totalRetainersForChurn > 0
+      ? Math.round((cancelledRetainersCount / totalRetainersForChurn) * 100)
+      : 0;
+
+  // Calculate new retainers in the last 30 days
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const newRetainersLast30Days = activeRetainers.filter(
+    (r) => new Date(r.createdAt) >= thirtyDaysAgo,
+  ).length;
 
   // Serialize data (convert Decimal to number) for Client Components
   const serializedActiveRetainers = activeRetainers.map((r) => ({
@@ -268,9 +294,12 @@ export default async function FinancePage() {
         activeRetainers={activeRetainers.length}
         collectionRate={collectionRate}
         newMrr={newMrrThisMonth}
-        overdueCount={overdueCount}
-        newRetainersCount={newRetainersThisMonth}
+        overdueCount={overdueCount} // Keeping for now, likely replacing in component
+        newRetainersCount={newRetainersThisMonth} // Keeping for now
         totalCollected={totalPaidAmount}
+        churnRate={churnRate}
+        cancelledRetainersCount={cancelledRetainersCount}
+        newRetainersLast30Days={newRetainersLast30Days}
       />
 
       {/* Goal Planning - Prominent Section */}

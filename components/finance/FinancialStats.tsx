@@ -9,6 +9,10 @@ interface FinancialStatsProps {
   overdueCount?: number;
   newRetainersCount?: number;
   totalCollected?: number;
+  churnRate?: number;
+  cancelledRetainersCount?: number;
+  retainerCollectionRate?: number;
+  newRetainersLast30Days?: number;
 }
 
 export default function FinancialStats({
@@ -20,6 +24,10 @@ export default function FinancialStats({
   overdueCount = 0,
   newRetainersCount = 0,
   totalCollected = 0,
+  churnRate = 0,
+  cancelledRetainersCount = 0,
+  retainerCollectionRate = 0,
+  newRetainersLast30Days = 0,
 }: FinancialStatsProps) {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -54,9 +62,7 @@ export default function FinancialStats({
             ₪{outstandingDebt.toLocaleString()}
           </div>
           <p className="text-xs text-gray-500 mt-1">
-            {overdueCount > 0
-              ? `${overdueCount} תשלומים באיחור`
-              : "אין תשלומים באיחור"}
+            {collectionRate}% שיעור גבייה
           </p>
         </div>
       </div>
@@ -73,9 +79,7 @@ export default function FinancialStats({
             {activeRetainers}
           </div>
           <p className="text-xs text-gray-500 mt-1">
-            {newRetainersCount > 0
-              ? `+${newRetainersCount} חדשים החודש`
-              : "אין ריטיינרים חדשים החודש"}
+            +{newRetainersLast30Days} ב-30 הימים האחרונים
           </p>
         </div>
       </div>
@@ -83,16 +87,14 @@ export default function FinancialStats({
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <div className="flex flex-row items-center justify-between space-y-0 pb-2">
           <h3 className="tracking-tight text-sm font-medium text-gray-500">
-            שיעור גבייה
+            שיעור עזיבת ריטיינרים
           </h3>
           <TrendingUp className="h-4 w-4 text-gray-500" />
         </div>
         <div className="pt-2">
-          <div className="text-2xl font-bold text-gray-900">
-            {collectionRate}%
-          </div>
+          <div className="text-2xl font-bold text-gray-900">{churnRate}%</div>
           <p className="text-xs text-gray-500 mt-1">
-            נאספו ₪{totalCollected.toLocaleString()}
+            {cancelledRetainersCount} ריטיינרים עזבו
           </p>
         </div>
       </div>
