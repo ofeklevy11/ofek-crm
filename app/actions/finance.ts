@@ -153,7 +153,7 @@ export async function updateRetainer(
     status?: string;
     notes?: string;
     nextDueDate?: string;
-  }
+  },
 ) {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
@@ -348,7 +348,7 @@ export async function updatePayment(
     dueDate?: string;
     status?: string;
     notes?: string;
-  }
+  },
 ) {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
@@ -376,37 +376,25 @@ export async function updatePayment(
     });
 
     // --- REAL-TIME FINANCE SYNC FOR PAYMENTS ---
-    // If payment became "paid", trigger all TRANSACTIONS sync rules
+    // If payment became "paid", trigger auto-sync
     if (
       data.status === "paid" ||
       data.status === "Pd" ||
       data.status === "PAID" ||
-      data.status === "manual-marked-paid"
+      data.status === "manual-marked-paid" ||
+      data.status === "completed" ||
+      data.status === "COMPLETED"
     ) {
       try {
-        const syncRules = await prisma.financeSyncRule.findMany({
-          where: {
-            sourceType: "TRANSACTIONS",
-            isActive: true,
-            companyId: existing.client.companyId,
-          },
-        });
-
-        if (syncRules.length > 0) {
-          console.log(
-            `[Finance] Payment #${id} marked as paid. Triggering ${syncRules.length} sync rules...`
-          );
-          const { runSyncRule } = await import("./finance-sync");
-          for (const rule of syncRules) {
-            runSyncRule(rule.id).catch((e) =>
-              console.error(`[Auto-Sync] Failed to run rule ${rule.id}`, e)
-            );
-          }
-        }
+        const { triggerSyncByType } = await import("./finance-sync");
+        await triggerSyncByType(
+          existing.client.companyId,
+          "PAYMENTS_RETAINERS",
+        );
       } catch (err) {
         console.error(
           "[Finance] Error triggering sync on payment update:",
-          err
+          err,
         );
       }
     }

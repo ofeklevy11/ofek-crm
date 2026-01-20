@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 
 export async function markRetainerAsPaid(
   retainerId: number,
-  count: number = 1
+  count: number = 1,
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
@@ -71,23 +71,10 @@ export async function markRetainerAsPaid(
     },
   });
 
-  // Trigger Sync Rules specifically for Transactions
+  // Trigger Sync Rules
   try {
-    const syncRules = await prisma.financeSyncRule.findMany({
-      where: {
-        sourceType: "TRANSACTIONS",
-        isActive: true,
-        companyId: user.companyId,
-      },
-    });
-
-    if (syncRules.length > 0) {
-      console.log(`[Retainer] Created ${count} payments. Triggering sync...`);
-      const { runSyncRule } = await import("./finance-sync");
-      for (const rule of syncRules) {
-        await runSyncRule(rule.id).catch((e) => console.error(e));
-      }
-    }
+    const { triggerSyncByType } = await import("./finance-sync");
+    await triggerSyncByType(user.companyId, "PAYMENTS_RETAINERS");
   } catch (e) {
     console.error("Failed to trigger sync from retainer payment", e);
   }

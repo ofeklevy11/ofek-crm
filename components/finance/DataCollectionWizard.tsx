@@ -45,9 +45,7 @@ export default function DataCollectionWizard({
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  const [sourceType, setSourceType] = useState<"TABLE" | "TRANSACTIONS">(
-    "TABLE"
-  );
+  const sourceType = "TABLE"; // Only table source is now available through wizard
 
   const [formData, setFormData] = useState({
     name: "",
@@ -63,12 +61,12 @@ export default function DataCollectionWizard({
   });
 
   const selectedTable = tables.find(
-    (t) => t.id.toString() === formData.sourceId
+    (t) => t.id.toString() === formData.sourceId,
   );
   // FILTER: Only NUMBER columns can be amount fields
   const currentColumns = selectedTable?.columns || [];
   const numberColumns = currentColumns.filter(
-    (c) => c.type === "number" || c.type === "currency"
+    (c) => c.type === "number" || c.type === "currency",
   );
 
   const handleCreateAndRun = async () => {
@@ -183,8 +181,8 @@ export default function DataCollectionWizard({
                   {s === 1
                     ? "בחירת מקור"
                     : s === 2
-                    ? "מיפוי נתונים"
-                    : "סיכום והרצה"}
+                      ? "מיפוי נתונים"
+                      : "סיכום והרצה"}
                 </div>
               </div>
             );
@@ -208,73 +206,6 @@ export default function DataCollectionWizard({
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
-              <div
-                onClick={() => setSourceType("TABLE")}
-                className={`cursor-pointer group relative p-6 rounded-2xl border-2 transition-all duration-300 flex flex-col items-center gap-4 text-center hover:shadow-lg ${
-                  sourceType === "TABLE"
-                    ? "border-[#4f95ff] bg-blue-50/30 shadow-md ring-2 ring-[#4f95ff]/20"
-                    : "border-gray-100 bg-white hover:border-gray-200"
-                }`}
-              >
-                <div
-                  className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-colors ${
-                    sourceType === "TABLE"
-                      ? "bg-[#4f95ff] text-white"
-                      : "bg-gray-100 text-gray-400 group-hover:bg-gray-200 group-hover:text-gray-600"
-                  }`}
-                >
-                  <TableIcon className="w-8 h-8" />
-                </div>
-                <div>
-                  <h3
-                    className={`font-bold text-lg ${
-                      sourceType === "TABLE" ? "text-gray-900" : "text-gray-600"
-                    }`}
-                  >
-                    טבלה מותאמת
-                  </h3>
-                  <p className="text-sm text-gray-400 mt-1">
-                    ייבוא מטבלאות המערכת (לידים, לקוחות, וכו')
-                  </p>
-                </div>
-              </div>
-
-              <div
-                onClick={() => setSourceType("TRANSACTIONS")}
-                className={`cursor-pointer group relative p-6 rounded-2xl border-2 transition-all duration-300 flex flex-col items-center gap-4 text-center hover:shadow-lg ${
-                  sourceType === "TRANSACTIONS"
-                    ? "border-[#a24ec1] bg-purple-50/30 shadow-md ring-2 ring-[#a24ec1]/20"
-                    : "border-gray-100 bg-white hover:border-gray-200"
-                }`}
-              >
-                <div
-                  className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-colors ${
-                    sourceType === "TRANSACTIONS"
-                      ? "bg-[#a24ec1] text-white"
-                      : "bg-gray-100 text-gray-400 group-hover:bg-gray-200 group-hover:text-gray-600"
-                  }`}
-                >
-                  <CreditCard className="w-8 h-8" />
-                </div>
-                <div>
-                  <h3
-                    className={`font-bold text-lg ${
-                      sourceType === "TRANSACTIONS"
-                        ? "text-gray-900"
-                        : "text-gray-600"
-                    }`}
-                  >
-                    מערכת תשלומים
-                  </h3>
-                  <p className="text-sm text-gray-400 mt-1">
-                    ייבוא אוטומטי של עסקאות בסטטוס "שולם" + ריטיינר בסטטוס
-                    "שולם"
-                  </p>
-                </div>
-              </div>
-            </div>
-
             <div className="space-y-6 max-w-lg mx-auto w-full pt-4">
               <div className="space-y-2">
                 <Label className="text-base">שם לחוק האיסוף</Label>
@@ -283,11 +214,7 @@ export default function DataCollectionWizard({
                   onChange={(e) =>
                     setFormData((p) => ({ ...p, name: e.target.value }))
                   }
-                  placeholder={
-                    sourceType === "TABLE"
-                      ? "למשל: ייבוא לידים כהכנסה"
-                      : "למשל: סנכרון תשלומים מהמערכת"
-                  }
+                  placeholder="למשל: ייבוא לידים כהכנסה"
                   className="text-right h-12 text-lg bg-gray-50/50 border-gray-200 focus:border-[#4f95ff] focus:ring-[#4f95ff]/20 transition-all"
                 />
               </div>
@@ -322,46 +249,40 @@ export default function DataCollectionWizard({
                 </div>
               </div>
 
-              {sourceType === "TABLE" && (
-                <div className="space-y-2">
-                  <Label className="text-base">בחר טבלת מקור</Label>
-                  <Select
-                    value={formData.sourceId}
-                    onValueChange={(val) =>
-                      setFormData((p) => ({ ...p, sourceId: val }))
-                    }
+              <div className="space-y-2">
+                <Label className="text-base">בחר טבלת מקור</Label>
+                <Select
+                  value={formData.sourceId}
+                  onValueChange={(val) =>
+                    setFormData((p) => ({ ...p, sourceId: val }))
+                  }
+                >
+                  <SelectTrigger
+                    className="text-right h-12 bg-gray-50/50 border-gray-200"
+                    dir="rtl"
                   >
-                    <SelectTrigger
-                      className="text-right h-12 bg-gray-50/50 border-gray-200"
-                      dir="rtl"
-                    >
-                      <SelectValue placeholder="בחר טבלה..." />
-                    </SelectTrigger>
-                    <SelectContent dir="rtl" className="max-h-[300px]">
-                      {tables.map((t) => (
-                        <SelectItem key={t.id} value={t.id.toString()}>
-                          {t.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+                    <SelectValue placeholder="בחר טבלה..." />
+                  </SelectTrigger>
+                  <SelectContent dir="rtl" className="max-h-[300px]">
+                    {tables.map((t) => (
+                      <SelectItem key={t.id} value={t.id.toString()}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="flex-1" />
 
             <div className="flex justify-end pt-8">
               <Button
-                onClick={() => setStep(sourceType === "TABLE" ? 2 : 3)}
-                disabled={
-                  !formData.name ||
-                  (sourceType === "TABLE" && !formData.sourceId)
-                }
+                onClick={() => setStep(2)}
+                disabled={!formData.name || !formData.sourceId}
                 className="bg-[#4f95ff] hover:bg-blue-600 text-white rounded-full px-8 py-6 text-lg shadow-lg shadow-blue-500/20 transition-all hover:scale-105"
               >
-                {sourceType === "TABLE" ? "המשך למיפוי" : "המשך לסיכום"}{" "}
-                <ChevronLeft className="w-5 h-5 mr-2" />
+                המשך למיפוי <ChevronLeft className="w-5 h-5 mr-2" />
               </Button>
             </div>
           </div>

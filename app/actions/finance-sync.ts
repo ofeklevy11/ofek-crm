@@ -15,7 +15,12 @@ export interface SyncMapping {
 export async function createSyncRule(data: {
   name: string;
   targetType: "INCOME" | "EXPENSE";
-  sourceType: "TABLE" | "TRANSACTIONS" | "RETAINERS";
+  sourceType:
+    | "TABLE"
+    | "TRANSACTIONS"
+    | "RETAINERS"
+    | "FIXED_EXPENSES"
+    | "PAYMENTS_RETAINERS";
   sourceId?: number; // Optional for system sources
   fieldMapping: SyncMapping;
 }) {
@@ -38,7 +43,7 @@ export async function createSyncRule(data: {
 
 export async function updateSyncRule(
   id: number,
-  data: { name?: string; targetType?: "INCOME" | "EXPENSE" }
+  data: { name?: string; targetType?: "INCOME" | "EXPENSE" },
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
@@ -93,7 +98,7 @@ export async function runSyncRule(ruleId: number) {
           record.data,
           mapping,
           user.companyId,
-          record.createdAt
+          record.createdAt,
         );
         if (res.status === "created") stats.created++;
         else if (res.status === "updated") stats.updated++;
@@ -104,8 +109,11 @@ export async function runSyncRule(ruleId: number) {
             stats.errors.push(`Record #${record.id}: ${res.error}`);
         }
       }
-    } else if (rule.sourceType === "TRANSACTIONS") {
-      // --- SYSTEM TRANSACTIONS SOURCE ---
+    } else if (
+      rule.sourceType === "TRANSACTIONS" ||
+      rule.sourceType === "PAYMENTS_RETAINERS"
+    ) {
+      // --- SYSTEM PAYMENTS SOURCE ---
       // 1. Fetch from Transactions table (Legacy or specific transactions)
       const transactions = await prisma.transaction.findMany({
         where: {
@@ -130,7 +138,9 @@ export async function runSyncRule(ruleId: number) {
       for (const t of transactions) {
         const date = t.paidDate || t.attemptDate || t.createdAt;
         const title = t.notes || `System Transaction #${t.id}`;
-        const amount = Number(t.amount);
+        // Ensure 2 decimal precision to avoid floating point artifacts
+        const amount =
+          Math.round((Number(t.amount) + Number.EPSILON) * 100) / 100;
 
         if (amount > 0) {
           const res = await createFinanceRecord(
@@ -143,7 +153,7 @@ export async function runSyncRule(ruleId: number) {
               category: "System Transaction",
               clientId: t.clientId,
             },
-            user.companyId
+            user.companyId,
           );
 
           if (res === "created") stats.created++;
@@ -158,7 +168,9 @@ export async function runSyncRule(ruleId: number) {
       for (const p of payments) {
         const date = p.paidDate || p.dueDate || p.createdAt;
         const title = p.title || `Payment #${p.id}`;
-        const amount = Number(p.amount);
+        // Ensure 2 decimal precision to avoid floating point artifacts
+        const amount =
+          Math.round((Number(p.amount) + Number.EPSILON) * 100) / 100;
 
         if (amount > 0) {
           const res = await createFinanceRecord(
@@ -172,7 +184,7 @@ export async function runSyncRule(ruleId: number) {
               clientId: p.clientId,
             },
             user.companyId,
-            "INCOME" // Force Income for Client Payments
+            "INCOME", // Force Income for Client Payments
           );
 
           if (res === "created") stats.created++;
@@ -182,11 +194,42 @@ export async function runSyncRule(ruleId: number) {
           stats.skippedError++;
         }
       }
+    } else if (rule.sourceType === "FIXED_EXPENSES") {
+      // --- FIXED EXPENSES SOURCE ---
+      // 1. Ensure all fixed expenses have generated their records
+      const { processFixedExpenses } = await import("./fixed-expenses");
+      const generatedCount = (await processFixedExpenses()) || 0;
+
+      // 2. Link unlinked fixed expense records to this rule
+      // Find records that start with "fixed_" and have no syncRuleId (or different one, but usually none)
+      const unlinkedRecords = await prisma.financeRecord.findMany({
+        where: {
+          companyId: user.companyId,
+          originId: { startsWith: "fixed_" },
+          syncRuleId: null,
+        },
+      });
+
+      stats.scanned = unlinkedRecords.length;
+
+      if (unlinkedRecords.length > 0) {
+        await prisma.financeRecord.updateMany({
+          where: {
+            id: { in: unlinkedRecords.map((r) => r.id) },
+          },
+          data: {
+            syncRuleId: rule.id,
+          },
+        });
+        stats.created = generatedCount; // Use generated count as "new" action indicator
+        stats.updated = unlinkedRecords.length; // These were linked
+      } else {
+        stats.created = generatedCount;
+      }
     }
 
     // --- GARBAGE COLLECTION ---
     // Remove FinanceRecords linked to this rule whose source no longer exists.
-    // 1. Get all originIds processed in this run
     const currentOriginIds: string[] = [];
 
     if (rule.sourceType === "TABLE" && rule.sourceId) {
@@ -195,8 +238,10 @@ export async function runSyncRule(ruleId: number) {
         select: { id: true },
       });
       records.forEach((r) => currentOriginIds.push(r.id.toString()));
-    } else if (rule.sourceType === "TRANSACTIONS") {
-      // Fetch fresh lists matching the criteria used above
+    } else if (
+      rule.sourceType === "TRANSACTIONS" ||
+      rule.sourceType === "PAYMENTS_RETAINERS"
+    ) {
       const transactions = await prisma.transaction.findMany({
         where: {
           client: { companyId: user.companyId },
@@ -216,7 +261,10 @@ export async function runSyncRule(ruleId: number) {
       payments.forEach((p) => currentOriginIds.push(`payment_${p.id}`));
     }
 
-    if (currentOriginIds.length > 0) {
+    if (
+      currentOriginIds.length > 0 &&
+      rule.sourceType !== "FIXED_EXPENSES" // Skip for fixed expenses
+    ) {
       await prisma.financeRecord.deleteMany({
         where: {
           syncRuleId: rule.id,
@@ -225,7 +273,9 @@ export async function runSyncRule(ruleId: number) {
       });
     } else if (
       currentOriginIds.length === 0 &&
-      (rule.sourceType === "TRANSACTIONS" || rule.sourceType === "TABLE")
+      (rule.sourceType === "TRANSACTIONS" ||
+        rule.sourceType === "PAYMENTS_RETAINERS" ||
+        rule.sourceType === "TABLE")
     ) {
       // If no source items found, delete ALL records for this rule (source was emptied)
       await prisma.financeRecord.deleteMany({
@@ -263,7 +313,7 @@ async function createFinanceRecord(
     clientId?: number;
   },
   companyId: number,
-  forcedType?: "INCOME" | "EXPENSE"
+  forcedType?: "INCOME" | "EXPENSE",
 ): Promise<"created" | "exists" | "updated"> {
   const exists = await prisma.financeRecord.findUnique({
     where: {
@@ -327,7 +377,7 @@ async function processTableRecord(
   data: any,
   mapping: SyncMapping,
   companyId: number,
-  defaultDate: Date
+  defaultDate: Date,
 ): Promise<{
   status: "created" | "exists" | "updated" | "error";
   error?: string;
@@ -359,6 +409,9 @@ async function processTableRecord(
     amount = parseFloat(cleaned);
   }
 
+  // Ensure 2 decimal precision
+  amount = Math.round((amount + Number.EPSILON) * 100) / 100;
+
   if (isNaN(amount) || amount === 0) {
     return { status: "error", error: `Invalid amount value: ${rawAmount}` };
   }
@@ -377,7 +430,7 @@ async function processTableRecord(
     rule,
     originId,
     { title, amount, date, category },
-    companyId
+    companyId,
   );
   return { status };
 }
@@ -402,8 +455,88 @@ export async function deleteSyncRule(id: number) {
 export async function getSyncRules() {
   const user = await getCurrentUser();
   if (!user) return [];
+
+  await ensureDefaultRules(user.companyId);
+
   return prisma.financeSyncRule.findMany({
     where: { companyId: user.companyId },
     orderBy: { createdAt: "desc" },
   });
+}
+
+async function ensureDefaultRules(companyId: number) {
+  // 1. Fixed Expenses Rule
+  const fixedRule = await prisma.financeSyncRule.findFirst({
+    where: { companyId, sourceType: "FIXED_EXPENSES" },
+  });
+
+  if (!fixedRule) {
+    await prisma.financeSyncRule.create({
+      data: {
+        companyId,
+        name: "הוצאות קבועות",
+        sourceType: "FIXED_EXPENSES",
+        targetType: "EXPENSE",
+        fieldMapping: {},
+      },
+    });
+  }
+
+  // 2. Payments & Retainers Rule
+  const paymentsRule = await prisma.financeSyncRule.findFirst({
+    where: { companyId, sourceType: "PAYMENTS_RETAINERS" },
+  });
+
+  if (!paymentsRule) {
+    // Check if legacy rule exists
+    const legacyRule = await prisma.financeSyncRule.findFirst({
+      where: { companyId, sourceType: "TRANSACTIONS" },
+    });
+
+    if (legacyRule) {
+      // Update legacy to new type
+      await prisma.financeSyncRule.update({
+        where: { id: legacyRule.id },
+        data: {
+          sourceType: "PAYMENTS_RETAINERS",
+          name: "תשלומים וריטיינרים", // Update name to reflect current purpose
+        },
+      });
+    } else {
+      // Create new
+      await prisma.financeSyncRule.create({
+        data: {
+          companyId,
+          name: "תשלומים וריטיינרים",
+          sourceType: "PAYMENTS_RETAINERS",
+          targetType: "INCOME",
+          fieldMapping: {},
+        },
+      });
+    }
+  }
+}
+
+export async function triggerSyncByType(
+  companyId: number,
+  sourceType: "FIXED_EXPENSES" | "PAYMENTS_RETAINERS",
+) {
+  try {
+    const rule = await prisma.financeSyncRule.findFirst({
+      where: {
+        companyId,
+        sourceType,
+        isActive: true, // Only trigger active rules
+      },
+    });
+
+    if (rule) {
+      // Run in background without awaiting if possible, but Server Actions await result usually.
+      // We await it to ensure consistency, but wrap in try-catch to not block UI on error.
+      await runSyncRule(rule.id);
+      console.log(`[AutoSync] Triggered sync for ${sourceType}`);
+    }
+  } catch (error) {
+    console.error(`[AutoSync] Failed to trigger sync for ${sourceType}`, error);
+  }
 }

@@ -43,8 +43,17 @@ export default async function IncomeExpensesPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  // Ensure fixed expenses are generated up to date
-  await processFixedExpenses();
+  // Ensure data is synced and up to date
+  try {
+    const { triggerSyncByType } = await import("@/app/actions/finance-sync");
+    // We run them in parallel for speed
+    await Promise.all([
+      triggerSyncByType(user.companyId, "FIXED_EXPENSES"),
+      triggerSyncByType(user.companyId, "PAYMENTS_RETAINERS"),
+    ]);
+  } catch (e) {
+    console.error("Auto-sync on page load failed", e);
+  }
 
   // Fetch stats and existing rules
   const [stats, rules] = await Promise.all([

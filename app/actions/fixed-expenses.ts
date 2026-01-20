@@ -197,7 +197,7 @@ export async function markFixedExpensePaid(expenseId: number, count: number) {
         // If one time and we already processed it (or added it), stop.
         // Actually for one time, we should probably stop after 1.
         checkDate = new Date(
-          checkDate.setFullYear(checkDate.getFullYear() + 100)
+          checkDate.setFullYear(checkDate.getFullYear() + 100),
         ); // Force exit
         break;
       }
@@ -233,6 +233,10 @@ export async function markFixedExpensePaid(expenseId: number, count: number) {
     });
   }
 
+  // Trigger Auto-Sync
+  const { triggerSyncByType } = await import("./finance-sync");
+  await triggerSyncByType(user.companyId, "FIXED_EXPENSES");
+
   revalidatePath("/finance/fixed-expenses");
   revalidatePath("/finance/income-expenses");
   revalidatePath("/finance");
@@ -264,6 +268,10 @@ export async function createFixedExpense(data: {
     },
   });
 
+  // Trigger Auto-Sync
+  const { triggerSyncByType } = await import("./finance-sync");
+  await triggerSyncByType(user.companyId, "FIXED_EXPENSES");
+
   revalidatePath("/finance/fixed-expenses");
   revalidatePath("/finance/income-expenses");
   // await processFixedExpenses(); // Disabled automatic processing
@@ -280,7 +288,7 @@ export async function updateFixedExpense(
     description?: string;
     startDate?: Date;
     status?: string;
-  }
+  },
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
@@ -292,6 +300,10 @@ export async function updateFixedExpense(
     },
     data,
   });
+
+  // Trigger Auto-Sync
+  const { triggerSyncByType } = await import("./finance-sync");
+  await triggerSyncByType(user.companyId, "FIXED_EXPENSES");
 
   revalidatePath("/finance/fixed-expenses");
   revalidatePath("/finance/income-expenses");
@@ -308,6 +320,10 @@ export async function deleteFixedExpense(id: number) {
       companyId: user.companyId,
     },
   });
+
+  // Trigger Auto-Sync
+  const { triggerSyncByType } = await import("./finance-sync");
+  await triggerSyncByType(user.companyId, "FIXED_EXPENSES");
 
   revalidatePath("/finance/fixed-expenses");
 }
