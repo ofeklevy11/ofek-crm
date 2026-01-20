@@ -30,11 +30,13 @@ export default function QuoteEditor({
       ? new Date(initialQuote.validUntil).toISOString().split("T")[0]
       : "",
     status: initialQuote?.status || "DRAFT",
+    // title: initialQuote?.title || "", // Removed
   });
 
   const [items, setItems] = useState<any[]>(initialQuote?.items || []);
 
   const handleClientChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    // ... existing client logic ...
     const clientId = e.target.value;
     if (clientId === "new") {
       setFormData((prev) => ({
@@ -63,6 +65,7 @@ export default function QuoteEditor({
   };
 
   const addItem = () => {
+    // ... existing addItem logic ...
     setItems([
       ...items,
       {
@@ -74,6 +77,8 @@ export default function QuoteEditor({
       },
     ]);
   };
+
+  // ... removeItem and others ...
 
   const removeItem = (index: number) => {
     const newItems = [...items];
@@ -89,7 +94,7 @@ export default function QuoteEditor({
         newItems[index] = { ...newItems[index], productId: null };
       } else {
         const product = products.find(
-          (p) => p.id.toString() === value.toString()
+          (p) => p.id.toString() === value.toString(),
         );
         if (product) {
           newItems[index] = {
@@ -110,14 +115,14 @@ export default function QuoteEditor({
   const calculateTotal = () => {
     return items.reduce(
       (acc, item) => acc + Number(item.quantity) * Number(item.unitPrice),
-      0
+      0,
     );
   };
 
   const calculateTotalCost = () => {
     return items.reduce(
       (acc, item) => acc + Number(item.quantity) * Number(item.unitCost || 0),
-      0
+      0,
     );
   };
 
@@ -151,6 +156,7 @@ export default function QuoteEditor({
           ? new Date(formData.validUntil)
           : undefined,
         status: formData.status,
+        // title: formData.title, // Removed
         items: items.map((item) => ({
           productId: item.productId ? parseInt(item.productId) : undefined,
           description: item.description,
@@ -305,6 +311,7 @@ export default function QuoteEditor({
             <h3 className="font-semibold text-gray-900">הגדרות וסטטוס</h3>
           </div>
           <div className="p-6 space-y-4">
+            {/* Title field removed per schema change */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
                 סטטוס

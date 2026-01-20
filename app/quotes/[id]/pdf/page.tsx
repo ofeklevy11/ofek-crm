@@ -47,6 +47,7 @@ export default async function QuotePdfPage({
           <PrintButton
             quoteId={quote.id}
             quoteNumber={(quote as any).quoteNumber}
+            clientName={(quote as any).clientName}
           />
         </div>
       </div>

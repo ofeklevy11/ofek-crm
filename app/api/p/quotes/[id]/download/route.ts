@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/permissions-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,10 +28,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const resolvedParams = await params;
-  const user = await getCurrentUser();
-  if (!user) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
+
+  // No auth check for public route - relying on ID secrecy (UUID/CUID)
 
   // Check configuration
   if (!PDFMONKEY_API_KEY || !PDFMONKEY_TEMPLATE_ID) {
@@ -44,7 +41,7 @@ export async function GET(
   }
 
   const quote = await prisma.quote.findUnique({
-    where: { id: resolvedParams.id, companyId: user.companyId },
+    where: { id: resolvedParams.id },
     include: {
       client: true,
       items: {
@@ -60,7 +57,7 @@ export async function GET(
     return new NextResponse("Quote not found", { status: 404 });
   }
 
-  // Prepare Data for PDF Monkey
+  // Prepare Data for PDF Monkey (Same as private route)
   const vatRate = 0.18;
   const isVatExempt = quote.company.businessType === "exempt";
   const subtotal = Number(quote.total);
@@ -88,9 +85,6 @@ export async function GET(
     created_at: formatDate(quote.createdAt),
     valid_until: formatDate(quote.validUntil),
 
-    // Quote Title Removed from Schema
-    quote_title: null,
-
     // Company (Sender)
     company_name: quote.company.name,
     company_business_type: quote.company.businessType,
@@ -99,8 +93,6 @@ export async function GET(
     company_address: quote.company.businessAddress,
     company_email: quote.company.businessEmail,
     company_website: quote.company.businessWebsite,
-    // Logo Removed from Schema
-    company_logo_url: null,
 
     // Client (Receiver)
     client_name: quote.clientName,
@@ -137,7 +129,7 @@ export async function GET(
         document: {
           document_template_id: PDFMONKEY_TEMPLATE_ID,
           payload: payload,
-          status: "pending", // Explicitly ask for creation
+          status: "pending",
         },
       }),
     });
@@ -153,10 +145,9 @@ export async function GET(
     let downloadUrl = createData.document.download_url;
     let status = createData.document.status;
 
-    // 2. Poll for completion if not ready
+    // 2. Poll for completion
     let attempts = 0;
     while (status !== "success" && attempts < 15) {
-      // Try for ~15-20 seconds
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const checkRes = await fetch(

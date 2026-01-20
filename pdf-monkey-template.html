@@ -8,323 +8,315 @@
       rel="stylesheet"
     />
     <style>
+      :root {
+        --primary-color: #2563eb; /* Royal Blue */
+        --header-bg: #dbeafe; /* Light Blue */
+        --border-color: #000; /* Black borders as in image */
+      }
+
       body {
         font-family: "Heebo", sans-serif;
         margin: 0;
         padding: 40px;
         direction: rtl;
         text-align: right;
-        color: #333;
+        color: #000;
+        font-size: 14px; /* Smaller base font size per request */
       }
 
-      /* Avoid repeating table headers on new pages */
-      thead {
-        display: table-header-group;
-      }
-      /* However, some WebKit browsers (like wkhtmltopdf or older chrome used in lambda) force it. 
-       Let's try to contain the table better.
-    */
-
-      .header {
+      /* Top Header Section */
+      .top-header {
         display: flex;
         justify-content: space-between;
-        border-bottom: 2px solid rgba(79, 149, 255, 0.2);
-        padding-bottom: 30px;
-        margin-bottom: 30px;
-      }
-      .title-section h1 {
-        color: #4f95ff;
-        font-size: 32px;
-        margin: 0 0 10px 0;
-      }
-      .quote-number {
-        font-family: monospace;
-        color: #666;
-        font-size: 16px;
-      }
-      .company-details h3 {
-        font-size: 20px;
-        margin: 0 0 5px 0;
-      }
-      .grid-container {
-        display: flex;
-        gap: 40px;
+        align-items: flex-start;
         margin-bottom: 40px;
-      }
-      .col {
-        flex: 1;
-      }
-      .info-box {
-        background-color: #f9fafb;
-        border: 1px solid #e5e7eb;
-        padding: 20px;
-        border-radius: 8px;
-      }
-      .info-box p {
-        margin: 5px 0;
-        font-size: 14px;
-      }
-      .section-title {
-        color: #7c3aed; /* Purple/Secondary */
-        font-size: 16px;
-        font-weight: bold;
-        margin-bottom: 10px;
+        border-bottom: 2px solid #e5e7eb;
+        padding-bottom: 20px;
       }
 
-      /* Table Styling */
+      .company-info {
+        text-align: right;
+      }
+      .company-info h1 {
+        font-size: 24px;
+        margin: 0 0 5px 0;
+        font-weight: bold;
+      }
+      .company-details {
+        font-size: 13px;
+        color: #333;
+        line-height: 1.4;
+      }
+
+      .logo-container {
+        width: 200px;
+        text-align: left; /* Logo on the left */
+      }
+      .logo-container img {
+        max-width: 100%;
+        max-height: 80px;
+        object-fit: contain;
+      }
+
+      /* Client & Date Section */
+      .meta-section {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 40px;
+      }
+      .client-info h3 {
+        font-size: 18px;
+        margin: 0 0 5px 0;
+      }
+      .doc-meta {
+        text-align: left;
+        font-size: 13px;
+      }
+
+      /* Main Title */
+      .document-title {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      .document-title h2 {
+        font-size: 24px;
+        margin: 0;
+        font-weight: normal;
+      }
+      .document-number {
+        font-weight: bold;
+      }
+      .quote-subject {
+        font-size: 16px;
+        color: #555;
+        margin-top: 5px;
+      }
+
+      /* Table Styles */
       table {
         width: 100%;
         border-collapse: collapse;
-        margin-bottom: 30px;
-        page-break-inside: auto;
-      }
-      tr {
-        page-break-inside: avoid;
-        page-break-after: auto;
-      }
-
-      /* This rule often helps prevent header repetition in webkit browsers */
-      thead {
-        display: table-row-group;
+        margin-bottom: 20px;
       }
 
       th {
-        background-color: rgba(79, 149, 255, 0.1);
-        color: #4f95ff;
-        padding: 12px;
-        text-align: right;
+        background-color: var(--header-bg);
+        border: 1px solid var(--border-color);
+        padding: 8px;
+        text-align: center;
         font-weight: bold;
-        border-bottom: 2px solid #4f95ff; /* Add border to header instead of relying on default */
-      }
-      td {
-        padding: 12px;
-        vertical-align: top;
-        border-bottom: 1px solid #eee;
-      }
-
-      /* Style for the separate description row */
-      .description-row td {
-        border-bottom: 1px solid #ddd;
-        padding-bottom: 20px;
-        padding-top: 5px;
-      }
-      .item-description {
-        color: #555;
         font-size: 13px;
-        line-height: 1.8;
-        white-space: pre-wrap;
+      }
+      /* Specific alignments for headers */
+      th.col-desc {
+        text-align: right;
       }
 
-      .text-center {
+      td {
+        border: 1px solid var(--border-color);
+        padding: 8px;
+        vertical-align: top;
+        font-size: 13px;
+      }
+
+      /* Table Columns Widths */
+      .col-sum {
+        width: 15%;
         text-align: center;
-      }
-      .text-left {
-        text-align: left;
-      }
+      } /* סכום */
+      .col-price {
+        width: 15%;
+        text-align: center;
+      } /* מחיר */
+      .col-qty {
+        width: 10%;
+        text-align: center;
+      } /* כמות */
+      .col-desc {
+        text-align: right;
+      } /* פירוט */
 
-      .totals-section {
-        display: flex;
-        justify-content: flex-end;
-        page-break-inside: avoid; /* Keep totals together */
-      }
-      .totals-box {
-        width: 300px;
-        background-color: #f9fafb;
-        padding: 20px;
-        border-radius: 8px;
-        border: 1px solid #e5e7eb;
-      }
-      .total-row {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 10px;
-        font-size: 14px;
-      }
-      .grand-total {
-        border-top: 1px solid #ddd;
-        padding-top: 10px;
+      /* Item Description Styling */
+      .item-name {
         font-weight: bold;
-        font-size: 18px;
-        color: #4f95ff;
       }
-      .footer {
-        margin-top: 50px;
-        text-align: center;
+      .item-desc-text {
+        margin-top: 4px;
         font-size: 12px;
-        color: #888;
+        color: #444;
+        white-space: pre-wrap;
+        line-height: 1.5;
       }
-      .footer-highlight {
-        color: #4f95ff;
+
+      /* Totals Section */
+      .totals-wrapper {
+        display: flex;
+        justify-content: flex-end; /* Align to left (end of RTL) */
+        margin-top: 10px;
+      }
+      .totals-table {
+        width: 300px;
+        border-collapse: collapse;
+        /* No borders for the totals container itself, just text */
+      }
+      .totals-table td {
+        border: none;
+        padding: 4px 0;
+        text-align: left; /* Align numbers to left */
+      }
+      .totals-table .label {
+        text-align: right;
+        padding-left: 20px;
         font-weight: bold;
+      }
+      .total-line {
         font-size: 14px;
+      }
+      .final-total {
+        font-size: 16px;
+        font-weight: bold;
+      }
+
+      /* Footer Notes */
+      .notes-section {
+        margin-top: 60px;
+        border-top: 1px solid #ddd;
+        padding-top: 20px;
+      }
+      .notes-title {
+        font-weight: bold;
         margin-bottom: 10px;
+        font-size: 14px;
+      }
+      .notes-content {
+        font-size: 12px;
+        line-height: 1.6;
+        color: #333;
+      }
+
+      /* Page Break Handling */
+      thead {
+        display: table-header-group;
+      }
+      tr {
+        page-break-inside: avoid;
       }
     </style>
   </head>
   <body>
-    <!-- Header -->
-    <div class="header">
-      <div class="title-section">
-        <h1>הצעת מחיר</h1>
-        <div class="quote-number">#{{ quote_number }}</div>
-        <div style="margin-top: 15px; font-size: 14px">
-          <div><strong>תאריך הפקה:</strong> {{ created_at }}</div>
-          {% if valid_until %}
-          <div><strong>בתוקף עד:</strong> {{ valid_until }}</div>
+    <!-- Top Header -->
+    <div class="top-header">
+      <div class="company-info">
+        <h1>{{ company_name }}</h1>
+        <div class="company-details">
+          {% if company_business_type_label %}
+          <div>{{ company_business_type_label }} מס.: {{ company_tax_id }}</div>
+          {% endif %}
+          <div>{{ company_address }}</div>
+          {% if company_website %}
+          <div>{{ company_website }}</div>
+          {% endif %} {% if company_email %}
+          <div>{{ company_email }}</div>
           {% endif %}
         </div>
       </div>
-      <div class="company-details" style="text-align: left">
-        <h3>{{ company_name }}</h3>
-        {% if company_tax_id %}
-        <div style="font-size: 14px; color: #666">
-          {{ company_business_type_label }} / {{ company_tax_id }}
-        </div>
+
+      <div class="logo-container">
+        <!-- Only show if logo exists, otherwise show placeholder or nothing -->
+        {% if company_logo_url %}
+        <img src="{{ company_logo_url }}" alt="Logo" />
+        {% else %}
+        <!-- Fallback text logo if want -->
+        <h2 style="color: #2563eb; margin: 0">OFEK CONNECT</h2>
         {% endif %}
       </div>
     </div>
 
-    <!-- Info Grids -->
-    <div class="grid-container">
-      <div class="col">
-        <div class="section-title">עבור:</div>
-        <div class="info-box">
-          <p style="font-weight: bold; font-size: 16px">{{ client_name }}</p>
-          {% if client_tax_id %}
-          <p>ח.פ / ת.ז: {{ client_tax_id }}</p>
-          {% endif %} {% if client_email %}
-          <p>{{ client_email }}</p>
-          {% endif %} {% if client_phone %}
-          <p>{{ client_phone }}</p>
-          {% endif %} {% if client_address %}
-          <p style="white-space: pre-wrap; margin-top: 10px; color: #666">
-            {{ client_address }}
-          </p>
-          {% endif %}
-        </div>
+    <!-- Client & Meta -->
+    <div class="meta-section">
+      <div class="client-info">
+        <h3>לכבוד: {{ client_name }}</h3>
+        {% if client_address %}
+        <div style="font-size: 13px">{{ client_address }}</div>
+        {% endif %}
       </div>
-      <div class="col">
-        <div class="section-title">מאת:</div>
-        <div class="info-box">
-          <p style="font-weight: bold; font-size: 16px">{{ company_name }}</p>
-          {% if company_business_type_label %}
-          <p>{{ company_business_type_label }}</p>
-          {% endif %} {% if company_tax_id %}
-          <p>
-            {% if company_business_type == 'ltd' %}ח.פ{% else %}מספר עוסק{%
-            endif %}: {{ company_tax_id }}
-          </p>
-          {% endif %} {% if company_address %}
-          <p>{{ company_address }}</p>
-          {% endif %} {% if company_email %}
-          <p>{{ company_email }}</p>
-          {% endif %} {% if company_website %}
-          <p style="color: #4f95ff">{{ company_website }}</p>
-          {% endif %}
-        </div>
+
+      <div class="doc-meta">
+        <div style="font-weight: bold; margin-bottom: 5px">[מקור]</div>
+        <div>תאריך: {{ created_at }}</div>
+        <div>מסמך ממוחשב, חתום דיגיטלית</div>
       </div>
+    </div>
+
+    <!-- Document Title -->
+    <div class="document-title">
+      <h2>
+        הצעת מחיר מספר <span class="document-number">{{ quote_number }}</span>
+      </h2>
+      {% if quote_title %}
+      <div class="quote-subject">{{ quote_title }}</div>
+      {% endif %}
     </div>
 
     <!-- Items Table -->
     <table>
       <thead>
         <tr>
-          <th style="border-radius: 0 8px 8px 0; width: 40%">פריט</th>
-          <th class="text-center" style="width: 15%">כמות</th>
-          <th class="text-left" style="width: 20%">מחיר יחידה</th>
-          <th class="text-left" style="border-radius: 8px 0 0 8px; width: 25%">
-            סה״כ
-          </th>
+          <th class="col-sum">סכום</th>
+          <th class="col-price">מחיר</th>
+          <th class="col-qty">כמות</th>
+          <th class="col-desc">פירוט:</th>
         </tr>
       </thead>
       <tbody>
         {% for item in items %}
-        <!-- Main Item Row: Title and Prices -->
-        <tr style="background-color: #fff">
-          <td
-            style="
-              border-bottom: none;
-              font-weight: bold;
-              font-size: 15px;
-              padding-bottom: 5px;
-            "
-          >
-            {{ item.name }}
-          </td>
-          <td
-            class="text-center"
-            style="border-bottom: none; padding-bottom: 5px"
-          >
-            {{ item.quantity }}
-          </td>
-          <td
-            class="text-left"
-            style="border-bottom: none; padding-bottom: 5px"
-          >
-            ₪{{ item.unit_price }}
-          </td>
-          <td
-            class="text-left"
-            style="border-bottom: none; font-weight: bold; padding-bottom: 5px"
-          >
-            ₪{{ item.total }}
-          </td>
-        </tr>
-
-        <!-- Description Row: Runs across all columns -->
-        <tr class="description-row">
-          <td colspan="4">
-            <div class="item-description">
-              {{ item.description | replace: "\n", "<br /><br />" }}
+        <tr>
+          <td class="col-sum">₪{{ item.total }}</td>
+          <td class="col-price">₪{{ item.unit_price }}</td>
+          <td class="col-qty">{{ item.quantity }}</td>
+          <td class="col-desc">
+            <div class="item-name">{{ item.name }}</div>
+            {% if item.description %}
+            <div class="item-desc-text">
+              {{ item.description | replace: "\n", "<br />" }}
             </div>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
 
-    <!-- Totals -->
-    <div class="totals-section">
-      <div class="totals-box">
-        <div class="total-row">
-          <span>סיכום ביניים:</span>
-          <span>₪{{ subtotal }}</span>
-        </div>
-
-        {% if is_vat_exempt %}
-        <div class="total-row" style="color: #888">
-          <span>פטור ממע״מ</span>
-          <span>-</span>
-        </div>
-        {% else %}
-        <div class="total-row">
-          <span>מע״מ (18%):</span>
-          <span>₪{{ vat_amount }}</span>
-        </div>
+    <!-- Totals Section (Below columns) -->
+    <div class="totals-wrapper">
+      <table class="totals-table">
+        <tr class="total-line">
+          <td class="label">סה"כ חייב במע"מ:</td>
+          <td>₪{{ subtotal }}</td>
+        </tr>
+        {% if is_vat_exempt == false %}
+        <tr class="total-line">
+          <td class="label">מע"מ 18.00%:</td>
+          <td>₪{{ vat_amount }}</td>
+        </tr>
         {% endif %}
-
-        <div class="total-row grand-total">
-          <span>סה״כ לתשלום:</span>
-          <span>₪{{ grand_total }}</span>
-        </div>
-      </div>
+        <tr class="final-total">
+          <td class="label">סה"כ:</td>
+          <td>₪{{ grand_total }}</td>
+        </tr>
+      </table>
     </div>
 
-    <!-- Footer -->
-    <div class="footer">
-      <div class="footer-highlight">תודה שבחרתם בנו!</div>
-      <p>
-        מסמך זה הינו הצעת מחיר ואינו מהווה חשבונית מס.<br />
-        ההצעה בתוקף עד {{ valid_until | default: "30 יום מיום הפקתה" }}.
-      </p>
-      {% if company_website or company_email %}
-      <div
-        style="border-top: 1px solid #eee; margin-top: 15px; padding-top: 15px"
-      >
-        {{ company_website }} {% if company_website and company_email %} | {%
-        endif %} {{ company_email }}
+    <!-- Footer / Notes -->
+    <div class="notes-section">
+      <div class="notes-title">הערה מצורפת:</div>
+      <div class="notes-content">
+        הצעה זו בתוקף עד {{ valid_until }}.
+        <br /><br />
+        תנאי תשלום: בהתאם לסיכום מול הלקוח.
+        <br />
+        ט.ל.ח
       </div>
-      {% endif %}
     </div>
   </body>
 </html>
