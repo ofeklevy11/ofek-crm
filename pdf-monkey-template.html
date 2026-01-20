@@ -16,6 +16,15 @@
         text-align: right;
         color: #333;
       }
+
+      /* Avoid repeating table headers on new pages */
+      thead {
+        display: table-header-group;
+      }
+      /* However, some WebKit browsers (like wkhtmltopdf or older chrome used in lambda) force it. 
+       Let's try to contain the table better.
+    */
+
       .header {
         display: flex;
         justify-content: space-between;
@@ -61,34 +70,49 @@
         font-weight: bold;
         margin-bottom: 10px;
       }
+
+      /* Table Styling */
       table {
         width: 100%;
         border-collapse: collapse;
         margin-bottom: 30px;
+        page-break-inside: auto;
       }
+      tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+
+      /* This rule often helps prevent header repetition in webkit browsers */
+      thead {
+        display: table-row-group;
+      }
+
       th {
         background-color: rgba(79, 149, 255, 0.1);
         color: #4f95ff;
         padding: 12px;
         text-align: right;
         font-weight: bold;
+        border-bottom: 2px solid #4f95ff; /* Add border to header instead of relying on default */
       }
       td {
         padding: 12px;
         vertical-align: top;
         border-bottom: 1px solid #eee;
       }
+
       /* Style for the separate description row */
       .description-row td {
-        border-bottom: 1px solid #ddd; /* Stronger border after description */
+        border-bottom: 1px solid #ddd;
         padding-bottom: 20px;
         padding-top: 5px;
       }
       .item-description {
         color: #555;
         font-size: 13px;
-        line-height: 1.8; /* Make it spacious */
-        white-space: pre-wrap; /* Preserve line breaks from input */
+        line-height: 1.8;
+        white-space: pre-wrap;
       }
 
       .text-center {
@@ -101,6 +125,7 @@
       .totals-section {
         display: flex;
         justify-content: flex-end;
+        page-break-inside: avoid; /* Keep totals together */
       }
       .totals-box {
         width: 300px;
