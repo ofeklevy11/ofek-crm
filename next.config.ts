@@ -4,9 +4,7 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // eslint config is removed as it is deprecated in next.config.ts
   serverExternalPackages: [
     "puppeteer",
     "puppeteer-core",
