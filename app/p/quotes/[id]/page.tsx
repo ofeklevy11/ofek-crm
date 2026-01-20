@@ -20,10 +20,14 @@ export default async function PublicQuoteDownloadPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  console.log("Public Quote Page: starting render");
   const resolvedParams = await params;
+  console.log("Public Quote Page: params resolved", resolvedParams);
+
   const quote = await prisma.quote.findUnique({
     where: { id: resolvedParams.id },
   });
+  console.log("Public Quote Page: quote fetched", quote ? "found" : "null");
 
   if (!quote) {
     return (

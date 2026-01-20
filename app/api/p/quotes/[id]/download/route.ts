@@ -85,6 +85,9 @@ export async function GET(
     created_at: formatDate(quote.createdAt),
     valid_until: formatDate(quote.validUntil),
 
+    // Quote Title Removed from Schema
+    quote_title: null,
+
     // Company (Sender)
     company_name: quote.company.name,
     company_business_type: quote.company.businessType,
@@ -93,6 +96,8 @@ export async function GET(
     company_address: quote.company.businessAddress,
     company_email: quote.company.businessEmail,
     company_website: quote.company.businessWebsite,
+    // Logo Removed from Schema
+    company_logo_url: null,
 
     // Client (Receiver)
     client_name: quote.clientName,
