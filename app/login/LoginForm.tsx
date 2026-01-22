@@ -69,6 +69,7 @@ export default function LoginForm() {
             <Label htmlFor="password">סיסמא</Label>
             <Link
               href="/forgot-password"
+              prefetch={false}
               className="text-xs text-primary hover:text-primary/80 transition-colors hidden" // Hidden for now as requested simple login
             >
               שכחת סיסמא?
@@ -117,6 +118,7 @@ export default function LoginForm() {
           עדיין אין לך חשבון?{" "}
           <Link
             href="/register"
+            prefetch={false}
             className="font-medium text-primary hover:text-secondary transition-colors"
           >
             פתח חשבון חדש

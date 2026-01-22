@@ -136,10 +136,10 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
     if (fileFilter === "other") {
       const otherFilters = FILE_FILTERS.filter(
         (f) =>
-          f.id !== "all" && f.id !== "folders" && f.id !== "other" && f.match
+          f.id !== "all" && f.id !== "folders" && f.id !== "other" && f.match,
       );
       return files.filter(
-        (file: any) => !otherFilters.some((f) => f.match!(file.type))
+        (file: any) => !otherFilters.some((f) => f.match!(file.type)),
       );
     }
 
@@ -160,7 +160,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
     FILE_FILTERS.forEach((filter) => {
       if (filter.match && filter.id !== "other") {
         counts[filter.id] = files.filter((file: any) =>
-          filter.match!(file.type)
+          filter.match!(file.type),
         ).length;
       }
     });
@@ -253,7 +253,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
               </h2>
             </div>
           </div>
-          <Link href="/files">
+          <Link href="/files" prefetch={false}>
             <Button
               variant="outline"
               size="sm"
@@ -278,7 +278,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
                 ? "bg-primary/10 text-primary"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted",
               draggedFileId &&
-                "bg-blue-100 border-2 border-dashed border-blue-400"
+                "bg-blue-100 border-2 border-dashed border-blue-400",
             )}
             onDragOver={(e) => {
               e.preventDefault();
@@ -298,6 +298,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
               {/* RTL Chevron */}
               <Link
                 href={`/files?folderId=${crumb.id}`}
+                prefetch={false}
                 className={cn(
                   "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
                   index === breadcrumbs.length - 1
@@ -305,7 +306,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
                     : "text-muted-foreground hover:text-foreground hover:bg-muted",
                   draggedFileId &&
                     index < breadcrumbs.length - 1 &&
-                    "bg-blue-100 border-2 border-dashed border-blue-400"
+                    "bg-blue-100 border-2 border-dashed border-blue-400",
                 )}
                 onDragOver={(e) => {
                   e.preventDefault();
@@ -336,7 +337,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
                   "h-8 px-3",
                   viewMode === mode
                     ? "bg-white shadow-sm text-foreground"
-                    : "hover:bg-white/50"
+                    : "hover:bg-white/50",
                 )}
                 onClick={() => setViewMode(mode)}
                 title={label}
@@ -360,7 +361,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
               value={usagePercent}
               className={cn(
                 "h-2 bg-white [&>div]:bg-[#a24ec1] rotate-180",
-                usagePercent > 90 && "bg-red-100 [&>div]:bg-red-500"
+                usagePercent > 90 && "bg-red-100 [&>div]:bg-red-500",
               )}
             />
           </div>
@@ -388,7 +389,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
                 isActive
                   ? "bg-[#4f95ff] text-white shadow-md border-[#4f95ff]"
                   : "hover:bg-muted/80",
-                !isActive && filter.color
+                !isActive && filter.color,
               )}
               onClick={() => setFileFilter(filter.id)}
             >
@@ -399,7 +400,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
                   "min-w-[20px] h-5 flex items-center justify-center rounded-full text-xs font-medium px-1.5",
                   isActive
                     ? "bg-white/20 text-white"
-                    : "bg-muted text-muted-foreground"
+                    : "bg-muted text-muted-foreground",
                 )}
               >
                 {count}
@@ -428,11 +429,11 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
               {fileFilter === "all"
                 ? "התיקייה ריקה"
                 : fileFilter === "folders"
-                ? "לא נמצאו תיקיות"
-                : `לא נמצאו ${
-                    FILE_FILTERS.find((f) => f.id === fileFilter)?.label ||
-                    "קבצים"
-                  }`}
+                  ? "לא נמצאו תיקיות"
+                  : `לא נמצאו ${
+                      FILE_FILTERS.find((f) => f.id === fileFilter)?.label ||
+                      "קבצים"
+                    }`}
             </h3>
             <p className="text-muted-foreground">
               {fileFilter === "all"

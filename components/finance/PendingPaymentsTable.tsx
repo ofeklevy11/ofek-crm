@@ -81,6 +81,7 @@ export default function PendingPaymentsTable({
                     </button>
                     <Link
                       href={`/finance/clients/${payment.clientId}`}
+                      prefetch={false}
                       className="text-[#4f95ff] hover:text-[#4f95ff]/80 text-xs font-medium hover:underline"
                     >
                       ניהול

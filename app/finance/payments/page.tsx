@@ -54,6 +54,7 @@ export default async function PaymentsPage({
       <div>
         <Link
           href="/finance"
+          prefetch={false}
           className="inline-flex items-center text-sm text-gray-500 hover:text-gray-900 mb-4"
         >
           <ArrowRight className="w-4 h-4 ml-1" /> חזרה למרכז הפיננסי
@@ -69,6 +70,7 @@ export default async function PaymentsPage({
           </div>
           <Link
             href="/finance/payments/new"
+            prefetch={false}
             className="inline-flex items-center px-4 py-2 bg-[#4f95ff] text-white rounded-lg hover:bg-blue-600 transition-colors shadow-sm"
           >
             + תשלום חדש

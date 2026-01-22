@@ -19,7 +19,7 @@ async function getUsers(companyId: number) {
 async function getTaskSheets(
   companyId: number,
   isAdmin: boolean,
-  userId: number
+  userId: number,
 ) {
   const now = new Date();
 
@@ -134,6 +134,7 @@ export default async function TasksPage({
                 <Link
                   key={tab.id}
                   href={`/tasks?view=${tab.id}`}
+                  prefetch={false}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
                     isActive
                       ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/20"

@@ -116,6 +116,7 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
                 <td className="px-6 py-4 whitespace-nowrap">
                   <Link
                     href={`/finance/clients/${payment.clientId}`}
+                    prefetch={false}
                     className="text-sm font-medium text-[#4f95ff] hover:text-blue-900 hover:underline"
                   >
                     {payment.client.name}
@@ -148,25 +149,26 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
                 <td className="px-6 py-4 whitespace-nowrap text-right">
                   <span
                     className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                      payment.status
+                      payment.status,
                     )}`}
                   >
                     {getStatusIcon(payment.status)}
                     {payment.status === "paid"
                       ? "שולם"
                       : payment.status === "overdue"
-                      ? "באיחור"
-                      : payment.status === "pending"
-                      ? "ממתין"
-                      : payment.status === "cancelled"
-                      ? "בוטל"
-                      : payment.status}
+                        ? "באיחור"
+                        : payment.status === "pending"
+                          ? "ממתין"
+                          : payment.status === "cancelled"
+                            ? "בוטל"
+                            : payment.status}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
                   <div className="flex items-center justify-start gap-2">
                     <Link
                       href={`/finance/clients/${payment.clientId}`}
+                      prefetch={false}
                       className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
                       title="צפה בלקוח"
                     >

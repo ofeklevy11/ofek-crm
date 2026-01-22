@@ -8,6 +8,7 @@ export default function NewRetainerPage() {
       <div className="mb-8">
         <Link
           href="/finance/retainers"
+          prefetch={false}
           className="inline-flex items-center text-sm text-gray-500 hover:text-gray-900 mb-4"
         >
           <ArrowRight className="w-4 h-4 ml-1" /> חזרה לריטיינרים

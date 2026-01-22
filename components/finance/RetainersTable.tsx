@@ -117,6 +117,7 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
                 <td className="px-6 py-4 whitespace-nowrap">
                   <Link
                     href={`/finance/clients/${retainer.clientId}`}
+                    prefetch={false}
                     className="text-sm font-medium text-[#4f95ff] hover:text-blue-900 hover:underline"
                   >
                     {retainer.client.name}
@@ -136,7 +137,7 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
                     <div className="flex items-center gap-1 justify-start">
                       <Calendar className="w-3 h-3" />
                       {new Date(retainer.nextDueDate).toLocaleDateString(
-                        "he-IL"
+                        "he-IL",
                       )}
                     </div>
                   ) : (
@@ -146,16 +147,16 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
                 <td className="px-6 py-4 whitespace-nowrap text-right">
                   <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                      retainer.status
+                      retainer.status,
                     )}`}
                   >
                     {retainer.status === "active"
                       ? "פעיל"
                       : retainer.status === "paused"
-                      ? "מושהה"
-                      : retainer.status === "cancelled"
-                      ? "לא פעיל"
-                      : retainer.status}
+                        ? "מושהה"
+                        : retainer.status === "cancelled"
+                          ? "לא פעיל"
+                          : retainer.status}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -204,7 +205,7 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
                             onClick={() =>
                               handlePaymentClick(
                                 retainer,
-                                Math.max(1, overdueCount)
+                                Math.max(1, overdueCount),
                               )
                             }
                             className="bg-[#4f95ff] text-white hover:bg-blue-600 px-2 py-1 rounded-md text-xs font-medium shadow-sm transition-all whitespace-nowrap min-w-[100px]"
@@ -224,6 +225,7 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
 
                     <Link
                       href={`/finance/clients/${retainer.clientId}`}
+                      prefetch={false}
                       className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
                       title="צפה בלקוח"
                     >

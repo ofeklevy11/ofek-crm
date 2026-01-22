@@ -184,6 +184,7 @@ export default async function FinancePage() {
         <div className="flex gap-3">
           <Link
             href="/finance/retainers/new"
+            prefetch={false}
             className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm font-medium"
           >
             <Plus className="w-4 h-4 ml-2" />
@@ -191,6 +192,7 @@ export default async function FinancePage() {
           </Link>
           <Link
             href="/finance/payments/new"
+            prefetch={false}
             className="inline-flex items-center px-4 py-2 bg-[#4f95ff] text-white rounded-lg hover:bg-[#4f95ff]/90 transition-colors shadow-sm font-medium"
           >
             <Plus className="w-4 h-4 ml-2" />
@@ -200,7 +202,11 @@ export default async function FinancePage() {
       </div>
 
       {/* NEW: Unified Ledger Navigation Card */}
-      <Link href="/finance/income-expenses" className="block group">
+      <Link
+        href="/finance/income-expenses"
+        prefetch={false}
+        className="block group"
+      >
         <div className="bg-linear-to-r from-[#4f95ff] to-[#a24ec1] rounded-xl p-6 text-white shadow-lg shadow-blue-200 transition-all transform group-hover:scale-[1.01] group-hover:shadow-xl relative overflow-hidden">
           <div className="relative z-10 flex items-center justify-between">
             <div>
@@ -227,6 +233,7 @@ export default async function FinancePage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Link
           href="/finance/clients"
+          prefetch={false}
           className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-[#4f95ff]/50 hover:shadow-md transition-all"
         >
           <div className="flex justify-between items-start mb-4">
@@ -242,6 +249,7 @@ export default async function FinancePage() {
         </Link>
         <Link
           href="/finance/retainers"
+          prefetch={false}
           className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-[#a24ec1]/50 hover:shadow-md transition-all"
         >
           <div className="flex justify-between items-start mb-4">
@@ -257,6 +265,7 @@ export default async function FinancePage() {
         </Link>
         <Link
           href="/finance/payments"
+          prefetch={false}
           className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-[#4f95ff]/50 hover:shadow-md transition-all"
         >
           <div className="flex justify-between items-start mb-4">
@@ -272,6 +281,7 @@ export default async function FinancePage() {
         </Link>
         <Link
           href="/finance/fixed-expenses"
+          prefetch={false}
           className="group p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-[#a24ec1]/50 hover:shadow-md transition-all"
         >
           <div className="flex justify-between items-start mb-4">
@@ -306,6 +316,7 @@ export default async function FinancePage() {
       <div className="rounded-xl overflow-hidden shadow-sm border border-[#4f95ff]/20 bg-linear-to-r from-[#4f95ff]/5 to-[#a24ec1]/5 p-1 relative group">
         <Link
           href="/finance/goals"
+          prefetch={false}
           className="flex items-center justify-between p-6 bg-white/60 hover:bg-white/90 rounded-lg transition-all"
         >
           <div className="flex items-center gap-6">
@@ -339,6 +350,7 @@ export default async function FinancePage() {
             </h2>
             <Link
               href="/finance/retainers"
+              prefetch={false}
               className="text-sm text-[#4f95ff] hover:text-[#4f95ff]/80 font-medium"
             >
               צפה בהכל
@@ -358,6 +370,7 @@ export default async function FinancePage() {
             </h2>
             <Link
               href="/finance/payments"
+              prefetch={false}
               className="text-sm text-[#4f95ff] hover:text-[#4f95ff]/80 font-medium"
             >
               צפה בהכל

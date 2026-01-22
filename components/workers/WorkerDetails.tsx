@@ -118,7 +118,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
     number | null
   >(
     worker.onboardingProgress.find((op) => op.status === "IN_PROGRESS")?.id ??
-      null
+      null,
   );
   const [updatingStep, setUpdatingStep] = useState<number | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -129,13 +129,13 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
   const departmentPaths = availablePaths.filter(
     (p) =>
       p.isActive &&
-      (p.departmentId === null || p.departmentId === worker.departmentId)
+      (p.departmentId === null || p.departmentId === worker.departmentId),
   );
 
   // Filter out already assigned paths
   const assignedPathIds = worker.onboardingProgress.map((op) => op.pathId);
   const unassignedPaths = departmentPaths.filter(
-    (p) => !assignedPathIds.includes(p.id)
+    (p) => !assignedPathIds.includes(p.id),
   );
 
   const getStatusConfig = (status: string) => {
@@ -188,7 +188,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
   const handleUpdateStepStatus = async (
     onboardingId: number,
     stepId: number,
-    newStatus: string
+    newStatus: string,
   ) => {
     setUpdatingStep(stepId);
     try {
@@ -223,15 +223,15 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
   const status = getStatusConfig(worker.status);
 
   const activeOnboarding = worker.onboardingProgress.find(
-    (op) => op.status === "IN_PROGRESS"
+    (op) => op.status === "IN_PROGRESS",
   );
 
   const getOnboardingProgress = (
-    onboarding: (typeof worker.onboardingProgress)[0]
+    onboarding: (typeof worker.onboardingProgress)[0],
   ) => {
     const totalSteps = onboarding.path.steps.length;
     const completedSteps = onboarding.stepProgress.filter(
-      (sp) => sp.status === "COMPLETED"
+      (sp) => sp.status === "COMPLETED",
     ).length;
     const progress =
       totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
@@ -243,6 +243,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
       {/* Back Button */}
       <Link
         href="/workers"
+        prefetch={false}
         className="inline-flex items-center gap-2 text-gray-600 hover:text-indigo-600 mb-6 transition"
       >
         <ArrowRight className="h-4 w-4" />
@@ -525,7 +526,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
                           .sort((a, b) => a.order - b.order)
                           .map((step) => {
                             const stepProgress = onboarding.stepProgress.find(
-                              (sp) => sp.stepId === step.id
+                              (sp) => sp.stepId === step.id,
                             );
                             const stepStatus =
                               stepProgress?.status ?? "PENDING";
@@ -538,8 +539,8 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
                                   stepStatus === "COMPLETED"
                                     ? "bg-emerald-50/50 border-emerald-100"
                                     : stepStatus === "IN_PROGRESS"
-                                    ? "bg-blue-50/50 border-blue-100"
-                                    : "bg-gray-50/50 border-gray-100"
+                                      ? "bg-blue-50/50 border-blue-100"
+                                      : "bg-gray-50/50 border-gray-100"
                                 }`}
                               >
                                 {/* Status Icon */}
@@ -601,7 +602,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
                                         }>
                                       ).map((action, idx) => {
                                         const getActionLabel = (
-                                          type: string
+                                          type: string,
                                         ) => {
                                           switch (type) {
                                             case "SEND_NOTIFICATION":
@@ -649,7 +650,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
                                           }
                                         };
                                         const actionInfo = getActionLabel(
-                                          action.actionType
+                                          action.actionType,
                                         );
                                         const ActionIcon = actionInfo.icon;
                                         return (
@@ -676,14 +677,14 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
                                         handleUpdateStepStatus(
                                           onboarding.id,
                                           step.id,
-                                          "PENDING"
+                                          "PENDING",
                                         );
                                       } else {
                                         // Mark as completed
                                         handleUpdateStepStatus(
                                           onboarding.id,
                                           step.id,
-                                          "COMPLETED"
+                                          "COMPLETED",
                                         );
                                       }
                                     }}
@@ -722,7 +723,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
                                           handleUpdateStepStatus(
                                             onboarding.id,
                                             step.id,
-                                            "SKIPPED"
+                                            "SKIPPED",
                                           );
                                         }}
                                         disabled={updatingStep === step.id}
@@ -737,7 +738,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
                                     stepProgress?.completedAt && (
                                       <span className="text-xs text-emerald-600">
                                         {new Date(
-                                          stepProgress.completedAt
+                                          stepProgress.completedAt,
                                         ).toLocaleDateString("he-IL")}
                                       </span>
                                     )}

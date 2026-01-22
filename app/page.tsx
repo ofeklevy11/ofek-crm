@@ -41,6 +41,7 @@ export default async function Home() {
             <div className="flex flex-col sm:flex-row gap-4">
               <Link
                 href="/login"
+                prefetch={false}
                 className="flex items-center justify-center gap-2 bg-gradient-to-r from-[#4f95ff] to-[#a24ec1] text-white py-4 px-8 rounded-xl hover:opacity-90 transition-all font-semibold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
               >
                 <span>כניסה למערכת</span>
@@ -49,6 +50,7 @@ export default async function Home() {
 
               <Link
                 href="/register"
+                prefetch={false}
                 className="flex items-center justify-center gap-2 bg-white text-gray-700 border border-gray-200 py-4 px-8 rounded-xl hover:bg-gray-50 transition-all font-semibold text-lg"
               >
                 <span>הרשמה</span>

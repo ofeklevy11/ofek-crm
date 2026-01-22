@@ -16,7 +16,7 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
   const handleDelete = async (id: number) => {
     if (
       !confirm(
-        "האם אתה בטוח שברצונך למחוק לקוח זה? פעולה זו תמחק גם את הריטיינרים והתשלומים המקושרים. לא ניתן לבטל פעולה זו."
+        "האם אתה בטוח שברצונך למחוק לקוח זה? פעולה זו תמחק גם את הריטיינרים והתשלומים המקושרים. לא ניתן לבטל פעולה זו.",
       )
     )
       return;
@@ -64,7 +64,7 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
           {clients.map((client) => {
             const oneTimeDebt = client.oneTimePayments.reduce(
               (sum: number, payment: any) => sum + Number(payment.amount),
-              0
+              0,
             );
 
             const retainerDebt = client.retainers.reduce(
@@ -79,7 +79,7 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
                 }
                 return sum;
               },
-              0
+              0,
             );
 
             const outstanding = oneTimeDebt + retainerDebt;
@@ -132,6 +132,7 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
                   <div className="flex items-center justify-center gap-2">
                     <Link
                       href={`/finance/clients/${client.id}`}
+                      prefetch={false}
                       className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
                       title="צפה בלקוח"
                     >
@@ -139,6 +140,7 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
                     </Link>
                     <Link
                       href={`/finance/clients/${client.id}/edit`}
+                      prefetch={false}
                       className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
                       title="ערוך לקוח"
                     >

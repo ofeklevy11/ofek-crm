@@ -48,13 +48,13 @@ export default async function RetainersPage({
   const totalPages = Math.ceil(sortedRetainers.length / pageSize);
   const currentRetainers = sortedRetainers.slice(
     (currentPage - 1) * pageSize,
-    currentPage * pageSize
+    currentPage * pageSize,
   );
 
   const activeRetainers = sortedRetainers.filter((r) => r.status === "active");
   const pausedRetainers = sortedRetainers.filter((r) => r.status === "paused");
   const cancelledRetainers = sortedRetainers.filter(
-    (r) => r.status === "cancelled"
+    (r) => r.status === "cancelled",
   );
 
   return (
@@ -62,6 +62,7 @@ export default async function RetainersPage({
       <div>
         <Link
           href="/finance"
+          prefetch={false}
           className="inline-flex items-center text-sm text-gray-500 hover:text-gray-900 mb-4"
         >
           <ArrowRight className="w-4 h-4 ml-1" /> חזרה למרכז הפיננסי
@@ -75,6 +76,7 @@ export default async function RetainersPage({
           </div>
           <Link
             href="/finance/retainers/new"
+            prefetch={false}
             className="inline-flex items-center px-4 py-2 bg-[#4f95ff] text-white rounded-lg hover:bg-blue-600 transition-colors shadow-sm"
           >
             + ריטיינר חדש

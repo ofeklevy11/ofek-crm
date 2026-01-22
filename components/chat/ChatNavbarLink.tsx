@@ -67,6 +67,7 @@ export default function ChatNavbarLink({ userId }: ChatNavbarLinkProps) {
   return (
     <Link
       href="/chat"
+      prefetch={false}
       className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[#4f95ff]/10 to-blue-400/10 hover:from-[#4f95ff]/20 hover:to-blue-400/20 text-[#4f95ff] text-sm font-medium border border-[#4f95ff]/20 transition-all whitespace-nowrap shadow-sm hover:shadow-md flex items-center gap-2"
     >
       Chat

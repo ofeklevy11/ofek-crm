@@ -207,6 +207,7 @@ export default function RegisterForm() {
           כבר יש לך חשבון?{" "}
           <Link
             href="/login"
+            prefetch={false}
             className="font-medium text-primary hover:text-secondary transition-colors"
           >
             התחבר כאן

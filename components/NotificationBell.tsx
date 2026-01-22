@@ -120,6 +120,7 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
           )}
           <Link
             href="/notifications"
+            prefetch={false}
             className="text-xs text-primary hover:underline hover:text-primary/80 transition-colors"
             onClick={() => setIsOpen(false)}
           >

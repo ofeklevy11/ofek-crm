@@ -100,7 +100,7 @@ export default function OnboardingPathsList({
   // Modal states
   const [modalPathId, setModalPathId] = useState<number | null>(null);
   const [modalType, setModalType] = useState<"completed" | "inProgress" | null>(
-    null
+    null,
   );
   const [workersData, setWorkersData] = useState<WorkerProgress[]>([]);
   const [loadingWorkers, setLoadingWorkers] = useState(false);
@@ -123,7 +123,7 @@ export default function OnboardingPathsList({
 
   const openWorkersModal = async (
     pathId: number,
-    type: "completed" | "inProgress"
+    type: "completed" | "inProgress",
   ) => {
     setModalPathId(pathId);
     setModalType(type);
@@ -206,7 +206,7 @@ export default function OnboardingPathsList({
           const isExpanded = expandedId === path.id;
           const totalMinutes = path.steps.reduce(
             (sum, step) => sum + (step.estimatedMinutes ?? 0),
-            0
+            0,
           );
           const requiredSteps = path.steps.filter((s) => s.isRequired).length;
 
@@ -473,6 +473,7 @@ export default function OnboardingPathsList({
                     <Link
                       key={wp.id}
                       href={`/workers/${wp.workerId}`}
+                      prefetch={false}
                       className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition group"
                     >
                       {/* Avatar */}

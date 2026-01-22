@@ -78,6 +78,7 @@ export default function UserMenu({ user }: UserMenuProps) {
         <DropdownMenuItem asChild>
           <Link
             href="/profile"
+            prefetch={false}
             className="cursor-pointer gap-2 w-full flex items-center"
           >
             <Settings className="w-4 h-4" />

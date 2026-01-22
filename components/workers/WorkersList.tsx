@@ -167,7 +167,7 @@ export default function WorkersList({
     }
 
     const activeOnboarding = worker.onboardingProgress.find(
-      (op) => op.status === "IN_PROGRESS"
+      (op) => op.status === "IN_PROGRESS",
     );
     if (!activeOnboarding) return null;
 
@@ -177,7 +177,7 @@ export default function WorkersList({
     const totalSteps =
       activeOnboarding.path._count?.steps ?? stepProgress.length;
     const completedSteps = stepProgress.filter(
-      (sp) => sp.status === "COMPLETED"
+      (sp) => sp.status === "COMPLETED",
     ).length;
     const progress =
       totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
@@ -201,7 +201,7 @@ export default function WorkersList({
       // Use path._count.steps for accurate total, fallback to stepProgress.length
       const totalSteps = op.path._count?.steps ?? stepProgress.length;
       const completedSteps = stepProgress.filter(
-        (sp) => sp.status === "COMPLETED"
+        (sp) => sp.status === "COMPLETED",
       ).length;
       const progress =
         totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
@@ -381,6 +381,7 @@ export default function WorkersList({
                       <div className="absolute left-0 top-full mt-1 bg-white rounded-lg shadow-lg border z-50 min-w-[120px]">
                         <Link
                           href={`/workers/${worker.id}`}
+                          prefetch={false}
                           onClick={() => setMenuOpenId(null)}
                           className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
@@ -575,8 +576,8 @@ export default function WorkersList({
                                       isCompleted
                                         ? "bg-emerald-100 text-emerald-700"
                                         : isSkipped
-                                        ? "bg-gray-200 text-gray-500 line-through"
-                                        : "bg-white text-gray-600 border border-gray-200"
+                                          ? "bg-gray-200 text-gray-500 line-through"
+                                          : "bg-white text-gray-600 border border-gray-200"
                                     }`}
                                   >
                                     {isCompleted ? (

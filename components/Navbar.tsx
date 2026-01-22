@@ -19,6 +19,7 @@ export default async function Navbar() {
           <div className="shrink-0 flex items-center">
             <Link
               href="/"
+              prefetch={false}
               className="text-lg font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent whitespace-nowrap"
             >
               {(() => {
@@ -30,84 +31,121 @@ export default async function Navbar() {
 
           <div className="hidden md:flex items-center justify-center flex-1 px-8">
             <div className="flex items-center space-x-6 space-x-reverse overflow-x-auto scrollbar-hide py-2">
-              <Link href="/" className={linkClass}>
+              <Link href="/" prefetch={false} className={linkClass}>
                 לוח בקרה
               </Link>
               {user && (
                 <>
                   {hasUserFlag(user, "canViewTables") && (
-                    <Link href="/tables" className={linkClass}>
+                    <Link href="/tables" prefetch={false} className={linkClass}>
                       טבלאות
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewFinance") && (
-                    <Link href="/finance" className={linkClass}>
+                    <Link
+                      href="/finance"
+                      prefetch={false}
+                      className={linkClass}
+                    >
                       כספים
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewCalendar") && (
-                    <Link href="/calendar" className={linkClass}>
+                    <Link
+                      href="/calendar"
+                      prefetch={false}
+                      className={linkClass}
+                    >
                       יומן
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewTasks") && (
-                    <Link href="/tasks" className={linkClass}>
+                    <Link href="/tasks" prefetch={false} className={linkClass}>
                       משימות
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewNurtureHub") && (
-                    <Link href="/nurture-hub" className={linkClass}>
+                    <Link
+                      href="/nurture-hub"
+                      prefetch={false}
+                      className={linkClass}
+                    >
                       טיפוח לקוחות
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewAutomations") && (
-                    <Link href="/automations" className={linkClass}>
+                    <Link
+                      href="/automations"
+                      prefetch={false}
+                      className={linkClass}
+                    >
                       אוטומציות
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewWorkflows") && (
-                    <Link href="/workflows" className={linkClass}>
+                    <Link
+                      href="/workflows"
+                      prefetch={false}
+                      className={linkClass}
+                    >
                       תהליכים
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewUsers") && (
-                    <Link href="/users" className={linkClass}>
+                    <Link href="/users" prefetch={false} className={linkClass}>
                       משתמשים
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewWorkers") && (
-                    <Link href="/workers" className={linkClass}>
+                    <Link
+                      href="/workers"
+                      prefetch={false}
+                      className={linkClass}
+                    >
                       עובדים
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewAnalytics") && (
-                    <Link href="/analytics" className={linkClass}>
+                    <Link
+                      href="/analytics"
+                      prefetch={false}
+                      className={linkClass}
+                    >
                       אנליטיקה
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewServices") && (
-                    <Link href="/services" className={linkClass}>
+                    <Link
+                      href="/services"
+                      prefetch={false}
+                      className={linkClass}
+                    >
                       שירותים
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewQuotes") && (
-                    <Link href="/quotes" className={linkClass}>
+                    <Link href="/quotes" prefetch={false} className={linkClass}>
                       הצעות מחיר
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewServiceCalls") && (
-                    <Link href="/service" className={linkClass}>
+                    <Link
+                      href="/service"
+                      prefetch={false}
+                      className={linkClass}
+                    >
                       קריאות שירות
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewFiles") && (
-                    <Link href="/files" className={linkClass}>
+                    <Link href="/files" prefetch={false} className={linkClass}>
                       קבצים
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewGuides") && (
                     <Link
                       href="/guides"
+                      prefetch={false}
                       className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[#4f95ff]/10 to-[#a24ec1]/10 hover:from-[#4f95ff]/20 hover:to-[#a24ec1]/20 text-[#a24ec1] text-sm font-medium border border-[#a24ec1]/20 transition-all whitespace-nowrap shadow-sm hover:shadow-md"
                     >
                       מדריכים
@@ -130,6 +168,7 @@ export default async function Navbar() {
             ) : (
               <Link
                 href="/login"
+                prefetch={false}
                 className="text-sm font-medium text-muted-foreground hover:text-primary"
               >
                 התחבר

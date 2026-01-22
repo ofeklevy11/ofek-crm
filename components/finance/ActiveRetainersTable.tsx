@@ -131,7 +131,7 @@ export default function ActiveRetainersTable({
                             onClick={() =>
                               handlePaymentClick(
                                 retainer,
-                                Math.max(1, overdueCount)
+                                Math.max(1, overdueCount),
                               )
                             }
                             className="bg-[#4f95ff] text-white hover:bg-blue-600 px-3 py-1.5 rounded-md text-xs font-medium shadow-sm transition-all whitespace-nowrap"
@@ -158,6 +158,7 @@ export default function ActiveRetainersTable({
                     </button>
                     <Link
                       href={`/finance/clients/${retainer.clientId}`}
+                      prefetch={false}
                       className="text-[#4f95ff] hover:text-[#4f95ff]/80 text-xs font-medium hover:underline"
                     >
                       ניהול

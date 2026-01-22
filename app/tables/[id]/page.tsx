@@ -142,6 +142,7 @@ export default async function TableDetailsPage({
         <div className="mb-8">
           <Link
             href="/tables"
+            prefetch={false}
             className="inline-flex items-center text-primary hover:text-primary/80 font-medium mb-4 transition text-sm"
           >
             <span className="ml-2">→</span> חזרה לטבלאות

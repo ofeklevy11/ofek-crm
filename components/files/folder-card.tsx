@@ -66,7 +66,7 @@ export function FolderCard({
     e.stopPropagation();
     if (
       !confirm(
-        "האם אתה בטוח שברצונך למחוק תיקייה זו? התיקייה חייבת להיות ריקה."
+        "האם אתה בטוח שברצונך למחוק תיקייה זו? התיקייה חייבת להיות ריקה.",
       )
     )
       return;
@@ -147,6 +147,7 @@ export function FolderCard({
       <>
         <Link
           href={`${baseUrl}?folderId=${folder.id}`}
+          prefetch={false}
           className="block group"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -155,7 +156,7 @@ export function FolderCard({
           <div
             className={cn(
               "relative p-4 border rounded-xl hover:bg-muted/50 transition-all bg-card text-right",
-              isDragOver && "ring-2 ring-primary bg-primary/10 scale-105"
+              isDragOver && "ring-2 ring-primary bg-primary/10 scale-105",
             )}
             dir="rtl"
           >
@@ -269,6 +270,7 @@ export function FolderCard({
       <>
         <Link
           href={`${baseUrl}?folderId=${folder.id}`}
+          prefetch={false}
           className="block group"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -277,7 +279,7 @@ export function FolderCard({
           <div
             className={cn(
               "flex items-center gap-4 p-4 border rounded-xl hover:bg-muted/50 transition-all bg-card relative text-right",
-              isDragOver && "ring-2 ring-primary bg-primary/10 scale-[1.02]"
+              isDragOver && "ring-2 ring-primary bg-primary/10 scale-[1.02]",
             )}
             dir="rtl"
           >
@@ -392,6 +394,7 @@ export function FolderCard({
       <>
         <Link
           href={`${baseUrl}?folderId=${folder.id}`}
+          prefetch={false}
           className="block group"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -400,7 +403,7 @@ export function FolderCard({
           <div
             className={cn(
               "grid grid-cols-12 gap-4 px-4 py-3 hover:bg-muted/30 transition-all items-center relative text-right",
-              isDragOver && "bg-primary/10"
+              isDragOver && "bg-primary/10",
             )}
             dir="rtl"
           >

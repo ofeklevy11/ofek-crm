@@ -38,14 +38,14 @@ export default function NotificationsList({
   const handleMarkAsRead = async (id: number) => {
     // Optimistic update
     setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
     );
 
     const result = await markAsRead(id);
     if (!result.success) {
       // Revert if failed
       setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, read: false } : n))
+        prev.map((n) => (n.id === id ? { ...n, read: false } : n)),
       );
       console.error("Failed to mark as read");
     }
@@ -104,7 +104,7 @@ export default function NotificationsList({
 
   const toggleSelect = (id: number) => {
     setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((pid) => pid !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((pid) => pid !== id) : [...prev, id],
     );
   };
 
@@ -238,7 +238,7 @@ export default function NotificationsList({
                         <div className="text-xs text-gray-400">
                           <p suppressHydrationWarning>
                             {new Date(notification.createdAt).toLocaleString(
-                              "he-IL"
+                              "he-IL",
                             )}
                           </p>
                         </div>
@@ -246,6 +246,7 @@ export default function NotificationsList({
                         {notification.link && (
                           <Link
                             href={notification.link}
+                            prefetch={false}
                             className="text-sm text-blue-500 hover:text-blue-700 font-medium inline-flex items-center gap-1"
                           >
                             מעבר לקישור
