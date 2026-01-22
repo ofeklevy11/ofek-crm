@@ -210,11 +210,13 @@ export default function TableCard({
       </div>
 
       {/* Edit Modal */}
-      <EditTableModal
-        tableId={table.id}
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-      />
+      {isEditModalOpen && (
+        <EditTableModal
+          tableId={table.id}
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+        />
+      )}
 
       {/* Delete Dialog */}
       <AlertDialog
