@@ -34,7 +34,7 @@ await processMultiEventDurationTrigger(tableId, recordId, oldData, newData);
 
 ## קבצים שנוצרו:
 
-✅ prisma/schema.prisma - עודכן
+✅ prisma/schema.prisma -  עודכן
 ✅ app/actions/multi-event-automations.ts - חדש
 ✅ app/actions/analytics.ts - עודכן
 ✅ components/MultiEventAutomationModal.tsx - חדש
