@@ -16,12 +16,12 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import DynamicViewCard from "./DynamicViewCard";
-import DynamicViewRenderer from "./DynamicViewRenderer";
+import Link from "next/link";
+
+import AsyncViewWrapper from "./AsyncViewWrapper";
 import AddViewModal from "./AddViewModal";
 import SortableView from "./SortableView";
-import { processView } from "@/lib/viewProcessor";
-import { reorderViews } from "@/app/actions/views";
+import { reorderViews, getUserRefreshUsage } from "@/app/actions/views";
 import type { ViewConfig } from "@/app/actions/views";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -38,7 +38,6 @@ interface ViewsPanelProps {
     relationTableId?: number;
     displayField?: string;
   }>;
-  records: any[];
   views: Array<{
     id: number;
     name: string;
@@ -46,20 +45,51 @@ interface ViewsPanelProps {
     config: any;
     isEnabled: boolean;
   }>;
+  isPremium: string;
 }
 
 export default function ViewsPanel({
   tableId,
   tableSlug,
   schema,
-  records,
   views: initialViews,
+  isPremium,
 }: ViewsPanelProps) {
   const router = useRouter();
   const [showAddModal, setShowAddModal] = useState(false);
   const [views, setViews] = useState(initialViews);
   const [isReordering, setIsReordering] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [refreshUsage, setRefreshUsage] = useState(0);
+  const [nextResetTime, setNextResetTime] = useState<string | null>(null);
+
+  const fetchUsageStats = () => {
+    getUserRefreshUsage().then((res) => {
+      if (res.success) {
+        setRefreshUsage(res.usage);
+        setNextResetTime(res.nextResetTime || null);
+      }
+    });
+  };
+
+  useEffect(() => {
+    fetchUsageStats();
+  }, []);
+
+  // Determine limits based on plan
+  const plan = isPremium || "basic";
+  let maxViews = 3;
+  let planLabel = "משתמש רגיל";
+
+  if (plan === "premium") {
+    maxViews = 10;
+    planLabel = "משתמש פרימיום";
+  } else if (plan === "super") {
+    maxViews = 9999;
+    planLabel = "משתמש סופר";
+  }
+
+  const reachedLimit = views.length >= maxViews;
 
   // Ensure component only renders DnD on client-side to avoid hydration issues
   useEffect(() => {
@@ -79,26 +109,20 @@ export default function ViewsPanel({
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
-    console.log("🎯 Drag ended:", { activeId: active.id, overId: over?.id });
-
     if (!over || active.id === over.id) {
-      console.log("⏭️ No change needed");
       return;
     }
 
     const oldIndex = views.findIndex((v) => v.id === active.id);
     const newIndex = views.findIndex((v) => v.id === over.id);
 
-    console.log("📍 Moving from index", oldIndex, "to", newIndex);
-
     if (oldIndex === -1 || newIndex === -1) {
-      console.log("❌ Invalid index");
       return;
     }
 
@@ -116,8 +140,6 @@ export default function ViewsPanel({
       order: index,
     }));
 
-    console.log("💾 Saving new order to DB:", viewOrders);
-
     const result = await reorderViews(tableId, viewOrders);
 
     if (!result.success) {
@@ -126,7 +148,6 @@ export default function ViewsPanel({
       alert(`שגיאה: ${result.error}`);
       setViews(originalViews);
     } else {
-      console.log("✅ Order saved successfully, refreshing...");
       // Refresh to ensure sync
       router.refresh();
     }
@@ -138,39 +159,67 @@ export default function ViewsPanel({
 
   return (
     <div className="w-full lg:w-80 shrink-0 space-y-4">
-      <Button
-        onClick={() => setShowAddModal(true)}
-        className="w-full gap-2 bg-linear-to-r from-primary to-primary/80"
-      >
-        <Plus className="h-4 w-4" /> הוסף תצוגה
-      </Button>
+      <div className="space-y-2">
+        <Button
+          onClick={() => !reachedLimit && setShowAddModal(true)}
+          disabled={reachedLimit}
+          className="w-full gap-2 bg-linear-to-r from-primary to-primary/80 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Plus className="h-4 w-4" /> הוסף תצוגה
+        </Button>
+        {reachedLimit && (
+          <p className="text-xs text-center text-muted-foreground bg-muted/50 p-2 rounded-md border border-muted">
+            {planLabel} מוגבל ל-{maxViews} תצוגות בלבד.
+          </p>
+        )}
+
+        {plan !== "super" && views.length > 0 && (
+          <div className="text-[12px] text-muted-foreground text-center mt-2 px-1 leading-tight space-y-0.5 bg-gray-50/50 p-1.5 rounded border border-gray-100/50">
+            <div>
+              משתמש {plan === "premium" ? "פרימיום" : "רגיל"} מוגבל ל-
+              {plan === "premium" ? 10 : 3} רענונים ב-4 שעות
+            </div>
+            <div
+              className={
+                (plan === "premium" ? 10 : 3) - refreshUsage <= 0
+                  ? "text-red-500 font-bold"
+                  : ""
+              }
+            >
+              (נותרו לך{" "}
+              {Math.max(0, (plan === "premium" ? 10 : 3) - refreshUsage)})
+            </div>
+            <div className="mt-1 pt-1 border-t border-gray-200/50 text-gray-400">
+              הנתונים מתרעננים אוטומטית כל 4 שעות
+              {nextResetTime && (
+                <span>
+                  {" "}
+                  (רענון הבא:{" "}
+                  {new Date(nextResetTime).toLocaleTimeString("he-IL", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                  )
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {!isMounted ? (
         <div className="space-y-4">
-          {views.map((view) => {
-            const processedData = processView(
-              view.config as ViewConfig,
-              records,
-              schema
-            );
-
-            return (
-              <div key={view.id}>
-                <DynamicViewCard
-                  viewId={view.id}
-                  viewName={view.name}
-                  viewSlug={view.slug}
-                  title={view.name}
-                  isEnabled={view.isEnabled}
-                  config={view.config as ViewConfig}
-                  tableSlug={tableSlug}
-                  schema={schema}
-                >
-                  <DynamicViewRenderer viewData={processedData} />
-                </DynamicViewCard>
-              </div>
-            );
-          })}
+          {views.map((view) => (
+            <div key={view.id}>
+              <AsyncViewWrapper
+                view={view}
+                tableId={tableId}
+                tableSlug={tableSlug}
+                schema={schema}
+                onAfterRefresh={fetchUsageStats}
+              />
+            </div>
+          ))}
         </div>
       ) : (
         <DndContext
@@ -183,30 +232,17 @@ export default function ViewsPanel({
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-4">
-              {views.map((view) => {
-                const processedData = processView(
-                  view.config as ViewConfig,
-                  records,
-                  schema
-                );
-
-                return (
-                  <SortableView key={view.id} id={view.id}>
-                    <DynamicViewCard
-                      viewId={view.id}
-                      viewName={view.name}
-                      viewSlug={view.slug}
-                      title={view.name}
-                      isEnabled={view.isEnabled}
-                      config={view.config as ViewConfig}
-                      tableSlug={tableSlug}
-                      schema={schema}
-                    >
-                      <DynamicViewRenderer viewData={processedData} />
-                    </DynamicViewCard>
-                  </SortableView>
-                );
-              })}
+              {views.map((view) => (
+                <SortableView key={view.id} id={view.id}>
+                  <AsyncViewWrapper
+                    view={view}
+                    tableId={tableId}
+                    tableSlug={tableSlug}
+                    schema={schema}
+                    onAfterRefresh={fetchUsageStats}
+                  />
+                </SortableView>
+              ))}
             </div>
           </SortableContext>
         </DndContext>

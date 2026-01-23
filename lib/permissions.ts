@@ -6,6 +6,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  isPremium?: string;
   allowedWriteTableIds: number[];
   permissions?: Record<string, boolean>; // JSON field in DB
   tablePermissions?: Record<string, "read" | "write" | "none">; // JSON field in DB

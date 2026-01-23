@@ -5,10 +5,10 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { Prisma } from "@prisma/client";
 
 interface DashboardWidgetInput {
-  widgetType: "ANALYTICS" | "TABLE" | "GOAL";
+  widgetType: "ANALYTICS" | "TABLE" | "GOAL" | "TABLE_VIEWS_DASHBOARD";
   referenceId?: string; // Made optional
   tableId?: number;
-  settings?: any; // New settings field
+  settings?: any; // New settings field - for TABLE_VIEWS_DASHBOARD includes views: ViewItem[]
 }
 
 /**

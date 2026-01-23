@@ -69,6 +69,7 @@ model User {
   email                String        @unique
   passwordHash         String
   role                 String        @default("basic")
+  isPremium            String        @default("basic") // "basic", "premium", "super"
   permissions          Json?         @default("{}")
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
@@ -98,6 +99,7 @@ model User {
   company              Company       @relation(fields: [companyId], references: [id])
   ticketComments       TicketComment[]
   ticketActivityLogs   TicketActivityLog[]
+  viewRefreshLogs      ViewRefreshLog[]
   
   @@index([companyId])
 }
@@ -260,6 +262,7 @@ model View {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   table      TableMeta @relation("TableViews", fields: [tableId], references: [id], onDelete: Cascade)
+  refreshLogs ViewRefreshLog[]
 
   @@unique([tableId, slug])
   @@index([tableId])
@@ -1300,4 +1303,24 @@ model DashboardWidget {
 
 model TestCiCdPipeline2 {
   id Int @id @default(autoincrement())
+}
+
+model CachedMetric {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @map("updated_at")
+
+  @@map("cached_metrics")
+}
+
+model ViewRefreshLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  viewId    Int?
+  timestamp DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  view      View?    @relation(fields: [viewId], references: [id], onDelete: SetNull)
+
+  @@index([userId, viewId, timestamp])
 }

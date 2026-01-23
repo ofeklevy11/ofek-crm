@@ -198,10 +198,8 @@ export default async function TableDetailsPage({
             tableId={tableId}
             tableSlug={table.slug}
             schema={schema}
-            records={records.map((r) => ({
-              ...r,
-              createdAt: r.createdAt.toISOString(),
-            }))}
+            // @ts-ignore
+            isPremium={user.isPremium || "basic"}
             views={views.map((v) => ({
               id: v.id,
               name: v.name,

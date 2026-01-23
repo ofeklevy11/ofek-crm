@@ -18,11 +18,19 @@ import {
   sortableKeyboardCoordinates,
   rectSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Plus, LayoutDashboard, X, Target, Trash2 } from "lucide-react";
+import {
+  Plus,
+  LayoutDashboard,
+  X,
+  Target,
+  Trash2,
+  LayoutGrid,
+} from "lucide-react";
 import AnalyticsWidget from "./dashboard/AnalyticsWidget";
 import TableWidget from "./dashboard/TableWidget";
 import CustomTableWidget from "./dashboard/CustomTableWidget";
 import GoalWidget from "./dashboard/GoalWidget";
+import TableViewsDashboardWidget from "./dashboard/TableViewsDashboardWidget";
 import AnalyticsDetailsModal from "./AnalyticsDetailsModal";
 import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
 import { getTableViewData, getCustomTableData } from "@/app/actions/dashboard";
@@ -39,7 +47,7 @@ import { hasUserFlag, User } from "@/lib/permissions";
 import { GoalWithProgress } from "@/app/actions/goals";
 
 // Define Types
-type WidgetType = "ANALYTICS" | "TABLE" | "GOAL";
+type WidgetType = "ANALYTICS" | "TABLE" | "GOAL" | "TABLE_VIEWS_DASHBOARD";
 
 interface DashboardWidget {
   id: string; // Unique ID for this instance on dashboard
@@ -142,6 +150,23 @@ export default function DashboardClient({
   // Data State for Table Widgets
   const [tableData, setTableData] = useState<Record<string, any>>({});
   const [tableLoading, setTableLoading] = useState<Record<string, boolean>>({});
+
+  // Mini Dashboard (Table Views Dashboard) State
+  const [isMiniDashboardModalOpen, setIsMiniDashboardModalOpen] =
+    useState(false);
+  const [miniDashboardTitle, setMiniDashboardTitle] = useState("מיני דאשבורד");
+  const [miniDashboardViews, setMiniDashboardViews] = useState<
+    Array<{
+      tableId: number;
+      viewId: number;
+      tableName?: string;
+      viewName?: string;
+      colorIndex?: number;
+    }>
+  >([]);
+  const [editingMiniDashboardId, setEditingMiniDashboardId] = useState<
+    string | null
+  >(null);
 
   // Permissions
   const canViewDashboard = hasUserFlag(user, "canViewDashboard");
@@ -396,6 +421,8 @@ export default function DashboardClient({
       title = (content as any)?.ruleName || "אנליטיקה";
     } else if (widget.type === "GOAL") {
       title = (content as any)?.name || "יעד";
+    } else if (widget.type === "TABLE_VIEWS_DASHBOARD") {
+      title = widget.settings?.title || "מיני דאשבורד";
     } else {
       const { view } = content as any;
       title = view?.name || "טבלה";
@@ -435,6 +462,8 @@ export default function DashboardClient({
         (g) => String(g.id) === String(widget.referenceId),
       );
       return goal;
+    } else if (widget.type === "TABLE_VIEWS_DASHBOARD") {
+      return widget.settings;
     } else {
       // TABLE
       const table = availableTables.find((t) => t.id === widget.tableId);
@@ -482,6 +511,69 @@ export default function DashboardClient({
     }
   };
 
+  // Mini Dashboard Logic
+  const handleOpenMiniDashboardModal = () => {
+    setEditingMiniDashboardId(null);
+    setMiniDashboardTitle("מיני דאשבורד");
+    setMiniDashboardViews([]);
+    setIsMiniDashboardModalOpen(true);
+  };
+
+  const handleEditMiniDashboard = (widget: DashboardWidget) => {
+    setEditingMiniDashboardId(widget.id);
+    setMiniDashboardTitle(widget.settings?.title || "מיני דאשבורד");
+    setMiniDashboardViews(widget.settings?.views || []);
+    setIsMiniDashboardModalOpen(true);
+  };
+
+  const handleAddMiniDashboard = async () => {
+    // Basic validation
+    if (!miniDashboardTitle) return;
+
+    const settings = {
+      title: miniDashboardTitle,
+      views: miniDashboardViews,
+      collapsed: false,
+    };
+
+    if (editingMiniDashboardId) {
+      const res = await updateDashboardWidget(editingMiniDashboardId, {
+        settings,
+      });
+
+      if (res.success) {
+        setWidgets((prev) =>
+          prev.map((w) =>
+            w.id === editingMiniDashboardId ? { ...w, settings } : w,
+          ),
+        );
+      }
+    } else {
+      // @ts-ignore
+      const res = await addDashboardWidget({
+        widgetType: "TABLE_VIEWS_DASHBOARD",
+        referenceId: "custom",
+        settings,
+      });
+
+      if (res.success && res.data) {
+        const newWidget: DashboardWidget = {
+          id: res.data.id,
+          type: res.data.widgetType as WidgetType,
+          referenceId: res.data.referenceId || "custom",
+          tableId: res.data.tableId ?? undefined,
+          settings: res.data.settings,
+        };
+        setWidgets([...widgets, newWidget]);
+      }
+    }
+
+    setIsMiniDashboardModalOpen(false);
+    setEditingMiniDashboardId(null);
+    setMiniDashboardViews([]);
+    setMiniDashboardTitle("");
+  };
+
   if (!canViewDashboard) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
@@ -503,18 +595,32 @@ export default function DashboardClient({
           הדאשבורד שלי
         </h2>
         {canViewDashboard && (
-          <button
-            onClick={handleOpenAddModal}
-            disabled={!canAddWidget}
-            className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg transition shadow-sm font-medium text-sm ${
-              !canAddWidget
-                ? "opacity-50 cursor-not-allowed"
-                : "hover:bg-blue-700"
-            }`}
-          >
-            <Plus size={16} />
-            הוסף וידג׳ט
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleOpenMiniDashboardModal}
+              disabled={!canAddWidget}
+              className={`flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700 border border-blue-100 rounded-lg transition shadow-sm font-medium text-sm ${
+                !canAddWidget
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:shadow-md"
+              }`}
+            >
+              <LayoutGrid size={16} />
+              הוסף מיני דאשבורד
+            </button>
+            <button
+              onClick={handleOpenAddModal}
+              disabled={!canAddWidget}
+              className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg transition shadow-sm font-medium text-sm ${
+                !canAddWidget
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:bg-blue-700"
+              }`}
+            >
+              <Plus size={16} />
+              הוסף וידג׳ט
+            </button>
+          </div>
         )}
       </div>
 
@@ -528,7 +634,13 @@ export default function DashboardClient({
           items={widgets.map((w) => w.id)}
           strategy={rectSortingStrategy}
         >
-          <div className="columns-1 sm:columns-2 gap-6 space-y-6">
+          <div
+            className={
+              widgets.length > 0
+                ? "columns-1 sm:columns-2 gap-6 space-y-6"
+                : "w-full flex justify-center"
+            }
+          >
             {widgets.map((widget) => {
               const content = getWidgetContent(widget);
 
@@ -562,6 +674,24 @@ export default function DashboardClient({
                       metrics={GOAL_METRICS}
                       tables={availableTables}
                       onRemove={() => handleRemoveWidget(widget)}
+                    />
+                  </div>
+                );
+              } else if (widget.type === "TABLE_VIEWS_DASHBOARD") {
+                const settings = (widget as any).settings || {};
+                return (
+                  <div key={widget.id} className="break-inside-avoid">
+                    <TableViewsDashboardWidget
+                      id={widget.id}
+                      title={settings.title}
+                      views={settings.views || []}
+                      availableTables={availableTables}
+                      onRemove={() => handleRemoveWidget(widget)}
+                      onEdit={() => handleEditMiniDashboard(widget)}
+                      settings={settings}
+                      onSettingsChange={(newSettings) =>
+                        handleWidgetSettingsChange(widget.id, newSettings)
+                      }
                     />
                   </div>
                 );
@@ -617,27 +747,45 @@ export default function DashboardClient({
             })}
 
             {widgets.length === 0 && (
-              <div className="w-full py-16 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 border-2 border-dashed border-gray-200 rounded-3xl text-center px-4">
-                <LayoutDashboard size={64} className="mb-6 opacity-10" />
+              <div className="w-full max-w-4xl flex flex-col items-center justify-center min-h-[500px] relative overflow-hidden bg-white rounded-3xl border border-gray-100 shadow-sm mx-auto">
+                {/* Background decoration */}
+                <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] opacity-20"></div>
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-50/50 rounded-full blur-3xl -ml-32 -mb-32 pointer-events-none"></div>
 
-                {!canAddWidget ? (
-                  <div className="max-w-lg space-y-2">
-                    <p className="text-gray-500 font-medium">
-                      על מנת להוסיף ווידגט ללוח הבקרה תצטרכו ליצור תצוגה בתוך
-                      טבלה או אנליטיקה בעמוד "אנליטיקות"
-                    </p>
+                <div className="relative z-10 flex flex-col items-center max-w-lg text-center p-8">
+                  <div className="mb-8 relative group">
+                    <div className="w-24 h-24 bg-gradient-to-br from-blue-50 to-purple-50 rounded-3xl flex items-center justify-center transform rotate-3 group-hover:rotate-6 transition-transform duration-300 shadow-sm">
+                      <LayoutDashboard className="w-10 h-10 text-[#4f95ff]" />
+                    </div>
+                    <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center text-[#a24ec1] rotate-12 group-hover:rotate-12 transition-transform duration-300 border border-gray-50">
+                      <Plus className="w-5 h-5" />
+                    </div>
                   </div>
-                ) : (
-                  <>
-                    <p>הדאשבורד שלך ריק</p>
+
+                  <h3 className="text-3xl font-bold text-gray-900 mb-4">
+                    {!canAddWidget ? "אין גישה לעריכה" : "הדאשבורד שלך ריק"}
+                  </h3>
+
+                  <p className="text-gray-500 text-lg mb-10 leading-relaxed">
+                    {!canAddWidget
+                      ? 'על מנת להוסיף ווידגט ללוח הבקרה תצטרכו ליצור תצוגה בתוך טבלה או אנליטיקה בעמוד "אנליטיקות"'
+                      : "זה הזמן להפוך את הנתונים שלך לויזואליים. הוסף טבלאות, גרפים ויעדים כדי לקבל תמונת מצב מלאה על העסק."}
+                  </p>
+
+                  {canAddWidget && (
                     <button
                       onClick={handleOpenAddModal}
-                      className="mt-4 text-blue-600 font-medium hover:underline"
+                      className="group relative inline-flex items-center gap-2 px-8 py-3.5 bg-gray-900 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
                     >
-                      לחץ כאן להוספת נתונים
+                      <span className="absolute inset-0 bg-gradient-to-r from-[#4f95ff] to-[#a24ec1] opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                      <span className="relative flex items-center gap-2 text-lg">
+                        <Plus className="w-5 h-5" />
+                        הוסף וידג׳ט ראשון
+                      </span>
                     </button>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1034,6 +1182,184 @@ export default function DashboardClient({
           </div>
         )}
       </DndContext>
+
+      {/* Mini Dashboard Modal */}
+      {isMiniDashboardModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto flex flex-col"
+            dir="rtl"
+          >
+            <div className="flex justify-between items-center mb-6 shrink-0">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <LayoutGrid className="text-blue-600" />
+                {editingMiniDashboardId
+                  ? "עריכת מיני דאשבורד"
+                  : "הוספת מיני דאשבורד"}
+              </h3>
+              <button
+                onClick={() => {
+                  setIsMiniDashboardModalOpen(false);
+                  setEditingMiniDashboardId(null);
+                }}
+                className="p-1 hover:bg-gray-100 rounded-full transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-6 flex-1 overflow-y-auto p-1">
+              {/* Title Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  כותרת
+                </label>
+                <input
+                  type="text"
+                  value={miniDashboardTitle}
+                  onChange={(e) => setMiniDashboardTitle(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  placeholder="דוגמה: סיכום לידים ומכירות"
+                />
+              </div>
+
+              {/* Views Selection */}
+              <div>
+                <div className="flex justify-between items-end mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    תצוגות שנבחרו ({miniDashboardViews.length})
+                  </label>
+                </div>
+
+                {/* Selected Views List */}
+                {miniDashboardViews.length > 0 && (
+                  <div className="mb-4 flex flex-wrap gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100 min-h-[60px]">
+                    {miniDashboardViews.map((view, idx) => (
+                      <div
+                        key={`${view.tableId}-${view.viewId}-${idx}`}
+                        className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm text-sm group"
+                      >
+                        <span className="font-medium text-gray-800">
+                          {view.viewName}
+                        </span>
+                        <span className="text-xs text-gray-400 border-r border-gray-200 pr-2 mr-1">
+                          {view.tableName}
+                        </span>
+                        <button
+                          onClick={() => {
+                            const newViews = [...miniDashboardViews];
+                            newViews.splice(idx, 1);
+                            setMiniDashboardViews(newViews);
+                          }}
+                          className="text-gray-400 hover:text-red-500 transition ml-1"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add Views Selection Area */}
+                <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col max-h-[400px]">
+                  <div className="bg-gray-50 p-3 text-xs font-semibold text-gray-500 border-b border-gray-200">
+                    בחר תצוגות להוספה
+                  </div>
+                  <div className="overflow-y-auto p-2">
+                    {availableTables.map((table) => {
+                      // Filter views that are simple enough for mini dashboard
+                      // Or just show all? showing all stats/aggregation views makes most sense.
+                      return (
+                        <div key={table.id} className="mb-4 last:mb-0">
+                          <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wide px-2 mb-2">
+                            {table.name}
+                          </h5>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {table.views?.map((view: any) => {
+                              const isSelected = miniDashboardViews.some(
+                                (v) =>
+                                  v.tableId === table.id &&
+                                  v.viewId === view.id,
+                              );
+                              // We can allow duplicate views in different mini dashboards, but here maybe prevent duplicates in SAME dashboard
+
+                              return (
+                                <button
+                                  key={view.id}
+                                  onClick={() => {
+                                    // Add view
+                                    setMiniDashboardViews([
+                                      ...miniDashboardViews,
+                                      {
+                                        tableId: table.id,
+                                        viewId: view.id,
+                                        tableName: table.name,
+                                        viewName: view.name,
+                                        colorIndex: miniDashboardViews.length,
+                                      },
+                                    ]);
+                                  }}
+                                  className={`flex items-center justify-between p-2.5 rounded-lg border text-right transition ${
+                                    isSelected
+                                      ? "bg-blue-50 border-blue-200 cursor-default" // Allowing duplicates? maybe best to not disable but show added indicator
+                                      : "bg-white border-gray-100 hover:border-blue-300 hover:shadow-sm"
+                                  }`}
+                                >
+                                  <div className="truncate">
+                                    <div className="font-medium text-sm text-gray-800 truncate">
+                                      {view.name}
+                                    </div>
+                                    <div className="text-[10px] text-gray-500">
+                                      {view.config?.type === "stats"
+                                        ? "סטטיסטיקה"
+                                        : view.config?.type === "aggregation"
+                                          ? "אגרגציה"
+                                          : "רגיל"}
+                                    </div>
+                                  </div>
+                                  <div className="shrink-0 w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-blue-100 group-hover:text-blue-600 transition">
+                                    <Plus size={14} />
+                                  </div>
+                                </button>
+                              );
+                            })}
+                            {(!table.views || table.views.length === 0) && (
+                              <div className="text-xs text-gray-400 px-2 italic col-span-2">
+                                אין תצוגות זמינות
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-gray-100 flex gap-3 shrink-0">
+              <button
+                onClick={() => {
+                  setIsMiniDashboardModalOpen(false);
+                  setEditingMiniDashboardId(null);
+                }}
+                className="flex-1 py-2.5 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 font-medium transition"
+              >
+                ביטול
+              </button>
+              <button
+                disabled={
+                  !miniDashboardTitle || miniDashboardViews.length === 0
+                }
+                onClick={handleAddMiniDashboard}
+                className="flex-1 py-2.5 text-white bg-blue-600 rounded-xl hover:bg-blue-700 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-200"
+              >
+                {editingMiniDashboardId ? "שמור שינויים" : "צור מיני דאשבורד"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Analytics Details Modal */}
       <AnalyticsDetailsModal

@@ -62,6 +62,31 @@ export async function createView(data: {
       select: { order: true },
     });
 
+    // --- SECURITY CHECK: VIEW LIMITS ---
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+
+    // Limits
+    const plan = user?.isPremium || "basic";
+    let maxViews = 3;
+    if (plan === "premium") {
+      maxViews = 10;
+    } else if (plan === "super") {
+      maxViews = 9999;
+    }
+
+    const currentCount = await prisma.view.count({
+      where: { tableId: data.tableId },
+    });
+
+    if (currentCount >= maxViews) {
+      return {
+        success: false,
+        error: `הגעת למגבלת התצוגות בחבילה שלך (${maxViews}). שדרג כדי ליצור עוד.`,
+      };
+    }
+    // -----------------------------------
+
     const nextOrder = (maxOrderView?.order ?? -1) + 1;
 
     const view = await prisma.view.create({
@@ -107,7 +132,7 @@ export async function updateView(
     slug?: string;
     config?: ViewConfig;
     isEnabled?: boolean;
-  }
+  },
 ) {
   try {
     const view = await prisma.view.update({
@@ -240,7 +265,7 @@ export async function getEnabledViewsForTable(tableId: number) {
 
 export async function reorderViews(
   tableId: number,
-  viewOrders: Array<{ id: number; order: number }>
+  viewOrders: Array<{ id: number; order: number }>,
 ) {
   try {
     console.log("🔄 Reordering views for table:", tableId);
@@ -254,7 +279,7 @@ export async function reorderViews(
           where: { id },
           data: { order },
         });
-      })
+      }),
     );
 
     console.log("✅ Views reordered successfully");
@@ -267,5 +292,58 @@ export async function reorderViews(
       success: false,
       error: "אירעה שגיאה בשינוי סדר התצוגות. אנא נסה שוב.",
     };
+  }
+}
+
+export async function getUserRefreshUsage() {
+  try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, usage: 0 };
+    }
+
+    const windowStart = new Date(Date.now() - 4 * 60 * 60 * 1000); // 4 hours ago
+
+    // Check usage global per user (not per view)
+    try {
+      if (!(prisma as any).viewRefreshLog) {
+        return { success: true, usage: 0 };
+      }
+
+      const usageCount = await (prisma as any).viewRefreshLog.count({
+        where: {
+          userId: user.id,
+          timestamp: { gt: windowStart },
+        },
+      });
+
+      // Find the oldest log in the window to calculate when the next credit returns
+      let nextResetTime = null;
+      if (usageCount > 0) {
+        const oldestLog = await (prisma as any).viewRefreshLog.findFirst({
+          where: {
+            userId: user.id,
+            timestamp: { gt: windowStart },
+          },
+          orderBy: { timestamp: "asc" },
+        });
+
+        if (oldestLog) {
+          nextResetTime = new Date(
+            new Date(oldestLog.timestamp).getTime() + 4 * 60 * 60 * 1000,
+          ).toISOString();
+        }
+      }
+
+      return { success: true, usage: usageCount, nextResetTime };
+    } catch (e) {
+      console.error("Failed to check refresh usage:", e);
+      return { success: true, usage: 0 };
+    }
+  } catch (error) {
+    console.error("Error in getUserRefreshUsage:", error);
+    return { success: false, usage: 0 };
   }
 }

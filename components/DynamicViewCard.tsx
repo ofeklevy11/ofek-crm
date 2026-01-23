@@ -7,7 +7,7 @@ import EditViewModal from "./EditViewModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit2, Trash2, Power, PowerOff } from "lucide-react";
+import { Edit2, Trash2, Power, PowerOff, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface DynamicViewCardProps {
@@ -26,6 +26,7 @@ interface DynamicViewCardProps {
   }>;
   children: React.ReactNode;
   onDelete?: () => void;
+  onRefresh?: () => Promise<void>;
 }
 
 export default function DynamicViewCard({
@@ -39,11 +40,13 @@ export default function DynamicViewCard({
   schema,
   children,
   onDelete,
+  onRefresh,
 }: DynamicViewCardProps) {
   const router = useRouter();
   const [isEnabled, setIsEnabled] = useState(initialIsEnabled);
   const [isToggling, setIsToggling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
   const handleToggle = async () => {
@@ -63,7 +66,7 @@ export default function DynamicViewCard({
   const handleDelete = async () => {
     if (
       !confirm(
-        `האם אתה בטוח שברצונך למחוק את התצוגה "${title}"? פעולה זו בלתי הפיכה.`
+        `האם אתה בטוח שברצונך למחוק את התצוגה "${title}"? פעולה זו בלתי הפיכה.`,
       )
     ) {
       return;
@@ -98,6 +101,26 @@ export default function DynamicViewCard({
             >
               <Edit2 className="h-4 w-4" />
             </Button>
+            {onRefresh && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={async () => {
+                  if (onRefresh) {
+                    setIsRefreshing(true);
+                    await onRefresh();
+                    setIsRefreshing(false);
+                  }
+                }}
+                disabled={isRefreshing}
+                className="h-8 w-8 text-muted-foreground hover:text-blue-500"
+                title="רענן נתונים"
+              >
+                <RefreshCw
+                  className={cn("h-4 w-4", isRefreshing && "animate-spin")}
+                />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -107,7 +130,7 @@ export default function DynamicViewCard({
                 "h-8 w-8 transition-colors",
                 isEnabled
                   ? "text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
               )}
               title={isEnabled ? "הסתר" : "הצג"}
             >
