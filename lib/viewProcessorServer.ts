@@ -24,7 +24,13 @@ export async function processViewServer({
   // 2. Process based on view type
   switch (type) {
     case "stats":
-      return await processStatsServer(whereClause, config);
+      return await processStatsServer(
+        whereClause,
+        config,
+        companyId,
+        tableId,
+        forceRefresh,
+      );
     case "aggregation":
     case "chart": // Charts usually use aggregation data
       return await processAggregationServer(
@@ -170,61 +176,77 @@ function buildWhereClause(
     : Prisma.sql`1=1`;
 }
 
-async function processStatsServer(whereClause: Prisma.Sql, config: ViewConfig) {
+async function processStatsServer(
+  whereClause: Prisma.Sql,
+  config: ViewConfig,
+  companyId: number,
+  tableId: number,
+  forceRefresh: boolean = false,
+) {
   // Stats view usually shows "New this week/month" or total count
 
-  // We need two counts:
-  // 1. Total filtered count (based on regular filters)
-  // 2. Time-filtered count (if applicable) - but processView logic seems to apply date filter to MAIN count
+  const cacheKey = `view_stats:${companyId}:${tableId}:${JSON.stringify(config)}`;
+  const ttl = forceRefresh ? 0 : 4 * 60 * 60; // 0 seconds vs 4 hours
 
-  // In `processView`: `actualCount` is filtered by ALL filters + dateFilter.
-  // And it compares again with `startDate` (redundant if dateFilter is applied perfectly, but let's see).
+  return await getCachedMetric(
+    cacheKey,
+    async () => {
+      // We need two counts:
+      // 1. Total filtered count (based on regular filters)
+      // 2. Time-filtered count (if applicable) - but processView logic seems to apply date filter to MAIN count
 
-  // Actually `processStatsView` in client applies `config.filters` AND `config.dateFilter`.
-  // So the whereClause we built ALREADY includes the date filter if present.
+      // In `processView`: `actualCount` is filtered by ALL filters + dateFilter.
+      // And it compares again with `startDate` (redundant if dateFilter is applied perfectly, but let's see).
 
-  // Wait, `processStatsView` (client) has specific logic:
-  // It handles `config.timeRange` SEPARATELY from `config.dateFilter`.
-  // `config.timeRange` seems to be legacy or specific to stats view ("week", "month", "all").
-  // Let's implement that.
+      // Actually `processStatsView` in client applies `config.filters` AND `config.dateFilter`.
+      // So the whereClause we built ALREADY includes the date filter if present.
 
-  let timeRangeClause = Prisma.sql`1=1`;
-  if (config.timeRange && config.timeRange !== "all") {
-    const now = new Date();
-    let start: Date;
+      // Wait, `processStatsView` (client) has specific logic:
+      // It handles `config.timeRange` SEPARATELY from `config.dateFilter`.
+      // `config.timeRange` seems to be legacy or specific to stats view ("week", "month", "all").
+      // Let's implement that.
 
-    // Default to checking 'createdAt' for timeRange if no specific field?
-    // Client code: `r.createdAt && new Date(r.createdAt) >= startDate`
-    // So it uses `createdAt`.
+      let timeRangeClause = Prisma.sql`1=1`;
+      if (config.timeRange && config.timeRange !== "all") {
+        const now = new Date();
+        let start: Date;
 
-    if (config.timeRange === "week") {
-      start = new Date(now);
-      start.setDate(now.getDate() - now.getDay()); // Start of week (Sunday/Monday?)
-      start.setHours(0, 0, 0, 0);
-    } else {
-      // month
-      start = new Date(now.getFullYear(), now.getMonth(), 1);
-    }
+        // Default to checking 'createdAt' for timeRange if no specific field?
+        // Client code: `r.createdAt && new Date(r.createdAt) >= startDate`
+        // So it uses `createdAt`.
 
-    timeRangeClause = Prisma.sql`"createdAt" >= ${start}`;
-  }
+        if (config.timeRange === "week") {
+          start = new Date(now);
+          start.setDate(now.getDate() - now.getDay()); // Start of week (Sunday/Monday?)
+          start.setHours(0, 0, 0, 0);
+        } else {
+          // month
+          start = new Date(now.getFullYear(), now.getMonth(), 1);
+        }
 
-  // So count is WHERE (filters) AND (timeRange)
-  const query = Prisma.sql`SELECT COUNT(*) as count FROM "Record" WHERE ${whereClause} AND ${timeRangeClause}`;
-  const result = await prisma.$queryRaw<[{ count: bigint }]>(query);
-  const actualCount = Number(result[0].count);
-  const MAX_DISPLAY_COUNT = 999;
+        timeRangeClause = Prisma.sql`"createdAt" >= ${start}`;
+      }
 
-  return {
-    type: "stats",
-    title: config.title,
-    data: {
-      count: actualCount > MAX_DISPLAY_COUNT ? MAX_DISPLAY_COUNT : actualCount,
-      actualCount,
-      isOverLimit: actualCount > MAX_DISPLAY_COUNT,
-      timeRange: config.timeRange,
+      // So count is WHERE (filters) AND (timeRange)
+      const query = Prisma.sql`SELECT COUNT(*) as count FROM "Record" WHERE ${whereClause} AND ${timeRangeClause}`;
+      const result = await prisma.$queryRaw<[{ count: bigint }]>(query);
+      const actualCount = Number(result[0].count);
+      const MAX_DISPLAY_COUNT = 999;
+
+      return {
+        type: "stats",
+        title: config.title,
+        data: {
+          count:
+            actualCount > MAX_DISPLAY_COUNT ? MAX_DISPLAY_COUNT : actualCount,
+          actualCount,
+          isOverLimit: actualCount > MAX_DISPLAY_COUNT,
+          timeRange: config.timeRange,
+        },
+      };
     },
-  };
+    ttl,
+  );
 }
 
 async function processAggregationServer(

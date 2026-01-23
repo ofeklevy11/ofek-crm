@@ -655,47 +655,7 @@ export default function RecordTable({
   };
 
   const getRowColorClass = (record: any) => {
-    if (getWinningLegendColor(record)) {
-      return "";
-    }
-
-    const recordData = record.data;
-
-    if (
-      activeBooleanFieldName &&
-      recordData?.[activeBooleanFieldName] === false
-    ) {
-      return "bg-destructive/10 hover:bg-destructive/20";
-    }
-
-    const values = Object.values(recordData || {});
-    const stringValues = values.map((v) => String(v).trim());
-
-    if (stringValues.some((v) => v.includes("לא פעיל")))
-      return "bg-destructive/10 hover:bg-destructive/20";
-    if (stringValues.some((v) => v.includes("ריטיינר")))
-      return "bg-green-100 dark:bg-green-900/30 hover:bg-green-200";
-    if (stringValues.some((v) => v.includes("תשלום חד פעמי")))
-      return "bg-yellow-100 dark:bg-yellow-900/30 hover:bg-yellow-200";
-
-    const status = statusFieldName ? recordData?.[statusFieldName] : null;
-    if (!status) return ""; // Default Shadcn table row style (white/muted)
-    switch (status) {
-      case "לא רלוונטי":
-        return "bg-destructive/10 hover:bg-destructive/20";
-      case "ליד רגיל":
-        return "";
-      case "ליד קר":
-        return "bg-yellow-100 dark:bg-yellow-900/30 hover:bg-yellow-200";
-      case "ליד חם":
-        return "bg-green-100 dark:bg-green-900/30 hover:bg-green-200";
-      case "ליד שנסגר":
-        return "bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200";
-      case "ליד שלא נסגר":
-        return "bg-orange-100 dark:bg-orange-900/30 hover:bg-orange-200";
-      default:
-        return "";
-    }
+    return "";
   };
 
   const getRowStyle = (record: any): React.CSSProperties | undefined => {
