@@ -1283,8 +1283,10 @@ model DashboardWidget {
   userId      Int
   
   widgetType  String   // 'ANALYTICS' | 'TABLE'
-  referenceId String   // ID of the analytics view or table view
+  referenceId String?  // ID of the analytics view or table view
   tableId     Int?     // Only for TABLE type widgets
+  
+  settings    Json?    // Custom configuration (columns, sort, limit, etc.)
   
   order       Int      @default(0)
   

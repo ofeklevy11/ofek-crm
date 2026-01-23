@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ProcessedViewData } from "@/lib/viewProcessor";
 
 interface DynamicViewRendererProps {
@@ -20,11 +21,106 @@ export default function DynamicViewRenderer({
       return <LegendView title={title} data={data} />;
     case "chart":
       return <ChartView title={title} data={data} />;
+    case "custom-table":
+      return <CustomTableView title={title} data={data} />;
     default:
       return (
         <div className="text-sm text-gray-500">Unknown view type: {type}</div>
       );
   }
+}
+
+function CustomTableView({ title, data }: { title: string; data: any }) {
+  const { columns, records, hasMore, tableSlug } = data;
+
+  if (!records || records.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-gray-400 py-8">
+        <div className="text-4xl mb-2">📭</div>
+        <div className="text-sm">אין נתונים להצגה</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-full flex flex-col font-sans">
+      {/* Removed title from here as it is displayed by the widget container */}
+      <div className="flex-1 overflow-auto -mx-4 px-4 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+        <table className="w-full text-sm text-right border-collapse">
+          <thead className="sticky top-0 bg-white z-10 text-xs text-gray-500 font-semibold uppercase tracking-wider pb-2 border-b border-gray-100">
+            <tr>
+              {columns.map((col: any) => (
+                <th
+                  key={col.name}
+                  className="py-2 px-2 first:pr-0 font-medium text-gray-400"
+                >
+                  {col.label || col.name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {records.map((record: any) => (
+              <tr
+                key={record.id}
+                className="group hover:bg-blue-50/50 transition-colors"
+              >
+                {columns.map((col: any) => {
+                  let val = record.data?.[col.name];
+
+                  // Handle system fields
+                  if (col.name === "createdAt") val = record.createdAt;
+                  if (col.name === "updatedAt") val = record.updatedAt;
+                  if (col.name === "createdBy") val = record.createdBy;
+                  if (col.name === "updatedBy") val = record.updatedBy;
+
+                  // Simple render of value
+                  let displayVal = val;
+
+                  // Date formatting
+                  if (col.name === "createdAt" || col.name === "updatedAt") {
+                    if (val) displayVal = new Date(val).toLocaleString("he-IL");
+                  }
+
+                  if (
+                    typeof val === "object" &&
+                    val !== null &&
+                    !(val instanceof Date)
+                  ) {
+                    displayVal = Array.isArray(val)
+                      ? val.join(", ")
+                      : JSON.stringify(val);
+                  }
+                  if (val === true) displayVal = "כן";
+                  if (val === false) displayVal = "לא";
+
+                  return (
+                    <td
+                      key={col.name}
+                      className="py-2.5 px-2 first:pr-0 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]"
+                    >
+                      {displayVal}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {hasMore && (
+        <div className="mt-auto pt-3 border-t border-gray-100/50 flex justify-center">
+          <Link
+            href={`/tables/${tableSlug}`}
+            className="text-xs text-blue-500 hover:text-blue-700 font-medium cursor-pointer transition-colors px-3 py-1 bg-blue-50/50 hover:bg-blue-50 rounded-full"
+          >
+            הצג עוד רשומות...
+          </Link>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function StatsView({ title, data }: { title: string; data: any }) {

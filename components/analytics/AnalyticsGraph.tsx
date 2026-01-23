@@ -142,15 +142,18 @@ export default function AnalyticsGraph({
         );
 
       case "pie":
+        const outerRadius = height / 2 - 30; // Reduced padding to make it a bit larger
+        const innerRadius = outerRadius - 30; // Slightly thicker ring
+
         return (
           <PieChart>
             <Pie
               data={data}
               cx="50%"
               cy="50%"
-              labelLine={false}
-              outerRadius={height / 2 - 20}
-              fill="#8884d8"
+              innerRadius={innerRadius}
+              outerRadius={outerRadius}
+              paddingAngle={4}
               dataKey="value"
               nameKey="name"
               label={({
@@ -159,32 +162,56 @@ export default function AnalyticsGraph({
                 midAngle,
                 innerRadius,
                 outerRadius,
+                value,
+                index,
+                name,
                 percent,
               }) => {
-                const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                const safeAngle = midAngle ?? 0;
-                const x = cx + radius * Math.cos(-safeAngle * (Math.PI / 180));
-                const y = cy + radius * Math.sin(-safeAngle * (Math.PI / 180));
-                const safePercent = percent ?? 0;
+                const RADIAN = Math.PI / 180;
+                const radius = 25 + innerRadius + (outerRadius - innerRadius);
+                const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
                 return (
                   <text
                     x={x}
                     y={y}
-                    fill="white"
+                    fill="#374151"
                     textAnchor={x > cx ? "start" : "end"}
                     dominantBaseline="central"
-                    fontSize={12}
+                    className="text-[10px] font-medium"
+                    fontSize={10}
                   >
-                    {`${(safePercent * 100).toFixed(0)}%`}
+                    <tspan
+                      x={x}
+                      dy="-0.6em"
+                      className="fill-gray-900 font-bold"
+                      fontWeight="bold"
+                    >
+                      {name}
+                    </tspan>
+                    <tspan
+                      x={x}
+                      dy="1.4em"
+                      className="fill-gray-500 text-[9px]"
+                      fontSize={9}
+                      fill="#6b7280"
+                    >
+                      {`(${(percent * 100).toFixed(0)}%) ${value}`}
+                    </tspan>
                   </text>
                 );
+              }}
+              labelLine={{
+                stroke: "#e5e7eb",
+                strokeWidth: 1,
               }}
             >
               {data.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={COLORS[index % COLORS.length]}
+                  stroke="transparent"
                 />
               ))}
             </Pie>
@@ -194,9 +221,13 @@ export default function AnalyticsGraph({
                 borderRadius: "8px",
                 border: "1px solid #f3f4f6",
                 boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                direction: "rtl",
               }}
+              formatter={(value: any, name: string) => [
+                value.toLocaleString(),
+                name,
+              ]}
             />
-            <Legend />
           </PieChart>
         );
 

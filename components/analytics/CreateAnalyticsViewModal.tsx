@@ -222,7 +222,7 @@ export default function CreateAnalyticsViewModal({
     if (!showPreview) return null;
 
     return (
-      <div className="mt-6 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+      <div className="mt-6 p-4 bg-linear-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Eye size={18} className="text-blue-600" />
@@ -888,7 +888,7 @@ export default function CreateAnalyticsViewModal({
 
     if (selectedType === "GRAPH") {
       const selectedGraphType = GRAPH_TYPES.find(
-        (t) => t.id === config.chartType
+        (t) => t.id === config.chartType,
       );
 
       return (
@@ -1086,14 +1086,14 @@ export default function CreateAnalyticsViewModal({
           {step === 1 ? (
             <button
               onClick={() => {
-                // If GRAPH type is selected, redirect to graphs page
-                if (selectedType === "GRAPH") {
+                // If GRAPH type is selected from general mode, redirect to graphs page
+                if (selectedType === "GRAPH" && mode !== "graph") {
                   onClose();
                   router.push("/analytics/graphs");
                   return;
                 }
-                if (mode === "graph" && selectedType === "GRAPH") setStep(2);
-                else if (selectedType) setStep(2);
+                // Otherwise proceed to step 2
+                setStep(2);
               }}
               disabled={!selectedType && mode !== "graph"} // In graph mode, type is set on click
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 shadow-sm"
@@ -1135,8 +1135,8 @@ export default function CreateAnalyticsViewModal({
                 {loading
                   ? "שומר..."
                   : initialData
-                  ? "שמור שינויים"
-                  : "צור תצוגה"}
+                    ? "שמור שינויים"
+                    : "צור תצוגה"}
                 {!loading && <Check size={20} />}
               </button>
             </div>

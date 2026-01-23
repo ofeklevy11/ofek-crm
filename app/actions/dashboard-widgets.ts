@@ -2,11 +2,13 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { Prisma } from "@prisma/client";
 
 interface DashboardWidgetInput {
   widgetType: "ANALYTICS" | "TABLE" | "GOAL";
-  referenceId: string;
+  referenceId?: string; // Made optional
   tableId?: number;
+  settings?: any; // New settings field
 }
 
 /**
@@ -52,8 +54,9 @@ export async function addDashboardWidget(data: DashboardWidgetInput) {
       data: {
         userId: user.id,
         widgetType: data.widgetType,
-        referenceId: data.referenceId,
+        referenceId: data.referenceId || "custom", // Default to "custom" if not provided
         tableId: data.tableId,
+        settings: data.settings ?? undefined,
         order: nextOrder,
       },
     });
@@ -110,7 +113,7 @@ export async function updateDashboardWidgetOrder(widgetIds: string[]) {
       prisma.dashboardWidget.updateMany({
         where: { id, userId: user.id },
         data: { order: index },
-      })
+      }),
     );
 
     await prisma.$transaction(updates);
@@ -127,7 +130,7 @@ export async function updateDashboardWidgetOrder(widgetIds: string[]) {
  * This can be called on first load to move existing localStorage widgets to DB
  */
 export async function migrateDashboardWidgets(
-  localStorageWidgets: DashboardWidgetInput[]
+  localStorageWidgets: DashboardWidgetInput[],
 ) {
   try {
     const user = await getCurrentUser();
@@ -163,4 +166,60 @@ export async function migrateDashboardWidgets(
     console.error("Error migrating dashboard widgets:", error);
     return { success: false, error: "Failed to migrate widgets" };
   }
+}
+
+/**
+ * Update widget settings (e.g. valid for custom widgets)
+ */
+/**
+ * Update a widget's full configuration
+ */
+export async function updateDashboardWidget(
+  widgetId: string,
+  data: Partial<DashboardWidgetInput>,
+) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Verify ownership
+    const widget = await prisma.dashboardWidget.findUnique({
+      where: { id: widgetId },
+    });
+
+    if (!widget || widget.userId !== user.id) {
+      return { success: false, error: "Widget not found" };
+    }
+
+    // Build update data object dynamically
+    const updateData: any = {};
+    if (data.referenceId !== undefined)
+      updateData.referenceId = data.referenceId;
+    if (data.tableId !== undefined) updateData.tableId = data.tableId;
+    if (data.settings !== undefined)
+      updateData.settings = data.settings ?? Prisma.DbNull;
+    // We don't typically update widgetType, but could if needed
+
+    await prisma.dashboardWidget.update({
+      where: { id: widgetId },
+      data: updateData,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating widget:", error);
+    return { success: false, error: "Failed to update widget" };
+  }
+}
+
+/**
+ * Update widget settings (e.g. valid for custom widgets)
+ */
+export async function updateDashboardWidgetSettings(
+  widgetId: string,
+  settings: any,
+) {
+  return updateDashboardWidget(widgetId, { settings });
 }

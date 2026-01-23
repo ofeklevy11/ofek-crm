@@ -1,9 +1,9 @@
-"use client";
-
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { X, List } from "lucide-react";
+import { X, List, Eye, EyeOff, Settings } from "lucide-react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
 import {
   BarChart,
   Bar,
@@ -21,15 +21,16 @@ import {
 } from "recharts";
 
 // Chart colors for consistency
+// Chart colors for consistency (matching AnalyticsGraph)
 const CHART_COLORS = [
-  "#4f46e5",
-  "#ec4899",
-  "#10b981",
-  "#f59e0b",
-  "#6366f1",
-  "#8b5cf6",
-  "#14b8a6",
-  "#f97316",
+  "#6366f1", // Indigo 500
+  "#8b5cf6", // Violet 500
+  "#ec4899", // Pink 500
+  "#f43f5e", // Rose 500
+  "#f59e0b", // Amber 500
+  "#10b981", // Emerald 500
+  "#3b82f6", // Blue 500
+  "#06b6d4", // Cyan 500
 ];
 
 // Available colors for the cards (matching existing app)
@@ -167,6 +168,9 @@ interface AnalyticsWidgetProps {
   view: any; // The analytics data object
   onRemove: () => void;
   onOpenDetails?: (view: any) => void;
+  onEdit?: () => void;
+  settings?: any;
+  onSettingsChange?: (newSettings: any) => void;
 }
 
 export default function AnalyticsWidget({
@@ -174,7 +178,11 @@ export default function AnalyticsWidget({
   view,
   onRemove,
   onOpenDetails,
+  onEdit,
+  settings,
+  onSettingsChange,
 }: AnalyticsWidgetProps) {
+  const router = useRouter();
   const {
     attributes,
     listeners,
@@ -189,6 +197,34 @@ export default function AnalyticsWidget({
     transition,
     zIndex: isDragging ? 50 : "auto",
     opacity: isDragging ? 0.5 : 1,
+  };
+
+  const [isCollapsed, setIsCollapsed] = useState(settings?.collapsed || false);
+
+  const handleToggleCollapse = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const newCollapsed = !isCollapsed;
+    setIsCollapsed(newCollapsed);
+
+    try {
+      const newSettings = {
+        ...(settings || {}),
+        collapsed: newCollapsed,
+      };
+
+      await updateDashboardWidgetSettings(id, newSettings);
+
+      if (onSettingsChange) {
+        onSettingsChange(newSettings);
+      }
+      router.refresh();
+    } catch (err) {
+      console.error("Failed to update collapsed state", err);
+      // Revert on failure
+      setIsCollapsed(!newCollapsed);
+    }
   };
 
   const getAccentClass = (bgVal: string) => {
@@ -220,8 +256,10 @@ export default function AnalyticsWidget({
       style={style}
       {...attributes}
       {...listeners}
-      className={`group relative flex flex-col justify-between h-full bg-white rounded-2xl shadow-sm hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300 border border-gray-100 overflow-hidden cursor-grab active:cursor-grabbing ${
-        isGraph ? "min-h-[350px]" : "min-h-[280px]"
+      className={`group relative flex flex-col justify-between bg-white rounded-2xl shadow-sm hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300 border border-gray-100 overflow-hidden cursor-grab active:cursor-grabbing ${
+        isCollapsed
+          ? "h-auto"
+          : `h-full ${isGraph ? "min-h-[350px]" : "min-h-[280px]"}`
       }`}
     >
       {/* Top Accent Line */}
@@ -262,197 +300,272 @@ export default function AnalyticsWidget({
             {/* ConfigDetails hidden on dashboard for cleaner layout unless needed, keeping as per original */}
           </div>
 
-          <button
-            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors opacity-0 group-hover:opacity-100"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              onRemove();
-            }}
-            title="הסר מהדאשבורד"
-          >
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Hide / Show Toggle */}
+            <button
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleToggleCollapse}
+              title={isCollapsed ? "הצג" : "הסתר"}
+            >
+              {isCollapsed ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+
+            {/* Settings Button - Navigate to analytics page */}
+            <button
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                // Navigate to the appropriate analytics page
+                if (view.type === "GRAPH") {
+                  router.push("/analytics/graphs");
+                } else {
+                  router.push("/analytics");
+                }
+              }}
+              title="הגדרות"
+            >
+              <Settings size={16} />
+            </button>
+
+            <button
+              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onRemove();
+              }}
+              title="הסר מהדאשבורד"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
-        <div
-          className={`flex-1 w-full flex flex-col justify-center items-center my-4 ${
-            view.type === "GRAPH" ? "min-h-[220px]" : "min-h-[100px]"
-          }`}
-        >
-          {!view.stats ? (
-            <div className="text-center opacity-50">
-              <span className="text-4xl font-light text-gray-300">-</span>
-              <p className="text-xs text-gray-400 mt-2">אין נתונים</p>
-            </div>
-          ) : view.type === "GRAPH" && view.data?.length > 0 ? (
-            <div className="w-full" style={{ height: 250 }} dir="ltr">
-              <ResponsiveContainer width="100%" height={250}>
-                {view.config?.chartType === "line" ? (
-                  <LineChart data={view.data}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fontSize: 10 }}
-                      interval="preserveStartEnd"
-                      stroke="#9ca3af"
-                    />
-                    <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                    <Tooltip
-                      contentStyle={{
-                        direction: "rtl",
-                        borderRadius: "8px",
-                        border: "none",
-                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#4f46e5"
-                      strokeWidth={2}
-                      dot={{ fill: "#4f46e5", r: 4 }}
-                    />
-                  </LineChart>
-                ) : view.config?.chartType === "pie" ? (
-                  <PieChart margin={{ top: 20, bottom: 20 }}>
-                    <Pie
-                      data={view.data}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={4}
-                      dataKey="value"
-                      nameKey="name"
-                      label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
-                      labelLine={false}
-                    >
-                      {view.data.map((entry: any, index: number) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={CHART_COLORS[index % CHART_COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        direction: "rtl",
-                        borderRadius: "8px",
-                        border: "none",
-                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                      }}
-                      formatter={(value: any, name: string) => [
-                        value.toLocaleString(),
-                        name,
-                      ]}
-                    />
-                    <Legend
-                      layout="vertical"
-                      align="right"
-                      verticalAlign="middle"
-                      iconType="circle"
-                      iconSize={8}
-                      wrapperStyle={{
-                        fontSize: "12px",
-                        direction: "rtl",
-                        right: 0,
-                      }}
-                    />
-                  </PieChart>
-                ) : (
-                  <BarChart data={view.data}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fontSize: 10 }}
-                      interval="preserveStartEnd"
-                      stroke="#9ca3af"
-                    />
-                    <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                    <Tooltip
-                      cursor={{ fill: "#f9fafb" }}
-                      contentStyle={{
-                        direction: "rtl",
-                        borderRadius: "8px",
-                        border: "none",
-                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                      }}
-                      formatter={(value: any) => [
-                        value.toLocaleString(),
-                        view.stats.subMetric,
-                      ]}
-                    />
-                    <Bar
-                      dataKey="value"
-                      fill="#4f46e5"
-                      radius={[4, 4, 0, 0]}
-                      barSize={32}
-                    />
-                  </BarChart>
-                )}
-              </ResponsiveContainer>
-            </div>
-          ) : view.stats.mainMetric ? (
-            <div className="text-center w-full">
-              <div className="text-5xl font-extrabold text-gray-900 mb-1 tracking-tight truncate px-2 leading-none">
-                {view.stats.mainMetric}
+        {!isCollapsed && (
+          <div
+            className={`flex-1 w-full flex flex-col justify-center items-center my-4 ${
+              view.type === "GRAPH" ? "min-h-[220px]" : "min-h-[100px]"
+            }`}
+          >
+            {!view.stats ? (
+              <div className="text-center opacity-50">
+                <span className="text-4xl font-light text-gray-300">-</span>
+                <p className="text-xs text-gray-400 mt-2">אין נתונים</p>
               </div>
-              <p className="text-sm font-medium text-gray-500">
-                {view.stats.label || "ערך"}
-              </p>
-              {view.stats.subMetric && (
-                <p
-                  className="text-xs font-medium text-gray-400 mt-1 font-mono"
-                  dir="rtl"
-                >
-                  {view.stats.subMetric}
+            ) : view.type === "GRAPH" && view.data?.length > 0 ? (
+              <div className="w-full" style={{ height: 300 }} dir="ltr">
+                <ResponsiveContainer width="100%" height={300}>
+                  {view.config?.chartType === "line" ? (
+                    <LineChart data={view.data}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fontSize: 10 }}
+                        interval="preserveStartEnd"
+                        stroke="#9ca3af"
+                      />
+                      <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
+                      <Tooltip
+                        contentStyle={{
+                          direction: "rtl",
+                          borderRadius: "8px",
+                          border: "none",
+                          boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        stroke="#4f46e5"
+                        strokeWidth={2}
+                        dot={{ fill: "#4f46e5", r: 4 }}
+                      />
+                    </LineChart>
+                  ) : view.config?.chartType === "pie" ? (
+                    <PieChart margin={{ top: 20, bottom: 20 }}>
+                      <Pie
+                        data={view.data}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={80}
+                        outerRadius={110}
+                        paddingAngle={4}
+                        dataKey="value"
+                        nameKey="name"
+                        label={({
+                          cx,
+                          cy,
+                          midAngle,
+                          innerRadius,
+                          outerRadius,
+                          value,
+                          index,
+                          name,
+                          percent,
+                        }) => {
+                          const RADIAN = Math.PI / 180;
+                          const radius =
+                            25 + innerRadius + (outerRadius - innerRadius);
+                          const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                          const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+                          return (
+                            <text
+                              x={x}
+                              y={y}
+                              fill="#374151"
+                              textAnchor={x > cx ? "start" : "end"}
+                              dominantBaseline="central"
+                              className="text-[10px] font-medium"
+                            >
+                              <tspan
+                                x={x}
+                                dy="-0.6em"
+                                className="fill-gray-900 font-bold"
+                              >
+                                {name}
+                              </tspan>
+                              <tspan
+                                x={x}
+                                dy="1.4em"
+                                className="fill-gray-500 text-[9px]"
+                              >
+                                {`(${(percent * 100).toFixed(0)}%) ${value}`}
+                              </tspan>
+                            </text>
+                          );
+                        }}
+                        labelLine={{
+                          stroke: "#e5e7eb",
+                          strokeWidth: 1,
+                        }}
+                      >
+                        {view.data.map((entry: any, index: number) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={CHART_COLORS[index % CHART_COLORS.length]}
+                            stroke="transparent"
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          direction: "rtl",
+                          borderRadius: "8px",
+                          border: "none",
+                          boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                        }}
+                        formatter={(value: any, name: string) => [
+                          value.toLocaleString(),
+                          name,
+                        ]}
+                      />
+                    </PieChart>
+                  ) : (
+                    <BarChart data={view.data}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fontSize: 10 }}
+                        interval="preserveStartEnd"
+                        stroke="#9ca3af"
+                      />
+                      <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
+                      <Tooltip
+                        cursor={{ fill: "#f9fafb" }}
+                        contentStyle={{
+                          direction: "rtl",
+                          borderRadius: "8px",
+                          border: "none",
+                          boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                        }}
+                        formatter={(value: any) => [
+                          value.toLocaleString(),
+                          view.stats.subMetric,
+                        ]}
+                      />
+                      <Bar
+                        dataKey="value"
+                        fill="#4f46e5"
+                        radius={[4, 4, 0, 0]}
+                        barSize={32}
+                      >
+                        {view.data.map((entry: any, index: number) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={CHART_COLORS[index % CHART_COLORS.length]}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  )}
+                </ResponsiveContainer>
+              </div>
+            ) : view.stats.mainMetric ? (
+              <div className="text-center w-full">
+                <div className="text-5xl font-extrabold text-gray-900 mb-1 tracking-tight truncate px-2 leading-none">
+                  {view.stats.mainMetric}
+                </div>
+                <p className="text-sm font-medium text-gray-500">
+                  {view.stats.label || "ערך"}
                 </p>
-              )}
-            </div>
-          ) : view.stats.averageDuration ? (
-            <div className="text-center w-full">
-              <div className="text-4xl font-bold text-gray-900 mb-2 truncate">
-                {view.stats.averageDuration}
+                {view.stats.subMetric && (
+                  <p
+                    className="text-xs font-medium text-gray-400 mt-1 font-mono"
+                    dir="rtl"
+                  >
+                    {view.stats.subMetric}
+                  </p>
+                )}
               </div>
-              <p className="text-sm text-gray-500">ממוצע זמן</p>
-            </div>
-          ) : (
-            <div className="text-center opacity-50">
-              <span className="text-4xl font-light text-gray-300">-</span>
-              <p className="text-xs text-gray-400 mt-2">אין נתונים</p>
-            </div>
-          )}
-        </div>
+            ) : view.stats.averageDuration ? (
+              <div className="text-center w-full">
+                <div className="text-4xl font-bold text-gray-900 mb-2 truncate">
+                  {view.stats.averageDuration}
+                </div>
+                <p className="text-sm text-gray-500">ממוצע זמן</p>
+              </div>
+            ) : (
+              <div className="text-center opacity-50">
+                <span className="text-4xl font-light text-gray-300">-</span>
+                <p className="text-xs text-gray-400 mt-2">אין נתונים</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Footer */}
-      <div className="border-t border-gray-100 bg-gray-50/50 px-5 py-3 flex justify-between items-center text-xs text-gray-400 transition-colors group-hover:bg-gray-50">
-        <span className="font-medium">
-          {view.stats?.totalRecords || view.data?.length || 0} רשומות
-        </span>
-        <div className="flex items-center gap-2">
-          {/* Only show list icon for non-graph analytics */}
-          {view.type !== "GRAPH" &&
-            (view.data?.length > 0 || view.stats?.totalRecords > 0) &&
-            onOpenDetails && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenDetails(view);
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                className="group/list p-1.5 hover:bg-white hover:shadow-sm rounded-full transition-all text-blue-600 border border-transparent hover:border-blue-100"
-                title="צפה ברשימה המלאה"
-              >
-                <List
-                  size={16}
-                  className="group-hover/list:scale-110 transition-transform"
-                />
-              </button>
-            )}
+      {!isCollapsed && (
+        <div className="border-t border-gray-100 bg-gray-50/50 px-5 py-3 flex justify-between items-center text-xs text-gray-400 transition-colors group-hover:bg-gray-50">
+          <span className="font-medium">
+            {view.stats?.totalRecords || view.data?.length || 0} רשומות
+          </span>
+          <div className="flex items-center gap-2">
+            {/* Only show list icon for non-graph analytics */}
+            {view.type !== "GRAPH" &&
+              (view.data?.length > 0 || view.stats?.totalRecords > 0) &&
+              onOpenDetails && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenDetails(view);
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="group/list p-1.5 hover:bg-white hover:shadow-sm rounded-full transition-all text-blue-600 border border-transparent hover:border-blue-100"
+                  title="צפה ברשימה המלאה"
+                >
+                  <List
+                    size={16}
+                    className="group-hover/list:scale-110 transition-transform"
+                  />
+                </button>
+              )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

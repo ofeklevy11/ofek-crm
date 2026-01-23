@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { uploadFiles } from "@/lib/uploadthing";
 import { saveFileMetadata } from "@/app/actions/storage";
@@ -36,6 +36,8 @@ interface SchemaField {
   max?: number | string;
 }
 
+import { useSearchParams } from "next/navigation";
+
 export default function AddRecordForm({
   tableId,
   schema,
@@ -46,6 +48,7 @@ export default function AddRecordForm({
   tableName: string;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<Record<string, any>>({});
@@ -76,6 +79,15 @@ export default function AddRecordForm({
     setNewAttachmentName("");
     setIsOpen(true);
   };
+
+  // Auto-open if query param exists
+  useEffect(() => {
+    if (searchParams.get("new") === "true" && !isOpen) {
+      handleOpen();
+      // Optional: Clear the param to prevent reopening on generic refresh if desired,
+      // but keeping it allows bookmarking the "create page".
+    }
+  }, [searchParams]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;

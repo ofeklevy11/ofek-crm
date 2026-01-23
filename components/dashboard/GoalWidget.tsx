@@ -2,7 +2,8 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Trash2 } from "lucide-react";
+import { Trash2, Settings } from "lucide-react";
+import { useRouter } from "next/navigation";
 import GoalCard from "@/components/finance/GoalCard";
 import { GoalWithProgress } from "@/app/actions/goals";
 
@@ -21,6 +22,7 @@ export default function GoalWidget({
   tables,
   onRemove,
 }: GoalWidgetProps) {
+  const router = useRouter();
   const {
     attributes,
     listeners,
@@ -61,17 +63,31 @@ export default function GoalWidget({
         </div>
       </div>
 
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove();
-        }}
-        onPointerDown={(e) => e.stopPropagation()} // Important: stop drag when clicking remove
-        className="absolute top-2 left-2 bg-white/90 p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:text-red-500 z-10"
-        title="הסר מהדאשבורד"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
+      <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        {/* Settings Button - Navigate to goals page */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            router.push("/finance/goals");
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="bg-white/90 p-1.5 rounded-full shadow-sm hover:bg-gray-50 hover:text-gray-600 transition-colors"
+          title="הגדרות"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          onPointerDown={(e) => e.stopPropagation()} // Important: stop drag when clicking remove
+          className="bg-white/90 p-1.5 rounded-full shadow-sm hover:bg-red-50 hover:text-red-500 transition-colors"
+          title="הסר מהדאשבורד"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
     </div>
   );
 }
