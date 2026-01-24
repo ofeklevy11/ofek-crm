@@ -20,6 +20,7 @@ export function middleware(request: NextRequest) {
     publicPaths.includes(path) ||
     path.startsWith("/api/make/") || // Allow Make webhooks to bypass cookie auth
     path.startsWith("/api/cron/") || // Allow Cron jobs to bypass cookie auth (secured in route)
+    path.startsWith("/api/automations/") || // Allow automation cron endpoints to bypass cookie auth
     path.startsWith("/p/") || // Allow Public Pages
     path.startsWith("/api/p/") || // Allow Public APIs
     path.startsWith("/_next") ||

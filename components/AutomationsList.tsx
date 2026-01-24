@@ -75,12 +75,12 @@ export default function AutomationsList({
 
   const handleMoveToFolder = async (
     ruleId: number,
-    folderId: number | null
+    folderId: number | null,
   ) => {
     const { moveItemToFolder } = await import("@/app/actions/folders");
     await moveItemToFolder(ruleId, folderId, "AUTOMATION");
     const updatedRules = rules.map((r) =>
-      r.id === ruleId ? { ...r, folderId } : r
+      r.id === ruleId ? { ...r, folderId } : r,
     );
     setRules(updatedRules);
   };
@@ -95,7 +95,7 @@ export default function AutomationsList({
   const handleToggle = async (id: number, currentStatus: boolean) => {
     await toggleAutomationRule(id, !currentStatus);
     setRules(
-      rules.map((r) => (r.id === id ? { ...r, isActive: !currentStatus } : r))
+      rules.map((r) => (r.id === id ? { ...r, isActive: !currentStatus } : r)),
     );
   };
 
@@ -105,7 +105,7 @@ export default function AutomationsList({
       rule.actionConfig?.listId
     ) {
       router.push(
-        `/nurture-hub/${rule.actionConfig.listId}?openAutomation=true`
+        `/nurture-hub/${rule.actionConfig.listId}?openAutomation=true`,
       );
       return;
     }
@@ -188,6 +188,9 @@ export default function AutomationsList({
 
       case "RECORD_FIELD_CHANGE":
         return "שינוי ערך בשדה";
+
+      case "TIME_SINCE_CREATION":
+        return "זמן מאז יצירה";
 
       default:
         return rule.triggerType;
@@ -369,7 +372,7 @@ export default function AutomationsList({
                 const tableId = rule.triggerConfig?.tableId;
                 if (tableId) {
                   const tableName = tables.find(
-                    (t) => t.id === Number(tableId)
+                    (t) => t.id === Number(tableId),
                   )?.name;
                   if (tableName && !parts.includes(tableName)) {
                     // If clean parts don't include table name, append it
@@ -385,7 +388,7 @@ export default function AutomationsList({
                 // Fallback simple translation
                 displayName = displayName.replace(
                   "Nurture Auto-Add:",
-                  "הוספה אוטומטית:"
+                  "הוספה אוטומטית:",
                 );
               }
             }
@@ -489,7 +492,7 @@ export default function AutomationsList({
                       <p>
                         <span className="font-semibold">נשלח ל:</span>{" "}
                         {users.find(
-                          (u) => u.id === rule.actionConfig?.recipientId
+                          (u) => u.id === rule.actionConfig?.recipientId,
                         )?.name || "לא ידוע"}
                       </p>
                     )}

@@ -78,6 +78,17 @@ export async function createAutomationRule(data: {
       return { success: false, error: "Authentication required" };
     }
 
+    // Validate TIME_SINCE_CREATION with minutes unit
+    if (data.triggerType === "TIME_SINCE_CREATION") {
+      const { timeValue, timeUnit } = data.triggerConfig || {};
+      if (timeUnit === "minutes" && Number(timeValue) < 5) {
+        return {
+          success: false,
+          error: "בעת בחירת דקות, הזמן המינימלי הוא 5 דקות לפחות",
+        };
+      }
+    }
+
     let folderId: number | null = (data as any).folderId || null;
 
     // Auto-assign folder for specific triggers if no folder provided
@@ -344,6 +355,17 @@ export async function updateAutomationRule(
 
     if (!currentUser) {
       return { success: false, error: "Authentication required" };
+    }
+
+    // Validate TIME_SINCE_CREATION with minutes unit
+    if (data.triggerType === "TIME_SINCE_CREATION") {
+      const { timeValue, timeUnit } = data.triggerConfig || {};
+      if (timeUnit === "minutes" && Number(timeValue) < 5) {
+        return {
+          success: false,
+          error: "בעת בחירת דקות, הזמן המינימלי הוא 5 דקות לפחות",
+        };
+      }
     }
 
     const rule = await prisma.automationRule.update({
@@ -795,6 +817,19 @@ export async function processNewRecordTrigger(
       where: { isActive: true, triggerType: "NEW_RECORD" },
     });
 
+    // Pre-fetch record data to allow for condition checking
+    const record = await prisma.record.findUnique({
+      where: { id: recordId },
+    });
+
+    if (!record) {
+      console.log(
+        `[Automations] Record ${recordId} not found, skipping NEW_RECORD automations.`,
+      );
+      return;
+    }
+    const recordData = record.data as any;
+
     for (const rule of rules) {
       const triggerConfig = rule.triggerConfig as TriggerConfig;
 
@@ -806,6 +841,56 @@ export async function processNewRecordTrigger(
         parseInt(String(triggerConfig.tableId)) !== tableId
       )
         continue;
+
+      // --- NEW Condition Check (Optional) ---
+      if (triggerConfig.conditionColumnId) {
+        const colId = triggerConfig.conditionColumnId;
+        const recordVal = recordData[colId];
+        const targetVal = triggerConfig.conditionValue;
+
+        // If condition requires a value but record has none
+        if (recordVal === undefined || recordVal === null) continue;
+
+        if (triggerConfig.operator) {
+          // Numeric Comparison
+          const valNum = Number(recordVal);
+          const targetNum = Number(targetVal);
+
+          if (isNaN(valNum) || isNaN(targetNum)) continue;
+
+          let match = false;
+          switch (triggerConfig.operator) {
+            case "gt":
+              match = valNum > targetNum;
+              break;
+            case "lt":
+              match = valNum < targetNum;
+              break;
+            case "gte":
+              match = valNum >= targetNum;
+              break;
+            case "lte":
+              match = valNum <= targetNum;
+              break;
+            case "eq":
+              match = valNum === targetNum;
+              break;
+            case "neq":
+              match = valNum !== targetNum;
+              break;
+          }
+          if (!match) continue;
+        } else {
+          // String Comparison (Select/Text)
+          // If conditionValue is provided, it must match
+          if (
+            targetVal !== undefined &&
+            String(recordVal) !== String(targetVal)
+          ) {
+            continue;
+          }
+        }
+      }
 
       if (rule.actionType === "SEND_NOTIFICATION") {
         const actionConfig = rule.actionConfig as ActionConfig;
@@ -820,48 +905,43 @@ export async function processNewRecordTrigger(
           });
         }
       } else if (rule.actionType === "ADD_TO_NURTURE_LIST") {
-        const record = await prisma.record.findUnique({
-          where: { id: recordId },
-        });
-        if (record) {
-          const data = record.data as any;
-          const actionConfig = rule.actionConfig as any;
-          const mapping = actionConfig.mapping || {};
-          const name = data[mapping.name] || "Unknown";
-          const email = data[mapping.email] || "";
-          const phone = data[mapping.phone] || "";
+        const data = recordData;
+        const actionConfig = rule.actionConfig as any;
+        const mapping = actionConfig.mapping || {};
+        const name = data[mapping.name] || "Unknown";
+        const email = data[mapping.email] || "";
+        const phone = data[mapping.phone] || "";
 
-          if (email || phone) {
-            console.log(
-              `[Automations] 🟢 ADD_TO_NURTURE_LIST (New Record). Adding ${name} to ${actionConfig.listId}`,
-            );
+        if (email || phone) {
+          console.log(
+            `[Automations] 🟢 ADD_TO_NURTURE_LIST (New Record). Adding ${name} to ${actionConfig.listId}`,
+          );
 
-            const added = await addToNurtureList({
-              companyId: rule.companyId,
-              listSlug: actionConfig.listId,
-              name,
-              email,
-              phone,
-              sourceType: "TABLE",
-              sourceId: String(recordId),
-              sourceTableId: tableId,
-            });
+          const added = await addToNurtureList({
+            companyId: rule.companyId,
+            listSlug: actionConfig.listId,
+            name,
+            email,
+            phone,
+            sourceType: "TABLE",
+            sourceId: String(recordId),
+            sourceTableId: tableId,
+          });
 
-            if (added) {
-              // Send notification based on configuration
-              const notifyTo = actionConfig.notifyUserId || rule.createdBy;
-              const notifyMsg = actionConfig.notifyMessage
-                ? actionConfig.notifyMessage.replace("{name}", name)
-                : `הליד ${name} נוסף אוטומטית לרשימה "${actionConfig.listId}".`;
+          if (added) {
+            // Send notification based on configuration
+            const notifyTo = actionConfig.notifyUserId || rule.createdBy;
+            const notifyMsg = actionConfig.notifyMessage
+              ? actionConfig.notifyMessage.replace("{name}", name)
+              : `הליד ${name} נוסף אוטומטית לרשימה "${actionConfig.listId}".`;
 
-              if (actionConfig.sendNotification !== false && notifyTo) {
-                await sendNotification({
-                  userId: notifyTo,
-                  title: actionConfig.notifyTitle || "נוסף לרשימת תפוצה",
-                  message: notifyMsg,
-                  link: `/nurture-hub`,
-                });
-              }
+            if (actionConfig.sendNotification !== false && notifyTo) {
+              await sendNotification({
+                userId: notifyTo,
+                title: actionConfig.notifyTitle || "נוסף לרשימת תפוצה",
+                message: notifyMsg,
+                link: `/nurture-hub`,
+              });
             }
           }
         }
@@ -936,16 +1016,50 @@ export async function processRecordUpdate(
 
       if (newValue === undefined || oldValue === newValue) continue;
 
-      if (
-        triggerConfig.fromValue &&
-        String(oldValue) !== String(triggerConfig.fromValue)
-      )
-        continue;
-      if (
-        triggerConfig.toValue &&
-        String(newValue) !== String(triggerConfig.toValue)
-      )
-        continue;
+      // Numeric/Score Operator Check
+      if (triggerConfig.operator && triggerConfig.toValue !== undefined) {
+        const val = Number(newValue);
+        const target = Number(triggerConfig.toValue);
+
+        // If not a valid number, skip or treat as false?
+        // Let's assume strict number requirement for these operators
+        if (isNaN(val) || isNaN(target)) continue;
+
+        let match = false;
+        switch (triggerConfig.operator) {
+          case "gt":
+            match = val > target;
+            break;
+          case "lt":
+            match = val < target;
+            break;
+          case "gte":
+            match = val >= target;
+            break;
+          case "lte":
+            match = val <= target;
+            break;
+          case "eq":
+            match = val === target;
+            break; // Note: strict number equality
+          case "neq":
+            match = val !== target;
+            break;
+        }
+        if (!match) continue;
+      } else {
+        // Default String Equality Check
+        if (
+          triggerConfig.fromValue &&
+          String(oldValue) !== String(triggerConfig.fromValue)
+        )
+          continue;
+        if (
+          triggerConfig.toValue &&
+          String(newValue) !== String(triggerConfig.toValue)
+        )
+          continue;
+      }
 
       if (rule.actionType === "SEND_NOTIFICATION") {
         const actionConfig = rule.actionConfig as ActionConfig;

@@ -82,6 +82,9 @@ export default function AutomationModal({
   const [toValue, setToValue] = useState(
     editingRule?.triggerConfig?.toValue || "",
   );
+  const [operator, setOperator] = useState(
+    editingRule?.triggerConfig?.operator || "",
+  );
 
   // Time Based Trigger specific
   const [timeValue, setTimeValue] = useState(
@@ -105,7 +108,8 @@ export default function AutomationModal({
     if (
       tableId &&
       (triggerType === "RECORD_FIELD_CHANGE" ||
-        triggerType === "TIME_SINCE_CREATION")
+        triggerType === "TIME_SINCE_CREATION" ||
+        triggerType === "NEW_RECORD")
     ) {
       setLoadingColumns(true);
       getTableById(Number(tableId))
@@ -126,6 +130,13 @@ export default function AutomationModal({
       setColumns([]);
     }
   }, [tableId, triggerType]);
+
+  // Auto-adjust timeValue when switching to minutes with value < 5
+  useEffect(() => {
+    if (timeUnit === "minutes" && timeValue && Number(timeValue) < 5) {
+      setTimeValue("5");
+    }
+  }, [timeUnit, timeValue]);
 
   const [recipientId, setRecipientId] = useState(
     editingRule?.actionConfig?.recipientId?.toString() || "",
@@ -163,6 +174,12 @@ export default function AutomationModal({
     selectedColumn &&
     (selectedColumn.type === "select" || selectedColumn.type === "multiSelect");
 
+  const isNumericColumn =
+    selectedColumn &&
+    ["number", "currency", "percent", "rating", "score", "autoNumber"].includes(
+      selectedColumn.type,
+    );
+
   const selectedConditionColumn = columns.find(
     (c) => c.id === conditionColumnId || c.name === conditionColumnId,
   );
@@ -182,13 +199,18 @@ export default function AutomationModal({
       if (triggerType === "TASK_STATUS_CHANGE") {
         triggerConfig = { toStatus: toStatus === "any" ? undefined : toStatus };
       } else if (triggerType === "NEW_RECORD") {
-        triggerConfig = { tableId };
-      } else if (triggerType === "RECORD_FIELD_CHANGE") {
         triggerConfig = {
           tableId,
+          conditionColumnId,
+          conditionValue,
+          operator: operator || undefined,
+        };
+      } else if (triggerType === "RECORD_FIELD_CHANGE") {
+        triggerConfig = {
           columnId,
           fromValue: fromValue || undefined,
           toValue: toValue || undefined,
+          operator: operator || undefined,
         };
       } else if (triggerType === "TIME_SINCE_CREATION") {
         triggerConfig = {
@@ -234,7 +256,7 @@ export default function AutomationModal({
         onCreated();
         onClose();
       } else {
-        alert("Failed to save automation");
+        alert(result.error || "Failed to save automation");
       }
     } catch (error) {
       console.error(error);
@@ -250,7 +272,12 @@ export default function AutomationModal({
     if (triggerType === "NEW_RECORD") return !!tableId;
     if (triggerType === "TASK_STATUS_CHANGE") return true;
     if (triggerType === "RECORD_FIELD_CHANGE") return !!tableId && !!columnId;
-    if (triggerType === "TIME_SINCE_CREATION") return !!tableId && !!timeValue;
+    if (triggerType === "TIME_SINCE_CREATION") {
+      if (!tableId || !timeValue) return false;
+      // If minutes selected, minimum is 5
+      if (timeUnit === "minutes" && Number(timeValue) < 5) return false;
+      return true;
+    }
     return false;
   };
   const canSubmit = () => {
@@ -392,6 +419,91 @@ export default function AutomationModal({
         </div>
       )}
 
+      {/* New Record Specific */}
+      {triggerType === "NEW_RECORD" && tableId && (
+        <div className="space-y-4 border-t pt-4">
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              תנאי נוסף (רק אם...)
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <select
+                value={conditionColumnId}
+                onChange={(e) => {
+                  setConditionColumnId(e.target.value);
+                  setConditionValue("");
+                  setOperator("");
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              >
+                <option value="">תמיד (כל רשומה חדשה)</option>
+                {columns.map((col: any) => (
+                  <option key={col.id || col.name} value={col.name}>
+                    {col.label || col.name}
+                  </option>
+                ))}
+              </select>
+
+              {conditionColumnId &&
+                (isSelectConditionColumn ? (
+                  <select
+                    value={conditionValue}
+                    onChange={(e) => setConditionValue(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  >
+                    <option value="">בחר ערך...</option>
+                    {selectedConditionColumn?.options?.map((opt: string) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                ) : // Check if numeric column for operator support
+                selectedConditionColumn &&
+                  [
+                    "number",
+                    "currency",
+                    "percent",
+                    "rating",
+                    "score",
+                    "autoNumber",
+                  ].includes(selectedConditionColumn.type) ? (
+                  <div className="flex gap-2">
+                    <select
+                      value={operator}
+                      onChange={(e) => setOperator(e.target.value)}
+                      className="w-1/3 px-2 py-2 border border-gray-300 rounded-md text-sm"
+                    >
+                      <option value="">אופרטור</option>
+                      <option value="gt">&gt;</option>
+                      <option value="lt">&lt;</option>
+                      <option value="eq">=</option>
+                      <option value="neq">≠</option>
+                      <option value="gte">≥</option>
+                      <option value="lte">≤</option>
+                    </select>
+                    <input
+                      type="number"
+                      value={conditionValue}
+                      onChange={(e) => setConditionValue(e.target.value)}
+                      placeholder="ערך..."
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    />
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={conditionValue}
+                    onChange={(e) => setConditionValue(e.target.value)}
+                    placeholder="ערך שווה ל..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  />
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Field Change Specific */}
       {triggerType === "RECORD_FIELD_CHANGE" && tableId && (
         <div className="space-y-4 border-t pt-4">
@@ -411,6 +523,7 @@ export default function AutomationModal({
                   setColumnId(e.target.value);
                   setFromValue("");
                   setToValue("");
+                  setOperator("");
                 }}
                 className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500"
               >
@@ -425,64 +538,101 @@ export default function AutomationModal({
           </div>
 
           {selectedColumn && (
-            <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  ערך מקור (אופציונלי)
-                </label>
-                {isSelectColumn ? (
-                  <select
-                    value={fromValue}
-                    onChange={(e) => setFromValue(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border rounded text-sm"
-                  >
-                    <option value="">הכל</option>
-                    {selectedColumn.options?.map((opt: string) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    value={fromValue}
-                    onChange={(e) => setFromValue(e.target.value)}
-                    placeholder="הכל"
-                    className="w-full px-3 py-2 bg-white border rounded text-sm"
-                  />
-                )}
-              </div>
-              <div className="flex items-center justify-center pt-5">
-                <ArrowLeft className="text-gray-400" size={20} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  ערך חדש (אופציונלי)
-                </label>
-                {isSelectColumn ? (
-                  <select
-                    value={toValue}
-                    onChange={(e) => setToValue(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border rounded text-sm"
-                  >
-                    <option value="">הכל</option>
-                    {selectedColumn.options?.map((opt: string) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    value={toValue}
-                    onChange={(e) => setToValue(e.target.value)}
-                    placeholder="הכל"
-                    className="w-full px-3 py-2 bg-white border rounded text-sm"
-                  />
-                )}
-              </div>
+            <div className="bg-gray-50 p-4 rounded-lg">
+              {isNumericColumn ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      תנאי
+                    </label>
+                    <select
+                      value={operator}
+                      onChange={(e) => setOperator(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border rounded text-sm"
+                    >
+                      <option value="">בחר אופרטור...</option>
+                      <option value="gt">גדול מ ( &gt; )</option>
+                      <option value="lt">קטן מ ( &lt; )</option>
+                      <option value="eq">שווה ל ( = )</option>
+                      <option value="neq">לא שווה ל ( ≠ )</option>
+                      <option value="gte">גדול או שווה ( ≥ )</option>
+                      <option value="lte">קטן או שווה ( ≤ )</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      ערך
+                    </label>
+                    <input
+                      type="number"
+                      value={toValue}
+                      onChange={(e) => setToValue(e.target.value)}
+                      placeholder="הכנס מספר..."
+                      className="w-full px-3 py-2 bg-white border rounded text-sm"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      ערך מקור (אופציונלי)
+                    </label>
+                    {isSelectColumn ? (
+                      <select
+                        value={fromValue}
+                        onChange={(e) => setFromValue(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border rounded text-sm"
+                      >
+                        <option value="">הכל</option>
+                        {selectedColumn.options?.map((opt: string) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={fromValue}
+                        onChange={(e) => setFromValue(e.target.value)}
+                        placeholder="הכל"
+                        className="w-full px-3 py-2 bg-white border rounded text-sm"
+                      />
+                    )}
+                  </div>
+                  <div className="flex items-center justify-center pt-5">
+                    <ArrowLeft className="text-gray-400" size={20} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      ערך חדש (אופציונלי)
+                    </label>
+                    {isSelectColumn ? (
+                      <select
+                        value={toValue}
+                        onChange={(e) => setToValue(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border rounded text-sm"
+                      >
+                        <option value="">הכל</option>
+                        {selectedColumn.options?.map((opt: string) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={toValue}
+                        onChange={(e) => setToValue(e.target.value)}
+                        placeholder="הכל"
+                        className="w-full px-3 py-2 bg-white border rounded text-sm"
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -498,11 +648,11 @@ export default function AutomationModal({
               </label>
               <input
                 type="number"
-                min="1"
+                min={timeUnit === "minutes" ? "5" : "1"}
                 value={timeValue}
                 onChange={(e) => setTimeValue(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                placeholder="1"
+                placeholder={timeUnit === "minutes" ? "5" : "1"}
               />
             </div>
             <div className="flex-1">
@@ -521,6 +671,15 @@ export default function AutomationModal({
             </div>
             <div className="mb-2 text-gray-500 font-medium">לאחר היצירה</div>
           </div>
+          {timeUnit === "minutes" && (
+            <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg text-sm text-orange-800 flex gap-2 items-start">
+              <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+              <span>
+                <strong>שים לב:</strong> בעת בחירת דקות, הזמן המינימלי הוא 5
+                דקות לפחות.
+              </span>
+            </div>
+          )}
           <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg text-sm text-blue-800 flex gap-2 items-start">
             <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
             <span>
