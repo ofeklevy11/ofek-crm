@@ -270,15 +270,14 @@ export default function AnalyticsWidget({
         <div className="flex justify-between items-start">
           <div className="flex-1 overflow-hidden">
             <div className="flex items-center gap-2 mb-2">
-              <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                  isAutomation
-                    ? "bg-indigo-50 text-indigo-700 border-indigo-100"
-                    : "bg-gray-50 text-gray-600 border-gray-100"
-                }`}
-              >
-                {isAutomation ? "אוטומציה" : "אנליטיקה"}
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-100">
+                אנליטיקה
               </span>
+              {isAutomation && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-100">
+                  מקור האנליטיקה מאוטומציה
+                </span>
+              )}
               {isGraph && (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-pink-50 text-pink-700 border-pink-100">
                   גרף

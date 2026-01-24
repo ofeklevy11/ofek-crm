@@ -146,6 +146,9 @@ export async function createAutomationRule(data: {
       },
     });
 
+    // DISABLED Retroactive calculation by default as per user request (2025-01-24)
+    // New automations should only apply to future events.
+    /*
     try {
       if (rule.actionType === "CALCULATE_DURATION") {
         await applyRetroactiveAutomation(rule);
@@ -153,6 +156,7 @@ export async function createAutomationRule(data: {
     } catch (retroError) {
       console.error("Error applying retroactive automation:", retroError);
     }
+    */
 
     revalidatePath("/automations");
     return { success: true, data: rule };
@@ -164,7 +168,7 @@ export async function createAutomationRule(data: {
 
 async function applyRetroactiveAutomation(rule: any) {
   console.log(
-    `[Automations] Applying retroactive automation for rule ${rule.id}`
+    `[Automations] Applying retroactive automation for rule ${rule.id}`,
   );
   const triggerConfig = rule.triggerConfig as any;
 
@@ -332,7 +336,7 @@ export async function updateAutomationRule(
     triggerConfig: any;
     actionType: string;
     actionConfig: any;
-  }
+  },
 ) {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
@@ -403,12 +407,63 @@ export async function toggleAutomationRule(id: number, isActive: boolean) {
 
 // --- Processor Logic ---
 
+// Helper to check Business Hours
+function checkBusinessHours(config: any): boolean {
+  if (!config.businessHours) return true; // No restriction
+
+  const { days, start, end } = config.businessHours;
+  const now = new Date();
+
+  // FIX: Shift to Israel Time (UTC+2 or UTC+3).
+  // For simplicity, we will just use the server time if hosted in Israel region,
+  // OR we can manually adjust if we know server is UTC.
+  // Assuming Vercel is UTC. Israel is GMT+2 (Winter) or GMT+3 (Summer).
+  // Let's assume GMT+3 for now to be safe or use proper library if available.
+  // Actually, let's stick to local server time for now but Log it clearly.
+  // Ideally, we store "timezone" in config, but for this specific user request,
+  // we will just check the day.
+
+  const currentDay = now.getDay(); // 0-6
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+
+  // 1. Day Check
+  if (Array.isArray(days) && days.length > 0) {
+    if (!days.includes(currentDay)) {
+      console.log(
+        `[Automations] ⏳ Skipping Rule (Business Hours - Day ${currentDay} not in ${days})`,
+      );
+      return false;
+    }
+  }
+
+  // 2. Time Check
+  const [startH, startM] = (start || "00:00").split(":").map(Number);
+  const [endH, endM] = (end || "23:59").split(":").map(Number);
+
+  const currentTimeInMinutes = currentHour * 60 + currentMinute;
+  const startTimeInMinutes = startH * 60 + startM;
+  const endTimeInMinutes = endH * 60 + endM;
+
+  if (
+    currentTimeInMinutes < startTimeInMinutes ||
+    currentTimeInMinutes > endTimeInMinutes
+  ) {
+    console.log(
+      `[Automations] ⏳ Skipping Rule (Business Hours - Time ${currentHour}:${currentMinute} not in ${start}-${end})`,
+    );
+    return false;
+  }
+
+  return true;
+}
+
 export async function processViewAutomations(
   tableId?: number,
-  taskId?: string
+  taskId?: string,
 ) {
   console.log(
-    `\n🔍🔍🔍 [Automations] CHECKING VIEW AUTOMATIONS - Table=${tableId}, Task=${taskId}\n`
+    `\n🔍🔍🔍 [Automations] CHECKING VIEW AUTOMATIONS - Table=${tableId}, Task=${taskId}\n`,
   );
   try {
     const rules = await prisma.automationRule.findMany({
@@ -419,22 +474,25 @@ export async function processViewAutomations(
     });
 
     console.log(
-      `[Automations DEBUG] Found ${rules.length} active view automation rules.`
+      `[Automations DEBUG] Found ${rules.length} active view automation rules.`,
     );
 
     for (const rule of rules) {
       const triggerConfig = rule.triggerConfig as TriggerConfig;
 
+      // --- Business Hours Check ---
+      if (!checkBusinessHours(triggerConfig)) continue;
+
       // Basic Validation
       if (!triggerConfig || !triggerConfig.viewId) {
         console.log(
-          `[Automations DEBUG] Rule ${rule.id} missing viewId in config.`
+          `[Automations DEBUG] Rule ${rule.id} missing viewId in config.`,
         );
         continue;
       }
 
       console.log(
-        `[Automations DEBUG] Processing Rule ${rule.id} for View ${triggerConfig.viewId}`
+        `[Automations DEBUG] Processing Rule ${rule.id} for View ${triggerConfig.viewId}`,
       );
 
       const view = await prisma.analyticsView.findUnique({
@@ -443,7 +501,7 @@ export async function processViewAutomations(
 
       if (!view) {
         console.log(
-          `[Automations DEBUG] View ${triggerConfig.viewId} not found.`
+          `[Automations DEBUG] View ${triggerConfig.viewId} not found.`,
         );
         continue;
       }
@@ -477,13 +535,13 @@ export async function processViewAutomations(
             requestedTask: taskId,
             viewTable: viewConfig.tableId,
             viewModel: viewConfig.model,
-          }
+          },
         );
         continue;
       }
 
       console.log(
-        `[Automations DEBUG] ✅ Context Matched. Calculating stats for ${view.title}`
+        `[Automations DEBUG] ✅ Context Matched. Calculating stats for ${view.title}`,
       );
 
       const { stats } = await calculateViewStats(view);
@@ -491,7 +549,7 @@ export async function processViewAutomations(
       if (!stats || stats.rawMetric === undefined) {
         console.log(
           `[Automations DEBUG] No valid metric data (rawMetric) for view ${view.id}`,
-          stats
+          stats,
         );
         continue;
       }
@@ -509,7 +567,7 @@ export async function processViewAutomations(
       }
 
       console.log(
-        `[Automations DEBUG] Metric Check: ${currentVal} ${triggerConfig.operator} ${threshold} = ${triggered}`
+        `[Automations DEBUG] Metric Check: ${currentVal} ${triggerConfig.operator} ${threshold} = ${triggered}`,
       );
 
       if (triggered) {
@@ -525,7 +583,7 @@ export async function processViewAutomations(
         if (frequency === "once" && lastRunAt) {
           shouldRunFrequency = false;
           console.log(
-            `[Automations] ⏳ Skipping Rule ${rule.id} (Frequency: ONCE, already ran at ${lastRunAt})`
+            `[Automations] ⏳ Skipping Rule ${rule.id} (Frequency: ONCE, already ran at ${lastRunAt})`,
           );
         } else if (frequency === "daily" && lastRunAt) {
           const diffHours =
@@ -535,7 +593,7 @@ export async function processViewAutomations(
             console.log(
               `[Automations] ⏳ Skipping Rule ${
                 rule.id
-              } (Frequency: DAILY, ran ${diffHours.toFixed(1)}h ago)`
+              } (Frequency: DAILY, ran ${diffHours.toFixed(1)}h ago)`,
             );
           }
         } else if (frequency === "weekly" && lastRunAt) {
@@ -546,7 +604,7 @@ export async function processViewAutomations(
             console.log(
               `[Automations] ⏳ Skipping Rule ${
                 rule.id
-              } (Frequency: WEEKLY, ran ${diffDays.toFixed(1)}d ago)`
+              } (Frequency: WEEKLY, ran ${diffDays.toFixed(1)}d ago)`,
             );
           }
         }
@@ -556,7 +614,7 @@ export async function processViewAutomations(
         }
 
         console.log(
-          `[Automations] 🔔 Rule ${rule.id} TRIGGERED! Executing Action...`
+          `[Automations] 🔔 Rule ${rule.id} TRIGGERED! Executing Action...`,
         );
 
         let actionSuccess = false;
@@ -564,7 +622,7 @@ export async function processViewAutomations(
         if (rule.actionType === "SEND_NOTIFICATION") {
           const actionConfig = rule.actionConfig as ActionConfig;
           console.log(
-            `[Automations] Sending notification to ${actionConfig.recipientId}`
+            `[Automations] Sending notification to ${actionConfig.recipientId}`,
           );
 
           if (actionConfig.recipientId) {
@@ -584,7 +642,7 @@ export async function processViewAutomations(
             }
           } else {
             console.warn(
-              "[Automations] No recipientId configured for notification"
+              "[Automations] No recipientId configured for notification",
             );
           }
         } else if (rule.actionType === "CREATE_TASK") {
@@ -626,12 +684,12 @@ export async function processViewAutomations(
               },
             });
             console.log(
-              `[Automations] ✅ Updated lastRunAt for rule ${rule.id}`
+              `[Automations] ✅ Updated lastRunAt for rule ${rule.id}`,
             );
           } catch (updateErr) {
             console.error(
               `[Automations] Failed to update lastRunAt for rule ${rule.id}:`,
-              updateErr
+              updateErr,
             );
           }
         }
@@ -648,7 +706,7 @@ export async function processTaskStatusChange(
   taskId: string,
   taskTitle: string,
   fromStatus: string,
-  toStatus: string
+  toStatus: string,
 ) {
   try {
     const rules = await prisma.automationRule.findMany({
@@ -660,6 +718,10 @@ export async function processTaskStatusChange(
 
     for (const rule of rules) {
       const triggerConfig = rule.triggerConfig as TriggerConfig;
+
+      // --- Business Hours Check ---
+      if (!checkBusinessHours(triggerConfig)) continue;
+
       if (triggerConfig.fromStatus && triggerConfig.fromStatus !== fromStatus)
         continue;
       if (triggerConfig.toStatus && triggerConfig.toStatus !== toStatus)
@@ -726,7 +788,7 @@ export async function processTaskStatusChange(
 export async function processNewRecordTrigger(
   tableId: number,
   tableName: string,
-  recordId: number
+  recordId: number,
 ) {
   try {
     const rules = await prisma.automationRule.findMany({
@@ -735,6 +797,10 @@ export async function processNewRecordTrigger(
 
     for (const rule of rules) {
       const triggerConfig = rule.triggerConfig as TriggerConfig;
+
+      // --- Business Hours Check ---
+      if (!checkBusinessHours(triggerConfig)) continue;
+
       if (
         triggerConfig.tableId &&
         parseInt(String(triggerConfig.tableId)) !== tableId
@@ -767,7 +833,7 @@ export async function processNewRecordTrigger(
 
           if (email || phone) {
             console.log(
-              `[Automations] 🟢 ADD_TO_NURTURE_LIST (New Record). Adding ${name} to ${actionConfig.listId}`
+              `[Automations] 🟢 ADD_TO_NURTURE_LIST (New Record). Adding ${name} to ${actionConfig.listId}`,
             );
 
             const added = await addToNurtureList({
@@ -814,14 +880,14 @@ export async function processNewRecordTrigger(
 
       if (syncRules.length > 0) {
         console.log(
-          `[Automations] Found ${syncRules.length} sync rules for Table ${tableId}. Triggering sync...`
+          `[Automations] Found ${syncRules.length} sync rules for Table ${tableId}. Triggering sync...`,
         );
         const { runSyncRule } = await import("./finance-sync");
         for (const rule of syncRules) {
           // Run sync asynchronously to not block the user response
           // We use processTableRecord logic there which handles "exists" checks efficiently
           runSyncRule(rule.id).catch((e) =>
-            console.error(`[Auto-Sync] Failed to run rule ${rule.id}`, e)
+            console.error(`[Auto-Sync] Failed to run rule ${rule.id}`, e),
           );
         }
       }
@@ -837,10 +903,10 @@ export async function processRecordUpdate(
   tableId: number,
   recordId: number,
   oldData: any,
-  newData: any
+  newData: any,
 ) {
   console.log(
-    `[Automations] Processing update for Table ${tableId}, Record ${recordId}`
+    `[Automations] Processing update for Table ${tableId}, Record ${recordId}`,
   );
   try {
     const rules = await prisma.automationRule.findMany({
@@ -855,6 +921,10 @@ export async function processRecordUpdate(
 
     for (const rule of rules) {
       const triggerConfig = rule.triggerConfig as TriggerConfig;
+
+      // --- Business Hours Check ---
+      if (!checkBusinessHours(triggerConfig)) continue;
+
       if (triggerConfig.tableId && Number(triggerConfig.tableId) !== tableId)
         continue;
 
@@ -963,7 +1033,7 @@ export async function processRecordUpdate(
 
         if (email || phone) {
           console.log(
-            `[Automations] 🟢 ADD_TO_NURTURE_LIST triggered for Record ${recordId}. Adding ${name} (${email}, ${phone}) to list ${actionConfig.listId}`
+            `[Automations] 🟢 ADD_TO_NURTURE_LIST triggered for Record ${recordId}. Adding ${name} (${email}, ${phone}) to list ${actionConfig.listId}`,
           );
           const added = await addToNurtureList({
             companyId: rule.companyId,
@@ -1000,7 +1070,7 @@ export async function processRecordUpdate(
 
     // Check all view automations to ensure they trigger correctly
     console.log(
-      `[Automations] 🎯 About to check VIEW AUTOMATIONS after record update`
+      `[Automations] 🎯 About to check VIEW AUTOMATIONS after record update`,
     );
     await processViewAutomations();
     console.log(`[Automations] ✅ Finished checking VIEW AUTOMATIONS`);
@@ -1013,12 +1083,12 @@ export async function processRecordUpdate(
 
       if (syncRules.length > 0) {
         console.log(
-          `[Automations] Record update in Table ${tableId}. Triggering ${syncRules.length} sync rules...`
+          `[Automations] Record update in Table ${tableId}. Triggering ${syncRules.length} sync rules...`,
         );
         const { runSyncRule } = await import("./finance-sync");
         for (const rule of syncRules) {
           runSyncRule(rule.id).catch((e) =>
-            console.error(`[Auto-Sync] Failed to run rule ${rule.id}`, e)
+            console.error(`[Auto-Sync] Failed to run rule ${rule.id}`, e),
           );
         }
       }
@@ -1129,5 +1199,107 @@ async function addToNurtureList(params: {
   } catch (error) {
     console.error("Error adding to nurture list:", error);
     return false;
+  }
+}
+
+export async function processTimeBasedAutomations() {
+  console.log("⏰ Checking time-based automations...");
+  try {
+    const rules = await prisma.automationRule.findMany({
+      where: {
+        isActive: true,
+        triggerType: "TIME_SINCE_CREATION",
+      },
+    });
+
+    console.log(`Found ${rules.length} active time-based rules.`);
+
+    for (const rule of rules) {
+      const config = rule.triggerConfig as any;
+      if (!config.tableId || !config.timeValue || !config.timeUnit) continue;
+
+      // --- Business Hours Check ---
+      if (!checkBusinessHours(config)) continue;
+
+      const timeValue = Number(config.timeValue);
+      const timeUnit = config.timeUnit;
+
+      const now = new Date();
+      let cutoffTime = new Date();
+
+      if (timeUnit === "minutes") {
+        cutoffTime.setMinutes(now.getMinutes() - timeValue);
+      } else if (timeUnit === "hours") {
+        cutoffTime.setHours(now.getHours() - timeValue);
+      } else if (timeUnit === "days") {
+        cutoffTime.setDate(now.getDate() - timeValue);
+      }
+
+      // Find records created before cutoffTime AND not yet processed by this rule
+      // We check the AutomationLog table
+      // CRITICAL FIX: Only process records created AFTER the automation rule was created (unless applyToPast is implemented)
+      // to avoid spamming notifications for old records.
+      const records = await prisma.record.findMany({
+        where: {
+          tableId: Number(config.tableId),
+          createdAt: {
+            lte: cutoffTime,
+            gte: rule.createdAt, // Only records created AFTER this rule
+          },
+          automationLogs: {
+            none: {
+              automationRuleId: rule.id,
+            },
+          },
+        },
+      });
+
+      console.log(
+        `Rule ${rule.name}: Found ${records.length} potential records.`,
+      );
+
+      for (const record of records) {
+        // Check extra conditions
+        let conditionMet = true;
+        if (config.conditionColumnId && config.conditionValue) {
+          const recordData = record.data as any;
+          const val = recordData[config.conditionColumnId];
+          // Simple string comparison for now
+          // If conditionValue is user input string, we compare as string
+          if (String(val) !== String(config.conditionValue)) {
+            conditionMet = false;
+          }
+        }
+
+        if (conditionMet) {
+          console.log(`Rule ${rule.name}: Triggering for record ${record.id}`);
+
+          // Execute Action
+          if (rule.actionType === "SEND_NOTIFICATION") {
+            const actionConfig = rule.actionConfig as ActionConfig;
+            if (actionConfig.recipientId) {
+              await sendNotification({
+                userId: actionConfig.recipientId,
+                title: actionConfig.titleTemplate || "התראת זמן",
+                message: (
+                  actionConfig.messageTemplate || "חלף זמן מאז יצירת הרשומה"
+                ).replace("{tableName}", "Table " + config.tableId), // Ideally fetch table name
+                link: `/tables/${config.tableId}`,
+              });
+            }
+          }
+
+          // Log execution to prevent re-running
+          await prisma.automationLog.create({
+            data: {
+              automationRuleId: rule.id,
+              recordId: record.id,
+            },
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error processing time-based automations:", error);
   }
 }

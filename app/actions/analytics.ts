@@ -269,11 +269,11 @@ export async function calculateViewStats(view: any) {
 
       const totalAll = Object.values(groups).reduce(
         (acc, g) => acc + g.total,
-        0
+        0,
       );
       const successAll = Object.values(groups).reduce(
         (acc, g) => acc + g.success,
-        0
+        0,
       );
       const globalRate =
         totalAll > 0 ? ((successAll / totalAll) * 100).toFixed(1) : "0";
@@ -459,7 +459,7 @@ export async function updateAnalyticsView(
     description?: string;
     config?: any;
     color?: string;
-  }
+  },
 ) {
   try {
     const user = await getCurrentUser();
@@ -539,7 +539,10 @@ export async function getAnalyticsData() {
         }
 
         const multiEventDurations = await prisma.multiEventDuration.findMany({
-          where: { automationRuleId: rule.id },
+          where: {
+            automationRuleId: rule.id,
+            createdAt: { gte: rule.createdAt }, // CRITICAL: Only count stats from rule creation onwards
+          },
           include: { record: true, task: true },
           orderBy: { createdAt: "desc" },
         });
@@ -555,7 +558,7 @@ export async function getAnalyticsData() {
                 (k) =>
                   k.toLowerCase().includes("name") ||
                   k.toLowerCase().includes("title") ||
-                  (typeof data[k] === "string" && data[k].length < 50)
+                  (typeof data[k] === "string" && data[k].length < 50),
               ) || "Record";
             title = data[titleField]
               ? String(data[titleField])
@@ -587,7 +590,7 @@ export async function getAnalyticsData() {
         if (items.length > 0) {
           const totalSeconds = items.reduce(
             (acc, item) => acc + item.totalDurationSeconds,
-            0
+            0,
           );
           const avg = Math.round(totalSeconds / items.length);
           const min = Math.min(...items.map((i) => i.totalDurationSeconds));
@@ -617,7 +620,10 @@ export async function getAnalyticsData() {
       } else if (rule.actionType === "CALCULATE_DURATION") {
         // ... (Existing Logic for Duration)
         const durations = await prisma.statusDuration.findMany({
-          where: { automationRuleId: rule.id },
+          where: {
+            automationRuleId: rule.id,
+            createdAt: { gte: rule.createdAt }, // CRITICAL: Only count stats from rule creation onwards
+          },
           include: { record: true, task: true },
           orderBy: { createdAt: "desc" },
         });
@@ -632,7 +638,7 @@ export async function getAnalyticsData() {
                 (k) =>
                   k.toLowerCase().includes("name") ||
                   k.toLowerCase().includes("title") ||
-                  (typeof data[k] === "string" && data[k].length < 50)
+                  (typeof data[k] === "string" && data[k].length < 50),
               ) || "Record";
             title = data[titleField]
               ? String(data[titleField])
@@ -658,16 +664,16 @@ export async function getAnalyticsData() {
         if (items.length > 0) {
           const totalSeconds = items.reduce(
             (acc, item) => acc + item.durationSeconds,
-            0
+            0,
           );
           const avg = Math.round(totalSeconds / items.length);
           stats = {
             averageDuration: formatSecondsToHebrew(avg),
             minDuration: formatSecondsToHebrew(
-              Math.min(...items.map((i) => i.durationSeconds))
+              Math.min(...items.map((i) => i.durationSeconds)),
             ),
             maxDuration: formatSecondsToHebrew(
-              Math.max(...items.map((i) => i.durationSeconds))
+              Math.max(...items.map((i) => i.durationSeconds)),
             ),
             totalRecords: items.length,
             averageSeconds: avg,
@@ -719,7 +725,7 @@ export async function getAnalyticsData() {
 }
 
 export async function updateAnalyticsViewOrder(
-  items: { id: number; type: "AUTOMATION" | "CUSTOM"; order: number }[]
+  items: { id: number; type: "AUTOMATION" | "CUSTOM"; order: number }[],
 ) {
   try {
     const user = await getCurrentUser();
@@ -752,7 +758,7 @@ export async function updateAnalyticsViewOrder(
 export async function updateAnalyticsViewColor(
   id: number,
   type: "AUTOMATION" | "CUSTOM",
-  color: string
+  color: string,
 ) {
   try {
     const user = await getCurrentUser();

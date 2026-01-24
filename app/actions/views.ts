@@ -217,6 +217,46 @@ export async function deleteView(viewId: number) {
       return { success: false, error: "התצוגה לא נמצאה." };
     }
 
+    // --- CLEANUP DASHBOARD WIDGETS ---
+    // Remove this view from any "Table Views" widgets (Mini Dashboard)
+    try {
+      const widgets = await prisma.dashboardWidget.findMany({
+        where: {
+          widgetType: "TABLE_VIEWS_DASHBOARD",
+        },
+      });
+
+      for (const widget of widgets) {
+        const settings = widget.settings as any;
+        if (settings?.views && Array.isArray(settings.views)) {
+          const originalLength = settings.views.length;
+          const newViews = settings.views.filter(
+            (v: any) => v.viewId !== viewId,
+          );
+
+          if (newViews.length !== originalLength) {
+            // Update widget with removed view
+            await prisma.dashboardWidget.update({
+              where: { id: widget.id },
+              data: {
+                settings: {
+                  ...settings,
+                  views: newViews,
+                },
+              },
+            });
+          }
+        }
+      }
+    } catch (cleanupError) {
+      console.error(
+        "Error cleaning up dashboard widgets for deleted view:",
+        cleanupError,
+      );
+      // We continue with view deletion even if widget cleanup fails
+    }
+    // ---------------------------------
+
     await prisma.view.delete({
       where: { id: viewId },
     });

@@ -31,7 +31,7 @@ export default function DynamicViewRenderer({
 }
 
 function CustomTableView({ title, data }: { title: string; data: any }) {
-  const { columns, records, hasMore, tableSlug } = data;
+  const { columns, records, hasMore, tableSlug, tableId } = data;
 
   if (!records || records.length === 0) {
     return (
@@ -112,7 +112,7 @@ function CustomTableView({ title, data }: { title: string; data: any }) {
       {hasMore && (
         <div className="mt-auto pt-3 border-t border-gray-100/50 flex justify-center">
           <Link
-            href={`/tables/${tableSlug}`}
+            href={`/tables/${tableId}`}
             className="text-xs text-blue-500 hover:text-blue-700 font-medium cursor-pointer transition-colors px-3 py-1 bg-blue-50/50 hover:bg-blue-50 rounded-full"
           >
             הצג עוד רשומות...

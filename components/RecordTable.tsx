@@ -824,6 +824,7 @@ export default function RecordTable({
                         selectedIds.length === filteredRecords.length
                       }
                       onCheckedChange={toggleSelectAll}
+                      className="border-gray-400 bg-white mr-4"
                     />
                   </TableHead>
                   <TableHead className="w-[50px]"></TableHead>
@@ -869,6 +870,7 @@ export default function RecordTable({
                       <Checkbox
                         checked={selectedIds.includes(record.id)}
                         onCheckedChange={() => toggleSelect(record.id)}
+                        className="border-gray-400 bg-white mr-4"
                       />
                     </TableCell>
                     <TableCell>

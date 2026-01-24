@@ -206,7 +206,7 @@ function AnalyticsCard({
   onColorChange: (
     id: number,
     type: "AUTOMATION" | "CUSTOM",
-    color: string
+    color: string,
   ) => void;
   onEdit: (view: any) => void;
   onAddAutomation: (view: any) => void;
@@ -375,7 +375,7 @@ function AnalyticsCard({
                             onColorChange(
                               view.ruleId,
                               "AUTOMATION",
-                              color.value
+                              color.value,
                             );
                         } else {
                           if (view.viewId)
@@ -554,7 +554,7 @@ export default function AnalyticsPage() {
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   async function fetchData() {
@@ -650,7 +650,7 @@ export default function AnalyticsPage() {
   const handleDeleteFolder = async (id: number) => {
     if (
       !confirm(
-        "האם אתה בטוח שברצונך למחוק את התיקייה? הViews לא יימחקו אלא יעברו לתיקייה הראשית."
+        "האם אתה בטוח שברצונך למחוק את התיקייה? הViews לא יימחקו אלא יעברו לתיקייה הראשית.",
       )
     )
       return;
@@ -663,7 +663,7 @@ export default function AnalyticsPage() {
   const handleColorChange = async (
     id: number,
     type: "AUTOMATION" | "CUSTOM",
-    color: string
+    color: string,
   ) => {
     if (!id) return;
     setViews((prev) =>
@@ -671,7 +671,7 @@ export default function AnalyticsPage() {
         if (type === "AUTOMATION" && v.ruleId === id) return { ...v, color };
         if (type === "CUSTOM" && v.viewId === id) return { ...v, color };
         return v;
-      })
+      }),
     );
     try {
       await updateAnalyticsViewColor(id, type, color);
@@ -682,11 +682,9 @@ export default function AnalyticsPage() {
 
   const handleDelete = async (view: any) => {
     if (view.source === "AUTOMATION") {
-      setToast({
-        message: "ה-VIEW מגיע מאוטומציות, נא למחוק את הview מעמוד אוטומציות",
-        type: "error",
-      });
-      setTimeout(() => setToast(null), 5000);
+      alert(
+        "על מנת למחוק אנליטיקה שנוצרה על ידי אוטומציה נצטרך למחוק את האוטומציה עצמה בעמוד אוטומציות.",
+      );
       return;
     }
 

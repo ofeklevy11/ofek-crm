@@ -301,23 +301,6 @@ export default function GoalCard({ goal, metrics, tables }: GoalCardProps) {
             <span>{goal.daysRemaining} ימים נותרו</span>
           </div>
         </div>
-
-        {goal.recommendation && !goal.isArchived && (
-          <div
-            className={`p-3 rounded-lg text-sm flex gap-3 items-start ${status.bg}`}
-          >
-            <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${status.color}`} />
-            <div>
-              <p className={`font-medium ${status.color}`}>תובנת המערכת</p>
-              <p className="text-gray-700 mt-0.5">{goal.recommendation}</p>
-              {goal.status !== "EXCEEDED" && goal.status !== "ON_TRACK" && (
-                <div className="mt-2 text-xs text-gray-500 font-medium">
-                  צפי סיום: {formattedProjected}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </Card>
   );

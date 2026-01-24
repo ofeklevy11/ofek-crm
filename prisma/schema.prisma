@@ -189,6 +189,7 @@ model AutomationRule {
   // Relation to the new time tracking tables
   statusDurations StatusDuration[]
   multiEventDurations MultiEventDuration[]
+  executedLogs    AutomationLog[]
 
   // Analytics View Configuration
   analyticsOrder Int?     @default(0)
@@ -289,6 +290,7 @@ model Record {
   files       File[]
   statusDurations StatusDuration[]
   multiEventDurations MultiEventDuration[]
+  automationLogs  AutomationLog[]
   
   @@index([companyId])
   @@index([tableId, companyId, createdAt(sort: Desc)]) // Composite index for table pagination
@@ -1323,4 +1325,18 @@ model ViewRefreshLog {
   view      View?    @relation(fields: [viewId], references: [id], onDelete: SetNull)
 
   @@index([userId, viewId, timestamp])
+}
+
+model AutomationLog {
+  id               Int            @id @default(autoincrement())
+  automationRuleId Int
+  recordId         Int
+  executedAt       DateTime       @default(now())
+  
+  automationRule   AutomationRule @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
+  record           Record         @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@unique([automationRuleId, recordId]) 
+  @@index([automationRuleId])
+  @@index([recordId])
 }

@@ -99,8 +99,14 @@ async function main() {
   }
   console.log(`Using company: ${company.name} (ID: ${company.id})`);
 
-  // 2. Find the TableMeta
-  const table = await prisma.tableMeta.findUnique({
+  // 2. Get a user for createdBy (to avoid foreign key errors)
+  const user = await prisma.user.findFirst({
+    where: { companyId: company.id },
+  });
+  const userId = user ? user.id : 1;
+
+  // 3. Find or Create the TableMeta
+  let table = await prisma.tableMeta.findUnique({
     where: {
       companyId_slug: {
         companyId: company.id,
@@ -110,21 +116,38 @@ async function main() {
   });
 
   if (!table) {
-    console.error(
-      `Error: Table with slug "${TABLE_SLUG}" not found for company "${company.name}".`,
-    );
-    console.log("Available tables:");
-    const tables = await prisma.tableMeta.findMany({
-      where: { companyId: company.id },
-      select: { slug: true, name: true },
-    });
-    tables.forEach((t) => console.log(`- ${t.name} (slug: ${t.slug})`));
-    process.exit(1);
+    console.log(`Table "${TABLE_SLUG}" not found. Creating it...`);
+
+    // Define schema
+    const schema = [
+      { name: "leadName", label: "שם הליד", type: "text" },
+      { name: "phoneNumber", label: "טלפון", type: "text" },
+      { name: "source", label: "מקור", type: "select", options: SOURCES },
+      { name: "status", label: "סטטוס", type: "select", options: STATUSES },
+      { name: "budget", label: "תקציב", type: "number" },
+      { name: "email", label: "אימייל", type: "text" },
+    ];
+
+    try {
+      table = await prisma.tableMeta.create({
+        data: {
+          name: "לידים",
+          slug: TABLE_SLUG,
+          schemaJson: schema,
+          companyId: company.id,
+          createdBy: userId,
+        },
+      });
+      console.log(`Created table: ${table.name} (ID: ${table.id})`);
+    } catch (createError) {
+      console.error("Error creating table:", createError);
+      process.exit(1);
+    }
+  } else {
+    console.log(`Found table: ${table.name} (ID: ${table.id})`);
   }
 
-  console.log(`Found table: ${table.name} (ID: ${table.id})`);
-
-  // 3. Generate Records
+  // 4. Generate Records
   const recordsData = [];
   for (let i = 0; i < RECORD_COUNT; i++) {
     const firstName = getRandomElement(FIRST_NAMES);
@@ -142,11 +165,11 @@ async function main() {
     const email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}${getRandomInt(1, 99)}@${emailDomain}`;
 
     const recordData = {
-      leadName: fullName, // Assuming 'leadName' is the column key
+      leadName: fullName,
       phoneNumber: generatePhoneNumber(),
       source: getRandomElement(SOURCES),
       status: getRandomElement(STATUSES),
-      budget: getRandomInt(1000, 50000), // Variable budget
+      budget: getRandomInt(1000, 50000),
       email: email,
     };
 
@@ -154,7 +177,7 @@ async function main() {
       companyId: company.id,
       tableId: table.id,
       data: recordData,
-      createdBy: 1, // Assuming admin/system user ID 1 exists
+      createdBy: userId,
     });
   }
 

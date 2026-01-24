@@ -172,6 +172,12 @@ export default function ViewsPanel({
             {planLabel} מוגבל ל-{maxViews} תצוגות בלבד.
           </p>
         )}
+        {!reachedLimit && views.length > 0 && plan !== "super" && (
+          <p className="text-xs text-center text-muted-foreground pt-1">
+            נותרו לך {maxViews - views.length} תצוגות נוספות לטבלה זאת (
+            {planLabel})
+          </p>
+        )}
 
         {plan !== "super" && views.length > 0 && (
           <div className="text-[12px] text-muted-foreground text-center mt-2 px-1 leading-tight space-y-0.5 bg-gray-50/50 p-1.5 rounded border border-gray-100/50">

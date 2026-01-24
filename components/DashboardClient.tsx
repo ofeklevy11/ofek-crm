@@ -25,12 +25,15 @@ import {
   Target,
   Trash2,
   LayoutGrid,
+  BarChart3,
 } from "lucide-react";
 import AnalyticsWidget from "./dashboard/AnalyticsWidget";
 import TableWidget from "./dashboard/TableWidget";
 import CustomTableWidget from "./dashboard/CustomTableWidget";
 import GoalWidget from "./dashboard/GoalWidget";
 import TableViewsDashboardWidget from "./dashboard/TableViewsDashboardWidget";
+import GoalsTableWidget from "./dashboard/GoalsTableWidget";
+import AnalyticsTableWidget from "./dashboard/AnalyticsTableWidget";
 import AnalyticsDetailsModal from "./AnalyticsDetailsModal";
 import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
 import { getTableViewData, getCustomTableData } from "@/app/actions/dashboard";
@@ -47,7 +50,13 @@ import { hasUserFlag, User } from "@/lib/permissions";
 import { GoalWithProgress } from "@/app/actions/goals";
 
 // Define Types
-type WidgetType = "ANALYTICS" | "TABLE" | "GOAL" | "TABLE_VIEWS_DASHBOARD";
+type WidgetType =
+  | "ANALYTICS"
+  | "TABLE"
+  | "GOAL"
+  | "TABLE_VIEWS_DASHBOARD"
+  | "GOALS_TABLE"
+  | "ANALYTICS_TABLE";
 
 interface DashboardWidget {
   id: string; // Unique ID for this instance on dashboard
@@ -167,6 +176,145 @@ export default function DashboardClient({
   const [editingMiniDashboardId, setEditingMiniDashboardId] = useState<
     string | null
   >(null);
+
+  // Goals Table State
+  const [isGoalsTableModalOpen, setIsGoalsTableModalOpen] = useState(false);
+  const [goalsTableTitle, setGoalsTableTitle] = useState("טבלת יעדים");
+  const [goalsTableSelectedIds, setGoalsTableSelectedIds] = useState<string[]>(
+    [],
+  );
+  const [editingGoalsTableId, setEditingGoalsTableId] = useState<string | null>(
+    null,
+  );
+
+  // Goals Table Logic
+  const handleOpenGoalsTableModal = () => {
+    setEditingGoalsTableId(null);
+    setGoalsTableTitle("טבלת יעדים");
+    setGoalsTableSelectedIds([]);
+    setIsGoalsTableModalOpen(true);
+  };
+
+  const handleEditGoalsTable = (widget: DashboardWidget) => {
+    setEditingGoalsTableId(widget.id);
+    setGoalsTableTitle(widget.settings?.title || "טבלת יעדים");
+    setGoalsTableSelectedIds(widget.settings?.goalIds || []);
+    setIsGoalsTableModalOpen(true);
+  };
+
+  const handleAddGoalsTable = async () => {
+    if (!goalsTableTitle) return;
+
+    const settings = {
+      title: goalsTableTitle,
+      goalIds: goalsTableSelectedIds,
+      collapsed: false,
+    };
+
+    if (editingGoalsTableId) {
+      const res = await updateDashboardWidget(editingGoalsTableId, {
+        settings,
+      });
+      if (res.success) {
+        setWidgets((prev) =>
+          prev.map((w) =>
+            w.id === editingGoalsTableId ? { ...w, settings } : w,
+          ),
+        );
+      }
+    } else {
+      // @ts-ignore
+      const res = await addDashboardWidget({
+        widgetType: "GOALS_TABLE",
+        referenceId: "custom",
+        settings,
+      });
+      if (res.success && res.data) {
+        const newWidget: DashboardWidget = {
+          id: res.data.id,
+          type: res.data.widgetType as WidgetType,
+          referenceId: res.data.referenceId || "custom",
+          settings: res.data.settings,
+        };
+        setWidgets([...widgets, newWidget]);
+      }
+    }
+
+    setIsGoalsTableModalOpen(false);
+    setEditingGoalsTableId(null);
+    setGoalsTableSelectedIds([]);
+    setGoalsTableTitle("");
+  };
+
+  // Analytics Table Logic
+  const [isAnalyticsTableModalOpen, setIsAnalyticsTableModalOpen] =
+    useState(false);
+  const [analyticsTableTitle, setAnalyticsTableTitle] =
+    useState("טבלת אנליטיקות");
+  const [analyticsTableSelectedIds, setAnalyticsTableSelectedIds] = useState<
+    string[]
+  >([]);
+  const [editingAnalyticsTableId, setEditingAnalyticsTableId] = useState<
+    string | null
+  >(null);
+
+  const handleOpenAnalyticsTableModal = () => {
+    setEditingAnalyticsTableId(null);
+    setAnalyticsTableTitle("טבלת אנליטיקות");
+    setAnalyticsTableSelectedIds([]);
+    setIsAnalyticsTableModalOpen(true);
+  };
+
+  const handleEditAnalyticsTable = (widget: DashboardWidget) => {
+    setEditingAnalyticsTableId(widget.id);
+    setAnalyticsTableTitle(widget.settings?.title || "טבלת אנליטיקות");
+    setAnalyticsTableSelectedIds(widget.settings?.analyticsIds || []);
+    setIsAnalyticsTableModalOpen(true);
+  };
+
+  const handleAddAnalyticsTable = async () => {
+    if (!analyticsTableTitle) return;
+
+    const settings = {
+      title: analyticsTableTitle,
+      analyticsIds: analyticsTableSelectedIds,
+      collapsed: false,
+    };
+
+    if (editingAnalyticsTableId) {
+      const res = await updateDashboardWidget(editingAnalyticsTableId, {
+        settings,
+      });
+      if (res.success) {
+        setWidgets((prev) =>
+          prev.map((w) =>
+            w.id === editingAnalyticsTableId ? { ...w, settings } : w,
+          ),
+        );
+      }
+    } else {
+      // @ts-ignore
+      const res = await addDashboardWidget({
+        widgetType: "ANALYTICS_TABLE",
+        referenceId: "custom",
+        settings,
+      });
+      if (res.success && res.data) {
+        const newWidget: DashboardWidget = {
+          id: res.data.id,
+          type: res.data.widgetType as WidgetType,
+          referenceId: res.data.referenceId || "custom",
+          settings: res.data.settings,
+        };
+        setWidgets([...widgets, newWidget]);
+      }
+    }
+
+    setIsAnalyticsTableModalOpen(false);
+    setEditingAnalyticsTableId(null);
+    setAnalyticsTableSelectedIds([]);
+    setAnalyticsTableTitle("");
+  };
 
   // Permissions
   const canViewDashboard = hasUserFlag(user, "canViewDashboard");
@@ -305,32 +453,29 @@ export default function DashboardClient({
     setSelectedType(widget.type);
     if (widget.type === "TABLE" && widget.tableId) {
       setSelectedTable(String(widget.tableId));
-      if (String(widget.referenceId) === "custom") {
-        setIsCustomMode(true);
+      setIsCustomMode(true);
+      setSelectedItem("custom");
 
-        // Try to get columns from settings, fallback to loaded data if available
-        let initialCols = widget.settings?.columns;
+      // Try to get columns from settings, fallback to loaded data if available
+      let initialCols = widget.settings?.columns;
 
+      if (
+        !initialCols ||
+        !Array.isArray(initialCols) ||
+        initialCols.length === 0
+      ) {
+        const loadedData = tableData[widget.id];
+        // If legacy view data is loaded, it might have columns in a different format or as part of data
+        // For now, if no settings columns, we rely on user picking them or default empty
         if (
-          !initialCols ||
-          !Array.isArray(initialCols) ||
-          initialCols.length === 0
+          loadedData?.data?.columns &&
+          Array.isArray(loadedData.data.columns)
         ) {
-          const loadedData = tableData[widget.id];
-          if (
-            loadedData?.data?.columns &&
-            Array.isArray(loadedData.data.columns)
-          ) {
-            initialCols = loadedData.data.columns.map((c: any) => c.name);
-          }
+          initialCols = loadedData.data.columns.map((c: any) => c.name);
         }
-
-        setSelectedColumns(initialCols || []);
-        setSelectedItem("custom");
-      } else {
-        setIsCustomMode(false);
-        setSelectedItem(String(widget.referenceId));
       }
+
+      setSelectedColumns(initialCols || []);
     } else {
       setSelectedItem(String(widget.referenceId));
     }
@@ -423,6 +568,10 @@ export default function DashboardClient({
       title = (content as any)?.name || "יעד";
     } else if (widget.type === "TABLE_VIEWS_DASHBOARD") {
       title = widget.settings?.title || "מיני דאשבורד";
+    } else if (widget.type === "GOALS_TABLE") {
+      title = widget.settings?.title || "טבלת יעדים";
+    } else if (widget.type === "ANALYTICS_TABLE") {
+      title = widget.settings?.title || "טבלת אנליטיקות";
     } else {
       const { view } = content as any;
       title = view?.name || "טבלה";
@@ -463,6 +612,10 @@ export default function DashboardClient({
       );
       return goal;
     } else if (widget.type === "TABLE_VIEWS_DASHBOARD") {
+      return widget.settings;
+    } else if (widget.type === "GOALS_TABLE") {
+      return widget.settings;
+    } else if (widget.type === "ANALYTICS_TABLE") {
       return widget.settings;
     } else {
       // TABLE
@@ -599,7 +752,7 @@ export default function DashboardClient({
             <button
               onClick={handleOpenMiniDashboardModal}
               disabled={!canAddWidget}
-              className={`flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700 border border-blue-100 rounded-lg transition shadow-sm font-medium text-sm ${
+              className={`flex items-center gap-2 px-4 py-2 bg-linear-to-r from-blue-50 to-purple-50 text-blue-700 border border-blue-100 rounded-lg transition shadow-sm font-medium text-sm ${
                 !canAddWidget
                   ? "opacity-50 cursor-not-allowed"
                   : "hover:shadow-md"
@@ -607,6 +760,30 @@ export default function DashboardClient({
             >
               <LayoutGrid size={16} />
               הוסף מיני דאשבורד
+            </button>
+            <button
+              onClick={handleOpenGoalsTableModal}
+              disabled={!canAddWidget}
+              className={`flex items-center gap-2 px-4 py-2 bg-linear-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-100 rounded-lg transition shadow-sm font-medium text-sm ${
+                !canAddWidget
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:shadow-md"
+              }`}
+            >
+              <Target size={16} />
+              הוסף טבלת יעדים
+            </button>
+            <button
+              onClick={handleOpenAnalyticsTableModal}
+              disabled={!canAddWidget}
+              className={`flex items-center gap-2 px-4 py-2 bg-linear-to-r from-green-50 to-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg transition shadow-sm font-medium text-sm ${
+                !canAddWidget
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:shadow-md"
+              }`}
+            >
+              <BarChart3 size={16} />
+              הוסף טבלת אנליטיקות
             </button>
             <button
               onClick={handleOpenAddModal}
@@ -692,6 +869,40 @@ export default function DashboardClient({
                       onSettingsChange={(newSettings) =>
                         handleWidgetSettingsChange(widget.id, newSettings)
                       }
+                    />
+                  </div>
+                );
+              } else if (widget.type === "GOALS_TABLE") {
+                const settings = (widget as any).settings || {};
+                const displayedGoals = availableGoals.filter((g) =>
+                  (settings.goalIds || []).includes(String(g.id)),
+                );
+                return (
+                  <div key={widget.id} className="break-inside-avoid">
+                    <GoalsTableWidget
+                      id={widget.id}
+                      title={settings.title}
+                      goals={displayedGoals}
+                      onRemove={() => handleRemoveWidget(widget)}
+                      onEdit={() => handleEditGoalsTable(widget)}
+                      settings={settings}
+                    />
+                  </div>
+                );
+              } else if (widget.type === "ANALYTICS_TABLE") {
+                const settings = (widget as any).settings || {};
+                const displayedAnalytics = initialAnalytics.filter((a) =>
+                  (settings.analyticsIds || []).includes(String(a.id)),
+                );
+                return (
+                  <div key={widget.id} className="break-inside-avoid">
+                    <AnalyticsTableWidget
+                      id={widget.id}
+                      title={settings.title}
+                      analytics={displayedAnalytics}
+                      onRemove={() => handleRemoveWidget(widget)}
+                      onEdit={() => handleEditAnalyticsTable(widget)}
+                      settings={settings}
                     />
                   </div>
                 );
@@ -864,6 +1075,7 @@ export default function DashboardClient({
                         if (editingWidgetId) return;
                         setSelectedType("TABLE");
                         setSelectedItem("");
+                        setIsCustomMode(true);
                       }}
                       disabled={!!editingWidgetId}
                     >
@@ -960,7 +1172,8 @@ export default function DashboardClient({
                         value={selectedTable}
                         onChange={(e) => {
                           setSelectedTable(e.target.value);
-                          setSelectedItem("");
+                          setSelectedItem("custom");
+                          setIsCustomMode(true);
                         }}
                         disabled={!!editingWidgetId}
                       >
@@ -974,183 +1187,99 @@ export default function DashboardClient({
                     </div>
 
                     {selectedTable && (
-                      <div>
-                        {!editingWidgetId && (
-                          <div className="flex gap-2 mb-3 bg-gray-50 p-1 rounded-lg">
-                            <button
-                              className={`flex-1 text-xs py-1.5 font-medium rounded-md transition ${
-                                !isCustomMode
-                                  ? "bg-white shadow text-blue-600"
-                                  : "text-gray-500 hover:text-gray-700"
-                              }`}
-                              onClick={() => {
-                                setIsCustomMode(false);
-                                setSelectedItem("");
-                              }}
-                            >
-                              תצוגות שמורות
-                            </button>
-                            <button
-                              className={`flex-1 text-xs py-1.5 font-medium rounded-md transition ${
-                                isCustomMode
-                                  ? "bg-white shadow text-blue-600"
-                                  : "text-gray-500 hover:text-gray-700"
-                              }`}
-                              onClick={() => {
-                                setIsCustomMode(true);
-                                setSelectedItem("custom"); // Mark as selected so "Add" button works
-                                // Default columns? maybe select all or first 5
-                              }}
-                            >
-                              תצוגה מותאמת
-                            </button>
-                          </div>
-                        )}
-
-                        {!isCustomMode ? (
-                          <>
-                            <label className="block text-xs font-semibold text-gray-500 mb-1">
-                              בחר תצוגה
-                            </label>
-                            <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
-                              {availableTables
-                                .find((t) => String(t.id) === selectedTable)
-                                ?.views.map((v: any) => (
-                                  <button
-                                    key={v.id}
-                                    onClick={() =>
-                                      setSelectedItem(String(v.id))
-                                    }
-                                    className={`w-full text-right p-3 hover:bg-blue-50 transition flex items-center justify-between ${
-                                      selectedItem === String(v.id)
-                                        ? "bg-blue-50 ring-1 ring-blue-500"
-                                        : ""
-                                    }`}
-                                  >
-                                    <div className="font-medium text-gray-800">
-                                      {v.name}
-                                    </div>
-                                    <div
-                                      className={`w-4 h-4 rounded-full border border-gray-300 ${
-                                        selectedItem === String(v.id)
-                                          ? "bg-blue-600 border-blue-600"
-                                          : ""
-                                      }`}
-                                    ></div>
-                                  </button>
-                                ))}
-                              {availableTables.find(
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 mb-1">
+                            בחר עמודות (מקסימום 7)
+                          </label>
+                          <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1">
+                            {(
+                              (availableTables.find(
                                 (t) => String(t.id) === selectedTable,
-                              )?.views.length === 0 && (
-                                <div className="p-3 text-center text-sm text-gray-500">
-                                  אין תצוגות לטבלה זו
-                                </div>
-                              )}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="space-y-3">
-                            <div>
-                              <label className="block text-xs font-semibold text-gray-500 mb-1">
-                                בחר עמודות (מקסימום 7)
+                              )?.schemaJson as any) || []
+                            ).map((field: any) => (
+                              <label
+                                key={field.name}
+                                className="flex items-center gap-2 p-1.5 hover:bg-gray-50 rounded cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                  checked={selectedColumns.includes(field.name)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      if (selectedColumns.length >= 7) return;
+                                      setSelectedColumns([
+                                        ...selectedColumns,
+                                        field.name,
+                                      ]);
+                                    } else {
+                                      setSelectedColumns(
+                                        selectedColumns.filter(
+                                          (c) => c !== field.name,
+                                        ),
+                                      );
+                                    }
+                                  }}
+                                  disabled={
+                                    !selectedColumns.includes(field.name) &&
+                                    selectedColumns.length >= 7
+                                  }
+                                />
+                                <span className="text-sm text-gray-700">
+                                  {field.label || field.name}
+                                </span>
                               </label>
-                              <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1">
-                                {(
-                                  (availableTables.find(
-                                    (t) => String(t.id) === selectedTable,
-                                  )?.schemaJson as any) || []
-                                ).map((field: any) => (
-                                  <label
-                                    key={field.name}
-                                    className="flex items-center gap-2 p-1.5 hover:bg-gray-50 rounded cursor-pointer"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                      checked={selectedColumns.includes(
+                            ))}
+                            {/* Add System Columns */}
+                            {[
+                              { name: "createdAt", label: "נוצר בתאריך" },
+                              { name: "updatedAt", label: "עודכן בתאריך" },
+                              { name: "createdBy", label: "נוצר על ידי" },
+                              { name: "updatedBy", label: "עודכן על ידי" },
+                            ].map((field: any) => (
+                              <label
+                                key={field.name}
+                                className="flex items-center gap-2 p-1.5 hover:bg-gray-100/50 rounded cursor-pointer border-t border-dashed border-gray-100 first:border-0"
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                  checked={selectedColumns.includes(field.name)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      if (selectedColumns.length >= 7) return;
+                                      setSelectedColumns([
+                                        ...selectedColumns,
                                         field.name,
-                                      )}
-                                      onChange={(e) => {
-                                        if (e.target.checked) {
-                                          if (selectedColumns.length >= 7)
-                                            return;
-                                          setSelectedColumns([
-                                            ...selectedColumns,
-                                            field.name,
-                                          ]);
-                                        } else {
-                                          setSelectedColumns(
-                                            selectedColumns.filter(
-                                              (c) => c !== field.name,
-                                            ),
-                                          );
-                                        }
-                                      }}
-                                      disabled={
-                                        !selectedColumns.includes(field.name) &&
-                                        selectedColumns.length >= 7
-                                      }
-                                    />
-                                    <span className="text-sm text-gray-700">
-                                      {field.label || field.name}
-                                    </span>
-                                  </label>
-                                ))}
-                                {/* Add System Columns */}
-                                {[
-                                  { name: "createdAt", label: "נוצר בתאריך" },
-                                  { name: "updatedAt", label: "עודכן בתאריך" },
-                                  { name: "createdBy", label: "נוצר על ידי" },
-                                  { name: "updatedBy", label: "עודכן על ידי" },
-                                ].map((field: any) => (
-                                  <label
-                                    key={field.name}
-                                    className="flex items-center gap-2 p-1.5 hover:bg-gray-100/50 rounded cursor-pointer border-t border-dashed border-gray-100 first:border-0"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                      checked={selectedColumns.includes(
-                                        field.name,
-                                      )}
-                                      onChange={(e) => {
-                                        if (e.target.checked) {
-                                          if (selectedColumns.length >= 7)
-                                            return;
-                                          setSelectedColumns([
-                                            ...selectedColumns,
-                                            field.name,
-                                          ]);
-                                        } else {
-                                          setSelectedColumns(
-                                            selectedColumns.filter(
-                                              (c) => c !== field.name,
-                                            ),
-                                          );
-                                        }
-                                      }}
-                                      disabled={
-                                        !selectedColumns.includes(field.name) &&
-                                        selectedColumns.length >= 7
-                                      }
-                                    />
-                                    <span className="text-sm text-gray-500 italic">
-                                      {field.label}
-                                    </span>
-                                  </label>
-                                ))}
-                              </div>
-                              <p className="text-xs text-gray-500 mt-1">
-                                נבחרו: {selectedColumns.length}/7
-                              </p>
-                            </div>
-
-                            <div className="text-xs text-gray-500 bg-blue-50 p-2 rounded text-center">
-                              התצוגה תהיה ממוינת מהחדש לישן ותציג 10 רשומות
-                              אחרונות.
-                            </div>
+                                      ]);
+                                    } else {
+                                      setSelectedColumns(
+                                        selectedColumns.filter(
+                                          (c) => c !== field.name,
+                                        ),
+                                      );
+                                    }
+                                  }}
+                                  disabled={
+                                    !selectedColumns.includes(field.name) &&
+                                    selectedColumns.length >= 7
+                                  }
+                                />
+                                <span className="text-sm text-gray-500 italic">
+                                  {field.label}
+                                </span>
+                              </label>
+                            ))}
                           </div>
-                        )}
+                          <p className="text-xs text-gray-500 mt-1">
+                            נבחרו: {selectedColumns.length}/7
+                          </p>
+                        </div>
+
+                        <div className="text-xs text-gray-500 bg-blue-50 p-2 rounded text-center">
+                          התצוגה תהיה ממוינת מהחדש לישן ותציג 10 רשומות אחרונות.
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1275,54 +1404,69 @@ export default function DashboardClient({
                             {table.name}
                           </h5>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {table.views?.map((view: any) => {
-                              const isSelected = miniDashboardViews.some(
-                                (v) =>
-                                  v.tableId === table.id &&
-                                  v.viewId === view.id,
-                              );
-                              // We can allow duplicate views in different mini dashboards, but here maybe prevent duplicates in SAME dashboard
+                            {table.views
+                              ?.filter(
+                                (view: any) => view.config?.type !== "legend",
+                              )
+                              .map((view: any) => {
+                                const isSelected = miniDashboardViews.some(
+                                  (v) =>
+                                    v.tableId === table.id &&
+                                    v.viewId === view.id,
+                                );
+                                // We can allow duplicate views in different mini dashboards, but here maybe prevent duplicates in SAME dashboard
 
-                              return (
-                                <button
-                                  key={view.id}
-                                  onClick={() => {
-                                    // Add view
-                                    setMiniDashboardViews([
-                                      ...miniDashboardViews,
-                                      {
-                                        tableId: table.id,
-                                        viewId: view.id,
-                                        tableName: table.name,
-                                        viewName: view.name,
-                                        colorIndex: miniDashboardViews.length,
-                                      },
-                                    ]);
-                                  }}
-                                  className={`flex items-center justify-between p-2.5 rounded-lg border text-right transition ${
-                                    isSelected
-                                      ? "bg-blue-50 border-blue-200 cursor-default" // Allowing duplicates? maybe best to not disable but show added indicator
-                                      : "bg-white border-gray-100 hover:border-blue-300 hover:shadow-sm"
-                                  }`}
-                                >
-                                  <div className="truncate">
-                                    <div className="font-medium text-sm text-gray-800 truncate">
-                                      {view.name}
+                                return (
+                                  <button
+                                    key={view.id}
+                                    onClick={() => {
+                                      // Prevent duplicates
+                                      if (
+                                        miniDashboardViews.some(
+                                          (v) =>
+                                            v.tableId === table.id &&
+                                            v.viewId === view.id,
+                                        )
+                                      ) {
+                                        return;
+                                      }
+
+                                      // Add view
+                                      setMiniDashboardViews([
+                                        ...miniDashboardViews,
+                                        {
+                                          tableId: table.id,
+                                          viewId: view.id,
+                                          tableName: table.name,
+                                          viewName: view.name,
+                                          colorIndex: miniDashboardViews.length,
+                                        },
+                                      ]);
+                                    }}
+                                    className={`flex items-center justify-between p-2.5 rounded-lg border text-right transition ${
+                                      isSelected
+                                        ? "bg-blue-50 border-blue-200 cursor-default" // Allowing duplicates? maybe best to not disable but show added indicator
+                                        : "bg-white border-gray-100 hover:border-blue-300 hover:shadow-sm"
+                                    }`}
+                                  >
+                                    <div className="truncate">
+                                      <div className="font-medium text-sm text-gray-800 truncate">
+                                        {view.name}
+                                      </div>
+                                      <div className="text-[10px] text-gray-500">
+                                        {view.config?.type === "stats"
+                                          ? "סטטיסטיקה"
+                                          : view.config?.type === "aggregation"
+                                            ? "אגרגציה"
+                                            : "רגיל"}
+                                      </div>
                                     </div>
-                                    <div className="text-[10px] text-gray-500">
-                                      {view.config?.type === "stats"
-                                        ? "סטטיסטיקה"
-                                        : view.config?.type === "aggregation"
-                                          ? "אגרגציה"
-                                          : "רגיל"}
+                                    <div className="shrink-0 w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-blue-100 group-hover:text-blue-600 transition">
+                                      <Plus size={14} />
                                     </div>
-                                  </div>
-                                  <div className="shrink-0 w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-blue-100 group-hover:text-blue-600 transition">
-                                    <Plus size={14} />
-                                  </div>
-                                </button>
-                              );
-                            })}
+                                  </button>
+                                );
+                              })}
                             {(!table.views || table.views.length === 0) && (
                               <div className="text-xs text-gray-400 px-2 italic col-span-2">
                                 אין תצוגות זמינות
@@ -1355,6 +1499,253 @@ export default function DashboardClient({
                 className="flex-1 py-2.5 text-white bg-blue-600 rounded-xl hover:bg-blue-700 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-200"
               >
                 {editingMiniDashboardId ? "שמור שינויים" : "צור מיני דאשבורד"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Goals Table Modal */}
+      {isGoalsTableModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto flex flex-col"
+            dir="rtl"
+          >
+            <div className="flex justify-between items-center mb-6 shrink-0">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <Target className="text-purple-600" />
+                {editingGoalsTableId ? "עריכת טבלת יעדים" : "הוספת טבלת יעדים"}
+              </h3>
+              <button
+                onClick={() => {
+                  setIsGoalsTableModalOpen(false);
+                  setEditingGoalsTableId(null);
+                }}
+                className="p-1 hover:bg-gray-100 rounded-full transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-6 flex-1 overflow-y-auto p-1">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  כותרת
+                </label>
+                <input
+                  type="text"
+                  value={goalsTableTitle}
+                  onChange={(e) => setGoalsTableTitle(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 p-3 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition"
+                  placeholder="דוגמה: יעדי מכירות רבעוניים"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between items-end mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    בחר יעדים להצגה ({goalsTableSelectedIds.length})
+                  </label>
+                </div>
+                <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col max-h-[400px]">
+                  <div className="overflow-y-auto p-2">
+                    {availableGoals.map((goal) => (
+                      <label
+                        key={goal.id}
+                        className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition border border-transparent hover:border-gray-100"
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                          checked={goalsTableSelectedIds.includes(
+                            String(goal.id),
+                          )}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setGoalsTableSelectedIds([
+                                ...goalsTableSelectedIds,
+                                String(goal.id),
+                              ]);
+                            } else {
+                              setGoalsTableSelectedIds(
+                                goalsTableSelectedIds.filter(
+                                  (id) => id !== String(goal.id),
+                                ),
+                              );
+                            }
+                          }}
+                        />
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">
+                            {goal.name}
+                          </div>
+                          <div className="text-xs text-gray-500 flex items-center gap-2">
+                            <span>{goal.metricType}</span>
+                            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                            <span>
+                              יעד:{" "}
+                              {new Intl.NumberFormat("he-IL", {
+                                notation: "compact",
+                              }).format(goal.targetValue)}
+                            </span>
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                    {availableGoals.length === 0 && (
+                      <div className="p-8 text-center text-gray-500">
+                        לא נמצאו יעדים זמינים.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-gray-100 flex gap-3 shrink-0">
+              <button
+                onClick={() => {
+                  setIsGoalsTableModalOpen(false);
+                  setEditingGoalsTableId(null);
+                }}
+                className="flex-1 py-2.5 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 font-medium transition"
+              >
+                ביטול
+              </button>
+              <button
+                disabled={
+                  !goalsTableTitle || goalsTableSelectedIds.length === 0
+                }
+                onClick={handleAddGoalsTable}
+                className="flex-1 py-2.5 text-white bg-purple-600 rounded-xl hover:bg-purple-700 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-purple-200"
+              >
+                {editingGoalsTableId ? "שמור שינויים" : "צור טבלה"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Analytics Table Modal */}
+      {isAnalyticsTableModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto flex flex-col"
+            dir="rtl"
+          >
+            <div className="flex justify-between items-center mb-6 shrink-0">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <BarChart3 className="text-emerald-600" />
+                {editingAnalyticsTableId
+                  ? "עריכת טבלת אנליטיקות"
+                  : "הוספת טבלת אנליטיקות"}
+              </h3>
+              <button
+                onClick={() => {
+                  setIsAnalyticsTableModalOpen(false);
+                  setEditingAnalyticsTableId(null);
+                }}
+                className="p-1 hover:bg-gray-100 rounded-full transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-6 flex-1 overflow-y-auto p-1">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  כותרת
+                </label>
+                <input
+                  type="text"
+                  value={analyticsTableTitle}
+                  onChange={(e) => setAnalyticsTableTitle(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 p-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition"
+                  placeholder="דוגמה: אנליטיקות מכירות"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between items-end mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    בחר אנליטיקות להצגה ({analyticsTableSelectedIds.length})
+                  </label>
+                </div>
+                <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col max-h-[400px]">
+                  <div className="overflow-y-auto p-2">
+                    {initialAnalytics.map((analytic) => (
+                      <label
+                        key={analytic.id}
+                        className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition border border-transparent hover:border-gray-100"
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-5 h-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                          checked={analyticsTableSelectedIds.includes(
+                            String(analytic.id),
+                          )}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setAnalyticsTableSelectedIds([
+                                ...analyticsTableSelectedIds,
+                                String(analytic.id),
+                              ]);
+                            } else {
+                              setAnalyticsTableSelectedIds(
+                                analyticsTableSelectedIds.filter(
+                                  (id) => id !== String(analytic.id),
+                                ),
+                              );
+                            }
+                          }}
+                        />
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">
+                            {analytic.ruleName}
+                          </div>
+                          <div className="text-xs text-gray-500 flex items-center gap-2">
+                            <span>
+                              {analytic.tableName === "System"
+                                ? "מערכת"
+                                : analytic.tableName}
+                            </span>
+                            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                            <span>
+                              {analytic.type === "GRAPH" ? "גרף" : "אנליטיקה"}
+                            </span>
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                    {initialAnalytics.length === 0 && (
+                      <div className="p-8 text-center text-gray-500">
+                        לא נמצאו אנליטיקות זמינות.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-gray-100 flex gap-3 shrink-0">
+              <button
+                onClick={() => {
+                  setIsAnalyticsTableModalOpen(false);
+                  setEditingAnalyticsTableId(null);
+                }}
+                className="flex-1 py-2.5 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 font-medium transition"
+              >
+                ביטול
+              </button>
+              <button
+                disabled={
+                  !analyticsTableTitle || analyticsTableSelectedIds.length === 0
+                }
+                onClick={handleAddAnalyticsTable}
+                className="flex-1 py-2.5 text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-emerald-200"
+              >
+                {editingAnalyticsTableId ? "שמור שינויים" : "צור טבלה"}
               </button>
             </div>
           </div>
