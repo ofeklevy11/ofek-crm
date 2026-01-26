@@ -304,7 +304,7 @@ function AnalyticsCard({
 
           {/* Actions - Visible on Hover */}
           {canManage && (
-            <div className="absolute top-4 left-4 flex gap-1 bg-white/95 backdrop-blur rounded-lg p-1 border border-gray-100 shadow-sm opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 transition-all duration-200 origin-top-left z-10">
+            <div className="absolute top-4 left-4 flex gap-1 bg-white/95 backdrop-blur rounded-lg p-1 border border-gray-100 shadow-sm opacity-100 md:opacity-0 md:group-hover:opacity-100 scale-100 md:scale-90 md:group-hover:scale-100 transition-all duration-200 origin-top-left z-10">
               <button
                 className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
                 onPointerDown={(e) => {
@@ -707,16 +707,16 @@ export default function AnalyticsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8" dir="rtl">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8" dir="rtl">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">ניתוח נתונים</h1>
             <p className="text-gray-500 mt-2">דוחות וניתוחים בזמן אמת.</p>
           </div>
           <div className="flex gap-3">
             {canManage && (
-              <div className="flex gap-2">
+              <div className="hidden md:flex gap-2">
                 <button
                   disabled
                   className="px-4 py-2 bg-gray-300 text-gray-500 rounded-md shadow-sm text-sm font-medium cursor-not-allowed flex items-center gap-2"

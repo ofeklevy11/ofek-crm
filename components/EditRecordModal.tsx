@@ -26,6 +26,7 @@ import {
   Pencil,
   X,
   Check,
+  Phone,
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
@@ -704,45 +705,66 @@ export default function EditRecordModal({
                       />
                     </div>
                   ) : (
-                    <Input
-                      id={`field-${field.name}`}
-                      type={
-                        field.type === "number"
-                          ? "number"
-                          : field.type === "date"
-                            ? "date"
-                            : "text"
-                      }
-                      value={formData[field.name] || ""}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          [field.name]:
-                            field.type === "number"
-                              ? Number(e.target.value)
-                              : e.target.value,
-                        })
-                      }
-                      onBlur={(e) => {
-                        if (field.type === "url" && e.target.value) {
-                          let val = e.target.value.trim();
-                          if (val && !/^https?:\/\//i.test(val)) {
-                            setFormData({
-                              ...formData,
-                              [field.name]: `https://${val}`,
-                            });
-                          }
+                    <>
+                      <Input
+                        id={`field-${field.name}`}
+                        type={
+                          field.type === "number"
+                            ? "number"
+                            : field.type === "date"
+                              ? "date"
+                              : "text"
                         }
-                      }}
-                      className={
-                        field.type === "lookup" || field.type === "automation"
-                          ? "bg-muted text-muted-foreground cursor-not-allowed"
-                          : ""
-                      }
-                      readOnly={
-                        field.type === "lookup" || field.type === "automation"
-                      }
-                    />
+                        value={formData[field.name] || ""}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            [field.name]:
+                              field.type === "number"
+                                ? Number(e.target.value)
+                                : e.target.value,
+                          })
+                        }
+                        onBlur={(e) => {
+                          if (field.type === "url" && e.target.value) {
+                            let val = e.target.value.trim();
+                            if (val && !/^https?:\/\//i.test(val)) {
+                              setFormData({
+                                ...formData,
+                                [field.name]: `https://${val}`,
+                              });
+                            }
+                          }
+                        }}
+                        className={
+                          field.type === "lookup" || field.type === "automation"
+                            ? "bg-muted text-muted-foreground cursor-not-allowed"
+                            : ""
+                        }
+                        readOnly={
+                          field.type === "lookup" || field.type === "automation"
+                        }
+                      />
+                      {(field.type === "text" || field.type === "phone") &&
+                        (field.name.toLowerCase().includes("phone") ||
+                          field.name.toLowerCase().includes("mobile") ||
+                          field.label.includes("טלפון") ||
+                          field.label.includes("נייד")) &&
+                        formData[field.name] && (
+                          <div className="mt-2">
+                            <a
+                              href={`tel:${String(formData[field.name]).replace(
+                                /\D/g,
+                                "",
+                              )}`}
+                              className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors shadow-sm"
+                            >
+                              <Phone className="w-3 h-3" />
+                              חיוג ישיר
+                            </a>
+                          </div>
+                        )}
+                    </>
                   )}
                 </div>
               ))}

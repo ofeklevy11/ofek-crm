@@ -91,7 +91,7 @@ export default function TaskKanbanBoard({ currentUser }: TaskKanbanBoardProps) {
       const result = await updateTask(taskId, { status: newStatus });
       if (result.success) {
         setTasks(
-          tasks.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
+          tasks.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)),
         );
       }
     } catch (error) {
@@ -135,7 +135,7 @@ export default function TaskKanbanBoard({ currentUser }: TaskKanbanBoardProps) {
   const filteredTasks = tasks.filter(
     (t) =>
       t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.description?.toLowerCase().includes(searchQuery.toLowerCase())
+      t.description?.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const getTasksByStatus = (status: TaskStatus) =>
@@ -144,7 +144,7 @@ export default function TaskKanbanBoard({ currentUser }: TaskKanbanBoardProps) {
   return (
     <div className="space-y-6">
       {/* Search & Add */}
-      <div className="flex items-center gap-4 bg-slate-800/50 backdrop-blur-sm p-4 rounded-xl border border-slate-700/50">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 bg-slate-800/50 backdrop-blur-sm p-4 rounded-xl border border-slate-700/50">
         <div className="flex-1 relative">
           <span
             className="absolute start-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -164,7 +164,7 @@ export default function TaskKanbanBoard({ currentUser }: TaskKanbanBoardProps) {
         {canCreate && (
           <button
             onClick={() => handleTaskCreate()}
-            className="flex items-center gap-2 bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-2 rounded-lg transition-all shadow-lg hover:shadow-blue-500/50 font-medium"
+            className="flex items-center justify-center md:justify-start gap-2 bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-2 rounded-lg transition-all shadow-lg hover:shadow-blue-500/50 font-medium"
           >
             <span className="w-5 h-5" role="img" aria-label="plus">
               +

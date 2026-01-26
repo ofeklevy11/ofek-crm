@@ -138,7 +138,7 @@ export default async function Home() {
   const { analyticsViews, tables, goals } = await getDashboardInitialData();
 
   return (
-    <div className="min-h-screen bg-muted/40 p-8" dir="rtl">
+    <div className="min-h-screen bg-muted/40 p-4 md:p-8" dir="rtl">
       <div className="max-w-[1600px] mx-auto space-y-6">
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">

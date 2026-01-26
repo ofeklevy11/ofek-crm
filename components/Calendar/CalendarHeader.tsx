@@ -31,23 +31,29 @@ export function CalendarHeader({
 
   return (
     <div
-      className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white"
+      className="flex flex-col md:flex-row items-center justify-between px-4 py-4 border-b border-gray-200 bg-white gap-4"
       dir="rtl"
     >
-      <div className="flex items-center gap-6">
-        <h1 className="text-2xl font-semibold text-gray-800 min-w-[180px]">
+      {/* Top Row: Title */}
+      <div className="flex items-center justify-between w-full md:w-auto">
+        <h1 className="text-xl md:text-2xl font-semibold text-gray-800">
           {formatMonthYear(currentDate)}
         </h1>
 
-        {/* Navigation Controls */}
-        <div className="flex items-center gap-4">
-          {/* Month Navigation */}
-          <div className="flex items-center gap-1 px-2 py-1 bg-gray-50 rounded-lg border border-gray-200">
+        {/* Mobile View Switcher (Visible only on mobile to save space in main controls if needed, 
+            but we can keep the main one valid. Let's stick to one View Switcher) */}
+      </div>
+
+      {/* Controls Container */}
+      <div className="flex flex-col w-full md:w-auto gap-3 md:flex-row md:items-center">
+        {/* Navigation Group */}
+        <div className="flex items-center justify-between md:justify-start w-full md:w-auto gap-2">
+          {/* Month Nav */}
+          <div className="flex items-center gap-1 px-1 py-1 bg-gray-50 rounded-lg border border-gray-200 shrink-0">
             <button
-              onClick={onNextMonth}
+              onClick={onPrevMonth}
               className="p-1.5 hover:bg-gray-200 rounded transition-colors"
               aria-label="חודש הבא"
-              title="חודש הבא"
             >
               <svg
                 className="w-4 h-4 text-gray-600"
@@ -63,12 +69,13 @@ export function CalendarHeader({
                 />
               </svg>
             </button>
-            <span className="text-xs font-medium text-gray-500 px-1">חודש</span>
+            <span className="text-xs font-medium text-gray-500 px-1 hidden sm:inline">
+              חודש
+            </span>
             <button
-              onClick={onPrevMonth}
+              onClick={onNextMonth}
               className="p-1.5 hover:bg-gray-200 rounded transition-colors"
               aria-label="חודש קודם"
-              title="חודש קודם"
             >
               <svg
                 className="w-4 h-4 text-gray-600"
@@ -86,13 +93,12 @@ export function CalendarHeader({
             </button>
           </div>
 
-          {/* Day/Week Navigation */}
-          <div className="flex items-center gap-1 px-2 py-1 bg-gray-50 rounded-lg border border-gray-200">
+          {/* Period Nav */}
+          <div className="flex items-center gap-1 px-1 py-1 bg-gray-50 rounded-lg border border-gray-200 shrink-0">
             <button
-              onClick={onNext}
+              onClick={onPrev}
               className="p-1.5 hover:bg-gray-200 rounded transition-colors"
               aria-label={view === "day" ? "יום הבא" : "שבוע הבא"}
-              title={view === "day" ? "יום הבא" : "שבוע הבא"}
             >
               <svg
                 className="w-4 h-4 text-gray-600"
@@ -108,14 +114,13 @@ export function CalendarHeader({
                 />
               </svg>
             </button>
-            <span className="text-xs font-medium text-gray-500 px-1">
+            <span className="text-xs font-medium text-gray-500 px-1 w-8 text-center">
               {view === "day" ? "יום" : "שבוע"}
             </span>
             <button
-              onClick={onPrev}
+              onClick={onNext}
               className="p-1.5 hover:bg-gray-200 rounded transition-colors"
               aria-label={view === "day" ? "יום קודם" : "שבוע קודם"}
-              title={view === "day" ? "יום קודם" : "שבוע קודם"}
             >
               <svg
                 className="w-4 h-4 text-gray-600"
@@ -136,51 +141,22 @@ export function CalendarHeader({
           {/* Today Button */}
           <button
             onClick={onToday}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+            className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm whitespace-nowrap"
           >
             היום
           </button>
+        </div>
 
-          {/* Date Picker Button */}
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <button
-                onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
-                className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors shadow-sm flex items-center gap-2"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
-                </svg>
-                בחר תאריך מדויק
-              </button>
-
-              <DatePickerPopup
-                isOpen={isDatePickerOpen}
-                onClose={() => setIsDatePickerOpen(false)}
-                onSelectDate={(date) => {
-                  onSelectDate(date);
-                  setIsDatePickerOpen(false);
-                }}
-                currentDate={currentDate}
-              />
-            </div>
-
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          {/* Date Picker */}
+          <div className="relative flex-1 md:flex-none">
             <button
-              onClick={onShowAllEvents}
-              className="px-4 py-2 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors shadow-sm flex items-center gap-2"
+              onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
+              className="w-full md:w-auto px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors shadow-sm flex items-center justify-center gap-2 whitespace-nowrap"
             >
               <svg
-                className="w-4 h-4"
+                className="w-3.5 h-3.5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -189,20 +165,51 @@ export function CalendarHeader({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M4 6h16M4 10h16M4 14h16M4 18h16"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                 />
               </svg>
-              הצג את כל הרשומות
+              <span>לבחירת תאריך מדויק</span>
             </button>
+
+            <DatePickerPopup
+              isOpen={isDatePickerOpen}
+              onClose={() => setIsDatePickerOpen(false)}
+              onSelectDate={(date) => {
+                onSelectDate(date);
+                setIsDatePickerOpen(false);
+              }}
+              currentDate={currentDate}
+            />
           </div>
+
+          {/* Show All */}
+          <button
+            onClick={onShowAllEvents}
+            className="flex-1 md:flex-none w-full md:w-auto px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors shadow-sm flex items-center justify-center gap-2 whitespace-nowrap"
+          >
+            <svg
+              className="w-3.5 h-3.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 10h16M4 14h16M4 18h16"
+              />
+            </svg>
+            <span>לצפייה בכל הרשומות</span>
+          </button>
         </div>
       </div>
 
       {/* View Switcher */}
-      <div className="flex bg-gray-100 p-1 rounded-lg">
+      <div className="flex w-full md:w-auto bg-gray-100 p-1 rounded-lg shrink-0">
         <button
           onClick={() => onViewChange("day")}
-          className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+          className={`flex-1 md:flex-none px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-all ${
             view === "day"
               ? "bg-white text-gray-900 shadow-sm"
               : "text-gray-500 hover:text-gray-700"
@@ -212,7 +219,7 @@ export function CalendarHeader({
         </button>
         <button
           onClick={() => onViewChange("week")}
-          className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+          className={`flex-1 md:flex-none px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-all ${
             view === "week"
               ? "bg-white text-gray-900 shadow-sm"
               : "text-gray-500 hover:text-gray-700"

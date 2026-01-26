@@ -145,7 +145,7 @@ export default function TaskSheetsManager({
             (data || []).map((t: { id: number; name: string }) => ({
               id: t.id,
               name: t.name,
-            }))
+            })),
           );
         }
       } catch (error) {
@@ -226,7 +226,7 @@ export default function TaskSheetsManager({
 
   const updateNewItem = (index: number, field: string, value: unknown) => {
     setNewItems((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
     );
   };
 
@@ -285,10 +285,12 @@ export default function TaskSheetsManager({
             ? {
                 ...prev,
                 items: prev.items.map((item) =>
-                  item.id === editingItemId ? { ...item, ...updatedItem } : item
+                  item.id === editingItemId
+                    ? { ...item, ...updatedItem }
+                    : item,
                 ),
               }
-            : null
+            : null,
         );
         setSheets((prev) =>
           prev.map((sheet) =>
@@ -298,11 +300,11 @@ export default function TaskSheetsManager({
                   items: sheet.items.map((item) =>
                     item.id === editingItemId
                       ? { ...item, ...updatedItem }
-                      : item
+                      : item,
                   ),
                 }
-              : sheet
-          )
+              : sheet,
+          ),
         );
         cancelEditingItem();
       }
@@ -329,9 +331,8 @@ export default function TaskSheetsManager({
     try {
       if (editingSheet) {
         // Update existing sheet
-        const { updateTaskSheet, addTaskSheetItem } = await import(
-          "@/app/actions"
-        );
+        const { updateTaskSheet, addTaskSheetItem } =
+          await import("@/app/actions");
         const result = await updateTaskSheet(editingSheet.id, {
           title: formData.title,
           description: formData.description || undefined,
@@ -364,8 +365,8 @@ export default function TaskSheetsManager({
             prev.map((s) =>
               s.id === editingSheet.id
                 ? { ...s, items: [...s.items, ...addedItems] }
-                : s
-            )
+                : s,
+            ),
           );
         }
         closeModal();
@@ -470,8 +471,8 @@ export default function TaskSheetsManager({
           prev.map((s) =>
             s.id === sheetId
               ? { ...s, items: [...s.items, result.data as TaskSheetItem] }
-              : s
-          )
+              : s,
+          ),
         );
       }
     } catch (error) {
@@ -488,8 +489,8 @@ export default function TaskSheetsManager({
           prev.map((s) =>
             s.id === sheetId
               ? { ...s, items: s.items.filter((i) => i.id !== itemId) }
-              : s
-          )
+              : s,
+          ),
         );
       }
     } catch (error) {
@@ -512,7 +513,7 @@ export default function TaskSheetsManager({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-white">ניהול דפי משימות</h2>
           <p className="text-slate-400 text-sm mt-1">
@@ -521,7 +522,7 @@ export default function TaskSheetsManager({
         </div>
         <button
           onClick={openCreateModal}
-          className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-5 py-2.5 rounded-xl transition-all shadow-lg hover:shadow-blue-500/30 font-medium"
+          className="flex items-center justify-center md:justify-start gap-2 bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-5 py-2.5 rounded-xl transition-all shadow-lg hover:shadow-blue-500/30 font-medium w-full md:w-auto"
         >
           <Plus className="w-5 h-5" />
           דף משימות חדש
@@ -551,7 +552,7 @@ export default function TaskSheetsManager({
           {sheets.map((sheet) => {
             const isExpanded = expandedSheets.has(sheet.id);
             const completedCount = sheet.items.filter(
-              (i) => i.isCompleted
+              (i) => i.isCompleted,
             ).length;
             const progress =
               sheet.items.length > 0
@@ -621,8 +622,8 @@ export default function TaskSheetsManager({
                           progress === 100
                             ? "bg-emerald-500"
                             : progress >= 50
-                            ? "bg-blue-500"
-                            : "bg-amber-500"
+                              ? "bg-blue-500"
+                              : "bg-amber-500"
                         }`}
                         style={{ width: `${progress}%` }}
                       />
@@ -696,16 +697,16 @@ export default function TaskSheetsManager({
                                 item.priority === "URGENT"
                                   ? "bg-red-500/20 text-red-400"
                                   : item.priority === "HIGH"
-                                  ? "bg-orange-500/20 text-orange-400"
-                                  : item.priority === "OPPORTUNITY"
-                                  ? "bg-emerald-500/20 text-emerald-400"
-                                  : item.priority === "LOW"
-                                  ? "bg-slate-500/20 text-slate-400"
-                                  : "bg-blue-500/20 text-blue-400"
+                                    ? "bg-orange-500/20 text-orange-400"
+                                    : item.priority === "OPPORTUNITY"
+                                      ? "bg-emerald-500/20 text-emerald-400"
+                                      : item.priority === "LOW"
+                                        ? "bg-slate-500/20 text-slate-400"
+                                        : "bg-blue-500/20 text-blue-400"
                               }`}
                             >
                               {priorityOptions.find(
-                                (p) => p.value === item.priority
+                                (p) => p.value === item.priority,
                               )?.label || "רגיל"}
                             </span>
                             <button
@@ -881,7 +882,7 @@ export default function TaskSheetsManager({
                       const isExpanded = expandedExistingItems.has(item.id);
                       const isEditing = editingItemId === item.id;
                       const priorityInfo = priorityOptions.find(
-                        (p) => p.value === item.priority
+                        (p) => p.value === item.priority,
                       );
                       return (
                         <div
@@ -890,8 +891,8 @@ export default function TaskSheetsManager({
                             item.isCompleted
                               ? "border-emerald-500/30 bg-emerald-500/5"
                               : isEditing
-                              ? "border-blue-500/50 bg-blue-500/5"
-                              : "border-slate-600"
+                                ? "border-blue-500/50 bg-blue-500/5"
+                                : "border-slate-600"
                           }`}
                         >
                           <button
@@ -919,12 +920,12 @@ export default function TaskSheetsManager({
                                   item.priority === "URGENT"
                                     ? "bg-red-500/20 text-red-400"
                                     : item.priority === "HIGH"
-                                    ? "bg-orange-500/20 text-orange-400"
-                                    : item.priority === "OPPORTUNITY"
-                                    ? "bg-emerald-500/20 text-emerald-400"
-                                    : item.priority === "LOW"
-                                    ? "bg-slate-500/20 text-slate-400"
-                                    : "bg-blue-500/20 text-blue-400"
+                                      ? "bg-orange-500/20 text-orange-400"
+                                      : item.priority === "OPPORTUNITY"
+                                        ? "bg-emerald-500/20 text-emerald-400"
+                                        : item.priority === "LOW"
+                                          ? "bg-slate-500/20 text-slate-400"
+                                          : "bg-blue-500/20 text-blue-400"
                                 }`}
                               >
                                 {priorityInfo?.label || "רגיל"}
@@ -1077,7 +1078,7 @@ export default function TaskSheetsManager({
                                           הושלם:
                                         </span>{" "}
                                         {new Date(
-                                          item.completedAt
+                                          item.completedAt,
                                         ).toLocaleString("he-IL")}
                                       </p>
                                     )}
@@ -1221,8 +1222,8 @@ export default function TaskSheetsManager({
                   {loading
                     ? "שומר..."
                     : editingSheet
-                    ? "שמור שינויים"
-                    : "צור דף משימות"}
+                      ? "שמור שינויים"
+                      : "צור דף משימות"}
                 </button>
               </div>
             </form>

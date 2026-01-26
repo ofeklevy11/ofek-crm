@@ -126,7 +126,7 @@ export default async function TasksPage({
 
         {/* Tabs */}
         <div className="mb-6">
-          <div className="flex items-center gap-2 bg-slate-800/50 backdrop-blur-sm p-1.5 rounded-xl border border-slate-700/50 w-fit">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 bg-slate-800/50 backdrop-blur-sm p-1.5 rounded-xl border border-slate-700/50 w-full md:w-fit">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = currentView === tab.id;
@@ -135,9 +135,9 @@ export default async function TasksPage({
                   key={tab.id}
                   href={`/tasks?view=${tab.id}`}
                   prefetch={false}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                  className={`flex items-center justify-center md:justify-start gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
                     isActive
-                      ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/20"
+                      ? "bg-linear-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/20"
                       : "text-slate-400 hover:text-white hover:bg-slate-700/50"
                   }`}
                 >

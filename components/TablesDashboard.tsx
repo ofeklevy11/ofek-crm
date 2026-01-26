@@ -222,7 +222,7 @@ export default function TablesDashboard({
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <div className="min-h-screen bg-muted/30 p-8" dir="rtl">
+      <div className="min-h-screen bg-muted/30 p-4 md:p-8" dir="rtl">
         <div className="max-w-7xl mx-auto space-y-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>

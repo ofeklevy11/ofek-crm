@@ -162,7 +162,7 @@ export default function TableCard({
         </div>
 
         {/* Buttons (appear on hover) */}
-        <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-10">
+        <div className="absolute top-4 left-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex gap-2 z-10">
           {canEdit && (
             <button
               onClick={handleEditClick}

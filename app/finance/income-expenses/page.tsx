@@ -95,7 +95,7 @@ export default async function IncomeExpensesPage() {
             ניהול תזרימי המזומנים של העסק במקום אחד
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-col md:flex-row gap-3">
           <SyncRulesDialog rules={rules} />
 
           <Link href="/finance/collect">

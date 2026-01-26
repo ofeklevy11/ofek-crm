@@ -4,6 +4,7 @@ import { hasUserFlag } from "@/lib/permissions";
 import UserMenu from "./UserMenu";
 import ChatNavbarLink from "./chat/ChatNavbarLink";
 import NotificationBell from "./NotificationBell";
+import MobileMenu from "./MobileMenu";
 
 export default async function Navbar() {
   const user = await getCurrentUser();
@@ -163,7 +164,12 @@ export default async function Navbar() {
             {user ? (
               <>
                 <NotificationBell userId={user.id} />
-                <UserMenu user={user} />
+                <div className="hidden md:block">
+                  <UserMenu user={user} />
+                </div>
+                <div className="md:hidden">
+                  <MobileMenu user={user} />
+                </div>
               </>
             ) : (
               <Link

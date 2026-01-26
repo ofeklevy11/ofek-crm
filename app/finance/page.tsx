@@ -173,8 +173,8 @@ export default async function FinancePage() {
   }));
 
   return (
-    <div className="p-8 space-y-8 bg-[#f4f8f8] min-h-screen" dir="rtl">
-      <div className="flex justify-between items-center">
+    <div className="p-4 md:p-8 space-y-8 bg-[#f4f8f8] min-h-screen" dir="rtl">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
             ניהול כספים

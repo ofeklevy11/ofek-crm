@@ -742,17 +742,17 @@ export default function DashboardClient({
 
   return (
     <div className="w-full">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
           <LayoutDashboard className="text-blue-600" />
           הדאשבורד שלי
         </h2>
         {canViewDashboard && (
-          <div className="flex gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex gap-2 w-full md:w-auto">
             <button
               onClick={handleOpenMiniDashboardModal}
               disabled={!canAddWidget}
-              className={`flex items-center gap-2 px-4 py-2 bg-linear-to-r from-blue-50 to-purple-50 text-blue-700 border border-blue-100 rounded-lg transition shadow-sm font-medium text-sm ${
+              className={`flex items-center justify-center gap-2 px-4 py-2 bg-linear-to-r from-blue-50 to-purple-50 text-blue-700 border border-blue-100 rounded-lg transition shadow-sm font-medium text-sm ${
                 !canAddWidget
                   ? "opacity-50 cursor-not-allowed"
                   : "hover:shadow-md"
@@ -764,7 +764,7 @@ export default function DashboardClient({
             <button
               onClick={handleOpenGoalsTableModal}
               disabled={!canAddWidget}
-              className={`flex items-center gap-2 px-4 py-2 bg-linear-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-100 rounded-lg transition shadow-sm font-medium text-sm ${
+              className={`flex items-center justify-center gap-2 px-4 py-2 bg-linear-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-100 rounded-lg transition shadow-sm font-medium text-sm ${
                 !canAddWidget
                   ? "opacity-50 cursor-not-allowed"
                   : "hover:shadow-md"
@@ -776,7 +776,7 @@ export default function DashboardClient({
             <button
               onClick={handleOpenAnalyticsTableModal}
               disabled={!canAddWidget}
-              className={`flex items-center gap-2 px-4 py-2 bg-linear-to-r from-green-50 to-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg transition shadow-sm font-medium text-sm ${
+              className={`flex items-center justify-center gap-2 px-4 py-2 bg-linear-to-r from-green-50 to-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg transition shadow-sm font-medium text-sm ${
                 !canAddWidget
                   ? "opacity-50 cursor-not-allowed"
                   : "hover:shadow-md"
@@ -788,7 +788,7 @@ export default function DashboardClient({
             <button
               onClick={handleOpenAddModal}
               disabled={!canAddWidget}
-              className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg transition shadow-sm font-medium text-sm ${
+              className={`flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg transition shadow-sm font-medium text-sm ${
                 !canAddWidget
                   ? "opacity-50 cursor-not-allowed"
                   : "hover:bg-blue-700"
@@ -891,8 +891,10 @@ export default function DashboardClient({
                 );
               } else if (widget.type === "ANALYTICS_TABLE") {
                 const settings = (widget as any).settings || {};
-                const displayedAnalytics = initialAnalytics.filter((a) =>
-                  (settings.analyticsIds || []).includes(String(a.id)),
+                const displayedAnalytics = initialAnalytics.filter(
+                  (a) =>
+                    (settings.analyticsIds || []).includes(String(a.id)) &&
+                    a.type !== "GRAPH",
                 );
                 return (
                   <div key={widget.id} className="break-inside-avoid">
@@ -1674,55 +1676,69 @@ export default function DashboardClient({
                 </div>
                 <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col max-h-[400px]">
                   <div className="overflow-y-auto p-2">
-                    {initialAnalytics.map((analytic) => (
-                      <label
-                        key={analytic.id}
-                        className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition border border-transparent hover:border-gray-100"
-                      >
-                        <input
-                          type="checkbox"
-                          className="w-5 h-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                          checked={analyticsTableSelectedIds.includes(
-                            String(analytic.id),
-                          )}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setAnalyticsTableSelectedIds([
-                                ...analyticsTableSelectedIds,
-                                String(analytic.id),
-                              ]);
-                            } else {
-                              setAnalyticsTableSelectedIds(
-                                analyticsTableSelectedIds.filter(
-                                  (id) => id !== String(analytic.id),
-                                ),
-                              );
-                            }
-                          }}
-                        />
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900">
-                            {analytic.ruleName}
+                    {(() => {
+                      const availableAnalytics = initialAnalytics.filter(
+                        (a) => a.type !== "GRAPH",
+                      );
+
+                      if (availableAnalytics.length === 0) {
+                        return (
+                          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 border border-gray-100">
+                              <BarChart3 className="w-8 h-8 text-gray-300" />
+                            </div>
+                            <h3 className="text-gray-900 font-medium mb-1">
+                              לא נמצאו אנליטיקות זמינות
+                            </h3>
+                            <p className="text-sm text-gray-500 max-w-[250px] mx-auto leading-relaxed">
+                              ניתן להוסיף אנליטיקות חדשות דרך עמוד
+                              האנליטיקות
+                            </p>
                           </div>
-                          <div className="text-xs text-gray-500 flex items-center gap-2">
-                            <span>
-                              {analytic.tableName === "System"
-                                ? "מערכת"
-                                : analytic.tableName}
-                            </span>
-                            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                            <span>
-                              {analytic.type === "GRAPH" ? "גרף" : "אנליטיקה"}
-                            </span>
+                        );
+                      }
+
+                      return availableAnalytics.map((analytic) => (
+                        <label
+                          key={analytic.id}
+                          className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition border border-transparent hover:border-gray-100 group"
+                        >
+                          <input
+                            type="checkbox"
+                            className="w-5 h-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 transition"
+                            checked={analyticsTableSelectedIds.includes(
+                              String(analytic.id),
+                            )}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setAnalyticsTableSelectedIds([
+                                  ...analyticsTableSelectedIds,
+                                  String(analytic.id),
+                                ]);
+                              } else {
+                                setAnalyticsTableSelectedIds(
+                                  analyticsTableSelectedIds.filter(
+                                    (id) => id !== String(analytic.id),
+                                  ),
+                                );
+                              }
+                            }}
+                          />
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-900 group-hover:text-emerald-700 transition">
+                              {analytic.ruleName}
+                            </div>
+                            <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+                              <span className="bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">
+                                {analytic.tableName === "System"
+                                  ? "מערכת"
+                                  : analytic.tableName}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      </label>
-                    ))}
-                    {initialAnalytics.length === 0 && (
-                      <div className="p-8 text-center text-gray-500">
-                        לא נמצאו אנליטיקות זמינות.
-                      </div>
-                    )}
+                        </label>
+                      ));
+                    })()}
                   </div>
                 </div>
               </div>

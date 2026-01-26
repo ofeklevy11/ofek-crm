@@ -211,9 +211,9 @@ export default function UsersPage() {
   const pageNumbers = getPageNumbers();
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 p-8">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
             <h1 className="text-4xl font-bold text-gray-900 mb-2">
               ניהול משתמשים
@@ -234,7 +234,7 @@ export default function UsersPage() {
           </div>
         ) : (
           <>
-            <div className="bg-white rounded-2xl shadow-md overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-md overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
@@ -269,7 +269,7 @@ export default function UsersPage() {
                         <td className="px-6 py-4">
                           <span
                             className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(
-                              user.role
+                              user.role,
                             )}`}
                           >
                             {getRoleLabel(user.role)}

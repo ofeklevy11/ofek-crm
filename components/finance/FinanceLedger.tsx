@@ -62,7 +62,7 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
   const [deleteRecord, setDeleteRecord] = useState<FinanceRecord | null>(null);
 
   const filteredRecords = initialRecords.filter(
-    (r) => filter === "ALL" || r.type === filter
+    (r) => filter === "ALL" || r.type === filter,
   );
 
   const confirmDelete = async () => {
@@ -105,7 +105,7 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
               "px-3 py-1 text-xs font-medium rounded-md transition-all",
               filter === "ALL"
                 ? "bg-white shadow-sm text-gray-900"
-                : "text-gray-500 hover:text-gray-900"
+                : "text-gray-500 hover:text-gray-900",
             )}
           >
             הכל
@@ -116,7 +116,7 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
               "px-3 py-1 text-xs font-medium rounded-md transition-all",
               filter === "INCOME"
                 ? "bg-white shadow-sm text-[#4f95ff]"
-                : "text-gray-500 hover:text-[#4f95ff]"
+                : "text-gray-500 hover:text-[#4f95ff]",
             )}
           >
             הכנסות
@@ -127,7 +127,7 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
               "px-3 py-1 text-xs font-medium rounded-md transition-all",
               filter === "EXPENSE"
                 ? "bg-white shadow-sm text-[#a24ec1]"
-                : "text-gray-500 hover:text-[#a24ec1]"
+                : "text-gray-500 hover:text-[#a24ec1]",
             )}
           >
             הוצאות
@@ -168,7 +168,7 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
                       ? "bg-green-50/50 hover:bg-green-100/50"
                       : record.type === "EXPENSE"
                         ? "bg-red-50/50 hover:bg-red-100/50"
-                        : "hover:bg-gray-50/50"
+                        : "hover:bg-gray-50/50",
                   )}
                 >
                   <TableCell className="font-medium text-gray-600 text-right">
@@ -241,7 +241,7 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
                         "font-bold flex items-center justify-end gap-1",
                         record.type === "INCOME"
                           ? "text-[#4f95ff]"
-                          : "text-[#a24ec1]"
+                          : "text-[#a24ec1]",
                       )}
                     >
                       {record.type === "INCOME" ? (
@@ -258,7 +258,7 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
                       size="icon"
                       disabled={isDeleting === record.id}
                       onClick={() => setDeleteRecord(record)}
-                      className="h-8 w-8 text-gray-400 hover:text-[#a24ec1] opacity-0 group-hover:opacity-100 transition-all"
+                      className="h-8 w-8 text-gray-400 hover:text-[#a24ec1] opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -319,7 +319,7 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
               className={cn(
                 deleteRecord?.syncRule?.sourceType === "TABLE"
                   ? "bg-[#a24ec1] hover:bg-purple-700"
-                  : "bg-[#4f95ff] hover:bg-blue-600"
+                  : "bg-[#4f95ff] hover:bg-blue-600",
               )}
             >
               {isDeleting ? "מוחק..." : "אשר מחיקה"}
