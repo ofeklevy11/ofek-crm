@@ -63,7 +63,7 @@ export async function createWorkflowInstance(data: {
 export async function updateWorkflowInstanceStage(
   instanceId: number,
   stageId: number,
-  completed: boolean
+  completed: boolean,
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
@@ -91,7 +91,7 @@ export async function updateWorkflowInstanceStage(
 
     // Find next stage to set as "current"
     const currentStageIndex = instance.workflow.stages.findIndex(
-      (s) => s.id === stageId
+      (s) => s.id === stageId,
     );
     const completedStage = instance.workflow.stages[currentStageIndex];
     const nextStage = instance.workflow.stages[currentStageIndex + 1];
@@ -109,7 +109,7 @@ export async function updateWorkflowInstanceStage(
     if (completedStage) {
       // Run in background (fire and forget pattern for response speed, though we await here for safety in this demo)
       await executeStageAutomations(completedStage, instance, user).catch((e) =>
-        console.error("Automation Error:", e)
+        console.error("Automation Error:", e),
       );
     }
   } else {
@@ -157,7 +157,7 @@ async function executeStageAutomations(stage: any, instance: any, user: any) {
   if (!details || !Array.isArray(details.systemActions)) return;
 
   console.log(
-    `[Automation] Processing ${details.systemActions.length} actions for stage ${stage.name}`
+    `[Automation] Processing ${details.systemActions.length} actions for stage ${stage.name}`,
   );
 
   for (const action of details.systemActions) {
@@ -174,6 +174,15 @@ async function executeStageAutomations(stage: any, instance: any, user: any) {
       switch (type) {
         case "create_task":
           if (config.title) {
+            let dueDate = undefined;
+            if (
+              config.dueDateOffset !== undefined &&
+              config.dueDateOffset !== ""
+            ) {
+              dueDate = new Date();
+              dueDate.setDate(dueDate.getDate() + Number(config.dueDateOffset));
+            }
+
             await prisma.task.create({
               data: {
                 companyId: user.companyId,
@@ -183,8 +192,9 @@ async function executeStageAutomations(stage: any, instance: any, user: any) {
                   ? Number(config.assigneeId)
                   : null,
                 priority: config.priority || "normal",
-                description: `Created automatically by workflow: ${instance.name} (Stage: ${stage.name})`,
-                tags: ["automation"],
+                description: config.description || "",
+                dueDate: dueDate,
+                tags: ['נוצר ע"י אוטומציה מתהליך עבודה'],
               },
             });
             console.log(`[Automation] Task created: ${config.title}`);
@@ -204,7 +214,7 @@ async function executeStageAutomations(stage: any, instance: any, user: any) {
               },
             });
             console.log(
-              `[Automation] Notification sent to user ${config.recipientId}`
+              `[Automation] Notification sent to user ${config.recipientId}`,
             );
           }
           break;
@@ -223,8 +233,161 @@ async function executeStageAutomations(stage: any, instance: any, user: any) {
               },
             });
             console.log(
-              `[Automation] Record created in table ${config.tableId}`
+              `[Automation] Record created in table ${config.tableId}`,
             );
+          }
+          break;
+
+        case "update_record":
+          if (config.tableId && config.recordId && config.fieldName) {
+            const recordId = Number(config.recordId);
+            const tableId = Number(config.tableId);
+
+            // Fetch existing record first to get current data
+            const record = await prisma.record.findFirst({
+              where: {
+                id: recordId,
+                tableId: tableId,
+                companyId: user.companyId,
+              },
+            });
+
+            if (record) {
+              let newData = { ...(record.data as any) };
+              const field = config.fieldName;
+              let val = config.value;
+
+              // Handle numeric operations if specified (add, subtract, etc.)
+              if (
+                config.operation &&
+                config.operation !== "set" &&
+                !isNaN(Number(val))
+              ) {
+                const currentVal = Number(newData[field] || 0);
+                const operVal = Number(val);
+                switch (config.operation) {
+                  case "add":
+                    val = currentVal + operVal;
+                    break;
+                  case "subtract":
+                    val = currentVal - operVal;
+                    break;
+                  case "multiply":
+                    val = currentVal * operVal;
+                    break;
+                  case "divide":
+                    val = operVal !== 0 ? currentVal / operVal : currentVal;
+                    break;
+                }
+              }
+
+              newData[field] = val;
+
+              await prisma.record.update({
+                where: { id: recordId },
+                data: { data: newData },
+              });
+              console.log(
+                `[Automation] Record ${recordId} updated: ${field} = ${val}`,
+              );
+            } else {
+              console.log(
+                `[Automation] Record ${recordId} not found for update in table ${tableId}`,
+              );
+            }
+          }
+          break;
+
+        case "create_event":
+          const now = new Date();
+          let startTime = new Date(now);
+
+          // TIMING LOGIC
+          if (config.timingMode === "relative") {
+            // Add hours and minutes from now
+            if (config.hoursOffset)
+              startTime.setHours(
+                startTime.getHours() + Number(config.hoursOffset),
+              );
+            if (config.minutesOffset)
+              startTime.setMinutes(
+                startTime.getMinutes() + Number(config.minutesOffset),
+              );
+          } else {
+            // Fixed time mode (Default)
+            // 1. Add days
+            if (config.daysOffset) {
+              startTime.setDate(
+                startTime.getDate() + Number(config.daysOffset),
+              );
+            }
+            // 2. Set specific time if provided (e.g. "14:30")
+            if (config.startTime) {
+              const [hours, minutes] = config.startTime.split(":").map(Number);
+              if (!isNaN(hours) && !isNaN(minutes)) {
+                startTime.setHours(hours);
+                startTime.setMinutes(minutes);
+                startTime.setSeconds(0);
+                startTime.setMilliseconds(0);
+              }
+            }
+          }
+
+          // DURATION LOGIC
+          const duration = Number(config.duration || 60);
+          const endTime = new Date(startTime);
+          endTime.setMinutes(endTime.getMinutes() + duration);
+
+          await prisma.calendarEvent.create({
+            data: {
+              companyId: user.companyId,
+              title: config.title || "Meeting (Auto)",
+              description:
+                config.description || `Created by workflow: ${instance.name}`,
+              startTime: startTime,
+              endTime: endTime,
+              color: config.color || "#3788d8",
+            },
+          });
+          console.log(`[Automation] Event created: ${config.title}`);
+          break;
+
+        case "whatsapp":
+          let target = config.phoneColumnId || "";
+          if (target.startsWith("manual:")) {
+            target = target.replace("manual:", "");
+          } else {
+            // For now we only support manual or we'd need record context
+          }
+
+          const isGroup = config.targetType === "group";
+
+          console.log(
+            `[Automation] Sending WhatsApp via GreenAPI to ${target} (${isGroup ? "Group" : "Private"})`,
+          );
+
+          try {
+            const { sendGreenApiMessage, sendGreenApiFile } =
+              await import("./green-api");
+
+            if (config.messageType === "media" && config.mediaFileId) {
+              // If media logic is needed in future, we check file URL here.
+              await sendGreenApiMessage(
+                user.companyId,
+                target,
+                config.content || "",
+              );
+            } else {
+              await sendGreenApiMessage(
+                user.companyId,
+                target,
+                config.content || "",
+              );
+            }
+
+            console.log("[Automation] GreenAPI call successful");
+          } catch (e) {
+            console.error("[Automation] GreenAPI failed:", e);
           }
           break;
 

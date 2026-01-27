@@ -15,6 +15,7 @@ import {
   Plus,
   ArrowUp,
   ArrowDown,
+  RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -125,6 +126,10 @@ export default function AITableCreator({
       }
 
       if (data.schema) {
+        // Safeguard: ensure fields is an array
+        if (!Array.isArray(data.schema.fields)) {
+          data.schema.fields = [];
+        }
         setCurrentSchema(data.schema);
         setMessages((prev) => [
           ...prev,
@@ -267,14 +272,35 @@ export default function AITableCreator({
                 תאר מה שאתה צריך, ואני אבנה את זה.
               </p>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-5 w-5" />
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setMessages([
+                    {
+                      role: "model",
+                      content:
+                        "היי! תאר את הטבלה שתרצה ליצור, ואני אעצב אותה עבורך.",
+                    },
+                  ]);
+                  setCurrentSchema(null);
+                  setInput("");
+                }}
+                className="text-muted-foreground hover:text-foreground gap-2"
+              >
+                <RotateCcw className="h-4 w-4" />
+                התחל מחדש
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
 
           <ScrollArea className="flex-1 p-6 bg-muted/10">
@@ -400,7 +426,7 @@ export default function AITableCreator({
               <div className="flex items-center justify-between">
                 <h4 className="font-semibold text-foreground flex items-center gap-2">
                   <TableIcon className="h-4 w-4" />
-                  שדות ({currentSchema.fields.length})
+                  שדות ({currentSchema.fields?.length || 0})
                 </h4>
                 <Button
                   variant="outline"
@@ -413,7 +439,7 @@ export default function AITableCreator({
               </div>
 
               <div className="space-y-3">
-                {currentSchema.fields.map((field, idx) => (
+                {currentSchema.fields?.map((field, idx) => (
                   <div
                     key={idx}
                     className="bg-muted/30 border border-border rounded-lg p-4 space-y-3 group hover:border-primary/30 transition shadow-sm"
@@ -487,7 +513,9 @@ export default function AITableCreator({
                             variant="ghost"
                             size="icon"
                             onClick={() => moveField(idx, "down")}
-                            disabled={idx === currentSchema.fields.length - 1}
+                            disabled={
+                              idx === (currentSchema.fields?.length || 0) - 1
+                            }
                             className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-background rounded-sm"
                             title="הזז למטה"
                           >

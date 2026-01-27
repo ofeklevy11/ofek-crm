@@ -39,6 +39,7 @@ import { getApiKeys, createApiKey, deleteApiKey } from "@/app/actions/api-keys";
 import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import GreenApiConnection from "./GreenApiConnection";
 
 interface ProfileContentProps {
   user: User;
@@ -93,7 +94,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
   async function handleDeleteKey(id: number) {
     if (
       !confirm(
-        "האם אתה בטוח שברצונך למחוק מפתח זה? פעולה זו תחסום כל שימוש קיים במפתח."
+        "האם אתה בטוח שברצונך למחוק מפתח זה? פעולה זו תחסום כל שימוש קיים במפתח.",
       )
     )
       return;
@@ -226,8 +227,52 @@ export default function ProfileContent({ user }: ProfileContentProps) {
           </Card>
         </div>
 
-        {/* Right Column: API Management (Admins Only) */}
+        {/* Right Column: API Management & Integrations */}
         <div className="md:col-span-2 space-y-6">
+          {/* Integrations Card */}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Shield className="w-5 h-5 text-indigo-600" />
+                ניהול אינטגרציות
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-slate-300 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="p-2 bg-green-50 rounded-lg border border-green-100">
+                    <span className="text-green-600 font-bold text-lg">WA</span>
+                    {/* Or use an icon if available */}
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-900">
+                      Green API (WhatsApp)
+                    </h4>
+                    <p className="text-sm text-slate-500">
+                      חיבור וואטסאפ ארגוני לשליחת הודעות
+                    </p>
+                  </div>
+                </div>
+                {isAdmin ? (
+                  <Button
+                    variant="outline"
+                    className="bg-white hover:bg-slate-50 text-indigo-600 border-indigo-200 hover:border-indigo-300"
+                    onClick={() => router.push("/profile/green-api")}
+                  >
+                    הגדרות
+                  </Button>
+                ) : (
+                  <Badge
+                    variant="secondary"
+                    className="bg-slate-100 text-slate-500"
+                  >
+                    גישה לאדמין בלבד
+                  </Badge>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           {isAdmin ? (
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="border-b border-slate-100">
@@ -335,7 +380,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                               <TableCell className="text-slate-500 text-sm">
                                 {format(
                                   new Date(apiKey.createdAt),
-                                  "dd/MM/yyyy"
+                                  "dd/MM/yyyy",
                                 )}
                               </TableCell>
                               <TableCell>

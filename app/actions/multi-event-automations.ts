@@ -36,7 +36,7 @@ function extractIdsFromValue(val: any): number[] {
 async function getRelatedRecordIdsRecursive(
   recordId: number,
   visited = new Set<number>(),
-  depth = 0
+  depth = 0,
 ): Promise<Set<number>> {
   if (visited.has(recordId) || depth >= 4) return visited;
   visited.add(recordId);
@@ -62,7 +62,7 @@ async function getRelatedRecordIdsRecursive(
             linkedIds.forEach((id) => {
               if (!visited.has(id)) {
                 promises.push(
-                  getRelatedRecordIdsRecursive(id, visited, depth + 1)
+                  getRelatedRecordIdsRecursive(id, visited, depth + 1),
                 );
               }
             });
@@ -91,7 +91,7 @@ export async function calculateMultiEventDuration(
     value: string;
     tableId?: string;
   }>,
-  automationRuleId: number
+  automationRuleId: number,
 ) {
   console.log(`[Multi-Event] Starting calculation for Record ${recordId}`);
 
@@ -106,7 +106,7 @@ export async function calculateMultiEventDuration(
     console.log(
       `[Multi-Event] Looking for logs in ${
         targetRecordIds.size
-      } records: ${Array.from(targetRecordIds).join(", ")}`
+      } records: ${Array.from(targetRecordIds).join(", ")}`,
     );
 
     // 2. משיכת כל ה-audit logs
@@ -167,7 +167,7 @@ export async function calculateMultiEventDuration(
           });
           found = true;
           console.log(
-            `[Multi-Event] ✅ Found '${event.eventName}' at ${log.timestamp} (Record: ${log.recordId})`
+            `[Multi-Event] ✅ Found '${event.eventName}' at ${log.timestamp} (Record: ${log.recordId})`,
           );
           break;
         }
@@ -175,7 +175,7 @@ export async function calculateMultiEventDuration(
 
       if (!found) {
         console.log(
-          `[Multi-Event] ⚠️ Event '${event.eventName}' NOT found. Searched for Column: '${event.columnId}' with Value: '${targetValue}'`
+          `[Multi-Event] ⚠️ Event '${event.eventName}' NOT found. Searched for Column: '${event.columnId}' with Value: '${targetValue}'`,
         );
         return null;
       }
@@ -218,7 +218,7 @@ export async function calculateMultiEventDuration(
     // 5. סיכום ושמירה
     const totalDurationSeconds = deltas.reduce(
       (sum, delta) => sum + delta.durationSeconds,
-      0
+      0,
     );
 
     const totalMinutes = Math.floor(totalDurationSeconds / 60);
@@ -246,24 +246,141 @@ export async function calculateMultiEventDuration(
     });
 
     console.log(
-      `[Multi-Event] ✅ Successfully saved result #${result.id}. Duration: ${totalDurationString}`
+      `[Multi-Event] ✅ Successfully saved result #${result.id}. Duration: ${totalDurationString}`,
     );
 
-    // 6. התראה
-    if (rule && rule.actionConfig) {
-      const config = rule.actionConfig as any;
-      if (
-        config.notification &&
-        config.notification.recipientId &&
-        config.notification.message
-      ) {
-        console.log(`[Multi-Event] Sending notification...`);
-        await sendNotification({
-          userId: Number(config.notification.recipientId),
-          title: "משימה הושלמה: " + rule.name,
-          message: `${config.notification.message}\nמשך כולל: ${totalDurationString}`,
-          link: `/tables/${tableId}?recordId=${recordId}`,
-        });
+    // 6. ביצוע פעולה (Action) לפי סוג הכלל
+    if (rule) {
+      const companyId = rule.companyId;
+      // נשיג את המידע העדכני של הרשומה לצורך הזרקת משתנים
+      const record = await prisma.record.findUnique({
+        where: { id: recordId },
+        select: { data: true },
+      });
+      const recordData = record?.data || {};
+
+      // נוסיף את משך הזמן לנתונים זמינים
+      const enrichedData = {
+        ...(typeof recordData === "object" ? recordData : {}),
+        durationString: totalDurationString,
+        durationSeconds: totalDurationSeconds,
+        weightedScore: weightedScore,
+      };
+
+      console.log(`[Multi-Event] Executing Action: ${rule.actionType}`);
+
+      const executeSingleAction = async (
+        type: string,
+        config: any,
+        contextData: any,
+      ) => {
+        try {
+          if (type === "SEND_WHATSAPP") {
+            // Handle delay/sleep if configured (to avoid Green API blocks)
+            if (config.delay) {
+              console.log(
+                `[Multi-Event] Sleeping for ${config.delay} seconds before sending WhatsApp...`,
+              );
+              await new Promise((resolve) =>
+                setTimeout(resolve, config.delay * 1000),
+              );
+            }
+
+            const { executeWhatsAppAction } = await import("./automations");
+            await executeWhatsAppAction(
+              { ...rule, actionConfig: config },
+              contextData,
+              companyId,
+            );
+          } else if (type === "WEBHOOK") {
+            const { executeWebhookAction } = await import("./automations");
+            await executeWebhookAction(
+              { ...rule, actionConfig: config },
+              contextData,
+              companyId,
+            );
+          } else if (type === "SEND_NOTIFICATION") {
+            if (config.recipientId) {
+              await sendNotification({
+                userId: Number(config.recipientId),
+                title: config.titleTemplate || "הושלמה שרשרת אירועים",
+                message: (
+                  config.messageTemplate ||
+                  "התהליך הושלם בהצלחה.\nמשך: {durationString}"
+                ).replace("{durationString}", totalDurationString),
+                link: `/tables/${tableId}?recordId=${recordId}`,
+              });
+            }
+          } else if (type === "CREATE_TASK") {
+            const taskData: any = {
+              title: config.title || "משימה מאוטומציה מרובת שלבים",
+              description:
+                (config.description || "") +
+                `\n\nמשך התהליך: ${totalDurationString}`,
+              status: config.status || "todo",
+              companyId: companyId,
+              tags: config.tags || [],
+            };
+
+            if (config.priority) taskData.priority = config.priority;
+
+            if (config.dueDays) {
+              const due = new Date();
+              due.setDate(due.getDate() + Number(config.dueDays));
+              taskData.dueDate = due;
+            } else if (config.dueDate) {
+              taskData.dueDate = new Date(config.dueDate);
+            }
+
+            if (config.assigneeId)
+              taskData.assigneeId = Number(config.assigneeId);
+
+            await prisma.task.create({
+              data: taskData,
+            });
+            console.log(`[Multi-Event] Task created for rule ${rule.id}`);
+          }
+        } catch (actionErr) {
+          console.error(
+            `[Multi-Event] Action execution failed (${type}):`,
+            actionErr,
+          );
+        }
+      };
+
+      try {
+        if (rule.actionType === "MULTI_ACTION") {
+          const actions = (rule.actionConfig as any)?.actions || [];
+          for (const action of actions) {
+            await executeSingleAction(action.type, action.config, enrichedData);
+          }
+        } else {
+          // Single Action
+          await executeSingleAction(
+            rule.actionType,
+            rule.actionConfig,
+            enrichedData,
+          );
+
+          // Legacy backward compatibility for notifications attached to duration calc
+          if (rule.actionType === "CALCULATE_MULTI_EVENT_DURATION") {
+            const config = rule.actionConfig as any;
+            if (
+              config.notification &&
+              config.notification.recipientId &&
+              config.notification.message
+            ) {
+              await sendNotification({
+                userId: Number(config.notification.recipientId),
+                title: "משימה הושלמה: " + rule.name,
+                message: `${config.notification.message}\nמשך כולל: ${totalDurationString}`,
+                link: `/tables/${tableId}?recordId=${recordId}`,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error("[Multi-Event] Error in action orchestration:", err);
       }
     }
 
@@ -281,13 +398,13 @@ export async function processMultiEventDurationTrigger(
   tableId: number,
   recordId: number,
   oldData: any,
-  newData: any
+  newData: any,
 ) {
   try {
     const rules = await prisma.automationRule.findMany({
       where: {
         isActive: true,
-        actionType: "CALCULATE_MULTI_EVENT_DURATION",
+        triggerType: "MULTI_EVENT_DURATION",
       },
     });
 
@@ -302,8 +419,8 @@ export async function processMultiEventDurationTrigger(
       const expectedTableId = lastEvent.tableId
         ? Number(lastEvent.tableId)
         : triggerConfig.tableId
-        ? Number(triggerConfig.tableId)
-        : null;
+          ? Number(triggerConfig.tableId)
+          : null;
 
       if (expectedTableId && expectedTableId !== tableId) {
         continue;
@@ -327,14 +444,14 @@ export async function processMultiEventDurationTrigger(
         oldValue !== newValue
       ) {
         console.log(
-          `[Multi-Event Trigger] ✅ Chain completion detected for Rule ${rule.id}`
+          `[Multi-Event Trigger] ✅ Chain completion detected for Rule ${rule.id}`,
         );
 
         await calculateMultiEventDuration(
           tableId,
           recordId,
           eventChain,
-          rule.id
+          rule.id,
         );
       }
     }

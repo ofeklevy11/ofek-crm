@@ -59,6 +59,9 @@ model Company {
   // Nurture Hub
   nurtureLists        NurtureList[]
 
+  greenApiInstanceId String?  // Green API Instance ID
+  greenApiToken      String?  // Green API Token
+
   apiKeys             ApiKey[]
 }
 

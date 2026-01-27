@@ -20,7 +20,14 @@ import {
   MousePointer2,
   CalendarClock,
   ChevronDown,
+  MessageSquare,
+  FileText,
+  Image as ImageIcon,
+  Copy,
+  Pencil,
+  CheckSquare,
 } from "lucide-react";
+import { getAllFiles } from "@/app/actions/storage";
 
 interface User {
   id: number;
@@ -41,6 +48,7 @@ interface AutomationModalProps {
     actionType: string;
     actionConfig: any;
   } | null;
+  userPlan?: string;
 }
 
 export default function AutomationModal({
@@ -50,10 +58,14 @@ export default function AutomationModal({
   onClose,
   onCreated,
   editingRule,
+  userPlan = "basic",
 }: AutomationModalProps) {
   // --- Wizard State ---
   const [step, setStep] = useState(1);
   const totalSteps = 4;
+
+  // Calculate max actions based on user plan
+  const maxActions = userPlan === "premium" || userPlan === "super" ? 5 : 2;
 
   // --- Form State ---
   const [name, setName] = useState(editingRule?.name || "");
@@ -67,6 +79,9 @@ export default function AutomationModal({
   // Task specific
   const [toStatus, setToStatus] = useState(
     editingRule?.triggerConfig?.toStatus || "any",
+  );
+  const [fromStatus, setFromStatus] = useState(
+    editingRule?.triggerConfig?.fromStatus || "any",
   );
 
   // Generic Record specific
@@ -103,6 +118,88 @@ export default function AutomationModal({
   const [columns, setColumns] = useState<any[]>([]);
   const [loadingColumns, setLoadingColumns] = useState(false);
 
+  const [availableFiles, setAvailableFiles] = useState<any[]>([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+  const [showDynamicValues, setShowDynamicValues] = useState(false);
+
+  // --- Actions State ---
+  // We now support multiple actions.
+  // If editing legacy rule, we convert it to array.
+  const [actions, setActions] = useState<{ type: string; config: any }[]>(
+    () => {
+      if (!editingRule) return [];
+      if (editingRule.actionType === "MULTI_ACTION") {
+        return editingRule.actionConfig?.actions || [];
+      }
+      return [
+        {
+          type: editingRule.actionType,
+          config: editingRule.actionConfig || {},
+        },
+      ];
+    },
+  );
+
+  // State for the CURRENT action being added/edited
+  const [isAddingAction, setIsAddingAction] = useState(actions.length === 0);
+  const [currentActionType, setCurrentActionType] = useState<
+    | "SEND_NOTIFICATION"
+    | "CALCULATE_DURATION"
+    | "SEND_WHATSAPP"
+    | "WEBHOOK"
+    | "CREATE_TASK"
+    | ""
+  >("");
+  const [editingActionIndex, setEditingActionIndex] = useState<number | null>(
+    null,
+  );
+
+  // Temporary config state for the current action
+  const [recipientId, setRecipientId] = useState("");
+  const [messageTemplate, setMessageTemplate] = useState(
+    "המשימה {taskTitle} עברה לסטטוס {toStatus}",
+  );
+
+  // WhatsApp Specific
+  const [waPhoneColumnId, setWaPhoneColumnId] = useState("");
+  const [waTargetType, setWaTargetType] = useState<"private" | "group">(
+    "private",
+  );
+  const [waMessageType, setWaMessageType] = useState<
+    "private" | "group" | "media"
+  >("private");
+  const [waContent, setWaContent] = useState("");
+  const [waMediaFileId, setWaMediaFileId] = useState("");
+  const [waDelay, setWaDelay] = useState(0);
+
+  // Webhook Specific
+  const [webhookUrl, setWebhookUrl] = useState("");
+
+  // Create Task Specific
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskDescription, setTaskDescription] = useState("");
+  const [taskStatus, setTaskStatus] = useState("todo");
+  const [taskPriority, setTaskPriority] = useState("low");
+  const [taskAssigneeId, setTaskAssigneeId] = useState("");
+  const [taskDueDays, setTaskDueDays] = useState(0);
+  const [taskTags, setTaskTags] = useState<string[]>([]);
+  const [taskTagInput, setTaskTagInput] = useState("");
+
+  const handleAddTaskTag = (e: React.KeyboardEvent | React.MouseEvent) => {
+    if (e.type === "keydown" && (e as React.KeyboardEvent).key !== "Enter")
+      return;
+    e.preventDefault();
+    const tag = taskTagInput.trim();
+    if (tag && !taskTags.includes(tag)) {
+      setTaskTags([...taskTags, tag]);
+      setTaskTagInput("");
+    }
+  };
+
+  const removeTaskTag = (tagToRemove: string) => {
+    setTaskTags(taskTags.filter((t) => t !== tagToRemove));
+  };
+
   // Fetch columns when table/trigger changes
   useEffect(() => {
     if (
@@ -131,6 +228,18 @@ export default function AutomationModal({
     }
   }, [tableId, triggerType]);
 
+  // Load files when WhatsApp media is selected
+  useEffect(() => {
+    if (waMessageType === "media") {
+      setLoadingFiles(true);
+      getAllFiles()
+        .then((files) => {
+          setAvailableFiles(files);
+        })
+        .finally(() => setLoadingFiles(false));
+    }
+  }, [waMessageType]);
+
   // Auto-adjust timeValue when switching to minutes with value < 5
   useEffect(() => {
     if (timeUnit === "minutes" && timeValue && Number(timeValue) < 5) {
@@ -138,18 +247,7 @@ export default function AutomationModal({
     }
   }, [timeUnit, timeValue]);
 
-  const [recipientId, setRecipientId] = useState(
-    editingRule?.actionConfig?.recipientId?.toString() || "",
-  );
-  const [messageTemplate, setMessageTemplate] = useState(
-    editingRule?.actionConfig?.messageTemplate ||
-      "המשימה {taskTitle} עברה לסטטוס {toStatus}",
-  );
   const [loading, setLoading] = useState(false);
-
-  const [actionType, setActionType] = useState<
-    "SEND_NOTIFICATION" | "CALCULATE_DURATION"
-  >((editingRule?.actionType as any) || "SEND_NOTIFICATION");
 
   // Advanced Conditions State
   const [useBusinessHours, setUseBusinessHours] = useState(
@@ -190,6 +288,7 @@ export default function AutomationModal({
       selectedConditionColumn.type === "status");
 
   // --- Submission ---
+  // --- Submission ---
   const handleSubmit = async () => {
     setLoading(true);
 
@@ -197,7 +296,10 @@ export default function AutomationModal({
       let triggerConfig: any = {};
 
       if (triggerType === "TASK_STATUS_CHANGE") {
-        triggerConfig = { toStatus: toStatus === "any" ? undefined : toStatus };
+        triggerConfig = {
+          toStatus: toStatus === "any" ? undefined : toStatus,
+          fromStatus: fromStatus === "any" ? undefined : fromStatus,
+        };
       } else if (triggerType === "NEW_RECORD") {
         triggerConfig = {
           tableId,
@@ -207,6 +309,7 @@ export default function AutomationModal({
         };
       } else if (triggerType === "RECORD_FIELD_CHANGE") {
         triggerConfig = {
+          tableId,
           columnId,
           fromValue: fromValue || undefined,
           toValue: toValue || undefined,
@@ -230,19 +333,30 @@ export default function AutomationModal({
         };
       }
 
+      // Determine Action Payload
+      let finalActionType = "";
+      let finalActionConfig = {};
+
+      if (actions.length > 1) {
+        finalActionType = "MULTI_ACTION";
+        finalActionConfig = { actions };
+      } else if (actions.length === 1) {
+        // Use the specific type directly for backward compatibility / simplicity
+        finalActionType = actions[0].type;
+        finalActionConfig = actions[0].config;
+      } else {
+        // Should not happen if validation works
+        alert("נא לבחור לפחות פעולה אחת");
+        setLoading(false);
+        return;
+      }
+
       const data = {
         name,
         triggerType,
         triggerConfig,
-        actionType,
-        actionConfig:
-          actionType === "SEND_NOTIFICATION"
-            ? {
-                recipientId: parseInt(recipientId),
-                messageTemplate,
-                titleTemplate: "עדכון במערכת",
-              }
-            : {},
+        actionType: finalActionType,
+        actionConfig: finalActionConfig,
       };
 
       let result;
@@ -266,6 +380,135 @@ export default function AutomationModal({
     }
   };
 
+  // --- Action Management ---
+  const handleConfirmAction = () => {
+    if (!validateCurrentAction()) return;
+
+    const newActionConfig: any =
+      currentActionType === "WEBHOOK"
+        ? { webhookUrl }
+        : currentActionType === "SEND_NOTIFICATION"
+          ? {
+              recipientId: parseInt(recipientId),
+              messageTemplate,
+              titleTemplate: "עדכון במערכת",
+            }
+          : currentActionType === "SEND_WHATSAPP"
+            ? {
+                phoneColumnId: waPhoneColumnId,
+                messageType: waMessageType,
+                content: waContent,
+                mediaFileId: waMediaFileId ? Number(waMediaFileId) : null,
+                delay: waDelay,
+              }
+            : currentActionType === "CREATE_TASK"
+              ? {
+                  title: taskTitle,
+                  description: taskDescription,
+                  status: taskStatus,
+                  priority: taskPriority,
+                  assigneeId: taskAssigneeId ? Number(taskAssigneeId) : null,
+                  dueDays: Number(taskDueDays),
+                  tags: taskTags,
+                }
+              : {};
+
+    const actionObj = { type: currentActionType, config: newActionConfig };
+
+    if (editingActionIndex !== null) {
+      // Update existing
+      const newActions = [...actions];
+      newActions[editingActionIndex] = actionObj;
+      setActions(newActions);
+      setEditingActionIndex(null);
+    } else {
+      // Add new
+      setActions([...actions, actionObj]);
+    }
+
+    // Reset fields
+    setIsAddingAction(false);
+    setCurrentActionType("");
+    setRecipientId("");
+    setMessageTemplate("המשימה {taskTitle} עברה לסטטוס {toStatus}");
+    setWaPhoneColumnId("");
+    setWaContent("");
+    setWaMediaFileId("");
+    setWaDelay(0);
+    setWaDelay(0);
+    setWebhookUrl("");
+    setTaskTitle("");
+    setTaskDescription("");
+    setTaskStatus("todo");
+    setTaskPriority("low");
+    setTaskAssigneeId("");
+    setTaskDueDays(0);
+    setTaskTags([]);
+    setTaskTagInput("");
+  };
+
+  const removeAction = (index: number) => {
+    const newActions = [...actions];
+    newActions.splice(index, 1);
+    setActions(newActions);
+    if (newActions.length === 0) {
+      setIsAddingAction(true);
+      setEditingActionIndex(null);
+    }
+  };
+
+  const editAction = (index: number) => {
+    const action = actions[index];
+    setCurrentActionType(action.type as any);
+
+    // Populate fields based on type
+    if (action.type === "SEND_NOTIFICATION") {
+      setRecipientId(action.config.recipientId?.toString() || "");
+      setMessageTemplate(action.config.messageTemplate || "");
+    } else if (action.type === "SEND_WHATSAPP") {
+      setWaPhoneColumnId(action.config.phoneColumnId || "");
+      setWaTargetType(
+        action.config.phoneColumnId?.includes("@g.us") ? "group" : "private",
+      );
+      setWaMessageType(action.config.messageType || "private");
+      setWaContent(action.config.content || "");
+      setWaMediaFileId(action.config.mediaFileId?.toString() || "");
+      setWaDelay(action.config.delay || 0);
+    } else if (action.type === "WEBHOOK") {
+      setWebhookUrl(action.config.webhookUrl || "");
+    } else if (action.type === "CREATE_TASK") {
+      setTaskTitle(action.config.title || "");
+      setTaskDescription(action.config.description || "");
+      setTaskStatus(action.config.status || "todo");
+      setTaskPriority(action.config.priority || "low");
+      setTaskAssigneeId(action.config.assigneeId?.toString() || "");
+      setTaskDueDays(action.config.dueDays || 0);
+      setTaskTags(action.config.tags || []);
+    }
+
+    setEditingActionIndex(index);
+    setIsAddingAction(true);
+  };
+
+  const handleNextStep = () => {
+    if (step === 3) {
+      // If user is currently adding an action and hits "Next" (shouldn't happen if UI is correct, but safe guard)
+      // We could auto-save if valid?
+      if (isAddingAction && validateCurrentAction()) {
+        handleConfirmAction();
+        // Then check if we should move on?
+        // Actually, if they confirmed, we just show the summary screen.
+        // But if they clicked "Finish" (Step 4), they might expect to go to Step 4.
+        // Let's assume footer handles this.
+      }
+      if (actions.length > 0 && !isAddingAction) {
+        setStep(step + 1);
+      }
+    } else {
+      setStep(step + 1);
+    }
+  };
+
   // --- Validation ---
   const canProceedToStep2 = name.length > 2;
   const canProceedToStep3 = () => {
@@ -280,10 +523,54 @@ export default function AutomationModal({
     }
     return false;
   };
-  const canSubmit = () => {
-    if (actionType === "SEND_NOTIFICATION")
+
+  const validateCurrentAction = () => {
+    if (!currentActionType) return false;
+    if (currentActionType === "SEND_NOTIFICATION")
       return !!recipientId && !!messageTemplate;
-    return true;
+    if (currentActionType === "SEND_WHATSAPP") {
+      if (!waPhoneColumnId) return false;
+      if (!waContent) return false;
+      if (waMessageType === "media" && !waMediaFileId) return false;
+
+      // Check delay
+      const waBeforeCount =
+        editingActionIndex !== null
+          ? actions.filter(
+              (a, i) => a.type === "SEND_WHATSAPP" && i < editingActionIndex,
+            ).length
+          : actions.filter((a) => a.type === "SEND_WHATSAPP").length;
+
+      if (waBeforeCount > 0) {
+        const minDelay = waBeforeCount >= 2 ? 20 : 10;
+        if (!waDelay || waDelay < minDelay) return false;
+      }
+
+      return true;
+    }
+    if (currentActionType === "WEBHOOK") {
+      return !!webhookUrl && webhookUrl.startsWith("http");
+    }
+    if (currentActionType === "CREATE_TASK") {
+      return !!taskTitle;
+    }
+    if (currentActionType === "CALCULATE_DURATION") return true;
+    return false;
+  };
+
+  const canSubmit = () => {
+    // If we are currently adding an action, we can't submit the whole form yet
+    // unless we treat "submit" as "save current action and submit", but it's cleaner to force them to "Add" first.
+    // However, for UX, if they have 1 action and are not adding another, they proceed.
+
+    if (actions.length > 0 && !isAddingAction) return true;
+
+    // If they are in the middle of adding the FIRST action, we check if it's valid
+    if (actions.length === 0 && isAddingAction) {
+      return validateCurrentAction();
+    }
+
+    return false;
   };
 
   // --- Steps Components ---
@@ -401,21 +688,40 @@ export default function AutomationModal({
 
       {/* Task Specific */}
       {triggerType === "TASK_STATUS_CHANGE" && (
-        <div className="p-4 border rounded-lg bg-blue-50 border-blue-100">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            מתי להפעיל?
-          </label>
-          <select
-            value={toStatus}
-            onChange={(e) => setToStatus(e.target.value)}
-            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg"
-          >
-            <option value="any">כאשר עובר לכל סטטוס שהוא</option>
-            <option value="todo">כאשר עובר ל-לביצוע</option>
-            <option value="in_progress">כאשר עובר ל-בטיפול</option>
-            <option value="waiting_client">כאשר עובר ל-ממתין ללקוח</option>
-            <option value="completed_month">כאשר עובר ל-בוצע</option>
-          </select>
+        <div className="p-4 border rounded-lg bg-blue-50 border-blue-100 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              מאיזה סטטוס?
+            </label>
+            <select
+              value={fromStatus}
+              onChange={(e) => setFromStatus(e.target.value)}
+              className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg"
+            >
+              <option value="any">מכל סטטוס שהוא</option>
+              <option value="todo">משימות</option>
+              <option value="in_progress">משימות בטיפול</option>
+              <option value="waiting_client">ממתינים לאישור לקוח</option>
+              <option value="completed_month">בוצעו החודש</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              לאיזה סטטוס?
+            </label>
+            <select
+              value={toStatus}
+              onChange={(e) => setToStatus(e.target.value)}
+              className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg"
+            >
+              <option value="any">לכל סטטוס שהוא</option>
+              <option value="todo">משימות</option>
+              <option value="in_progress">משימות בטיפול</option>
+              <option value="waiting_client">ממתינים לאישור לקוח</option>
+              <option value="completed_month">בוצעו החודש</option>
+            </select>
+          </div>
         </div>
       )}
 
@@ -739,69 +1045,757 @@ export default function AutomationModal({
   const renderStep3 = () => (
     <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
       <label className="block text-sm font-medium text-gray-700 mb-3">
-        איזו פעולה לבצע?
+        פעולות לביצוע
       </label>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <TriggerCard
-          title="שליחת התראה"
-          description="שלח הודעה למערכת"
-          icon={<Bell className="text-yellow-500" size={24} />}
-          selected={actionType === "SEND_NOTIFICATION"}
-          onClick={() => setActionType("SEND_NOTIFICATION")}
-        />
-        <TriggerCard
-          title="חישוב זמן"
-          description="חשב ושמור את זמן השהייה בסטטוס"
-          icon={<Timer className="text-teal-500" size={24} />}
-          selected={actionType === "CALCULATE_DURATION"}
-          onClick={() => setActionType("CALCULATE_DURATION")}
-        />
-      </div>
 
-      {actionType === "SEND_NOTIFICATION" && (
-        <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              למי לשלוח?
-            </label>
-            <select
-              required
-              value={recipientId}
-              onChange={(e) => setRecipientId(e.target.value)}
-              className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+      {/* List of Configured Actions */}
+      {actions.length > 0 && (
+        <div className="space-y-3 mb-6">
+          {actions.map((act, idx) => (
+            <div
+              key={idx}
+              className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-xl"
             >
-              <option value="">בחר משתמש...</option>
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              הודעה
-            </label>
-            <textarea
-              required
-              value={messageTemplate}
-              onChange={(e) => setMessageTemplate(e.target.value)}
-              rows={3}
-              className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
-            />
-            <p className="text-xs text-gray-500 mt-2">
-              טיפ: השתמש ב- {"{tableName}"} או {"{fieldName}"} כדי להוסיף מידע
-              דינמי.
-            </p>
-          </div>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                  {act.type === "SEND_NOTIFICATION" && <Bell size={20} />}
+                  {act.type === "SEND_WHATSAPP" && <MessageSquare size={20} />}
+                  {act.type === "WEBHOOK" && (
+                    <div className="font-bold text-xs">API</div>
+                  )}
+                  {act.type === "CALCULATE_DURATION" && <Timer size={20} />}
+                  {act.type === "CREATE_TASK" && <CheckSquare size={20} />}
+                </div>
+                <div>
+                  <div className="font-medium text-gray-900">
+                    {act.type === "SEND_NOTIFICATION" && "שליחת התראה"}
+                    {act.type === "SEND_WHATSAPP" && "שליחת WhatsApp"}
+                    {act.type === "WEBHOOK" && "Webhook"}
+                    {act.type === "CALCULATE_DURATION" && "חישוב זמן"}
+                    {act.type === "CREATE_TASK" && "יצירת משימה"}
+                  </div>
+                  <div className="text-xs text-gray-500">פעולה #{idx + 1}</div>
+                </div>
+              </div>
+              {!isAddingAction && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => editAction(idx)}
+                    className="text-blue-500 hover:text-blue-700 p-2 hover:bg-blue-50 rounded-full transition-colors"
+                    title="ערוך פעולה"
+                  >
+                    <Pencil size={18} />
+                  </button>
+                  <button
+                    onClick={() => removeAction(idx)}
+                    className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-full transition-colors"
+                    title="מחק פעולה"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
-      {actionType === "CALCULATE_DURATION" && (
-        <div className="bg-teal-50 p-4 rounded-xl border border-teal-100 text-sm text-teal-800">
-          <p className="font-semibold mb-1">איך זה עובד?</p>
-          המערכת תחשב אוטומטית את הזמן שעבר בין השינוי האחרון לשינוי הנוכחי
-          ותשמור אותו בדוח ביצועים. אין צורך בהגדרות נוספות.
+      {/* Add Action Section */}
+      {isAddingAction ? (
+        <div className="border-t pt-4">
+          <div className="flex justify-between items-center mb-4">
+            <h4 className="font-medium text-gray-800">
+              {editingActionIndex !== null
+                ? `עריכת פעולה #${editingActionIndex + 1}`
+                : `הוספת פעולה חדשה (${actions.length + 1}/3)`}
+            </h4>
+            <button
+              onClick={() => {
+                setIsAddingAction(false);
+                setEditingActionIndex(null);
+                // Also clear fields?
+                // Ideally yes, but `editAction` overwrites them.
+                // If we cancel "Add New", we want clear fields.
+                // If we cancel "Edit", we want clear fields.
+                // Let's rely on `setIsAddingAction` triggering a reset later?
+                // No, `handleConfirmAction` resets fields.
+                // We should reset fields manually here if canceling.
+                setCurrentActionType("");
+                setRecipientId("");
+                setWaPhoneColumnId("");
+                setTaskTitle("");
+                setTaskDescription("");
+                setTaskStatus("todo");
+                setTaskPriority("low");
+                setTaskAssigneeId("");
+                setTaskTags([]);
+              }}
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
+              ביטול
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <TriggerCard
+              title="שליחת התראה"
+              description="שלח הודעה למערכת"
+              icon={<Bell className="text-yellow-500" size={24} />}
+              selected={currentActionType === "SEND_NOTIFICATION"}
+              onClick={() => setCurrentActionType("SEND_NOTIFICATION")}
+            />
+            <TriggerCard
+              title="שליחת WhatsApp"
+              description="שלח הודעה דרך Green API"
+              icon={<MessageSquare className="text-green-600" size={24} />}
+              selected={currentActionType === "SEND_WHATSAPP"}
+              onClick={() => setCurrentActionType("SEND_WHATSAPP")}
+            />
+            <TriggerCard
+              title="חישוב זמן"
+              description="חשב ושמור את זמן השהייה בסטטוס"
+              icon={<Timer className="text-teal-500" size={24} />}
+              selected={currentActionType === "CALCULATE_DURATION"}
+              onClick={() => setCurrentActionType("CALCULATE_DURATION")}
+            />
+            <TriggerCard
+              title="Webhook"
+              description="שלח נתונים למערכת חיצונית"
+              icon={<div className="font-bold text-gray-600 text-lg">Api</div>}
+              selected={currentActionType === "WEBHOOK"}
+              onClick={() => setCurrentActionType("WEBHOOK")}
+            />
+            <TriggerCard
+              title="יצירת משימה"
+              description="צור משימה חדשה אוטומטית"
+              icon={<CheckSquare className="text-blue-500" size={24} />}
+              selected={currentActionType === "CREATE_TASK"}
+              onClick={() => setCurrentActionType("CREATE_TASK")}
+            />
+          </div>
+
+          {currentActionType === "SEND_NOTIFICATION" && (
+            <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 space-y-4 animate-in slide-in-from-top-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  למי לשלוח?
+                </label>
+                <select
+                  required
+                  value={recipientId}
+                  onChange={(e) => setRecipientId(e.target.value)}
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+                >
+                  <option value="">בחר משתמש...</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  הודעה
+                </label>
+                <textarea
+                  required
+                  value={messageTemplate}
+                  onChange={(e) => setMessageTemplate(e.target.value)}
+                  rows={3}
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  טיפ: השתמש ב- {"{tableName}"} או {"{fieldName}"} כדי להוסיף
+                  מידע דינמי.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {currentActionType === "SEND_WHATSAPP" && (
+            <div className="bg-green-50 p-6 rounded-xl border border-green-100 space-y-5 animate-in slide-in-from-top-2">
+              <div className="flex items-center gap-2 mb-2 text-green-800 font-medium pb-2 border-b border-green-200">
+                <MessageSquare size={18} />
+                הגדרות הודעת WhatsApp
+              </div>
+
+              {/* Target Type Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  למי לשלוח?
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-green-300 transition-colors flex-1">
+                    <input
+                      type="radio"
+                      name="waTargetType"
+                      value="private"
+                      checked={waTargetType === "private"}
+                      onChange={() => {
+                        setWaTargetType("private");
+                        setWaPhoneColumnId(""); // Reset needed
+                      }}
+                      className="text-green-600 focus:ring-green-500"
+                    />
+                    <span className="font-medium text-gray-700">אדם פרטי</span>
+                  </label>
+                  <label className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-green-300 transition-colors flex-1">
+                    <input
+                      type="radio"
+                      name="waTargetType"
+                      value="group"
+                      checked={waTargetType === "group"}
+                      onChange={() => {
+                        setWaTargetType("group");
+                        setWaPhoneColumnId("manual:"); // Start with manual for group
+                      }}
+                      className="text-green-600 focus:ring-green-500"
+                    />
+                    <span className="font-medium text-gray-700">קבוצה</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Target Configuration */}
+              {waTargetType === "private" ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    פרטי הנמען
+                  </label>
+                  <div className="flex gap-4 mb-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="phoneMode"
+                        checked={!waPhoneColumnId.startsWith("manual:")}
+                        onChange={() => setWaPhoneColumnId("")}
+                        className="text-green-600 focus:ring-green-500"
+                      />
+                      <span className="text-sm text-gray-700">
+                        לפי עמודה בטבלה
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="phoneMode"
+                        checked={waPhoneColumnId.startsWith("manual:")}
+                        onChange={() => setWaPhoneColumnId("manual:")}
+                        className="text-green-600 focus:ring-green-500"
+                      />
+                      <span className="text-sm text-gray-700">
+                        מספר ידני קבוע
+                      </span>
+                    </label>
+                  </div>
+
+                  {!waPhoneColumnId.startsWith("manual:") ? (
+                    triggerType === "TASK_STATUS_CHANGE" ? (
+                      <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded border border-gray-200">
+                        באוטומציות משימה, לא ניתן לבחור עמודה דינמית כי אין טבלה
+                        משויכת ישירות.
+                        <br />
+                        נא להשתמש במספר ידני או לשנות סוג אוטומציה.
+                      </div>
+                    ) : (
+                      <>
+                        <select
+                          required
+                          value={waPhoneColumnId}
+                          onChange={(e) => setWaPhoneColumnId(e.target.value)}
+                          className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500"
+                        >
+                          <option value="">בחר עמודה מהטבלה...</option>
+                          {columns.map((col: any) => (
+                            <option key={col.id || col.name} value={col.name}>
+                              {col.label || col.name} ({col.type})
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-green-600 mt-1">
+                          נא לבחור עמודה המכילה מספרי טלפון תקינים.
+                        </p>
+                      </>
+                    )
+                  ) : (
+                    <div>
+                      <input
+                        type="text"
+                        value={waPhoneColumnId.replace("manual:", "")}
+                        onChange={(e) =>
+                          setWaPhoneColumnId(`manual:${e.target.value}`)
+                        }
+                        placeholder="הכנס מספר טלפון (לדוגמה: 0501234567)"
+                        className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500"
+                        dir="ltr"
+                      />
+                      <div className="mt-2 text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
+                        <strong>תצוגה מקדימה לשליחה:</strong>{" "}
+                        <span dir="ltr" className="font-mono">
+                          {formatPhonePreview(
+                            waPhoneColumnId.replace("manual:", ""),
+                            "private",
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // Group Mode
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    מזהה קבוצה (Group ID)
+                  </label>
+                  <input
+                    type="text"
+                    value={waPhoneColumnId.replace("manual:", "")}
+                    onChange={(e) =>
+                      setWaPhoneColumnId(`manual:${e.target.value}`)
+                    }
+                    placeholder="לדוגמה: 123456789-1612345678@g.us"
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 font-mono text-sm"
+                    dir="ltr"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    ניתן למצוא את מזהה הקבוצה ב-Green API או דרך הדפדפן (סיומת
+                    @g.us).
+                  </p>
+                  {waPhoneColumnId.startsWith("manual:") && (
+                    <div className="mt-2 text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
+                      <strong>תצוגה מקדימה לשליחה:</strong>{" "}
+                      <span dir="ltr" className="font-mono">
+                        {formatPhonePreview(
+                          waPhoneColumnId.replace("manual:", ""),
+                          "group",
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Delay Logic */}
+              {(() => {
+                const waBeforeCount =
+                  editingActionIndex !== null
+                    ? actions.filter(
+                        (a, i) =>
+                          a.type === "SEND_WHATSAPP" && i < editingActionIndex,
+                      ).length
+                    : actions.filter((a) => a.type === "SEND_WHATSAPP").length;
+
+                if (waBeforeCount > 0) {
+                  const minDelay = waBeforeCount >= 2 ? 20 : 10;
+                  return (
+                    <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 mb-4 animate-in slide-in-from-top-2">
+                      <div className="flex items-center gap-2 text-orange-800 font-medium mb-2">
+                        <Clock size={16} />
+                        השהייה לפני שליחה (בשניות)
+                      </div>
+                      <p className="text-xs text-orange-600 mb-3">
+                        נא להגדיר השהייה של לפחות {minDelay} שניות כדי למנוע
+                        חסימה ע"י Green API.
+                      </p>
+                      <input
+                        type="number"
+                        min={minDelay}
+                        value={waDelay}
+                        onChange={(e) =>
+                          setWaDelay(parseInt(e.target.value) || 0)
+                        }
+                        className={`w-full px-4 py-2 bg-white border rounded-lg shadow-sm ${waDelay < minDelay ? "border-red-500 ring-1 ring-red-500" : "border-orange-200"}`}
+                      />
+                      {waDelay < minDelay && (
+                        <p className="text-xs text-red-500 mt-1">
+                          הערך נמוך מהמינימום הנדרש ({minDelay})
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Message Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  סוג הודעה
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-green-300 transition-colors flex-1">
+                    <input
+                      type="radio"
+                      name="waMessageType"
+                      value="private"
+                      checked={waMessageType === "private"}
+                      onChange={() => setWaMessageType("private")}
+                      className="text-green-600 focus:ring-green-500"
+                    />
+                    <span className="font-medium text-gray-700">
+                      הודעה רגילה
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-green-300 transition-colors flex-1">
+                    <input
+                      type="radio"
+                      name="waMessageType"
+                      value="media"
+                      checked={waMessageType === "media"}
+                      onChange={() => setWaMessageType("media")}
+                      className="text-green-600 focus:ring-green-500"
+                    />
+                    <span className="font-medium text-gray-700">
+                      הודעה עם מדיה
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Media Selection */}
+              {waMessageType === "media" && (
+                <div className="animate-in slide-in-from-top-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    בחר קובץ לשליחה
+                  </label>
+                  {loadingFiles ? (
+                    <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                      <Loader2 className="animate-spin" size={16} /> טוען
+                      קבצים...
+                    </div>
+                  ) : (
+                    <select
+                      value={waMediaFileId}
+                      onChange={(e) => setWaMediaFileId(e.target.value)}
+                      className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+                    >
+                      <option value="">בחר קובץ מהמערכת...</option>
+                      {availableFiles.map((file) => (
+                        <option key={file.id} value={file.id}>
+                          {file.name} ({file.type})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    הקובץ יישלח כקובץ מצורף יחד עם ההודעה.
+                  </p>
+                </div>
+              )}
+
+              {/* Content */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {waMessageType === "media"
+                    ? "כיתוב (Caption)"
+                    : "תוכן ההודעה"}
+                </label>
+                <textarea
+                  required
+                  value={waContent}
+                  onChange={(e) => setWaContent(e.target.value)}
+                  rows={4}
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                  placeholder="הקלד את ההודעה כאן..."
+                />
+                <div className="mt-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => setShowDynamicValues(!showDynamicValues)}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                  >
+                    לפתיחת הערכים לשימוש מהרשומה הנוכחית לחץ כאן:
+                    <ChevronDown
+                      size={16}
+                      className={`transition-transform ${showDynamicValues ? "rotate-180" : ""}`}
+                    />
+                  </button>
+
+                  {showDynamicValues && (
+                    <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                      {columns.length > 0 ? (
+                        columns.map((col: any) => (
+                          <button
+                            key={col.id || col.name}
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(`{${col.name}}`);
+                            }}
+                            className="flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded text-xs hover:border-blue-300 hover:bg-blue-50 transition-colors group"
+                            title="לחץ להעתקה"
+                          >
+                            <span
+                              className="font-mono text-gray-600 truncate max-w-[120px]"
+                              dir="ltr"
+                            >{`{${col.name}}`}</span>
+                            <Copy
+                              size={12}
+                              className="text-gray-400 group-hover:text-blue-500"
+                            />
+                          </button>
+                        ))
+                      ) : (
+                        <p className="text-xs text-gray-500 col-span-2">
+                          לא נמצאו עמודות זמינות (או שלא נבחרה טבלה).
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentActionType === "CALCULATE_DURATION" && (
+            <div className="bg-teal-50 p-4 rounded-xl border border-teal-100 text-sm text-teal-800 animate-in slide-in-from-top-2">
+              <p className="font-semibold mb-1">איך זה עובד?</p>
+              המערכת תחשב אוטומטית את הזמן שעבר בין השינוי האחרון לשינוי הנוכחי
+              ותשמור אותו בדוח ביצועים. אין צורך בהגדרות נוספות.
+            </div>
+          )}
+
+          {currentActionType === "WEBHOOK" && (
+            <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 space-y-5 animate-in slide-in-from-top-2">
+              <div className="flex items-center gap-2 mb-2 text-gray-800 font-medium pb-2 border-b border-gray-200">
+                Webhook Configuration
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  כתובת ה-URL לשליחה (POST)
+                </label>
+                <input
+                  type="url"
+                  required
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  placeholder="https://api.example.com/webhook"
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm font-mono text-sm ltr"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  המערכת תשלח בקשת POST לכתובת זו עם כל הנתונים הרלוונטיים
+                  (JSON).
+                </p>
+              </div>
+            </div>
+          )}
+
+          {currentActionType === "CREATE_TASK" && (
+            <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 space-y-5 animate-in slide-in-from-top-2">
+              <div className="flex items-center gap-2 mb-2 text-blue-800 font-medium pb-2 border-b border-blue-200">
+                <CheckSquare size={18} />
+                הגדרות משימה חדשה
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  כותרת המשימה
+                </label>
+                <input
+                  required
+                  type="text"
+                  value={taskTitle}
+                  onChange={(e) => setTaskTitle(e.target.value)}
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  placeholder="לדוגמה: לחזור לליד {name}"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  ניתן להשתמש בסוגריים מסולסלים כדי לשלב ערכים דינמיים.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  תיאור
+                </label>
+                <textarea
+                  value={taskDescription}
+                  onChange={(e) => setTaskDescription(e.target.value)}
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="תיאור המשימה..."
+                />
+                <div className="mt-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => setShowDynamicValues(!showDynamicValues)}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                  >
+                    לפתיחת הערכים לשימוש מהרשומה הנוכחית לחץ כאן:
+                    <ChevronDown
+                      size={16}
+                      className={`transition-transform ${showDynamicValues ? "rotate-180" : ""}`}
+                    />
+                  </button>
+
+                  {showDynamicValues && (
+                    <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                      {columns.length > 0 ? (
+                        columns.map((col: any) => (
+                          <button
+                            key={col.id || col.name}
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(`{${col.name}}`);
+                            }}
+                            className="flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded text-xs hover:border-blue-300 hover:bg-blue-50 transition-colors group"
+                            title="לחץ להעתקה"
+                          >
+                            <span
+                              className="font-mono text-gray-600 truncate max-w-[120px]"
+                              dir="ltr"
+                            >{`{${col.name}}`}</span>
+                            <Copy
+                              size={12}
+                              className="text-gray-400 group-hover:text-blue-500"
+                            />
+                          </button>
+                        ))
+                      ) : (
+                        <p className="text-xs text-gray-500 col-span-2">
+                          לא נמצאו עמודות זמינות (או שלא נבחרה טבלה).
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    סטטוס
+                  </label>
+                  <select
+                    value={taskStatus}
+                    onChange={(e) => setTaskStatus(e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+                  >
+                    <option value="todo">משימות</option>
+                    <option value="in_progress">משימות בטיפול</option>
+                    <option value="waiting_client">ממתינים לאישור לקוח</option>
+                    <option value="completed_month">בוצעו החודש</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    עדיפות
+                  </label>
+                  <select
+                    value={taskPriority}
+                    onChange={(e) => setTaskPriority(e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+                  >
+                    <option value="low">נמוך</option>
+                    <option value="medium">בינוני</option>
+                    <option value="high">גבוה</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    אחראי
+                  </label>
+                  <select
+                    value={taskAssigneeId}
+                    onChange={(e) => setTaskAssigneeId(e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+                  >
+                    <option value="">ללא אחראי</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    תאריך יעד (ימים מהיצירה)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={taskDueDays}
+                    onChange={(e) => setTaskDueDays(Number(e.target.value))}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+                    placeholder="0 = היום"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  תגיות
+                </label>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    value={taskTagInput}
+                    onChange={(e) => setTaskTagInput(e.target.value)}
+                    onKeyDown={handleAddTaskTag}
+                    placeholder="הקלד תגית ולחץ Enter"
+                    className="flex-1 px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddTaskTag}
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-colors text-sm border border-gray-300"
+                  >
+                    הוסף
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {taskTags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => removeTaskTag(tag)}
+                        className="hover:text-blue-900 transition-colors font-bold px-1"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={handleConfirmAction}
+              disabled={!validateCurrentAction()}
+              className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {actions.length > 0 ? "הוסף פעולה נוספת וסיים" : "אשר פעולה"}
+            </button>
+          </div>
+        </div>
+      ) : // Add Action Button (if not adding and less than max)
+      actions.length < maxActions ? (
+        <div className="bg-gray-50 p-8 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center text-center">
+          <p className="text-gray-600 mb-4 font-medium">
+            האם תרצה לבצע פעולה נוספת?
+          </p>
+          <button
+            onClick={() => setIsAddingAction(true)}
+            className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all flex items-center gap-2"
+          >
+            <ListTodo size={18} />
+            הוסף פעולה נוספת (+{actions.length}/{maxActions})
+          </button>
+        </div>
+      ) : (
+        <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 text-sm text-yellow-800 flex items-start gap-2">
+          <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+          הגעת למקסימום הפעולות ({maxActions}) עבור אוטומציה זו.
         </div>
       )}
     </div>
@@ -973,7 +1967,7 @@ export default function AutomationModal({
 
           {step < totalSteps ? (
             <button
-              onClick={() => setStep(step + 1)}
+              onClick={handleNextStep}
               disabled={
                 (step === 1 && !canProceedToStep2) ||
                 (step === 2 && !canProceedToStep3()) ||
@@ -1049,4 +2043,18 @@ function TriggerCard({
       )}
     </div>
   );
+}
+
+function formatPhonePreview(phone: string, type: "private" | "group") {
+  if (!phone) return "";
+  let clean = phone.trim();
+  if (type === "group") {
+    if (!clean.endsWith("@g.us")) return clean + "@g.us";
+    return clean;
+  }
+  // Private
+  clean = clean.replace(/\D/g, "");
+  if (clean.startsWith("0")) clean = "972" + clean.substring(1);
+  if (!clean.endsWith("@c.us")) clean = clean + "@c.us";
+  return clean;
 }

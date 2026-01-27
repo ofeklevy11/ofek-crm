@@ -30,6 +30,7 @@ interface AutomationsListProps {
   tables: { id: number; name: string; schemaJson: any }[];
   currentUserId: number;
   folders?: { id: number; name: string; _count?: any }[];
+  userPlan?: string;
 }
 
 export default function AutomationsList({
@@ -38,6 +39,7 @@ export default function AutomationsList({
   tables,
   currentUserId,
   folders: propsFolders = [],
+  userPlan = "basic",
 }: AutomationsListProps) {
   const [rules, setRules] = useState<AutomationRule[]>(initialRules);
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
@@ -50,6 +52,11 @@ export default function AutomationsList({
 
   // Use folders from props
   const [localFolders, setLocalFolders] = useState(propsFolders || []);
+
+  // State for interactions
+  const [activeDropdownId, setActiveDropdownId] = useState<number | null>(null);
+  const [movingRuleId, setMovingRuleId] = useState<number | null>(null);
+  const [successRuleId, setSuccessRuleId] = useState<number | null>(null);
 
   const router = useRouter();
 
@@ -77,12 +84,26 @@ export default function AutomationsList({
     ruleId: number,
     folderId: number | null,
   ) => {
-    const { moveItemToFolder } = await import("@/app/actions/folders");
-    await moveItemToFolder(ruleId, folderId, "AUTOMATION");
-    const updatedRules = rules.map((r) =>
-      r.id === ruleId ? { ...r, folderId } : r,
-    );
-    setRules(updatedRules);
+    setMovingRuleId(ruleId);
+    setActiveDropdownId(null); // Close immediately or keep open? Better close.
+
+    try {
+      const { moveItemToFolder } = await import("@/app/actions/folders");
+      await moveItemToFolder(ruleId, folderId, "AUTOMATION");
+
+      const updatedRules = rules.map((r) =>
+        r.id === ruleId ? { ...r, folderId } : r,
+      );
+      setRules(updatedRules);
+
+      // Show success
+      setMovingRuleId(null);
+      setSuccessRuleId(ruleId);
+      setTimeout(() => setSuccessRuleId(null), 2000);
+    } catch (error) {
+      console.error("Failed to move folder", error);
+      setMovingRuleId(null);
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -171,8 +192,22 @@ export default function AutomationsList({
         return `חריגת SLA (${bType}) בעדיפות ${prior}`;
       }
 
-      case "TASK_STATUS_CHANGE":
-        return "שינוי סטטוס משימה";
+      case "TASK_STATUS_CHANGE": {
+        const taskStatusMap: Record<string, string> = {
+          todo: "לביצוע",
+          in_progress: "בטיפול",
+          waiting_client: "ממתין ללקוח",
+          completed_month: "בוצע",
+          any: "כל סטטוס",
+        };
+        const from = config.fromStatus
+          ? taskStatusMap[config.fromStatus] || config.fromStatus
+          : "כל סטטוס";
+        const to = config.toStatus
+          ? taskStatusMap[config.toStatus] || config.toStatus
+          : "כל סטטוס";
+        return `שינוי סטטוס מ-${from} ל-${to}`;
+      }
 
       case "NEW_RECORD":
         const tableName =
@@ -194,6 +229,29 @@ export default function AutomationsList({
 
       default:
         return rule.triggerType;
+    }
+  };
+
+  const getActionDescription = (rule: AutomationRule) => {
+    const config = rule.actionConfig || {};
+    switch (rule.actionType) {
+      case "SEND_NOTIFICATION":
+        const user = users.find((u) => u.id === config.recipientId);
+        return `שליחת התראה ל-${user ? user.name : "משתמש לא ידוע"}`;
+      case "SEND_WHATSAPP":
+        return `שליחת וואטסאפ (${
+          config.messageType === "media" ? "מדיה" : "הודעה"
+        })`;
+      case "CREATE_TASK":
+        return `יצירת משימה: ${config.title || "ללא כותרת"}`;
+      case "CALCULATE_DURATION":
+        return "מדידת משך זמן בסטטוס";
+      case "ADD_TO_NURTURE_LIST":
+        return `הוספה לרשימת תפוצה: ${config.listId}`;
+      case "CALCULATE_MULTI_EVENT_DURATION":
+        return "מדידת זמנים בין אירועים";
+      default:
+        return rule.actionType;
     }
   };
 
@@ -407,42 +465,73 @@ export default function AutomationsList({
                 <dt>
                   <div className="absolute top-4 left-4 flex gap-2">
                     {/* Move Folder Dropdown */}
-                    <div className="relative group/move">
-                      <button className="text-gray-400 hover:text-blue-500">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="lucide lucide-folder-input"
-                        >
-                          <path d="M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2" />
-                          <path d="M2 13h10" />
-                          <path d="m9 10 3 3-3 3" />
-                        </svg>
-                      </button>
-                      <div className="absolute left-0 mt-1 w-40 bg-white border border-gray-200 shadow-lg rounded-md hidden group-hover/move:block z-20">
+                    <div className="relative">
+                      {movingRuleId === rule.id ? (
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                      ) : successRuleId === rule.id ? (
+                        <div className="text-green-500">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="lucide lucide-check"
+                          >
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg>
+                        </div>
+                      ) : (
                         <button
-                          onClick={() => handleMoveToFolder(rule.id, null)}
-                          className="block w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          onClick={() =>
+                            setActiveDropdownId(
+                              activeDropdownId === rule.id ? null : rule.id,
+                            )
+                          }
+                          className={`hover:text-blue-500 transition-colors ${activeDropdownId === rule.id ? "text-blue-600" : "text-gray-400"}`}
                         >
-                          ללא תיקייה
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="lucide lucide-folder-input"
+                          >
+                            <path d="M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2" />
+                            <path d="M2 13h10" />
+                            <path d="m9 10 3 3-3 3" />
+                          </svg>
                         </button>
-                        {localFolders.map((f) => (
+                      )}
+
+                      {activeDropdownId === rule.id && (
+                        <div className="absolute left-0 mt-1 w-40 bg-white border border-gray-200 shadow-lg rounded-md z-20 animate-in fade-in zoom-in-95 duration-100">
                           <button
-                            key={f.id}
-                            onClick={() => handleMoveToFolder(rule.id, f.id)}
+                            onClick={() => handleMoveToFolder(rule.id, null)}
                             className="block w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                           >
-                            {f.name}
+                            ללא תיקייה
                           </button>
-                        ))}
-                      </div>
+                          {localFolders.map((f) => (
+                            <button
+                              key={f.id}
+                              onClick={() => handleMoveToFolder(rule.id, f.id)}
+                              className="block w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              {f.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {rule.triggerType !== "VIEW_METRIC_THRESHOLD" && (
@@ -488,19 +577,10 @@ export default function AutomationsList({
                       <span className="font-semibold">טריגר:</span>{" "}
                       {getTriggerDescription(rule)}
                     </p>
-                    {rule.actionType === "SEND_NOTIFICATION" && (
-                      <p>
-                        <span className="font-semibold">נשלח ל:</span>{" "}
-                        {users.find(
-                          (u) => u.id === rule.actionConfig?.recipientId,
-                        )?.name || "לא ידוע"}
-                      </p>
-                    )}
-                    {rule.actionType === "CALCULATE_MULTI_EVENT_DURATION" && (
-                      <p className="text-xs text-orange-600 mt-1">
-                        מודד זמנים בין שרשרת אירועים
-                      </p>
-                    )}
+                    <p className="mt-1">
+                      <span className="font-semibold">פעולה:</span>{" "}
+                      {getActionDescription(rule)}
+                    </p>
                   </div>
 
                   <div className="absolute bottom-0 inset-x-0 bg-gray-50 px-4 py-4 sm:px-6">
@@ -536,6 +616,7 @@ export default function AutomationsList({
             tables={tables}
             currentUserId={currentUserId}
             editingRule={editingRule}
+            userPlan={userPlan}
             onClose={() => {
               setIsModalOpen(false);
               setEditingRule(null);
@@ -552,6 +633,7 @@ export default function AutomationsList({
             users={users}
             currentUserId={currentUserId}
             editingRule={editingRule}
+            userPlan={userPlan}
             onClose={() => {
               setIsMultiEventModalOpen(false);
               setEditingRule(null);

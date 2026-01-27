@@ -31,7 +31,435 @@ interface ActionConfig {
   status?: string;
   priority?: string;
   dueDate?: string | Date;
+  actions?: { type: string; config: any }[]; // For MULTI_ACTION
   [key: string]: any;
+}
+
+// Unified Action Executor
+export async function executeRuleActions(
+  rule: any,
+  context: {
+    recordData?: any;
+    oldRecordData?: any;
+    taskId?: string;
+    taskTitle?: string;
+    fromStatus?: string;
+    toStatus?: string;
+    tableName?: string;
+    tableId?: number;
+    recordId?: number;
+  },
+) {
+  const { companyId, id: ruleId, createdBy } = rule;
+
+  const executeSingle = async (type: string, config: any) => {
+    console.log(`[Automations] Executing Action: ${type} for Rule ${ruleId}`);
+    try {
+      if (type === "SEND_NOTIFICATION") {
+        if (config.recipientId) {
+          let message = config.messageTemplate || "עדכון במערכת";
+          let title = config.titleTemplate || "עדכון אוטומטי";
+          let link = "/";
+
+          // Dynamic Replacements
+          if (context.tableName) {
+            message = message.replace("{tableName}", context.tableName);
+            title = title.replace("{tableName}", context.tableName);
+            link = `/tables/${context.tableId}`;
+          }
+          if (context.recordData) {
+            for (const key in context.recordData) {
+              message = message.replace(
+                `{${key}}`,
+                String(context.recordData[key] || ""),
+              );
+            }
+          }
+          if (context.taskTitle) {
+            message = message
+              .replace("{taskTitle}", context.taskTitle)
+              .replace("{fromStatus}", context.fromStatus || "")
+              .replace("{toStatus}", context.toStatus || "");
+            link = "/tasks";
+          }
+          // Field Change Replacements
+          if (
+            context.oldRecordData &&
+            rule.triggerType === "RECORD_FIELD_CHANGE"
+          ) {
+            const colId = rule.triggerConfig?.columnId;
+            if (colId) {
+              message = message
+                .replace(`{fieldName}`, colId)
+                .replace(`{fromValue}`, String(context.oldRecordData[colId]))
+                .replace(`{toValue}`, String(context.recordData[colId]));
+            }
+          }
+
+          await sendNotification({
+            userId: config.recipientId,
+            title,
+            message,
+            link,
+          });
+        }
+      } else if (type === "SEND_WHATSAPP") {
+        // Sleep if configured (to avoid blocks)
+        if (config.delay) {
+          console.log(
+            `[Automations] Sleeping for ${config.delay} seconds before sending WhatsApp...`,
+          );
+          await new Promise((r) => setTimeout(r, config.delay * 1000));
+        }
+
+        // Prepare data for WA
+        const data = { ...context.recordData };
+        if (context.taskTitle) {
+          data.taskTitle = context.taskTitle;
+          data.fromStatus = context.fromStatus;
+          data.toStatus = context.toStatus;
+        }
+        await executeWhatsAppAction({ actionConfig: config }, data, companyId);
+      } else if (type === "WEBHOOK") {
+        const data = { ...context.recordData, ...context };
+        await executeWebhookAction(
+          { ...rule, actionConfig: config },
+          data,
+          companyId,
+        );
+      } else if (type === "CALCULATE_DURATION") {
+        // This is specific logic that relies on DB logs.
+        // We'll keep the specific logic in the trigger functions for now
+        // OR we should move it here?
+        // Duration calculation is complex and depends on trigger type.
+        // For now, if we use MULTI_ACTION, we might skip Duration or handle it if we can.
+        // Current implementation of 'processTaskStatusChange' handles it specifically.
+        // Let's defer it to the specific handlers if possible, or implement generic here.
+        // Since calculate duration writes to DB based on audit logs, it's safer to keep the specialized logic
+        // BUT we want to support it in multi-action.
+        // I will implement a generic "Trigger Calculation" call if possible?
+        // Actually, let's leave Duration for the specific handlers to call if the type matches,
+        // BUT standard "multi-action" flow usually implies "Send X, then Send Y".
+        // Duration is usually a standalone metric tracker.
+        // If the user wants to calculate duration AND send whatsapp, we should support it.
+
+        if (
+          rule.triggerType === "TASK_STATUS_CHANGE" &&
+          context.taskId &&
+          context.fromStatus
+        ) {
+          await calculateTaskDuration(context.taskId, context.fromStatus);
+        } else if (
+          rule.triggerType === "RECORD_FIELD_CHANGE" &&
+          context.recordId &&
+          context.oldRecordData
+        ) {
+          const colId = rule.triggerConfig?.columnId;
+          if (colId)
+            await calculateRecordDuration(
+              rule.id,
+              context.recordId,
+              colId,
+              context.oldRecordData[colId],
+              context.recordData[colId],
+            );
+        }
+      } else if (type === "ADD_TO_NURTURE_LIST") {
+        // Logic for nurture list
+        if (context.recordData) {
+          const mapping = config.mapping || {};
+          const name = context.recordData[mapping.name] || "Unknown";
+          const email = context.recordData[mapping.email] || "";
+          const phone = context.recordData[mapping.phone] || "";
+
+          if (email || phone) {
+            await addToNurtureList({
+              companyId,
+              listSlug: config.listId,
+              name,
+              email,
+              phone,
+              sourceType: "TABLE",
+              sourceId: String(context.recordId),
+              sourceTableId: context.tableId,
+            });
+          }
+        }
+      } else if (type === "CREATE_TASK") {
+        const {
+          title,
+          description,
+          status,
+          priority,
+          assigneeId,
+          dueDays,
+          tags,
+        } = config;
+
+        let finalTitle = title || "משימה חדשה";
+        let finalDesc = description || "";
+
+        // Dynamic Replacements Helper
+        const replaceText = (text: string) => {
+          let res = text;
+          if (context.tableName) {
+            res = res.replace(/{tableName}/g, context.tableName);
+          }
+          if (context.recordData) {
+            for (const key in context.recordData) {
+              const val = context.recordData[key];
+              res = res.replace(new RegExp(`{${key}}`, "g"), String(val || ""));
+            }
+          }
+          if (context.taskTitle) {
+            res = res
+              .replace(/{taskTitle}/g, context.taskTitle)
+              .replace(/{fromStatus}/g, context.fromStatus || "")
+              .replace(/{toStatus}/g, context.toStatus || "");
+          }
+          if (
+            context.oldRecordData &&
+            rule.triggerType === "RECORD_FIELD_CHANGE"
+          ) {
+            const colId = rule.triggerConfig?.columnId;
+            if (colId) {
+              res = res
+                .replace(/{fieldName}/g, colId)
+                .replace(/{fromValue}/g, String(context.oldRecordData[colId]))
+                .replace(/{toValue}/g, String(context.recordData[colId]));
+            }
+          }
+          return res;
+        };
+
+        finalTitle = replaceText(finalTitle);
+        finalDesc = replaceText(finalDesc);
+
+        // Calculate Due Date
+        let dueDate = null;
+        if (dueDays !== undefined && dueDays !== null && dueDays !== "") {
+          const date = new Date();
+          date.setDate(date.getDate() + Number(dueDays));
+          dueDate = date;
+        }
+
+        console.log(`[Automations] Creating Task: ${finalTitle}`);
+
+        await prisma.task.create({
+          data: {
+            title: finalTitle,
+            description: finalDesc,
+            status: status || "todo",
+            priority: priority || "low",
+            assigneeId: assigneeId ? Number(assigneeId) : null,
+            dueDate: dueDate,
+            tags: tags || [],
+            companyId: companyId,
+          },
+        });
+      }
+    } catch (e) {
+      console.error(`[Automations] Error executing action ${type}:`, e);
+    }
+  };
+
+  if (rule.actionType === "MULTI_ACTION") {
+    const actions = rule.actionConfig?.actions || [];
+    for (const action of actions) {
+      await executeSingle(action.type, action.config);
+    }
+  } else {
+    await executeSingle(rule.actionType, rule.actionConfig);
+  }
+}
+
+// Helpers for Duration (moved/extracted logic)
+async function calculateTaskDuration(taskId: string, fromStatus: string) {
+  const recentLogs = await prisma.auditLog.findMany({
+    where: { taskId: taskId, action: "UPDATE" },
+    orderBy: { timestamp: "desc" },
+    take: 20,
+  });
+  let previousChange = null;
+  for (const log of recentLogs) {
+    const diff = log.diffJson as any;
+    if (diff && diff.status && diff.status.to === fromStatus) {
+      previousChange = log;
+      break;
+    }
+  }
+  if (previousChange) {
+    const startTime = new Date(previousChange.timestamp).getTime();
+    const endTime = new Date().getTime();
+    const diffMs = endTime - startTime;
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffDays = Math.floor(diffMinutes / (60 * 24));
+    const remHours = Math.floor((diffMinutes % (60 * 24)) / 60);
+    const remMins = diffMinutes % 60;
+
+    const durationString = `${diffDays}d ${remHours}h ${remMins}m|->`;
+    await prisma.task.update({
+      where: { id: taskId },
+      data: { duration_status_change: durationString },
+    });
+  }
+}
+
+async function calculateRecordDuration(
+  ruleId: number,
+  recordId: number,
+  columnId: string,
+  oldValue: any,
+  newValue: any,
+) {
+  // Simplified Logic
+  const recentLogs = await prisma.auditLog.findMany({
+    where: { recordId: recordId, action: { in: ["UPDATE", "CREATE"] } },
+    orderBy: { timestamp: "desc" },
+    take: 100,
+  });
+
+  let startTime: Date | null = null;
+  for (const log of recentLogs) {
+    const logData = log.diffJson as any;
+    if (logData && String(logData[columnId]) === String(oldValue)) {
+      startTime = log.timestamp;
+      break;
+    }
+  }
+  if (!startTime) {
+    // Check Create
+    const createLog = recentLogs.find((l) => l.action === "CREATE");
+    if (createLog) {
+      const d = createLog.diffJson as any;
+      if (d && String(d[columnId]) === String(oldValue))
+        startTime = createLog.timestamp;
+    }
+  }
+
+  if (startTime) {
+    const endTime = new Date();
+    const diffMs = endTime.getTime() - new Date(startTime).getTime();
+    const diffSeconds = Math.floor(diffMs / 1000);
+    await prisma.statusDuration.create({
+      data: {
+        automationRuleId: ruleId,
+        recordId: recordId,
+        durationSeconds: diffSeconds,
+        durationString: `${Math.floor(diffSeconds / 86400)}d...`, // Simplified
+        fromValue: String(oldValue),
+        toValue: String(newValue),
+      },
+    });
+  }
+}
+
+export async function executeWhatsAppAction(
+  rule: any,
+  recordData: any,
+  companyId: number,
+) {
+  const { sendGreenApiMessage, sendGreenApiFile } = await import("./green-api");
+  const config = rule.actionConfig;
+  const phoneColumnId = config.phoneColumnId;
+
+  if (!phoneColumnId) return;
+
+  if (!phoneColumnId) return;
+
+  let phone = "";
+  if (phoneColumnId.startsWith("manual:")) {
+    phone = phoneColumnId.replace("manual:", "");
+  } else {
+    phone = recordData[phoneColumnId];
+  }
+
+  if (!phone) {
+    console.log(
+      `[Automations] WhatsApp action: No phone number resolved from ${phoneColumnId}`,
+    );
+    return;
+  }
+
+  // Resolve content
+  let content = config.content || "";
+  // Check for dynamic placeholders {Key}
+  for (const key in recordData) {
+    const val = recordData[key];
+    // Replace all occurrences
+    content = content.split(`{${key}}`).join(String(val || ""));
+  }
+
+  try {
+    if (config.messageType === "media" && config.mediaFileId) {
+      const file = await prisma.file.findUnique({
+        where: { id: Number(config.mediaFileId) },
+      });
+
+      if (file && file.url) {
+        await sendGreenApiFile(
+          companyId,
+          String(phone),
+          file.url,
+          file.name,
+          content,
+        );
+        console.log(`[Automations] WhatsApp file sent to ${phone}`);
+      } else {
+        console.error(
+          `[Automations] WhatsApp file not found: ${config.mediaFileId}`,
+        );
+      }
+    } else {
+      // Normal message (private or just text)
+      await sendGreenApiMessage(companyId, String(phone), content);
+      console.log(`[Automations] WhatsApp message sent to ${phone}`);
+    }
+  } catch (err) {
+    console.error(`[Automations] WhatsApp Send Error:`, err);
+  }
+}
+
+export async function executeWebhookAction(
+  rule: any,
+  data: any,
+  companyId: number,
+) {
+  const config = rule.actionConfig;
+  const url = config.webhookUrl;
+
+  if (!url) return;
+
+  console.log(`[Automations] Executing Webhook for Rule ${rule.id} to ${url}`);
+
+  try {
+    const payload = {
+      ruleId: rule.id,
+      ruleName: rule.name,
+      triggerType: rule.triggerType,
+      companyId: companyId,
+      timestamp: new Date().toISOString(),
+      data: data,
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      console.error(
+        `[Automations] Webhook failed with status ${response.status}: ${response.statusText}`,
+      );
+    } else {
+      console.log(`[Automations] Webhook sent successfully.`);
+    }
+  } catch (err) {
+    console.error(`[Automations] Webhook Execution Error:`, err);
+  }
 }
 
 // --- CRUD Actions ---
@@ -120,6 +548,28 @@ export async function createAutomationRule(data: {
         }
       } else if (data.triggerType === "TASK_STATUS_CHANGE") {
         const folderName = "אוטומציות משימות"; // Task Automations
+        const folder = await prisma.viewFolder.findFirst({
+          where: {
+            companyId: currentUser.companyId,
+            name: folderName,
+            type: "AUTOMATION",
+          },
+        });
+
+        if (folder) {
+          folderId = folder.id;
+        } else {
+          const newFolder = await prisma.viewFolder.create({
+            data: {
+              companyId: currentUser.companyId,
+              name: folderName,
+              type: "AUTOMATION",
+            },
+          });
+          folderId = newFolder.id;
+        }
+      } else if (data.triggerType === "MULTI_EVENT_DURATION") {
+        const folderName = "אוטומציות אירועים מרובים";
         const folder = await prisma.viewFolder.findFirst({
           where: {
             companyId: currentUser.companyId,
@@ -749,55 +1199,13 @@ export async function processTaskStatusChange(
       if (triggerConfig.toStatus && triggerConfig.toStatus !== toStatus)
         continue;
 
-      if (rule.actionType === "SEND_NOTIFICATION") {
-        const actionConfig = rule.actionConfig as ActionConfig;
-        if (actionConfig.recipientId) {
-          await sendNotification({
-            userId: actionConfig.recipientId,
-            title: actionConfig.titleTemplate || "עדכון משימה",
-            message: (
-              actionConfig.messageTemplate ||
-              "המשימה {taskTitle} עברה לסטטוס {toStatus}"
-            )
-              .replace("{taskTitle}", taskTitle)
-              .replace("{fromStatus}", fromStatus)
-              .replace("{toStatus}", toStatus),
-            link: "/tasks",
-          });
-        }
-      } else if (rule.actionType === "CALCULATE_DURATION") {
-        const recentLogs = await prisma.auditLog.findMany({
-          where: { taskId: taskId, action: "UPDATE" },
-          orderBy: { timestamp: "desc" },
-          take: 20,
-        });
-        let previousChange = null;
-        for (const log of recentLogs) {
-          const diff = log.diffJson as any;
-          if (diff && diff.status && diff.status.to === fromStatus) {
-            previousChange = log;
-            break;
-          }
-        }
-        if (previousChange) {
-          const startTime = new Date(previousChange.timestamp).getTime();
-          const endTime = new Date().getTime();
-          const diffMs = endTime - startTime;
-
-          const diffMinutes = Math.floor(diffMs / (1000 * 60));
-          const diffHours = Math.floor(diffMinutes / 60);
-          const diffDays = Math.floor(diffHours / 24);
-          const remainingHours = diffHours % 24;
-          const remainingMinutes = diffMinutes % 60;
-
-          const durationString = `${diffDays}d ${remainingHours}h ${remainingMinutes}m|->`;
-
-          await prisma.task.update({
-            where: { id: taskId },
-            data: { duration_status_change: durationString },
-          });
-        }
-      }
+      const context = {
+        taskId,
+        taskTitle,
+        fromStatus,
+        toStatus,
+      };
+      await executeRuleActions(rule, context);
     }
 
     // Check all view automations to ensure they trigger correctly
@@ -892,60 +1300,12 @@ export async function processNewRecordTrigger(
         }
       }
 
-      if (rule.actionType === "SEND_NOTIFICATION") {
-        const actionConfig = rule.actionConfig as ActionConfig;
-        if (actionConfig.recipientId) {
-          await sendNotification({
-            userId: actionConfig.recipientId,
-            title: actionConfig.titleTemplate || "נוצרה רשומה חדשה",
-            message: (
-              actionConfig.messageTemplate || "רשומה חדשה בטבלה {tableName}"
-            ).replace("{tableName}", tableName),
-            link: `/tables/${tableId}`,
-          });
-        }
-      } else if (rule.actionType === "ADD_TO_NURTURE_LIST") {
-        const data = recordData;
-        const actionConfig = rule.actionConfig as any;
-        const mapping = actionConfig.mapping || {};
-        const name = data[mapping.name] || "Unknown";
-        const email = data[mapping.email] || "";
-        const phone = data[mapping.phone] || "";
-
-        if (email || phone) {
-          console.log(
-            `[Automations] 🟢 ADD_TO_NURTURE_LIST (New Record). Adding ${name} to ${actionConfig.listId}`,
-          );
-
-          const added = await addToNurtureList({
-            companyId: rule.companyId,
-            listSlug: actionConfig.listId,
-            name,
-            email,
-            phone,
-            sourceType: "TABLE",
-            sourceId: String(recordId),
-            sourceTableId: tableId,
-          });
-
-          if (added) {
-            // Send notification based on configuration
-            const notifyTo = actionConfig.notifyUserId || rule.createdBy;
-            const notifyMsg = actionConfig.notifyMessage
-              ? actionConfig.notifyMessage.replace("{name}", name)
-              : `הליד ${name} נוסף אוטומטית לרשימה "${actionConfig.listId}".`;
-
-            if (actionConfig.sendNotification !== false && notifyTo) {
-              await sendNotification({
-                userId: notifyTo,
-                title: actionConfig.notifyTitle || "נוסף לרשימת תפוצה",
-                message: notifyMsg,
-                link: `/nurture-hub`,
-              });
-            }
-          }
-        }
-      }
+      await executeRuleActions(rule, {
+        recordData,
+        tableId,
+        tableName,
+        recordId,
+      });
     }
 
     // Check all view automations to ensure they trigger correctly
@@ -1061,126 +1421,21 @@ export async function processRecordUpdate(
           continue;
       }
 
-      if (rule.actionType === "SEND_NOTIFICATION") {
-        const actionConfig = rule.actionConfig as ActionConfig;
-        if (actionConfig.recipientId) {
-          await sendNotification({
-            userId: actionConfig.recipientId,
-            title: actionConfig.titleTemplate || "Record Updated",
-            message: (
-              actionConfig.messageTemplate ||
-              "Field {fieldName} changed from {fromValue} to {toValue}"
-            )
-              .replace("{tableName}", tableName)
-              .replace("{fieldName}", columnId)
-              .replace("{fromValue}", String(oldValue))
-              .replace("{toValue}", String(newValue)),
-            link: `/tables/${tableId}`,
-          });
-        }
-      } else if (rule.actionType === "CALCULATE_DURATION") {
-        // Duration Logic
-        // ...
-        // Kept simplified logic for calculating duration
-        const recentLogs = await prisma.auditLog.findMany({
-          where: { recordId: recordId, action: { in: ["UPDATE", "CREATE"] } },
-          orderBy: { timestamp: "desc" },
-          take: 100,
-        });
-
-        let startTime: Date | null = null;
-        for (const log of recentLogs) {
-          const logData = log.diffJson as any;
-          const logValue = logData ? logData[columnId] : undefined;
-          if (logData && String(logValue) === String(oldValue)) {
-            startTime = log.timestamp;
-            break;
-          }
-        }
-        if (!startTime) {
-          const createLog = await prisma.auditLog.findFirst({
-            where: { recordId: recordId, action: "CREATE" },
-          });
-          if (createLog) {
-            const createData = createLog.diffJson as any;
-            if (
-              createData &&
-              String(createData[columnId]) === String(oldValue)
-            ) {
-              startTime = createLog.timestamp;
-            }
-          }
-        }
-        if (startTime) {
-          const endTime = new Date();
-          const diffMs = endTime.getTime() - new Date(startTime).getTime();
-          const diffMinutes = Math.floor(diffMs / (1000 * 60));
-          const diffHours = Math.floor(diffMinutes / 60);
-          const diffDays = Math.floor(diffHours / 24);
-          const remainingHours = diffHours % 24;
-          const remainingMinutes = diffMinutes % 60;
-          const remainingSeconds = Math.floor((diffMs % (1000 * 60)) / 1000);
-          const durationString = `${diffDays}d ${remainingHours}h ${remainingMinutes}m ${remainingSeconds}s|${oldValue}->${newValue}`;
-
-          await prisma.statusDuration.create({
-            data: {
-              automationRuleId: rule.id,
-              recordId: recordId,
-              durationSeconds: Math.floor(diffMs / 1000),
-              durationString: durationString,
-              fromValue: String(oldValue),
-              toValue: String(newValue),
-            },
-          });
-        }
-      } else if (rule.actionType === "ADD_TO_NURTURE_LIST") {
-        const actionConfig = rule.actionConfig as any;
-        const mapping = actionConfig.mapping || {};
-
-        const nameField = mapping.name;
-        const emailField = mapping.email;
-        const phoneField = mapping.phone;
-
-        const name = newData[nameField] || "Unknown Name";
-        const email = newData[emailField] || "";
-        const phone = newData[phoneField] || "";
-
-        if (email || phone) {
-          console.log(
-            `[Automations] 🟢 ADD_TO_NURTURE_LIST triggered for Record ${recordId}. Adding ${name} (${email}, ${phone}) to list ${actionConfig.listId}`,
-          );
-          const added = await addToNurtureList({
-            companyId: rule.companyId,
-            listSlug: actionConfig.listId,
-            name,
-            email,
-            phone,
-            sourceType: "TABLE",
-            sourceId: String(recordId),
-            sourceTableId: tableId,
-          });
-
-          if (added) {
-            // Send notification based on configuration
-            const notifyTo = actionConfig.notifyUserId || rule.createdBy;
-            const notifyMsg = actionConfig.notifyMessage
-              ? actionConfig.notifyMessage.replace("{name}", name)
-              : `Lead ${name} was automatically added to list "${actionConfig.listId}".`;
-
-            if (actionConfig.sendNotification !== false && notifyTo) {
-              await sendNotification({
-                userId: notifyTo,
-                title: "Added to Nurture List",
-                message: notifyMsg,
-                link: `/nurture-hub`,
-              });
-            }
-          }
-        }
-      }
+      await executeRuleActions(rule, {
+        recordData: newData,
+        oldRecordData: oldData,
+        tableId,
+        tableName,
+        recordId,
+      });
     }
 
-    await processMultiEventDurationTrigger(tableId, recordId, oldData, newData);
+    // Run multi-event automations in background (fire-and-forget) to not block the UI
+    // This is important because multi-event automations may have delays/sleeps
+    processMultiEventDurationTrigger(tableId, recordId, oldData, newData).catch(
+      (err) =>
+        console.error("[Automations] Multi-Event background error:", err),
+    );
 
     // Check all view automations to ensure they trigger correctly
     console.log(
@@ -1388,20 +1643,11 @@ export async function processTimeBasedAutomations() {
         if (conditionMet) {
           console.log(`Rule ${rule.name}: Triggering for record ${record.id}`);
 
-          // Execute Action
-          if (rule.actionType === "SEND_NOTIFICATION") {
-            const actionConfig = rule.actionConfig as ActionConfig;
-            if (actionConfig.recipientId) {
-              await sendNotification({
-                userId: actionConfig.recipientId,
-                title: actionConfig.titleTemplate || "התראת זמן",
-                message: (
-                  actionConfig.messageTemplate || "חלף זמן מאז יצירת הרשומה"
-                ).replace("{tableName}", "Table " + config.tableId), // Ideally fetch table name
-                link: `/tables/${config.tableId}`,
-              });
-            }
-          }
+          await executeRuleActions(rule, {
+            recordData: record.data,
+            tableId: Number(config.tableId),
+            recordId: record.id,
+          });
 
           // Log execution to prevent re-running
           await prisma.automationLog.create({

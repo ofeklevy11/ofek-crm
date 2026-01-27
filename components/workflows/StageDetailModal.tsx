@@ -31,7 +31,13 @@ import {
   Database,
   ArrowLeft,
   Trash,
+  Loader2,
+  CheckCircle2,
+  Copy,
+  ChevronDown,
 } from "lucide-react";
+import { getAllFiles } from "@/app/actions/storage";
+import { getTableById } from "@/app/actions/tables";
 import { deleteStage, updateStage } from "@/app/actions/workflows";
 import { useRouter } from "next/navigation";
 import * as LucideIcons from "lucide-react";
@@ -115,18 +121,6 @@ const AUTOMATION_CATEGORIES = [
         icon: Plus,
         description: "פותח משימה חדשה עבור נציג",
       },
-      {
-        id: "update_task",
-        label: "עדכן משימה קיימת",
-        icon: Edit3,
-        description: "משנה סטטוס או פרטים במשימה",
-      },
-      {
-        id: "delete_task",
-        label: "מחק משימה",
-        icon: Trash,
-        description: "מסיר משימה מהמערכת",
-      },
     ],
   },
   {
@@ -148,12 +142,6 @@ const AUTOMATION_CATEGORIES = [
         icon: Edit3,
         description: "עורך ערכים ברשומה קיימת",
       },
-      {
-        id: "delete_record",
-        label: "מחק רשומה",
-        icon: Trash,
-        description: "מוחק רשומה מהטבלה",
-      },
     ],
   },
   {
@@ -168,18 +156,6 @@ const AUTOMATION_CATEGORIES = [
         label: "צור אירוע ביומן",
         icon: Plus,
         description: "משבץ פגישה או תזכורת",
-      },
-      {
-        id: "update_event",
-        label: "עדכן פרטי אירוע",
-        icon: Edit3,
-        description: "משנה מועד או מיקום",
-      },
-      {
-        id: "delete_event",
-        label: "מחק אירוע",
-        icon: Trash,
-        description: "מבטל פגישה מהיומן",
       },
     ],
   },
@@ -208,7 +184,6 @@ const AUTOMATION_CATEGORIES = [
         label: "שלח WhatsApp",
         icon: MessageCircle,
         description: "שליחת הודעה לנייד",
-        comingSoon: true,
       },
       {
         id: "sms",
@@ -375,6 +350,20 @@ function ActionSelectionModal({
 // CONFIGURATION MODAL
 // ----------------------------------------------------------------------
 
+function formatPhonePreview(phone: string, type: "private" | "group") {
+  if (!phone) return "";
+  let clean = phone.trim();
+  if (type === "group") {
+    if (!clean.endsWith("@g.us")) return clean + "@g.us";
+    return clean;
+  }
+  // Private
+  clean = clean.replace(/\D/g, "");
+  if (clean.startsWith("0")) clean = "972" + clean.substring(1);
+  if (!clean.endsWith("@c.us")) clean = clean + "@c.us";
+  return clean;
+}
+
 function AutomationConfigModal({
   isOpen,
   onClose,
@@ -382,6 +371,7 @@ function AutomationConfigModal({
   type,
   users,
   tables,
+  initialConfig,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -389,13 +379,85 @@ function AutomationConfigModal({
   type: any;
   users: any[];
   tables: any[];
+  initialConfig?: any;
 }) {
   const [fields, setFields] = useState<any>({});
+
+  // Advanced WhatsApp State
+  const [waTargetType, setWaTargetType] = useState<"private" | "group">(
+    "private",
+  );
+  const [waMessageType, setWaMessageType] = useState<
+    "private" | "group" | "media"
+  >("private");
+  const [waTableId, setWaTableId] = useState("");
+  const [waColumns, setWaColumns] = useState<any[]>([]);
+  const [loadingColumns, setLoadingColumns] = useState(false);
+
+  const [availableFiles, setAvailableFiles] = useState<any[]>([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+  const [showDynamicValues, setShowDynamicValues] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (initialConfig) {
+        setFields(initialConfig);
+        // Restore WhatsApp specific state if needed
+        if (type?.id === "whatsapp") {
+          setWaMessageType(initialConfig.messageType || "private");
+          setWaTargetType(initialConfig.targetType || "private");
+          setWaTableId(initialConfig.tableId || "");
+          // Phone mode check
+          // If it starts with manual:, it's just the value. If not, it's a column.
+        }
+      } else {
+        setFields({});
+        setWaTargetType("private");
+        setWaMessageType("private");
+        setWaTableId("");
+        setWaColumns([]);
+      }
+    }
+  }, [isOpen, initialConfig]);
+
+  // Load files for WhatsApp Media
+  useEffect(() => {
+    if (isOpen && type?.id === "whatsapp" && waMessageType === "media") {
+      setLoadingFiles(true);
+      getAllFiles()
+        .then((files) => setAvailableFiles(files))
+        .finally(() => setLoadingFiles(false));
+    }
+  }, [isOpen, type, waMessageType]);
+
+  // Load columns for WhatsApp Table
+  useEffect(() => {
+    if (waTableId) {
+      setLoadingColumns(true);
+      getTableById(Number(waTableId))
+        .then((res) => {
+          if (res.success && res.data && res.data.schemaJson) {
+            const schema = res.data.schemaJson as any;
+            if (Array.isArray(schema)) {
+              setWaColumns(schema);
+            } else if (schema && Array.isArray(schema.columns)) {
+              setWaColumns(schema.columns);
+            } else {
+              setWaColumns([]);
+            }
+          }
+        })
+        .finally(() => setLoadingColumns(false));
+    } else {
+      setWaColumns([]);
+    }
+  }, [waTableId]);
 
   if (!isOpen || !type) return null;
 
   const handleSave = () => {
     let desc = `${type.label}`;
+    let configToSave = { ...fields };
 
     switch (type.id) {
       case "create_task":
@@ -446,7 +508,19 @@ function AutomationConfigModal({
         const recipient =
           users.find((u) => u.id.toString() === fields.recipientId)?.name ||
           "ללא נמען";
-        desc = `שלח התראה ל${recipient}: "${fields.message || "..."}"`;
+        desc = `שלח התראה ל${recipient}`;
+        break;
+      case "whatsapp":
+        desc = `שלח WhatsApp (${waMessageType === "media" ? "מדיה" : "הודעה"})`;
+        configToSave = {
+          ...configToSave,
+          phoneColumnId: fields.phoneColumnId,
+          messageType: waMessageType,
+          targetType: waTargetType, // Added
+          content: fields.content,
+          mediaFileId: fields.mediaFileId,
+          tableId: waTableId,
+        };
         break;
       case "webhook":
         desc = `Webhook לכתובת: ${fields.url || "..."}`;
@@ -456,15 +530,15 @@ function AutomationConfigModal({
     onSave({
       type: type.id,
       summary: desc,
-      config: fields,
+      config: configToSave,
     });
     setFields({});
     onClose();
   };
 
-  // Helper for table columns
+  // Helper for table columns (Create Record)
   const selectedTable = tables.find((t) => t.id.toString() === fields.tableId);
-  let tableFields: string[] = [];
+  let tableFields: any[] = [];
   if (selectedTable && selectedTable.schemaJson) {
     try {
       const schema =
@@ -472,17 +546,23 @@ function AutomationConfigModal({
           ? JSON.parse(selectedTable.schemaJson)
           : selectedTable.schemaJson;
       if (Array.isArray(schema)) {
-        tableFields = schema.map((col: any) => col.name);
+        tableFields = schema;
+      } else if (schema && Array.isArray(schema.columns)) {
+        tableFields = schema.columns;
       }
     } catch (e) {}
   }
+
+  // Find currently selected field for update logic
+  const selectedFieldForUpdate = tableFields.find(
+    (f) => f.name === fields.fieldName,
+  );
 
   return (
     <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
         <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-indigo-50">
           <div className="flex items-center gap-2">
-            {/* <type.icon size={18} className="text-indigo-600" /> */}
             <h3 className="font-bold text-indigo-900">{type.label}</h3>
           </div>
           <button
@@ -503,30 +583,64 @@ function AutomationConfigModal({
                 </label>
                 <input
                   className="w-full p-2 border rounded-md"
-                  placeholder="לדוגמה: פגישת היכרות"
+                  placeholder="שם המשימה"
+                  value={fields.title || ""}
                   onChange={(e) =>
                     setFields({ ...fields, title: e.target.value })
                   }
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  שיוך לנציג
+                  תיאור
                 </label>
-                <select
+                <textarea
                   className="w-full p-2 border rounded-md"
+                  placeholder="תיאור (אופציונלי)"
+                  rows={3}
+                  value={fields.description || ""}
                   onChange={(e) =>
-                    setFields({ ...fields, assigneeId: e.target.value })
+                    setFields({ ...fields, description: e.target.value })
                   }
-                >
-                  <option value="">בחר משתמש...</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    תאריך יעד (בעוד X ימים)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-full p-2 border rounded-md"
+                    placeholder="0 = היום"
+                    value={fields.dueDateOffset || ""}
+                    onChange={(e) =>
+                      setFields({ ...fields, dueDateOffset: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    סטטוס
+                  </label>
+                  <select
+                    className="w-full p-2 border rounded-md"
+                    value={fields.status || "todo"}
+                    onChange={(e) =>
+                      setFields({ ...fields, status: e.target.value })
+                    }
+                  >
+                    <option value="todo">משימות</option>
+                    <option value="in_progress">משימות בטיפול</option>
+                    <option value="waiting_client">ממתינים לאישור לקוח</option>
+                    <option value="completed_month">בוצעו החודש</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -534,14 +648,99 @@ function AutomationConfigModal({
                   </label>
                   <select
                     className="w-full p-2 border rounded-md"
+                    value={fields.priority || "low"}
                     onChange={(e) =>
                       setFields({ ...fields, priority: e.target.value })
                     }
                   >
-                    <option value="normal">רגילה</option>
-                    <option value="high">גבוהה</option>
-                    <option value="low">נמוכה</option>
+                    <option value="high">גבוה</option>
+                    <option value="medium">בינוני</option>
+                    <option value="low">נמוך</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    אחראי
+                  </label>
+                  <select
+                    className="w-full p-2 border rounded-md"
+                    value={fields.assigneeId || ""}
+                    onChange={(e) =>
+                      setFields({ ...fields, assigneeId: e.target.value })
+                    }
+                  >
+                    <option value="">ללא אחראי</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  תגיות
+                </label>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    value={fields.tagInput || ""}
+                    onChange={(e) =>
+                      setFields({ ...fields, tagInput: e.target.value })
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const tag = (fields.tagInput || "").trim();
+                        if (tag && !(fields.tags || []).includes(tag)) {
+                          setFields({
+                            ...fields,
+                            tags: [...(fields.tags || []), tag],
+                            tagInput: "",
+                          });
+                        }
+                      }
+                    }}
+                    placeholder="הקלד תגית ולחץ Enter"
+                    className="flex-1 p-2 border rounded-md text-sm"
+                  />
+                  <button
+                    onClick={() => {
+                      const tag = (fields.tagInput || "").trim();
+                      if (tag && !(fields.tags || []).includes(tag)) {
+                        setFields({
+                          ...fields,
+                          tags: [...(fields.tags || []), tag],
+                          tagInput: "",
+                        });
+                      }
+                    }}
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded transition-colors text-sm border border-gray-200"
+                  >
+                    הוסף
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(fields.tags || []).map((tag: string) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-1 rounded-full text-xs border border-blue-100"
+                    >
+                      {tag}
+                      <button
+                        onClick={() => {
+                          setFields({
+                            ...fields,
+                            tags: fields.tags.filter((t: string) => t !== tag),
+                          });
+                        }}
+                        className="hover:text-blue-800 transition-colors"
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
                 </div>
               </div>
             </>
@@ -598,6 +797,7 @@ function AutomationConfigModal({
               ) : (
                 <select
                   className="w-full p-2 border rounded-md"
+                  value={fields.tableId || ""}
                   onChange={(e) =>
                     setFields({ ...fields, tableId: e.target.value })
                   }
@@ -620,6 +820,7 @@ function AutomationConfigModal({
               <input
                 className="w-full p-2 border rounded-md"
                 placeholder="Record ID..."
+                value={fields.recordId || ""}
                 onChange={(e) =>
                   setFields({ ...fields, recordId: e.target.value })
                 }
@@ -631,23 +832,56 @@ function AutomationConfigModal({
               <p className="text-xs font-bold text-gray-500 mb-2">
                 ערכי שדות (JSON)
               </p>
-              {tableFields.map((f) => (
-                <div
-                  key={f}
-                  className="mb-2 last:mb-0 grid grid-cols-3 gap-2 items-center"
-                >
-                  <span className="text-xs text-gray-600 truncate col-span-1">
-                    {f}
-                  </span>
-                  <input
-                    className="col-span-2 p-1 text-sm border rounded"
-                    placeholder="ערך..."
-                  />
-                </div>
-              ))}
-              <p className="text-[10px] text-gray-400 mt-1">
-                * במערכת האמיתית זה יאסוף את הנתונים ל-JSON
-              </p>
+              {tableFields.map((f: any) => {
+                const currentValues = fields.values || {};
+                const val = currentValues[f.name] || "";
+
+                return (
+                  <div
+                    key={f.name}
+                    className="mb-2 last:mb-0 grid grid-cols-3 gap-2 items-center"
+                  >
+                    <span className="text-xs text-gray-600 truncate col-span-1">
+                      {f.label || f.name}
+                    </span>
+                    {f.type === "select" ||
+                    f.type === "status" ||
+                    f.type === "priority" ? (
+                      <select
+                        className="col-span-2 p-1 text-sm border rounded"
+                        value={val}
+                        onChange={(e) => {
+                          const newValues = {
+                            ...currentValues,
+                            [f.name]: e.target.value,
+                          };
+                          setFields({ ...fields, values: newValues });
+                        }}
+                      >
+                        <option value="">בחר אפשרות...</option>
+                        {(f.options || []).map((opt: string) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        className="col-span-2 p-1 text-sm border rounded"
+                        placeholder="ערך..."
+                        value={val}
+                        onChange={(e) => {
+                          const newValues = {
+                            ...currentValues,
+                            [f.name]: e.target.value,
+                          };
+                          setFields({ ...fields, values: newValues });
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
           {type.id === "update_record" && fields.tableId && (
@@ -659,29 +893,104 @@ function AutomationConfigModal({
                 <select
                   className="w-full p-1 border rounded text-sm"
                   onChange={(e) =>
-                    setFields({ ...fields, fieldName: e.target.value })
+                    setFields({
+                      ...fields,
+                      fieldName: e.target.value,
+                      value: "",
+                      operation: "",
+                    })
                   }
+                  value={fields.fieldName || ""}
                 >
                   <option value="">בחר שדה...</option>
                   {tableFields.map((f) => (
-                    <option key={f} value={f}>
-                      {f}
+                    <option key={f.name} value={f.name}>
+                      {f.label || f.name} ({f.type})
                     </option>
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  ערך חדש
-                </label>
-                <input
-                  className="w-full p-1 border rounded text-sm"
-                  placeholder="ערך..."
-                  onChange={(e) =>
-                    setFields({ ...fields, value: e.target.value })
-                  }
-                />
-              </div>
+
+              {selectedFieldForUpdate && (
+                <>
+                  {selectedFieldForUpdate.type === "select" ||
+                  selectedFieldForUpdate.type === "status" ||
+                  selectedFieldForUpdate.type === "priority" ? (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        ערך חדש
+                      </label>
+                      <select
+                        className="w-full p-1 border rounded text-sm"
+                        value={fields.value || ""}
+                        onChange={(e) =>
+                          setFields({ ...fields, value: e.target.value })
+                        }
+                      >
+                        <option value="">בחר אפשרות...</option>
+                        {(selectedFieldForUpdate.options || []).map(
+                          (opt: string) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </div>
+                  ) : selectedFieldForUpdate.type === "number" ||
+                    selectedFieldForUpdate.type === "score" ||
+                    selectedFieldForUpdate.type === "currency" ? (
+                    <div className="flex gap-2">
+                      <div className="w-1/3">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          פעולה
+                        </label>
+                        <select
+                          className="w-full p-1 border rounded text-sm dir-ltr"
+                          value={fields.operation || "set"}
+                          onChange={(e) =>
+                            setFields({ ...fields, operation: e.target.value })
+                          }
+                        >
+                          <option value="set">=</option>
+                          <option value="add">+</option>
+                          <option value="subtract">-</option>
+                          <option value="multiply">*</option>
+                          <option value="divide">/</option>
+                        </select>
+                      </div>
+                      <div className="w-2/3">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          ערך
+                        </label>
+                        <input
+                          type="number"
+                          className="w-full p-1 border rounded text-sm"
+                          placeholder="מספר..."
+                          value={fields.value || ""}
+                          onChange={(e) =>
+                            setFields({ ...fields, value: e.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        ערך חדש
+                      </label>
+                      <input
+                        className="w-full p-1 border rounded text-sm"
+                        placeholder="ערך..."
+                        value={fields.value || ""}
+                        onChange={(e) =>
+                          setFields({ ...fields, value: e.target.value })
+                        }
+                      />
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 
@@ -695,37 +1004,175 @@ function AutomationConfigModal({
                 <input
                   className="w-full p-2 border rounded-md"
                   placeholder="פגישה עם..."
+                  value={fields.title || ""}
                   onChange={(e) =>
                     setFields({ ...fields, title: e.target.value })
                   }
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    תזמון (בעוד X ימים)
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  תיאור
+                </label>
+                <textarea
+                  className="w-full p-2 border rounded-md"
+                  placeholder="תיאור האירוע..."
+                  rows={3}
+                  value={fields.description || ""}
+                  onChange={(e) =>
+                    setFields({ ...fields, description: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 space-y-3">
+                <div className="flex gap-4 border-b border-gray-200 pb-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="timingMode"
+                      checked={fields.timingMode !== "relative"}
+                      onChange={() =>
+                        setFields({ ...fields, timingMode: "fixed" })
+                      }
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      בשעה קבוע
+                    </span>
                   </label>
-                  <input
-                    type="number"
-                    className="w-full p-2 border rounded-md"
-                    defaultValue={0}
-                    onChange={(e) =>
-                      setFields({ ...fields, daysOffset: e.target.value })
-                    }
-                  />
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="timingMode"
+                      checked={fields.timingMode === "relative"}
+                      onChange={() =>
+                        setFields({ ...fields, timingMode: "relative" })
+                      }
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      בעוד פרק זמן (מהרגע)
+                    </span>
+                  </label>
                 </div>
+
+                {fields.timingMode === "relative" ? (
+                  <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-200">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                        בעוד (שעות)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="w-full p-2 border rounded-md"
+                        placeholder="0"
+                        value={fields.hoursOffset || 0}
+                        onChange={(e) =>
+                          setFields({ ...fields, hoursOffset: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                        בעוד (דקות)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="5"
+                        className="w-full p-2 border rounded-md"
+                        placeholder="0"
+                        value={fields.minutesOffset || 0}
+                        onChange={(e) =>
+                          setFields({
+                            ...fields,
+                            minutesOffset: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-200">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                        בעוד (ימים)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="w-full p-2 border rounded-md"
+                        placeholder="0 = היום"
+                        value={fields.daysOffset || 0}
+                        onChange={(e) =>
+                          setFields({ ...fields, daysOffset: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                        שעה קבועה
+                      </label>
+                      <input
+                        type="time"
+                        className="w-full p-2 border rounded-md"
+                        value={fields.startTime || "09:00"}
+                        onChange={(e) =>
+                          setFields({ ...fields, startTime: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     משך (דקות)
                   </label>
                   <input
                     type="number"
+                    min="15"
+                    step="15"
                     className="w-full p-2 border rounded-md"
-                    defaultValue={60}
+                    value={fields.duration || 60}
                     onChange={(e) =>
                       setFields({ ...fields, duration: e.target.value })
                     }
                   />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  צבע
+                </label>
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    "#3788d8", // Blue
+                    "#7b1fa2", // Purple
+                    "#2e7d32", // Green
+                    "#d32f2f", // Red
+                    "#f57c00", // Orange
+                    "#0097a7", // Cyan
+                    "#5d4037", // Brown
+                  ].map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setFields({ ...fields, color: c })}
+                      className={`w-8 h-8 rounded-full transition-transform border border-transparent hover:border-gray-300 ${
+                        (fields.color || "#3788d8") === c
+                          ? "ring-2 ring-offset-2 ring-gray-400 scale-110"
+                          : ""
+                      }`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
                 </div>
               </div>
             </>
@@ -782,6 +1229,325 @@ function AutomationConfigModal({
             </>
           )}
 
+          {/* --- WHATSAPP --- */}
+          {type.id === "whatsapp" && (
+            <div className="space-y-5">
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                <label className="block text-sm font-medium text-blue-900 mb-1">
+                  הגדרת טבלה (עבור משתנים ומספרים)
+                </label>
+                <select
+                  className="w-full p-2 border rounded-md text-sm"
+                  value={waTableId}
+                  onChange={(e) => setWaTableId(e.target.value)}
+                >
+                  <option value="">בחר טבלה...</option>
+                  {tables.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  למי לשלוח?
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-green-300 transition-colors flex-1">
+                    <input
+                      type="radio"
+                      name="waTargetType"
+                      value="private"
+                      checked={waTargetType === "private"}
+                      onChange={() => {
+                        setWaTargetType("private");
+                        setFields({ ...fields, phoneColumnId: "" });
+                      }}
+                      className="text-green-600 focus:ring-green-500"
+                    />
+                    <span className="font-medium text-gray-700">אדם פרטי</span>
+                  </label>
+                  <label className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-green-300 transition-colors flex-1">
+                    <input
+                      type="radio"
+                      name="waTargetType"
+                      value="group"
+                      checked={waTargetType === "group"}
+                      onChange={() => {
+                        setWaTargetType("group");
+                        setFields({ ...fields, phoneColumnId: "manual:" });
+                      }}
+                      className="text-green-600 focus:ring-green-500"
+                    />
+                    <span className="font-medium text-gray-700">קבוצה</span>
+                  </label>
+                </div>
+              </div>
+
+              {waTargetType === "private" ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    פרטי הנמען
+                  </label>
+                  <div className="flex gap-4 mb-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="phoneMode"
+                        checked={
+                          !String(fields.phoneColumnId || "").startsWith(
+                            "manual:",
+                          )
+                        }
+                        onChange={() =>
+                          setFields({ ...fields, phoneColumnId: "" })
+                        }
+                        className="text-green-600 focus:ring-green-500"
+                      />
+                      <span className="text-sm text-gray-700">
+                        לפי עמודה בטבלה
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="phoneMode"
+                        checked={String(fields.phoneColumnId || "").startsWith(
+                          "manual:",
+                        )}
+                        onChange={() =>
+                          setFields({ ...fields, phoneColumnId: "manual:" })
+                        }
+                        className="text-green-600 focus:ring-green-500"
+                      />
+                      <span className="text-sm text-gray-700">
+                        מספר ידני קבוע
+                      </span>
+                    </label>
+                  </div>
+
+                  {!String(fields.phoneColumnId || "").startsWith("manual:") ? (
+                    <div>
+                      <select
+                        value={fields.phoneColumnId || ""}
+                        onChange={(e) =>
+                          setFields({
+                            ...fields,
+                            phoneColumnId: e.target.value,
+                          })
+                        }
+                        disabled={!waTableId}
+                        className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 disabled:bg-gray-100"
+                      >
+                        <option value="">
+                          {waTableId ? "בחר עמודה..." : "יש לבחור טבלה למעלה"}
+                        </option>
+                        {waColumns.map((col: any) => (
+                          <option key={col.id || col.name} value={col.name}>
+                            {col.label || col.name} ({col.type})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div>
+                      <input
+                        type="text"
+                        value={String(fields.phoneColumnId || "").replace(
+                          "manual:",
+                          "",
+                        )}
+                        onChange={(e) =>
+                          setFields({
+                            ...fields,
+                            phoneColumnId: `manual:${e.target.value}`,
+                          })
+                        }
+                        placeholder="הכנס מספר טלפון (לדוגמה: 0501234567)"
+                        className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500"
+                        dir="ltr"
+                      />
+                      <div className="mt-2 text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
+                        <strong>תצוגה מקדימה:</strong>{" "}
+                        <span dir="ltr" className="font-mono">
+                          {formatPhonePreview(
+                            String(fields.phoneColumnId || "").replace(
+                              "manual:",
+                              "",
+                            ),
+                            "private",
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    מזהה קבוצה (Group ID)
+                  </label>
+                  <input
+                    type="text"
+                    value={String(fields.phoneColumnId || "").replace(
+                      "manual:",
+                      "",
+                    )}
+                    onChange={(e) =>
+                      setFields({
+                        ...fields,
+                        phoneColumnId: `manual:${e.target.value}`,
+                      })
+                    }
+                    placeholder="לדוגמה: 12345678@g.us"
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 font-mono text-sm"
+                    dir="ltr"
+                  />
+                  <div className="mt-2 text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
+                    <strong>תצוגה מקדימה:</strong>{" "}
+                    <span dir="ltr" className="font-mono">
+                      {formatPhonePreview(
+                        String(fields.phoneColumnId || "").replace(
+                          "manual:",
+                          "",
+                        ),
+                        "group",
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  סוג הודעה
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-green-300 transition-colors flex-1">
+                    <input
+                      type="radio"
+                      name="waMessageType"
+                      value="private"
+                      checked={waMessageType === "private"}
+                      onChange={() => setWaMessageType("private")}
+                      className="text-green-600 focus:ring-green-500"
+                    />
+                    <span className="font-medium text-gray-700">
+                      הודעה רגילה
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-green-300 transition-colors flex-1">
+                    <input
+                      type="radio"
+                      name="waMessageType"
+                      value="media"
+                      checked={waMessageType === "media"}
+                      onChange={() => setWaMessageType("media")}
+                      className="text-green-600 focus:ring-green-500"
+                    />
+                    <span className="font-medium text-gray-700">
+                      הודעה עם מדיה
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {waMessageType === "media" && (
+                <div className="animate-in slide-in-from-top-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    בחר קובץ לשליחה
+                  </label>
+                  {loadingFiles ? (
+                    <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                      <Loader2 className="animate-spin" size={16} /> טוען
+                      קבצים...
+                    </div>
+                  ) : (
+                    <select
+                      value={fields.mediaFileId || ""}
+                      onChange={(e) =>
+                        setFields({ ...fields, mediaFileId: e.target.value })
+                      }
+                      className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+                    >
+                      <option value="">בחר קובץ מהמערכת...</option>
+                      {availableFiles.map((file) => (
+                        <option key={file.id} value={file.id}>
+                          {file.name} ({file.type})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {waMessageType === "media"
+                    ? "כיתוב (Caption)"
+                    : "תוכן ההודעה"}
+                </label>
+                <textarea
+                  value={fields.content || ""}
+                  onChange={(e) =>
+                    setFields({ ...fields, content: e.target.value })
+                  }
+                  rows={4}
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                  placeholder="הקלד את ההודעה כאן..."
+                />
+                <div className="mt-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => setShowDynamicValues(!showDynamicValues)}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                  >
+                    לפתיחת הערכים לשימוש מהרשומה הנוכחית לחץ כאן:
+                    <ChevronDown
+                      size={16}
+                      className={`transition-transform ${showDynamicValues ? "rotate-180" : ""}`}
+                    />
+                  </button>
+
+                  {showDynamicValues && (
+                    <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                      {waColumns.length > 0 ? (
+                        waColumns.map((col: any) => (
+                          <button
+                            key={col.id || col.name}
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(`{${col.name}}`);
+                            }}
+                            className="flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded text-xs hover:border-blue-300 hover:bg-blue-50 transition-colors group"
+                            title="לחץ להעתקה"
+                          >
+                            <span
+                              className="font-mono text-gray-600 truncate max-w-[120px]"
+                              dir="ltr"
+                            >{`{${col.name}}`}</span>
+                            <Copy
+                              size={12}
+                              className="text-gray-400 group-hover:text-blue-500"
+                            />
+                          </button>
+                        ))
+                      ) : (
+                        <p className="text-xs text-gray-500 col-span-2">
+                          {waTableId
+                            ? "לא נמצאו עמודות."
+                            : "יש לבחור טבלה למעלה."}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* --- WEBHOOK --- */}
           {type.id === "webhook" && (
             <div>
@@ -798,18 +1564,18 @@ function AutomationConfigModal({
           )}
         </div>
 
-        <div className="p-4 bg-gray-50 flex justify-end gap-2">
+        <div className="p-4 flex justify-end gap-2 bg-gray-50 border-t border-gray-100">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg text-sm"
+            className="px-4 py-2 rounded border border-gray-300 bg-white"
           >
             ביטול
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700"
+            className="px-4 py-2 rounded bg-indigo-600 text-white"
           >
-            שמור הגדרה
+            שמור
           </button>
         </div>
       </div>
@@ -1467,10 +2233,18 @@ export function StageDetailModal({
 
             <div className="space-y-2">
               {formData.systemActions.map((action: any, i: number) => {
+                const getActionType = (id: string) =>
+                  AUTOMATION_CATEGORIES.flatMap((c) => c.actions).find(
+                    (a) => a.id === id,
+                  );
+                const actionType = getActionType(action.type);
+
                 const isLegacy = typeof action === "string";
                 const summary = isLegacy
                   ? action
-                  : action.summary || action.type;
+                  : action.summary || actionType?.label || action.type;
+
+                const Icon = actionType?.icon || Zap;
 
                 return (
                   <div
@@ -1478,18 +2252,35 @@ export function StageDetailModal({
                     className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 group"
                   >
                     <div className="p-1.5 bg-white rounded-lg shadow-sm text-orange-500 mt-0.5">
-                      <Zap size={14} />
+                      <Icon size={14} />
                     </div>
                     <div className="flex-1">
                       <p className="text-sm text-gray-700">{summary}</p>
                     </div>
                     {isEditing && (
-                      <button
-                        onClick={() => removeItem("systemActions", i)}
-                        className="p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => {
+                            const typeObj = getActionType(action.type);
+                            if (typeObj) {
+                              setConfiguringAutomation({
+                                type: typeObj,
+                                config: action.config,
+                                index: i,
+                              });
+                            }
+                          }}
+                          className="p-1 text-gray-400 hover:text-indigo-500"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        <button
+                          onClick={() => removeItem("systemActions", i)}
+                          className="p-1 text-gray-400 hover:text-red-500"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     )}
                   </div>
                 );
@@ -1588,11 +2379,24 @@ export function StageDetailModal({
 
       <AutomationConfigModal
         isOpen={!!configuringAutomation}
-        type={configuringAutomation}
+        type={configuringAutomation?.type || configuringAutomation}
+        initialConfig={configuringAutomation?.config}
         users={users}
         tables={tables}
         onClose={() => setConfiguringAutomation(null)}
-        onSave={addAutomation}
+        onSave={(data) => {
+          if (configuringAutomation?.index !== undefined) {
+            // Update existing
+            setFormData((prev: any) => {
+              const newActions = [...(prev.systemActions || [])];
+              newActions[configuringAutomation.index] = data;
+              return { ...prev, systemActions: newActions };
+            });
+          } else {
+            // Add new
+            addAutomation(data);
+          }
+        }}
       />
 
       <ConditionSelectionModal

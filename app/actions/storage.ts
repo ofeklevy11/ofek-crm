@@ -4,6 +4,17 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
 
+export async function getAllFiles() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+
+  return prisma.file.findMany({
+    where: { companyId: user.companyId },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, name: true, url: true, type: true },
+  });
+}
+
 export async function moveFileToFolder(
   fileId: number,
   targetFolderId: number | null,

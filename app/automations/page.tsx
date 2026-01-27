@@ -80,6 +80,7 @@ export default async function AutomationsPage() {
         tables={tables}
         folders={folders}
         currentUserId={user.id}
+        userPlan={user.isPremium || "basic"}
       />
     </div>
   );
