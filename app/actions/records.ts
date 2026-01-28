@@ -23,7 +23,7 @@ export async function getRecordsByTableId(tableId: number) {
         tableId,
         companyId: user.companyId,
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     });
     return { success: true, data: records };
   } catch (error) {
@@ -81,7 +81,7 @@ export async function createRecord(data: {
       await processNewRecordTrigger(
         tableId,
         table?.name || "Unknown Table",
-        record.id
+        record.id,
       );
     } catch (autoError) {
       console.error(`[Records] Failed to process automations:`, autoError);
@@ -103,7 +103,7 @@ export async function updateRecord(
     data: Record<string, unknown>;
     updatedBy?: number;
     createdAt?: string;
-  }
+  },
 ) {
   console.log(`[Records] updateRecord called for Record ID: ${recordId}`);
   try {
@@ -143,8 +143,8 @@ export async function updateRecord(
 
     console.log(
       `[Records] Updating record ${recordId}. Keys in payload: ${Object.keys(
-        recordData
-      ).join(", ")}`
+        recordData,
+      ).join(", ")}`,
     );
 
     const record = await prisma.record.update({
@@ -167,7 +167,7 @@ export async function updateRecord(
         record.tableId,
         record.id,
         existingRecord.data as any,
-        recordData
+        recordData,
       );
     } catch (autoError) {
       console.error(`[Records] Failed to process automations:`, autoError);
@@ -236,7 +236,7 @@ export async function deleteRecord(recordId: number, deletedBy?: number) {
           },
         });
         console.log(
-          `[Records] Cascaded delete to Finance Records for origin #${recordId}`
+          `[Records] Cascaded delete to Finance Records for origin #${recordId}`,
         );
       }
     } catch (e) {
@@ -256,7 +256,7 @@ export async function deleteRecord(recordId: number, deletedBy?: number) {
 
 export async function bulkDeleteRecords(
   recordIds: number[],
-  deletedBy?: number
+  deletedBy?: number,
 ) {
   try {
     const user = await getCurrentUser();
@@ -305,7 +305,7 @@ export async function bulkDeleteRecords(
               },
             });
             console.log(
-              `[Records] Bulk cascade delete to Finance Records for ${recordIds.length} items`
+              `[Records] Bulk cascade delete to Finance Records for ${recordIds.length} items`,
             );
           }
         }

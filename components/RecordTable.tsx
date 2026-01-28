@@ -411,6 +411,17 @@ export default function RecordTable({
     return true;
   });
 
+  // Ensure strict order by createdAt (descending - stack order) with ID tie-breaker
+  // This prevents records from moving when updated, as they revert to physical order without explicit sort
+  filteredRecords.sort((a, b) => {
+    const timeA = new Date(a.createdAt).getTime();
+    const timeB = new Date(b.createdAt).getTime();
+    if (timeA !== timeB) {
+      return timeB - timeA;
+    }
+    return b.id - a.id;
+  });
+
   // Sync top scrollbar width with table width
   useEffect(() => {
     const updateScrollWidth = () => {

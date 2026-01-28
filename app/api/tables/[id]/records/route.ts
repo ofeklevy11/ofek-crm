@@ -35,7 +35,7 @@ export async function GET(
     // Now get records (they inherit companyId from table)
     const records = await prisma.record.findMany({
       where: { tableId, companyId: currentUser.companyId },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       include: {
         creator: {
           select: { id: true, name: true, email: true },

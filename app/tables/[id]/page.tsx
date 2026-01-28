@@ -88,7 +88,7 @@ export default async function TableDetailsPage({
 
     records = await prisma.record.findMany({
       where: { id: { in: ids } },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       include: {
         attachments: true,
         files: true,
@@ -107,7 +107,7 @@ export default async function TableDetailsPage({
         tableId,
         companyId: user.companyId,
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip: (currentPage - 1) * pageSize,
       take: pageSize,
       include: {

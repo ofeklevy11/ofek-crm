@@ -9,6 +9,7 @@ export type TaskStatus =
   | "todo"
   | "in_progress"
   | "waiting_client"
+  | "on_hold"
   | "completed_month";
 
 export interface Task {
@@ -42,22 +43,41 @@ const COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
     color: "from-amber-600 to-amber-700",
   },
   {
+    id: "on_hold",
+    title: "משימות בהשהייה",
+    color: "from-gray-500 to-gray-600",
+  },
+  {
     id: "completed_month",
     title: "בוצעו החודש",
     color: "from-emerald-600 to-emerald-700",
   },
 ];
 
+import TasksFilterSidebar, {
+  TaskFilters,
+} from "@/components/tasks/TasksFilterSidebar";
+
 interface TaskKanbanBoardProps {
   currentUser: User | null;
+  users?: { id: number; name: string }[];
 }
 
-export default function TaskKanbanBoard({ currentUser }: TaskKanbanBoardProps) {
+export default function TaskKanbanBoard({
+  currentUser,
+  users = [],
+}: TaskKanbanBoardProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalStatus, setModalStatus] = useState<TaskStatus>("todo");
+  const [filters, setFilters] = useState<TaskFilters>({
+    assigneeId: null,
+    priority: null,
+    dueDate: null,
+    startDate: null,
+  });
 
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
@@ -132,11 +152,32 @@ export default function TaskKanbanBoard({ currentUser }: TaskKanbanBoardProps) {
     }
   };
 
-  const filteredTasks = tasks.filter(
-    (t) =>
+  const filteredTasks = tasks.filter((t) => {
+    // Text search
+    const matchesSearch =
       t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.description?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+      t.description?.toLowerCase().includes(searchQuery.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    // Sidebar Filters
+    if (filters.assigneeId && t.assigneeId !== filters.assigneeId) return false;
+    if (filters.priority && t.priority !== filters.priority) return false;
+
+    if (filters.dueDate) {
+      if (!t.dueDate) return false;
+      const taskDue = new Date(t.dueDate).toISOString().split("T")[0];
+      if (taskDue !== filters.dueDate) return false;
+    }
+
+    if (filters.startDate) {
+      // Assuming startDate maps to createdAt
+      const taskStart = new Date(t.createdAt).toISOString().split("T")[0];
+      if (taskStart !== filters.startDate) return false;
+    }
+
+    return true;
+  });
 
   const getTasksByStatus = (status: TaskStatus) =>
     filteredTasks.filter((t) => t.status === status);
@@ -173,29 +214,44 @@ export default function TaskKanbanBoard({ currentUser }: TaskKanbanBoardProps) {
           </button>
         )}
       </div>
-      {/* Kanban Board */}
-      {isLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
+
+      <div className="flex flex-col md:flex-row gap-6 items-start">
+        {/* Sidebar */}
+        <div className="w-full md:w-64 shrink-0 md:sticky md:top-24">
+          <TasksFilterSidebar
+            filters={filters}
+            onChange={setFilters}
+            users={users}
+          />
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {COLUMNS.map((col) => (
-            <KanbanColumn
-              key={col.id}
-              title={col.title}
-              color={col.color}
-              tasks={getTasksByStatus(col.id)}
-              onTaskMove={handleTaskMove}
-              onTaskCreate={() => handleTaskCreate(col.id)}
-              onTaskDelete={handleTaskDelete}
-              onTaskEdit={handleTaskEdit}
-              status={col.id}
-              canCreate={canCreate ?? false}
-            />
-          ))}
+
+        {/* Kanban Board */}
+        <div className="flex-1 overflow-x-auto w-full">
+          {isLoading ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 min-w-[800px] lg:min-w-0">
+              {COLUMNS.map((col) => (
+                <KanbanColumn
+                  key={col.id}
+                  title={col.title}
+                  color={col.color}
+                  tasks={getTasksByStatus(col.id)}
+                  onTaskMove={handleTaskMove}
+                  onTaskCreate={() => handleTaskCreate(col.id)}
+                  onTaskDelete={handleTaskDelete}
+                  onTaskEdit={handleTaskEdit}
+                  status={col.id}
+                  canCreate={canCreate ?? false}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
+
       {/* Modal */}
       {modalOpen && (
         <TaskModal

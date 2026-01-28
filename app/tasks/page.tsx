@@ -101,7 +101,8 @@ export default async function TasksPage({
   const isAdmin = user?.role === "admin";
 
   // Fetch data based on view
-  const users = user && isAdmin ? await getUsers(user.companyId) : [];
+  // Fetch data based on view
+  const users = user ? await getUsers(user.companyId) : [];
   const taskSheets = user
     ? await getTaskSheets(user.companyId, isAdmin, user.id)
     : [];
@@ -117,7 +118,7 @@ export default async function TasksPage({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full px-6 py-8">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">משימות</h1>
@@ -162,7 +163,9 @@ export default async function TasksPage({
             </div>
           }
         >
-          {currentView === "kanban" && <TaskKanbanBoard currentUser={user} />}
+          {currentView === "kanban" && (
+            <TaskKanbanBoard currentUser={user} users={users} />
+          )}
 
           {currentView === "my-sheets" && (
             <div>

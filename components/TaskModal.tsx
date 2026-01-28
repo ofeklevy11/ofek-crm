@@ -27,10 +27,10 @@ export default function TaskModal({
   const [selectedStatus, setSelectedStatus] = useState(task?.status || status);
   // priority selector, default low
   const [priority, setPriority] = useState<"high" | "medium" | "low">(
-    task?.priority || "low"
+    task?.priority || "low",
   );
   const [assigneeId, setAssigneeId] = useState<number | undefined>(
-    task?.assigneeId || task?.assignee?.id || undefined
+    task?.assigneeId || task?.assignee?.id || undefined,
   );
   const [selectedTags, setSelectedTags] = useState<string[]>(task?.tags || []);
   const [tagInput, setTagInput] = useState("");
@@ -182,6 +182,7 @@ export default function TaskModal({
                 <option value="todo">משימות</option>
                 <option value="in_progress">משימות בטיפול</option>
                 <option value="waiting_client">ממתינים לאישור לקוח</option>
+                <option value="on_hold">משימות בהשהייה</option>
                 <option value="completed_month">בוצעו החודש</option>
               </select>
             </div>
@@ -211,7 +212,7 @@ export default function TaskModal({
                 value={assigneeId || ""}
                 onChange={(e) =>
                   setAssigneeId(
-                    e.target.value ? Number(e.target.value) : undefined
+                    e.target.value ? Number(e.target.value) : undefined,
                   )
                 }
                 disabled={loadingUsers}
