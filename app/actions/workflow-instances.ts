@@ -187,7 +187,7 @@ async function executeStageAutomations(stage: any, instance: any, user: any) {
               data: {
                 companyId: user.companyId,
                 title: config.title,
-                status: "todo",
+                status: config.status || "todo",
                 assigneeId: config.assigneeId
                   ? Number(config.assigneeId)
                   : null,

@@ -15,12 +15,21 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Save, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  SelectOptionsEditor,
+  SelectOption,
+  parseOptionsString,
+  optionsToString,
+  optionsToSchemaFormat,
+  parseOptionsWithColors,
+} from "@/components/ui/SelectOptionsEditor";
 
 interface FieldRow {
   name: string;
   type: string;
   label: string;
   options: string;
+  selectOptions?: Array<{ value: string; color?: string }>;
   relationTableId?: string;
   relationField?: string;
   lookupField?: string;
@@ -102,6 +111,10 @@ export default function EditTableModal({
         type: field.type,
         label: field.label,
         options: field.options ? field.options.join(", ") : "",
+        selectOptions: parseOptionsWithColors(
+          field.options,
+          field.optionColors,
+        ),
         relationTableId: field.relationTableId
           ? String(field.relationTableId)
           : undefined,
@@ -109,7 +122,6 @@ export default function EditTableModal({
         lookupField: field.lookupField,
         defaultValue: field.defaultValue,
         allowMultiple: field.allowMultiple,
-
         displayField: field.displayField,
         min: field.min ? String(field.min) : undefined,
         max: field.max ? String(field.max) : undefined,
@@ -192,33 +204,54 @@ export default function EditTableModal({
     }
 
     try {
-      const schemaJson = fields.map((f) => ({
-        name: f.name,
-        type: f.type === "record_owner" ? "select" : f.type,
-        label: f.label,
-        options: [
+      const schemaJson = fields.map((f) => {
+        const isSelectType = [
           "select",
           "multi-select",
           "radio",
           "tags",
           "record_owner",
-        ].includes(f.type)
-          ? f.options
+        ].includes(f.type);
+
+        let options: string[] | undefined = undefined;
+        let optionColors: Record<string, string> | undefined = undefined;
+
+        if (isSelectType) {
+          if (f.selectOptions && f.selectOptions.length > 0) {
+            // New format with colors
+            const schemaFormat = optionsToSchemaFormat(f.selectOptions);
+            options = schemaFormat.options;
+            optionColors =
+              Object.keys(schemaFormat.optionColors).length > 0
+                ? schemaFormat.optionColors
+                : undefined;
+          } else if (f.options) {
+            // Legacy format - comma separated string
+            options = f.options
               .split(",")
               .map((o) => o.trim())
-              .filter(Boolean)
-          : undefined,
-        relationTableId: f.relationTableId
-          ? Number(f.relationTableId)
-          : undefined,
-        relationField: f.relationField,
-        lookupField: f.lookupField,
-        defaultValue: f.defaultValue,
-        allowMultiple: f.allowMultiple,
-        displayField: f.displayField,
-        min: f.type === "score" ? Number(f.min) || 0 : undefined,
-        max: f.type === "score" ? Number(f.max) || 10 : undefined,
-      }));
+              .filter(Boolean);
+          }
+        }
+
+        return {
+          name: f.name,
+          type: f.type === "record_owner" ? "select" : f.type,
+          label: f.label,
+          options,
+          optionColors,
+          relationTableId: f.relationTableId
+            ? Number(f.relationTableId)
+            : undefined,
+          relationField: f.relationField,
+          lookupField: f.lookupField,
+          defaultValue: f.defaultValue,
+          allowMultiple: f.allowMultiple,
+          displayField: f.displayField,
+          min: f.type === "score" ? Number(f.min) || 0 : undefined,
+          max: f.type === "score" ? Number(f.max) || 10 : undefined,
+        };
+      });
 
       const res = await fetch(`/api/tables/${tableId}`, {
         method: "PATCH",
@@ -475,21 +508,24 @@ export default function EditTableModal({
                         "tags",
                         "record_owner",
                       ].includes(field.type) && (
-                        <div className="space-y-1">
+                        <div className="col-span-full space-y-2 pt-3 border-t border-border/50">
                           <Label className="text-xs font-bold uppercase tracking-wide">
-                            אפשרויות (מופרדות בפסיק)
+                            אפשרויות בחירה (עם צבעים)
                           </Label>
-                          <Input
-                            type="text"
-                            value={field.options}
-                            onChange={(e) =>
-                              handleFieldChange(
-                                index,
-                                "options",
-                                e.target.value,
-                              )
+                          <SelectOptionsEditor
+                            options={
+                              field.selectOptions ||
+                              parseOptionsString(field.options)
                             }
-                            placeholder="אפשרות 1, אפשרות 2"
+                            onChange={(newOptions) => {
+                              const newFields = [...fields];
+                              newFields[index] = {
+                                ...newFields[index],
+                                selectOptions: newOptions,
+                                options: optionsToString(newOptions),
+                              };
+                              setFields(newFields);
+                            }}
                           />
                         </div>
                       )}

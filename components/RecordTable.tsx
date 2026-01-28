@@ -50,12 +50,14 @@ import {
 import EditRecordModal from "./EditRecordModal";
 import ViewTextModal from "./ViewTextModal";
 import { cn } from "@/lib/utils";
+import { getTextColorForBackground } from "@/components/ui/ColorPicker";
 
 interface SchemaField {
   name: string;
   type: string;
   label: string;
   options?: string[];
+  optionColors?: Record<string, string>;
   relationTableId?: number;
   displayField?: string;
   min?: number;
@@ -986,6 +988,29 @@ export default function RecordTable({
                                       : String(val)}
                                   </div>
                                 );
+                              case "select":
+                              case "radio":
+                                // Single value select with optional color
+                                const selectColor = field.optionColors?.[val];
+                                if (selectColor) {
+                                  return (
+                                    <span
+                                      className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold whitespace-nowrap"
+                                      style={{
+                                        backgroundColor: selectColor,
+                                        color: "#FFFFFF",
+                                      }}
+                                    >
+                                      {val}
+                                    </span>
+                                  );
+                                }
+                                // No color - default display
+                                return (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-700 whitespace-nowrap">
+                                    {val}
+                                  </span>
+                                );
                               case "tags":
                               case "multi-select":
                                 let displayVal: any = val;
@@ -1003,15 +1028,33 @@ export default function RecordTable({
                                   return (
                                     <div className="flex flex-wrap gap-1">
                                       {displayVal.map(
-                                        (v: string, i: number) => (
-                                          <Badge
-                                            key={i}
-                                            variant="secondary"
-                                            className="text-xs px-2 py-0.5"
-                                          >
-                                            {v}
-                                          </Badge>
-                                        ),
+                                        (v: string, i: number) => {
+                                          const itemColor =
+                                            field.optionColors?.[v];
+                                          if (itemColor) {
+                                            return (
+                                              <span
+                                                key={i}
+                                                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold"
+                                                style={{
+                                                  backgroundColor: itemColor,
+                                                  color: "#FFFFFF",
+                                                }}
+                                              >
+                                                {v}
+                                              </span>
+                                            );
+                                          }
+                                          return (
+                                            <Badge
+                                              key={i}
+                                              variant="secondary"
+                                              className="text-xs px-2 py-0.5"
+                                            >
+                                              {v}
+                                            </Badge>
+                                          );
+                                        },
                                       )}
                                     </div>
                                   );
@@ -1344,100 +1387,134 @@ export default function RecordTable({
                           </div>
                         ))}
 
-                        {/* Upload Button */}
+                        {/* Upload Button - Compact Popover */}
                         {canEdit && (
-                          <div className="mt-1 w-full flex flex-col gap-1">
-                            <input
-                              type="file"
-                              id={`file-upload-${record.id}`}
-                              className="hidden"
-                              onChange={(e) => handleFileUpload(e, record.id)}
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                            <label
-                              htmlFor={`file-upload-${record.id}`}
-                              className="cursor-pointer inline-flex items-center justify-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors border border-dashed border-muted-foreground/30 px-2 py-1 rounded-sm w-full hover:bg-muted/50"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Paperclip className="h-3 w-3" />
-                              <span>העלה קובץ (עד 1MB)</span>
-                            </label>
-
-                            {/* Add Link Button/Input */}
-                            {linkInputRecordId === record.id ? (
-                              <div
-                                className="flex flex-col gap-1 w-full"
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-[10px] text-muted-foreground hover:text-primary gap-1 mt-1"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <Input
-                                  placeholder="שם הלינק (אופציונלי)"
-                                  value={newLinkName}
-                                  onChange={(e) =>
-                                    setNewLinkName(e.target.value)
-                                  }
-                                  className="h-7 text-[10px] w-full"
-                                />
-                                <div className="flex gap-1 items-center w-full">
-                                  <Input
-                                    placeholder="הדבק לינק..."
-                                    value={newLinkUrl}
+                                <Plus className="h-3 w-3" />
+                                הוסף
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              className="w-64 p-3"
+                              align="center"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="space-y-3">
+                                <h4 className="text-xs font-semibold text-muted-foreground">
+                                  העלאת קובץ או לינק
+                                </h4>
+
+                                {/* File Upload */}
+                                <div>
+                                  <input
+                                    type="file"
+                                    id={`file-upload-${record.id}`}
+                                    className="hidden"
                                     onChange={(e) =>
-                                      setNewLinkUrl(e.target.value)
+                                      handleFileUpload(e, record.id)
                                     }
-                                    className="h-7 text-[10px] flex-1 min-w-0"
-                                    autoFocus
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        e.preventDefault();
-                                        handleAddLink(record.id);
+                                  />
+                                  <label
+                                    htmlFor={`file-upload-${record.id}`}
+                                    className="cursor-pointer flex items-center gap-2 p-2 rounded-md border border-dashed border-muted-foreground/30 hover:border-primary hover:bg-primary/5 transition-colors"
+                                  >
+                                    <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                    <div className="flex-1">
+                                      <div className="text-xs font-medium">
+                                        העלה קובץ
+                                      </div>
+                                      <div className="text-[10px] text-muted-foreground">
+                                        עד 1MB
+                                      </div>
+                                    </div>
+                                  </label>
+                                </div>
+
+                                {/* Link Input */}
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                                    <Link className="h-3 w-3" />
+                                    הוסף לינק
+                                  </div>
+                                  <Input
+                                    placeholder="שם הלינק (אופציונלי)"
+                                    value={
+                                      linkInputRecordId === record.id
+                                        ? newLinkName
+                                        : ""
+                                    }
+                                    onChange={(e) => {
+                                      if (linkInputRecordId !== record.id) {
+                                        setLinkInputRecordId(record.id);
                                       }
-                                      if (e.key === "Escape") {
-                                        setLinkInputRecordId(null);
+                                      setNewLinkName(e.target.value);
+                                    }}
+                                    onFocus={() => {
+                                      if (linkInputRecordId !== record.id) {
+                                        setLinkInputRecordId(record.id);
                                         setNewLinkUrl("");
                                         setNewLinkName("");
                                       }
                                     }}
+                                    className="h-8 text-xs"
                                   />
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 px-1"
-                                    onClick={() => {
-                                      setLinkInputRecordId(null);
-                                      setNewLinkUrl("");
-                                      setNewLinkName("");
-                                    }}
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    className="h-7 px-2 text-[10px]"
-                                    onClick={() => handleAddLink(record.id)}
-                                    disabled={!newLinkUrl.trim()}
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                  </Button>
+                                  <div className="flex gap-1">
+                                    <Input
+                                      placeholder="הדבק לינק..."
+                                      value={
+                                        linkInputRecordId === record.id
+                                          ? newLinkUrl
+                                          : ""
+                                      }
+                                      onChange={(e) => {
+                                        if (linkInputRecordId !== record.id) {
+                                          setLinkInputRecordId(record.id);
+                                        }
+                                        setNewLinkUrl(e.target.value);
+                                      }}
+                                      onFocus={() => {
+                                        if (linkInputRecordId !== record.id) {
+                                          setLinkInputRecordId(record.id);
+                                          setNewLinkUrl("");
+                                          setNewLinkName("");
+                                        }
+                                      }}
+                                      className="h-8 text-xs flex-1"
+                                      onKeyDown={(e) => {
+                                        if (
+                                          e.key === "Enter" &&
+                                          newLinkUrl.trim()
+                                        ) {
+                                          e.preventDefault();
+                                          handleAddLink(record.id);
+                                        }
+                                      }}
+                                    />
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      className="h-8 px-3"
+                                      onClick={() => handleAddLink(record.id)}
+                                      disabled={
+                                        !newLinkUrl.trim() ||
+                                        linkInputRecordId !== record.id
+                                      }
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
-                            ) : (
-                              <button
-                                type="button"
-                                className="inline-flex items-center justify-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors border border-dashed border-muted-foreground/30 px-2 py-1 rounded-sm w-full hover:bg-muted/50"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setLinkInputRecordId(record.id);
-                                  setNewLinkUrl("");
-                                  setNewLinkName("");
-                                }}
-                              >
-                                <Link className="h-3 w-3" />
-                                <span>הוסף לינק</span>
-                              </button>
-                            )}
-                          </div>
+                            </PopoverContent>
+                          </Popover>
                         )}
 
                         {!record.attachments?.length &&

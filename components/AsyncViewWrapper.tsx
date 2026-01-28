@@ -31,6 +31,7 @@ export default function AsyncViewWrapper({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const isMounted = useRef(true);
+  const hasFetched = useRef(false);
 
   useEffect(() => {
     isMounted.current = true;
@@ -64,6 +65,7 @@ export default function AsyncViewWrapper({
         if (isMounted.current) {
           setData(result);
           setLoading(false);
+          hasFetched.current = true;
           // If force refresh was successful, call callback to update global usage stats
           if (force && onAfterRefresh) {
             onAfterRefresh();
@@ -91,8 +93,14 @@ export default function AsyncViewWrapper({
     [tableId, view.config, onAfterRefresh],
   );
 
+  // Only fetch on first mount, not on re-mounts (sidebar close/open)
   useEffect(() => {
-    fetchData(false);
+    if (!hasFetched.current) {
+      fetchData(false);
+    } else {
+      // Data already fetched, just make sure loading is false
+      setLoading(false);
+    }
   }, [fetchData]);
 
   const handleRefresh = async () => {

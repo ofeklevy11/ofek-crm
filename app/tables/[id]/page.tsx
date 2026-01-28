@@ -137,8 +137,8 @@ export default async function TableDetailsPage({
   });
 
   return (
-    <div className="min-h-screen bg-muted/40 p-8" dir="rtl">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-muted/40 p-4 lg:p-6" dir="rtl">
+      <div className="w-full">
         <div className="mb-8">
           <Link
             href="/tables"

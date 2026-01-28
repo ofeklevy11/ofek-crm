@@ -23,6 +23,10 @@ export async function GET(req: NextRequest) {
   // We MUST create a new redis client for this subscription or use a multiplexer.
   // Let's create a specialized duplicate for this request to ensure isolation.
   const subscriber = redis.duplicate();
+  // Prevent crash on connection error (common when closing)
+  subscriber.on("error", (err) => {
+    // console.error("Redis Subscriber Error (Ignored):", err);
+  });
 
   const stream = new ReadableStream({
     async start(controller) {

@@ -87,11 +87,8 @@ export default function DynamicViewCard({
   return (
     <>
       <Card className="overflow-hidden border-border/60 shadow-sm transition-all hover:shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between p-4 bg-muted/30 border-b border-border/40">
-          <CardTitle className="text-sm font-bold text-foreground truncate">
-            {title}
-          </CardTitle>
-          <div className="flex items-center gap-1">
+        <CardHeader className="flex flex-col gap-2 p-4 bg-muted/30 border-b border-border/40">
+          <div className="flex items-center justify-end gap-1">
             <Button
               variant="ghost"
               size="icon"
@@ -157,6 +154,12 @@ export default function DynamicViewCard({
               )}
             </Button>
           </div>
+          <CardTitle
+            className="text-sm font-bold text-foreground"
+            title={title}
+          >
+            {title.length > 50 ? title.slice(0, 50) + "..." : title}
+          </CardTitle>
         </CardHeader>
         {isEnabled && <CardContent className="p-6">{children}</CardContent>}
       </Card>

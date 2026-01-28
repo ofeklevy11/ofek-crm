@@ -92,6 +92,7 @@ export async function calculateMultiEventDuration(
     tableId?: string;
   }>,
   automationRuleId: number,
+  oldData?: any,
 ) {
   console.log(`[Multi-Event] Starting calculation for Record ${recordId}`);
 
@@ -102,6 +103,12 @@ export async function calculateMultiEventDuration(
 
     // 1. איסוף כל הרשומות הקשורות
     const targetRecordIds = await getRelatedRecordIdsRecursive(recordId);
+
+    // קבלת זמון יצירה של הרשומה הראשית לצורך חילוץ "מצב התחלתי"
+    const mainRecord = await prisma.record.findUnique({
+      where: { id: recordId },
+      select: { createdAt: true, data: true },
+    });
 
     console.log(
       `[Multi-Event] Looking for logs in ${
@@ -142,6 +149,8 @@ export async function calculateMultiEventDuration(
       tableName: string; // הוספנו את שם הטבלאה
     }> = [];
 
+    // נשתמש באינדקס הלולאה כדי לזהות את האירוע הראשון
+    let eventIndex = 0;
     for (const event of eventChain) {
       let found = false;
       const targetValue = String(event.value).trim().toLowerCase();
@@ -173,12 +182,41 @@ export async function calculateMultiEventDuration(
         }
       }
 
+      // אם זה האירוע הראשון ולא מצאנו בלוגים, נבדוק אם זה המצב הקיים ב-oldData
+      // (בתנאי שהאירוע מתייחס לטבלה הראשית)
+      if (
+        !found &&
+        eventIndex === 0 &&
+        eventTableId === tableId &&
+        oldData &&
+        mainRecord
+      ) {
+        const existingValue = oldData[event.columnId];
+        if (
+          existingValue !== undefined &&
+          String(existingValue).trim().toLowerCase() === targetValue
+        ) {
+          console.log(
+            `[Multi-Event] Event '${event.eventName}' matches previous state (oldData). Using record creation time.`,
+          );
+          found = true;
+          eventTimestamps.push({
+            eventName: event.eventName,
+            timestamp: mainRecord.createdAt, // שימוש בזמן יצירה כברירת מחדל להתחלה
+            columnId: event.columnId,
+            value: event.value,
+            tableName: tableName,
+          });
+        }
+      }
+
       if (!found) {
         console.log(
           `[Multi-Event] ⚠️ Event '${event.eventName}' NOT found. Searched for Column: '${event.columnId}' with Value: '${targetValue}'`,
         );
         return null;
       }
+      eventIndex++;
     }
 
     // 4. חישוב זמנים
@@ -196,7 +234,8 @@ export async function calculateMultiEventDuration(
       const diffMs =
         new Date(nextEvent.timestamp).getTime() -
         new Date(currentEvent.timestamp).getTime();
-      const diffSeconds = Math.floor(diffMs / 1000);
+      let diffSeconds = Math.floor(diffMs / 1000);
+      if (diffSeconds < 0) diffSeconds = 0; // מניעת זמנים שליליים במקרה קצה
 
       const diffMinutes = Math.floor(diffSeconds / 60);
       const diffHours = Math.floor(diffMinutes / 60);
@@ -253,11 +292,8 @@ export async function calculateMultiEventDuration(
     if (rule) {
       const companyId = rule.companyId;
       // נשיג את המידע העדכני של הרשומה לצורך הזרקת משתנים
-      const record = await prisma.record.findUnique({
-        where: { id: recordId },
-        select: { data: true },
-      });
-      const recordData = record?.data || {};
+      // (אנחנו כבר השגנו את data ב-mainRecord למעלה אם השתמשנו בו, אבל נשמור על הלוגיקה הקיימת)
+      const recordData = mainRecord?.data || {};
 
       // נוסיף את משך הזמן לנתונים זמינים
       const enrichedData = {
@@ -314,12 +350,10 @@ export async function calculateMultiEventDuration(
           } else if (type === "CREATE_TASK") {
             const taskData: any = {
               title: config.title || "משימה מאוטומציה מרובת שלבים",
-              description:
-                (config.description || "") +
-                `\n\nמשך התהליך: ${totalDurationString}`,
+              description: config.description || "",
               status: config.status || "todo",
               companyId: companyId,
-              tags: config.tags || [],
+              tags: [...(config.tags || []), 'נוצר ע"י אוטומציה מרובת שלבים'],
             };
 
             if (config.priority) taskData.priority = config.priority;
@@ -452,6 +486,7 @@ export async function processMultiEventDurationTrigger(
           recordId,
           eventChain,
           rule.id,
+          oldData, // העברת המידע הישן לפונקציית החישוב
         );
       }
     }

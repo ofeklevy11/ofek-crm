@@ -34,6 +34,16 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  webpack: (config) => {
+    config.ignoreWarnings = [
+      /Failed to parse source map/,
+      /Invalid source map/,
+    ];
+    return config;
+  },
+  // Silence the error about conflicting webpack config when using Turbopack (default in Next.js 16)
+  // @ts-ignore - Types might not be up to date yet
+  turbopack: {},
 };
 
 export default nextConfig;
