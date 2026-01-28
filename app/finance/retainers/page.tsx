@@ -58,7 +58,7 @@ export default async function RetainersPage({
   );
 
   return (
-    <div className="p-8 space-y-8 bg-[#f4f8f8] min-h-screen" dir="rtl">
+    <div className="p-4 md:p-8 space-y-8 bg-[#f4f8f8] min-h-screen" dir="rtl">
       <div>
         <Link
           href="/finance"
@@ -67,7 +67,7 @@ export default async function RetainersPage({
         >
           <ArrowRight className="w-4 h-4 ml-1" /> חזרה למרכז הפיננסי
         </Link>
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
               כל הריטיינרים

@@ -20,6 +20,7 @@ import AnalyticsDetailsModal from "@/components/AnalyticsDetailsModal";
 import CreateAnalyticsViewModal from "@/components/analytics/CreateAnalyticsViewModal";
 import ViewAutomationModal from "@/components/analytics/ViewAutomationModal";
 import AIAnalyticsCreator from "@/components/analytics/AIAnalyticsCreator";
+import AnalyticsGraph from "@/components/analytics/AnalyticsGraph";
 import {
   DndContext,
   closestCenter,
@@ -48,7 +49,15 @@ import {
   moveViewToFolder,
 } from "@/app/actions/view-folders";
 import { deleteAnalyticsView } from "@/app/actions/analytics";
-import { Folder, FolderPlus, ArrowLeft, Move, X, Trash2 } from "lucide-react";
+import {
+  Folder,
+  FolderPlus,
+  ArrowLeft,
+  Move,
+  X,
+  Trash2,
+  GripVertical,
+} from "lucide-react";
 import { hasUserFlag } from "@/lib/permissions";
 
 // Available colors for the cards
@@ -497,6 +506,67 @@ function AnalyticsCard({
   );
 }
 
+// Sortable Graph Card Component
+function SortableGraphCard({ view }: { view: any }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: view.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : "auto",
+    opacity: isDragging ? 0.8 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
+    >
+      <div className="p-4 border-b border-gray-50 flex justify-between items-start">
+        <div className="flex items-start gap-2">
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-1 text-gray-300 hover:text-gray-500 mt-1"
+            title="גרור לשינוי סדר"
+          >
+            <GripVertical size={18} />
+          </div>
+          <div>
+            <h3 className="font-bold text-gray-900 text-lg">{view.ruleName}</h3>
+            <p className="text-sm text-gray-500">{view.stats?.subMetric}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4" dir="ltr">
+        <AnalyticsGraph
+          data={view.data}
+          type={view.config.chartType}
+          height={300}
+        />
+      </div>
+
+      <div className="bg-gray-50 px-4 py-3 border-t border-gray-100 flex justify-between items-center text-sm">
+        <span className="text-gray-500">
+          סה״כ: <strong>{view.stats?.mainMetric}</strong>
+        </span>
+        <span className="text-xs text-gray-400 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
+          {view.tableName}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function AnalyticsPage() {
   const router = useRouter();
   const [views, setViews] = useState<any[]>([]);
@@ -517,6 +587,9 @@ export default function AnalyticsPage() {
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [movingView, setMovingView] = useState<any>(null); // View being moved
+
+  // Graph Views State
+  const [graphViews, setGraphViews] = useState<any[]>([]);
 
   // Toast State
   const [toast, setToast] = useState<{
@@ -567,6 +640,8 @@ export default function AnalyticsPage() {
 
       if (res.success && res.data) {
         setViews(res.data);
+        // Separate graph views for the graphs section
+        setGraphViews(res.data.filter((v: any) => v.type === "GRAPH"));
       }
       if (foldersRes.success && foldersRes.data) {
         setFolders(foldersRes.data);
@@ -617,6 +692,31 @@ export default function AnalyticsPage() {
           type: (item.source === "AUTOMATION" ? "AUTOMATION" : "CUSTOM") as
             | "AUTOMATION"
             | "CUSTOM",
+          order: index,
+        }));
+
+        if (updates.length > 0) updateAnalyticsViewOrder(updates);
+
+        return newItems;
+      });
+    }
+  };
+
+  // Handle Graph Drag End
+  const handleGraphDragEnd = async (event: DragEndEvent) => {
+    if (!canManage) return;
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setGraphViews((items) => {
+        const oldIndex = items.findIndex((i) => i.id === active.id);
+        const newIndex = items.findIndex((i) => i.id === over.id);
+        const newItems = arrayMove(items, oldIndex, newIndex);
+
+        // Update Backend - graphs are always CUSTOM type
+        const updates = newItems.map((item: any, index: number) => ({
+          id: item.viewId,
+          type: "CUSTOM" as "AUTOMATION" | "CUSTOM",
           order: index,
         }));
 
@@ -916,6 +1016,50 @@ export default function AnalyticsPage() {
               </div>
             </SortableContext>
           </DndContext>
+        )}
+
+        {/* Graphs Section */}
+        {graphViews.length > 0 && (
+          <div className="mt-12">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="bg-pink-50 p-2 rounded-lg">
+                  <BarChart2 className="text-pink-600" size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    תצוגת גרפים
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    ויזואליזציה גרפית של הנתונים{" "}
+                    {canManage && "• גרור לשינוי סדר"}
+                  </p>
+                </div>
+              </div>
+              <a
+                href="/analytics/graphs"
+                className="px-4 py-2 text-sm font-medium text-pink-600 hover:text-pink-700 hover:bg-pink-50 rounded-lg transition-colors flex items-center gap-2"
+              >
+לעריכת ומחיקת גרפים                <ArrowLeft size={14} />
+              </a>
+            </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleGraphDragEnd}
+            >
+              <SortableContext
+                items={graphViews.map((v) => v.id)}
+                strategy={rectSortingStrategy}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {graphViews.map((view) => (
+                    <SortableGraphCard key={view.id} view={view} />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </div>
         )}
       </div>
 

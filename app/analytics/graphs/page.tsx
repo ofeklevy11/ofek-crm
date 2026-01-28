@@ -1,17 +1,140 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAnalyticsData, deleteAnalyticsView } from "@/app/actions/analytics";
+import {
+  getAnalyticsData,
+  deleteAnalyticsView,
+  updateAnalyticsViewOrder,
+} from "@/app/actions/analytics";
 import AnalyticsGraph from "@/components/analytics/AnalyticsGraph";
-import Link from "next/link";
-import { ArrowLeft, Plus, BarChart2, Edit3, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  BarChart2,
+  Edit3,
+  Trash2,
+  GripVertical,
+} from "lucide-react";
 import CreateAnalyticsViewModal from "@/components/analytics/CreateAnalyticsViewModal";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  rectSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+// Sortable Graph Card Component
+function SortableGraphCard({
+  view,
+  onEdit,
+  onDelete,
+}: {
+  view: any;
+  onEdit: (view: any) => void;
+  onDelete: (id: number) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: view.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : "auto",
+    opacity: isDragging ? 0.8 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
+    >
+      <div className="p-4 border-b border-gray-50 flex justify-between items-start">
+        <div className="flex items-start gap-2">
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-1 text-gray-300 hover:text-gray-500 mt-1"
+            title="גרור לשינוי סדר"
+          >
+            <GripVertical size={18} />
+          </div>
+          <div>
+            <h3 className="font-bold text-gray-900 text-lg">{view.ruleName}</h3>
+            <p className="text-sm text-gray-500">{view.stats?.subMetric}</p>
+          </div>
+        </div>
+        <div className="flex gap-1 transition-opacity">
+          <button
+            onClick={() => onEdit(view)}
+            className="p-1.5 text-gray-400 hover:text-blue-600 rounded-full hover:bg-gray-50"
+            title="ערוך גרף"
+          >
+            <Edit3 size={16} />
+          </button>
+          <button
+            onClick={() => onDelete(view.viewId)}
+            className="p-1.5 text-gray-400 hover:text-red-600 rounded-full hover:bg-gray-50"
+            title="מחק גרף"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </div>
+
+      <div className="p-4" dir="ltr">
+        <AnalyticsGraph
+          data={view.data}
+          type={view.config.chartType}
+          height={300}
+        />
+      </div>
+
+      <div className="bg-gray-50 px-4 py-3 border-t border-gray-100 flex justify-between items-center text-sm">
+        <span className="text-gray-500">
+          סה״כ: <strong>{view.stats?.mainMetric}</strong>
+        </span>
+        <span className="text-xs text-gray-400 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
+          {view.tableName}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export default function GraphsPage() {
   const [loading, setLoading] = useState(true);
   const [views, setViews] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingView, setEditingView] = useState<any | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
 
   const fetchData = async () => {
     setLoading(true);
@@ -38,6 +161,35 @@ export default function GraphsPage() {
     fetchData();
   };
 
+  const handleEdit = (view: any) => {
+    setEditingView(view);
+    setIsModalOpen(true);
+  };
+
+  // Handle Drag End
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setViews((items) => {
+        const oldIndex = items.findIndex((i) => i.id === active.id);
+        const newIndex = items.findIndex((i) => i.id === over.id);
+        const newItems = arrayMove(items, oldIndex, newIndex);
+
+        // Update Backend - graphs are always CUSTOM type
+        const updates = newItems.map((item: any, index: number) => ({
+          id: item.viewId,
+          type: "CUSTOM" as "AUTOMATION" | "CUSTOM",
+          order: index,
+        }));
+
+        if (updates.length > 0) updateAnalyticsViewOrder(updates);
+
+        return newItems;
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-8" dir="rtl">
       <div className="max-w-7xl mx-auto">
@@ -49,7 +201,7 @@ export default function GraphsPage() {
               תצוגת גרפים
             </h1>
             <p className="text-gray-500 mt-2">
-              ויזואליזציה של הנתונים בתצורה גרפית מתקדמת.
+              ויזואליזציה של הנתונים בתצורה גרפית מתקדמת • גרור לשינוי סדר
             </p>
           </div>
           <div className="flex gap-3">
@@ -63,13 +215,13 @@ export default function GraphsPage() {
               <Plus size={16} />
               צור גרף חדש
             </button>
-            <Link
+            <a
               href="/analytics"
               className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
             >
               <ArrowLeft size={16} />
               חזרה לניתוח נתונים
-            </Link>
+            </a>
           </div>
         </div>
 
@@ -98,61 +250,27 @@ export default function GraphsPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {views.map((view) => (
-              <div
-                key={view.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
-              >
-                <div className="p-4 border-b border-gray-50 flex justify-between items-start">
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-lg">
-                      {view.ruleName}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      {view.stats?.subMetric}
-                    </p>
-                  </div>
-                  <div className="flex gap-1 transition-opacity">
-                    <button
-                      onClick={() => {
-                        setEditingView(view);
-                        setIsModalOpen(true);
-                      }}
-                      className="p-1.5 text-gray-400 hover:text-blue-600 rounded-full hover:bg-gray-50"
-                      title="ערוך גרף"
-                    >
-                      <Edit3 size={16} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(view.viewId)}
-                      className="p-1.5 text-gray-400 hover:text-red-600 rounded-full hover:bg-gray-50"
-                      title="מחק גרף"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="p-4" dir="ltr">
-                  <AnalyticsGraph
-                    data={view.data}
-                    type={view.config.chartType}
-                    height={300}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={views.map((v) => v.id)}
+              strategy={rectSortingStrategy}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {views.map((view) => (
+                  <SortableGraphCard
+                    key={view.id}
+                    view={view}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
                   />
-                </div>
-
-                <div className="bg-gray-50 px-4 py-3 border-t border-gray-100 flex justify-between items-center text-sm">
-                  <span className="text-gray-500">
-                    סה״כ: <strong>{view.stats?.mainMetric}</strong>
-                  </span>
-                  <span className="text-xs text-gray-400 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
-                    {view.tableName}
-                  </span>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </SortableContext>
+          </DndContext>
         )}
 
         <CreateAnalyticsViewModal

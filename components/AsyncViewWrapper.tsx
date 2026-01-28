@@ -95,19 +95,17 @@ export default function AsyncViewWrapper({
 
   // Only fetch on first mount, not on re-mounts (sidebar close/open)
   useEffect(() => {
-    if (!hasFetched.current) {
+    if (!hasFetched.current && view.isEnabled) {
       fetchData(false);
     } else {
       // Data already fetched, just make sure loading is false
       setLoading(false);
     }
-  }, [fetchData]);
+  }, [fetchData, view.isEnabled]);
 
   const handleRefresh = async () => {
     await fetchData(true);
   };
-
-  if (!view.isEnabled) return null;
 
   return (
     <DynamicViewCard

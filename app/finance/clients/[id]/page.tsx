@@ -117,7 +117,7 @@ export default async function ClientOverviewPage({
         >
           <ArrowRight className="w-4 h-4 ml-1" /> חזרה ללקוחות
         </Link>
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
               {client.name}
@@ -140,7 +140,7 @@ export default async function ClientOverviewPage({
               )}
             </div>
           </div>
-          <div className="flex flex-col md:flex-row items-end gap-6 bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+          <div className="flex flex-col md:flex-row items-end gap-6 bg-white p-4 rounded-2xl shadow-sm border border-gray-200 w-full md:w-auto">
             <div className="text-left px-2">
               <div className="text-sm font-medium text-gray-500 mb-1">
                 חוב פתוח

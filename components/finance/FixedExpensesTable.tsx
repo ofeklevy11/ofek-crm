@@ -55,7 +55,7 @@ export default function FixedExpensesTable({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentExpense, setPaymentExpense] = useState<FixedExpense | null>(
-    null
+    null,
   );
   const [paymentCount, setPaymentCount] = useState(1);
 
@@ -187,8 +187,8 @@ export default function FixedExpensesTable({
       </div>
 
       {/* Header Actions */}
-      <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-        <div className="relative w-72">
+      <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4 md:gap-0">
+        <div className="relative w-full md:w-72">
           {/* Search could be implemented here */}
           <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
             <Search className="h-5 w-5 text-gray-400" />
@@ -204,7 +204,7 @@ export default function FixedExpensesTable({
         </div>
         <button
           onClick={() => handleOpenModal()}
-          className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-[#4f95ff] hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4f95ff] transition-all transform hover:scale-105"
+          className="inline-flex items-center justify-center w-full md:w-auto px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-[#4f95ff] hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4f95ff] transition-all transform hover:scale-105"
         >
           <Plus className="ml-2 -mr-1 h-5 w-5" />
           הוסף הוצאה חדשה
@@ -309,7 +309,7 @@ export default function FixedExpensesTable({
                             שולם עד:{" "}
                             {expense.nextPaymentDate
                               ? new Date(
-                                  expense.nextPaymentDate
+                                  expense.nextPaymentDate,
                                 ).toLocaleDateString("he-IL")
                               : "-"}
                             <br />({expense.paidFutureCount} תשלומים עתידיים)
@@ -321,7 +321,7 @@ export default function FixedExpensesTable({
                             <span className="text-xs text-gray-400 mt-1">
                               תשלום הבא:{" "}
                               {new Date(
-                                expense.nextPaymentDate
+                                expense.nextPaymentDate,
                               ).toLocaleDateString("he-IL")}
                             </span>
                           )}
@@ -333,7 +333,7 @@ export default function FixedExpensesTable({
                           <span className="text-xs text-gray-400">
                             תשלום הבא:{" "}
                             {new Date(
-                              expense.nextPaymentDate
+                              expense.nextPaymentDate,
                             ).toLocaleDateString("he-IL")}
                           </span>
                         </div>
@@ -554,7 +554,7 @@ export default function FixedExpensesTable({
                                   now.getFullYear(),
                                   now.getMonth(),
                                   1,
-                                  12
+                                  12,
                                 ); // Noon to avoid timezone issues
                                 setFormData({
                                   ...formData,
@@ -575,7 +575,7 @@ export default function FixedExpensesTable({
                                   now.getFullYear(),
                                   now.getMonth() + 1,
                                   1,
-                                  12
+                                  12,
                                 );
                                 setFormData({
                                   ...formData,

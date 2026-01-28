@@ -317,7 +317,7 @@ export default async function FinancePage() {
         <Link
           href="/finance/goals"
           prefetch={false}
-          className="flex items-center justify-between p-6 bg-white/60 hover:bg-white/90 rounded-lg transition-all"
+          className="flex flex-col md:flex-row items-start md:items-center justify-between p-6 bg-white/60 hover:bg-white/90 rounded-lg transition-all gap-6"
         >
           <div className="flex items-center gap-6">
             <div className="p-4 bg-[#4f95ff]/10 rounded-xl group-hover:scale-110 transition-transform">

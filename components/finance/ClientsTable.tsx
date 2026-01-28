@@ -39,7 +39,7 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-[#f4f8f8]">
           <tr>
@@ -87,7 +87,8 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
             return (
               <tr
                 key={client.id}
-                className="hover:bg-gray-50 transition-colors group"
+                onClick={() => router.push(`/finance/clients/${client.id}`)}
+                className="hover:bg-gray-50 transition-colors group cursor-pointer"
               >
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">
@@ -128,7 +129,10 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
                     <span className="text-gray-400">₪0</span>
                   )}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-center">
+                <td
+                  className="px-6 py-4 whitespace-nowrap text-center"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <div className="flex items-center justify-center gap-2">
                     <Link
                       href={`/finance/clients/${client.id}`}
