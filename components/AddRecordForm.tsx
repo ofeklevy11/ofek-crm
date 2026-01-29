@@ -538,8 +538,11 @@ export default function AddRecordForm({
                               ? "number"
                               : field.type === "date"
                                 ? "date"
-                                : "text"
+                                : field.type === "phone"
+                                  ? "tel"
+                                  : "text"
                           }
+                          dir={field.type === "phone" ? "ltr" : "rtl"}
                           value={formData[field.name] || ""}
                           onChange={(e) =>
                             setFormData({

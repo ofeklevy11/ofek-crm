@@ -1691,8 +1691,7 @@ export default function DashboardClient({
                               לא נמצאו אנליטיקות זמינות
                             </h3>
                             <p className="text-sm text-gray-500 max-w-[250px] mx-auto leading-relaxed">
-                              ניתן להוסיף אנליטיקות חדשות דרך עמוד
-                              האנליטיקות
+                              ניתן להוסיף אנליטיקות חדשות דרך עמוד האנליטיקות
                             </p>
                           </div>
                         );

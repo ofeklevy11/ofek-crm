@@ -46,8 +46,12 @@ import {
   Plus,
   Pencil,
   X,
+  Upload,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import EditRecordModal from "./EditRecordModal";
+import ImportRecordsModal from "./ImportRecordsModal";
 import ViewTextModal from "./ViewTextModal";
 import { cn } from "@/lib/utils";
 import { getTextColorForBackground } from "@/components/ui/ColorPicker";
@@ -102,6 +106,7 @@ export default function RecordTable({
     }
   }, [initialRecords]);
 
+  const [showImportModal, setShowImportModal] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editingRecord, setEditingRecord] = useState<any | null>(null);
@@ -109,6 +114,8 @@ export default function RecordTable({
     undefined,
   );
   // Dynamic filters
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [viewText, setViewText] = useState<{
     title: string;
@@ -401,6 +408,18 @@ export default function RecordTable({
   );
 
   const filteredRecords = records.filter((record) => {
+    // 1. Text Search
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch =
+        Object.values(record.data || {}).some((val) =>
+          String(val).toLowerCase().includes(searchLower),
+        ) || String(record.id).includes(searchLower);
+
+      if (!matchesSearch) return false;
+    }
+
+    // 2. Filters
     for (const [fieldName, filterValue] of Object.entries(filters)) {
       if (!filterValue) continue;
       const recordValue = record.data?.[fieldName];
@@ -532,9 +551,11 @@ export default function RecordTable({
 
     const headers = [
       "ID",
-      ...uniqueFields.map((f) => f.label),
+      ...uniqueFields.map((f) => f.name),
       "Created At",
+      "Created By",
       "Updated At",
+      "Updated By",
     ];
     const csvContent = [headers.join(";")]
       .concat(
@@ -546,8 +567,10 @@ export default function RecordTable({
               const stringVal = String(val ?? "");
               return `"${stringVal.replace(/"/g, '""')}"`;
             }),
-            new Date(record.createdAt).toLocaleDateString(),
-            new Date(record.updatedAt).toLocaleDateString(),
+            `"${new Date(record.createdAt).toLocaleDateString()}"`,
+            `"${(record.creator?.name || record.creator?.email || "").replace(/"/g, '""')}"`,
+            `"${new Date(record.updatedAt).toLocaleDateString()}"`,
+            `"${(record.updater?.name || record.updater?.email || "").replace(/"/g, '""')}"`,
           ];
           return row.join(";");
         }),
@@ -584,9 +607,11 @@ export default function RecordTable({
 
     const headers = [
       "ID",
-      ...uniqueFields.map((f) => f.label),
+      ...uniqueFields.map((f) => f.name),
       "Created At",
+      "Created By",
       "Updated At",
+      "Updated By",
     ];
     const txtContent = [headers.join("\t")]
       .concat(
@@ -598,7 +623,9 @@ export default function RecordTable({
               return String(val ?? "");
             }),
             new Date(record.createdAt).toLocaleDateString(),
+            record.creator?.name || record.creator?.email || "",
             new Date(record.updatedAt).toLocaleDateString(),
+            record.updater?.name || record.updater?.email || "",
           ];
           return row.join("\t");
         }),
@@ -684,16 +711,57 @@ export default function RecordTable({
   return (
     <div className="flex flex-col lg:flex-row gap-6 items-start" dir="rtl">
       <div className="flex-1 w-full space-y-4">
-        {/* Advanced Search Component */}
-        {canSearch && (
-          <div className="bg-card rounded-xl shadow-sm border border-border p-4">
-            <AdvancedSearch
-              tableId={tableId}
-              schema={schema}
-              onRecordSelect={handleRecordSelect}
-            />
+        {/* Search & Filters Area */}
+        {/* Search & Filters Area */}
+        <div className="space-y-4">
+          {/* Free Text Search */}
+          <div className="bg-card rounded-xl shadow-sm border border-border p-4 w-full md:w-[25%] min-w-[300px]">
+            <h3 className="text-sm font-bold text-foreground mb-2">
+              חיפוש חופשי בטבלה
+            </h3>
+            <div className="relative">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="חפש..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-4 pr-10 h-9"
+              />
+            </div>
           </div>
-        )}
+
+          {/* Advanced Search Toggle */}
+          {canSearch && (
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => setIsAdvancedSearchOpen(!isAdvancedSearchOpen)}
+              >
+                <Search className="h-4 w-4 text-primary" />
+                <span>
+                  {isAdvancedSearchOpen ? "סגור חיפוש חכם" : "פתח חיפוש חכם"}
+                </span>
+                {isAdvancedSearchOpen ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </Button>
+
+              {isAdvancedSearchOpen && (
+                <div className="bg-card rounded-xl shadow-sm border border-border p-4 animate-in fade-in slide-in-from-top-2">
+                  <AdvancedSearch
+                    tableId={tableId}
+                    schema={schema}
+                    onRecordSelect={handleRecordSelect}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Main Table */}
         <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
@@ -752,22 +820,39 @@ export default function RecordTable({
               {selectedIds.length > 0 && (
                 <>
                   {canExport && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="gap-2">
-                          <Download className="h-4 w-4" />
-                          ייצוא נבחרים
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={handleExportCSV}>
-                          CSV (Excel)
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleExportTXT}>
-                          TXT (Text)
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <>
+                      <div className="hidden sm:block">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                            >
+                              <Download className="h-4 w-4" />
+                              ייצוא נבחרים
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={handleExportCSV}>
+                              CSV (Excel)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={handleExportTXT}>
+                              TXT (Text)
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2 sm:hidden"
+                        disabled
+                      >
+                        <Download className="h-4 w-4" />
+                        ייצוא נבחרים (במחשב בלבד)
+                      </Button>
+                    </>
                   )}
 
                   {canEdit && (
@@ -785,22 +870,61 @@ export default function RecordTable({
                 </>
               )}
               {selectedIds.length === 0 && canExport && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2">
-                      <FileDown className="h-4 w-4" />
-                      ייצוא הכל
+                <>
+                  <div className="hidden sm:block">
+                    {canEdit && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2 mx-2"
+                        onClick={() => setShowImportModal(true)}
+                      >
+                        <Upload className="h-4 w-4" />
+                        ייבוא נתונים
+                      </Button>
+                    )}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="gap-2">
+                          <FileDown className="h-4 w-4" />
+                          ייצוא נתונים{" "}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => handleExportAll("csv")}
+                        >
+                          CSV (Excel)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleExportAll("txt")}
+                        >
+                          TXT (Text)
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  {canEdit && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 sm:hidden mx-1"
+                      disabled
+                    >
+                      <Upload className="h-4 w-4" />
+                      ייבוא נתונים (במחשב בלבד)
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleExportAll("csv")}>
-                      CSV (Excel)
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExportAll("txt")}>
-                      TXT (Text)
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 sm:hidden"
+                    disabled
+                  >
+                    <FileDown className="h-4 w-4" />
+                    ייצוא נתונים (במחשב בלבד)
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -947,6 +1071,17 @@ export default function RecordTable({
                                   >
                                     לא
                                   </Badge>
+                                );
+                              case "phone":
+                                return (
+                                  <a
+                                    href={`tel:${String(val).replace(/\D/g, "")}`}
+                                    className="text-primary hover:underline block text-sm"
+                                    dir="ltr"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {val}
+                                  </a>
                                 );
                               case "textarea":
                               case "text":
@@ -1572,6 +1707,17 @@ export default function RecordTable({
               setEditingField(viewText.fieldName);
               setViewText(null);
             }
+          }}
+        />
+      )}
+
+      {showImportModal && (
+        <ImportRecordsModal
+          tableId={tableId}
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => {
+            setShowImportModal(false);
+            router.refresh();
           }}
         />
       )}

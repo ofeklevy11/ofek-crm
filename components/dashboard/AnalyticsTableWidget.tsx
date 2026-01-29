@@ -7,6 +7,164 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
 
+const KEY_MAPPING: Record<string, string> = {
+  status: "סטטוס",
+  priority: "עדיפות",
+  assignee: "נציג מטפל",
+  tags: "תגיות",
+  amount: "סכום",
+  title: "כותרת",
+  description: "תיאור",
+  client: "לקוח",
+  phone: "טלפון",
+  email: "מייל",
+  relatedType: "סוג קשור",
+  frequency: "תדירות",
+  startDate: "תאריך התחלה",
+  dueDate: "תאריך יעד",
+  createdAt: "נוצר ב",
+  updatedAt: "עודכן ב",
+  leadStatus: "סטטוס ליד",
+  source: "מקור",
+  type: "סוג",
+  lead: "ליד",
+  isClosed: "נסגר",
+  // Common Values translation
+  todo: "לביצוע",
+  in_progress: "בטיפול",
+  waiting_client: "ממתין",
+  completed_month: "הושלם",
+  archive: "ארכיון",
+  low: "נמוכה",
+  medium: "בינונית",
+  high: "גבוהה",
+  active: "פעיל",
+  paused: "מושהה",
+  cancelled: "מבוטל",
+  paid: "שולם",
+  pending: "ממתין",
+  overdue: "באיחור",
+  completed: "הושלם",
+  failed: "נכשל",
+  this_week: "השבוע (א'-ש')",
+  last_30_days: "30 ימים אחרונים",
+  last_year: "שנה אחרונה",
+};
+
+const translate = (key: string) => KEY_MAPPING[key] || key;
+
+function ConfigDetails({ config, type }: { config: any; type: string }) {
+  if (!config) return null;
+
+  const renderFilter = (filter: any, label?: string) => {
+    if (!filter || Object.keys(filter).length === 0) return null;
+    return (
+      <div className="flex flex-wrap gap-1.5 items-center mt-1">
+        {label && (
+          <span className="text-gray-400 text-[10px] font-medium uppercase tracking-wider ml-1">
+            {label}
+          </span>
+        )}
+        {Object.entries(filter).map(([key, val]) => (
+          <span
+            key={key}
+            className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-50 text-gray-600 border border-gray-100"
+          >
+            <span className="opacity-60 ml-1">{translate(key)}:</span>
+            <span>{translate(String(val))}</span>
+          </span>
+        ))}
+      </div>
+    );
+  };
+
+  const renderDateRange = () => {
+    if (!config.dateRangeType || config.dateRangeType === "all") return null;
+    let text = translate(config.dateRangeType);
+    if (config.dateRangeType === "custom") {
+      const start = config.customStartDate
+        ? new Date(config.customStartDate).toLocaleDateString("he-IL")
+        : "";
+      const end = config.customEndDate
+        ? new Date(config.customEndDate).toLocaleDateString("he-IL")
+        : "";
+      text = `${start} - ${end}`;
+    }
+    return (
+      <div className="flex items-center gap-2 mt-1">
+        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+          זמן
+        </span>
+        <div className="flex items-center gap-1.5 text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100">
+          <span className="font-medium">{text}</span>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-0.5 w-full mt-1">
+      {type === "COUNT" && renderFilter(config.filter)}
+      {type === "CONVERSION" && (
+        <div className="flex flex-col gap-1">
+          {renderFilter(config.totalFilter, "סה״כ")}
+          {renderFilter(config.successFilter, "הצלחה")}
+        </div>
+      )}
+      {renderDateRange()}
+      {config.groupByField && (
+        <div className="flex items-center gap-2 mt-1">
+          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+            קבץ לפי
+          </span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-100">
+            {translate(config.groupByField)}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const getSourceColor = (source: string) => {
+  const colors = [
+    { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-100" },
+    {
+      bg: "bg-purple-50",
+      text: "text-purple-700",
+      border: "border-purple-100",
+    },
+    { bg: "bg-green-50", text: "text-green-700", border: "border-green-100" },
+    { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-100" },
+    { bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-100" },
+    {
+      bg: "bg-indigo-50",
+      text: "text-indigo-700",
+      border: "border-indigo-100",
+    },
+    { bg: "bg-cyan-50", text: "text-cyan-700", border: "border-cyan-100" },
+    { bg: "bg-teal-50", text: "text-teal-700", border: "border-teal-100" },
+    {
+      bg: "bg-emerald-50",
+      text: "text-emerald-700",
+      border: "border-emerald-100",
+    },
+    {
+      bg: "bg-fuchsia-50",
+      text: "text-fuchsia-700",
+      border: "border-fuchsia-100",
+    },
+  ];
+
+  let hash = 0;
+  for (let i = 0; i < source.length; i++) {
+    hash = source.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+};
+
 interface AnalyticsTableWidgetProps {
   id: string; // The DND id
   title?: string;
@@ -131,14 +289,12 @@ export default function AnalyticsTableWidget({
                   <th className="pb-3 font-medium">שם האנליטיקה</th>
                   <th className="pb-3 font-medium w-32">מקור</th>
                   <th className="pb-3 font-medium text-center">ערך</th>
-                  <th className="pb-3 font-medium text-center">תווית</th>
-                  <th className="pb-3 font-medium text-center">רשומות</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {analytics.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-gray-400">
+                    <td colSpan={3} className="py-8 text-center text-gray-400">
                       לא נבחרו אנליטיקות להצגה
                     </td>
                   </tr>
@@ -159,6 +315,9 @@ export default function AnalyticsTableWidget({
                     }
 
                     const hasData = valueDisplay !== null;
+                    const sourceName =
+                      view.tableName === "System" ? "מערכת" : view.tableName;
+                    const sourceColor = getSourceColor(sourceName);
 
                     return (
                       <tr
@@ -169,35 +328,31 @@ export default function AnalyticsTableWidget({
                           className="py-4 font-semibold text-gray-900 group-hover/row:text-blue-600 transition-colors max-w-[200px] truncate"
                           title={view.ruleName}
                         >
-                          {view.ruleName}
+                          <div>{view.ruleName}</div>
+                          <ConfigDetails
+                            config={view.config}
+                            type={view.type}
+                          />
                         </td>
-                        <td className="py-4 text-gray-500 text-xs">
-                          <span className="bg-gray-50 border border-gray-100 px-2 py-1 rounded text-gray-600">
-                            {view.tableName === "System"
-                              ? "מערכת"
-                              : view.tableName}
+                        <td className="py-4 text-center">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${sourceColor.bg} ${sourceColor.text} ${sourceColor.border}`}
+                          >
+                            {sourceName}
                           </span>
                         </td>
                         <td className="py-4 text-center">
                           {hasData ? (
-                            <span
-                              className="font-bold text-gray-900 text-lg"
-                              dir="ltr"
-                            >
-                              {valueDisplay}
-                            </span>
-                          ) : (
-                            <span className="text-gray-300">-</span>
-                          )}
-                        </td>
-                        <td className="py-4 text-center text-gray-500 text-xs">
-                          {labelDisplay || "-"}
-                        </td>
-                        <td className="py-4 text-center">
-                          {stats.totalRecords !== undefined ? (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-50 text-gray-600">
-                              {stats.totalRecords}
-                            </span>
+                            <div className="flex justify-center">
+                              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-gray-200 text-sm shadow-sm">
+                                <span className="text-gray-500 text-xs font-medium">
+                                  סה״כ:
+                                </span>
+                                <span className="font-bold text-gray-900 dir-ltr">
+                                  {valueDisplay}
+                                </span>
+                              </div>
+                            </div>
                           ) : (
                             <span className="text-gray-300">-</span>
                           )}

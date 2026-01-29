@@ -413,6 +413,7 @@ export default function EditTableModal({
                           <option value="lookup">חיפוש (Lookup)</option>
                           <option value="automation">טריגר אוטומציה</option>
                           <option value="score">ניקוד (מדידה)</option>
+                          <option value="phone">טלפון</option>
                         </select>
                       </div>
                       <div className="flex items-end gap-2">

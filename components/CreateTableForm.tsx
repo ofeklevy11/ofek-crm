@@ -382,6 +382,7 @@ export default function CreateTableForm() {
                     <option value="lookup">חיפוש (Lookup)</option>
                     <option value="automation">טריגר אוטומציה</option>
                     <option value="score">ניקוד (מדידה)</option>
+                    <option value="phone">טלפון</option>
                   </select>
                 </div>
                 <div className="lg:col-span-1 flex items-end gap-2">

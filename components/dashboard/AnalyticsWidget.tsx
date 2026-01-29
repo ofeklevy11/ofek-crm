@@ -296,7 +296,7 @@ export default function AnalyticsWidget({
                 : `מקור: ${view.tableName}`}
             </p>
 
-            {/* ConfigDetails hidden on dashboard for cleaner layout unless needed, keeping as per original */}
+            <ConfigDetails config={view.config} type={view.type} />
           </div>
 
           <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">

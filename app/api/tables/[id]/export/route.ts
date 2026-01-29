@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -33,7 +33,7 @@ export async function GET(
     if (!table) {
       return NextResponse.json(
         { error: "Table not found", id: tableIdNum },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -43,25 +43,60 @@ export async function GET(
         companyId: user.companyId,
       },
       orderBy: { createdAt: "desc" },
+      include: {
+        creator: {
+          select: { name: true, email: true },
+        },
+        updater: {
+          select: { name: true, email: true },
+        },
+      },
     });
 
-    let schema: any[] = [];
+    let fields: { name: string; label: string; type: string }[] = [];
     try {
-      if (!table.schemaJson) schema = [];
+      let schemaArr: any[] = [];
+      if (!table.schemaJson) schemaArr = [];
       else if (typeof table.schemaJson === "string")
-        schema = JSON.parse(table.schemaJson);
-      else schema = table.schemaJson as any;
+        schemaArr = JSON.parse(table.schemaJson);
+      else schemaArr = table.schemaJson as any;
+
+      if (schemaArr.length > 0) {
+        fields = schemaArr.map((f: any) => ({
+          name: f.name,
+          label: f.label ?? f.name ?? "Field",
+          type: f.type,
+        }));
+      } else if (records.length > 0) {
+        fields = Object.keys(records[0].data || {}).map((k) => ({
+          name: k,
+          label: k,
+          type: "text",
+        }));
+      }
     } catch {
-      schema = [];
+      fields = [];
     }
 
-    let headers: string[] = [];
-    if (schema.length > 0)
-      headers = schema.map((f: any) => f.label ?? f.name ?? "field");
-    else if (records.length > 0) headers = Object.keys(records[0].data || {});
+    // Static headers
+    const staticHeaders = [
+      "ID",
+      "Created At",
+      "Created By",
+      "Updated At",
+      "Updated By",
+    ];
 
-    const includeCreatedAt = true;
-    if (includeCreatedAt) headers.push("Created At");
+    // Combine schema headers with static info
+    // Combine schema headers with static info
+    const allHeaders = [
+      "ID",
+      ...fields.map((f) => f.name),
+      "Created At",
+      "Created By",
+      "Updated At",
+      "Updated By",
+    ];
 
     const BOM = "\uFEFF";
     let content = "";
@@ -69,28 +104,61 @@ export async function GET(
     if (format === "csv") {
       const rows = records.map((record: any) => {
         const data = record.data || {};
-        const values = headers.map((h) => {
-          if (h === "Created At")
-            return `"${new Date(record.createdAt).toLocaleString()}"`;
-          const v = data[h];
-          return `"${String(v ?? "").replace(/"/g, '""')}"`;
+
+        // ID
+        const idVal = record.id;
+
+        // Schema Fields
+        const fieldValues = fields.map((f) => {
+          const val = data[f.name];
+          const stringVal = String(val ?? "");
+          return `"${stringVal.replace(/"/g, '""')}"`;
         });
-        return values.join(",");
+
+        // Metadata
+        const createdAt = `"${new Date(record.createdAt).toLocaleString()}"`;
+        const createdBy = `"${(record.creator?.name || record.creator?.email || "").replace(/"/g, '""')}"`;
+        const updatedAt = `"${new Date(record.updatedAt).toLocaleString()}"`;
+        const updatedBy = `"${(record.updater?.name || record.updater?.email || "").replace(/"/g, '""')}"`;
+
+        return [
+          idVal,
+          ...fieldValues,
+          createdAt,
+          createdBy,
+          updatedAt,
+          updatedBy,
+        ].join(",");
       });
 
-      content = BOM + [headers.join(","), ...rows].join("\n");
+      content = BOM + [allHeaders.join(","), ...rows].join("\n");
     } else {
       const rows = records.map((record: any) => {
         const data = record.data || {};
-        const values = headers.map((h) =>
-          h === "Created At"
-            ? new Date(record.createdAt).toLocaleString()
-            : String(data[h] ?? "")
-        );
-        return values.join("\t");
+
+        const idVal = record.id;
+
+        const fieldValues = fields.map((f) => {
+          const val = data[f.name];
+          return String(val ?? "");
+        });
+
+        const createdAt = new Date(record.createdAt).toLocaleString();
+        const createdBy = record.creator?.name || record.creator?.email || "";
+        const updatedAt = new Date(record.updatedAt).toLocaleString();
+        const updatedBy = record.updater?.name || record.updater?.email || "";
+
+        return [
+          idVal,
+          ...fieldValues,
+          createdAt,
+          createdBy,
+          updatedAt,
+          updatedBy,
+        ].join("\t");
       });
 
-      content = BOM + [headers.join("\t"), ...rows].join("\n");
+      content = BOM + [allHeaders.join("\t"), ...rows].join("\n");
     }
 
     const safeName = (table.name || `table_${tableIdNum}`)
@@ -113,7 +181,7 @@ export async function GET(
   } catch (err) {
     return NextResponse.json(
       { error: "Export failed", details: String(err) },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

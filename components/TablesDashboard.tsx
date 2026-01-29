@@ -233,23 +233,33 @@ export default function TablesDashboard({
             </div>
             {canManage && (
               <div className="flex flex-wrap gap-3">
-                <Button
-                  onClick={() => setIsAIModalOpen(true)}
-                  variant="outline"
-                  className="gap-2"
-                >
-                  <Sparkles className="h-4 w-4 text-indigo-500" />
-                  צור עם AI
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    className="gap-2 sm:hidden order-3"
+                    disabled
+                  >
+                    <Sparkles className="h-4 w-4 text-indigo-500" />
+                    צור עם AI (במחשב בלבד)
+                  </Button>
+                  <Button
+                    onClick={() => setIsAIModalOpen(true)}
+                    variant="outline"
+                    className="gap-2 hidden sm:inline-flex sm:order-1"
+                  >
+                    <Sparkles className="h-4 w-4 text-indigo-500" />
+                    צור עם AI
+                  </Button>
+                </>
                 <Button
                   onClick={() => setIsCategoryModalOpen(true)}
                   variant="outline"
-                  className="gap-2"
+                  className="gap-2 order-2 sm:order-2"
                 >
                   <Plus className="h-4 w-4" />
                   קטגוריה חדשה
                 </Button>
-                <Button asChild>
+                <Button asChild className="order-1 sm:order-3">
                   <Link href="/tables/new" prefetch={false} className="gap-2">
                     <Plus className="h-4 w-4" />
                     צור טבלה
@@ -370,15 +380,25 @@ export default function TablesDashboard({
                   </div>
                   {canManage && (
                     <div className="flex flex-col sm:flex-row justify-center gap-4">
-                      <Button
-                        onClick={() => setIsAIModalOpen(true)}
-                        variant="outline"
-                        className="gap-2 h-11"
-                      >
-                        <Sparkles className="h-4 w-4 text-indigo-500" />
-                        צור עם AI
-                      </Button>
-                      <Button asChild className="h-11">
+                      <>
+                        <Button
+                          variant="outline"
+                          className="gap-2 h-11 sm:hidden order-2"
+                          disabled
+                        >
+                          <Sparkles className="h-4 w-4 text-indigo-500" />
+                          צור עם AI (במחשב בלבד)
+                        </Button>
+                        <Button
+                          onClick={() => setIsAIModalOpen(true)}
+                          variant="outline"
+                          className="gap-2 h-11 hidden sm:inline-flex sm:order-1"
+                        >
+                          <Sparkles className="h-4 w-4 text-indigo-500" />
+                          צור עם AI
+                        </Button>
+                      </>
+                      <Button asChild className="h-11 order-1 sm:order-2">
                         <Link
                           href="/tables/new"
                           prefetch={false}

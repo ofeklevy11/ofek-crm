@@ -713,8 +713,11 @@ export default function EditRecordModal({
                             ? "number"
                             : field.type === "date"
                               ? "date"
-                              : "text"
+                              : field.type === "phone"
+                                ? "tel"
+                                : "text"
                         }
+                        dir={field.type === "phone" ? "ltr" : "rtl"}
                         value={formData[field.name] || ""}
                         onChange={(e) =>
                           setFormData({
@@ -745,25 +748,20 @@ export default function EditRecordModal({
                           field.type === "lookup" || field.type === "automation"
                         }
                       />
-                      {(field.type === "text" || field.type === "phone") &&
-                        (field.name.toLowerCase().includes("phone") ||
-                          field.name.toLowerCase().includes("mobile") ||
-                          field.label.includes("טלפון") ||
-                          field.label.includes("נייד")) &&
-                        formData[field.name] && (
-                          <div className="mt-2">
-                            <a
-                              href={`tel:${String(formData[field.name]).replace(
-                                /\D/g,
-                                "",
-                              )}`}
-                              className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors shadow-sm"
-                            >
-                              <Phone className="w-3 h-3" />
-                              חיוג ישיר
-                            </a>
-                          </div>
-                        )}
+                      {field.type === "phone" && formData[field.name] && (
+                        <div className="mt-2">
+                          <a
+                            href={`tel:${String(formData[field.name]).replace(
+                              /\D/g,
+                              "",
+                            )}`}
+                            className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors shadow-sm"
+                          >
+                            <Phone className="w-3 h-3" />
+                            חיוג ישיר
+                          </a>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

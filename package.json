@@ -11,7 +11,8 @@
     "init-views": "npx tsx scripts/init-view-orders.ts",
     "seed": "npx tsx scripts/seed-data.ts",
     "test": "dotenv -e .env.test -- prisma db push && vitest run",
-    "test:watch": "dotenv -e .env.test -- vitest"
+    "test:watch": "dotenv -e .env.test -- vitest",
+    "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest"
   },
   "prisma": {
     "seed": "npx tsx scripts/seed-data.ts"
@@ -58,9 +59,11 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "csv-parse": "^6.1.0",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.5",
     "embla-carousel-react": "^8.6.0",
+    "inngest": "^3.49.3",
     "input-otp": "^1.4.2",
     "ioredis": "^5.9.2",
     "lucide-react": "^0.554.0",
