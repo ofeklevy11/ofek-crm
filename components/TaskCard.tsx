@@ -85,14 +85,56 @@ export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
         </button>
       </div>
 
+      {/* Priority Badge - Above Title */}
+      {task.priority && (
+        <div className="mb-1">
+          <span
+            className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${getPriorityColor(
+              task.priority,
+            )}`}
+          >
+            ★{" "}
+            {task.priority === "high"
+              ? "גבוה"
+              : task.priority === "medium"
+                ? "בינוני"
+                : "נמוך"}
+          </span>
+        </div>
+      )}
+
       {/* Header */}
-      <h4 className="text-white font-semibold text-sm mb-2">{task.title}</h4>
+      {/* Header */}
+      <h4
+        className="text-white font-semibold text-sm mb-2 break-words line-clamp-2"
+        title={task.title}
+      >
+        {task.title}
+      </h4>
+
+      {/* Dates Row - Below Title */}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {/* Start Date */}
+        <span className="inline-flex items-center gap-1.5 bg-purple-500/10 text-purple-200 text-xs px-2 py-0.5 rounded-full border border-purple-500/20">
+          <span className="opacity-70">🚀 התחלנו:</span>
+          <span className="font-medium">{formatDate(task.createdAt)}</span>
+        </span>
+
+        {/* Due Date */}
+        {task.dueDate && (
+          <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-200 text-xs px-2 py-0.5 rounded-full border border-emerald-500/20">
+            <span className="opacity-70">📅 יעד לסיום:</span>
+            <span className="font-medium">{formatDate(task.dueDate)}</span>
+          </span>
+        )}
+      </div>
 
       {/* Description */}
       {task.description && (
-        <p className="text-slate-400 text-xs mb-2 line-clamp-2">
-          {task.description}
-        </p>
+        <DescriptionWithReadMore
+          text={task.description}
+          onReadMore={() => onEdit()}
+        />
       )}
 
       {/* Tags */}
@@ -110,40 +152,54 @@ export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-2 border-t border-slate-700/50">
-        <div className="flex items-center gap-2">
-          {/* Priority */}
-          {task.priority && (
-            <span
-              className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${getPriorityColor(
-                task.priority
-              )}`}
-            >
-              ★{" "}
-              {task.priority === "high"
-                ? "גבוה"
-                : task.priority === "medium"
-                ? "בינוני"
-                : "נמוך"}
-            </span>
-          )}
-
-          {/* Due Date */}
-          {task.dueDate && (
-            <span className="inline-flex items-center gap-1 text-slate-400 text-xs">
-              📅 {formatDate(task.dueDate)}
-            </span>
-          )}
-        </div>
-
-        {/* Assignee */}
-        {task.assignee && (
+      {task.assignee && (
+        <div className="flex items-center justify-end pt-2 border-t border-slate-700/50">
           <div className="flex items-center gap-1.5 bg-slate-700/50 px-2 py-1 rounded-full">
             👤{" "}
             <span className="text-xs text-slate-300">{task.assignee.name}</span>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DescriptionWithReadMore({
+  text,
+  onReadMore,
+}: {
+  text: string;
+  onReadMore: () => void;
+}) {
+  const [isTruncated, setIsTruncated] = React.useState(false);
+  const textRef = React.useRef<HTMLParagraphElement>(null);
+
+  React.useEffect(() => {
+    if (textRef.current) {
+      const { scrollHeight, clientHeight } = textRef.current;
+      setIsTruncated(scrollHeight > clientHeight);
+    }
+  }, [text]);
+
+  return (
+    <div className="mb-2">
+      <p
+        ref={textRef}
+        className="text-slate-400 text-xs line-clamp-3 mb-0.5 break-words break-all"
+      >
+        {text}
+      </p>
+      {isTruncated && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onReadMore();
+          }}
+          className="text-[10px] text-blue-400 hover:text-blue-300 hover:underline transition-colors block"
+        >
+          קרא עוד...
+        </button>
+      )}
     </div>
   );
 }

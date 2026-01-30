@@ -7,7 +7,6 @@ import { AlertCircle } from "lucide-react";
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -16,7 +15,6 @@ import {
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   rectSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
@@ -32,10 +30,14 @@ function SortableGoalItem({
   goal,
   metrics,
   tables,
+  isDropdownOpen,
+  onDropdownOpenChange,
 }: {
   goal: GoalWithProgress;
   metrics: any[];
   tables: any[];
+  isDropdownOpen: boolean;
+  onDropdownOpenChange: (open: boolean) => void;
 }) {
   const {
     attributes,
@@ -67,7 +69,13 @@ function SortableGoalItem({
              We might need a drag handle or rely on sensors safe-guards.
              PointerSensor with distance constraint is usually best for mixed content.
          */}
-        <GoalCard goal={goal} metrics={metrics} tables={tables} />
+        <GoalCard
+          goal={goal}
+          metrics={metrics}
+          tables={tables}
+          isDropdownOpen={isDropdownOpen}
+          onDropdownOpenChange={onDropdownOpenChange}
+        />
       </div>
     </div>
   );
@@ -75,6 +83,7 @@ function SortableGoalItem({
 
 export default function GoalList({ goals, metrics, tables }: GoalListProps) {
   const [items, setItems] = useState<GoalWithProgress[]>(goals);
+  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
 
   useEffect(() => {
     setItems(goals);
@@ -83,12 +92,10 @@ export default function GoalList({ goals, metrics, tables }: GoalListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8, // Require 8px movement before drag starts to allow klicks
+        distance: 8, // Require 8px movement before drag starts to allow clicks
       },
     }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    // KeyboardSensor removed to prevent Space key from triggering drag when editing goals
   );
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -144,6 +151,10 @@ export default function GoalList({ goals, metrics, tables }: GoalListProps) {
               goal={goal}
               metrics={metrics}
               tables={tables}
+              isDropdownOpen={openDropdownId === goal.id}
+              onDropdownOpenChange={(open) =>
+                setOpenDropdownId(open ? goal.id : null)
+              }
             />
           ))}
         </div>

@@ -152,6 +152,15 @@ export default async function Navbar() {
                       מדריכים
                     </Link>
                   )}
+                  {hasUserFlag(user, "canViewFinance") && (
+                    <Link
+                      href="/finance/goals"
+                      prefetch={false}
+                      className="px-4 py-1.5 rounded-full bg-[#22c55e]/10 hover:bg-[#22c55e]/20 text-[#22c55e] text-sm font-medium border border-[#22c55e]/20 transition-all whitespace-nowrap shadow-sm hover:shadow-md"
+                    >
+                      תכנון יעדים
+                    </Link>
+                  )}
                   {hasUserFlag(user, "canViewChat") && (
                     <ChatNavbarLink userId={user.id} />
                   )}

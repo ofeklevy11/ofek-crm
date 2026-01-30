@@ -2,23 +2,14 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import {
-  Trash2,
-  Settings,
-  TrendingUp,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  Eye,
-  EyeOff,
-} from "lucide-react";
+import { Trash2, Settings, Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { GoalWithProgress } from "@/app/actions/goals";
 import { Progress } from "@/components/ui/progress";
 import { useState } from "react";
 import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
 import { format } from "date-fns";
-import { he } from "date-fns/locale";
+import GoalContextExplanation from "@/components/finance/GoalContextExplanation";
 
 interface GoalsTableWidgetProps {
   id: string; // The DND id
@@ -27,6 +18,7 @@ interface GoalsTableWidgetProps {
   onRemove: () => void;
   onEdit: () => void;
   settings?: any;
+  tables?: any[];
 }
 
 export default function GoalsTableWidget({
@@ -36,6 +28,7 @@ export default function GoalsTableWidget({
   onRemove,
   onEdit,
   settings,
+  tables = [],
 }: GoalsTableWidgetProps) {
   const router = useRouter();
   const {
@@ -77,15 +70,27 @@ export default function GoalsTableWidget({
 
   const statusConfig: any = {
     ON_TRACK: {
-      color: "text-[#4f95ff]",
-      bg: "bg-[#4f95ff]/10",
+      color: "text-[#3B82F6]",
+      bg: "bg-[#3B82F6]/10",
+      progressColor: "bg-[#3B82F6]",
       label: "במסלול",
     },
-    WARNING: { color: "text-amber-600", bg: "bg-amber-50", label: "בסיכון" },
-    CRITICAL: { color: "text-red-600", bg: "bg-red-50", label: "קריטי" },
+    WARNING: {
+      color: "text-[#F59E0B]",
+      bg: "bg-[#F59E0B]/10",
+      progressColor: "bg-[#F59E0B]",
+      label: "בסיכון",
+    },
+    CRITICAL: {
+      color: "text-[#EF4444]",
+      bg: "bg-[#EF4444]/10",
+      progressColor: "bg-[#EF4444]",
+      label: "קריטי",
+    },
     EXCEEDED: {
-      color: "text-[#a24ec1]",
-      bg: "bg-[#a24ec1]/10",
+      color: "text-[#10B981]",
+      bg: "bg-[#10B981]/10",
+      progressColor: "bg-[#10B981]",
       label: "מצוין",
     },
   };
@@ -193,10 +198,17 @@ export default function GoalsTableWidget({
                         className="group/row hover:bg-gray-50/50 transition-colors"
                       >
                         <td
-                          className="py-4 font-semibold text-gray-900 group-hover/row:text-[#4f95ff] transition-colors max-w-[200px] truncate"
+                          className="py-4 font-semibold text-gray-900 group-hover/row:text-[#4f95ff] transition-colors max-w-[300px]"
                           title={goal.name}
                         >
-                          {goal.name}
+                          <div className="flex flex-col gap-1">
+                            <span>{goal.name}</span>
+                            <GoalContextExplanation
+                              goal={goal}
+                              tables={tables}
+                              mode="table"
+                            />
+                          </div>
                         </td>
                         <td className="py-4 text-center">
                           <span
@@ -212,11 +224,8 @@ export default function GoalsTableWidget({
                             </div>
                             <Progress
                               value={goal.progressPercent}
-                              className="h-2 w-full"
-                              indicatorClassName={stat.color.replace(
-                                "text-",
-                                "bg-",
-                              )}
+                              className="h-2 w-full bg-[#F3F4F6]"
+                              indicatorClassName={stat.progressColor}
                             />
                           </div>
                         </td>

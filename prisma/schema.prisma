@@ -98,6 +98,7 @@ model User {
   
   assignedTaskSheets   TaskSheet[]   @relation("TaskSheetAssignee")
   createdTaskSheets    TaskSheet[]   @relation("TaskSheetCreator")
+  createdTasks         Task[]        @relation("TaskCreator")
   createdApiKeys       ApiKey[]      @relation("KeyCreator")
   
   company              Company       @relation(fields: [companyId], references: [id])
@@ -339,6 +340,8 @@ model Task {
   dueDate     DateTime?
   tags        String[]
   duration_status_change String? // Legacy field, kept for safety or can be removed if fully migrated
+  creatorId   Int?
+  creator     User?     @relation("TaskCreator", fields: [creatorId], references: [id])
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   
@@ -838,7 +841,7 @@ model Goal {
   companyId   Int
   
   name        String                    // Goal name (e.g., "Monthly Sales Target")
-  metricType  String                    // SALES, REVENUE, LEADS, TASKS, CLOSING_RATIO, RETAINERS, QUOTES
+  metricType  String                    // SALES, REVENUE, CUSTOMERS, TASKS, CLOSING_RATIO, RETAINERS, QUOTES
   targetType  String   @default("sum")  // 'count' (quantity) or 'sum' (monetary/value)
   targetValue Decimal  @db.Decimal(15, 2)
   

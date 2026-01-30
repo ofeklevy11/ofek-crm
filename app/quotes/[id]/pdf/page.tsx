@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
 import PrintButton from "./print-button";
 import QuoteDocument from "@/components/quotes/QuoteDocument";
+import Navbar from "@/components/Navbar";
 
 // Force dynamic to ensure data is fresh
 export const dynamic = "force-dynamic";
@@ -31,11 +32,23 @@ export default async function QuotePdfPage({
 
   return (
     <div className="fixed inset-0 bg-white z-50 overflow-auto">
+      <div className="print:hidden w-full sticky top-0 z-[60]">
+        <Navbar />
+      </div>
+
       {/* Helper Header for Screen */}
       <div
         className="max-w-[210mm] mx-auto pt-8 px-8 md:px-16 print:hidden"
         dir="rtl"
       >
+        <div className="mb-6 flex justify-start">
+          <a
+            href="/quotes"
+            className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-gray-200 bg-white hover:bg-gray-50 h-10 px-4 py-2 text-gray-700 shadow-sm"
+          >
+            חזור להצעות מחיר
+          </a>
+        </div>
         <div className="flex justify-between items-center bg-gray-50 p-4 rounded-lg border">
           <div>
             <h2 className="font-semibold text-gray-900">תצוגה מקדימה להדפסה</h2>

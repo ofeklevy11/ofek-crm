@@ -94,8 +94,24 @@ export default function MobileMenu({ user }: MobileMenuProps) {
             <LinkItem href="/users">משתמשים</LinkItem>
           )}
 
+          {hasUserFlag(user, "canViewFinance") && (
+            <Link
+              href="/finance/goals"
+              className="text-lg font-medium py-3 px-4 bg-[#22c55e]/10 text-[#22c55e] hover:bg-[#22c55e]/20 rounded-md transition-colors text-right block mb-1"
+              onClick={() => setOpen(false)}
+            >
+              תכנון יעדים
+            </Link>
+          )}
+
           {hasUserFlag(user, "canViewChat") && (
-            <LinkItem href="/chat">צ׳אט</LinkItem>
+            <Link
+              href="/chat"
+              className="text-lg font-medium py-3 px-4 bg-[#4f95ff]/10 text-[#4f95ff] hover:bg-[#4f95ff]/20 rounded-md transition-colors text-right block mb-1"
+              onClick={() => setOpen(false)}
+            >
+              צ׳אט
+            </Link>
           )}
         </div>
 

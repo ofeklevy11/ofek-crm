@@ -162,6 +162,22 @@ export default function AddRecordForm({
         }
       });
 
+      // Validation: Check if the record is completely empty (ignoring attachments)
+      const hasValue = Object.values(finalData).some((val) => {
+        if (val === null || val === undefined) return false;
+        if (typeof val === "string" && val.trim() === "") return false;
+        if (Array.isArray(val) && val.length === 0) return false;
+        return true;
+      });
+
+      if (!hasValue) {
+        alert(
+          "לא ניתן להוסיף רשומה ריקה. יש למלא לפחות שדה אחד (קבצים ולינקים אינם נחשבים כשדה מלא).",
+        );
+        setLoading(false);
+        return;
+      }
+
       // 1. Create the record first to get an ID
       // We'll send attachments (links) directly here if the API continues to support it in the same call
       // Or we create record first then add files.

@@ -15,6 +15,7 @@ import { GoalWithProgress } from "@/app/actions/goals";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
+import GoalContextExplanation from "@/components/finance/GoalContextExplanation";
 
 interface GoalWidgetProps {
   id: string; // The DND id
@@ -49,32 +50,33 @@ export default function GoalWidget({
   };
 
   // Maps for style based on status
+  // Traffic Light Logic
   const statusConfig = {
     ON_TRACK: {
-      color: "text-[#4f95ff]",
-      bg: "bg-[#4f95ff]/10",
-      accent: "bg-[#4f95ff]",
+      color: "text-[#3B82F6]",
+      bg: "bg-[#3B82F6]/10",
+      accent: "bg-[#3B82F6]",
       icon: CheckCircle,
       label: "במסלול",
     },
     WARNING: {
-      color: "text-amber-600",
-      bg: "bg-amber-50",
-      accent: "bg-amber-500",
+      color: "text-[#F59E0B]",
+      bg: "bg-[#F59E0B]/10",
+      accent: "bg-[#F59E0B]",
       icon: AlertTriangle,
       label: "בסיכון",
     },
     CRITICAL: {
-      color: "text-red-600",
-      bg: "bg-red-50",
-      accent: "bg-red-500",
+      color: "text-[#EF4444]",
+      bg: "bg-[#EF4444]/10",
+      accent: "bg-[#EF4444]",
       icon: AlertTriangle,
       label: "קריטי",
     },
     EXCEEDED: {
-      color: "text-[#a24ec1]",
-      bg: "bg-[#a24ec1]/10",
-      accent: "bg-[#a24ec1]",
+      color: "text-[#10B981]",
+      bg: "bg-[#10B981]/10",
+      accent: "bg-[#10B981]",
       icon: TrendingUp,
       label: "מצוין",
     },
@@ -116,11 +118,11 @@ export default function GoalWidget({
       {/* Top Accent Line */}
       <div className={`h-1.5 w-full shrink-0 ${status.accent}`} />
 
-      <div className="p-5 flex-1 flex flex-col">
+      <div className="p-6 flex-1 flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-start mb-4">
           <div className="flex-1 overflow-hidden">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-1">
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${status.bg} ${status.color} border-transparent`}
               >
@@ -132,15 +134,33 @@ export default function GoalWidget({
               </span>
             </div>
             <h3
-              className="text-lg font-bold text-gray-900 line-clamp-2 leading-tight"
+              className="text-lg font-bold text-gray-900 line-clamp-2 leading-tight mb-4"
               title={goal.name}
             >
               {goal.name}
             </h3>
-            <p className="text-xs text-gray-400 mt-1 font-medium truncate">
-              {format(new Date(goal.startDate), "d MMM")} -{" "}
-              {format(new Date(goal.endDate), "d MMM, yyyy", { locale: he })}
-            </p>
+            <div className="flex items-center gap-8">
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-[10px] font-medium text-gray-400">
+                  התחלנו
+                </span>
+                <span className="text-xs font-bold text-gray-700 tracking-tight">
+                  {format(new Date(goal.startDate), "d MMM, yyyy", {
+                    locale: he,
+                  })}
+                </span>
+              </div>
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-[10px] font-medium text-gray-400">
+                  יעד לסיום
+                </span>
+                <span className="text-xs font-bold text-gray-700 tracking-tight">
+                  {format(new Date(goal.endDate), "d MMM, yyyy", {
+                    locale: he,
+                  })}
+                </span>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -183,7 +203,7 @@ export default function GoalWidget({
           <div className="space-y-1.5">
             <Progress
               value={goal.progressPercent}
-              className="h-2.5 bg-gray-100"
+              className="h-2.5 bg-[#F3F4F6]"
               indicatorClassName={status.accent}
             />
             <div className="flex justify-between text-[10px] text-gray-400 font-medium px-0.5">
@@ -191,6 +211,7 @@ export default function GoalWidget({
             </div>
           </div>
         </div>
+        <GoalContextExplanation goal={goal} tables={tables} />
       </div>
     </div>
   );

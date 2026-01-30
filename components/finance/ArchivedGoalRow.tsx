@@ -1,5 +1,6 @@
 "use client";
 
+import GoalContextExplanation from "./GoalContextExplanation";
 import { GoalWithProgress, toggleGoalArchive } from "@/app/actions/goals";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,9 +38,13 @@ import { useState } from "react";
 
 interface ArchivedGoalRowProps {
   goal: GoalWithProgress;
+  tables: { id: number; name: string }[];
 }
 
-export default function ArchivedGoalRow({ goal }: ArchivedGoalRowProps) {
+export default function ArchivedGoalRow({
+  goal,
+  tables,
+}: ArchivedGoalRowProps) {
   const router = useRouter();
   const [isRestoring, setIsRestoring] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -98,7 +103,7 @@ export default function ArchivedGoalRow({ goal }: ArchivedGoalRowProps) {
         return DollarSign;
       case "RETAINERS":
         return Briefcase;
-      case "LEADS":
+      case "CUSTOMERS":
         return Users;
       case "QUOTES":
         return FileText;
@@ -156,10 +161,10 @@ export default function ArchivedGoalRow({ goal }: ArchivedGoalRowProps) {
       <div className="flex items-center gap-4 min-w-[240px] flex-1">
         <div
           className={cn(
-            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-colors",
+            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-colors self-start mt-1",
             isSuccess
               ? "bg-green-50 border-green-100 text-green-600"
-              : "bg-gray-50 border-gray-200 text-gray-500"
+              : "bg-gray-50 border-gray-200 text-gray-500",
           )}
         >
           {isSuccess ? (
@@ -168,16 +173,22 @@ export default function ArchivedGoalRow({ goal }: ArchivedGoalRowProps) {
             <Icon className="w-5 h-5" />
           )}
         </div>
-        <div>
-          <h3 className="font-bold text-gray-900 text-base">{goal.name}</h3>
-          <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
-            <span className="capitalize">
-              {periodMap[goal.periodType] || goal.periodType}
-            </span>
-            {goal.metricType === "REVENUE" && "• הכנסות"}
-            {goal.metricType === "LEADS" && "• לידים"}
-            {goal.metricType === "TASKS" && "• משימות"}
-          </p>
+        <div className="flex flex-col gap-2 w-full">
+          <div>
+            <h3 className="font-bold text-gray-900 text-base">{goal.name}</h3>
+            <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
+              {goal.metricType === "REVENUE" && "הכנסות"}
+              {goal.metricType === "CUSTOMERS" && " לקוחות"}
+              {goal.metricType === "TASKS" && " משימות"}
+              {goal.metricType === "QUOTES" && " הצעות מחיר"}
+              {goal.metricType === "RECORDS" && " רשומות"}
+              {goal.metricType === "CALENDAR" && " יומן"}
+              {goal.metricType === "RETAINERS" && " ריטיינרים"}
+            </p>
+          </div>
+          <div className="mt-1">
+            <GoalContextExplanation goal={goal} tables={tables} mode="table" />
+          </div>
         </div>
       </div>
 
@@ -195,29 +206,13 @@ export default function ArchivedGoalRow({ goal }: ArchivedGoalRowProps) {
           <div
             className={cn(
               "h-full rounded-full transition-all",
-              isSuccess ? "bg-green-500" : "bg-blue-500"
+              isSuccess ? "bg-green-500" : "bg-blue-500",
             )}
             style={{ width: `${Math.min(goal.progressPercent, 100)}%` }}
           />
         </div>
-        <p className="text-xs text-gray-500 mt-1 flex justify-between">
-          <span>הושלמו {goal.progressPercent}%</span>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger>
-                <span className="hover:text-gray-900 cursor-help border-b border-dotted border-gray-300">
-                  פרטים מלאים
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                <p>יעד: {formatFullMoney(goal.targetValue)}</p>
-                <p>נוכחי: {formatFullMoney(goal.currentValue)}</p>
-                <p>
-                  הפרש: {formatFullMoney(goal.targetValue - goal.currentValue)}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+        <p className="text-xs text-gray-500 mt-1">
+          הושלמו {goal.progressPercent}%
         </p>
       </div>
 

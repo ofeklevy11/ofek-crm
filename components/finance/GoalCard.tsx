@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import GoalModal from "./GoalModal";
+import GoalContextExplanation from "./GoalContextExplanation";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -40,41 +41,53 @@ interface GoalCardProps {
   goal: GoalWithProgress;
   metrics: any[];
   tables: any[];
+  isDropdownOpen?: boolean;
+  onDropdownOpenChange?: (open: boolean) => void;
 }
 
-export default function GoalCard({ goal, metrics, tables }: GoalCardProps) {
+export default function GoalCard({
+  goal,
+  metrics,
+  tables,
+  isDropdownOpen,
+  onDropdownOpenChange,
+}: GoalCardProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
 
-  // Status config - using strict palette: Blue (#4f95ff), Purple (#a24ec1), Grays/Blacks.
+  // Status config - Traffic Light Logic
   const statusConfig = {
     ON_TRACK: {
-      color: "text-[#4f95ff]",
-      bg: "bg-[#4f95ff]/10",
-      border: "border-[#4f95ff]/20",
+      color: "text-[#3B82F6]", // Blue - Normal
+      bg: "bg-[#3B82F6]/10",
+      border: "border-[#3B82F6]/20",
+      progressColor: "bg-[#3B82F6]",
       icon: CheckCircle,
       label: "במסלול",
     },
     WARNING: {
-      color: "text-gray-600",
-      bg: "bg-gray-100",
-      border: "border-gray-200",
+      color: "text-[#F59E0B]", // Orange - At Risk
+      bg: "bg-[#F59E0B]/10",
+      border: "border-[#F59E0B]/20",
+      progressColor: "bg-[#F59E0B]",
       icon: AlertTriangle,
       label: "בסיכון",
     },
     CRITICAL: {
-      color: "text-gray-900",
-      bg: "bg-gray-200",
-      border: "border-gray-300",
+      color: "text-[#EF4444]", // Red - Critical
+      bg: "bg-[#EF4444]/10",
+      border: "border-[#EF4444]/20",
+      progressColor: "bg-[#EF4444]",
       icon: AlertTriangle,
       label: "קריטי",
     },
     EXCEEDED: {
-      color: "text-[#a24ec1]",
-      bg: "bg-[#a24ec1]/10",
-      border: "border-[#a24ec1]/20",
+      color: "text-[#10B981]", // Green - Excellent
+      bg: "bg-[#10B981]/10",
+      border: "border-[#10B981]/20",
+      progressColor: "bg-[#10B981]",
       icon: TrendingUp,
       label: "מצוין",
     },
@@ -188,7 +201,7 @@ export default function GoalCard({ goal, metrics, tables }: GoalCardProps) {
             {goal.metricType === "RETAINERS" && (
               <Briefcase className="w-5 h-5 text-[#4f95ff]" />
             )}
-            {goal.metricType === "LEADS" && (
+            {goal.metricType === "CUSTOMERS" && (
               <Users className="w-5 h-5 text-[#4f95ff]" />
             )}
             {goal.metricType === "QUOTES" && (
@@ -234,7 +247,10 @@ export default function GoalCard({ goal, metrics, tables }: GoalCardProps) {
             </Badge>
           )}
 
-          <DropdownMenu>
+          <DropdownMenu
+            open={isDropdownOpen}
+            onOpenChange={onDropdownOpenChange}
+          >
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
@@ -293,7 +309,11 @@ export default function GoalCard({ goal, metrics, tables }: GoalCardProps) {
           </div>
 
           <div className="relative">
-            <Progress value={goal.progressPercent} className="h-3" />
+            <Progress
+              value={goal.progressPercent}
+              className="h-3 bg-[#F3F4F6]"
+              indicatorClassName={status.progressColor}
+            />
           </div>
 
           <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -302,6 +322,8 @@ export default function GoalCard({ goal, metrics, tables }: GoalCardProps) {
           </div>
         </div>
       </div>
+
+      <GoalContextExplanation goal={goal} tables={tables} />
     </Card>
   );
 }

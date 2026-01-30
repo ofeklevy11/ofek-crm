@@ -90,9 +90,9 @@ const GOAL_METRICS = [
     icon: "💼",
   },
   {
-    type: "LEADS",
-    name: "לידים",
-    description: "לקוחות חדשים",
+    type: "CUSTOMERS",
+    name: "לקוחות",
+    description: "לקוחות חדשים (מעמוד כספים)",
     available: true,
     icon: "👥",
   },
@@ -883,6 +883,7 @@ export default function DashboardClient({
                       id={widget.id}
                       title={settings.title}
                       goals={displayedGoals}
+                      tables={availableTables}
                       onRemove={() => handleRemoveWidget(widget)}
                       onEdit={() => handleEditGoalsTable(widget)}
                       settings={settings}
@@ -1547,7 +1548,13 @@ export default function DashboardClient({
               <div>
                 <div className="flex justify-between items-end mb-2">
                   <label className="block text-sm font-medium text-gray-700">
-                    בחר יעדים להצגה ({goalsTableSelectedIds.length})
+                    בחר יעדים להצגה (
+                    {
+                      goalsTableSelectedIds.filter((id) =>
+                        availableGoals.some((g) => String(g.id) === id),
+                      ).length
+                    }
+                    )
                   </label>
                 </div>
                 <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col max-h-[400px]">

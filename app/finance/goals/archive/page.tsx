@@ -1,4 +1,4 @@
-import { getArchivedGoals } from "@/app/actions/goals";
+import { getArchivedGoals, getGoalCreationData } from "@/app/actions/goals";
 import ArchivedGoalRow from "@/components/finance/ArchivedGoalRow";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { Archive, ArrowRight, LayoutList, Search } from "lucide-react";
@@ -12,12 +12,17 @@ export default async function ArchivedGoalsPage() {
     redirect("/login");
   }
 
-  // Fetch only archived data
-  const goals = await getArchivedGoals();
+  // Fetch data
+  const [goals, creationData] = await Promise.all([
+    getArchivedGoals(),
+    getGoalCreationData(),
+  ]);
+
+  const { tables } = creationData;
 
   return (
     <div
-      className="p-8 space-y-8 bg-[#f4f8f8] min-h-screen text-right"
+      className="p-4 md:p-8 space-y-8 bg-[#f4f8f8] min-h-screen text-right"
       dir="rtl"
     >
       <div>
@@ -58,7 +63,7 @@ export default async function ArchivedGoalsPage() {
           <p className="text-gray-500 mt-2">אין יעדים בארכיון כרגע</p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
           {/* Header Row */}
           <div className="bg-gray-50/50 border-b border-gray-100 flex items-center justify-between gap-6 px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-wide">
             <div className="flex-1 min-w-[240px]">שם היעד וסוג</div>
@@ -71,7 +76,7 @@ export default async function ArchivedGoalsPage() {
           {/* Rows */}
           <div className="divide-y divide-gray-100">
             {goals.map((goal) => (
-              <ArchivedGoalRow key={goal.id} goal={goal} />
+              <ArchivedGoalRow key={goal.id} goal={goal} tables={tables} />
             ))}
           </div>
         </div>

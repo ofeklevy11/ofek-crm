@@ -29,6 +29,12 @@ export async function getTasks() {
             email: true,
           },
         },
+        creator: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -55,6 +61,12 @@ export async function getTaskById(id: string) {
             id: true,
             name: true,
             email: true,
+          },
+        },
+        creator: {
+          select: {
+            id: true,
+            name: true,
           },
         },
       },
@@ -104,7 +116,9 @@ export async function createTask(data: {
         assigneeId: data.assigneeId,
         priority: data.priority,
         tags: data.tags || [],
+        tags: data.tags || [],
         dueDate: dueDate,
+        creatorId: user.id,
       },
       include: {
         assignee: {
@@ -112,6 +126,12 @@ export async function createTask(data: {
             id: true,
             name: true,
             email: true,
+          },
+        },
+        creator: {
+          select: {
+            id: true,
+            name: true,
           },
         },
       },
@@ -122,7 +142,7 @@ export async function createTask(data: {
 
     // Trigger automations
     console.log(
-      `[Task Actions] Created task ${newTask.id}, triggering automations`
+      `[Task Actions] Created task ${newTask.id}, triggering automations`,
     );
     try {
       const { processViewAutomations } = await import("./automations");
@@ -148,7 +168,7 @@ export async function updateTask(
     priority?: string;
     tags?: string[];
     dueDate?: string | null;
-  }
+  },
 ) {
   try {
     const updateData: Record<string, unknown> = { ...data };
@@ -201,6 +221,12 @@ export async function updateTask(
             email: true,
           },
         },
+        creator: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     });
 
@@ -228,7 +254,7 @@ export async function updateTask(
         task.id,
         task.title,
         existingTask.status,
-        data.status
+        data.status,
       );
     }
 
@@ -242,7 +268,7 @@ export async function updateTask(
     } catch (autoError) {
       console.error(
         "[Task Actions] Failed to trigger view automations:",
-        autoError
+        autoError,
       );
     }
 

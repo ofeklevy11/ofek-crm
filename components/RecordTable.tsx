@@ -489,14 +489,17 @@ export default function RecordTable({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "delete", recordIds: selectedIds }),
       });
-      if (!res.ok) throw new Error("Failed to delete");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to delete");
+      }
 
       setRecords((prev) => prev.filter((r) => !selectedIds.includes(r.id)));
       setSelectedIds([]);
       router.refresh();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("שגיאה במחיקת רשומות");
+      alert(error.message || "שגיאה במחיקת רשומות");
     } finally {
       setIsDeleting(false);
     }

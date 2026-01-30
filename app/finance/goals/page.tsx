@@ -2,7 +2,7 @@ import { getGoalsWithProgress, getGoalCreationData } from "@/app/actions/goals";
 import GoalList from "@/components/finance/GoalList";
 import GoalModal from "@/components/finance/GoalModal";
 import { getCurrentUser } from "@/lib/permissions-server";
-import { Target, TrendingUp, ArrowRight, Archive } from "lucide-react";
+import { Target, TrendingUp, ArrowRight, Archive, Plus } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -38,9 +38,9 @@ export default async function GoalsPage() {
       icon: "💼",
     },
     {
-      type: "LEADS",
-      name: "לידים",
-      description: "לקוחות חדשים",
+      type: "CUSTOMERS",
+      name: "לקוחות",
+      description: "לקוחות חדשים (מעמוד כספים)",
       available: true,
       icon: "👥",
     },
@@ -87,7 +87,7 @@ export default async function GoalsPage() {
           <ArrowRight className="w-4 h-4 ml-1" />
           חזרה למרכז הפיננסי
         </Link>
-        <div className="flex justify-between items-center mt-4">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center mt-4 gap-4 md:gap-0">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
               <Target className="w-8 h-8 text-[#4f95ff]" />
@@ -98,17 +98,30 @@ export default async function GoalsPage() {
             </p>
           </div>
 
-          <div className="flex gap-3">
-            <Link href="/finance/goals/archive">
+          <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+            <Link
+              href="/finance/goals/archive"
+              className="w-full md:w-auto block"
+            >
               <Button
                 variant="outline"
-                className="gap-2 bg-white hover:bg-gray-50"
+                className="w-full md:w-auto gap-2 bg-white hover:bg-gray-50"
               >
                 <Archive className="w-4 h-4" />
-                ארכיון
+                ארכיון יעדים
               </Button>
             </Link>
-            <GoalModal metrics={metrics} tables={tables} clients={clients} />
+            <GoalModal
+              metrics={metrics}
+              tables={tables}
+              clients={clients}
+              trigger={
+                <Button className="w-full md:w-auto gap-2 bg-[#4f95ff] hover:bg-[#3d7ccc] text-white shadow-lg shadow-blue-200">
+                  <Plus className="w-4 h-4" />
+                  יעד חדש
+                </Button>
+              }
+            />
           </div>
         </div>
       </div>
@@ -136,7 +149,7 @@ export default async function GoalsPage() {
           <p className="text-3xl font-bold text-gray-900">
             {
               goals.filter(
-                (g: any) => g.status === "ON_TRACK" || g.status === "EXCEEDED"
+                (g: any) => g.status === "ON_TRACK" || g.status === "EXCEEDED",
               ).length
             }
           </p>

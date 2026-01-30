@@ -26,6 +26,11 @@ export interface Task {
   priority?: "low" | "medium" | "high" | string | null;
   dueDate?: Date | string | null;
   tags?: string[];
+  creatorId?: number;
+  creator?: {
+    id: number;
+    name: string;
+  };
   createdAt: Date | string;
   updatedAt: Date | string;
 }

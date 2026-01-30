@@ -7,11 +7,12 @@ import { revalidatePath } from "next/cache";
 // Use number for Decimal fields
 // type Decimal = Prisma.Decimal;
 // const Decimal = Prisma.Decimal;
+import { startOfDay, endOfDay } from "date-fns";
 
 export type MetricType =
   | "REVENUE" // Total income (Paid transactions OR Table Sum OR Finance Record)
   | "SALES" // Number of sales
-  | "LEADS" // New clients/leads
+  | "CUSTOMERS" // Customers from finance page (Client model)
   | "TASKS" // Tasks completion
   | "RETAINERS" // Retainers analysis
   | "QUOTES" // Quotes analysis
@@ -26,10 +27,11 @@ export interface GoalFilters {
   clientId?: number;
   frequency?: string;
   status?: string;
-  tableId?: number; // For leads OR revenue from specific table
+  tableId?: number; // For revenue from specific table
   source?: string; // 'TRANSACTIONS' | 'TABLE' | 'FINANCE_RECORD'
   columnKey?: string; // If source=TABLE, which column to sum. If source=FINANCE_RECORD, acts as category filter
   searchQuery?: string; // For calendar events or general text search
+  taskGoalMode?: "COUNT" | "REDUCE"; // For tasks: COUNT = count tasks reaching status, REDUCE = count remaining tasks
 }
 
 export interface GoalFormData {
@@ -77,7 +79,7 @@ export async function previewGoalValue(
   periodType: PeriodType,
   startDate: Date,
   endDate: Date,
-  filters: GoalFilters
+  filters: GoalFilters,
 ) {
   const user = await getCurrentUser();
   if (!user) return 0;
@@ -88,7 +90,7 @@ export async function previewGoalValue(
     user.companyId,
     startDate,
     endDate,
-    filters
+    filters,
   );
 }
 
@@ -140,7 +142,7 @@ export async function toggleGoalArchive(id: number, isArchived: boolean) {
 function getDateFilter(
   startDate: Date,
   endDate: Date,
-  field: string = "createdAt"
+  field: string = "createdAt",
 ) {
   return {
     [field]: {
@@ -154,10 +156,14 @@ async function calculateMetricValue(
   metricType: string,
   targetType: string, // 'COUNT' | 'SUM'
   companyId: number,
-  startDate: Date,
-  endDate: Date,
-  filters: GoalFilters
+  startDateRaw: Date,
+  endDateRaw: Date,
+  filters: GoalFilters,
 ): Promise<number> {
+  // Normalize dates to ensure full day coverage
+  const startDate = startOfDay(startDateRaw);
+  const endDate = endOfDay(endDateRaw);
+
   // Common filters
   const clientFilter = filters.clientId ? { clientId: filters.clientId } : {};
 
@@ -242,31 +248,113 @@ async function calculateMetricValue(
         }
       }
 
-      // Option C: Revenue from Transactions (Legacy System Financials)
-      const where: any = {
+      // Option C: Revenue from Payments System (Transactions + OneTimePayments)
+      // We sum up both sources to ensure coverage of both legacy and new systems.
+
+      // 1. Transactions (Legacy)
+      const transactionWhere: any = {
         client: { companyId },
         status: {
           in: ["manual-marked-paid", "paid", "PAID", "completed", "COMPLETED"],
         },
         ...clientFilter,
-        paidDate: {
-          gte: startDate,
-          lte: endDate,
-        },
+        OR: [
+          { paidDate: { gte: startDate, lte: endDate } },
+          {
+            paidDate: null,
+            updatedAt: { gte: startDate, lte: endDate },
+          },
+        ],
       };
 
-      if (targetType?.toUpperCase() === "SUM" || metricType === "REVENUE") {
-        const result = await prisma.transaction.aggregate({
-          where,
+      // 2. OneTimePayments (Modern)
+      const paymentWhere: any = {
+        client: { companyId },
+        status: {
+          in: ["paid", "PAID", "Pd", "manual-marked-paid", "completed"],
+        },
+        ...clientFilter,
+        OR: [
+          { paidDate: { gte: startDate, lte: endDate } },
+          {
+            paidDate: null,
+            dueDate: { gte: startDate, lte: endDate }, // Fallback to due date if no paid date? Or updatedAt?
+          },
+          // Also check updatedAt if neither paid nor due (though strictly paidDate is best)
+          {
+            paidDate: null,
+            updatedAt: { gte: startDate, lte: endDate },
+          },
+        ],
+      };
+
+      // Apply Filter Specifics
+      if (filters.source === "TRANSACTIONS_RETAINER") {
+        // Transactions: Only relatedType = 'retainer'
+        transactionWhere.relatedType = "retainer";
+
+        // Payments: Only notes containing 'ret' / 'ריטיינר'
+        // Using OR because "contains" is case sensitive often, and Hebrew vs English
+        paymentWhere.OR = paymentWhere.OR.map((dateCond: any) => ({
+          AND: [
+            dateCond,
+            {
+              OR: [
+                { notes: { contains: "ריטיינר" } },
+                { notes: { contains: "Retainer", mode: "insensitive" } },
+              ],
+            },
+          ],
+        }));
+      } else if (filters.source === "TRANSACTIONS_ONE_TIME") {
+        // Transactions: Exclude 'retainer'
+        transactionWhere.relatedType = { not: "retainer" };
+
+        // Payments: Exclude 'ret' / 'ריטיינר'
+        // Using AND NOT
+        paymentWhere.AND = [
+          {
+            NOT: {
+              notes: { contains: "ריטיינר" },
+            },
+          },
+          {
+            NOT: {
+              notes: { contains: "Retainer", mode: "insensitive" },
+            },
+          },
+        ];
+      }
+
+      // Execute Queries
+      let totalAmount = 0;
+      let totalCount = 0;
+
+      const [transSum, transCount, paySum, payCount] = await Promise.all([
+        prisma.transaction.aggregate({
+          where: transactionWhere,
           _sum: { amount: true },
-        });
-        return Number(result._sum.amount ?? 0);
+        }),
+        prisma.transaction.count({ where: transactionWhere }),
+        prisma.oneTimePayment.aggregate({
+          where: paymentWhere,
+          _sum: { amount: true },
+        }),
+        prisma.oneTimePayment.count({ where: paymentWhere }),
+      ]);
+
+      totalAmount =
+        Number(transSum._sum.amount ?? 0) + Number(paySum._sum.amount ?? 0);
+      totalCount = transCount + payCount;
+
+      if (targetType?.toUpperCase() === "SUM" || metricType === "REVENUE") {
+        return totalAmount;
       } else {
-        return await prisma.transaction.count({ where });
+        return totalCount;
       }
     }
 
-    case "LEADS": {
+    case "CUSTOMERS": {
       if (filters.tableId) {
         const where: any = {
           companyId,
@@ -284,11 +372,43 @@ async function calculateMetricValue(
     }
 
     case "TASKS": {
+      // Status mapping to actual task statuses in the system
+      const statusMap: Record<string, string[]> = {
+        TODO: ["todo", "Todo", "TODO"],
+        IN_PROGRESS: ["in_progress", "In Progress", "IN_PROGRESS"],
+        WAITING_CLIENT: ["waiting_client", "Waiting Client", "WAITING_CLIENT"],
+        ON_HOLD: ["on_hold", "On Hold", "ON_HOLD"],
+        COMPLETED: [
+          "completed_month",
+          "Completed",
+          "completed",
+          "done",
+          "Done",
+        ],
+      };
+
+      // REDUCE mode: Count how many tasks currently remain in the status (live count, no date filter)
+      if (filters.taskGoalMode === "REDUCE") {
+        const statusValues = filters.status
+          ? statusMap[filters.status] || [filters.status]
+          : statusMap.TODO;
+
+        const where: any = {
+          companyId,
+          status: { in: statusValues },
+        };
+
+        return await prisma.task.count({ where });
+      }
+
+      // COUNT mode (default): Count tasks that reached the status in the date range
+      const statusValues = filters.status
+        ? statusMap[filters.status] || [filters.status]
+        : statusMap.COMPLETED;
+
       const where: any = {
         companyId,
-        status: filters.status || {
-          in: ["done", "Done", "completed", "Completed"],
-        },
+        status: { in: statusValues },
         ...getDateFilter(startDate, endDate, "updatedAt"),
       };
 
@@ -298,6 +418,7 @@ async function calculateMetricValue(
     case "QUOTES": {
       const where: any = {
         companyId,
+        isTrashed: false,
         ...clientFilter,
         ...getDateFilter(startDate, endDate, "createdAt"),
       };
@@ -347,6 +468,23 @@ async function calculateMetricValue(
         ...getDateFilter(startDate, endDate, "createdAt"),
       };
 
+      if (targetType?.toUpperCase() === "SUM" && filters.columnKey) {
+        const records = await prisma.record.findMany({
+          where,
+          select: { data: true },
+        });
+
+        const sum = records.reduce((acc, r: any) => {
+          const val = r.data?.[filters.columnKey!] || 0;
+          const num =
+            typeof val === "string"
+              ? parseFloat(val.replace(/[^0-9.-]+/g, ""))
+              : Number(val);
+          return acc + (isNaN(num) ? 0 : num);
+        }, 0);
+        return sum;
+      }
+
       return await prisma.record.count({ where });
     }
 
@@ -360,7 +498,7 @@ function generateRecommendation(
   progress: number,
   targetType: string,
   daysRemaining: number,
-  gap: number
+  gap: number,
 ): string | null {
   if (gap <= 0) return "🎉 יעד הושג! כל הכבוד.";
   if (daysRemaining <= 0) return "⌛ הזמן עבר.";
@@ -372,19 +510,19 @@ function generateRecommendation(
 
   if (metricType === "RETAINERS") {
     return `💡 כדי להגיע ליעד, צריך להוסיף עוד ${Math.ceil(
-      gap
+      gap,
     ).toLocaleString()} ${unit} לריטיינר החודשי.`;
   }
 
   return `👉 נדרש קצב של ${Math.ceil(
-    dailyPace
+    dailyPace,
   ).toLocaleString()} ${unit} ליום כדי לעמוד ביעד.`;
 }
 
 // Internal helper to calculate progress for a list of goals
 async function enrichGoalsWithProgress(
   goals: any[],
-  companyId: number
+  companyId: number,
 ): Promise<GoalWithProgress[]> {
   return Promise.all(
     goals.map(async (goal) => {
@@ -397,26 +535,62 @@ async function enrichGoalsWithProgress(
         companyId,
         goal.startDate,
         goal.endDate,
-        filters
+        filters,
       );
 
       const targetValue = Number(goal.targetValue);
-      const progressPercent =
-        targetValue > 0 ? Math.round((currentValue / targetValue) * 100) : 0;
+
+      // For REDUCE mode (tasks), progress is inverted:
+      // If target is 2 and current is 10, we're far from goal (low progress)
+      // If target is 2 and current is 3, we're close to goal (high progress)
+      const isReduceMode =
+        goal.metricType === "TASKS" && filters.taskGoalMode === "REDUCE";
+
+      let progressPercent: number;
+      if (isReduceMode) {
+        // In reduce mode, lower currentValue = better progress
+        // If current <= target, we've achieved the goal (100%+)
+        if (currentValue <= targetValue) {
+          progressPercent = 100;
+        } else if (targetValue === 0) {
+          // Special case: target is 0, we want to eliminate all tasks
+          // Use a reference scale: assume starting from max(currentValue, 10) tasks
+          // This way, fewer tasks = higher progress
+          // Example: 4 tasks with target 0, using base 10: progress = (10-4)/10 = 60%
+          // Example: 2 tasks with target 0: progress = (10-2)/10 = 80%
+          // Example: 0 tasks with target 0: progress = 100%
+          const referenceBase = Math.max(currentValue, 10);
+          progressPercent = Math.round(
+            ((referenceBase - currentValue) / referenceBase) * 100,
+          );
+        } else {
+          // Progress based on how close current is to target
+          // The closer currentValue is to targetValue, the higher the progress
+          progressPercent = Math.max(
+            0,
+            Math.round((targetValue / currentValue) * 100),
+          );
+        }
+      } else {
+        progressPercent =
+          targetValue > 0 ? Math.round((currentValue / targetValue) * 100) : 0;
+      }
 
       const now = new Date();
       const endDate = new Date(goal.endDate);
       const startDate = new Date(goal.startDate);
       const daysRemaining = Math.max(
         0,
-        Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
       );
       const totalDays = Math.ceil(
-        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
       );
       const daysElapsed = Math.max(
         1,
-        Math.ceil((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+        Math.ceil(
+          (now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+        ),
       );
 
       const dailyRate = currentValue / daysElapsed;
@@ -436,7 +610,7 @@ async function enrichGoalsWithProgress(
         progressPercent,
         targetType,
         daysRemaining,
-        targetValue - currentValue
+        targetValue - currentValue,
       );
 
       return {
@@ -461,7 +635,7 @@ async function enrichGoalsWithProgress(
         projectedValue: finalProjected,
         recommendation,
       };
-    })
+    }),
   );
 }
 
@@ -510,7 +684,7 @@ export async function updateGoalOrder(goalIds: number[]) {
     prisma.goal.update({
       where: { id, companyId: user.companyId },
       data: { order: index },
-    })
+    }),
   );
 
   await prisma.$transaction(updates);
@@ -539,15 +713,25 @@ export async function getGoalCreationData() {
   const formattedTables = tables.map((table) => {
     let columns: any[] = [];
     try {
+      let rawColumns: any[] = [];
       const schema = table.schemaJson as any;
-      if (schema && Array.isArray(schema.columns)) {
-        columns = schema.columns.map((c: any) => ({
-          id: c.id,
-          key: c.key || c.id,
-          name: c.name,
-          type: c.type,
-        }));
+
+      if (Array.isArray(schema)) {
+        rawColumns = schema;
+      } else if (schema && typeof schema === "object") {
+        if (Array.isArray(schema.columns)) {
+          rawColumns = schema.columns;
+        } else if (Array.isArray(schema.fields)) {
+          rawColumns = schema.fields;
+        }
       }
+
+      columns = rawColumns.map((c: any) => ({
+        id: c.id || c.name,
+        key: c.key || c.name || c.id,
+        name: c.label || c.displayName || c.name,
+        type: c.type,
+      }));
     } catch (e) {
       console.error("Failed to parse table schema", table.id);
     }

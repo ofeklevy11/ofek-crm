@@ -188,6 +188,29 @@ export default function TaskModal({
             </div>
           </div>
 
+          {task && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-slate-400 text-sm mb-1">
+                  תאריך התחלה
+                </label>
+                <div className="w-full bg-slate-900/30 text-slate-300 rounded px-3 py-2 border border-slate-700/50 cursor-not-allowed">
+                  {task.createdAt
+                    ? new Date(task.createdAt).toLocaleDateString("he-IL")
+                    : "-"}
+                </div>
+              </div>
+              <div>
+                <label className="block text-slate-400 text-sm mb-1">
+                  נוצר על ידי
+                </label>
+                <div className="w-full bg-slate-900/30 text-slate-300 rounded px-3 py-2 border border-slate-700/50 cursor-not-allowed">
+                  {task.creator?.name || "לא ידוע"}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-slate-400 text-sm mb-1">
