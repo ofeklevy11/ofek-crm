@@ -130,7 +130,7 @@ async function seedLeads(companyId: number, userId: number) {
     // Define schema
     const schema = [
       { name: "leadName", label: "שם הליד", type: "text" },
-      { name: "phoneNumber", label: "טלפון", type: "text" },
+      { name: "phoneNumber", label: "טלפון", type: "phone" },
       { name: "source", label: "מקור", type: "select", options: SOURCES },
       { name: "status", label: "סטטוס", type: "select", options: STATUSES },
       { name: "budget", label: "תקציב", type: "number" },

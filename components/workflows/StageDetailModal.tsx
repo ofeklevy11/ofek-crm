@@ -397,9 +397,11 @@ function AutomationConfigModal({
   const [availableFiles, setAvailableFiles] = useState<any[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [showDynamicValues, setShowDynamicValues] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
+      setError(null);
       if (initialConfig) {
         setFields(initialConfig);
         // Restore WhatsApp specific state if needed
@@ -456,6 +458,14 @@ function AutomationConfigModal({
   if (!isOpen || !type) return null;
 
   const handleSave = () => {
+    if (
+      (type.id === "update_record" || type.id === "delete_record") &&
+      !fields.recordId
+    ) {
+      setError("חובה להזין מזהה רשומה");
+      return;
+    }
+
     let desc = `${type.label}`;
     let configToSave = { ...fields };
 
@@ -817,16 +827,20 @@ function AutomationConfigModal({
           {(type.id === "update_record" || type.id === "delete_record") && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                מזהה רשומה (ID)
+                מזהה רשומה (ID) <span className="text-red-500">*</span>
               </label>
               <input
-                className="w-full p-2 border rounded-md"
+                className={`w-full p-2 border rounded-md ${
+                  error ? "border-red-500" : ""
+                }`}
                 placeholder="Record ID..."
                 value={fields.recordId || ""}
-                onChange={(e) =>
-                  setFields({ ...fields, recordId: e.target.value })
-                }
+                onChange={(e) => {
+                  setFields({ ...fields, recordId: e.target.value });
+                  if (error) setError(null);
+                }}
               />
+              {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
             </div>
           )}
           {type.id === "create_record" && fields.tableId && (

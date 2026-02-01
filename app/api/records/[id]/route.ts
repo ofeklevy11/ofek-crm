@@ -4,7 +4,7 @@ import { createAuditLog } from "@/lib/audit";
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -20,7 +20,7 @@ export async function GET(
     if (!currentUser) {
       return NextResponse.json(
         { error: "Authentication required" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -37,6 +37,9 @@ export async function GET(
         updater: {
           select: { id: true, name: true, email: true },
         },
+        dialedBy: {
+          select: { id: true, name: true, email: true },
+        },
         files: true,
         attachments: true,
       },
@@ -51,14 +54,14 @@ export async function GET(
     console.error("Error fetching record:", error);
     return NextResponse.json(
       { error: "Failed to fetch record" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 export async function PUT(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -78,7 +81,7 @@ export async function PUT(
     if (!currentUser) {
       return NextResponse.json(
         { error: "Authentication required" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -98,7 +101,7 @@ export async function PUT(
     if (!canWriteTable(currentUser, existingRecord.tableId)) {
       return NextResponse.json(
         { error: "You don't have permission to write to this table" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -115,7 +118,7 @@ export async function PUT(
 
     // Trigger Automations
     console.log(
-      `[API Records] About to trigger automations for record ${record.id}, table ${record.tableId}`
+      `[API Records] About to trigger automations for record ${record.id}, table ${record.tableId}`,
     );
     try {
       const { processRecordUpdate } = await import("@/app/actions/automations");
@@ -125,7 +128,7 @@ export async function PUT(
         record.tableId,
         record.id,
         existingRecord.data as any,
-        data
+        data,
       );
       console.log(`[API Records] Successfully triggered automations`);
     } catch (autoError) {
@@ -137,14 +140,14 @@ export async function PUT(
     console.error("Error updating record:", error);
     return NextResponse.json(
       { error: "Failed to update record" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -162,7 +165,7 @@ export async function DELETE(
     if (!currentUser) {
       return NextResponse.json(
         { error: "Authentication required" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -183,7 +186,7 @@ export async function DELETE(
     if (!canWriteTable(currentUser, existingRecord.tableId)) {
       return NextResponse.json(
         { error: "You don't have permission to write to this table" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -198,7 +201,7 @@ export async function DELETE(
     console.error("Error deleting record:", error);
     return NextResponse.json(
       { error: "Failed to delete record" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

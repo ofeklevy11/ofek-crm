@@ -435,10 +435,19 @@ export async function processMultiEventDurationTrigger(
   newData: any,
 ) {
   try {
+    // Fetch record to verify company owner
+    const record = await prisma.record.findUnique({
+      where: { id: recordId },
+      select: { companyId: true },
+    });
+
+    if (!record) return;
+
     const rules = await prisma.automationRule.findMany({
       where: {
         isActive: true,
         triggerType: "MULTI_EVENT_DURATION",
+        companyId: record.companyId, // Filter by company
       },
     });
 

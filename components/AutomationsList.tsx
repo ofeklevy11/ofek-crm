@@ -227,6 +227,13 @@ export default function AutomationsList({
       case "TIME_SINCE_CREATION":
         return "זמן מאז יצירה";
 
+      case "DIRECT_DIAL": {
+        const dialTableName =
+          tables.find((t) => t.id === Number(config.tableId))?.name ||
+          "טבלה לא ידועה";
+        return `חיוג ישיר ב${dialTableName}`;
+      }
+
       default:
         return rule.triggerType;
     }
@@ -250,6 +257,31 @@ export default function AutomationsList({
         return `הוספה לרשימת תפוצה: ${config.listId}`;
       case "CALCULATE_MULTI_EVENT_DURATION":
         return "מדידת זמנים בין אירועים";
+      case "UPDATE_RECORD_FIELD": {
+        const tableId = rule.triggerConfig?.tableId;
+        const columnId = config.columnId;
+        let columnLabel = columnId;
+
+        if (tableId && columnId) {
+          const table = tables.find((t) => t.id === Number(tableId));
+          if (table?.schemaJson) {
+            const schema =
+              typeof table.schemaJson === "string"
+                ? JSON.parse(table.schemaJson)
+                : table.schemaJson;
+
+            const columns = Array.isArray(schema) ? schema : schema?.columns;
+
+            const col = columns?.find(
+              (c: any) => c.name === columnId || c.id === columnId,
+            );
+            if (col?.label) {
+              columnLabel = col.label;
+            }
+          }
+        }
+        return `עדכון שדה: ${columnLabel || "לא הוגדר"}`;
+      }
       default:
         return rule.actionType;
     }

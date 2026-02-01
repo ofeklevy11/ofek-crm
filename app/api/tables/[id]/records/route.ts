@@ -43,6 +43,9 @@ export async function GET(
         updater: {
           select: { id: true, name: true, email: true },
         },
+        dialedBy: {
+          select: { id: true, name: true, email: true },
+        },
         attachments: true,
       },
     });

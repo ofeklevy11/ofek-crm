@@ -26,6 +26,7 @@ import {
   Copy,
   Pencil,
   CheckSquare,
+  Phone,
 } from "lucide-react";
 import { getAllFiles } from "@/app/actions/storage";
 
@@ -74,6 +75,7 @@ export default function AutomationModal({
     | "NEW_RECORD"
     | "RECORD_FIELD_CHANGE"
     | "TIME_SINCE_CREATION"
+    | "DIRECT_DIAL"
   >((editingRule?.triggerType as any) || "RECORD_FIELD_CHANGE");
 
   // Task specific
@@ -148,6 +150,7 @@ export default function AutomationModal({
     | "SEND_WHATSAPP"
     | "WEBHOOK"
     | "CREATE_TASK"
+    | "UPDATE_RECORD_FIELD"
     | ""
   >("");
   const [editingActionIndex, setEditingActionIndex] = useState<number | null>(
@@ -185,6 +188,10 @@ export default function AutomationModal({
   const [taskTags, setTaskTags] = useState<string[]>([]);
   const [taskTagInput, setTaskTagInput] = useState("");
 
+  // Update Record Field Specific
+  const [updateFieldColumnId, setUpdateFieldColumnId] = useState("");
+  const [updateFieldValue, setUpdateFieldValue] = useState("");
+
   const handleAddTaskTag = (e: React.KeyboardEvent | React.MouseEvent) => {
     if (e.type === "keydown" && (e as React.KeyboardEvent).key !== "Enter")
       return;
@@ -206,7 +213,8 @@ export default function AutomationModal({
       tableId &&
       (triggerType === "RECORD_FIELD_CHANGE" ||
         triggerType === "TIME_SINCE_CREATION" ||
-        triggerType === "NEW_RECORD")
+        triggerType === "NEW_RECORD" ||
+        triggerType === "DIRECT_DIAL")
     ) {
       setLoadingColumns(true);
       getTableById(Number(tableId))
@@ -323,6 +331,10 @@ export default function AutomationModal({
           conditionColumnId,
           conditionValue,
         };
+      } else if (triggerType === "DIRECT_DIAL") {
+        triggerConfig = {
+          tableId,
+        };
       }
 
       if (useBusinessHours) {
@@ -411,7 +423,12 @@ export default function AutomationModal({
                   dueDays: Number(taskDueDays),
                   tags: taskTags,
                 }
-              : {};
+              : currentActionType === "UPDATE_RECORD_FIELD"
+                ? {
+                    columnId: updateFieldColumnId,
+                    value: updateFieldValue,
+                  }
+                : {};
 
     const actionObj = { type: currentActionType, config: newActionConfig };
 
@@ -445,6 +462,8 @@ export default function AutomationModal({
     setTaskDueDays(0);
     setTaskTags([]);
     setTaskTagInput("");
+    setUpdateFieldColumnId("");
+    setUpdateFieldValue("");
   };
 
   const removeAction = (index: number) => {
@@ -484,6 +503,9 @@ export default function AutomationModal({
       setTaskAssigneeId(action.config.assigneeId?.toString() || "");
       setTaskDueDays(action.config.dueDays || 0);
       setTaskTags(action.config.tags || []);
+    } else if (action.type === "UPDATE_RECORD_FIELD") {
+      setUpdateFieldColumnId(action.config.columnId || "");
+      setUpdateFieldValue(action.config.value || "");
     }
 
     setEditingActionIndex(index);
@@ -521,6 +543,7 @@ export default function AutomationModal({
       if (timeUnit === "minutes" && Number(timeValue) < 5) return false;
       return true;
     }
+    if (triggerType === "DIRECT_DIAL") return !!tableId;
     return false;
   };
 
@@ -553,6 +576,9 @@ export default function AutomationModal({
     }
     if (currentActionType === "CREATE_TASK") {
       return !!taskTitle;
+    }
+    if (currentActionType === "UPDATE_RECORD_FIELD") {
+      return !!updateFieldColumnId && !!updateFieldValue;
     }
     if (currentActionType === "CALCULATE_DURATION") return true;
     return false;
@@ -638,6 +664,16 @@ export default function AutomationModal({
               setMessageTemplate("חלף זמן מאז יצירת הרשומה בטבלה {tableName}");
             }}
           />
+          <TriggerCard
+            title="חיוג ישיר"
+            description="כאשר מבצעים חיוג ישיר ללקוח מרשומה בטבלה"
+            icon={<Phone className="text-green-500" size={24} />}
+            selected={triggerType === "DIRECT_DIAL"}
+            onClick={() => {
+              setTriggerType("DIRECT_DIAL");
+              setMessageTemplate("בוצע חיוג ישיר ברשומה בטבלה {tableName}");
+            }}
+          />
         </div>
       </div>
     </div>
@@ -650,6 +686,7 @@ export default function AutomationModal({
         {triggerType === "NEW_RECORD" && <TableProperties size={16} />}
         {triggerType === "RECORD_FIELD_CHANGE" && <MousePointer2 size={16} />}
         {triggerType === "TIME_SINCE_CREATION" && <Clock size={16} />}
+        {triggerType === "DIRECT_DIAL" && <Phone size={16} />}
         <span>
           מגדיר תנאים עבור:
           <span className="font-semibold mx-1">
@@ -657,6 +694,7 @@ export default function AutomationModal({
             {triggerType === "NEW_RECORD" && "רשומה חדשה"}
             {triggerType === "RECORD_FIELD_CHANGE" && "שינוי שדה"}
             {triggerType === "TIME_SINCE_CREATION" && "זמן מאז יצירה"}
+            {triggerType === "DIRECT_DIAL" && "חיוג ישיר"}
           </span>
         </span>
       </div>
@@ -664,7 +702,8 @@ export default function AutomationModal({
       {/* Common Table Selector */}
       {(triggerType === "NEW_RECORD" ||
         triggerType === "RECORD_FIELD_CHANGE" ||
-        triggerType === "TIME_SINCE_CREATION") && (
+        triggerType === "TIME_SINCE_CREATION" ||
+        triggerType === "DIRECT_DIAL") && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             בחר טבלה
@@ -1067,6 +1106,7 @@ export default function AutomationModal({
                   )}
                   {act.type === "CALCULATE_DURATION" && <Timer size={20} />}
                   {act.type === "CREATE_TASK" && <CheckSquare size={20} />}
+                  {act.type === "UPDATE_RECORD_FIELD" && <Pencil size={20} />}
                 </div>
                 <div>
                   <div className="font-medium text-gray-900">
@@ -1075,6 +1115,7 @@ export default function AutomationModal({
                     {act.type === "WEBHOOK" && "Webhook"}
                     {act.type === "CALCULATE_DURATION" && "חישוב זמן"}
                     {act.type === "CREATE_TASK" && "יצירת משימה"}
+                    {act.type === "UPDATE_RECORD_FIELD" && "עדכון שדה ברשומה"}
                   </div>
                   <div className="text-xs text-gray-500">פעולה #{idx + 1}</div>
                 </div>
@@ -1131,6 +1172,8 @@ export default function AutomationModal({
                 setTaskPriority("low");
                 setTaskAssigneeId("");
                 setTaskTags([]);
+                setUpdateFieldColumnId("");
+                setUpdateFieldValue("");
               }}
               className="text-sm text-gray-500 hover:text-gray-700"
             >
@@ -1174,6 +1217,19 @@ export default function AutomationModal({
               selected={currentActionType === "CREATE_TASK"}
               onClick={() => setCurrentActionType("CREATE_TASK")}
             />
+            {/* Show Update Record Field for all Record-based triggers */}
+            {(triggerType === "DIRECT_DIAL" ||
+              triggerType === "NEW_RECORD" ||
+              triggerType === "RECORD_FIELD_CHANGE" ||
+              triggerType === "TIME_SINCE_CREATION") && (
+              <TriggerCard
+                title="עדכון שדה ברשומה"
+                description="עדכן ערך בשדה מסוים ברשומה"
+                icon={<Pencil className="text-purple-500" size={24} />}
+                selected={currentActionType === "UPDATE_RECORD_FIELD"}
+                onClick={() => setCurrentActionType("UPDATE_RECORD_FIELD")}
+              />
+            )}
           </div>
 
           {currentActionType === "SEND_NOTIFICATION" && (
@@ -1768,6 +1824,101 @@ export default function AutomationModal({
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {currentActionType === "UPDATE_RECORD_FIELD" && (
+            <div className="bg-purple-50 p-6 rounded-xl border border-purple-100 space-y-5 animate-in slide-in-from-top-2">
+              <div className="flex items-center gap-2 mb-2 text-purple-800 font-medium pb-2 border-b border-purple-200">
+                <Pencil size={18} />
+                עדכון שדה ברשומה
+              </div>
+
+              <div className="bg-purple-100/50 p-3 rounded-lg text-sm text-purple-700">
+                <strong>שים לב:</strong> כאשר האוטומציה תפעל, השדה שתבחר יעודכן
+                אוטומטית לערך שתגדיר.
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  בחר שדה לעדכון
+                </label>
+                {loadingColumns ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                    <Loader2 className="animate-spin" size={16} /> טוען
+                    עמודות...
+                  </div>
+                ) : (
+                  <select
+                    required
+                    value={updateFieldColumnId}
+                    onChange={(e) => {
+                      setUpdateFieldColumnId(e.target.value);
+                      setUpdateFieldValue("");
+                    }}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                  >
+                    <option value="">בחר עמודה...</option>
+                    {columns.map((col: any) => (
+                      <option key={col.id || col.name} value={col.name}>
+                        {col.label || col.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {updateFieldColumnId && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    הערך החדש
+                  </label>
+                  {(() => {
+                    const selectedCol = columns.find(
+                      (c) =>
+                        c.id === updateFieldColumnId ||
+                        c.name === updateFieldColumnId,
+                    );
+                    const isSelectType =
+                      selectedCol &&
+                      (selectedCol.type === "select" ||
+                        selectedCol.type === "multiSelect" ||
+                        selectedCol.type === "status");
+
+                    if (isSelectType && selectedCol?.options) {
+                      return (
+                        <select
+                          required
+                          value={updateFieldValue}
+                          onChange={(e) => setUpdateFieldValue(e.target.value)}
+                          className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                        >
+                          <option value="">בחר ערך...</option>
+                          {selectedCol.options.map((opt: string) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      );
+                    }
+
+                    return (
+                      <input
+                        required
+                        type="text"
+                        value={updateFieldValue}
+                        onChange={(e) => setUpdateFieldValue(e.target.value)}
+                        className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                        placeholder='לדוגמה: "בוצעה שיחה"'
+                      />
+                    );
+                  })()}
+                  <p className="text-xs text-gray-500 mt-1">
+                    הערך הזה יוזן אוטומטית לשדה כאשר יבוצע חיוג ישיר.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

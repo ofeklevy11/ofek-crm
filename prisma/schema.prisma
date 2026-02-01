@@ -82,6 +82,7 @@ model User {
   auditLogs            AuditLog[]
   records              Record[]      @relation("CreatedBy")
   updatedRecords       Record[]      @relation("UpdatedBy")
+  dialedRecords        Record[]      @relation("DialedBy")
   tables               TableMeta[]   @relation("CreatedBy")
   transactions         Transaction[]
   notifications        Notification[]
@@ -182,10 +183,10 @@ model AutomationRule {
   id            Int      @id @default(autoincrement())
   companyId     Int
   name          String
-  triggerType   String   // 'MANUAL', 'TASK_STATUS_CHANGE', 'RECORD_CREATE', 'MULTI_EVENT_DURATION'
-  triggerConfig Json?    // Configuration for the trigger (e.g., fromStatus, toStatus)
-  actionType    String   // 'SEND_NOTIFICATION', 'CALCULATE_DURATION', 'CALCULATE_MULTI_EVENT_DURATION'
-  actionConfig  Json?    // Configuration for the action (e.g., recipientId, message)
+  triggerType   String   // 'MANUAL', 'TASK_STATUS_CHANGE', 'RECORD_CREATE', 'MULTI_EVENT_DURATION', 'DIRECT_DIAL'
+  triggerConfig Json?    // Configuration for the trigger (e.g., fromStatus, toStatus, tableId for DIRECT_DIAL)
+  actionType    String   // 'SEND_NOTIFICATION', 'CALCULATE_DURATION', 'CALCULATE_MULTI_EVENT_DURATION', 'UPDATE_RECORD_FIELD'
+  actionConfig  Json?    // Configuration for the action (e.g., recipientId, message, columnId, value for UPDATE_RECORD_FIELD)
   isActive      Boolean  @default(true)
   createdBy     Int
   createdAt     DateTime @default(now())
@@ -285,12 +286,15 @@ model Record {
   data        Json
   createdBy   Int?
   updatedBy   Int?
+  dialedById  Int?         // User who made the last direct dial call
+  dialedAt    DateTime?    // When the direct dial was made
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   attachments Attachment[]
   auditLogs   AuditLog[]
   creator     User?        @relation("CreatedBy", fields: [createdBy], references: [id])
   updater     User?        @relation("UpdatedBy", fields: [updatedBy], references: [id])
+  dialedBy    User?        @relation("DialedBy", fields: [dialedById], references: [id])
   table       TableMeta    @relation("TableRecords", fields: [tableId], references: [id])
   company     Company      @relation(fields: [companyId], references: [id])
   

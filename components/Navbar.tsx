@@ -21,11 +21,11 @@ export default async function Navbar() {
             <Link
               href="/"
               prefetch={false}
-              className="text-lg font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent whitespace-nowrap"
+              className="text-base font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent whitespace-nowrap"
             >
               {(() => {
                 const name = user?.company?.name || "CRM למנהל";
-                return name.length > 30 ? `${name.slice(0, 30)}...` : name;
+                return name.length > 16 ? `${name.slice(0, 16)}...` : name;
               })()}
             </Link>
           </div>
@@ -143,27 +143,27 @@ export default async function Navbar() {
                       קבצים
                     </Link>
                   )}
-                  {hasUserFlag(user, "canViewGuides") && (
-                    <Link
-                      href="/guides"
-                      prefetch={false}
-                      className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[#4f95ff]/10 to-[#a24ec1]/10 hover:from-[#4f95ff]/20 hover:to-[#a24ec1]/20 text-[#a24ec1] text-sm font-medium border border-[#a24ec1]/20 transition-all whitespace-nowrap shadow-sm hover:shadow-md"
-                    >
-                      מדריכים
-                    </Link>
-                  )}
-                  {hasUserFlag(user, "canViewFinance") && (
-                    <Link
-                      href="/finance/goals"
-                      prefetch={false}
-                      className="px-4 py-1.5 rounded-full bg-[#22c55e]/10 hover:bg-[#22c55e]/20 text-[#22c55e] text-sm font-medium border border-[#22c55e]/20 transition-all whitespace-nowrap shadow-sm hover:shadow-md"
-                    >
-                      תכנון יעדים
-                    </Link>
-                  )}
-                  {hasUserFlag(user, "canViewChat") && (
-                    <ChatNavbarLink userId={user.id} />
-                  )}
+                  <div className="flex items-center gap-3">
+                    {hasUserFlag(user, "canViewGuides") && (
+                      <a
+                        href="/guides"
+                        className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[#4f95ff]/10 to-[#a24ec1]/10 hover:from-[#4f95ff]/20 hover:to-[#a24ec1]/20 text-[#a24ec1] text-sm font-medium border border-[#a24ec1]/20 transition-all whitespace-nowrap shadow-sm hover:shadow-md"
+                      >
+                        מדריכים
+                      </a>
+                    )}
+                    {hasUserFlag(user, "canViewFinance") && (
+                      <a
+                        href="/finance/goals"
+                        className="px-4 py-1.5 rounded-full bg-[#22c55e]/10 hover:bg-[#22c55e]/20 text-[#22c55e] text-sm font-medium border border-[#22c55e]/20 transition-all whitespace-nowrap shadow-sm hover:shadow-md"
+                      >
+                        תכנון יעדים
+                      </a>
+                    )}
+                    {hasUserFlag(user, "canViewChat") && (
+                      <ChatNavbarLink userId={user.id} />
+                    )}
+                  </div>
                 </>
               )}
             </div>

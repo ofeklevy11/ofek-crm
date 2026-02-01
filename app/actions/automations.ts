@@ -185,6 +185,37 @@ export async function executeRuleActions(
             });
           }
         }
+      } else if (type === "UPDATE_RECORD_FIELD") {
+        // Update a specific field in the current record
+        if (context.recordId && config.columnId) {
+          try {
+            const record = await prisma.record.findFirst({
+              where: { id: context.recordId, companyId },
+            });
+
+            if (record) {
+              const currentData = record.data as Record<string, unknown>;
+              const newData = {
+                ...currentData,
+                [config.columnId]: config.value,
+              };
+
+              await prisma.record.update({
+                where: { id: context.recordId },
+                data: { data: JSON.parse(JSON.stringify(newData)) },
+              });
+
+              console.log(
+                `[Automations] Updated field ${config.columnId} to "${config.value}" for record ${context.recordId}`,
+              );
+            }
+          } catch (updateError) {
+            console.error(
+              `[Automations] Error updating record field:`,
+              updateError,
+            );
+          }
+        }
       } else if (type === "CREATE_TASK") {
         const {
           title,
@@ -933,15 +964,17 @@ function checkBusinessHours(config: any): boolean {
 export async function processViewAutomations(
   tableId?: number,
   taskId?: string,
+  companyId?: number, // Added companyId parameter
 ) {
   console.log(
-    `\n🔍🔍🔍 [Automations] CHECKING VIEW AUTOMATIONS - Table=${tableId}, Task=${taskId}\n`,
+    `\n🔍🔍🔍 [Automations] CHECKING VIEW AUTOMATIONS - Table=${tableId}, Task=${taskId}, Company=${companyId}\n`,
   );
   try {
     const rules = await prisma.automationRule.findMany({
       where: {
         isActive: true, // Only active rules
         triggerType: "VIEW_METRIC_THRESHOLD",
+        companyId: companyId, // Filter by company if provided
       },
     });
 
@@ -1181,10 +1214,24 @@ export async function processTaskStatusChange(
   toStatus: string,
 ) {
   try {
+    // Fetch task to get companyId
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { companyId: true },
+    });
+
+    if (!task) {
+      console.log(
+        `[Automations] Task ${taskId} not found for status change processing.`,
+      );
+      return;
+    }
+
     const rules = await prisma.automationRule.findMany({
       where: {
         isActive: true,
         triggerType: "TASK_STATUS_CHANGE",
+        companyId: task.companyId, // Filter by company
       },
     });
 
@@ -1204,12 +1251,13 @@ export async function processTaskStatusChange(
         taskTitle,
         fromStatus,
         toStatus,
+        companyId: task.companyId,
       };
       await executeRuleActions(rule, context);
     }
 
-    // Check all view automations to ensure they trigger correctly
-    await processViewAutomations();
+    // Check view automations with company context
+    await processViewAutomations(undefined, taskId, task.companyId);
   } catch (error) {
     console.error("Error processing task status automations:", error);
   }
@@ -1221,13 +1269,24 @@ export async function processNewRecordTrigger(
   recordId: number,
 ) {
   try {
-    const rules = await prisma.automationRule.findMany({
-      where: { isActive: true, triggerType: "NEW_RECORD" },
-    });
-
-    // Pre-fetch record data to allow for condition checking
+    // Fetch record first to get companyId
     const record = await prisma.record.findUnique({
       where: { id: recordId },
+    });
+
+    if (!record) {
+      console.log(
+        `[Automations] Record ${recordId} not found, skipping NEW_RECORD automations.`,
+      );
+      return;
+    }
+
+    const rules = await prisma.automationRule.findMany({
+      where: {
+        isActive: true,
+        triggerType: "NEW_RECORD",
+        companyId: record.companyId, // Filter by company
+      },
     });
 
     if (!record) {
@@ -1309,7 +1368,7 @@ export async function processNewRecordTrigger(
     }
 
     // Check all view automations to ensure they trigger correctly
-    await processViewAutomations();
+    await processViewAutomations(tableId, undefined, record.companyId);
 
     // --- REAL TEME FINANCE SYNC ---
     // Check if this table is source for any sync rule
@@ -1349,8 +1408,20 @@ export async function processRecordUpdate(
     `[Automations] Processing update for Table ${tableId}, Record ${recordId}`,
   );
   try {
+    // Need companyId to key safely
+    const record = await prisma.record.findUnique({
+      where: { id: recordId },
+      select: { companyId: true },
+    });
+
+    if (!record) return;
+
     const rules = await prisma.automationRule.findMany({
-      where: { isActive: true, triggerType: "RECORD_FIELD_CHANGE" },
+      where: {
+        isActive: true,
+        triggerType: "RECORD_FIELD_CHANGE",
+        companyId: record.companyId, // Filter by company
+      },
     });
 
     const table = await prisma.tableMeta.findUnique({
@@ -1441,7 +1512,7 @@ export async function processRecordUpdate(
     console.log(
       `[Automations] 🎯 About to check VIEW AUTOMATIONS after record update`,
     );
-    await processViewAutomations();
+    await processViewAutomations(tableId, undefined, record.companyId);
     console.log(`[Automations] ✅ Finished checking VIEW AUTOMATIONS`);
 
     // --- REAL TEME FINANCE SYNC (ON UPDATE) ---
@@ -1611,6 +1682,7 @@ export async function processTimeBasedAutomations() {
       const records = await prisma.record.findMany({
         where: {
           tableId: Number(config.tableId),
+          companyId: rule.companyId, // CRITICAL: Ensure we only process records for the same company
           createdAt: {
             lte: cutoffTime,
             gte: rule.createdAt, // Only records created AFTER this rule
@@ -1661,5 +1733,78 @@ export async function processTimeBasedAutomations() {
     }
   } catch (error) {
     console.error("Error processing time-based automations:", error);
+  }
+}
+
+/**
+ * Process automations triggered by direct dial action on a record.
+ * This is called when a user clicks the direct dial button on a record.
+ */
+export async function processDirectDialTrigger(
+  tableId: number,
+  recordId: number,
+  companyId: number,
+) {
+  console.log(
+    `[Automations] Processing direct dial trigger for Table ${tableId}, Record ${recordId}`,
+  );
+
+  try {
+    // Find all active DIRECT_DIAL automation rules for this table
+    const rules = await prisma.automationRule.findMany({
+      where: {
+        companyId,
+        triggerType: "DIRECT_DIAL",
+        isActive: true,
+      },
+    });
+
+    // Filter rules that are configured for this specific table
+    const matchingRules = rules.filter((rule) => {
+      const config = rule.triggerConfig as any;
+      if (!config?.tableId) return false;
+      return Number(config.tableId) === tableId;
+    });
+
+    if (matchingRules.length === 0) {
+      console.log(
+        `[Automations] No DIRECT_DIAL rules found for table ${tableId}`,
+      );
+      return;
+    }
+
+    // Get the record data
+    const record = await prisma.record.findFirst({
+      where: { id: recordId, companyId },
+    });
+
+    if (!record) {
+      console.log(`[Automations] Record ${recordId} not found`);
+      return;
+    }
+
+    // Get table name for notifications
+    const table = await prisma.tableMeta.findUnique({
+      where: { id: tableId },
+      select: { name: true },
+    });
+
+    const recordData = record.data as Record<string, unknown>;
+
+    // Execute each matching rule
+    for (const rule of matchingRules) {
+      console.log(
+        `[Automations] Executing DIRECT_DIAL rule: ${rule.name} (ID: ${rule.id})`,
+      );
+
+      await executeRuleActions(rule, {
+        recordData,
+        tableId,
+        recordId,
+        tableName: table?.name,
+      });
+    }
+  } catch (error) {
+    console.error("Error processing direct dial automations:", error);
   }
 }

@@ -65,6 +65,8 @@ export default function EditRecordModal({
   const [updatedAt, setUpdatedAt] = useState("");
   const [creatorName, setCreatorName] = useState("");
   const [updaterName, setUpdaterName] = useState("");
+  const [dialedByName, setDialedByName] = useState("");
+  const [dialedAt, setDialedAt] = useState("");
   const [attachments, setAttachments] = useState<any[]>([]);
   const [files, setFiles] = useState<any[]>([]); // New state for files
   const [newAttachmentUrl, setNewAttachmentUrl] = useState("");
@@ -128,6 +130,15 @@ export default function EditRecordModal({
       setUpdaterName(record.updater.name || record.updater.email || "");
     }
 
+    // Initialize dialed by info
+    if (record && record.dialedBy) {
+      setDialedByName(record.dialedBy.name || record.dialedBy.email || "");
+    }
+    if (record && record.dialedAt) {
+      const date = new Date(record.dialedAt);
+      setDialedAt(date.toISOString().split("T")[0]);
+    }
+
     fetchAttachments();
     fetchFiles();
   }, [record, schema]);
@@ -185,9 +196,76 @@ export default function EditRecordModal({
           const date = new Date(freshRecord.updatedAt);
           setUpdatedAt(date.toISOString().split("T")[0]);
         }
+        // Update dialed by info
+        if (freshRecord.dialedBy) {
+          setDialedByName(
+            freshRecord.dialedBy.name || freshRecord.dialedBy.email || "",
+          );
+        }
+        if (freshRecord.dialedAt) {
+          const date = new Date(freshRecord.dialedAt);
+          setDialedAt(date.toISOString().split("T")[0]);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch fresh files", err);
+    }
+  };
+
+  // Handle Direct Dial - records who made the call
+  const handleDirectDial = async (phoneNumber: string) => {
+    // Open the phone dialer
+    window.location.href = `tel:${phoneNumber.replace(/\D/g, "")}`;
+
+    // Record the dial action
+    try {
+      const res = await fetch(`/api/records/${record.id}/dial`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.dialedBy) {
+          setDialedByName(data.dialedBy.name || data.dialedBy.email || "");
+        }
+        if (data.dialedAt) {
+          const date = new Date(data.dialedAt);
+          setDialedAt(date.toISOString().split("T")[0]);
+        }
+
+        // Merge backend updates (e.g. from automations) into formData
+        // Only update fields that the user hasn't modified locally yet
+        if (data.recordData) {
+          setFormData((prev) => {
+            const next = { ...prev };
+            // Original data from props
+            const original = record.data || {};
+
+            Object.keys(data.recordData).forEach((key) => {
+              const serverValue = data.recordData[key];
+              const localValue = prev[key];
+              const originalValue = original[key];
+
+              // If the local value is same as original (user hasn't touched it),
+              // OR if the local value is undefined/missing.
+              // Then we can safely accept the server update.
+              // We compare as string to be safe with types if needed, or strict eq.
+              // Using JSON.stringify for comparison might be safer for objects/arrays.
+              const userHasModified =
+                localValue !== originalValue &&
+                JSON.stringify(localValue) !== JSON.stringify(originalValue);
+
+              if (!userHasModified) {
+                next[key] = serverValue;
+              }
+            });
+            return next;
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to record dial", error);
     }
   };
 
@@ -749,17 +827,39 @@ export default function EditRecordModal({
                         }
                       />
                       {field.type === "phone" && formData[field.name] && (
-                        <div className="mt-2">
-                          <a
-                            href={`tel:${String(formData[field.name]).replace(
-                              /\D/g,
-                              "",
-                            )}`}
+                        <div className="mt-2 space-y-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleDirectDial(String(formData[field.name]))
+                            }
                             className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors shadow-sm"
                           >
                             <Phone className="w-3 h-3" />
                             חיוג ישיר
-                          </a>
+                          </button>
+                          {/* Display who last made the call */}
+                          {dialedByName && (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 px-2 py-1.5 rounded border border-border">
+                              <Phone className="w-3 h-3 text-green-600" />
+                              <span>
+                                <span className="font-medium">
+                                  יצר קשר אחרון:{" "}
+                                </span>
+                                {dialedByName}
+                                {dialedAt && (
+                                  <span className="text-muted-foreground/70">
+                                    {" "}
+                                    (
+                                    {new Date(dialedAt).toLocaleDateString(
+                                      "he-IL",
+                                    )}
+                                    )
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </>
