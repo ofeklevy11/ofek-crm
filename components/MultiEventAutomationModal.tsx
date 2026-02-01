@@ -108,11 +108,16 @@ export default function MultiEventAutomationModal({
     | "SEND_NOTIFICATION"
     | "CREATE_TASK"
     | "WEBHOOK"
+    | "UPDATE_RECORD_FIELD"
     | ""
   >("");
   const [editingActionIndex, setEditingActionIndex] = useState<number | null>(
     null,
   );
+
+  // Update Record Field Specific
+  const [updateFieldColumnId, setUpdateFieldColumnId] = useState("");
+  const [updateFieldValue, setUpdateFieldValue] = useState("");
 
   // --- Temp Config State for Current Action ---
   // Notification / Legacy
@@ -426,6 +431,9 @@ export default function MultiEventAutomationModal({
     if (currentActionType === "CREATE_TASK") {
       return !!taskTitle;
     }
+    if (currentActionType === "UPDATE_RECORD_FIELD") {
+      return !!updateFieldColumnId && !!updateFieldValue;
+    }
     if (currentActionType === "CALCULATE_MULTI_EVENT_DURATION") return true;
     return false;
   };
@@ -453,6 +461,11 @@ export default function MultiEventAutomationModal({
         assigneeId: taskAssignee,
         tags: taskTags,
         dueDays: taskDueDays ? Number(taskDueDays) : undefined,
+      };
+    } else if (currentActionType === "UPDATE_RECORD_FIELD") {
+      config = {
+        columnId: updateFieldColumnId,
+        value: updateFieldValue,
       };
     } else {
       // Notification / Calc
@@ -491,6 +504,8 @@ export default function MultiEventAutomationModal({
     setTaskAssignee("");
     setTaskTags([]);
     setTaskDueDays("");
+    setUpdateFieldColumnId("");
+    setUpdateFieldValue("");
   };
 
   const editAction = (index: number) => {
@@ -528,6 +543,9 @@ export default function MultiEventAutomationModal({
       setTaskAssignee(conf.assigneeId?.toString() || "");
       setTaskTags(conf.tags || []);
       setTaskDueDays(conf.dueDays?.toString() || "");
+    } else if (action.type === "UPDATE_RECORD_FIELD") {
+      setUpdateFieldColumnId(conf.columnId || "");
+      setUpdateFieldValue(conf.value || "");
     }
 
     setEditingActionIndex(index);
@@ -902,6 +920,13 @@ export default function MultiEventAutomationModal({
                 selected={false}
                 onClick={() => setCurrentActionType("SEND_NOTIFICATION")}
               />
+              <ActionCard
+                title="עדכון שדה ברשומה"
+                desc="עדכן ערך באופן אוטומטי כשמתקיים התהליך"
+                icon={<Pencil className="text-purple-500" />}
+                selected={false}
+                onClick={() => setCurrentActionType("UPDATE_RECORD_FIELD")}
+              />
             </div>
           ) : (
             <div className="space-y-6">
@@ -920,6 +945,7 @@ export default function MultiEventAutomationModal({
                   {currentActionType === "CREATE_TASK" && "יצירת משימה"}
                   {currentActionType === "WEBHOOK" && "Webhook"}
                   {currentActionType === "SEND_NOTIFICATION" && "התראה"}
+                  {currentActionType === "UPDATE_RECORD_FIELD" && "עדכון שדה"}
                 </span>
               </div>
 
@@ -1432,6 +1458,55 @@ export default function MultiEventAutomationModal({
                 </div>
               )}
 
+              {/* Update Record Field Config */}
+              {currentActionType === "UPDATE_RECORD_FIELD" && (
+                <div className="space-y-4">
+                  <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 mb-4">
+                    <h4 className="font-bold text-purple-800 flex items-center gap-2">
+                      <Pencil size={18} />
+                      הגדרות עדכון שדה
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        בחר שדה לעדכון
+                      </label>
+                      <select
+                        value={updateFieldColumnId}
+                        onChange={(e) => setUpdateFieldColumnId(e.target.value)}
+                        className="w-full px-4 py-2 border rounded-lg bg-white"
+                      >
+                        <option value="">בחר עמודה...</option>
+                        {getColumnsForEvent(tableId).map((col: any) => (
+                          <option key={col.id || col.name} value={col.name}>
+                            {col.label || col.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        ערך חדש
+                      </label>
+                      <input
+                        type="text"
+                        value={updateFieldValue}
+                        onChange={(e) => setUpdateFieldValue(e.target.value)}
+                        placeholder="הזן ערך..."
+                        className="w-full px-4 py-2 border rounded-lg"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-purple-100/50 p-3 rounded-lg text-sm text-purple-700">
+                    <strong>שים לב:</strong> כאשר האוטומציה תפעל, השדה שתבחר
+                    יעודכן אוטומטית לערך שתגדיר.
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-end pt-6">
                 <button
                   onClick={handleConfirmAction}
@@ -1475,6 +1550,8 @@ export default function MultiEventAutomationModal({
                     {action.type === "CREATE_TASK" && "יצירת משימה חדשה"}
                     {action.type === "WEBHOOK" && "שליחת Webhook"}
                     {action.type === "SEND_NOTIFICATION" && "התראה למערכת"}
+                    {action.type === "UPDATE_RECORD_FIELD" &&
+                      "עדכון שדה ברשומה"}
                   </h4>
                   <p className="text-xs text-gray-500 mt-1 truncate max-w-[300px]">
                     {JSON.stringify(action.config).slice(0, 50)}...

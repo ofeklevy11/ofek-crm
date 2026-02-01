@@ -373,6 +373,31 @@ export async function calculateMultiEventDuration(
               data: taskData,
             });
             console.log(`[Multi-Event] Task created for rule ${rule.id}`);
+          } else if (type === "UPDATE_RECORD_FIELD") {
+            if (config.columnId) {
+              const currentRecord = await prisma.record.findUnique({
+                where: { id: recordId },
+                select: { data: true },
+              });
+
+              if (currentRecord) {
+                const currentData =
+                  (currentRecord.data as Record<string, unknown>) || {};
+                const newData = {
+                  ...currentData,
+                  [config.columnId]: config.value,
+                };
+
+                await prisma.record.update({
+                  where: { id: recordId },
+                  data: { data: JSON.parse(JSON.stringify(newData)) },
+                });
+
+                console.log(
+                  `[Multi-Event] Updated field ${config.columnId} to "${config.value}" for record ${recordId}`,
+                );
+              }
+            }
           }
         } catch (actionErr) {
           console.error(

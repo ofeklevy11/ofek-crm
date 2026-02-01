@@ -1899,6 +1899,54 @@ function ConditionSelectionModal({ isOpen, onClose, onSelect }: any) {
 }
 
 // ----------------------------------------------------------------------
+// DELETE CONFIRMATION MODAL
+// ----------------------------------------------------------------------
+
+function DeleteAutomationAlert({
+  isOpen,
+  onClose,
+  onConfirm,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-6 text-center">
+          <div className="mx-auto w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
+            <AlertTriangle className="text-red-600" size={24} />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            מחיקת אוטומציה
+          </h3>
+          <p className="text-gray-500 text-sm mb-6">
+            האם אתה בטוח שברצונך למחוק את האוטומציה? <br />
+            פעולה זו היא בלתי הפיכה.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium"
+            >
+              ביטול
+            </button>
+            <button
+              onClick={onConfirm}
+              className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 text-sm font-medium"
+            >
+              מחק אוטומציה
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------
 // MAIN COMPONENT
 // ----------------------------------------------------------------------
 
@@ -1920,6 +1968,9 @@ export function StageDetailModal({
 
   const [configuringAutomation, setConfiguringAutomation] = useState<any>(null);
   const [configuringCondition, setConfiguringCondition] = useState<any>(null);
+  const [automationToDelete, setAutomationToDelete] = useState<number | null>(
+    null,
+  );
 
   // View/Edit Mode
   const [isEditing, setIsEditing] = useState(false);
@@ -2291,7 +2342,7 @@ export function StageDetailModal({
                           <Edit3 size={14} />
                         </button>
                         <button
-                          onClick={() => removeItem("systemActions", i)}
+                          onClick={() => setAutomationToDelete(i)}
                           className="p-1 text-gray-400 hover:text-red-500"
                         >
                           <Trash2 size={14} />
@@ -2390,6 +2441,17 @@ export function StageDetailModal({
         onSelect={(item) => {
           setIsAutomationModalOpen(false);
           setConfiguringAutomation(item);
+        }}
+      />
+
+      <DeleteAutomationAlert
+        isOpen={automationToDelete !== null}
+        onClose={() => setAutomationToDelete(null)}
+        onConfirm={() => {
+          if (automationToDelete !== null) {
+            removeItem("systemActions", automationToDelete);
+            setAutomationToDelete(null);
+          }
         }}
       />
 
