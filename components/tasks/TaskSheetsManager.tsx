@@ -34,6 +34,7 @@ interface TaskSheetItem {
   isCompleted: boolean;
   completedAt?: string | null;
   dueTime?: string | null;
+  onCompleteActions: any;
 }
 
 interface TaskSheet {
@@ -91,7 +92,9 @@ interface NewItemType {
       | "CREATE_TASK"
       | "CREATE_FINANCE"
       | "SEND_NOTIFICATION"
-      | "UPDATE_TASK";
+      | "UPDATE_TASK"
+      | "SEND_WEBHOOK"
+      | "SEND_WHATSAPP";
     config: Record<string, unknown>;
   }>;
 }
@@ -124,7 +127,9 @@ export default function TaskSheetsManager({
         | "CREATE_TASK"
         | "CREATE_FINANCE"
         | "SEND_NOTIFICATION"
-        | "UPDATE_TASK";
+        | "UPDATE_TASK"
+        | "SEND_WEBHOOK"
+        | "SEND_WHATSAPP";
       config: Record<string, unknown>;
     }>;
   } | null>(null);
@@ -254,7 +259,7 @@ export default function TaskSheetsManager({
       priority: item.priority,
       category: item.category || "",
       dueTime: item.dueTime || "",
-      onCompleteActions: [], // Will be loaded from API if needed
+      onCompleteActions: (item.onCompleteActions as any) || [],
     });
     setExpandedExistingItems((prev) => new Set([...prev, item.id]));
   };
@@ -275,6 +280,7 @@ export default function TaskSheetsManager({
         priority: editingItemData.priority,
         category: editingItemData.category || undefined,
         dueTime: editingItemData.dueTime || undefined,
+        onCompleteActions: editingItemData.onCompleteActions,
       });
 
       if (result.success) {

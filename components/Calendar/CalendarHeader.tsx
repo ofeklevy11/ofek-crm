@@ -69,9 +69,7 @@ export function CalendarHeader({
                 />
               </svg>
             </button>
-            <span className="text-xs font-medium text-gray-500 px-1 hidden sm:inline">
-              חודש
-            </span>
+            <span className="text-xs font-medium text-gray-500 px-1">חודש</span>
             <button
               onClick={onNextMonth}
               className="p-1.5 hover:bg-gray-200 rounded transition-colors"

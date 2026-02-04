@@ -12,6 +12,8 @@ import {
   Bell,
   Settings2,
   X,
+  Globe,
+  MessageCircle,
 } from "lucide-react";
 
 interface OnCompleteAction {
@@ -20,7 +22,9 @@ interface OnCompleteAction {
     | "CREATE_TASK"
     | "UPDATE_TASK"
     | "CREATE_FINANCE"
-    | "SEND_NOTIFICATION";
+    | "SEND_NOTIFICATION"
+    | "SEND_WEBHOOK"
+    | "SEND_WHATSAPP";
   config: Record<string, unknown>;
 }
 
@@ -62,6 +66,18 @@ const actionTypes = [
     icon: Bell,
     color: "text-orange-400",
   },
+  {
+    value: "SEND_WEBHOOK",
+    label: "שליחת Webhook",
+    icon: Globe,
+    color: "text-cyan-400",
+  },
+  {
+    value: "SEND_WHATSAPP",
+    label: "שליחת הודעת וואטספ",
+    icon: MessageCircle,
+    color: "text-green-400",
+  },
 ];
 
 export default function TaskItemAutomations({
@@ -89,8 +105,8 @@ export default function TaskItemAutomations({
   const updateAction = (index: number, updates: Partial<OnCompleteAction>) => {
     onChange(
       actions.map((action, i) =>
-        i === index ? { ...action, ...updates } : action
-      )
+        i === index ? { ...action, ...updates } : action,
+      ),
     );
   };
 
@@ -260,6 +276,76 @@ function ActionCard({
           </>
         )}
 
+        {action.actionType === "SEND_WHATSAPP" && (
+          <>
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">
+                מספר טלפון או מזהה קבוצה
+              </label>
+              <input
+                type="text"
+                value={(action.config.phone as string) || ""}
+                onChange={(e) => onUpdateConfig("phone", e.target.value)}
+                placeholder="0501234567 או 123456@g.us"
+                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dir-ltr"
+              />
+              {/* Preview Logic */}
+              {(action.config.phone as string) && (
+                <div className="mt-2 bg-slate-900/50 p-2 rounded border border-slate-600/50">
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">
+                    תצוגה מקדימה למערכת (Preview)
+                  </div>
+                  <div className="text-xs font-mono text-green-400 dir-ltr">
+                    {(() => {
+                      const input = (action.config.phone as string) || "";
+                      let clean = input.trim();
+                      if (clean.endsWith("@g.us")) return clean;
+                      clean = clean.replace(/\D/g, "");
+                      if (clean.startsWith("0"))
+                        clean = "972" + clean.substring(1);
+                      if (clean && !clean.endsWith("@c.us")) clean += "@c.us";
+                      return clean || "מספר לא תקין";
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">
+                תוכן ההודעה
+              </label>
+              <textarea
+                value={(action.config.message as string) || ""}
+                onChange={(e) => onUpdateConfig("message", e.target.value)}
+                placeholder="הקלד את הודעת הוואטספ שלך כאן..."
+                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                rows={3}
+              />
+              <p className="text-[10px] text-slate-500 mt-1">
+                ניתן להשתמש ב-{"{itemTitle}"}, {"{sheetTitle}"}, {"{userName}"}
+              </p>
+            </div>
+          </>
+        )}
+
+        {action.actionType === "SEND_WEBHOOK" && (
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">
+              כתובת ה-Webhook (URL)
+            </label>
+            <input
+              type="url"
+              value={(action.config.url as string) || ""}
+              onChange={(e) => onUpdateConfig("url", e.target.value)}
+              placeholder="https://api.example.com/webhook"
+              className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dir-ltr"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">
+              אנו נשלח בקשת POST לכתובת זו עם כל פרטי המשימה והמשתמש המבצע.
+            </p>
+          </div>
+        )}
+
         {action.actionType === "CREATE_TASK" && (
           <>
             <div>
@@ -324,7 +410,7 @@ function ActionCard({
                 onChange={(e) =>
                   onUpdateConfig(
                     "assigneeId",
-                    e.target.value ? parseInt(e.target.value) : undefined
+                    e.target.value ? parseInt(e.target.value) : undefined,
                   )
                 }
                 className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"

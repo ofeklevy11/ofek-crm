@@ -22,6 +22,10 @@ export function Calendar() {
   const [initialEventHour, setInitialEventHour] = useState<
     number | undefined
   >();
+  const [initialEventMinutes, setInitialEventMinutes] = useState<
+    number | undefined
+  >();
+  const [draggingEventId, setDraggingEventId] = useState<string | null>(null);
 
   // Load events from API on mount
   useEffect(() => {
@@ -104,8 +108,8 @@ export function Calendar() {
                     startTime: new Date(updatedEvent.startTime),
                     endTime: new Date(updatedEvent.endTime),
                   }
-                : e
-            )
+                : e,
+            ),
           );
           setSelectedEvent(undefined);
         }
@@ -135,6 +139,7 @@ export function Calendar() {
       setIsModalOpen(false);
       setInitialEventDate(undefined);
       setInitialEventHour(undefined);
+      setInitialEventMinutes(undefined);
     } catch (error) {
       console.error("Failed to save event:", error);
     }
@@ -144,6 +149,7 @@ export function Calendar() {
     setSelectedEvent(event);
     setInitialEventDate(undefined);
     setInitialEventHour(undefined);
+    setInitialEventMinutes(undefined);
     setIsModalOpen(true);
   };
 
@@ -201,14 +207,78 @@ export function Calendar() {
     // Set default to today with next rounded hour
     setInitialEventDate(new Date());
     setInitialEventHour(getNextRoundedHour());
+    setInitialEventMinutes(0);
     setIsModalOpen(true);
   };
 
-  const handleTimeSlotClick = (date: Date, hour: number) => {
+  const handleTimeSlotClick = (
+    date: Date,
+    hour: number,
+    minutes: number = 0,
+  ) => {
     setSelectedEvent(undefined);
     setInitialEventDate(date);
     setInitialEventHour(hour);
+    setInitialEventMinutes(minutes);
     setIsModalOpen(true);
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (event: CalendarEvent) => {
+    setDraggingEventId(event.id);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingEventId(null);
+  };
+
+  const handleEventDrop = async (
+    eventId: string,
+    newDate: Date,
+    newHour: number,
+    newMinutes: number,
+    duration: number,
+  ) => {
+    try {
+      // Calculate new start and end times
+      const newStartTime = new Date(newDate);
+      newStartTime.setHours(newHour, newMinutes, 0, 0);
+
+      const newEndTime = new Date(newStartTime.getTime() + duration);
+
+      // Find the event to get its current data
+      const eventToUpdate = events.find((e) => e.id === eventId);
+      if (!eventToUpdate) return;
+
+      // Update via API
+      const { updateCalendarEvent } = await import("@/app/actions");
+      const result = await updateCalendarEvent(eventId, {
+        title: eventToUpdate.title,
+        description: eventToUpdate.description ?? undefined,
+        startTime: newStartTime.toISOString(),
+        endTime: newEndTime.toISOString(),
+        color: eventToUpdate.color ?? undefined,
+      });
+
+      if (result.success) {
+        const updatedEvent = result.data!;
+        setEvents(
+          events.map((e) =>
+            e.id === eventId
+              ? {
+                  ...updatedEvent,
+                  startTime: new Date(updatedEvent.startTime),
+                  endTime: new Date(updatedEvent.endTime),
+                }
+              : e,
+          ),
+        );
+      }
+    } catch (error) {
+      console.error("Failed to move event:", error);
+    } finally {
+      setDraggingEventId(null);
+    }
   };
 
   return (
@@ -253,6 +323,10 @@ export function Calendar() {
             events={events}
             onEventClick={handleEventClick}
             onTimeSlotClick={handleTimeSlotClick}
+            onEventDrop={handleEventDrop}
+            draggingEventId={draggingEventId}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
           />
         ) : (
           <DayView
@@ -260,6 +334,10 @@ export function Calendar() {
             events={events}
             onEventClick={handleEventClick}
             onTimeSlotClick={handleTimeSlotClick}
+            onEventDrop={handleEventDrop}
+            draggingEventId={draggingEventId}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
           />
         )}
       </div>
@@ -271,12 +349,14 @@ export function Calendar() {
           setSelectedEvent(undefined);
           setInitialEventDate(undefined);
           setInitialEventHour(undefined);
+          setInitialEventMinutes(undefined);
         }}
         onSave={handleSaveEvent}
         onDelete={selectedEvent ? handleDeleteEvent : undefined}
         event={selectedEvent}
         initialDate={initialEventDate}
         initialHour={initialEventHour}
+        initialMinutes={initialEventMinutes}
       />
 
       <AllEventsModal

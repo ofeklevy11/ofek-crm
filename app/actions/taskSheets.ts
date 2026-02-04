@@ -19,7 +19,8 @@ export interface TaskSheetItemInput {
       | "CREATE_TASK"
       | "CREATE_FINANCE"
       | "SEND_NOTIFICATION"
-      | "UPDATE_TASK";
+      | "UPDATE_TASK"
+      | "SEND_WEBHOOK";
     config: Record<string, unknown>;
   }>;
 }
@@ -170,7 +171,7 @@ export async function createTaskSheet(data: TaskSheetInput) {
                 dueTime: item.dueTime,
                 linkedTaskId: item.linkedTaskId,
                 onCompleteActions: JSON.parse(
-                  JSON.stringify(item.onCompleteActions || [])
+                  JSON.stringify(item.onCompleteActions || []),
                 ),
               })),
             }
@@ -197,7 +198,7 @@ export async function createTaskSheet(data: TaskSheetInput) {
 // Update a task sheet (admin only)
 export async function updateTaskSheet(
   id: number,
-  data: Partial<TaskSheetInput>
+  data: Partial<TaskSheetInput>,
 ) {
   try {
     const user = await getCurrentUser();
@@ -270,7 +271,7 @@ export async function deleteTaskSheet(id: number) {
 // Add item to a task sheet (admin only)
 export async function addTaskSheetItem(
   sheetId: number,
-  item: TaskSheetItemInput
+  item: TaskSheetItemInput,
 ) {
   try {
     const user = await getCurrentUser();
@@ -299,7 +300,7 @@ export async function addTaskSheetItem(
         dueTime: item.dueTime,
         linkedTaskId: item.linkedTaskId,
         onCompleteActions: JSON.parse(
-          JSON.stringify(item.onCompleteActions || [])
+          JSON.stringify(item.onCompleteActions || []),
         ),
       },
     });
@@ -317,7 +318,7 @@ export async function addTaskSheetItem(
 // Update a task sheet item
 export async function updateTaskSheetItem(
   itemId: number,
-  data: Partial<TaskSheetItemInput & { isCompleted?: boolean; notes?: string }>
+  data: Partial<TaskSheetItemInput & { isCompleted?: boolean; notes?: string }>,
 ) {
   try {
     const user = await getCurrentUser();
@@ -458,7 +459,7 @@ export async function toggleTaskSheetItemCompletion(itemId: number) {
         await executeItemAutomations(
           item.onCompleteActions as unknown as OnCompleteAction[],
           item,
-          user
+          user,
         );
       } catch (autoError) {
         console.error("[TaskSheets] Error executing automations:", autoError);
@@ -483,7 +484,8 @@ interface OnCompleteAction {
     | "CREATE_TASK"
     | "CREATE_FINANCE"
     | "SEND_NOTIFICATION"
-    | "UPDATE_TASK";
+    | "UPDATE_TASK"
+    | "SEND_WEBHOOK";
   config: Record<string, unknown>;
 }
 
@@ -495,12 +497,12 @@ async function executeItemAutomations(
     title: string;
     sheet: { title: string; companyId: number };
   },
-  user: { id: number; companyId: number; name: string }
+  user: { id: number; companyId: number; name: string },
 ) {
   if (!actions || !Array.isArray(actions) || actions.length === 0) return;
 
   console.log(
-    `[TaskSheets] Executing ${actions.length} automations for item ${item.id}`
+    `[TaskSheets] Executing ${actions.length} automations for item ${item.id}`,
   );
 
   for (const action of actions) {
@@ -521,15 +523,21 @@ async function executeItemAutomations(
         case "SEND_NOTIFICATION":
           await executeSendNotification(action.config, item, user);
           break;
+        case "SEND_WEBHOOK":
+          await executeSendWebhook(action.config, item, user);
+          break;
+        case "SEND_WHATSAPP":
+          await executeSendWhatsapp(action.config, item, user);
+          break;
         default:
           console.warn(
-            `[TaskSheets] Unknown action type: ${action.actionType}`
+            `[TaskSheets] Unknown action type: ${action.actionType}`,
           );
       }
     } catch (error) {
       console.error(
         `[TaskSheets] Failed to execute ${action.actionType}:`,
-        error
+        error,
       );
     }
   }
@@ -538,7 +546,7 @@ async function executeItemAutomations(
 // Update a record in a table
 async function executeUpdateRecord(
   config: Record<string, unknown>,
-  companyId: number
+  companyId: number,
 ) {
   const { tableId, recordId, updates } = config as {
     tableId: number;
@@ -572,7 +580,7 @@ async function executeUpdateRecord(
 // Create a new task
 async function executeCreateTask(
   config: Record<string, unknown>,
-  user: { id: number; companyId: number }
+  user: { id: number; companyId: number },
 ) {
   const { title, description, status, priority, assigneeId, dueDate } =
     config as {
@@ -632,7 +640,7 @@ async function executeUpdateTask(config: Record<string, unknown>) {
 // Create a finance record
 async function executeCreateFinance(
   config: Record<string, unknown>,
-  companyId: number
+  companyId: number,
 ) {
   const { title, amount, type, category, clientId, description } = config as {
     title?: string;
@@ -666,7 +674,7 @@ async function executeCreateFinance(
 async function executeSendNotification(
   config: Record<string, unknown>,
   item: { id: number; title: string; sheet: { title: string } },
-  user: { id: number; name: string }
+  user: { id: number; name: string },
 ) {
   const { recipientId, title, message } = config as {
     recipientId?: number;
@@ -696,6 +704,74 @@ async function executeSendNotification(
   });
 
   console.log(`[TaskSheets] Sent notification to user ${recipientId}`);
+}
+
+// Send a webhook
+async function executeSendWebhook(
+  config: Record<string, unknown>,
+  item: { id: number; title: string; sheet: { title: string } },
+  user: { id: number; name: string },
+) {
+  const { url } = config as { url?: string };
+
+  if (!url) return;
+
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        event: "TASK_ITEM_COMPLETED",
+        timestamp: new Date().toISOString(),
+        item: {
+          id: item.id,
+          title: item.title,
+        },
+        sheet: {
+          title: item.sheet.title,
+        },
+        completedBy: {
+          id: user.id,
+          name: user.name,
+        },
+      }),
+    });
+
+    console.log(`[TaskSheets] Sent webhook to ${url}`);
+  } catch (error) {
+    console.error(`[TaskSheets] Failed to send webhook to ${url}:`, error);
+  }
+}
+
+// Send WhatsApp message
+async function executeSendWhatsapp(
+  config: Record<string, unknown>,
+  item: {
+    id: number;
+    title: string;
+    sheet: { title: string; companyId: number };
+  },
+  user: { id: number; name: string },
+) {
+  const { phone, message } = config as { phone?: string; message?: string };
+
+  if (!phone || !message) return;
+
+  // Replace placeholders
+  const finalMessage = message
+    .replace("{itemTitle}", item.title)
+    .replace("{sheetTitle}", item.sheet.title)
+    .replace("{userName}", user.name);
+
+  try {
+    const { sendGreenApiMessage } = await import("./green-api");
+    await sendGreenApiMessage(item.sheet.companyId, phone, finalMessage);
+    console.log(`[TaskSheets] Sent WhatsApp to ${phone}`);
+  } catch (error) {
+    console.error(`[TaskSheets] Failed to send WhatsApp to ${phone}:`, error);
+  }
 }
 
 // Get my task sheets (for current user only)
@@ -748,5 +824,47 @@ export async function getMyTaskSheets() {
   } catch (error) {
     console.error("Error fetching my task sheets:", error);
     return { success: false, error: "Failed to fetch task sheets" };
+  }
+}
+
+// Reset task sheet items (mark all as incomplete)
+export async function resetTaskSheetItems(sheetId: number) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Verify sheet ownership/access
+    const sheet = await prisma.taskSheet.findFirst({
+      where: {
+        id: sheetId,
+        companyId: user.companyId,
+        assigneeId: user.id, // Only assignee can reset their own sheet
+      },
+    });
+
+    if (!sheet) {
+      return { success: false, error: "Task sheet not found or unauthorized" };
+    }
+
+    const result = await prisma.taskSheetItem.updateMany({
+      where: {
+        sheetId: sheetId,
+        isCompleted: true,
+      },
+      data: {
+        isCompleted: false,
+        completedAt: null,
+      },
+    });
+
+    revalidatePath("/tasks");
+    revalidatePath("/tasks/my-sheets");
+
+    return { success: true, count: result.count };
+  } catch (error) {
+    console.error("Error resetting task sheet:", error);
+    return { success: false, error: "Failed to reset task sheet" };
   }
 }

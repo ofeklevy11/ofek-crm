@@ -11,6 +11,7 @@ interface EventModalProps {
   event?: CalendarEvent;
   initialDate?: Date;
   initialHour?: number;
+  initialMinutes?: number;
 }
 
 export function EventModal({
@@ -21,6 +22,7 @@ export function EventModal({
   event,
   initialDate,
   initialHour = 9,
+  initialMinutes = 0,
 }: EventModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -43,11 +45,27 @@ export function EventModal({
       const date = formatDateForInput(initialDate);
       setStartDate(date);
       setEndDate(date);
-      setStartTime(`${initialHour.toString().padStart(2, "0")}:00`);
-      setEndTime(`${(initialHour + 1).toString().padStart(2, "0")}:00`);
+      // Calculate end hour and minutes (start + 1 hour)
+      let endHr = initialHour;
+      let endMin = initialMinutes + 60; // Add 60 minutes for 1 hour duration
+      if (endMin >= 60) {
+        endHr += Math.floor(endMin / 60);
+        endMin = endMin % 60;
+      }
+      // If end hour goes past 23, cap at 23:59
+      if (endHr >= 24) {
+        endHr = 23;
+        endMin = 59;
+      }
+      setStartTime(
+        `${initialHour.toString().padStart(2, "0")}:${initialMinutes.toString().padStart(2, "0")}`,
+      );
+      setEndTime(
+        `${endHr.toString().padStart(2, "0")}:${endMin.toString().padStart(2, "0")}`,
+      );
       setColor(defaultEventColors[0]);
     }
-  }, [event, initialDate, initialHour]);
+  }, [event, initialDate, initialHour, initialMinutes]);
 
   const formatDateForInput = (date: Date): string => {
     const year = date.getFullYear();
@@ -79,7 +97,7 @@ export function EventModal({
         startMonth - 1,
         startDay,
         startHours,
-        startMinutes
+        startMinutes,
       ),
       endTime: new Date(endYear, endMonth - 1, endDay, endHours, endMinutes),
       color,

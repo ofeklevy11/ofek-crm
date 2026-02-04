@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronUp,
   User,
+  RefreshCw,
 } from "lucide-react";
 
 interface TaskSheetItem {
@@ -90,7 +91,7 @@ const priorityConfig: Record<
 export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
   const [sheets, setSheets] = useState<TaskSheet[]>(initialSheets);
   const [expandedSheets, setExpandedSheets] = useState<Set<number>>(
-    new Set(initialSheets.map((s) => s.id))
+    new Set(initialSheets.map((s) => s.id)),
   );
   const [loading, setLoading] = useState<Record<number, boolean>>({});
 
@@ -124,15 +125,49 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
                     completedAt:
                       result.data!.completedAt?.toISOString() || null,
                   }
-                : item
+                : item,
             ),
-          }))
+          })),
         );
       }
     } catch (error) {
       console.error("Error toggling completion:", error);
     } finally {
       setLoading((prev) => ({ ...prev, [itemId]: false }));
+    }
+  };
+
+  const handleResetSheet = async (sheetId: number) => {
+    if (
+      !confirm(
+        "האם אתה בטוח שברצונך לאפס את דף המשימות? כל המשימות שהושלמו יסומנו מחדש כלא הושלמו.",
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const { resetTaskSheetItems } = await import("@/app/actions");
+      const result = await resetTaskSheetItems(sheetId);
+
+      if (result.success) {
+        setSheets((prev) =>
+          prev.map((sheet) =>
+            sheet.id === sheetId
+              ? {
+                  ...sheet,
+                  items: sheet.items.map((item) => ({
+                    ...item,
+                    isCompleted: false,
+                    completedAt: null,
+                  })),
+                }
+              : sheet,
+          ),
+        );
+      }
+    } catch (error) {
+      console.error("Error resetting sheet:", error);
     }
   };
 
@@ -187,7 +222,8 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
         const completedCount = sheet.items.filter((i) => i.isCompleted).length;
         const urgentCount = sheet.items.filter(
           (i) =>
-            !i.isCompleted && (i.priority === "URGENT" || i.priority === "HIGH")
+            !i.isCompleted &&
+            (i.priority === "URGENT" || i.priority === "HIGH"),
         ).length;
 
         return (
@@ -196,9 +232,9 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
             className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl overflow-hidden shadow-xl"
           >
             {/* Sheet Header */}
-            <button
+            <div
               onClick={() => toggleSheet(sheet.id)}
-              className="w-full p-5 flex items-center justify-between hover:bg-slate-700/30 transition-colors"
+              className="w-full p-5 flex items-center justify-between hover:bg-slate-700/30 transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-4">
                 <div
@@ -284,10 +320,10 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
                           progress === 100
                             ? "text-emerald-500"
                             : progress >= 70
-                            ? "text-blue-500"
-                            : progress >= 40
-                            ? "text-yellow-500"
-                            : "text-red-500"
+                              ? "text-blue-500"
+                              : progress >= 40
+                                ? "text-yellow-500"
+                                : "text-red-500"
                         }
                         strokeLinecap="round"
                       />
@@ -298,13 +334,26 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
                   </div>
                 </div>
 
-                {isExpanded ? (
-                  <ChevronUp className="w-5 h-5 text-slate-400" />
-                ) : (
-                  <ChevronDown className="w-5 h-5 text-slate-400" />
-                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleResetSheet(sheet.id);
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/30 rounded-lg transition-colors ml-2"
+                    title="איפוס דף משימות"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    איפוס דף המשימות
+                  </button>
+                  {isExpanded ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </div>
               </div>
-            </button>
+            </div>
 
             {/* Items List */}
             {isExpanded && (
@@ -395,7 +444,7 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
                                   {
                                     dateStyle: "short",
                                     timeStyle: "short",
-                                  }
+                                  },
                                 )}
                               </div>
                             )}

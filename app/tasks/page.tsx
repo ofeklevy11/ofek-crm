@@ -110,7 +110,7 @@ export default async function TasksPage({
 
   const tabs = [
     { id: "kanban", label: "לוח קנבן", icon: LayoutGrid },
-    { id: "my-sheets", label: "המשימות שלי", icon: ClipboardList },
+    { id: "my-sheets", label: "דפי המשימות שלי", icon: ClipboardList },
     ...(isAdmin
       ? [{ id: "manage-sheets", label: "ניהול דפי משימות", icon: Users }]
       : []),
