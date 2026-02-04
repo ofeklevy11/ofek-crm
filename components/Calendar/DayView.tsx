@@ -8,7 +8,7 @@ import {
   DragOverlay,
   useSensor,
   useSensors,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   DragEndEvent,
   DragStartEvent,
@@ -45,7 +45,7 @@ export function DayView({
   const [activeEvent, setActiveEvent] = useState<CalendarEvent | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: {
         distance: 8,
       },
@@ -53,7 +53,7 @@ export function DayView({
     useSensor(TouchSensor, {
       activationConstraint: {
         delay: 250,
-        tolerance: 5,
+        tolerance: 8,
       },
     }),
   );

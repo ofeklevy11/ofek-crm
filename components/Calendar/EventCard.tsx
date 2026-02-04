@@ -56,7 +56,7 @@ export function EventCard({
       onClick={onClick}
       {...attributes}
       {...listeners}
-      className={`absolute rounded-md px-2 py-1 text-white text-xs cursor-grab active:cursor-grabbing transition-shadow overflow-hidden shadow-sm ${
+      className={`absolute rounded-md px-2 py-1 text-white text-xs cursor-grab active:cursor-grabbing transition-shadow overflow-hidden shadow-sm select-none ${
         isDragging && !isOverlay ? "opacity-30" : "hover:opacity-90"
       } ${isOverlay ? "z-50 shadow-xl scale-105" : "z-10"}`}
       style={{
@@ -69,7 +69,7 @@ export function EventCard({
         right: `calc(${rightPercent}% + 6px)`,
         transform: CSS.Translate.toString(transform),
         zIndex: isOverlay ? 50 : 10,
-        touchAction: "none", // Critical for touch dragging
+        touchAction: "manipulation", // Allow scrolling, but dnd-kit TouchSensor will handle drag after delay
         ...styleProp,
       }}
     >
