@@ -315,6 +315,7 @@ export function WeekView({
                           id={`slot-${dayIndex}-${hourIndex}-0`}
                           data={{ dayIndex, hour: hourIndex, minutes: 0 }}
                           className="group flex-1 cursor-pointer transition-colors border-b border-dashed border-gray-200 relative hover:bg-blue-50"
+                          isOverClassName="bg-blue-100"
                           onClick={(e) => {
                             e.stopPropagation();
                             onTimeSlotClick?.(date, hourIndex, 0);
@@ -333,6 +334,7 @@ export function WeekView({
                           id={`slot-${dayIndex}-${hourIndex}-30`}
                           data={{ dayIndex, hour: hourIndex, minutes: 30 }}
                           className="group flex-1 cursor-pointer transition-colors relative hover:bg-green-50"
+                          isOverClassName="bg-green-100"
                           onClick={(e) => {
                             e.stopPropagation();
                             onTimeSlotClick?.(date, hourIndex, 30);

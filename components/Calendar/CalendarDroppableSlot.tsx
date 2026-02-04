@@ -6,6 +6,7 @@ interface CalendarDroppableSlotProps {
   children: React.ReactNode;
   data: any;
   className?: string;
+  isOverClassName?: string;
   onClick?: (e: React.MouseEvent) => void;
 }
 
@@ -14,6 +15,7 @@ export function CalendarDroppableSlot({
   children,
   data,
   className,
+  isOverClassName,
   onClick,
 }: CalendarDroppableSlotProps) {
   const { setNodeRef, isOver } = useDroppable({
@@ -24,7 +26,9 @@ export function CalendarDroppableSlot({
   return (
     <div
       ref={setNodeRef}
-      className={`${className} ${isOver ? "bg-opacity-50" : ""}`}
+      className={`${className} ${
+        isOver ? isOverClassName || "bg-blue-100" : ""
+      }`}
       onClick={onClick}
     >
       {children}

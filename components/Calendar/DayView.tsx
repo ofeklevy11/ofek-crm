@@ -281,6 +281,7 @@ export function DayView({
                         id={`slot-${index}-0`}
                         data={{ hour: index, minutes: 0 }}
                         className="group flex-1 cursor-pointer transition-colors border-b border-dashed border-gray-200 relative hover:bg-blue-50"
+                        isOverClassName="bg-blue-100"
                         onClick={(e) => {
                           e.stopPropagation();
                           onTimeSlotClick?.(currentDate, index, 0);
@@ -299,6 +300,7 @@ export function DayView({
                         id={`slot-${index}-30`}
                         data={{ hour: index, minutes: 30 }}
                         className="group flex-1 cursor-pointer transition-colors relative hover:bg-green-50"
+                        isOverClassName="bg-green-100"
                         onClick={(e) => {
                           e.stopPropagation();
                           onTimeSlotClick?.(currentDate, index, 30);
