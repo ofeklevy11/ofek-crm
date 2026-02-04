@@ -10,7 +10,7 @@ export default async function CalendarPage() {
   }
 
   return (
-    <div className="h-screen">
+    <div className="min-h-screen">
       <Calendar />
     </div>
   );

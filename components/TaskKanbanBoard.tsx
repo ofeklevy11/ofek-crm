@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import KanbanColumn from "./KanbanColumn";
 import TaskModal from "./TaskModal";
 import { User, hasUserFlag } from "@/lib/permissions";
+import { Filter } from "lucide-react";
 
 export type TaskStatus =
   | "todo"
@@ -83,6 +84,7 @@ export default function TaskKanbanBoard({
     dueDate: null,
     startDate: null,
   });
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
@@ -207,6 +209,19 @@ export default function TaskKanbanBoard({
             className="w-full bg-slate-900/50 text-white placeholder-slate-400 border border-slate-600 rounded-lg px-4 py-2 ps-10 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
           />
         </div>
+
+        <button
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className={`flex items-center justify-center md:justify-start gap-2 px-6 py-2 rounded-lg transition-all font-medium border ${
+            isSidebarOpen
+              ? "bg-slate-700/50 text-slate-200 border-slate-600 hover:bg-slate-700"
+              : "bg-blue-600/10 text-blue-400 border-blue-500/50 hover:bg-blue-600/20"
+          }`}
+        >
+          <Filter className="w-5 h-5" />
+          {isSidebarOpen ? "הסתר פילטרים" : "הצג פילטרים"}
+        </button>
+
         {canCreate && (
           <button
             onClick={() => handleTaskCreate()}
@@ -222,13 +237,15 @@ export default function TaskKanbanBoard({
 
       <div className="flex flex-col md:flex-row gap-6 items-start">
         {/* Sidebar */}
-        <div className="w-full md:w-64 shrink-0 md:sticky md:top-24">
-          <TasksFilterSidebar
-            filters={filters}
-            onChange={setFilters}
-            users={users}
-          />
-        </div>
+        {isSidebarOpen && (
+          <div className="w-full md:w-64 shrink-0 md:sticky md:top-24 transition-all">
+            <TasksFilterSidebar
+              filters={filters}
+              onChange={setFilters}
+              users={users}
+            />
+          </div>
+        )}
 
         {/* Kanban Board */}
         <div className="flex-1 overflow-x-auto w-full">
@@ -237,7 +254,7 @@ export default function TaskKanbanBoard({
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 min-w-[800px] lg:min-w-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 w-full md:min-w-[800px] lg:min-w-0">
               {COLUMNS.map((col) => (
                 <KanbanColumn
                   key={col.id}

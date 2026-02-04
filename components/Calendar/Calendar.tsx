@@ -282,11 +282,11 @@ export function Calendar() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white" dir="rtl">
+    <div className="flex flex-col min-h-screen bg-white" dir="rtl">
       {/* Floating Create Button */}
       <button
         onClick={handleCreateEvent}
-        className="fixed bottom-8 start-8 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 z-40"
+        className="fixed bottom-8 start-8 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg items-center justify-center transition-all hover:scale-110 z-40 hidden md:flex"
         aria-label="צור אירוע"
       >
         <svg
@@ -316,7 +316,7 @@ export function Calendar() {
         onSelectDate={handleSelectDate}
         onShowAllEvents={() => setIsAllEventsModalOpen(true)}
       />
-      <div className="flex-1 overflow-hidden">
+      <div className="sticky top-16 h-[calc(100dvh-4rem)] overflow-hidden bg-white z-0">
         {view === "week" ? (
           <WeekView
             currentDate={currentDate}
@@ -327,6 +327,7 @@ export function Calendar() {
             draggingEventId={draggingEventId}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
+            onCreateEvent={handleCreateEvent}
           />
         ) : (
           <DayView
@@ -338,6 +339,7 @@ export function Calendar() {
             draggingEventId={draggingEventId}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
+            onCreateEvent={handleCreateEvent}
           />
         )}
       </div>

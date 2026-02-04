@@ -234,59 +234,84 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
             {/* Sheet Header */}
             <div
               onClick={() => toggleSheet(sheet.id)}
-              className="w-full p-5 flex items-center justify-between hover:bg-slate-700/30 transition-colors cursor-pointer"
+              className="w-full p-5 flex flex-col md:flex-row items-center justify-between hover:bg-slate-700/30 transition-colors cursor-pointer gap-4 md:gap-0"
             >
-              <div className="flex items-center gap-4">
-                <div
-                  className={`p-3 rounded-xl ${
-                    sheet.type === "DAILY"
-                      ? "bg-gradient-to-br from-blue-500 to-blue-600"
-                      : "bg-gradient-to-br from-purple-500 to-purple-600"
-                  }`}
-                >
-                  {sheet.type === "DAILY" ? (
-                    <Clock className="w-6 h-6 text-white" />
-                  ) : (
-                    <Calendar className="w-6 h-6 text-white" />
-                  )}
-                </div>
-                <div className="text-start">
-                  <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                    {sheet.title}
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${
-                        sheet.type === "DAILY"
-                          ? "bg-blue-500/20 text-blue-400"
-                          : "bg-purple-500/20 text-purple-400"
-                      }`}
-                    >
-                      {sheet.type === "DAILY" ? "יומי" : "שבועי"}
-                    </span>
-                  </h3>
-                  {sheet.description && (
-                    <p className="text-sm text-slate-400 mt-0.5">
-                      {sheet.description}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                    <span className="flex items-center gap-1">
-                      <User className="w-3 h-3" />
-                      נוצר ע"י {sheet.createdBy.name}
-                    </span>
-                    {urgentCount > 0 && (
-                      <span className="flex items-center gap-1 text-red-400">
-                        <AlertTriangle className="w-3 h-3" />
-                        {urgentCount} דחופים
-                      </span>
+              <div className="flex items-center justify-between w-full md:w-auto">
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`p-3 rounded-xl ${
+                      sheet.type === "DAILY"
+                        ? "bg-gradient-to-br from-blue-500 to-blue-600"
+                        : "bg-gradient-to-br from-purple-500 to-purple-600"
+                    }`}
+                  >
+                    {sheet.type === "DAILY" ? (
+                      <Clock className="w-6 h-6 text-white" />
+                    ) : (
+                      <Calendar className="w-6 h-6 text-white" />
                     )}
                   </div>
+                  <div className="text-start">
+                    <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                      {sheet.title}
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full ${
+                          sheet.type === "DAILY"
+                            ? "bg-blue-500/20 text-blue-400"
+                            : "bg-purple-500/20 text-purple-400"
+                        }`}
+                      >
+                        {sheet.type === "DAILY" ? "יומי" : "שבועי"}
+                      </span>
+                    </h3>
+                    {sheet.description && (
+                      <p className="text-sm text-slate-400 mt-0.5">
+                        {sheet.description}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <User className="w-3 h-3" />
+                        נוצר ע"י {sheet.createdBy.name}
+                      </span>
+                      {urgentCount > 0 && (
+                        <span className="flex items-center gap-1 text-red-400">
+                          <AlertTriangle className="w-3 h-3" />
+                          {urgentCount} דחופים
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {/* Mobile Chevron */}
+                <div className="md:hidden">
+                  {isExpanded ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
                 </div>
               </div>
 
-              <div className="flex items-center gap-4">
-                {/* Progress */}
-                <div className="flex items-center gap-3">
-                  <div className="text-end">
+              <div className="flex items-center gap-4 w-full md:w-auto flex-col md:flex-row">
+                {/* Button Section */}
+                <div className="w-full md:w-auto md:order-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleResetSheet(sheet.id);
+                    }}
+                    className="w-full md:w-auto justify-center flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/30 rounded-lg transition-colors md:ml-2"
+                    title="איפוס דף משימות"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    איפוס דף המשימות
+                  </button>
+                </div>
+
+                {/* Progress Section */}
+                <div className="flex items-center gap-3 w-full md:w-auto md:order-1 justify-between md:justify-end">
+                  <div className="flex-1 flex md:block items-center justify-between md:text-end">
                     <div className="text-2xl font-bold text-white">
                       {progress}%
                     </div>
@@ -294,7 +319,7 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
                       {completedCount}/{sheet.items.length} הושלמו
                     </div>
                   </div>
-                  <div className="w-16 h-16 relative">
+                  <div className="w-16 h-16 relative flex-shrink-0">
                     <svg
                       className="w-full h-full -rotate-90"
                       viewBox="0 0 36 36"
@@ -334,18 +359,8 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleResetSheet(sheet.id);
-                    }}
-                    className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/30 rounded-lg transition-colors ml-2"
-                    title="איפוס דף משימות"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    איפוס דף המשימות
-                  </button>
+                {/* Desktop Chevron */}
+                <div className="hidden md:block md:order-3">
                   {isExpanded ? (
                     <ChevronUp className="w-5 h-5 text-slate-400" />
                   ) : (

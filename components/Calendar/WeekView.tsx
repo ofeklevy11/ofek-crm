@@ -7,7 +7,18 @@ import {
   getTimeSlots,
 } from "@/lib/dateUtils";
 import { CalendarEvent } from "@/lib/types";
-import { EventCard } from "./EventCard";
+import { EventCard, DraggableEventCard } from "./EventCard";
+import { CalendarDroppableSlot } from "./CalendarDroppableSlot";
+import {
+  DndContext,
+  DragOverlay,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  TouchSensor,
+  DragEndEvent,
+  DragStartEvent,
+} from "@dnd-kit/core";
 
 interface WeekViewProps {
   currentDate: Date;
@@ -24,6 +35,7 @@ interface WeekViewProps {
   draggingEventId?: string | null;
   onDragStart?: (event: CalendarEvent) => void;
   onDragEnd?: () => void;
+  onCreateEvent?: () => void;
 }
 
 export function WeekView({
@@ -32,15 +44,26 @@ export function WeekView({
   onEventClick,
   onTimeSlotClick,
   onEventDrop,
-  draggingEventId,
   onDragStart,
   onDragEnd,
+  onCreateEvent,
 }: WeekViewProps) {
-  const [dropTarget, setDropTarget] = useState<{
-    dayIndex: number;
-    hour: number;
-    minutes: number;
-  } | null>(null);
+  const [activeEvent, setActiveEvent] = useState<CalendarEvent | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 5,
+      },
+    }),
+  );
+
   const startOfWeek = getStartOfWeek(currentDate);
   const weekDates = Array.from({ length: 7 }, (_, i) =>
     addDays(startOfWeek, i),
@@ -166,198 +189,204 @@ export function WeekView({
     return layout;
   };
 
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveEvent(event.active.data.current?.event);
+    onDragStart?.(event.active.data.current?.event);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id && onEventDrop) {
+      const { dayIndex, hour, minutes } = over.data.current as {
+        dayIndex: number;
+        hour: number;
+        minutes: number;
+      };
+      const duration = active.data.current?.duration as number;
+      const targetDate = weekDates[dayIndex];
+
+      onEventDrop(active.id as string, targetDate, hour, minutes, duration);
+    }
+
+    setActiveEvent(null);
+    onDragEnd?.();
+  };
+
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-white">
-      {/* Header Row */}
-      <div className="flex border-b border-gray-200">
-        <div className="w-16 shrink-0 border-l border-gray-100 bg-white" />{" "}
-        {/* Time column spacer */}
-        <div className="flex flex-1">
-          {weekDates.map((date, index) => {
-            const isToday = isSameDay(date, today);
-            return (
-              <div
-                key={index}
-                className="flex-1 py-3 text-center border-l border-gray-100 last:border-l-0"
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="flex flex-col h-full overflow-hidden bg-white">
+        {/* Header Row */}
+        <div className="flex border-b border-gray-200">
+          <div className="w-16 shrink-0 border-l border-gray-100 bg-white flex items-center justify-center">
+            {onCreateEvent && (
+              <button
+                onClick={onCreateEvent}
+                className="w-10 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center md:hidden"
+                aria-label="צור אירוע"
               >
-                <div
-                  className={`text-xs font-medium mb-1 ${
-                    isToday ? "text-blue-600" : "text-gray-500"
-                  }`}
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  {daysOfWeek[date.getDay()].toUpperCase()}
-                </div>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4v16m8-8H4"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>{" "}
+          {/* Time column spacer */}
+          <div className="flex flex-1">
+            {weekDates.map((date, index) => {
+              const isToday = isSameDay(date, today);
+              return (
                 <div
-                  className={`inline-flex items-center justify-center w-8 h-8 text-lg rounded-full ${
-                    isToday
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-800 group-hover:bg-gray-100"
-                  }`}
+                  key={index}
+                  className="flex-1 py-3 text-center border-l border-gray-100 last:border-l-0"
                 >
-                  {date.getDate()}
+                  <div
+                    className={`text-xs font-medium mb-1 ${
+                      isToday ? "text-blue-600" : "text-gray-500"
+                    }`}
+                  >
+                    {daysOfWeek[date.getDay()].toUpperCase()}
+                  </div>
+                  <div
+                    className={`inline-flex items-center justify-center w-8 h-8 text-lg rounded-full ${
+                      isToday
+                        ? "bg-blue-600 text-white"
+                        : "text-gray-800 group-hover:bg-gray-100"
+                    }`}
+                  >
+                    {date.getDate()}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Scrollable Grid */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="flex relative min-h-[600px]">
-          {/* Time Column */}
-          <div className="w-16 shrink-0 border-l border-gray-100 bg-white select-none">
-            {timeSlots.map((time, index) => (
-              <div key={index} className="h-14 relative">
-                <span className="absolute -top-2.5 left-2 text-xs text-gray-400">
-                  {time}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
+        </div>
 
-          {/* Days Columns */}
-          <div className="flex flex-1 relative">
-            {/* Vertical Day Columns */}
-            {weekDates.map((date, dayIndex) => (
-              <div
-                key={dayIndex}
-                className="flex-1 border-l border-gray-100 last:border-l-0 relative h-[calc(24*3.5rem)]"
-              >
-                {/* Clickable Time Slots background - split into halves */}
-                {timeSlots.map((_, hourIndex) => {
-                  const startHourFull = hourIndex;
-                  const endHourFull = (hourIndex + 1) % 24;
-                  const startHourHalf = hourIndex;
-                  // For half-hour: starts at hourIndex:30, ends at (hourIndex+1):30
-                  const endHourHalfActual = (hourIndex + 1) % 24;
+        {/* Scrollable Grid */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="flex relative min-h-[600px]">
+            {/* Time Column */}
+            <div className="w-16 shrink-0 border-l border-gray-100 bg-white select-none">
+              {timeSlots.map((time, index) => (
+                <div key={index} className="h-14 relative">
+                  <span className="absolute -top-2.5 left-2 text-xs text-gray-400">
+                    {time}
+                  </span>
+                </div>
+              ))}
+            </div>
 
-                  const isDropTargetTop =
-                    dropTarget?.dayIndex === dayIndex &&
-                    dropTarget?.hour === hourIndex &&
-                    dropTarget?.minutes === 0;
-                  const isDropTargetBottom =
-                    dropTarget?.dayIndex === dayIndex &&
-                    dropTarget?.hour === hourIndex &&
-                    dropTarget?.minutes === 30;
+            {/* Days Columns */}
+            <div className="flex flex-1 relative">
+              {/* Vertical Day Columns */}
+              {weekDates.map((date, dayIndex) => (
+                <div
+                  key={dayIndex}
+                  className="flex-1 border-l border-gray-100 last:border-l-0 relative h-[calc(24*3.5rem)]"
+                >
+                  {/* Clickable Time Slots background - split into halves */}
+                  {timeSlots.map((_, hourIndex) => {
+                    const startHourFull = hourIndex;
+                    const endHourFull = (hourIndex + 1) % 24;
+                    const startHourHalf = hourIndex;
+                    const endHourHalfActual = (hourIndex + 1) % 24;
 
-                  const handleDragOver = (
-                    e: React.DragEvent,
-                    minutes: number,
-                  ) => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = "move";
-                    setDropTarget({ dayIndex, hour: hourIndex, minutes });
-                  };
-
-                  const handleDragLeave = () => {
-                    setDropTarget(null);
-                  };
-
-                  const handleDrop = (e: React.DragEvent, minutes: number) => {
-                    e.preventDefault();
-                    setDropTarget(null);
-
-                    try {
-                      const data = JSON.parse(
-                        e.dataTransfer.getData("application/json"),
-                      );
-                      if (data.eventId && onEventDrop) {
-                        onEventDrop(
-                          data.eventId,
-                          date,
-                          hourIndex,
-                          minutes,
-                          data.duration,
-                        );
-                      }
-                    } catch (err) {
-                      console.error("Failed to parse drag data:", err);
-                    }
-                    onDragEnd?.();
-                  };
-
-                  return (
-                    <div
-                      key={`slot-${dayIndex}-${hourIndex}`}
-                      className="h-14 border-b border-gray-100 relative z-0 flex flex-col"
-                    >
-                      {/* Top half - full hour (e.g., 10:00 - 11:00) */}
-                      <div
-                        className={`group flex-1 cursor-pointer transition-colors border-b border-dashed border-gray-200 relative ${
-                          isDropTargetTop
-                            ? "bg-blue-200 ring-2 ring-blue-400 ring-inset"
-                            : "hover:bg-blue-100"
-                        }`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onTimeSlotClick?.(date, hourIndex, 0);
-                        }}
-                        onDragOver={(e) => handleDragOver(e, 0)}
-                        onDragLeave={handleDragLeave}
-                        onDrop={(e) => handleDrop(e, 0)}
-                      >
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                          <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-md shadow-sm font-medium whitespace-nowrap">
-                            {startHourFull.toString().padStart(2, "0")}:00 עד{" "}
-                            {endHourFull.toString().padStart(2, "0")}:00
-                          </span>
-                        </div>
-                      </div>
-                      {/* Bottom half - half hour (e.g., 10:30 - 11:30) */}
-                      <div
-                        className={`group flex-1 cursor-pointer transition-colors relative ${
-                          isDropTargetBottom
-                            ? "bg-green-200 ring-2 ring-green-400 ring-inset"
-                            : "hover:bg-green-100"
-                        }`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onTimeSlotClick?.(date, hourIndex, 30);
-                        }}
-                        onDragOver={(e) => handleDragOver(e, 30)}
-                        onDragLeave={handleDragLeave}
-                        onDrop={(e) => handleDrop(e, 30)}
-                      >
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                          <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-md shadow-sm font-medium whitespace-nowrap">
-                            {startHourHalf.toString().padStart(2, "0")}:30 עד{" "}
-                            {endHourHalfActual.toString().padStart(2, "0")}:30
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Events overlay - positioned absolutely on top */}
-                {(() => {
-                  const dayEvents = eventsByDay[dayIndex];
-                  const layoutMap = getEventLayout(dayEvents);
-                  return dayEvents.map((event) => {
-                    const layoutInfo = layoutMap.get(event.id) || {
-                      columnIndex: 0,
-                      totalColumns: 1,
-                    };
                     return (
-                      <EventCard
-                        key={event.id}
-                        event={event}
-                        onClick={() => onEventClick?.(event)}
-                        columnIndex={layoutInfo.columnIndex}
-                        totalColumns={layoutInfo.totalColumns}
-                        onDragStart={onDragStart}
-                        onDragEnd={onDragEnd}
-                        isDragging={draggingEventId === event.id}
-                      />
+                      <div
+                        key={`slot-${dayIndex}-${hourIndex}`}
+                        className="h-14 border-b border-gray-100 relative z-0 flex flex-col"
+                      >
+                        {/* Top half - full hour */}
+                        <CalendarDroppableSlot
+                          id={`slot-${dayIndex}-${hourIndex}-0`}
+                          data={{ dayIndex, hour: hourIndex, minutes: 0 }}
+                          className="group flex-1 cursor-pointer transition-colors border-b border-dashed border-gray-200 relative hover:bg-blue-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onTimeSlotClick?.(date, hourIndex, 0);
+                          }}
+                        >
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                            <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-md shadow-sm font-medium whitespace-nowrap">
+                              {startHourFull.toString().padStart(2, "0")}:00 עד{" "}
+                              {endHourFull.toString().padStart(2, "0")}:00
+                            </span>
+                          </div>
+                        </CalendarDroppableSlot>
+
+                        {/* Bottom half - half hour */}
+                        <CalendarDroppableSlot
+                          id={`slot-${dayIndex}-${hourIndex}-30`}
+                          data={{ dayIndex, hour: hourIndex, minutes: 30 }}
+                          className="group flex-1 cursor-pointer transition-colors relative hover:bg-green-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onTimeSlotClick?.(date, hourIndex, 30);
+                          }}
+                        >
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                            <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-md shadow-sm font-medium whitespace-nowrap">
+                              {startHourHalf.toString().padStart(2, "0")}:30 עד{" "}
+                              {endHourHalfActual.toString().padStart(2, "0")}:30
+                            </span>
+                          </div>
+                        </CalendarDroppableSlot>
+                      </div>
                     );
-                  });
-                })()}
-              </div>
-            ))}
+                  })}
+
+                  {/* Events overlay - positioned absolutely on top */}
+                  {(() => {
+                    const dayEvents = eventsByDay[dayIndex];
+                    const layoutMap = getEventLayout(dayEvents);
+                    return dayEvents.map((event) => {
+                      const layoutInfo = layoutMap.get(event.id) || {
+                        columnIndex: 0,
+                        totalColumns: 1,
+                      };
+                      return (
+                        <DraggableEventCard
+                          key={event.id}
+                          event={event}
+                          onClick={() => onEventClick?.(event)}
+                          columnIndex={layoutInfo.columnIndex}
+                          totalColumns={layoutInfo.totalColumns}
+                        />
+                      );
+                    });
+                  })()}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+
+        <DragOverlay>
+          {activeEvent ? (
+            <EventCard
+              event={activeEvent}
+              isOverlay
+              columnIndex={0}
+              totalColumns={1}
+              style={{ top: 0, right: 0 }}
+            />
+          ) : null}
+        </DragOverlay>
       </div>
-    </div>
+    </DndContext>
   );
 }

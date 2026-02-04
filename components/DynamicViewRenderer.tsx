@@ -65,7 +65,7 @@ function CustomTableView({ title, data }: { title: string; data: any }) {
       if (selectColor) {
         return (
           <span
-            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap"
+            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold text-center whitespace-normal h-auto leading-tight"
             style={{
               backgroundColor: selectColor,
               color: "#FFFFFF",
@@ -77,7 +77,7 @@ function CustomTableView({ title, data }: { title: string; data: any }) {
       }
       // No color defined - default display with gray badge
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 whitespace-nowrap">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 text-center whitespace-normal h-auto leading-tight">
           {val}
         </span>
       );
@@ -126,7 +126,7 @@ function CustomTableView({ title, data }: { title: string; data: any }) {
       }
       // If it's not an array, still show as a badge
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 whitespace-nowrap">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 text-center whitespace-normal h-auto leading-tight">
           {String(val)}
         </span>
       );
@@ -184,7 +184,7 @@ function CustomTableView({ title, data }: { title: string; data: any }) {
                   return (
                     <td
                       key={col.name}
-                      className="py-2.5 px-2 first:pr-0 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]"
+                      className="py-2.5 px-2 first:pr-0 text-gray-700 min-w-[120px] max-w-[300px]"
                     >
                       {renderCellValue(col, val)}
                     </td>

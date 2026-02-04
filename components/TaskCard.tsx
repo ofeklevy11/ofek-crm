@@ -185,7 +185,7 @@ function DescriptionWithReadMore({
     <div className="mb-2">
       <p
         ref={textRef}
-        className="text-slate-400 text-xs line-clamp-3 mb-0.5 break-words break-all"
+        className="text-slate-400 text-xs line-clamp-3 mb-0.5 break-words"
       >
         {text}
       </p>

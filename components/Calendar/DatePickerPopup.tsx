@@ -76,7 +76,7 @@ export function DatePickerPopup({
 
       {/* Popup */}
       <div
-        className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-xl border border-gray-200 z-50 p-4 w-80"
+        className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 md:absolute md:top-full md:left-0 md:transform-none md:mt-2 bg-white rounded-lg shadow-xl border border-gray-200 z-50 p-4 w-80"
         dir="rtl"
       >
         {/* Header */}
@@ -149,8 +149,8 @@ export function DatePickerPopup({
                     isSelected(day)
                       ? "bg-blue-600 text-white font-semibold shadow-md"
                       : isToday(day)
-                      ? "bg-blue-100 text-blue-700 font-semibold"
-                      : "text-gray-700 hover:bg-gray-100"
+                        ? "bg-blue-100 text-blue-700 font-semibold"
+                        : "text-gray-700 hover:bg-gray-100"
                   }`}
                 >
                   {day}

@@ -79,12 +79,12 @@ export function AllEventsModal({
         </div>
 
         <div
-          className="p-4 border-b border-gray-200 flex gap-4 overflow-x-auto"
+          className="p-4 border-b border-gray-200 flex items-center gap-4 overflow-x-auto scrollbar-hide"
           dir="rtl"
         >
           <button
             onClick={() => setView("upcoming")}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap shrink-0 focus:outline-none ${
               view === "upcoming"
                 ? "bg-blue-100 text-blue-700"
                 : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
@@ -94,7 +94,7 @@ export function AllEventsModal({
           </button>
           <button
             onClick={() => setView("past")}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap shrink-0 focus:outline-none ${
               view === "past"
                 ? "bg-blue-100 text-blue-700"
                 : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
@@ -104,7 +104,7 @@ export function AllEventsModal({
           </button>
           <button
             onClick={() => setView("all")}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap shrink-0 focus:outline-none ${
               view === "all"
                 ? "bg-blue-100 text-blue-700"
                 : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"

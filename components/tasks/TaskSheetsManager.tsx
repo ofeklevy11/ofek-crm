@@ -571,90 +571,93 @@ export default function TaskSheetsManager({
                 className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl overflow-hidden"
               >
                 {/* Sheet Header */}
-                <div className="p-4 flex items-center justify-between">
-                  <button
-                    onClick={() => toggleSheet(sheet.id)}
-                    className="flex items-center gap-3 flex-1 text-start"
-                  >
-                    <div
-                      className={`p-2.5 rounded-lg ${
-                        sheet.type === "DAILY"
-                          ? "bg-blue-500/20 text-blue-400"
-                          : "bg-purple-500/20 text-purple-400"
-                      }`}
+                <div className="scrollbar-hide">
+                  <div className="p-4 flex items-center justify-between min-w-[600px] md:min-w-0">
+                    <button
+                      onClick={() => toggleSheet(sheet.id)}
+                      className="flex items-center gap-3 flex-1 text-start"
                     >
-                      {sheet.type === "DAILY" ? (
-                        <Clock className="w-5 h-5" />
-                      ) : (
-                        <Calendar className="w-5 h-5" />
-                      )}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-white flex items-center gap-2">
-                        {sheet.title}
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full ${
-                            sheet.type === "DAILY"
-                              ? "bg-blue-500/20 text-blue-400"
-                              : "bg-purple-500/20 text-purple-400"
-                          }`}
-                        >
-                          {sheet.type === "DAILY" ? "יומי" : "שבועי"}
-                        </span>
-                      </h3>
-                      <div className="flex items-center gap-3 text-sm text-slate-400 mt-0.5">
-                        <span className="flex items-center gap-1">
-                          <User className="w-3.5 h-3.5" />
-                          {sheet.assignee.name}
-                        </span>
-                        <span>•</span>
-                        <span>
-                          {sheet.items.length} פריטים ({completedCount} הושלמו)
-                        </span>
-                      </div>
-                    </div>
-                    {isExpanded ? (
-                      <ChevronUp className="w-5 h-5 text-slate-400 ms-auto" />
-                    ) : (
-                      <ChevronDown className="w-5 h-5 text-slate-400 ms-auto" />
-                    )}
-                  </button>
-
-                  {/* Progress Bar */}
-                  <div className="flex items-center gap-3 mx-4">
-                    <div className="w-24 h-2 bg-slate-700 rounded-full overflow-hidden">
                       <div
-                        className={`h-full transition-all ${
-                          progress === 100
-                            ? "bg-emerald-500"
-                            : progress >= 50
-                              ? "bg-blue-500"
-                              : "bg-amber-500"
+                        className={`p-2.5 rounded-lg ${
+                          sheet.type === "DAILY"
+                            ? "bg-blue-500/20 text-blue-400"
+                            : "bg-purple-500/20 text-purple-400"
                         }`}
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                    <span className="text-sm font-medium text-slate-300 w-12">
-                      {progress}%
-                    </span>
-                  </div>
+                      >
+                        {sheet.type === "DAILY" ? (
+                          <Clock className="w-5 h-5" />
+                        ) : (
+                          <Calendar className="w-5 h-5" />
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-white flex items-center gap-2">
+                          {sheet.title}
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full ${
+                              sheet.type === "DAILY"
+                                ? "bg-blue-500/20 text-blue-400"
+                                : "bg-purple-500/20 text-purple-400"
+                            }`}
+                          >
+                            {sheet.type === "DAILY" ? "יומי" : "שבועי"}
+                          </span>
+                        </h3>
+                        <div className="flex items-center gap-3 text-sm text-slate-400 mt-0.5">
+                          <span className="flex items-center gap-1">
+                            <User className="w-3.5 h-3.5" />
+                            {sheet.assignee.name}
+                          </span>
+                          <span>•</span>
+                          <span>
+                            {sheet.items.length} פריטים ({completedCount}{" "}
+                            הושלמו)
+                          </span>
+                        </div>
+                      </div>
+                      {isExpanded ? (
+                        <ChevronUp className="w-5 h-5 text-slate-400 ms-auto" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-slate-400 ms-auto" />
+                      )}
+                    </button>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => openEditModal(sheet)}
-                      className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
-                      title="ערוך"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setDeleteConfirm(sheet.id)}
-                      className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                      title="מחק"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {/* Progress Bar */}
+                    <div className="flex items-center gap-3 mx-4">
+                      <div className="w-24 h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all ${
+                            progress === 100
+                              ? "bg-emerald-500"
+                              : progress >= 50
+                                ? "bg-blue-500"
+                                : "bg-amber-500"
+                          }`}
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-medium text-slate-300 w-12">
+                        {progress}%
+                      </span>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => openEditModal(sheet)}
+                        className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                        title="ערוך"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm(sheet.id)}
+                        className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                        title="מחק"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 

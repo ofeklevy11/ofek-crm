@@ -1,5 +1,7 @@
 import React from "react";
 import { CalendarEvent } from "@/lib/types";
+import { useDraggable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 
 interface EventCardProps {
   event: CalendarEvent;
@@ -7,10 +9,14 @@ interface EventCardProps {
   // For handling overlapping events - position within the column
   columnIndex?: number;
   totalColumns?: number;
-  // For drag and drop
-  onDragStart?: (event: CalendarEvent) => void;
-  onDragEnd?: () => void;
+  // For dnd-kit
+  attributes?: any;
+  listeners?: any;
+  setNodeRef?: (node: HTMLElement | null) => void;
+  transform?: any;
   isDragging?: boolean;
+  isOverlay?: boolean;
+  style?: React.CSSProperties;
 }
 
 export function EventCard({
@@ -18,9 +24,13 @@ export function EventCard({
   onClick,
   columnIndex = 0,
   totalColumns = 1,
-  onDragStart,
-  onDragEnd,
+  attributes,
+  listeners,
+  setNodeRef,
+  transform,
   isDragging = false,
+  isOverlay = false,
+  style: styleProp,
 }: EventCardProps) {
   const startHour =
     event.startTime.getHours() + event.startTime.getMinutes() / 60;
@@ -40,30 +50,15 @@ export function EventCard({
   // In RTL, we use "right" positioning instead of "left"
   const rightPercent = columnIndex * widthPercent;
 
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
-    // Set drag data
-    e.dataTransfer.setData(
-      "application/json",
-      JSON.stringify({
-        eventId: event.id,
-        duration: event.endTime.getTime() - event.startTime.getTime(),
-      }),
-    );
-    e.dataTransfer.effectAllowed = "move";
-
-    // Call the onDragStart callback
-    onDragStart?.(event);
-  };
-
   return (
     <div
+      ref={setNodeRef}
       onClick={onClick}
-      draggable
-      onDragStart={handleDragStart}
-      onDragEnd={onDragEnd}
-      className={`absolute rounded-md px-2 py-1 text-white text-xs cursor-grab active:cursor-grabbing transition-all overflow-hidden shadow-sm z-10 ${
-        isDragging ? "opacity-50 scale-95" : "hover:opacity-90"
-      }`}
+      {...attributes}
+      {...listeners}
+      className={`absolute rounded-md px-2 py-1 text-white text-xs cursor-grab active:cursor-grabbing transition-shadow overflow-hidden shadow-sm ${
+        isDragging && !isOverlay ? "opacity-30" : "hover:opacity-90"
+      } ${isOverlay ? "z-50 shadow-xl scale-105" : "z-10"}`}
       style={{
         top: `calc(${startHour * 3.5}rem + 2px)`,
         height: `calc(${duration * 3.5}rem - 4px)`,
@@ -72,6 +67,10 @@ export function EventCard({
         // For overlapping events, calculate width and position
         width: `calc(${widthPercent}% - 12px)`,
         right: `calc(${rightPercent}% + 6px)`,
+        transform: CSS.Translate.toString(transform),
+        zIndex: isOverlay ? 50 : 10,
+        touchAction: "none", // Critical for touch dragging
+        ...styleProp,
       }}
     >
       <div className="font-semibold truncate">{event.title}</div>
@@ -81,5 +80,29 @@ export function EventCard({
         </div>
       )}
     </div>
+  );
+}
+
+export function DraggableEventCard(props: EventCardProps) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: props.event.id,
+      data: {
+        type: "Event",
+        event: props.event,
+        duration:
+          props.event.endTime.getTime() - props.event.startTime.getTime(),
+      },
+    });
+
+  return (
+    <EventCard
+      {...props}
+      setNodeRef={setNodeRef}
+      transform={transform}
+      attributes={attributes}
+      listeners={listeners}
+      isDragging={isDragging}
+    />
   );
 }
