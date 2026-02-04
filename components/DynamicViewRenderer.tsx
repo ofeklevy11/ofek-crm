@@ -42,6 +42,113 @@ function CustomTableView({ title, data }: { title: string; data: any }) {
     );
   }
 
+  // Helper function to get contrasting text color
+  const getContrastColor = (bgColor: string): string => {
+    if (!bgColor) return "#000000";
+    const hex = bgColor.replace("#", "");
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.5 ? "#000000" : "#FFFFFF";
+  };
+
+  // Render cell value with proper formatting for select fields
+  const renderCellValue = (col: any, val: any) => {
+    if (val === null || val === undefined || val === "") {
+      return <span className="text-gray-300">-</span>;
+    }
+
+    // Handle select/radio fields - always show as badges
+    if (col.type === "select" || col.type === "radio") {
+      const selectColor = col.optionColors?.[val];
+      if (selectColor) {
+        return (
+          <span
+            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap"
+            style={{
+              backgroundColor: selectColor,
+              color: "#FFFFFF",
+            }}
+          >
+            {val}
+          </span>
+        );
+      }
+      // No color defined - default display with gray badge
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 whitespace-nowrap">
+          {val}
+        </span>
+      );
+    }
+
+    // Handle tags/multi-select fields - always show as badges
+    if (col.type === "tags" || col.type === "multi-select") {
+      let displayVal = val;
+      if (typeof val === "string" && val.startsWith("[")) {
+        try {
+          displayVal = JSON.parse(val);
+        } catch (e) {
+          // ignore parsing error
+        }
+      }
+      if (Array.isArray(displayVal)) {
+        return (
+          <div className="flex flex-wrap gap-1">
+            {displayVal.map((v: string, i: number) => {
+              const itemColor = col.optionColors?.[v];
+              if (itemColor) {
+                return (
+                  <span
+                    key={i}
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
+                    style={{
+                      backgroundColor: itemColor,
+                      color: "#FFFFFF",
+                    }}
+                  >
+                    {v}
+                  </span>
+                );
+              }
+              return (
+                <span
+                  key={i}
+                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700"
+                >
+                  {v}
+                </span>
+              );
+            })}
+          </div>
+        );
+      }
+      // If it's not an array, still show as a badge
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 whitespace-nowrap">
+          {String(val)}
+        </span>
+      );
+    }
+
+    // Date formatting
+    if (col.name === "createdAt" || col.name === "updatedAt") {
+      if (val) return new Date(val).toLocaleString("he-IL");
+    }
+
+    // Handle objects/arrays
+    if (typeof val === "object" && val !== null && !(val instanceof Date)) {
+      return Array.isArray(val) ? val.join(", ") : JSON.stringify(val);
+    }
+
+    // Handle booleans
+    if (val === true) return "כן";
+    if (val === false) return "לא";
+
+    return val;
+  };
+
   return (
     <div className="w-full h-full flex flex-col font-sans">
       {/* Removed title from here as it is displayed by the widget container */}
@@ -74,32 +181,12 @@ function CustomTableView({ title, data }: { title: string; data: any }) {
                   if (col.name === "createdBy") val = record.createdBy;
                   if (col.name === "updatedBy") val = record.updatedBy;
 
-                  // Simple render of value
-                  let displayVal = val;
-
-                  // Date formatting
-                  if (col.name === "createdAt" || col.name === "updatedAt") {
-                    if (val) displayVal = new Date(val).toLocaleString("he-IL");
-                  }
-
-                  if (
-                    typeof val === "object" &&
-                    val !== null &&
-                    !(val instanceof Date)
-                  ) {
-                    displayVal = Array.isArray(val)
-                      ? val.join(", ")
-                      : JSON.stringify(val);
-                  }
-                  if (val === true) displayVal = "כן";
-                  if (val === false) displayVal = "לא";
-
                   return (
                     <td
                       key={col.name}
                       className="py-2.5 px-2 first:pr-0 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]"
                     >
-                      {displayVal}
+                      {renderCellValue(col, val)}
                     </td>
                   );
                 })}
@@ -111,12 +198,12 @@ function CustomTableView({ title, data }: { title: string; data: any }) {
 
       {hasMore && (
         <div className="mt-auto pt-3 border-t border-gray-100/50 flex justify-center">
-          <Link
+          <a
             href={`/tables/${tableId}`}
             className="text-xs text-blue-500 hover:text-blue-700 font-medium cursor-pointer transition-colors px-3 py-1 bg-blue-50/50 hover:bg-blue-50 rounded-full"
           >
             הצג עוד רשומות...
-          </Link>
+          </a>
         </div>
       )}
     </div>

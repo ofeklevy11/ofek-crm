@@ -138,9 +138,18 @@ export async function getCustomTableData(
 
     // Filter columns if specified
     // Also include system columns if requested
+    // Include full field info (type, optionColors, etc.) for proper rendering
     const columns = settings.columns
       ? [
-          ...schema.filter((f: any) => settings.columns?.includes(f.name)),
+          ...schema
+            .filter((f: any) => settings.columns?.includes(f.name))
+            .map((f: any) => ({
+              name: f.name,
+              label: f.label,
+              type: f.type,
+              options: f.options,
+              optionColors: f.optionColors,
+            })),
           ...(settings.columns?.includes("createdAt")
             ? [{ name: "createdAt", label: "נוצר בתאריך", type: "datetime" }]
             : []),
@@ -154,7 +163,13 @@ export async function getCustomTableData(
             ? [{ name: "updatedBy", label: "עודכן על ידי", type: "string" }]
             : []),
         ]
-      : schema.slice(0, 7); // Default to first 7 if not specified
+      : schema.slice(0, 7).map((f: any) => ({
+          name: f.name,
+          label: f.label,
+          type: f.type,
+          options: f.options,
+          optionColors: f.optionColors,
+        })); // Default to first 7 if not specified
 
     let records = table.records.map((r) => ({
       ...r,
