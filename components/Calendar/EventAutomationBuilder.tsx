@@ -170,6 +170,14 @@ export function EventAutomationBuilder({
   };
 
   const handleSave = () => {
+    // Validation
+    if (actionType === "SEND_WHATSAPP") {
+      if (!waPhone || waPhone.trim() === "") {
+        alert("חובה להזין מספר טלפון או Group ID");
+        return;
+      }
+    }
+
     let config = {};
     if (actionType === "CREATE_TASK") {
       config = {
@@ -243,10 +251,10 @@ export function EventAutomationBuilder({
         {step === 1 && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="text-center">
-              <h3 className="text-2xl font-bold text-gray-800 mb-2">
+              <h3 className="text-xl md:text-2xl font-bold text-gray-800 mb-2">
                 מתי להפעיל את האוטומציה?
               </h3>
-              <p className="text-gray-500">
+              <p className="text-sm md:text-base text-gray-500">
                 בחר כמה זמן לפני תחילת האירוע הפעולה תקרה
               </p>
             </div>
@@ -269,24 +277,26 @@ export function EventAutomationBuilder({
                     onChange={(e) =>
                       setTimeValue(Math.max(1, Number(e.target.value)))
                     }
-                    className="w-32 text-center text-4xl font-bold border-b-2 border-blue-500 focus:outline-none focus:border-blue-700 bg-transparent py-2"
+                    className="w-24 md:w-32 text-center text-2xl md:text-4xl font-bold border-b-2 border-blue-500 focus:outline-none focus:border-blue-700 bg-transparent py-2"
                   />
                 </div>
                 <select
                   value={timeUnit}
                   onChange={(e) => setTimeUnit(e.target.value as any)}
-                  className="text-xl p-3 bg-gray-50 rounded-lg border-none focus:ring-2 focus:ring-blue-500 cursor-pointer hover:bg-gray-100"
+                  className="text-base md:text-xl p-3 bg-gray-50 rounded-lg border-none focus:ring-2 focus:ring-blue-500 cursor-pointer hover:bg-gray-100"
                 >
                   <option value="minutes">דקות</option>
                   <option value="hours">שעות</option>
                   <option value="days">ימים</option>
                 </select>
-                <span className="text-2xl text-gray-400 font-light">לפני</span>
+                <span className="text-lg md:text-2xl text-gray-400 font-light">
+                  לפני
+                </span>
               </div>
 
               <div className="mt-8 p-4 bg-blue-50 rounded-xl flex items-center gap-3 text-blue-700">
-                <Clock className="w-6 h-6 flex-shrink-0" />
-                <span className="font-medium">
+                <Clock className="w-5 h-5 md:w-6 md:h-6 flex-shrink-0" />
+                <span className="text-sm md:text-base font-medium">
                   האוטומציה תופעל {timeValue}{" "}
                   {timeUnit === "minutes"
                     ? "דקות"
@@ -303,11 +313,11 @@ export function EventAutomationBuilder({
         {/* Step 2: Action Selection */}
         {step === 2 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold text-gray-800 mb-2">
+            <div className="text-center mb-6 md:mb-8">
+              <h3 className="text-xl md:text-2xl font-bold text-gray-800 mb-2">
                 מה לעשות?
               </h3>
-              <p className="text-gray-500">
+              <p className="text-sm md:text-base text-gray-500">
                 בחר את הפעולה שתרצה שתתבצע באופן אוטומטי
               </p>
             </div>
@@ -384,7 +394,9 @@ export function EventAutomationBuilder({
                   <div className="p-2 bg-green-100 rounded-lg text-green-700">
                     <CheckSquare />
                   </div>
-                  <h3 className="text-xl font-bold">הגדרת משימה חדשה</h3>
+                  <h3 className="text-lg md:text-xl font-bold">
+                    הגדרת משימה חדשה
+                  </h3>
                 </div>
 
                 <div>
@@ -481,7 +493,9 @@ export function EventAutomationBuilder({
                   <div className="p-2 bg-yellow-100 rounded-lg text-yellow-700">
                     <Bell />
                   </div>
-                  <h3 className="text-xl font-bold">שליחת התראה למערכת</h3>
+                  <h3 className="text-lg md:text-xl font-bold">
+                    שליחת התראה למערכת
+                  </h3>
                 </div>
 
                 <div>
@@ -537,7 +551,7 @@ export function EventAutomationBuilder({
                   <div className="p-2 bg-green-100 rounded-lg text-green-700">
                     <Smartphone />
                   </div>
-                  <h3 className="text-xl font-bold text-gray-800">
+                  <h3 className="text-lg md:text-xl font-bold text-gray-800">
                     הודעת WhatsApp
                   </h3>
                 </div>
@@ -650,7 +664,9 @@ export function EventAutomationBuilder({
                   <div className="p-2 bg-purple-100 rounded-lg text-purple-700">
                     <Webhook />
                   </div>
-                  <h3 className="text-xl font-bold">הגדרת Webhook</h3>
+                  <h3 className="text-lg md:text-xl font-bold">
+                    הגדרת Webhook
+                  </h3>
                 </div>
 
                 <div>
