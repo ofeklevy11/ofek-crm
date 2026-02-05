@@ -73,10 +73,19 @@ export function EventCard({
         ...styleProp,
       }}
     >
-      <div className="font-semibold truncate">{event.title}</div>
-      {duration >= 1 && (
-        <div className="text-[10px] opacity-90 mt-0.5">
-          {formatTime(event.startTime)} - {formatTime(event.endTime)}
+      {duration >= 1 ? (
+        <>
+          <div className="font-semibold truncate">{event.title}</div>
+          <div className="text-[10px] opacity-90 mt-0.5">
+            {formatTime(event.startTime)} - {formatTime(event.endTime)}
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center justify-between gap-1 overflow-hidden h-full">
+          <div className="font-semibold truncate">{event.title}</div>
+          <div className="text-[10px] opacity-90 whitespace-nowrap">
+            {formatTime(event.startTime)}
+          </div>
         </div>
       )}
     </div>

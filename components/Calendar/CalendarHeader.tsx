@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { formatMonthYear } from "@/lib/dateUtils";
 import { DatePickerPopup } from "./DatePickerPopup";
+import { Zap } from "lucide-react";
 
 interface CalendarHeaderProps {
   currentDate: Date;
@@ -13,6 +14,7 @@ interface CalendarHeaderProps {
   onNextMonth: () => void;
   onSelectDate: (date: Date) => void;
   onShowAllEvents: () => void;
+  onGlobalAutomations: () => void;
 }
 
 export function CalendarHeader({
@@ -26,6 +28,7 @@ export function CalendarHeader({
   onNextMonth,
   onSelectDate,
   onShowAllEvents,
+  onGlobalAutomations,
 }: CalendarHeaderProps) {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
@@ -199,6 +202,15 @@ export function CalendarHeader({
               />
             </svg>
             <span>לצפייה בכל הרשומות</span>
+          </button>
+
+          {/* Global Automations */}
+          <button
+            onClick={onGlobalAutomations}
+            className="flex-1 md:flex-none w-full md:w-auto px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors shadow-sm flex items-center justify-center gap-2 whitespace-nowrap"
+          >
+            <Zap size={14} className="fill-indigo-300" />
+            <span>אוטומציות קבועות</span>
           </button>
         </div>
       </div>

@@ -75,9 +75,49 @@ export async function createCalendarEvent(data: {
     revalidatePath("/calendar");
     revalidatePath("/");
 
+    // Apply Global Automations
+    try {
+      const globalRules = await prisma.automationRule.findMany({
+        where: {
+          companyId: user.companyId,
+          triggerType: "EVENT_TIME",
+          calendarEventId: null,
+          isActive: true, // Only copy ACTIVE rules
+        },
+      });
+
+      if (globalRules.length > 0) {
+        console.log(
+          `[Calendar Actions] Found ${globalRules.length} active global rules to apply.`,
+        );
+
+        const rulesToCreate = globalRules.map((rule) => ({
+          companyId: user.companyId,
+          name: rule.name,
+          triggerType: rule.triggerType,
+          triggerConfig: JSON.parse(JSON.stringify(rule.triggerConfig ?? {})),
+          actionType: rule.actionType,
+          actionConfig: JSON.parse(JSON.stringify(rule.actionConfig ?? {})),
+          calendarEventId: event.id,
+          createdBy: user.id,
+          isActive: true, // Ensure copy is active
+        }));
+
+        await prisma.automationRule.createMany({
+          data: rulesToCreate,
+        });
+
+        console.log(
+          `[Calendar Actions] Successfully applied ${globalRules.length} global automations to event ${event.id}`,
+        );
+      }
+    } catch (err) {
+      console.error("Error applying global automations:", err);
+    }
+
     // Trigger automations
     console.log(
-      `[Calendar Actions] Created event ${event.id}, triggering automations`
+      `[Calendar Actions] Created event ${event.id}, triggering automations`,
     );
     try {
       const { processViewAutomations } = await import("./automations");
@@ -86,7 +126,7 @@ export async function createCalendarEvent(data: {
     } catch (autoError) {
       console.error(
         "[Calendar Actions] Failed to trigger automations:",
-        autoError
+        autoError,
       );
     }
 
@@ -105,7 +145,7 @@ export async function updateCalendarEvent(
     startTime?: string;
     endTime?: string;
     color?: string;
-  }
+  },
 ) {
   try {
     const user = await getCurrentUser();
@@ -145,7 +185,7 @@ export async function updateCalendarEvent(
 
     // Trigger automations
     console.log(
-      `[Calendar Actions] Updated event ${event.id}, triggering automations`
+      `[Calendar Actions] Updated event ${event.id}, triggering automations`,
     );
     try {
       const { processViewAutomations } = await import("./automations");
@@ -153,7 +193,7 @@ export async function updateCalendarEvent(
     } catch (autoError) {
       console.error(
         "[Calendar Actions] Failed to trigger automations:",
-        autoError
+        autoError,
       );
     }
 
@@ -192,7 +232,7 @@ export async function deleteCalendarEvent(id: string) {
 
     // Trigger automations
     console.log(
-      `[Calendar Actions] Deleted event ${id}, triggering automations`
+      `[Calendar Actions] Deleted event ${id}, triggering automations`,
     );
     try {
       const { processViewAutomations } = await import("./automations");
@@ -200,7 +240,7 @@ export async function deleteCalendarEvent(id: string) {
     } catch (autoError) {
       console.error(
         "[Calendar Actions] Failed to trigger automations:",
-        autoError
+        autoError,
       );
     }
 

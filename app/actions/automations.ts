@@ -3,7 +3,10 @@
 import { prisma } from "@/lib/prisma";
 // import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { sendNotification } from "./notifications";
+import {
+  sendNotification,
+  createNotificationForCompany,
+} from "./notifications";
 import { processMultiEventDurationTrigger } from "./multi-event-automations";
 import { calculateViewStats } from "./analytics";
 
@@ -65,12 +68,16 @@ export async function executeRuleActions(
           if (context.tableName) {
             message = message.replace("{tableName}", context.tableName);
             title = title.replace("{tableName}", context.tableName);
-            link = `/tables/${context.tableId}`;
+            if (context.tableName === "Calendar") {
+              link = "/calendar";
+            } else {
+              link = `/tables/${context.tableId}`;
+            }
           }
           if (context.recordData) {
             for (const key in context.recordData) {
               message = message.replace(
-                `{${key}}`,
+                new RegExp(`{${key}}`, "g"),
                 String(context.recordData[key] || ""),
               );
             }
@@ -96,12 +103,18 @@ export async function executeRuleActions(
             }
           }
 
-          await sendNotification({
+          const notifRes = await createNotificationForCompany({
+            companyId,
             userId: config.recipientId,
             title,
             message,
             link,
           });
+          if (!notifRes.success) {
+            console.error(
+              `[Automations] Notification failed for rule ${ruleId}: ${notifRes.error}`,
+            );
+          }
         }
       } else if (type === "SEND_WHATSAPP") {
         // Sleep if configured (to avoid blocks)
@@ -274,20 +287,28 @@ export async function executeRuleActions(
           dueDate = date;
         }
 
-        console.log(`[Automations] Creating Task: ${finalTitle}`);
+        console.log(
+          `[Automations] Creating Task: ${finalTitle} (Assignee: ${assigneeId}, Due: ${dueDate})`,
+        );
 
-        await prisma.task.create({
-          data: {
-            title: finalTitle,
-            description: finalDesc,
-            status: status || "todo",
-            priority: priority || "low",
-            assigneeId: assigneeId ? Number(assigneeId) : null,
-            dueDate: dueDate,
-            tags: tags || [],
-            companyId: companyId,
-          },
-        });
+        try {
+          await prisma.task.create({
+            data: {
+              title: finalTitle,
+              description: finalDesc,
+              status: status || "todo",
+              priority: priority || "low",
+              assigneeId: assigneeId ? Number(assigneeId) : null,
+              dueDate: dueDate,
+              tags: tags || [],
+              companyId: companyId,
+            },
+          });
+          console.log(`[Automations] Task created successfully.`);
+        } catch (taskError) {
+          console.error(`[Automations] Task Creation Error:`, taskError);
+          // If this fails, we want to know why.
+        }
       }
     } catch (e) {
       console.error(`[Automations] Error executing action ${type}:`, e);
@@ -457,11 +478,20 @@ export async function executeWebhookAction(
   companyId: number,
 ) {
   const config = rule.actionConfig;
-  const url = config.webhookUrl;
+  const url = config.webhookUrl || config.url;
 
-  if (!url) return;
+  if (!url) {
+    console.warn(
+      `[Automations] Webhook action missing URL (checked webhookUrl and url) for Rule ${rule.id}`,
+    );
+    return;
+  }
 
   console.log(`[Automations] Executing Webhook for Rule ${rule.id} to ${url}`);
+  console.log(
+    `[Automations] Webhook Payload Preview:`,
+    JSON.stringify(data).substring(0, 200) + "...",
+  );
 
   try {
     const payload = {
@@ -474,7 +504,7 @@ export async function executeWebhookAction(
     };
 
     const response = await fetch(url, {
-      method: "POST",
+      method: "POST", // Support config.method later if needed, but UI saves method too at config.method
       headers: {
         "Content-Type": "application/json",
       },
@@ -485,6 +515,8 @@ export async function executeWebhookAction(
       console.error(
         `[Automations] Webhook failed with status ${response.status}: ${response.statusText}`,
       );
+      const text = await response.text();
+      console.error(`[Automations] Webhook response body:`, text);
     } else {
       console.log(`[Automations] Webhook sent successfully.`);
     }

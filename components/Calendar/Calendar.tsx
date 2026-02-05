@@ -6,6 +6,7 @@ import { WeekView } from "./WeekView";
 import { DayView } from "./DayView";
 import { EventModal } from "./EventModal";
 import { AllEventsModal } from "./AllEventsModal";
+import { GlobalEventAutomationsModal } from "./GlobalEventAutomationsModal";
 import { addDays, addWeeks, addMonths } from "@/lib/dateUtils";
 import { CalendarEvent } from "@/lib/types";
 
@@ -15,6 +16,8 @@ export function Calendar() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAllEventsModalOpen, setIsAllEventsModalOpen] = useState(false);
+  const [isGlobalAutomationsModalOpen, setIsGlobalAutomationsModalOpen] =
+    useState(false);
   const [selectedEvent, setSelectedEvent] = useState<
     CalendarEvent | undefined
   >();
@@ -315,6 +318,7 @@ export function Calendar() {
         onNextMonth={handleNextMonth}
         onSelectDate={handleSelectDate}
         onShowAllEvents={() => setIsAllEventsModalOpen(true)}
+        onGlobalAutomations={() => setIsGlobalAutomationsModalOpen(true)}
       />
       <div className="sticky top-16 h-[calc(100dvh-4rem)] overflow-hidden bg-white z-0">
         {view === "week" ? (
@@ -372,6 +376,11 @@ export function Calendar() {
           // Let's not close it for now, assuming standard z-index stacking handles it.
         }}
         onDelete={handleDeleteById}
+      />
+
+      <GlobalEventAutomationsModal
+        isOpen={isGlobalAutomationsModalOpen}
+        onClose={() => setIsGlobalAutomationsModalOpen(false)}
       />
     </div>
   );

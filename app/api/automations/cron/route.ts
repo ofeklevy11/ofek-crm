@@ -22,6 +22,11 @@ export async function GET(request: Request) {
     // Run time based automations
     await processTimeBasedAutomations();
 
+    // Run event based automations
+    const { processEventAutomations } =
+      await import("@/app/actions/event-automations");
+    await processEventAutomations();
+
     return NextResponse.json({
       success: true,
       message: "Automations processed",

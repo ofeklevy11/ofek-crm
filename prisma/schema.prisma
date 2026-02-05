@@ -205,9 +205,13 @@ model AutomationRule {
   folderId      Int?
   folder        ViewFolder? @relation(fields: [folderId], references: [id])
   company       Company     @relation(fields: [companyId], references: [id])
+
+  calendarEventId String?
+  calendarEvent   CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
   
   @@index([companyId])
   @@index([companyId, isActive, triggerType]) // For filtering active rules by trigger type
+  @@index([calendarEventId])
 }
 
 model Notification {
@@ -369,6 +373,9 @@ model CalendarEvent {
   updatedAt   DateTime @updatedAt
   company     Company  @relation(fields: [companyId], references: [id])
   
+  automationRules AutomationRule[]
+  automationLogs  AutomationLog[]
+
   @@index([companyId])
 }
 
@@ -1343,15 +1350,21 @@ model ViewRefreshLog {
 model AutomationLog {
   id               Int            @id @default(autoincrement())
   automationRuleId Int
-  recordId         Int
+  recordId         Int?
+  calendarEventId  String?
+
   executedAt       DateTime       @default(now())
   
   automationRule   AutomationRule @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
-  record           Record         @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  record           Record?        @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  calendarEvent    CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
 
   @@unique([automationRuleId, recordId]) 
+  @@unique([automationRuleId, calendarEventId])
+
   @@index([automationRuleId])
   @@index([recordId])
+  @@index([calendarEventId])
 }
 
 model ImportJob {
