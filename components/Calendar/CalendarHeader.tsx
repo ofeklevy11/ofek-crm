@@ -149,7 +149,7 @@ export function CalendarHeader({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           {/* Date Picker */}
           <div className="relative flex-1 md:flex-none">
             <button
