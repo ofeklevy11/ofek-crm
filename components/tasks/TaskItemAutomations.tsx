@@ -14,6 +14,7 @@ import {
   X,
   Globe,
   MessageCircle,
+  Calendar,
 } from "lucide-react";
 
 interface OnCompleteAction {
@@ -24,7 +25,8 @@ interface OnCompleteAction {
     | "CREATE_FINANCE"
     | "SEND_NOTIFICATION"
     | "SEND_WEBHOOK"
-    | "SEND_WHATSAPP";
+    | "SEND_WHATSAPP"
+    | "CREATE_CALENDAR_EVENT";
   config: Record<string, unknown>;
 }
 
@@ -40,43 +42,48 @@ const actionTypes = [
     value: "UPDATE_RECORD",
     label: "עדכון רשומה בטבלה",
     icon: Table,
-    color: "text-blue-400",
+    color: "text-blue-600",
   },
   {
     value: "CREATE_TASK",
     label: "יצירת משימה חדשה",
     icon: CheckSquare,
-    color: "text-emerald-400",
+    color: "text-emerald-600",
   },
   {
     value: "UPDATE_TASK",
     label: "עדכון משימה קיימת",
     icon: Settings2,
-    color: "text-purple-400",
+    color: "text-purple-600",
   },
   {
     value: "CREATE_FINANCE",
     label: "יצירת רשומת פיננסים",
     icon: DollarSign,
-    color: "text-yellow-400",
+    color: "text-yellow-600",
   },
   {
     value: "SEND_NOTIFICATION",
     label: "שליחת התראה",
     icon: Bell,
-    color: "text-orange-400",
+    color: "text-orange-600",
   },
   {
     value: "SEND_WEBHOOK",
     label: "שליחת Webhook",
     icon: Globe,
-    color: "text-cyan-400",
+    color: "text-cyan-600",
   },
   {
-    value: "SEND_WHATSAPP",
     label: "שליחת הודעת וואטספ",
     icon: MessageCircle,
-    color: "text-green-400",
+    color: "text-green-600",
+  },
+  {
+    value: "CREATE_CALENDAR_EVENT",
+    label: "יצירת אירוע ביומן",
+    icon: Calendar,
+    color: "text-pink-600",
   },
 ];
 
@@ -116,35 +123,35 @@ export default function TaskItemAutomations({
   };
 
   return (
-    <div className="border border-slate-600 rounded-lg overflow-hidden">
+    <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
       <button
         type="button"
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-3 bg-slate-700/30 hover:bg-slate-700/50 transition-colors"
+        className="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <Settings2 className="w-4 h-4 text-slate-400" />
-          <span className="text-sm font-medium text-slate-300">
+          <Settings2 className="w-5 h-5 text-gray-500" />
+          <span className="text-sm font-semibold text-gray-900">
             אוטומציות בהשלמה
           </span>
           {actions.length > 0 && (
-            <span className="bg-blue-500/20 text-blue-400 text-xs px-2 py-0.5 rounded-full">
+            <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-medium">
               {actions.length}
             </span>
           )}
         </div>
         {isExpanded ? (
-          <ChevronUp className="w-4 h-4 text-slate-400" />
+          <ChevronUp className="w-5 h-5 text-gray-400" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-slate-400" />
+          <ChevronDown className="w-5 h-5 text-gray-400" />
         )}
       </button>
 
       {isExpanded && (
-        <div className="p-3 space-y-3 bg-slate-900/30">
+        <div className="p-4 space-y-4 border-t border-gray-100 bg-gray-50/50">
           {actions.length === 0 ? (
-            <p className="text-center text-sm text-slate-500 py-2">
-              אין אוטומציות מוגדרות. הוסף פעולה שתרוץ כשהפריט יסומן כמושלם.
+            <p className="text-center text-sm text-gray-500 py-4 bg-white rounded-lg border border-dashed border-gray-300">
+              לא הוגדרו אוטומציות. הוסף פעולה שתרוץ בעת השלמת השלב.
             </p>
           ) : (
             actions.map((action, index) => (
@@ -164,10 +171,10 @@ export default function TaskItemAutomations({
           <button
             type="button"
             onClick={addAction}
-            className="w-full flex items-center justify-center gap-2 text-sm text-blue-400 hover:text-blue-300 py-2 border border-dashed border-slate-600 rounded-lg hover:border-blue-500/50 transition-colors"
+            className="w-full flex items-center justify-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium py-2.5 border border-dashed border-blue-200 hover:border-blue-400 bg-blue-50/50 hover:bg-blue-50 rounded-xl transition-all"
           >
             <Plus className="w-4 h-4" />
-            הוסף פעולה
+            הוסף פעולה חדשה
           </button>
         </div>
       )}
@@ -198,10 +205,12 @@ function ActionCard({
   const Icon = actionTypeInfo?.icon || Settings2;
 
   return (
-    <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3 space-y-3">
+    <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Icon className={`w-4 h-4 ${actionTypeInfo?.color}`} />
+        <div className="flex items-center gap-3 flex-1">
+          <div className={`p-2 rounded-lg bg-gray-50 ${actionTypeInfo?.color}`}>
+            <Icon className="w-4 h-4" />
+          </div>
           <select
             value={action.actionType}
             onChange={(e) =>
@@ -210,7 +219,7 @@ function ActionCard({
                 config: {},
               })
             }
-            className="bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="bg-transparent font-medium text-gray-900 border-none focus:ring-0 cursor-pointer text-sm"
           >
             {actionTypes.map((type) => (
               <option key={type.value} value={type.value}>
@@ -222,24 +231,26 @@ function ActionCard({
         <button
           type="button"
           onClick={onRemove}
-          className="p-1.5 text-slate-400 hover:text-red-400 rounded hover:bg-red-500/10 transition-colors"
+          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          title="מחק אוטומציה"
         >
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Config fields based on action type */}
-      <div className="space-y-2">
+      <div className="space-y-3 pl-11">
         {action.actionType === "SEND_NOTIFICATION" && (
           <>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">נמען</label>
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                נמען
+              </label>
               <select
                 value={(action.config.recipientId as number) || ""}
                 onChange={(e) =>
                   onUpdateConfig("recipientId", parseInt(e.target.value))
                 }
-                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               >
                 <option value="">בחר נמען...</option>
                 {users.map((user) => (
@@ -250,7 +261,7 @@ function ActionCard({
               </select>
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                 כותרת ההתראה
               </label>
               <input
@@ -258,11 +269,11 @@ function ActionCard({
                 value={(action.config.title as string) || ""}
                 onChange={(e) => onUpdateConfig("title", e.target.value)}
                 placeholder='לדוגמה: "משימה הושלמה"'
-                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                 תוכן ההתראה
               </label>
               <input
@@ -270,7 +281,7 @@ function ActionCard({
                 value={(action.config.message as string) || ""}
                 onChange={(e) => onUpdateConfig("message", e.target.value)}
                 placeholder="השתמש ב-{itemTitle}, {sheetTitle}, {userName}"
-                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               />
             </div>
           </>
@@ -279,7 +290,7 @@ function ActionCard({
         {action.actionType === "SEND_WHATSAPP" && (
           <>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                 מספר טלפון או מזהה קבוצה
               </label>
               <input
@@ -287,15 +298,15 @@ function ActionCard({
                 value={(action.config.phone as string) || ""}
                 onChange={(e) => onUpdateConfig("phone", e.target.value)}
                 placeholder="0501234567 או 123456@g.us"
-                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dir-ltr"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all dir-ltr"
               />
               {/* Preview Logic */}
               {(action.config.phone as string) && (
-                <div className="mt-2 bg-slate-900/50 p-2 rounded border border-slate-600/50">
-                  <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">
+                <div className="mt-2 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                  <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 font-semibold">
                     תצוגה מקדימה למערכת (Preview)
                   </div>
-                  <div className="text-xs font-mono text-green-400 dir-ltr">
+                  <div className="text-xs font-mono text-green-600 dir-ltr font-medium">
                     {(() => {
                       const input = (action.config.phone as string) || "";
                       let clean = input.trim();
@@ -311,17 +322,17 @@ function ActionCard({
               )}
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                 תוכן ההודעה
               </label>
               <textarea
                 value={(action.config.message as string) || ""}
                 onChange={(e) => onUpdateConfig("message", e.target.value)}
                 placeholder="הקלד את הודעת הוואטספ שלך כאן..."
-                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
                 rows={3}
               />
-              <p className="text-[10px] text-slate-500 mt-1">
+              <p className="text-[10px] text-gray-500 mt-1.5">
                 ניתן להשתמש ב-{"{itemTitle}"}, {"{sheetTitle}"}, {"{userName}"}
               </p>
             </div>
@@ -330,7 +341,7 @@ function ActionCard({
 
         {action.actionType === "SEND_WEBHOOK" && (
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">
+            <label className="text-xs font-medium text-gray-700 mb-1.5 block">
               כתובת ה-Webhook (URL)
             </label>
             <input
@@ -338,9 +349,9 @@ function ActionCard({
               value={(action.config.url as string) || ""}
               onChange={(e) => onUpdateConfig("url", e.target.value)}
               placeholder="https://api.example.com/webhook"
-              className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dir-ltr"
+              className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all dir-ltr"
             />
-            <p className="text-[10px] text-slate-500 mt-1">
+            <p className="text-[10px] text-gray-500 mt-1.5">
               אנו נשלח בקשת POST לכתובת זו עם כל פרטי המשימה והמשתמש המבצע.
             </p>
           </div>
@@ -349,7 +360,7 @@ function ActionCard({
         {action.actionType === "CREATE_TASK" && (
           <>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                 כותרת המשימה *
               </label>
               <input
@@ -357,28 +368,30 @@ function ActionCard({
                 value={(action.config.title as string) || ""}
                 onChange={(e) => onUpdateConfig("title", e.target.value)}
                 placeholder="שם המשימה החדשה"
-                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">תיאור</label>
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                תיאור
+              </label>
               <input
                 type="text"
                 value={(action.config.description as string) || ""}
                 onChange={(e) => onUpdateConfig("description", e.target.value)}
                 placeholder="תיאור המשימה"
-                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">
+                <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                   סטטוס
                 </label>
                 <select
                   value={(action.config.status as string) || "todo"}
                   onChange={(e) => onUpdateConfig("status", e.target.value)}
-                  className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 >
                   <option value="todo">לביצוע</option>
                   <option value="in_progress">בטיפול</option>
@@ -386,13 +399,13 @@ function ActionCard({
                 </select>
               </div>
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">
+                <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                   עדיפות
                 </label>
                 <select
                   value={(action.config.priority as string) || ""}
                   onChange={(e) => onUpdateConfig("priority", e.target.value)}
-                  className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 >
                   <option value="">ללא</option>
                   <option value="low">נמוכה</option>
@@ -402,7 +415,7 @@ function ActionCard({
               </div>
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                 הקצה ל-
               </label>
               <select
@@ -413,7 +426,7 @@ function ActionCard({
                     e.target.value ? parseInt(e.target.value) : undefined,
                   )
                 }
-                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               >
                 <option value="">ללא הקצאה</option>
                 {users.map((user) => (
@@ -429,7 +442,7 @@ function ActionCard({
         {action.actionType === "UPDATE_TASK" && (
           <>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                 מזהה המשימה (Task ID)
               </label>
               <input
@@ -437,11 +450,11 @@ function ActionCard({
                 value={(action.config.taskId as string) || ""}
                 onChange={(e) => onUpdateConfig("taskId", e.target.value)}
                 placeholder="ID של המשימה לעדכון"
-                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                 סטטוס חדש
               </label>
               <select
@@ -455,7 +468,7 @@ function ActionCard({
                     status: e.target.value || undefined,
                   })
                 }
-                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               >
                 <option value="">ללא שינוי</option>
                 <option value="todo">לביצוע</option>
@@ -470,7 +483,7 @@ function ActionCard({
         {action.actionType === "CREATE_FINANCE" && (
           <>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                 כותרת *
               </label>
               <input
@@ -478,12 +491,12 @@ function ActionCard({
                 value={(action.config.title as string) || ""}
                 onChange={(e) => onUpdateConfig("title", e.target.value)}
                 placeholder="שם הרשומה"
-                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">
+                <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                   סכום *
                 </label>
                 <input
@@ -493,17 +506,17 @@ function ActionCard({
                     onUpdateConfig("amount", parseFloat(e.target.value))
                   }
                   placeholder="0.00"
-                  className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 />
               </div>
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">
+                <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                   סוג *
                 </label>
                 <select
                   value={(action.config.type as string) || "INCOME"}
                   onChange={(e) => onUpdateConfig("type", e.target.value)}
-                  className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 >
                   <option value="INCOME">הכנסה</option>
                   <option value="EXPENSE">הוצאה</option>
@@ -511,7 +524,7 @@ function ActionCard({
               </div>
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                 קטגוריה
               </label>
               <input
@@ -519,7 +532,7 @@ function ActionCard({
                 value={(action.config.category as string) || ""}
                 onChange={(e) => onUpdateConfig("category", e.target.value)}
                 placeholder='לדוגמה: "מכירות"'
-                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               />
             </div>
           </>
@@ -528,13 +541,15 @@ function ActionCard({
         {action.actionType === "UPDATE_RECORD" && (
           <>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">טבלה</label>
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                טבלה
+              </label>
               <select
                 value={(action.config.tableId as number) || ""}
                 onChange={(e) =>
                   onUpdateConfig("tableId", parseInt(e.target.value))
                 }
-                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               >
                 <option value="">בחר טבלה...</option>
                 {tables.map((table) => (
@@ -545,7 +560,7 @@ function ActionCard({
               </select>
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                 מזהה רשומה (Record ID)
               </label>
               <input
@@ -555,11 +570,11 @@ function ActionCard({
                   onUpdateConfig("recordId", parseInt(e.target.value))
                 }
                 placeholder="ID של הרשומה"
-                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
                 עדכונים (JSON)
               </label>
               <textarea
@@ -573,8 +588,72 @@ function ActionCard({
                   }
                 }}
                 placeholder='{"fieldKey": "newValue"}'
-                className="w-full bg-slate-900/50 border border-slate-600 rounded px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono resize-none"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono resize-none"
                 rows={3}
+              />
+            </div>
+          </>
+        )}
+
+        {action.actionType === "CREATE_CALENDAR_EVENT" && (
+          <>
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                כותרת האירוע *
+              </label>
+              <input
+                type="text"
+                value={(action.config.title as string) || ""}
+                onChange={(e) => onUpdateConfig("title", e.target.value)}
+                placeholder="פגישת היכרות"
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                תיאור
+              </label>
+              <input
+                type="text"
+                value={(action.config.description as string) || ""}
+                onChange={(e) => onUpdateConfig("description", e.target.value)}
+                placeholder="פרטי האירוע..."
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                  שעת התחלה
+                </label>
+                <input
+                  type="datetime-local"
+                  value={(action.config.startTime as string) || ""}
+                  onChange={(e) => onUpdateConfig("startTime", e.target.value)}
+                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                  שעת סיום
+                </label>
+                <input
+                  type="datetime-local"
+                  value={(action.config.endTime as string) || ""}
+                  onChange={(e) => onUpdateConfig("endTime", e.target.value)}
+                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                צבע
+              </label>
+              <input
+                type="color"
+                value={(action.config.color as string) || "#3b82f6"}
+                onChange={(e) => onUpdateConfig("color", e.target.value)}
+                className="w-full h-10 p-1 bg-white border border-gray-200 rounded-lg cursor-pointer"
               />
             </div>
           </>

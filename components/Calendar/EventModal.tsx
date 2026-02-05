@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { EventAutomationBuilder } from "./EventAutomationBuilder";
+import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
 
 interface EventModalProps {
   isOpen: boolean;
@@ -528,87 +529,110 @@ export function EventModal({
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {automations.map((auto) => (
-                          <div
-                            key={auto.id}
-                            className="bg-white border border-gray-200 rounded-xl p-4 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow group"
-                          >
-                            <div className="flex items-center gap-4">
-                              <div
-                                className={`w-12 h-12 rounded-full flex items-center justify-center shadow-inner ${
-                                  auto.actionType === "SEND_NOTIFICATION"
-                                    ? "bg-yellow-50 text-yellow-600"
-                                    : auto.actionType === "CREATE_TASK"
-                                      ? "bg-green-50 text-green-600"
-                                      : auto.actionType === "SEND_WHATSAPP"
-                                        ? "bg-[#e6f7ee] text-green-700"
-                                        : "bg-gray-50 text-gray-600"
-                                }`}
-                              >
-                                {auto.actionType === "SEND_NOTIFICATION" ? (
-                                  <Bell size={20} />
-                                ) : auto.actionType === "CREATE_TASK" ? (
-                                  <CheckSquare size={20} />
-                                ) : auto.actionType === "SEND_WHATSAPP" ? (
-                                  <Smartphone size={20} />
-                                ) : (
-                                  <Webhook size={20} />
-                                )}
-                              </div>
-                              <div>
-                                <div className="font-bold text-gray-800">
-                                  {auto.name || "אוטומציה ללא שם"}
-                                </div>
-                                <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-1">
-                                  <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 font-medium">
-                                    {auto.triggerConfig?.minutesBefore} דקות
-                                    לפני
-                                  </span>
-                                  <span>•</span>
-                                  <span>
-                                    {auto.actionType === "SEND_NOTIFICATION"
-                                      ? "התראה"
+                        {automations.map((auto) => {
+                          let displayName = auto.name || "אוטומציה ללא שם";
+                          // Legacy translation
+                          if (
+                            displayName.includes("Global Event Automation") ||
+                            displayName.includes("Event Automation")
+                          ) {
+                            displayName = displayName
+                              .replace(
+                                "Global Event Automation",
+                                "אוטומציה גלובלית של אירועי יומן",
+                              )
+                              .replace("Event Automation", "אוטומציה לאירוע");
+
+                            if (displayName.includes("m before")) {
+                              displayName = displayName.replace(
+                                "m before",
+                                " דקות לפני",
+                              );
+                            }
+                          }
+
+                          return (
+                            <div
+                              key={auto.id}
+                              className="bg-white border border-gray-200 rounded-xl p-4 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow group"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div
+                                  className={`w-12 h-12 rounded-full flex items-center justify-center shadow-inner ${
+                                    auto.actionType === "SEND_NOTIFICATION"
+                                      ? "bg-yellow-50 text-yellow-600"
                                       : auto.actionType === "CREATE_TASK"
-                                        ? "משימה"
+                                        ? "bg-green-50 text-green-600"
                                         : auto.actionType === "SEND_WHATSAPP"
-                                          ? "WhatsApp"
-                                          : "פעולה"}
-                                  </span>
+                                          ? "bg-[#e6f7ee] text-green-700"
+                                          : "bg-gray-50 text-gray-600"
+                                  }`}
+                                >
+                                  {auto.actionType === "SEND_NOTIFICATION" ? (
+                                    <Bell size={20} />
+                                  ) : auto.actionType === "CREATE_TASK" ? (
+                                    <CheckSquare size={20} />
+                                  ) : auto.actionType === "SEND_WHATSAPP" ? (
+                                    <WhatsAppIcon size={20} />
+                                  ) : (
+                                    <Webhook size={20} />
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-gray-800">
+                                    {displayName}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-1">
+                                    <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 font-medium">
+                                      {auto.triggerConfig?.minutesBefore} דקות
+                                      לפני
+                                    </span>
+                                    <span>•</span>
+                                    <span>
+                                      {auto.actionType === "SEND_NOTIFICATION"
+                                        ? "התראה"
+                                        : auto.actionType === "CREATE_TASK"
+                                          ? "משימה"
+                                          : auto.actionType === "SEND_WHATSAPP"
+                                            ? "WhatsApp"
+                                            : "פעולה"}
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                            <div className="flex gap-2 opacity-100">
-                              <button
-                                onClick={() => handleEditAuto(auto)}
-                                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-all"
-                                title="ערוך אוטומציה"
-                              >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  width="16"
-                                  height="16"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  className="lucide lucide-pencil"
+                              <div className="flex gap-2 opacity-100">
+                                <button
+                                  onClick={() => handleEditAuto(auto)}
+                                  className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-all"
+                                  title="ערוך אוטומציה"
                                 >
-                                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                                  <path d="m15 5 4 4" />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => handleDeleteAuto(auto.id)}
-                                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
-                                title="מחק אוטומציה"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-pencil"
+                                  >
+                                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                                    <path d="m15 5 4 4" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteAuto(auto.id)}
+                                  className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                                  title="מחק אוטומציה"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>

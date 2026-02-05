@@ -544,6 +544,9 @@ export async function getAutomationRules() {
         creator: {
           select: { name: true },
         },
+        calendarEvent: {
+          select: { title: true },
+        },
       },
     });
     return { success: true, data: rules };

@@ -70,7 +70,7 @@ export async function updateDepartment(
     icon?: string;
     managerId?: number;
     isActive?: boolean;
-  }
+  },
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
@@ -242,7 +242,7 @@ export async function updateWorker(
     linkedUserId?: number;
     avatar?: string;
     customFields?: Record<string, unknown>;
-  }
+  },
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
@@ -365,7 +365,7 @@ export async function updateOnboardingPath(
     isDefault?: boolean;
     isActive?: boolean;
     estimatedDays?: number;
-  }
+  },
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
@@ -469,7 +469,7 @@ export async function updateOnboardingStep(
     resourceType?: string;
     isRequired?: boolean;
     onCompleteActions?: unknown[];
-  }
+  },
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
@@ -497,7 +497,7 @@ export async function deleteOnboardingStep(id: number) {
 
 export async function reorderOnboardingSteps(
   pathId: number,
-  stepIds: number[]
+  stepIds: number[],
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
@@ -507,8 +507,8 @@ export async function reorderOnboardingSteps(
       prisma.onboardingStep.update({
         where: { id },
         data: { order: index },
-      })
-    )
+      }),
+    ),
   );
 
   revalidatePath("/workers");
@@ -561,7 +561,7 @@ export async function updateStepProgress(
     notes?: string;
     score?: number;
     feedback?: string;
-  }
+  },
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
@@ -610,9 +610,23 @@ export async function updateStepProgress(
       }>;
       if (Array.isArray(actions) && actions.length > 0) {
         console.log(
-          `[Workers] Executing ${actions.length} automations for step ${step.title}`
+          `[Workers] Executing ${actions.length} automations for step ${step.title}`,
         );
-        await executeOnboardingStepAutomations(actions, step, user);
+
+        // Fetch worker for automation context
+        const onboardingRec = await prisma.workerOnboarding.findUnique({
+          where: { id: onboardingId },
+          include: { worker: true },
+        });
+
+        if (onboardingRec?.worker) {
+          await executeOnboardingStepAutomations(
+            actions,
+            step,
+            user,
+            onboardingRec.worker,
+          );
+        }
       }
     } catch (autoError) {
       console.error("[Workers] Error executing automations:", autoError);
@@ -636,7 +650,7 @@ export async function updateStepProgress(
     const completedRequired = onboarding.stepProgress.filter(
       (sp) =>
         sp.status === "COMPLETED" &&
-        requiredSteps.some((rs) => rs.id === sp.stepId)
+        requiredSteps.some((rs) => rs.id === sp.stepId),
     );
 
     const allRequiredCompleted =
@@ -708,8 +722,9 @@ export async function getWorkersByOnboardingPath(pathId: number) {
 
   return workerProgress.map((wp) => {
     const totalSteps = wp.path.steps.length;
+    const stepIds = new Set(wp.path.steps.map((s) => s.id));
     const completedSteps = wp.stepProgress.filter(
-      (sp) => sp.status === "COMPLETED"
+      (sp) => sp.status === "COMPLETED" && stepIds.has(sp.stepId),
     ).length;
     const progress =
       totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
@@ -785,7 +800,7 @@ export async function updateWorkerTask(
     status?: string;
     dueDate?: Date;
     completedAt?: Date;
-  }
+  },
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
@@ -878,12 +893,16 @@ interface UserContext {
 async function executeOnboardingStepAutomations(
   actions: OnboardingStepAction[],
   step: StepContext,
-  user: UserContext
+  user: UserContext,
+  workerData?: any,
 ) {
   if (!actions || !Array.isArray(actions) || actions.length === 0) return;
 
+  const { executeWhatsAppAction, executeWebhookAction } =
+    await import("./automations");
+
   console.log(
-    `[Workers] Executing ${actions.length} automations for step: ${step.title}`
+    `[Workers] Executing ${actions.length} automations for step: ${step.title}`,
   );
 
   for (const action of actions) {
@@ -904,6 +923,50 @@ async function executeOnboardingStepAutomations(
         case "SEND_NOTIFICATION":
           await executeSendNotificationAction(action.config, step, user);
           break;
+        case "SEND_WHATSAPP":
+          if (workerData) {
+            // Adapt config from TaskItemAutomations to executeWhatsAppAction format
+            const adaptedConfig = {
+              ...action.config,
+              // Map 'phone' input to 'manual:PHONE' format required by action
+              phoneColumnId: action.config.phone
+                ? `manual:${action.config.phone}`
+                : undefined,
+              // Map 'message' to 'content'
+              content: action.config.message,
+            };
+
+            await executeWhatsAppAction(
+              { actionConfig: adaptedConfig },
+              workerData,
+              step.path.companyId,
+            );
+          }
+          break;
+        case "WEBHOOK":
+          if (workerData) {
+            const webhookData = {
+              ...workerData,
+              stepId: step.id,
+              stepTitle: step.title,
+              pathName: step.path.name,
+              actorName: user.name,
+            };
+            await executeWebhookAction(
+              {
+                id: 0, // Mock ID for onboarding automation
+                name: `Onboarding: ${step.title}`,
+                triggerType: "ONBOARDING_STEP_COMPLETED",
+                actionConfig: action.config,
+              },
+              webhookData,
+              step.path.companyId,
+            );
+          }
+          break;
+        case "CREATE_CALENDAR_EVENT":
+          await executeCreateCalendarEventAction(action.config, user);
+          break;
         default:
           console.warn(`[Workers] Unknown action type: ${action.actionType}`);
       }
@@ -913,10 +976,37 @@ async function executeOnboardingStepAutomations(
   }
 }
 
+// Create a calendar event
+async function executeCreateCalendarEventAction(
+  config: Record<string, unknown>,
+  user: UserContext,
+) {
+  const { createCalendarEvent } = await import("./calendar");
+  const { title, description, startTime, endTime, color } = config as {
+    title?: string;
+    description?: string;
+    startTime?: string;
+    endTime?: string;
+    color?: string;
+  };
+
+  if (!title || !startTime || !endTime) return;
+
+  await createCalendarEvent({
+    title,
+    description: description || undefined,
+    startTime,
+    endTime,
+    color: color || undefined,
+  });
+
+  console.log(`[Workers] Created calendar event: ${title}`);
+}
+
 // Update a record in a table
 async function executeUpdateRecordAction(
   config: Record<string, unknown>,
-  companyId: number
+  companyId: number,
 ) {
   const { tableId, recordId, updates } = config as {
     tableId: number;
@@ -950,7 +1040,7 @@ async function executeUpdateRecordAction(
 // Create a new task
 async function executeCreateTaskAction(
   config: Record<string, unknown>,
-  user: UserContext
+  user: UserContext,
 ) {
   const { title, description, status, priority, assigneeId, dueDate } =
     config as {
@@ -1010,7 +1100,7 @@ async function executeUpdateTaskAction(config: Record<string, unknown>) {
 // Create a finance record
 async function executeCreateFinanceAction(
   config: Record<string, unknown>,
-  companyId: number
+  companyId: number,
 ) {
   const { title, amount, type, category, clientId, description } = config as {
     title?: string;
@@ -1044,7 +1134,7 @@ async function executeCreateFinanceAction(
 async function executeSendNotificationAction(
   config: Record<string, unknown>,
   step: StepContext,
-  user: UserContext
+  user: UserContext,
 ) {
   const { recipientId, title, message } = config as {
     recipientId?: number;

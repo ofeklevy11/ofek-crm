@@ -230,8 +230,9 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
     onboarding: (typeof worker.onboardingProgress)[0],
   ) => {
     const totalSteps = onboarding.path.steps.length;
+    const stepIds = new Set(onboarding.path.steps.map((s) => s.id));
     const completedSteps = onboarding.stepProgress.filter(
-      (sp) => sp.status === "COMPLETED",
+      (sp) => sp.status === "COMPLETED" && stepIds.has(sp.stepId),
     ).length;
     const progress =
       totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;

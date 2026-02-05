@@ -68,7 +68,21 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
   const { isConnected } = useRealtime(userId, (msg) => {
     if (msg.channel === `user:${userId}:notifications`) {
       // Add new notification to state
-      setNotifications((prev) => [msg.data, ...prev]);
+      setNotifications((prev) => {
+        // Prevent duplicates
+        if (prev.some((n) => n.id === msg.data.id)) {
+          return prev;
+        }
+
+        // Ensure proper typing and force unread status for new notifications
+        const newNotification = {
+          ...msg.data,
+          read: false,
+          createdAt: new Date(msg.data.createdAt),
+        };
+
+        return [newNotification, ...prev];
+      });
     }
   });
 

@@ -20,6 +20,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { EventAutomationBuilder } from "./EventAutomationBuilder";
+import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
 
 interface GlobalEventAutomationsModalProps {
   isOpen: boolean;
@@ -199,79 +200,103 @@ export function GlobalEventAutomationsModal({
                     </div>
 
                     <div className="grid gap-4">
-                      {automations.map((auto) => (
-                        <div
-                          key={auto.id}
-                          className="bg-white border border-gray-200 rounded-xl p-5 flex justify-between items-center shadow-sm hover:shadow-md transition-all group hover:border-indigo-300"
-                        >
-                          <div className="flex items-center gap-5">
-                            <div
-                              className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-inner ${
-                                auto.actionType === "SEND_NOTIFICATION"
-                                  ? "bg-yellow-50 text-yellow-600"
-                                  : auto.actionType === "CREATE_TASK"
-                                    ? "bg-green-50 text-green-600"
-                                    : auto.actionType === "SEND_WHATSAPP"
-                                      ? "bg-[#e6f7ee] text-green-700"
-                                      : "bg-purple-50 text-purple-600"
-                              }`}
-                            >
-                              {auto.actionType === "SEND_NOTIFICATION" ? (
-                                <Bell size={24} />
-                              ) : auto.actionType === "CREATE_TASK" ? (
-                                <CheckSquare size={24} />
-                              ) : auto.actionType === "SEND_WHATSAPP" ? (
-                                <Smartphone size={24} />
-                              ) : (
-                                <Webhook size={24} />
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="font-bold text-gray-800 text-lg">
-                                  {auto.name || "אוטומציה ללא שם"}
-                                </span>
-                                <span className="bg-indigo-50 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full border border-indigo-100 font-medium">
-                                  קבוע
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 text-sm text-gray-500">
-                                <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-medium flex items-center gap-1">
-                                  <Zap size={12} />
-                                  {auto.triggerConfig?.minutesBefore} דקות לפני
-                                </span>
-                                <span className="text-gray-300">•</span>
-                                <span>
-                                  {auto.actionType === "SEND_NOTIFICATION"
-                                    ? "שליחת התראה למערכת"
-                                    : auto.actionType === "CREATE_TASK"
-                                      ? "משימה אוטומטית"
-                                      : auto.actionType === "SEND_WHATSAPP"
-                                        ? "הודעת WhatsApp"
-                                        : "Webhook"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
+                      {automations.map((auto) => {
+                        let displayName = auto.name || "אוטומציה ללא שם";
+                        // Legacy translation
+                        if (
+                          displayName.includes("Global Event Automation") ||
+                          displayName.includes("Event Automation")
+                        ) {
+                          displayName = displayName
+                            .replace(
+                              "Global Event Automation",
+                              "אוטומציה גלובלית של אירועי יומן",
+                            )
+                            .replace("Event Automation", "אוטומציה לאירוע");
 
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleEdit(auto)}
-                              className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100"
-                              title="ערוך"
-                            >
-                              <Pencil size={18} />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(auto.id)}
-                              className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100"
-                              title="מחק"
-                            >
-                              <Trash2 size={18} />
-                            </button>
+                          if (displayName.includes("m before")) {
+                            displayName = displayName.replace(
+                              "m before",
+                              " דקות לפני",
+                            );
+                          }
+                        }
+
+                        return (
+                          <div
+                            key={auto.id}
+                            className="bg-white border border-gray-200 rounded-xl p-5 flex justify-between items-center shadow-sm hover:shadow-md transition-all group hover:border-indigo-300"
+                          >
+                            <div className="flex items-center gap-5">
+                              <div
+                                className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-inner ${
+                                  auto.actionType === "SEND_NOTIFICATION"
+                                    ? "bg-yellow-50 text-yellow-600"
+                                    : auto.actionType === "CREATE_TASK"
+                                      ? "bg-green-50 text-green-600"
+                                      : auto.actionType === "SEND_WHATSAPP"
+                                        ? "bg-[#e6f7ee] text-green-700"
+                                        : "bg-purple-50 text-purple-600"
+                                }`}
+                              >
+                                {auto.actionType === "SEND_NOTIFICATION" ? (
+                                  <Bell size={24} />
+                                ) : auto.actionType === "CREATE_TASK" ? (
+                                  <CheckSquare size={24} />
+                                ) : auto.actionType === "SEND_WHATSAPP" ? (
+                                  <WhatsAppIcon size={24} />
+                                ) : (
+                                  <Webhook size={24} />
+                                )}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-bold text-gray-800 text-lg">
+                                    {displayName}
+                                  </span>
+                                  <span className="bg-indigo-50 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full border border-indigo-100 font-medium">
+                                    קבוע
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-gray-500">
+                                  <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-medium flex items-center gap-1">
+                                    <Zap size={12} />
+                                    {auto.triggerConfig?.minutesBefore} דקות
+                                    לפני
+                                  </span>
+                                  <span className="text-gray-300">•</span>
+                                  <span>
+                                    {auto.actionType === "SEND_NOTIFICATION"
+                                      ? "שליחת התראה למערכת"
+                                      : auto.actionType === "CREATE_TASK"
+                                        ? "משימה אוטומטית"
+                                        : auto.actionType === "SEND_WHATSAPP"
+                                          ? "הודעת WhatsApp"
+                                          : "Webhook"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleEdit(auto)}
+                                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100"
+                                title="ערוך"
+                              >
+                                <Pencil size={18} />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(auto.id)}
+                                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100"
+                                title="מחק"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}

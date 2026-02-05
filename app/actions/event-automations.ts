@@ -39,7 +39,7 @@ export async function createGlobalEventAutomation(
         companyId: currentUser.companyId,
         name:
           data.name ||
-          `Global Event Automation (${data.minutesBefore}m before)`,
+          `אוטומציה קבועה לאירועים (${data.minutesBefore} דקות לפני)`,
         triggerType: "EVENT_TIME",
         triggerConfig: { minutesBefore: data.minutesBefore },
         actionType: data.actionType,
@@ -102,7 +102,7 @@ export async function updateGlobalEventAutomation(
       data: {
         name:
           data.name ||
-          `Global Event Automation (${data.minutesBefore}m before)`,
+          `אוטומציה קבועה לאירועים (${data.minutesBefore} דקות לפני)`,
         triggerConfig: { minutesBefore: data.minutesBefore },
         actionType: data.actionType,
         actionConfig: finalActionConfig,
@@ -153,7 +153,7 @@ export async function createEventAutomation(data: EventAutomationData) {
     const rule = await prisma.automationRule.create({
       data: {
         companyId: currentUser.companyId,
-        name: data.name || `Event Automation (${data.minutesBefore}m before)`,
+        name: data.name || `אוטומציה לאירוע (${data.minutesBefore} דקות לפני)`,
         triggerType: "EVENT_TIME",
         triggerConfig: { minutesBefore: data.minutesBefore },
         actionType: data.actionType,

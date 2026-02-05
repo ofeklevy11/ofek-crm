@@ -22,6 +22,9 @@ interface AutomationRule {
   creator: {
     name: string;
   };
+  calendarEvent?: {
+    title: string;
+  };
 }
 
 interface AutomationsListProps {
@@ -234,6 +237,9 @@ export default function AutomationsList({
         return `חיוג ישיר ב${dialTableName}`;
       }
 
+      case "EVENT_TIME":
+        return "תזמון אירוע (לפי שעה)";
+
       default:
         return rule.triggerType;
     }
@@ -250,7 +256,7 @@ export default function AutomationsList({
           config.messageType === "media" ? "מדיה" : "הודעה"
         })`;
       case "CREATE_TASK":
-        return `יצירת משימה: ${config.title || "ללא כותרת"}`;
+        return "יצירת משימה";
       case "CALCULATE_DURATION":
         return "מדידת משך זמן בסטטוס";
       case "ADD_TO_NURTURE_LIST":
@@ -282,6 +288,8 @@ export default function AutomationsList({
         }
         return `עדכון שדה: ${columnLabel || "לא הוגדר"}`;
       }
+      case "WEBHOOK":
+        return "שליחת Webhook";
       default:
         return rule.actionType;
     }
@@ -474,11 +482,34 @@ export default function AutomationsList({
 
                 // Construct new Hebrew name
                 displayName = `הוספה לרשימת ${listName}: ${parts.trim()}`;
-              } else {
-                // Fallback simple translation
                 displayName = displayName.replace(
                   "Nurture Auto-Add:",
                   "הוספה אוטומטית:",
+                );
+              }
+
+              // Handle Legacy Event Automation Names
+              if (typeof displayName === "string") {
+                // translate Global Event Automation
+                if (displayName.includes("Global Event Automation")) {
+                  displayName = displayName.replace(
+                    "Global Event Automation",
+                    "אוטומציה גלובלית של אירועי יומן",
+                  );
+                }
+
+                // translate Event Automation (if distinct or part of valid remaining text)
+                if (displayName.includes("Event Automation")) {
+                  displayName = displayName.replace(
+                    "Event Automation",
+                    "אוטומציה לאירוע",
+                  );
+                }
+
+                // translate "m before" to " דקות לפני" using regex for robustness
+                displayName = displayName.replace(
+                  /(\d+)m before/gi,
+                  "$1 דקות לפני",
                 );
               }
             }

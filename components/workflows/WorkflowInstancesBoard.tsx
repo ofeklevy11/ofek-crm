@@ -19,11 +19,13 @@ import {
   X,
   Edit2,
   Trash,
+  RotateCcw,
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import {
   createWorkflowInstance,
   updateWorkflowInstanceStage,
+  resetWorkflowInstance,
 } from "@/app/actions/workflow-instances";
 import {
   deleteWorkflowInstance,
@@ -54,6 +56,20 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
     assigneeId: "",
   });
 
+  const calculateProgress = (instance: any) => {
+    const stages = instance.workflow.stages || [];
+    if (stages.length === 0) return 0;
+
+    // Filter completed stages to only include those that actually exist in the workflow description
+    // This handles "phantom" completed stages (e.g. if a stage was deleted from the workflow)
+    const stageIds = new Set(stages.map((s: any) => s.id));
+    const validCompletedCount = instance.completedStages.filter((id: number) =>
+      stageIds.has(id),
+    ).length;
+
+    return Math.round((validCompletedCount / stages.length) * 100);
+  };
+
   const handleCreate = async () => {
     if (!newForm.workflowId || !newForm.name) return;
     try {
@@ -73,7 +89,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
   const handleStageToggle = async (
     instanceId: number,
     stageId: number,
-    isCompleted: boolean
+    isCompleted: boolean,
   ) => {
     // Optimistic update could happen here, but for now relying on server revalidate
     await updateWorkflowInstanceStage(instanceId, stageId, isCompleted);
@@ -83,7 +99,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
       const newCompleted = isCompleted
         ? [...selectedInstance.completedStages, stageId]
         : selectedInstance.completedStages.filter(
-            (id: number) => id !== stageId
+            (id: number) => id !== stageId,
           );
 
       setSelectedInstance({
@@ -140,6 +156,29 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
     });
   };
 
+  const handleReset = async () => {
+    if (!selectedInstance) return;
+    if (
+      confirm(
+        "האם אתה בטוח שברצונך לאפס את תהליך העבודה? כל השלבים יסומנו כלא הושלמו.",
+      )
+    ) {
+      try {
+        await resetWorkflowInstance(selectedInstance.id);
+
+        // Update local state to reflect reset
+        setSelectedInstance({
+          ...selectedInstance,
+          completedStages: [],
+          status: "active",
+        });
+      } catch (error) {
+        console.error("Failed to reset workflow:", error);
+        alert("שגיאה באיפוס התהליך");
+      }
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -150,13 +189,24 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
             ניהול ומעקב אחר ביצוע תהליכי עבודה שוטפים
           </p>
         </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 shadow-sm transition-all"
-        >
-          <PlayCircle size={18} />
-          התחל תהליך חדש
-        </button>
+        <div className="flex flex-col gap-2 items-end">
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 shadow-sm transition-all"
+          >
+            <PlayCircle size={18} />
+            התחל תהליך חדש
+          </button>
+          {selectedInstance && (
+            <button
+              onClick={handleReset}
+              className="flex items-center gap-2 bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-xl hover:bg-gray-50 hover:border-gray-300 shadow-sm transition-all text-sm"
+            >
+              <RotateCcw size={16} />
+              אפס את תהליך העבודה
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main Content Area */}
@@ -196,14 +246,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
               {/* Progress Ring or Bar could go here */}
               <div className="text-right">
                 <div className="text-2xl font-bold text-indigo-600">
-                  {selectedInstance.workflow.stages.length > 0
-                    ? Math.round(
-                        (selectedInstance.completedStages.length /
-                          selectedInstance.workflow.stages.length) *
-                          100
-                      )
-                    : 0}
-                  %
+                  {calculateProgress(selectedInstance)}%
                 </div>
                 <div className="text-xs text-gray-400">הושלם</div>
               </div>
@@ -223,7 +266,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                     !isCompleted &&
                     (index === 0 ||
                       (selectedInstance.completedStages as number[]).includes(
-                        selectedInstance.workflow.stages[index - 1].id
+                        selectedInstance.workflow.stages[index - 1].id,
                       ));
 
                   // @ts-ignore
@@ -261,7 +304,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                           handleStageToggle(
                             selectedInstance.id,
                             stage.id,
-                            !isCompleted
+                            !isCompleted,
                           )
                         }
                         className={`
@@ -270,8 +313,8 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                                         isCompleted
                                           ? "bg-green-500 border-green-500 text-white"
                                           : isCurrent
-                                          ? "bg-white border-indigo-500 text-indigo-500 animate-pulse"
-                                          : "bg-white border-gray-300 text-transparent hover:border-gray-400"
+                                            ? "bg-white border-indigo-500 text-indigo-500 animate-pulse"
+                                            : "bg-white border-gray-300 text-transparent hover:border-gray-400"
                                       }
                                   `}
                       >
@@ -341,14 +384,14 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                                     </span>
                                   </div>
                                 );
-                              }
+                              },
                             )}
                           </div>
                         )}
                       </div>
                     </div>
                   );
-                }
+                },
               )}
 
               {selectedInstance.status === "completed" && (
@@ -449,28 +492,13 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                 <div className="mb-4">
                   <div className="flex justify-between text-xs text-gray-500 mb-1">
                     <span>התקדמות</span>
-                    <span>
-                      {inst.workflow.stages.length > 0
-                        ? Math.round(
-                            (inst.completedStages.length /
-                              inst.workflow.stages.length) *
-                              100
-                          )
-                        : 0}
-                      %
-                    </span>
+                    <span>{calculateProgress(inst)}%</span>
                   </div>
                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-indigo-500 rounded-full transition-all duration-500"
                       style={{
-                        width: `${
-                          inst.workflow.stages.length > 0
-                            ? (inst.completedStages.length /
-                                inst.workflow.stages.length) *
-                              100
-                            : 0
-                        }%`,
+                        width: `${calculateProgress(inst)}%`,
                       }}
                     />
                   </div>
@@ -528,8 +556,8 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                           isEmpty
                             ? "opacity-50 cursor-not-allowed bg-gray-100 border-gray-200"
                             : newForm.workflowId === w.id.toString()
-                            ? "border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500"
-                            : "border-gray-200 hover:border-gray-300"
+                              ? "border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500"
+                              : "border-gray-200 hover:border-gray-300"
                         }`}
                       >
                         <div className="font-medium text-sm">{w.name}</div>

@@ -17,6 +17,7 @@ import {
   Webhook,
 } from "lucide-react";
 import { getUsers } from "@/app/actions/users";
+import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
 
 interface EventAutomationBuilderProps {
   onSave: (data: {
@@ -73,6 +74,8 @@ export function EventAutomationBuilder({
   const [taskDesc, setTaskDesc] = useState("האירוע מתחיל ב-{eventStart}");
   const [taskAssignee, setTaskAssignee] = useState("");
   const [taskPriority, setTaskPriority] = useState("medium");
+  // Add Status State
+  const [taskStatus, setTaskStatus] = useState("todo");
   const [taskDueDays, setTaskDueDays] = useState(0);
 
   // Notification
@@ -128,6 +131,7 @@ export function EventAutomationBuilder({
         setTaskDesc(config.description || "");
         setTaskAssignee(config.assigneeId ? String(config.assigneeId) : "");
         setTaskPriority(config.priority || "medium");
+        setTaskStatus(config.status || "todo");
         setTaskDueDays(config.dueDays || 0);
       } else if (initialData.actionType === "SEND_NOTIFICATION") {
         setNotifMessage(config.messageTemplate || "");
@@ -176,6 +180,11 @@ export function EventAutomationBuilder({
         alert("חובה להזין מספר טלפון או Group ID");
         return;
       }
+    } else if (actionType === "WEBHOOK") {
+      if (!webhookUrl || webhookUrl.trim() === "") {
+        alert("חובה להזין כתובת URL ל-Webhook");
+        return;
+      }
     }
 
     let config = {};
@@ -185,6 +194,7 @@ export function EventAutomationBuilder({
         description: taskDesc,
         assigneeId: taskAssignee ? Number(taskAssignee) : null,
         priority: taskPriority,
+        status: taskStatus,
         dueDays: Number(taskDueDays),
       };
     } else if (actionType === "SEND_NOTIFICATION") {
@@ -343,7 +353,7 @@ export function EventAutomationBuilder({
                 {
                   id: "SEND_WHATSAPP",
                   title: "הודעת WhatsApp",
-                  icon: Smartphone,
+                  icon: WhatsAppIcon,
                   color: "text-green-600",
                   bg: "bg-green-50",
                   border: "hover:border-green-500",
@@ -429,7 +439,7 @@ export function EventAutomationBuilder({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       למי להקצות?
@@ -463,6 +473,24 @@ export function EventAutomationBuilder({
                       <option value="medium">רגילה</option>
                       <option value="high">גבוהה</option>
                       <option value="critical">קריטית</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      סטטוס
+                    </label>
+                    <select
+                      value={taskStatus}
+                      onChange={(e) => setTaskStatus(e.target.value)}
+                      className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="todo">משימות</option>
+                      <option value="in_progress">משימות בטיפול</option>
+                      <option value="waiting_client">
+                        ממתינים לאישור לקוח
+                      </option>
+                      <option value="on_hold">משימות בהשהייה</option>
+                      <option value="completed_month">בוצעו החודש</option>
                     </select>
                   </div>
                 </div>
@@ -549,7 +577,7 @@ export function EventAutomationBuilder({
 
                 <div className="flex items-center gap-3 border-b pb-4 mb-4">
                   <div className="p-2 bg-green-100 rounded-lg text-green-700">
-                    <Smartphone />
+                    <WhatsAppIcon />
                   </div>
                   <h3 className="text-lg md:text-xl font-bold text-gray-800">
                     הודעת WhatsApp
@@ -569,7 +597,7 @@ export function EventAutomationBuilder({
                       placeholder="+972501234567"
                     />
                     <div className="absolute right-3 top-2.5 text-gray-400 pointer-events-none">
-                      <Smartphone size={16} />
+                      <WhatsAppIcon size={16} />
                     </div>
                   </div>
                   <p
@@ -607,44 +635,6 @@ export function EventAutomationBuilder({
                     </div>
                   </div>
                   <AvailableVariables />
-                </div>
-
-                {/* WhatsApp Preview */}
-                <div className="border border-gray-300 rounded-xl overflow-hidden bg-gray-50 shadow-sm">
-                  <div className="bg-gray-800 text-white p-3 text-xs font-mono flex items-center justify-between">
-                    <span>API Payload Preview (Green-API)</span>
-                    <span className="opacity-50">JSON</span>
-                  </div>
-                  <div
-                    className="p-4 font-mono text-sm overflow-x-auto text-gray-800"
-                    dir="ltr"
-                  >
-                    <pre>
-                      {JSON.stringify(
-                        {
-                          chatId: (() => {
-                            let p = waPhone.trim();
-                            if (!p) return "MISSING_PHONE_NUMBER";
-                            if (p.endsWith("@g.us")) return p;
-                            p = p.replace(/\D/g, "");
-                            if (p.startsWith("0")) p = "972" + p.substring(1);
-                            if (!p.endsWith("@c.us")) p += "@c.us";
-                            return p;
-                          })(),
-                          message: (() => {
-                            let m = waMessage
-                              .replace(/{eventTitle}/g, "פגישה עם לקוח")
-                              .replace(/{eventStart}/g, "10:30, 25/11/2024")
-                              .replace(/{eventEnd}/g, "11:30, 25/11/2024");
-                            // Basic example replacement
-                            return m;
-                          })(),
-                        },
-                        null,
-                        2,
-                      )}
-                    </pre>
-                  </div>
                 </div>
 
                 <div className="bg-blue-50 p-3 rounded-lg flex gap-2 items-start text-xs text-blue-700">

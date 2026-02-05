@@ -34,7 +34,10 @@ interface OnCompleteAction {
     | "CREATE_TASK"
     | "UPDATE_TASK"
     | "CREATE_FINANCE"
-    | "SEND_NOTIFICATION";
+    | "SEND_NOTIFICATION"
+    | "SEND_WEBHOOK"
+    | "SEND_WHATSAPP"
+    | "CREATE_CALENDAR_EVENT";
   config: Record<string, unknown>;
 }
 
@@ -96,7 +99,7 @@ export default function OnboardingPathModal({
 }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeSection, setActiveSection] = useState<"details" | "steps">(
-    "details"
+    "details",
   );
   const [formData, setFormData] = useState({
     name: path?.name ?? "",
@@ -136,8 +139,8 @@ export default function OnboardingPathModal({
     // Update local steps
     setSteps((currentSteps) =>
       currentSteps.map((s) =>
-        s.id === editingStepId ? { ...s, ...editingStepData } : s
-      )
+        s.id === editingStepId ? { ...s, ...editingStepData } : s,
+      ),
     );
 
     // Save to server
@@ -151,7 +154,7 @@ export default function OnboardingPathModal({
       if (Object.keys(cleanUpdates).length > 0) {
         await updateOnboardingStep(
           editingStepId,
-          cleanUpdates as Parameters<typeof updateOnboardingStep>[1]
+          cleanUpdates as Parameters<typeof updateOnboardingStep>[1],
         );
       }
     }
@@ -277,7 +280,7 @@ export default function OnboardingPathModal({
 
   const handleUpdateStep = async (
     stepId: number,
-    updates: Partial<OnboardingStep>
+    updates: Partial<OnboardingStep>,
   ) => {
     if (path && stepId > 0) {
       const cleanUpdates: Record<string, unknown> = {};
@@ -289,7 +292,7 @@ export default function OnboardingPathModal({
       if (Object.keys(cleanUpdates).length > 0) {
         await updateOnboardingStep(
           stepId,
-          cleanUpdates as Parameters<typeof updateOnboardingStep>[1]
+          cleanUpdates as Parameters<typeof updateOnboardingStep>[1],
         );
       }
     }
@@ -301,11 +304,11 @@ export default function OnboardingPathModal({
   // Using a ref to avoid re-renders during editing
   const updateStepFieldInline = async (
     stepId: number,
-    updates: Partial<OnboardingStep>
+    updates: Partial<OnboardingStep>,
   ) => {
     // Update local steps state
     setSteps((currentSteps) =>
-      currentSteps.map((s) => (s.id === stepId ? { ...s, ...updates } : s))
+      currentSteps.map((s) => (s.id === stepId ? { ...s, ...updates } : s)),
     );
 
     // Save to server if this is a saved path
@@ -319,7 +322,7 @@ export default function OnboardingPathModal({
       if (Object.keys(cleanUpdates).length > 0) {
         await updateOnboardingStep(
           stepId,
-          cleanUpdates as Parameters<typeof updateOnboardingStep>[1]
+          cleanUpdates as Parameters<typeof updateOnboardingStep>[1],
         );
       }
     }
@@ -352,7 +355,7 @@ export default function OnboardingPathModal({
     if (path) {
       await reorderOnboardingSteps(
         path.id,
-        newSteps.map((s) => s.id)
+        newSteps.map((s) => s.id),
       );
     }
   };

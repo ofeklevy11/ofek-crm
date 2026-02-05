@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
+import { createNotificationForCompany } from "@/app/actions/notifications";
 
 export async function getWorkflowInstances() {
   const user = await getCurrentUser();
@@ -148,6 +149,34 @@ export async function deleteWorkflowInstance(instanceId: number) {
   revalidatePath("/workflows");
 }
 
+export async function resetWorkflowInstance(instanceId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+
+  // CRITICAL: Verify instance belongs to user's company
+  const instance = await prisma.workflowInstance.findFirst({
+    where: { id: instanceId, companyId: user.companyId },
+    include: {
+      workflow: { include: { stages: { orderBy: { order: "asc" } } } },
+    },
+  });
+
+  if (!instance) throw new Error("Instance not found or access denied");
+
+  const firstStage = instance.workflow.stages[0];
+
+  await prisma.workflowInstance.update({
+    where: { id: instanceId },
+    data: {
+      completedStages: [],
+      currentStageId: firstStage ? firstStage.id : null,
+      status: "active",
+    },
+  });
+
+  revalidatePath("/workflows");
+}
+
 // ----------------------------------------------------------------------
 // AUTOMATION EXECUTOR
 // ----------------------------------------------------------------------
@@ -203,15 +232,12 @@ async function executeStageAutomations(stage: any, instance: any, user: any) {
 
         case "notification":
           if (config.recipientId && config.message) {
-            await prisma.notification.create({
-              data: {
-                companyId: user.companyId,
-                userId: Number(config.recipientId),
-                title: "התראה מתהליך עבודה",
-                message: `${config.message} (תהליך: ${instance.name})`,
-                link: `/workflows`,
-                read: false,
-              },
+            await createNotificationForCompany({
+              companyId: user.companyId,
+              userId: Number(config.recipientId),
+              title: "התראה מתהליך עבודה",
+              message: `${config.message} (תהליך: ${instance.name})`,
+              link: `/workflows`,
             });
             console.log(
               `[Automation] Notification sent to user ${config.recipientId}`,
