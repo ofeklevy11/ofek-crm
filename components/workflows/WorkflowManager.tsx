@@ -24,6 +24,7 @@ interface WorkflowManagerProps {
   initialWorkflows: WorkflowWithStages[];
   initialInstances: any[]; // Typed as any to avoid build errors until Prisma generates
   users: User[];
+  currentUser: any; // We use 'any' or import the User type from permissions
 }
 
 type Tab = "active" | "templates";
@@ -32,6 +33,7 @@ export function WorkflowManager({
   initialWorkflows,
   initialInstances,
   users,
+  currentUser,
 }: WorkflowManagerProps) {
   const [activeTab, setActiveTab] = useState<Tab>("active");
 
@@ -39,7 +41,7 @@ export function WorkflowManager({
   const [workflows, setWorkflows] =
     useState<WorkflowWithStages[]>(initialWorkflows);
   const [activeWorkflowId, setActiveWorkflowId] = useState<number | null>(
-    initialWorkflows.length > 0 ? initialWorkflows[0].id : null
+    initialWorkflows.length > 0 ? initialWorkflows[0].id : null,
   );
 
   const activeWorkflow = workflows.find((w) => w.id === activeWorkflowId);
@@ -158,17 +160,17 @@ export function WorkflowManager({
                     onClick={async () => {
                       if (
                         confirm(
-                          `האם אתה בטוח שברצונך למחוק את התבנית "${activeWorkflow.name}"?`
+                          `האם אתה בטוח שברצונך למחוק את התבנית "${activeWorkflow.name}"?`,
                         )
                       ) {
                         await deleteWorkflow(activeWorkflow.id);
                         setActiveWorkflowId(
                           workflows.find((w) => w.id !== activeWorkflow.id)
-                            ?.id || null
+                            ?.id || null,
                         );
                         // Optimistic update
                         setWorkflows(
-                          workflows.filter((w) => w.id !== activeWorkflow.id)
+                          workflows.filter((w) => w.id !== activeWorkflow.id),
                         );
                       }
                     }}
@@ -181,13 +183,14 @@ export function WorkflowManager({
 
                 <WorkflowBoard
                   workflow={activeWorkflow}
+                  currentUser={currentUser}
                   onStageCreated={(newStage: WorkflowStage) => {
                     setWorkflows((prev) =>
                       prev.map((w) =>
                         w.id === newStage.workflowId
                           ? { ...w, stages: [...w.stages, newStage] }
-                          : w
-                      )
+                          : w,
+                      ),
                     );
                   }}
                   onStageUpdated={(updatedStage: WorkflowStage) => {
@@ -197,11 +200,11 @@ export function WorkflowManager({
                           ? {
                               ...w,
                               stages: w.stages.map((s) =>
-                                s.id === updatedStage.id ? updatedStage : s
+                                s.id === updatedStage.id ? updatedStage : s,
                               ),
                             }
-                          : w
-                      )
+                          : w,
+                      ),
                     );
                   }}
                   onStageDeleted={(stageId: number) => {
@@ -212,8 +215,8 @@ export function WorkflowManager({
                               ...w,
                               stages: w.stages.filter((s) => s.id !== stageId),
                             }
-                          : w
-                      )
+                          : w,
+                      ),
                     );
                   }}
                 />

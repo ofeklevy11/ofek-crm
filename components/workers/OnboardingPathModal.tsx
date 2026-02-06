@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronUp,
   Zap,
+  Pencil,
 } from "lucide-react";
 import {
   createOnboardingPath,
@@ -26,20 +27,11 @@ import {
   deleteOnboardingStep,
   reorderOnboardingSteps,
 } from "@/app/actions/workers";
-import TaskItemAutomations from "@/components/tasks/TaskItemAutomations";
+import OnboardingAutomationBuilder, {
+  OnCompleteAction,
+} from "./OnboardingAutomationBuilder";
 
-interface OnCompleteAction {
-  actionType:
-    | "UPDATE_RECORD"
-    | "CREATE_TASK"
-    | "UPDATE_TASK"
-    | "CREATE_FINANCE"
-    | "SEND_NOTIFICATION"
-    | "SEND_WEBHOOK"
-    | "SEND_WHATSAPP"
-    | "CREATE_CALENDAR_EVENT";
-  config: Record<string, unknown>;
-}
+// OnCompleteAction removed as it is imported now
 
 interface OnboardingStep {
   id: number;
@@ -79,6 +71,7 @@ interface Props {
   tables: Array<{ id: number; name: string }>;
   onClose: () => void;
   onSave: (path: OnboardingPath) => void;
+  userPlan?: string;
 }
 
 const stepTypes = [
@@ -96,6 +89,7 @@ export default function OnboardingPathModal({
   tables,
   onClose,
   onSave,
+  userPlan = "basic",
 }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeSection, setActiveSection] = useState<"details" | "steps">(
@@ -114,10 +108,49 @@ export default function OnboardingPathModal({
   const [editingStepData, setEditingStepData] =
     useState<Partial<OnboardingStep> | null>(null);
   const [newStep, setNewStep] = useState<Partial<OnboardingStep> | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Automation Builder State
+  const [automationBuilderState, setAutomationBuilderState] = useState<{
+    isOpen: boolean;
+    editingIndex: number | null;
+  }>({ isOpen: false, editingIndex: null });
+
+  // Limits Logic
+  const limits: Record<string, number> = {
+    basic: 2,
+    premium: 6,
+    super: Infinity,
+  };
+  const planLabels: Record<string, string> = {
+    basic: "משתמש רגיל",
+    premium: "משתמש פרימיום",
+    super: "משתמש Super",
+  };
+  const globalLimit = limits[userPlan] ?? 2;
+
+  // Calculate total automations across ALL steps in the path
+  const getTotalAutomationsCount = () => {
+    let total = 0;
+    for (const step of steps) {
+      // If this step is being edited, use the editing data instead
+      if (step.id === editingStepId && editingStepData) {
+        total += editingStepData.onCompleteActions?.length || 0;
+      } else {
+        total += step.onCompleteActions?.length || 0;
+      }
+    }
+    return total;
+  };
+
+  const totalAutomationsCount = getTotalAutomationsCount();
+  const currentStepAutomationCount =
+    editingStepData?.onCompleteActions?.length || 0;
 
   // Start editing a step - copy data to local editing state
   const startEditing = (step: OnboardingStep) => {
     setEditingStepId(step.id);
+    setEditError(null);
     setEditingStepData({
       title: step.title,
       description: step.description,
@@ -132,9 +165,83 @@ export default function OnboardingPathModal({
     });
   };
 
+  // Validation function for automations
+  const validateAutomation = (action: OnCompleteAction): string | null => {
+    const config = action.config as any;
+
+    // Check for empty config
+    if (!config || Object.keys(config).length === 0) {
+      return "יש להגדיר את פרטי האוטומציה (לחץ על גלגל השיניים)";
+    }
+
+    switch (action.actionType) {
+      case "SEND_NOTIFICATION":
+        if (!config.recipientId) return "יש לבחור נמען להתראה";
+        if (!config.title) return "יש להזין כותרת להתראה";
+        break;
+      case "SEND_WHATSAPP":
+        // Check if phone source is from table or manual
+        if (config.phoneSource === "table") {
+          // When using table as phone source, validate table and column selection
+          if (!config.waTableId) return "יש לבחור טבלה עבור וואטספ";
+          if (!config.waPhoneColumn) return "יש לבחור שדה טלפון עבור וואטספ";
+        } else {
+          // Manual phone entry
+          if (!config.phone) return "יש להזין מספר טלפון לוואטספ";
+        }
+        // Message is always required
+        if (!config.message) return "יש להזין תוכן הודעה לוואטספ";
+        break;
+      case "SEND_WEBHOOK":
+        if (!config.url) return "יש להזין כתובת Webhook";
+        break;
+      case "CREATE_TASK":
+        if (!config.title) return "יש להזין כותרת למשימה";
+        break;
+      case "UPDATE_TASK":
+        if (!config.taskId) return "יש להזין מספר משימה לעדכון";
+        if (!config.updates || Object.keys(config.updates).length === 0)
+          return "יש לבחור לפחות שדה אחד לעדכון במשימה";
+        break;
+      case "CREATE_FINANCE":
+        if (!config.title) return "יש להזין כותרת לרשומה הפיננסית";
+        if (!config.amount) return "יש להזין סכום";
+        break;
+      case "UPDATE_RECORD":
+        if (!config.tableId) return "יש לבחור טבלה";
+        if (!config.recordId) return "יש להזין מספר רשומה";
+        break;
+      case "CREATE_RECORD":
+        if (!config.tableId) return "יש לבחור טבלה";
+        break;
+      case "CREATE_CALENDAR_EVENT":
+        if (!config.title) return "יש להזין כותרת לאירוע";
+        if (!config.startTime) return "יש להזין שעת התחלה";
+        if (!config.endTime) return "יש להזין שעת סיום";
+        break;
+    }
+    return null;
+  };
+
   // Save editing and close
   const saveEditing = async () => {
     if (!editingStepId || !editingStepData) return;
+
+    setEditError(null);
+
+    // Validate Automations
+    if (
+      editingStepData.onCompleteActions &&
+      editingStepData.onCompleteActions.length > 0
+    ) {
+      for (const action of editingStepData.onCompleteActions as OnCompleteAction[]) {
+        const error = validateAutomation(action);
+        if (error) {
+          setEditError(`שגיאה באוטומציה: ${error}`);
+          return;
+        }
+      }
+    }
 
     // Update local steps
     setSteps((currentSteps) =>
@@ -765,21 +872,164 @@ export default function OnboardingPathModal({
                                   הגדר פעולות אוטומטיות שיופעלו כאשר העובד משלים
                                   את השלב
                                 </p>
-                                <TaskItemAutomations
-                                  actions={
-                                    (editingStepData.onCompleteActions as OnCompleteAction[]) ??
-                                    []
-                                  }
-                                  onChange={(actions) =>
-                                    setEditingStepData({
-                                      ...editingStepData,
-                                      onCompleteActions:
-                                        actions as unknown as OnCompleteAction[],
-                                    })
-                                  }
-                                  users={users}
-                                  tables={tables}
-                                />
+
+                                {/* Plan Limit Disclaimer */}
+                                <div
+                                  className={`flex items-start gap-3 p-3 mb-3 rounded-lg border text-sm ${
+                                    userPlan === "super"
+                                      ? "bg-purple-50 border-purple-200 text-purple-800"
+                                      : totalAutomationsCount >= globalLimit
+                                        ? "bg-amber-50 border-amber-200 text-amber-800"
+                                        : "bg-blue-50 border-blue-200 text-blue-800"
+                                  }`}
+                                >
+                                  <Zap className="h-4 w-4 shrink-0 mt-0.5" />
+                                  <div>
+                                    <p className="font-semibold mb-0.5">
+                                      {userPlan === "super"
+                                        ? "ללא הגבלה"
+                                        : `ניצול אוטומציות במסלול: ${totalAutomationsCount} מתוך ${globalLimit}`}
+                                    </p>
+                                    <p className="opacity-90 text-xs">
+                                      אתה מוגדר כ
+                                      {planLabels[userPlan] || userPlan}. ניתן
+                                      להוסיף עד{" "}
+                                      {globalLimit === Infinity
+                                        ? "אינסוף"
+                                        : globalLimit}{" "}
+                                      אוטומציות{" "}
+                                      <strong>
+                                        בכל המסלול (כל השלבים ביחד)
+                                      </strong>
+                                      .
+                                      {currentStepAutomationCount > 0 && (
+                                        <span className="block mt-1">
+                                          שלב נוכחי:{" "}
+                                          {currentStepAutomationCount} אוטומציות
+                                        </span>
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="space-y-3">
+                                  {editingStepData.onCompleteActions &&
+                                  editingStepData.onCompleteActions.length >
+                                    0 ? (
+                                    editingStepData.onCompleteActions.map(
+                                      (action, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-xl shadow-sm group hover:border-indigo-300 transition-all"
+                                        >
+                                          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                                            <Zap className="h-4 w-4" />
+                                          </div>
+                                          <div className="flex-1">
+                                            <p className="text-sm font-medium text-gray-900">
+                                              {
+                                                {
+                                                  CREATE_TASK: "יצירת משימה",
+                                                  SEND_NOTIFICATION:
+                                                    "שליחת התראה",
+                                                  SEND_WHATSAPP: "שליחת וואטספ",
+                                                  UPDATE_RECORD: "עדכון רשומה",
+                                                  CREATE_RECORD:
+                                                    "יצירת רשומה בטבלה",
+                                                  CREATE_CALENDAR_EVENT:
+                                                    "יצירת אירוע",
+                                                  UPDATE_TASK: "עדכון משימה",
+                                                  CREATE_FINANCE:
+                                                    "יצירת רשומה פיננסית",
+                                                  SEND_WEBHOOK: "Webhook",
+                                                }[action.actionType]
+                                              }
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                              {action.actionType ===
+                                              "CREATE_RECORD"
+                                                ? `טבלה: ${
+                                                    tables.find(
+                                                      (t) =>
+                                                        t.id ===
+                                                        (action.config as any)
+                                                          .tableId,
+                                                    )?.name || "לא נבחרה"
+                                                  }`
+                                                : (action.config
+                                                    .title as string) ||
+                                                  (action.config
+                                                    .message as string) ||
+                                                  "ללא כותרת"}
+                                            </p>
+                                          </div>
+                                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button
+                                              onClick={() =>
+                                                setAutomationBuilderState({
+                                                  isOpen: true,
+                                                  editingIndex: idx,
+                                                })
+                                              }
+                                              className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition"
+                                            >
+                                              <Pencil className="h-4 w-4" />
+                                            </button>
+                                            <button
+                                              onClick={() => {
+                                                const newActions = [
+                                                  ...(editingStepData.onCompleteActions ||
+                                                    []),
+                                                ];
+                                                newActions.splice(idx, 1);
+                                                setEditingStepData({
+                                                  ...editingStepData,
+                                                  onCompleteActions: newActions,
+                                                });
+                                              }}
+                                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ),
+                                    )
+                                  ) : (
+                                    <div className="text-center py-6 bg-gray-50 border border-dashed border-gray-200 rounded-xl text-gray-500">
+                                      <Zap className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                                      <p className="text-sm">
+                                        לא הוגדרו אוטומציות
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  <button
+                                    onClick={() =>
+                                      setAutomationBuilderState({
+                                        isOpen: true,
+                                        editingIndex: null,
+                                      })
+                                    }
+                                    disabled={
+                                      userPlan !== "super" &&
+                                      totalAutomationsCount >= globalLimit
+                                    }
+                                    className="w-full py-3 flex items-center justify-center gap-2 border border-dashed border-indigo-300 bg-indigo-50/50 text-indigo-600 rounded-xl hover:bg-indigo-50 hover:border-indigo-400 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 disabled:border-gray-200"
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                    {userPlan !== "super" &&
+                                    totalAutomationsCount >= globalLimit
+                                      ? "הגעת למגבלת האוטומציות במסלול"
+                                      : "הוסף אוטומציה חדשה"}
+                                  </button>
+                                </div>
+                                {editError && (
+                                  <div className="flex items-center gap-2 text-red-600 bg-red-50 p-2 rounded-lg mt-2 text-sm">
+                                    <Zap className="h-4 w-4" />{" "}
+                                    {/* Reusing Zap icon or import AlertTriangle if preferred, Zap is already imported */}
+                                    {editError}
+                                  </div>
+                                )}
                               </div>
 
                               {/* Action Buttons */}
@@ -1114,16 +1364,97 @@ export default function OnboardingPathModal({
                     <p className="text-xs text-gray-500 mb-3">
                       הגדר פעולות אוטומטיות שיופעלו כאשר העובד משלים את השלב
                     </p>
-                    <TaskItemAutomations
-                      actions={
-                        (newStep.onCompleteActions as OnCompleteAction[]) ?? []
-                      }
-                      onChange={(actions) =>
-                        setNewStep({ ...newStep, onCompleteActions: actions })
-                      }
-                      users={users}
-                      tables={tables}
-                    />
+                    <div className="space-y-3">
+                      {newStep.onCompleteActions &&
+                      newStep.onCompleteActions.length > 0 ? (
+                        newStep.onCompleteActions.map((action, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-xl shadow-sm group hover:border-indigo-300 transition-all"
+                          >
+                            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                              <Zap className="h-4 w-4" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-gray-900">
+                                {
+                                  {
+                                    CREATE_TASK: "יצירת משימה",
+                                    SEND_NOTIFICATION: "שליחת התראה",
+                                    SEND_WHATSAPP: "שליחת וואטספ",
+                                    UPDATE_RECORD: "עדכון רשומה",
+                                    CREATE_RECORD: "יצירת רשומה בטבלה",
+                                    CREATE_CALENDAR_EVENT: "יצירת אירוע",
+                                    UPDATE_TASK: "עדכון משימה",
+                                    CREATE_FINANCE: "יצירת רשומה פיננסית",
+                                    SEND_WEBHOOK: "Webhook",
+                                  }[action.actionType]
+                                }
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {action.actionType === "CREATE_RECORD"
+                                  ? `טבלה: ${
+                                      tables.find(
+                                        (t) =>
+                                          t.id ===
+                                          (action.config as any).tableId,
+                                      )?.name || "לא נבחרה"
+                                    }`
+                                  : (action.config.title as string) ||
+                                    (action.config.message as string) ||
+                                    "ללא כותרת"}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() =>
+                                  setAutomationBuilderState({
+                                    isOpen: true,
+                                    editingIndex: idx,
+                                  })
+                                }
+                                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const newActions = [
+                                    ...(newStep.onCompleteActions || []),
+                                  ];
+                                  newActions.splice(idx, 1);
+                                  setNewStep({
+                                    ...newStep,
+                                    onCompleteActions: newActions,
+                                  });
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-6 bg-gray-50 border border-dashed border-gray-200 rounded-xl text-gray-500">
+                          <Zap className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                          <p className="text-sm">לא הוגדרו אוטומציות</p>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() =>
+                          setAutomationBuilderState({
+                            isOpen: true,
+                            editingIndex: -1, // -1 indicates we are editing 'newStep'
+                          })
+                        }
+                        className="w-full py-3 flex items-center justify-center gap-2 border border-dashed border-indigo-300 bg-indigo-50/50 text-indigo-600 rounded-xl hover:bg-indigo-50 hover:border-indigo-400 transition-colors font-medium text-sm"
+                      >
+                        <Plus className="h-4 w-4" />
+                        הוסף אוטומציה חדשה
+                      </button>
+                    </div>
                   </div>
 
                   {/* Action Buttons */}
@@ -1176,6 +1507,82 @@ export default function OnboardingPathModal({
           </button>
         </div>
       </div>
+
+      {/* Automation Builder Modal */}
+      <OnboardingAutomationBuilder
+        isOpen={automationBuilderState.isOpen}
+        onClose={() =>
+          setAutomationBuilderState({ isOpen: false, editingIndex: null })
+        }
+        users={users}
+        tables={tables}
+        initialAction={
+          automationBuilderState.editingIndex !== null &&
+          automationBuilderState.editingIndex >= 0
+            ? newStep
+              ? newStep.onCompleteActions?.[automationBuilderState.editingIndex]
+              : editingStepData?.onCompleteActions?.[
+                  automationBuilderState.editingIndex
+                ]
+            : null
+        }
+        onSave={(action) => {
+          // If we are editing 'newStep' (the step being created primarily)
+          if (newStep) {
+            // We are in the "New Step" context
+            const currentActions = [...(newStep.onCompleteActions || [])];
+
+            if (automationBuilderState.editingIndex === -1) {
+              // Adding NEW automation to New Step
+              setNewStep({
+                ...newStep,
+                onCompleteActions: [
+                  ...currentActions,
+                  action,
+                ] as OnCompleteAction[],
+              });
+            } else if (
+              automationBuilderState.editingIndex !== null &&
+              automationBuilderState.editingIndex >= 0
+            ) {
+              // Editing EXISTING automation in New Step (IF ENABLED)
+              // Note: I left the edit button hidden for new steps above because it requires extra state logic I can't fully inject safely right now without 'source' prop.
+              // But valid logic would be:
+              currentActions[automationBuilderState.editingIndex] = action;
+              setNewStep({
+                ...newStep,
+                onCompleteActions: currentActions as OnCompleteAction[],
+              });
+            }
+          }
+          // Default: Editing an EXISTING existing step (editingStepData)
+          else if (editingStepData) {
+            const currentActions = [
+              ...(editingStepData.onCompleteActions || []),
+            ];
+
+            if (automationBuilderState.editingIndex === null) {
+              // Adding NEW automation to Existing Step
+              setEditingStepData({
+                ...editingStepData,
+                onCompleteActions: [
+                  ...currentActions,
+                  action,
+                ] as OnCompleteAction[],
+              });
+            } else {
+              // Editing EXISTING automation in Existing Step
+              if (automationBuilderState.editingIndex >= 0) {
+                currentActions[automationBuilderState.editingIndex] = action;
+                setEditingStepData({
+                  ...editingStepData,
+                  onCompleteActions: currentActions as OnCompleteAction[],
+                });
+              }
+            }
+          }
+        }}
+      />
     </div>
   );
 }

@@ -309,6 +309,159 @@ export async function executeRuleActions(
           console.error(`[Automations] Task Creation Error:`, taskError);
           // If this fails, we want to know why.
         }
+      } else if (type === "CREATE_RECORD") {
+        // Create a new record in a specified table
+        const { tableId, fieldMappings } = config;
+
+        if (!tableId) {
+          console.error(`[Automations] CREATE_RECORD: No tableId specified`);
+          return;
+        }
+
+        // Dynamic Replacements Helper
+        const replaceText = (text: string) => {
+          if (!text) return text;
+          let res = text;
+          if (context.tableName) {
+            res = res.replace(/{tableName}/g, context.tableName);
+          }
+          if (context.recordData) {
+            for (const key in context.recordData) {
+              const val = context.recordData[key];
+              res = res.replace(new RegExp(`{${key}}`, "g"), String(val || ""));
+            }
+          }
+          if (context.taskTitle) {
+            res = res
+              .replace(/{taskTitle}/g, context.taskTitle)
+              .replace(/{fromStatus}/g, context.fromStatus || "")
+              .replace(/{toStatus}/g, context.toStatus || "");
+          }
+          return res;
+        };
+
+        try {
+          // Build record data from field mappings
+          const recordData: Record<string, unknown> = {};
+
+          if (fieldMappings && Array.isArray(fieldMappings)) {
+            for (const mapping of fieldMappings) {
+              const { columnId, value } = mapping;
+              if (columnId && value !== undefined) {
+                recordData[columnId] = replaceText(String(value));
+              }
+            }
+          }
+
+          console.log(
+            `[Automations] Creating record in table ${tableId} with data:`,
+            recordData,
+          );
+
+          try {
+            await prisma.record.create({
+              data: {
+                tableId: Number(tableId),
+                companyId: companyId,
+                data: recordData as any,
+                createdBy: createdBy, // Try with original creator
+              },
+            });
+          } catch (fkError: any) {
+            // If createdBy user fails (e.g. deleted user), try without it
+            console.warn(
+              `[Automations] Failed to create record with creator ${createdBy}, retrying without...`,
+              fkError.message,
+            );
+            await prisma.record.create({
+              data: {
+                tableId: Number(tableId),
+                companyId: companyId,
+                data: recordData as any,
+                createdBy: null, // Fallback
+              },
+            });
+          }
+
+          console.log(
+            `[Automations] Record created successfully in table ${tableId}`,
+          );
+        } catch (recordError) {
+          console.error(`[Automations] Record Creation Error:`, recordError);
+        }
+      } else if (type === "CREATE_CALENDAR_EVENT") {
+        // Create a new calendar event
+        const { title, description, startOffset, endOffset, color } = config;
+
+        // Dynamic Replacements Helper
+        const replaceText = (text: string) => {
+          if (!text) return text;
+          let res = text;
+          if (context.tableName) {
+            res = res.replace(/{tableName}/g, context.tableName);
+          }
+          if (context.recordData) {
+            for (const key in context.recordData) {
+              const val = context.recordData[key];
+              res = res.replace(new RegExp(`{${key}}`, "g"), String(val || ""));
+            }
+          }
+          if (context.taskTitle) {
+            res = res
+              .replace(/{taskTitle}/g, context.taskTitle)
+              .replace(/{fromStatus}/g, context.fromStatus || "")
+              .replace(/{toStatus}/g, context.toStatus || "");
+          }
+          return res;
+        };
+
+        try {
+          const finalTitle = replaceText(title || "אירוע אוטומטי");
+          const finalDesc = replaceText(description || "");
+
+          // Calculate start and end times based on offsets
+          const now = new Date();
+
+          let startMultiplier = 24 * 60 * 60 * 1000; // Default days
+          if (config.startOffsetUnit === "minutes") startMultiplier = 60 * 1000;
+          if (config.startOffsetUnit === "hours")
+            startMultiplier = 60 * 60 * 1000;
+
+          const startTime = new Date(
+            now.getTime() + (Number(startOffset) || 0) * startMultiplier,
+          );
+
+          let durationMultiplier = 60 * 60 * 1000; // Default hours
+          if (config.endOffsetUnit === "minutes")
+            durationMultiplier = 60 * 1000;
+          // if (config.endOffsetUnit === "hours") // already default
+
+          const endTime = new Date(
+            startTime.getTime() + (Number(endOffset) || 1) * durationMultiplier,
+          );
+
+          console.log(
+            `[Automations] Creating calendar event: ${finalTitle} at ${startTime.toISOString()}`,
+          );
+
+          await prisma.calendarEvent.create({
+            data: {
+              companyId: companyId,
+              title: finalTitle,
+              description: finalDesc,
+              startTime: startTime,
+              endTime: endTime,
+              color: color || "#4f95ff",
+            },
+          });
+
+          console.log(`[Automations] Calendar event created successfully.`);
+        } catch (eventError) {
+          console.error(
+            `[Automations] Calendar Event Creation Error:`,
+            eventError,
+          );
+        }
       }
     } catch (e) {
       console.error(`[Automations] Error executing action ${type}:`, e);

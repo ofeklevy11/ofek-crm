@@ -12,7 +12,6 @@ interface EventAutomationData {
   actionType: string;
   actionConfig: any;
   name?: string;
-  name?: string;
   id?: number; // For update
 }
 
@@ -193,6 +192,37 @@ export async function getEventAutomations(eventId: string) {
   }
 }
 
+export async function getMaxEventAutomationCount() {
+  try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+    if (!currentUser)
+      return { success: false, error: "Authentication required" };
+
+    const eventCounts = await prisma.automationRule.groupBy({
+      by: ["calendarEventId"],
+      where: {
+        companyId: currentUser.companyId,
+        triggerType: "EVENT_TIME",
+        calendarEventId: { not: null },
+      },
+      _count: {
+        id: true,
+      },
+    });
+
+    let maxCount = 0;
+    if (eventCounts.length > 0) {
+      maxCount = Math.max(...eventCounts.map((e) => e._count.id));
+    }
+
+    return { success: true, count: maxCount };
+  } catch (error) {
+    console.error("Error fetching max event automation count:", error);
+    return { success: false, error: "Failed to fetch max count" };
+  }
+}
+
 export async function deleteEventAutomation(ruleId: number) {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
@@ -273,6 +303,19 @@ export async function processEventAutomations() {
               eventTitle: rule.calendarEvent.title,
               eventStart: rule.calendarEvent.startTime.toLocaleString("he-IL"),
               eventEnd: rule.calendarEvent.endTime.toLocaleString("he-IL"),
+              // Granular Date/Time for Inputs
+              eventStartDate: rule.calendarEvent.startTime
+                .toISOString()
+                .split("T")[0],
+              eventStartTime: rule.calendarEvent.startTime
+                .toTimeString()
+                .slice(0, 5),
+              eventEndDate: rule.calendarEvent.endTime
+                .toISOString()
+                .split("T")[0],
+              eventEndTime: rule.calendarEvent.endTime
+                .toTimeString()
+                .slice(0, 5),
               // Legacy support for older templates
               time: rule.calendarEvent.startTime.toLocaleString("he-IL"),
             };

@@ -61,6 +61,7 @@ export default async function WorkersPage() {
           stats={stats}
           users={users}
           tables={tables}
+          userPlan={user.isPremium || "basic"}
         />
       </Suspense>
     </div>

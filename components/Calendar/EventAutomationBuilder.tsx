@@ -15,8 +15,11 @@ import {
   CheckCircle2,
   X,
   Webhook,
+  Table as TableIcon,
+  CalendarPlus,
 } from "lucide-react";
 import { getUsers } from "@/app/actions/users";
+import { getTables } from "@/app/actions/tables";
 import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
 
 interface EventAutomationBuilderProps {
@@ -29,6 +32,9 @@ interface EventAutomationBuilderProps {
   eventId?: string;
 
   initialData?: any;
+  userPlan?: string; // "basic", "premium", "super"
+  globalCount?: number;
+  specificCount?: number;
 }
 
 const AvailableVariables = () => (
@@ -55,9 +61,13 @@ export function EventAutomationBuilder({
   onSave,
   onCancel,
   initialData,
+  userPlan = "basic",
+  globalCount = 0,
+  specificCount = 0,
 }: EventAutomationBuilderProps) {
   const [step, setStep] = useState(1);
   const [users, setUsers] = useState<any[]>([]);
+  const [tables, setTables] = useState<any[]>([]);
 
   // -- Trigger State --
   const [timeValue, setTimeValue] = useState(30);
@@ -94,6 +104,26 @@ export function EventAutomationBuilder({
   const [webhookUrl, setWebhookUrl] = useState("");
   const [webhookMethod, setWebhookMethod] = useState("POST");
 
+  // Create Record
+  const [selectedTableId, setSelectedTableId] = useState<string>("");
+  const [selectedTableSchema, setSelectedTableSchema] = useState<any>(null);
+  const [recordFieldMappings, setRecordFieldMappings] = useState<
+    { columnId: string; value: string }[]
+  >([]);
+
+  // Create Calendar Event
+  const [newEventTitle, setNewEventTitle] = useState("אירוע חדש: {eventTitle}");
+  const [newEventDesc, setNewEventDesc] = useState("");
+  const [newEventStartOffset, setNewEventStartOffset] = useState(0);
+  const [newEventStartUnit, setNewEventStartUnit] = useState<
+    "minutes" | "hours" | "days"
+  >("days");
+
+  const [newEventDuration, setNewEventDuration] = useState(1);
+  const [newEventDurationUnit, setNewEventDurationUnit] = useState<
+    "minutes" | "hours"
+  >("hours");
+
   // Load Users
   useEffect(() => {
     getUsers().then((res) => {
@@ -101,7 +131,28 @@ export function EventAutomationBuilder({
         setUsers(res.data);
       }
     });
+    getTables().then((res) => {
+      if (res.success && res.data) {
+        setTables(res.data);
+      }
+    });
   }, []);
+
+  // Update schema when table changes
+  useEffect(() => {
+    if (selectedTableId && tables.length > 0) {
+      const table = tables.find(
+        (t) => String(t.id) === String(selectedTableId),
+      );
+      if (table && table.schemaJson) {
+        setSelectedTableSchema(table.schemaJson);
+      } else {
+        setSelectedTableSchema(null);
+      }
+    } else {
+      setSelectedTableSchema(null);
+    }
+  }, [selectedTableId, tables]);
 
   // Initialize from initialData if provided
   useEffect(() => {
@@ -145,6 +196,16 @@ export function EventAutomationBuilder({
       } else if (initialData.actionType === "WEBHOOK") {
         setWebhookUrl(config.url || "");
         setWebhookMethod(config.method || "POST");
+      } else if (initialData.actionType === "CREATE_RECORD") {
+        setSelectedTableId(config.tableId ? String(config.tableId) : "");
+        setRecordFieldMappings(config.fieldMappings || []);
+      } else if (initialData.actionType === "CREATE_CALENDAR_EVENT") {
+        setNewEventTitle(config.title || "");
+        setNewEventDesc(config.description || "");
+        setNewEventStartOffset(config.startOffset || 0);
+        setNewEventStartUnit(config.startOffsetUnit || "days");
+        setNewEventDuration(config.endOffset || 1);
+        setNewEventDurationUnit(config.endOffsetUnit || "hours");
       }
     }
   }, [initialData]);
@@ -173,18 +234,47 @@ export function EventAutomationBuilder({
     setStep(step - 1);
   };
 
+  // Validation Error State
+  const [error, setError] = useState<string | null>(null);
+
   const handleSave = () => {
+    setError(null);
+    let validationError = null;
+
     // Validation
     if (actionType === "SEND_WHATSAPP") {
       if (!waPhone || waPhone.trim() === "") {
-        alert("חובה להזין מספר טלפון או Group ID");
-        return;
+        validationError = "חובה להזין מספר טלפון או Group ID";
+      } else if (!waMessage || waMessage.trim() === "") {
+        validationError = "חובה להזין תוכן הודעה להודעת ה-WhatsApp";
       }
     } else if (actionType === "WEBHOOK") {
       if (!webhookUrl || webhookUrl.trim() === "") {
-        alert("חובה להזין כתובת URL ל-Webhook");
-        return;
+        validationError = "חובה להזין כתובת URL ל-Webhook";
       }
+    } else if (actionType === "CREATE_TASK") {
+      if (!taskTitle || taskTitle.trim() === "") {
+        validationError = "חובה להזין כותרת למשימה";
+      }
+    } else if (actionType === "SEND_NOTIFICATION") {
+      if (!notifRecipient) {
+        validationError = "חובה לבחור משתמש לקבלת ההתראה";
+      } else if (!notifMessage || notifMessage.trim() === "") {
+        validationError = "חובה להזין תוכן להתראה";
+      }
+    } else if (actionType === "CREATE_RECORD") {
+      if (!selectedTableId) {
+        validationError = "חובה לבחור טבלה ליצירת הרשומה";
+      }
+    } else if (actionType === "CREATE_CALENDAR_EVENT") {
+      if (!newEventTitle || newEventTitle.trim() === "") {
+        validationError = "חובה להזין כותרת לאירוע";
+      }
+    }
+
+    if (validationError) {
+      setError(validationError);
+      return;
     }
 
     let config = {};
@@ -215,6 +305,21 @@ export function EventAutomationBuilder({
       config = {
         url: webhookUrl,
         method: webhookMethod,
+      };
+    } else if (actionType === "CREATE_RECORD") {
+      config = {
+        tableId: selectedTableId,
+        fieldMappings: recordFieldMappings,
+      };
+    } else if (actionType === "CREATE_CALENDAR_EVENT") {
+      config = {
+        title: newEventTitle,
+        description: newEventDesc,
+        startOffset: Number(newEventStartOffset),
+        startOffsetUnit: newEventStartUnit,
+        endOffset: Number(newEventDuration), // we call it endOffset in config usually, effectively duration
+        endOffsetUnit: newEventDurationUnit,
+        color: "#a24ec1", // Purple default
       };
     }
 
@@ -271,11 +376,85 @@ export function EventAutomationBuilder({
 
             <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 max-w-lg mx-auto transform transition-all hover:shadow-md">
               {/* Disclaimer */}
-              <div className="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm mb-6 flex items-center justify-center gap-2">
-                <AlertCircle size={16} />
-                <span>
-                  שימו לב: לא ניתן להגדיר אוטומציה פחות מ-5 דקות לפני האירוע
-                </span>
+              <div className="space-y-4 mb-6">
+                <div className="bg-blue-50 text-blue-800 px-4 py-3 rounded-lg text-sm flex items-start gap-2 border border-blue-100">
+                  <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="font-semibold">
+                        סטטוס מנוי:{" "}
+                        {userPlan === "super"
+                          ? "Super (ללא הגבלה)"
+                          : userPlan === "premium"
+                            ? "Premium (עד 6 אוטומציות)"
+                            : "Basic (עד 2 אוטומציות)"}
+                      </p>
+                      {userPlan !== "super" && (
+                        <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-bold border border-blue-200">
+                          {globalCount + specificCount} מתוך{" "}
+                          {userPlan === "premium" ? 6 : 2} בשימוש
+                        </span>
+                      )}
+                    </div>
+                    {userPlan === "super" ? (
+                      <p>משתמשי Super נהנים מכמות בלתי מוגבלת של אוטומציות!</p>
+                    ) : (
+                      <>
+                        {/* Progress Bar */}
+                        <div className="mb-3">
+                          <div className="w-full bg-blue-100 rounded-full h-2 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                globalCount + specificCount >=
+                                (userPlan === "premium" ? 6 : 2)
+                                  ? "bg-red-500"
+                                  : globalCount + specificCount >=
+                                      (userPlan === "premium" ? 4 : 1)
+                                    ? "bg-yellow-500"
+                                    : "bg-blue-600"
+                              }`}
+                              style={{
+                                width: `${Math.min(100, ((globalCount + specificCount) / (userPlan === "premium" ? 6 : 2)) * 100)}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <p className="mb-2 text-xs">
+                          {userPlan === "premium"
+                            ? "משתמשי Premium מוגבלים ל-6 פעולות אוטומציה לאירוע (כולל קבועות)."
+                            : "משתמשים רגילים מוגבלים ל-2 פעולות אוטומציה לאירוע (כולל קבועות)."}
+                        </p>
+                        <div className="text-xs bg-white/50 p-2 rounded border border-blue-200">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                              <span>
+                                {globalCount} אוטומציות קבועות (גלובליות)
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                              <span>
+                                {specificCount} אוטומציות ספציפיות לאירוע
+                              </span>
+                            </div>
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-blue-200 font-bold text-center">
+                            סה"כ: {globalCount + specificCount} מתוך{" "}
+                            {userPlan === "premium" ? 6 : 2}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm flex items-center justify-center gap-2">
+                  <AlertCircle size={16} />
+                  <span>
+                    שימו לב: לא ניתן להגדיר אוטומציה פחות מ-5 דקות לפני האירוע
+                  </span>
+                </div>
               </div>
 
               <div className="flex items-center gap-4 justify-center">
@@ -366,6 +545,22 @@ export function EventAutomationBuilder({
                   bg: "bg-purple-50",
                   border: "hover:border-purple-500",
                 },
+                {
+                  id: "CREATE_RECORD",
+                  title: "צור רשומה בטבלה",
+                  icon: TableIcon,
+                  color: "text-blue-600",
+                  bg: "bg-blue-50",
+                  border: "hover:border-blue-500",
+                },
+                {
+                  id: "CREATE_CALENDAR_EVENT",
+                  title: "צור אירוע ביומן",
+                  icon: CalendarPlus,
+                  color: "text-indigo-600",
+                  bg: "bg-indigo-50",
+                  border: "hover:border-indigo-500",
+                },
               ].map((item) => (
                 <button
                   key={item.id}
@@ -397,6 +592,14 @@ export function EventAutomationBuilder({
         {/* Step 3: Configuration */}
         {step === 3 && (
           <div className="max-w-2xl mx-auto animate-in fade-in zoom-in-95 duration-300">
+            {/* Error Message */}
+            {error && (
+              <div className="mb-4 bg-red-50 text-red-600 px-4 py-3 rounded-xl flex items-center gap-2 border border-red-100 shadow-sm animate-in fade-in slide-in-from-top-2">
+                <AlertCircle size={18} className="shrink-0" />
+                <span className="font-medium text-sm">{error}</span>
+              </div>
+            )}
+
             {/* Task Config */}
             {actionType === "CREATE_TASK" && (
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-5">
@@ -689,17 +892,279 @@ export function EventAutomationBuilder({
 
                 <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800">
                   <p className="font-semibold mb-1">מידע שישלח (Payload):</p>
-                  <ul
-                    className="list-disc list-inside space-y-1 text-xs opacity-80"
-                    dir="ltr"
-                  >
-                    <li>eventId</li>
-                    <li>eventTitle</li>
-                    <li>startTime</li>
-                    <li>endTime</li>
-                    <li>description</li>
+                  <ul className="list-disc list-inside space-y-1 opacity-80">
+                    <li>פרטי האירוע (כותרת, תאריכים, תיאור)</li>
+                    <li>מידע על האוטומציה</li>
                   </ul>
                 </div>
+              </div>
+            )}
+
+            {/* Create Record Config */}
+            {actionType === "CREATE_RECORD" && (
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-5">
+                <div className="flex items-center gap-3 border-b pb-4 mb-4">
+                  <div className="p-2 bg-blue-100 rounded-lg text-blue-700">
+                    <TableIcon />
+                  </div>
+                  <h3 className="text-lg md:text-xl font-bold">
+                    יצירת רשומה בטבלה
+                  </h3>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    בחר טבלה
+                  </label>
+                  <select
+                    value={selectedTableId}
+                    onChange={(e) => {
+                      setSelectedTableId(e.target.value);
+                      setRecordFieldMappings([]); // Reset mappings on table change
+                    }}
+                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">בחר טבלה...</option>
+                    {tables.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedTableId &&
+                selectedTableSchema &&
+                Array.isArray(selectedTableSchema) &&
+                selectedTableSchema.length > 0 ? (
+                  <div className="space-y-4 border-t pt-4">
+                    <p className="font-semibold text-gray-800">מיפוי שדות:</p>
+                    <div className="space-y-3 max-h-60 overflow-y-auto custom-scrollbar p-1">
+                      {selectedTableSchema.map((col: any, idx: number) => {
+                        // Use column name as the identifier since record.data uses names as keys
+                        const colId = col.name;
+                        const currentMapping = recordFieldMappings.find(
+                          (m) => m.columnId === colId,
+                        );
+
+                        return (
+                          <div
+                            key={colId + idx}
+                            className="flex items-center gap-4 bg-gray-50 p-3 rounded-lg border border-gray-100"
+                          >
+                            <div className="w-1/3 shrink-0">
+                              <span
+                                className="text-sm font-medium text-gray-700 block truncate"
+                                title={col.name}
+                              >
+                                {col.label || col.name}
+                              </span>
+                              <span className="text-[10px] text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded-full inline-block mt-1">
+                                {col.type}
+                              </span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              {col.type === "select" ||
+                              col.type === "status" ||
+                              col.type === "priority" ? (
+                                <select
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                                  value={currentMapping?.value || ""}
+                                  onChange={(e) => {
+                                    const newVal = e.target.value;
+                                    setRecordFieldMappings((prev) => {
+                                      const existing = prev.find(
+                                        (p) => p.columnId === colId,
+                                      );
+                                      if (existing) {
+                                        if (newVal === "") {
+                                          return prev.filter(
+                                            (p) => p.columnId !== colId,
+                                          );
+                                        }
+                                        return prev.map((p) =>
+                                          p.columnId === colId
+                                            ? { ...p, value: newVal }
+                                            : p,
+                                        );
+                                      } else {
+                                        if (newVal === "") return prev;
+                                        return [
+                                          ...prev,
+                                          { columnId: colId, value: newVal },
+                                        ];
+                                      }
+                                    });
+                                  }}
+                                >
+                                  <option value="">בחר {col.label}...</option>
+                                  {col.options?.map((opt: string) => (
+                                    <option key={opt} value={opt}>
+                                      {opt}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <input
+                                  type={
+                                    col.type === "number" ||
+                                    col.type === "currency"
+                                      ? "number"
+                                      : col.type === "date"
+                                        ? "date"
+                                        : "text"
+                                  }
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500"
+                                  placeholder={`ערך עבור ${col.label || col.name}`}
+                                  value={currentMapping?.value || ""}
+                                  onChange={(e) => {
+                                    const newVal = e.target.value;
+                                    setRecordFieldMappings((prev) => {
+                                      const existing = prev.find(
+                                        (p) => p.columnId === colId,
+                                      );
+                                      if (existing) {
+                                        if (newVal === "") {
+                                          return prev.filter(
+                                            (p) => p.columnId !== colId,
+                                          );
+                                        }
+                                        return prev.map((p) =>
+                                          p.columnId === colId
+                                            ? { ...p, value: newVal }
+                                            : p,
+                                        );
+                                      } else {
+                                        if (newVal === "") return prev;
+                                        return [
+                                          ...prev,
+                                          { columnId: colId, value: newVal },
+                                        ];
+                                      }
+                                    });
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <AvailableVariables />
+                  </div>
+                ) : (
+                  selectedTableId && (
+                    <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-lg border border-dashed">
+                      <p>לא נמצאו שדות בטבלה זו או שהטבלה ריקה.</p>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+
+            {/* Create Calendar Event Config */}
+            {actionType === "CREATE_CALENDAR_EVENT" && (
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-5">
+                <div className="flex items-center gap-3 border-b pb-4 mb-4">
+                  <div className="p-2 bg-indigo-100 rounded-lg text-indigo-700">
+                    <CalendarPlus />
+                  </div>
+                  <h3 className="text-lg md:text-xl font-bold">
+                    יצירת אירוע נוסף ביומן
+                  </h3>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    כותרת האירוע
+                  </label>
+                  <input
+                    type="text"
+                    value={newEventTitle}
+                    onChange={(e) => setNewEventTitle(e.target.value)}
+                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    ניתן להשתמש במשתנים דינמיים
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    תיאור
+                  </label>
+                  <textarea
+                    value={newEventDesc}
+                    onChange={(e) => setNewEventDesc(e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      מתי להתחיל?
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        value={newEventStartOffset}
+                        onChange={(e) =>
+                          setNewEventStartOffset(Number(e.target.value))
+                        }
+                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                      <select
+                        value={newEventStartUnit}
+                        onChange={(e) =>
+                          setNewEventStartUnit(
+                            e.target.value as "minutes" | "hours" | "days",
+                          )
+                        }
+                        className="px-2 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                      >
+                        <option value="minutes">דקות</option>
+                        <option value="hours">שעות</option>
+                        <option value="days">ימים</option>
+                      </select>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      0 = מידית בעת הטריגר
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      משך האירוע
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min="0.5"
+                        step="0.5"
+                        value={newEventDuration}
+                        onChange={(e) =>
+                          setNewEventDuration(Number(e.target.value))
+                        }
+                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                      <select
+                        value={newEventDurationUnit}
+                        onChange={(e) =>
+                          setNewEventDurationUnit(
+                            e.target.value as "minutes" | "hours",
+                          )
+                        }
+                        className="px-2 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                      >
+                        <option value="minutes">דקות</option>
+                        <option value="hours">שעות</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <AvailableVariables />
               </div>
             )}
           </div>

@@ -6,7 +6,9 @@ import {
   createEventAutomation,
   getEventAutomations,
   deleteEventAutomation,
+  getGlobalEventAutomations,
 } from "@/app/actions/event-automations";
+import { getCurrentAuthUser } from "@/app/actions/auth";
 import {
   Loader2,
   Trash2,
@@ -17,6 +19,8 @@ import {
   Smartphone,
   Calendar as CalendarIcon,
   X,
+  Table as TableIcon,
+  CalendarPlus,
 } from "lucide-react";
 import { EventAutomationBuilder } from "./EventAutomationBuilder";
 import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
@@ -30,6 +34,7 @@ interface EventModalProps {
   initialDate?: Date;
   initialHour?: number;
   initialMinutes?: number;
+  initialTab?: "details" | "automations";
 }
 
 export function EventModal({
@@ -41,9 +46,10 @@ export function EventModal({
   initialDate,
   initialHour = 9,
   initialMinutes = 0,
+  initialTab = "details",
 }: EventModalProps) {
   const [activeTab, setActiveTab] = useState<"details" | "automations">(
-    "details",
+    initialTab,
   );
 
   // --- Details State ---
@@ -61,6 +67,8 @@ export function EventModal({
   const [showBuilder, setShowBuilder] = useState(false);
   const [editingAutoId, setEditingAutoId] = useState<number | null>(null);
   const [editingAutoData, setEditingAutoData] = useState<any>(null);
+  const [userPlan, setUserPlan] = useState("basic");
+  const [globalAutomationCount, setGlobalAutomationCount] = useState(0);
 
   useEffect(() => {
     if (event) {
@@ -106,6 +114,17 @@ export function EventModal({
     if (isOpen) {
       setActiveTab("details");
       setShowBuilder(false);
+      // Load user plan and global automations config
+      getCurrentAuthUser().then((res) => {
+        if (res.success && res.data) {
+          setUserPlan((res.data as any).isPremium || "basic");
+        }
+      });
+      getGlobalEventAutomations().then((res) => {
+        if (res.success && res.data) {
+          setGlobalAutomationCount(res.data.length);
+        }
+      });
     }
   }, [isOpen]);
 
@@ -239,6 +258,23 @@ export function EventModal({
     setShowBuilder(true);
   };
 
+  const handleOpenBuilder = () => {
+    // Check limits
+    const limit =
+      userPlan === "super" ? Infinity : userPlan === "premium" ? 6 : 2;
+    const currentTotal = globalAutomationCount + automations.length;
+
+    // If not editing (creating new), check limit
+    if (!editingAutoId && currentTotal >= limit) {
+      alert(
+        `הגעת למגבלת האוטומציות לאירוע (${limit}). שדרג את החבילה כדי להוסיף עוד.`,
+      );
+      return;
+    }
+
+    setShowBuilder(true);
+  };
+
   const handleDeleteAuto = async (id: number) => {
     if (!confirm("להסיר אוטומציה זו?")) return;
     await deleteEventAutomation(id);
@@ -264,6 +300,9 @@ export function EventModal({
             }}
             eventId={event.id}
             initialData={editingAutoData}
+            userPlan={userPlan}
+            globalCount={globalAutomationCount}
+            specificCount={automations.length}
           />
         </div>
       </div>
@@ -490,9 +529,57 @@ export function EventModal({
                 </div>
               ) : (
                 <>
+                  {/* Status Bar */}
+                  {userPlan !== "super" && (
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold text-blue-900">
+                          סטטוס מנוי:{" "}
+                          {userPlan === "premium"
+                            ? "Premium (עד 6 אוטומציות)"
+                            : "Basic (עד 2 אוטומציות)"}
+                        </span>
+                        <span className="bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-blue-200">
+                          {globalAutomationCount + automations.length} מתוך{" "}
+                          {userPlan === "premium" ? 6 : 2} בשימוש
+                        </span>
+                      </div>
+                      <div className="w-full bg-blue-100 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            globalAutomationCount + automations.length >=
+                            (userPlan === "premium" ? 6 : 2)
+                              ? "bg-red-500"
+                              : globalAutomationCount + automations.length >=
+                                  (userPlan === "premium" ? 4 : 1)
+                                ? "bg-yellow-500"
+                                : "bg-blue-600"
+                          }`}
+                          style={{
+                            width: `${Math.min(100, ((globalAutomationCount + automations.length) / (userPlan === "premium" ? 6 : 2)) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-between mt-1.5 text-[10px] text-blue-600">
+                        <span>{globalAutomationCount} קבועות</span>
+                        <span>{automations.length} ספציפיות לאירוע</span>
+                      </div>
+                    </div>
+                  )}
+                  {userPlan === "super" && (
+                    <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 mb-2 flex items-center gap-2">
+                      <span className="text-sm font-semibold text-purple-900">
+                        סטטוס מנוי: Super (ללא הגבלה)
+                      </span>
+                      <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                        ∞
+                      </span>
+                    </div>
+                  )}
+
                   {/* Add New Button */}
                   <button
-                    onClick={() => setShowBuilder(true)}
+                    onClick={handleOpenBuilder}
                     className="w-full group relative overflow-hidden bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl p-1 shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 transition-all transform hover:-translate-y-0.5"
                   >
                     <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity" />
@@ -565,7 +652,12 @@ export function EventModal({
                                         ? "bg-green-50 text-green-600"
                                         : auto.actionType === "SEND_WHATSAPP"
                                           ? "bg-[#e6f7ee] text-green-700"
-                                          : "bg-gray-50 text-gray-600"
+                                          : auto.actionType === "CREATE_RECORD"
+                                            ? "bg-blue-50 text-blue-600"
+                                            : auto.actionType ===
+                                                "CREATE_CALENDAR_EVENT"
+                                              ? "bg-indigo-50 text-indigo-600"
+                                              : "bg-gray-50 text-gray-600"
                                   }`}
                                 >
                                   {auto.actionType === "SEND_NOTIFICATION" ? (
@@ -574,6 +666,11 @@ export function EventModal({
                                     <CheckSquare size={20} />
                                   ) : auto.actionType === "SEND_WHATSAPP" ? (
                                     <WhatsAppIcon size={20} />
+                                  ) : auto.actionType === "CREATE_RECORD" ? (
+                                    <TableIcon size={20} />
+                                  ) : auto.actionType ===
+                                    "CREATE_CALENDAR_EVENT" ? (
+                                    <CalendarPlus size={20} />
                                   ) : (
                                     <Webhook size={20} />
                                   )}
@@ -595,7 +692,13 @@ export function EventModal({
                                           ? "משימה"
                                           : auto.actionType === "SEND_WHATSAPP"
                                             ? "WhatsApp"
-                                            : "פעולה"}
+                                            : auto.actionType ===
+                                                "CREATE_RECORD"
+                                              ? "רשומה"
+                                              : auto.actionType ===
+                                                  "CREATE_CALENDAR_EVENT"
+                                                ? "אירוע"
+                                                : "פעולה"}
                                     </span>
                                   </div>
                                 </div>

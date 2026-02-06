@@ -23,6 +23,7 @@ export async function getCurrentAuthUser() {
             permissions: true,
             allowedWriteTableIds: true,
             tablePermissions: true,
+            isPremium: true,
           },
         });
         if (user) return { success: true, data: user };
@@ -49,6 +50,7 @@ export async function getCurrentAuthUser() {
         permissions: true,
         allowedWriteTableIds: true,
         tablePermissions: true,
+        isPremium: true,
       },
     });
 

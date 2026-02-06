@@ -70,6 +70,7 @@ interface UserOption {
 interface TaskSheetsManagerProps {
   initialSheets: TaskSheet[];
   users: UserOption[];
+  userPlan?: string;
 }
 
 const priorityOptions = [
@@ -102,6 +103,7 @@ interface NewItemType {
 export default function TaskSheetsManager({
   initialSheets,
   users,
+  userPlan = "basic",
 }: TaskSheetsManagerProps) {
   const [sheets, setSheets] = useState<TaskSheet[]>(initialSheets);
   const [isCreating, setIsCreating] = useState(false);
@@ -115,6 +117,7 @@ export default function TaskSheetsManager({
   >(new Set());
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
   const [editingItemData, setEditingItemData] = useState<{
     title: string;
     description: string;
@@ -129,7 +132,8 @@ export default function TaskSheetsManager({
         | "SEND_NOTIFICATION"
         | "UPDATE_TASK"
         | "SEND_WEBHOOK"
-        | "SEND_WHATSAPP";
+        | "SEND_WHATSAPP"
+        | "CREATE_CALENDAR_EVENT";
       config: Record<string, unknown>;
     }>;
   } | null>(null);
@@ -267,10 +271,88 @@ export default function TaskSheetsManager({
   const cancelEditingItem = () => {
     setEditingItemId(null);
     setEditingItemData(null);
+    setEditError(null);
+  };
+
+  const validateAutomations = (
+    items: {
+      title: string;
+      onCompleteActions: Array<{
+        actionType: string;
+        config: Record<string, unknown>;
+      }>;
+    }[],
+  ): string | null => {
+    for (const item of items) {
+      if (!item.title.trim()) continue;
+      for (const action of item.onCompleteActions) {
+        // Basic check for empty config
+        if (!action.config || Object.keys(action.config).length === 0) {
+          return `באוטומציה לפריט "${item.title}": חובה להגדיר את האוטומציה (לחץ על גלגל השיניים)`;
+        }
+
+        const config = action.config || {};
+        switch (action.actionType) {
+          case "UPDATE_RECORD":
+            if (!config.tableId || !config.recordId)
+              return `באוטומציה לפריט "${item.title}": חובה לבחור טבלה ומזהה רשומה`;
+            break;
+          case "CREATE_TASK":
+            if (!config.title)
+              return `באוטומציה לפריט "${item.title}": חובה להזין כותרת משימה`;
+            break;
+          case "UPDATE_TASK":
+            if (!config.taskId)
+              return `באוטומציה לפריט "${item.title}": חובה להזין מזהה משימה`;
+            break;
+          case "CREATE_FINANCE":
+            if (!config.title || !config.amount)
+              return `באוטומציה לפריט "${item.title}": חובה להזין כותרת וסכום`;
+            break;
+          case "SEND_NOTIFICATION":
+            if (!config.recipientId)
+              return `באוטומציה לפריט "${item.title}": חובה לבחור נמען להתראה`;
+            break;
+          case "SEND_WEBHOOK":
+            if (!config.url)
+              return `באוטומציה לפריט "${item.title}": חובה להזין כתובת URL`;
+            break;
+          case "SEND_WHATSAPP":
+            // Check if phone source is from table or manual
+            if (config.phoneSource === "table") {
+              // When using table as phone source, validate table and column selection
+              if (!config.waTableId || !config.waPhoneColumn)
+                return `באוטומציה לפריט "${item.title}": יש לבחור טבלה ושדה טלפון`;
+            } else {
+              // Manual phone entry or legacy config
+              if (!config.phone && !config.phoneColumnId && !config.targetType)
+                return `באוטומציה לפריט "${item.title}": חובה להזין פרטי נמען`;
+            }
+            break;
+          case "CREATE_CALENDAR_EVENT":
+            if (!config.title)
+              return `באוטומציה לפריט "${item.title}": חובה להזין כותרת אירוע`;
+            break;
+          case "UPDATE_RECORD":
+            // Redundant case check removed
+            break;
+        }
+      }
+    }
+    return null;
   };
 
   const saveEditingItem = async () => {
     if (!editingItemId || !editingItemData || !editingSheet) return;
+
+    setEditError(null);
+
+    // Validate automations
+    const error = validateAutomations([editingItemData]);
+    if (error) {
+      setEditError(error);
+      return;
+    }
 
     try {
       const { updateTaskSheetItem } = await import("@/app/actions");
@@ -330,6 +412,13 @@ export default function TaskSheetsManager({
 
     if (!formData.assigneeId || formData.assigneeId === 0) {
       setFormError("יש לבחור עובד");
+      return;
+    }
+
+    // Validate new items automations
+    const automationError = validateAutomations(newItems);
+    if (automationError) {
+      setFormError(automationError);
       return;
     }
 
@@ -1033,7 +1122,41 @@ export default function TaskSheetsManager({
                                       name: u.name,
                                     }))}
                                     tables={tables}
+                                    userPlan={userPlan}
+                                    limit={
+                                      { basic: 2, premium: 6, super: Infinity }[
+                                        userPlan as
+                                          | "basic"
+                                          | "premium"
+                                          | "super"
+                                      ] || 2
+                                    }
+                                    externalUsageCount={
+                                      // 1. All other existing items (excluding this one)
+                                      (editingSheet?.items.reduce(
+                                        (acc, item) =>
+                                          item.id === editingItemId
+                                            ? 0
+                                            : acc +
+                                              (item.onCompleteActions as any[])
+                                                .length,
+                                        0,
+                                      ) || 0) +
+                                      // 2. All new items
+                                      newItems.reduce(
+                                        (acc, item) =>
+                                          acc + item.onCompleteActions.length,
+                                        0,
+                                      )
+                                    }
                                   />
+
+                                  {editError && (
+                                    <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 p-2 rounded-lg mt-2">
+                                      <AlertTriangle className="w-4 h-4" />
+                                      {editError}
+                                    </div>
+                                  )}
 
                                   <div className="flex justify-end gap-2 mt-2">
                                     <button
@@ -1202,6 +1325,37 @@ export default function TaskSheetsManager({
                           }
                           users={users.map((u) => ({ id: u.id, name: u.name }))}
                           tables={tables}
+                          userPlan={userPlan}
+                          limit={
+                            { basic: 2, premium: 6, super: Infinity }[
+                              userPlan as "basic" | "premium" | "super"
+                            ] || 2
+                          }
+                          externalUsageCount={
+                            // 1. All existing items (account for editing state if active)
+                            (editingSheet?.items.reduce((acc, existingItem) => {
+                              if (existingItem.id === editingItemId) {
+                                // If this existing item is being edited, use the editing state count
+                                return (
+                                  acc +
+                                  (editingItemData?.onCompleteActions.length ||
+                                    0)
+                                );
+                              }
+                              return (
+                                acc +
+                                (existingItem.onCompleteActions as any[]).length
+                              );
+                            }, 0) || 0) +
+                            // 2. All OTHER new items
+                            newItems.reduce(
+                              (acc, newItem, idx) =>
+                                idx === index
+                                  ? acc
+                                  : acc + newItem.onCompleteActions.length,
+                              0,
+                            )
+                          }
                         />
                       </div>
                     ))}

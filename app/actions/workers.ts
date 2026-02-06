@@ -414,6 +414,12 @@ export async function deleteOnboardingPath(id: number) {
   });
   if (!existing) throw new Error("Onboarding path not found or access denied");
 
+  // Delete all related WorkerOnboarding records first (WorkerOnboardingStep will cascade delete)
+  await prisma.workerOnboarding.deleteMany({
+    where: { pathId: id },
+  });
+
+  // Now delete the path (OnboardingStep will cascade delete due to onDelete: Cascade)
   await prisma.onboardingPath.delete({
     where: { id },
   });
@@ -911,6 +917,9 @@ async function executeOnboardingStepAutomations(
         case "UPDATE_RECORD":
           await executeUpdateRecordAction(action.config, step.path.companyId);
           break;
+        case "CREATE_RECORD":
+          await executeCreateRecordAction(action.config, step.path.companyId);
+          break;
         case "CREATE_TASK":
           await executeCreateTaskAction(action.config, user);
           break;
@@ -925,22 +934,81 @@ async function executeOnboardingStepAutomations(
           break;
         case "SEND_WHATSAPP":
           if (workerData) {
-            // Adapt config from TaskItemAutomations to executeWhatsAppAction format
-            const adaptedConfig = {
-              ...action.config,
-              // Map 'phone' input to 'manual:PHONE' format required by action
-              phoneColumnId: action.config.phone
-                ? `manual:${action.config.phone}`
-                : undefined,
-              // Map 'message' to 'content'
-              content: action.config.message,
-            };
+            let phoneNumber: string | null = null;
 
-            await executeWhatsAppAction(
-              { actionConfig: adaptedConfig },
-              workerData,
-              step.path.companyId,
-            );
+            // Check if phone source is from table
+            if (
+              action.config.phoneSource === "table" &&
+              action.config.waTableId &&
+              action.config.waPhoneColumn
+            ) {
+              // Fetch phone from the specified table
+              try {
+                let record;
+                if (action.config.waRecordId) {
+                  // Fetch specific record by ID
+                  record = await prisma.record.findFirst({
+                    where: {
+                      id: Number(action.config.waRecordId),
+                      tableId: Number(action.config.waTableId),
+                      companyId: step.path.companyId,
+                    },
+                  });
+                } else {
+                  // Fetch the last created record from the table
+                  record = await prisma.record.findFirst({
+                    where: {
+                      tableId: Number(action.config.waTableId),
+                      companyId: step.path.companyId,
+                    },
+                    orderBy: { createdAt: "desc" },
+                  });
+                }
+
+                if (record && record.data) {
+                  const recordData = record.data as Record<string, unknown>;
+                  phoneNumber = recordData[
+                    action.config.waPhoneColumn as string
+                  ] as string;
+                  console.log(
+                    `[Workers] WhatsApp: Fetched phone ${phoneNumber} from table ${action.config.waTableId}, column ${action.config.waPhoneColumn}`,
+                  );
+                } else {
+                  console.warn(
+                    `[Workers] WhatsApp: Record not found in table ${action.config.waTableId}`,
+                  );
+                }
+              } catch (fetchError) {
+                console.error(
+                  "[Workers] WhatsApp: Error fetching phone from table:",
+                  fetchError,
+                );
+              }
+            } else {
+              // Manual phone entry
+              phoneNumber = action.config.phone as string;
+            }
+
+            if (phoneNumber) {
+              // Adapt config for executeWhatsAppAction format
+              const adaptedConfig = {
+                ...action.config,
+                // Map phone to 'manual:PHONE' format required by action
+                phoneColumnId: `manual:${phoneNumber}`,
+                // Map 'message' to 'content'
+                content: action.config.message,
+              };
+
+              await executeWhatsAppAction(
+                { actionConfig: adaptedConfig },
+                workerData,
+                step.path.companyId,
+              );
+            } else {
+              console.warn(
+                "[Workers] WhatsApp: No valid phone number available",
+              );
+            }
           }
           break;
         case "WEBHOOK":
@@ -1035,6 +1103,29 @@ async function executeUpdateRecordAction(
   });
 
   console.log(`[Workers] Updated record ${recordId} in table ${tableId}`);
+}
+
+// Create a new record in a table
+async function executeCreateRecordAction(
+  config: Record<string, unknown>,
+  companyId: number,
+) {
+  const { tableId, values } = config as {
+    tableId: number;
+    values: Record<string, unknown>;
+  };
+
+  if (!tableId) return;
+
+  await prisma.record.create({
+    data: {
+      tableId,
+      companyId,
+      data: values ? JSON.parse(JSON.stringify(values)) : {},
+    },
+  });
+
+  console.log(`[Workers] Created record in table ${tableId}`);
 }
 
 // Create a new task

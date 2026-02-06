@@ -108,6 +108,7 @@ interface Props {
   stats: Stats;
   users: User[];
   tables: Array<{ id: number; name: string }>;
+  userPlan?: string;
 }
 
 export default function WorkersManager({
@@ -117,6 +118,7 @@ export default function WorkersManager({
   stats,
   users,
   tables,
+  userPlan = "basic",
 }: Props) {
   const [activeTab, setActiveTab] = useState<
     "workers" | "departments" | "onboarding"
@@ -124,7 +126,7 @@ export default function WorkersManager({
   const [workers, setWorkers] = useState(initialWorkers);
   const [departments, setDepartments] = useState(initialDepartments);
   const [onboardingPaths, setOnboardingPaths] = useState(
-    initialOnboardingPaths
+    initialOnboardingPaths,
   );
 
   // Filters
@@ -138,7 +140,7 @@ export default function WorkersManager({
   const [isPathModalOpen, setIsPathModalOpen] = useState(false);
   const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(
-    null
+    null,
   );
   const [editingPath, setEditingPath] = useState<OnboardingPath | null>(null);
 
@@ -191,7 +193,7 @@ export default function WorkersManager({
 
     if (editingWorker) {
       setWorkers(
-        workers.map((w) => (w.id === completeWorker.id ? completeWorker : w))
+        workers.map((w) => (w.id === completeWorker.id ? completeWorker : w)),
       );
     } else {
       setWorkers([...workers, completeWorker]);
@@ -203,7 +205,7 @@ export default function WorkersManager({
   const handleDepartmentSaved = (department: Department) => {
     if (editingDepartment) {
       setDepartments(
-        departments.map((d) => (d.id === department.id ? department : d))
+        departments.map((d) => (d.id === department.id ? department : d)),
       );
     } else {
       setDepartments([...departments, department]);
@@ -217,7 +219,7 @@ export default function WorkersManager({
     const typedPath = path as OnboardingPath;
     if (editingPath) {
       setOnboardingPaths(
-        onboardingPaths.map((p) => (p.id === typedPath.id ? typedPath : p))
+        onboardingPaths.map((p) => (p.id === typedPath.id ? typedPath : p)),
       );
     } else {
       setOnboardingPaths([...onboardingPaths, typedPath]);
@@ -357,7 +359,7 @@ export default function WorkersManager({
             value={departmentFilter ?? ""}
             onChange={(e) =>
               setDepartmentFilter(
-                e.target.value ? Number(e.target.value) : null
+                e.target.value ? Number(e.target.value) : null,
               )
             }
             className="px-4 py-2.5 bg-white/80 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition min-w-[150px]"
@@ -479,6 +481,7 @@ export default function WorkersManager({
           departments={departments}
           users={users.map((u) => ({ id: u.id, name: u.name }))}
           tables={tables}
+          userPlan={userPlan}
           onClose={() => {
             setIsPathModalOpen(false);
             setEditingPath(null);

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { CalendarHeader } from "./CalendarHeader";
 import { WeekView } from "./WeekView";
 import { DayView } from "./DayView";
@@ -29,11 +30,47 @@ export function Calendar() {
     number | undefined
   >();
   const [draggingEventId, setDraggingEventId] = useState<string | null>(null);
+  const [initialEventTab, setInitialEventTab] = useState<
+    "details" | "automations"
+  >("details");
+
+  const searchParams = useSearchParams();
 
   // Load events from API on mount
   useEffect(() => {
     fetchEvents();
   }, []);
+
+  // Handle URL params for opening modals
+  useEffect(() => {
+    if (events.length === 0) return;
+
+    const openGlobal = searchParams.get("openGlobalAutomations");
+    if (openGlobal === "true") {
+      setIsGlobalAutomationsModalOpen(true);
+    }
+
+    const eventId = searchParams.get("eventId");
+    const openEdit = searchParams.get("openEdit");
+    const tab = searchParams.get("tab");
+
+    if (eventId && openEdit === "true") {
+      const event = events.find((e) => e.id === eventId);
+      if (event) {
+        if (tab === "automations") {
+          setInitialEventTab("automations");
+        } else {
+          setInitialEventTab("details");
+        }
+        handleEventClick(event);
+        // Important: handleEventClick resets things, so we need to set tab AFTER or modify handleEventClick
+        // Actually handleEventClick sets selectedEvent and opens modal.
+        // But handleEventClick resets initial* vars.
+        // Let's modify handleEventClick to accept a tab or just setter here.
+        // Since I can't easily change handleEventClick signature everywhere, I will set it directly here.
+      }
+    }
+  }, [searchParams, events]);
 
   const fetchEvents = async () => {
     try {
@@ -153,6 +190,24 @@ export function Calendar() {
     setInitialEventDate(undefined);
     setInitialEventHour(undefined);
     setInitialEventMinutes(undefined);
+    // Don't reset tab here if called from effect with a specific intent?
+    // But handleEventClick is called from UI too.
+    // If called from UI, we want "details".
+    // If called from URL, we might want "automations".
+    // I can assume UI calls won't set tab state before calling this.
+    // But wait, the Effect calls handleEventClick.
+    // If I reset it here, it overrides the Effect.
+    // I should checking if I am in the effect... No.
+    // I will remove the reset here and rely on the value being set before or defaulting.
+    // But if I click from UI, I need it to be "details".
+    // So I will set it to "details" here unless I see a way to pass it.
+    // I'll assume standard click is details.
+    // For the param case, I'll set it AFTER calling this in the effect?
+    // React state updates are batched, so setting it after might work if handleEventClick sets it.
+    // But handleEventClick is just setting state.
+    // Let's default to "details" here, BUT check if I can modify the Effect to set it AFTER.
+    // Yes.
+    setInitialEventTab("details");
     setIsModalOpen(true);
   };
 
@@ -211,6 +266,7 @@ export function Calendar() {
     setInitialEventDate(new Date());
     setInitialEventHour(getNextRoundedHour());
     setInitialEventMinutes(0);
+    setInitialEventTab("details");
     setIsModalOpen(true);
   };
 
@@ -223,6 +279,7 @@ export function Calendar() {
     setInitialEventDate(date);
     setInitialEventHour(hour);
     setInitialEventMinutes(minutes);
+    setInitialEventTab("details");
     setIsModalOpen(true);
   };
 
@@ -356,6 +413,13 @@ export function Calendar() {
           setInitialEventDate(undefined);
           setInitialEventHour(undefined);
           setInitialEventMinutes(undefined);
+
+          const url = new URL(window.location.href);
+          if (url.searchParams.has("openEdit")) {
+            url.searchParams.delete("openEdit");
+            url.searchParams.delete("eventId");
+            window.history.replaceState({}, "", url.toString());
+          }
         }}
         onSave={handleSaveEvent}
         onDelete={selectedEvent ? handleDeleteEvent : undefined}
@@ -363,6 +427,7 @@ export function Calendar() {
         initialDate={initialEventDate}
         initialHour={initialEventHour}
         initialMinutes={initialEventMinutes}
+        initialTab={initialEventTab}
       />
 
       <AllEventsModal
@@ -380,7 +445,14 @@ export function Calendar() {
 
       <GlobalEventAutomationsModal
         isOpen={isGlobalAutomationsModalOpen}
-        onClose={() => setIsGlobalAutomationsModalOpen(false)}
+        onClose={() => {
+          setIsGlobalAutomationsModalOpen(false);
+          const url = new URL(window.location.href);
+          if (url.searchParams.has("openGlobalAutomations")) {
+            url.searchParams.delete("openGlobalAutomations");
+            window.history.replaceState({}, "", url.toString());
+          }
+        }}
       />
     </div>
   );

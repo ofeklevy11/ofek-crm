@@ -210,6 +210,7 @@ export default async function TasksPage({
                 })),
               }))}
               users={users}
+              userPlan={user?.isPremium || "basic"}
             />
           )}
         </Suspense>

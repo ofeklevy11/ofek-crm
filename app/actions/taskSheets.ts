@@ -20,7 +20,10 @@ export interface TaskSheetItemInput {
       | "CREATE_FINANCE"
       | "SEND_NOTIFICATION"
       | "UPDATE_TASK"
-      | "SEND_WEBHOOK";
+      | "SEND_WEBHOOK"
+      | "SEND_WHATSAPP"
+      | "CREATE_CALENDAR_EVENT"
+      | "CREATE_RECORD";
     config: Record<string, unknown>;
   }>;
 }
@@ -478,6 +481,7 @@ export async function toggleTaskSheetItemCompletion(itemId: number) {
 }
 
 // Types for automation actions
+// Types for automation actions
 interface OnCompleteAction {
   actionType:
     | "UPDATE_RECORD"
@@ -485,7 +489,10 @@ interface OnCompleteAction {
     | "CREATE_FINANCE"
     | "SEND_NOTIFICATION"
     | "UPDATE_TASK"
-    | "SEND_WEBHOOK";
+    | "SEND_WEBHOOK"
+    | "SEND_WHATSAPP"
+    | "CREATE_CALENDAR_EVENT"
+    | "CREATE_RECORD";
   config: Record<string, unknown>;
 }
 
@@ -529,6 +536,12 @@ async function executeItemAutomations(
         case "SEND_WHATSAPP":
           await executeSendWhatsapp(action.config, item, user);
           break;
+        case "CREATE_CALENDAR_EVENT":
+          await executeCreateCalendarEvent(action.config, user);
+          break;
+        case "CREATE_RECORD":
+          await executeCreateRecord(action.config, user.companyId);
+          break;
         default:
           console.warn(
             `[TaskSheets] Unknown action type: ${action.actionType}`,
@@ -541,6 +554,34 @@ async function executeItemAutomations(
       );
     }
   }
+}
+
+// Create calendar event
+async function executeCreateCalendarEvent(
+  config: Record<string, unknown>,
+  user: { id: number; companyId: number },
+) {
+  const { title, description, startTime, endTime } = config as {
+    title?: string;
+    description?: string;
+    startTime?: string;
+    endTime?: string;
+  };
+
+  if (!title || !startTime || !endTime) return;
+
+  const { createCalendarEvent } = await import("./calendar");
+  await createCalendarEvent({
+    title,
+    description,
+    startTime,
+    endTime,
+    companyId: user.companyId,
+    // Add other fields as needed
+    // Assuming createCalendarEvent handles defaults
+  });
+
+  console.log(`[TaskSheets] Created calendar event: ${title}`);
 }
 
 // Update a record in a table
@@ -575,6 +616,32 @@ async function executeUpdateRecord(
   });
 
   console.log(`[TaskSheets] Updated record ${recordId} in table ${tableId}`);
+}
+
+// Create a new record in a table
+async function executeCreateRecord(
+  config: Record<string, unknown>,
+  companyId: number,
+) {
+  const { tableId, values } = config as {
+    tableId: number;
+    values: Record<string, unknown>;
+  };
+
+  if (!tableId || !values) return;
+
+  // Verify table exists and belongs to company (optional but recommended)
+  // For now, we assume tableId is valid if picked from UI
+
+  await prisma.record.create({
+    data: {
+      companyId,
+      tableId,
+      data: JSON.parse(JSON.stringify(values)),
+    },
+  });
+
+  console.log(`[TaskSheets] Created record in table ${tableId}`);
 }
 
 // Create a new task
@@ -755,9 +822,65 @@ async function executeSendWhatsapp(
   },
   user: { id: number; name: string },
 ) {
-  const { phone, message } = config as { phone?: string; message?: string };
+  let phoneNumber: string | null = null;
 
-  if (!phone || !message) return;
+  // Check if phone source is from table
+  if (
+    config.phoneSource === "table" &&
+    config.waTableId &&
+    config.waPhoneColumn
+  ) {
+    // Fetch phone from the specified table
+    try {
+      let record;
+      if (config.waRecordId) {
+        // Fetch specific record by ID
+        record = await prisma.record.findFirst({
+          where: {
+            id: Number(config.waRecordId),
+            tableId: Number(config.waTableId),
+            companyId: item.sheet.companyId,
+          },
+        });
+      } else {
+        // Fetch the last created record from the table
+        record = await prisma.record.findFirst({
+          where: {
+            tableId: Number(config.waTableId),
+            companyId: item.sheet.companyId,
+          },
+          orderBy: { createdAt: "desc" },
+        });
+      }
+
+      if (record && record.data) {
+        const recordData = record.data as Record<string, unknown>;
+        phoneNumber = recordData[config.waPhoneColumn as string] as string;
+        console.log(
+          `[TaskSheets] WhatsApp: Fetched phone ${phoneNumber} from table ${config.waTableId}, column ${config.waPhoneColumn}`,
+        );
+      } else {
+        console.warn(
+          `[TaskSheets] WhatsApp: Record not found in table ${config.waTableId}`,
+        );
+      }
+    } catch (fetchError) {
+      console.error(
+        "[TaskSheets] WhatsApp: Error fetching phone from table:",
+        fetchError,
+      );
+    }
+  } else {
+    // Manual phone entry
+    phoneNumber = config.phone as string;
+  }
+
+  const message = config.message as string | undefined;
+
+  if (!phoneNumber || !message) {
+    console.warn("[TaskSheets] WhatsApp: Missing phone or message");
+    return;
+  }
 
   // Replace placeholders
   const finalMessage = message
@@ -767,10 +890,13 @@ async function executeSendWhatsapp(
 
   try {
     const { sendGreenApiMessage } = await import("./green-api");
-    await sendGreenApiMessage(item.sheet.companyId, phone, finalMessage);
-    console.log(`[TaskSheets] Sent WhatsApp to ${phone}`);
+    await sendGreenApiMessage(item.sheet.companyId, phoneNumber, finalMessage);
+    console.log(`[TaskSheets] Sent WhatsApp to ${phoneNumber}`);
   } catch (error) {
-    console.error(`[TaskSheets] Failed to send WhatsApp to ${phone}:`, error);
+    console.error(
+      `[TaskSheets] Failed to send WhatsApp to ${phoneNumber}:`,
+      error,
+    );
   }
 }
 

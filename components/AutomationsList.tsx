@@ -25,6 +25,7 @@ interface AutomationRule {
   calendarEvent?: {
     title: string;
   };
+  calendarEventId?: string | null;
 }
 
 interface AutomationsListProps {
@@ -124,6 +125,32 @@ export default function AutomationsList({
   };
 
   const handleEdit = (rule: AutomationRule) => {
+    // Calendar Automations Redirection check
+    if (rule.triggerType === "EVENT_TIME") {
+      // Global (no specific event ID)
+      if (!rule.calendarEventId) {
+        router.push("/calendar?openGlobalAutomations=true");
+        return;
+      }
+      // Single Event
+      if (rule.calendarEventId) {
+        router.push(
+          `/calendar?eventId=${rule.calendarEventId}&openEdit=true&tab=automations`,
+        );
+        return;
+      }
+    }
+
+    // Legacy string check fallback (just in case)
+    if (
+      rule.name === "Global Event Automation" ||
+      (typeof rule.name === "string" &&
+        rule.name.includes("Global Event Automation"))
+    ) {
+      router.push("/calendar?openGlobalAutomations=true");
+      return;
+    }
+
     if (
       rule.actionType === "ADD_TO_NURTURE_LIST" &&
       rule.actionConfig?.listId

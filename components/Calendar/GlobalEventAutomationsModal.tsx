@@ -6,6 +6,7 @@ import {
   getGlobalEventAutomations,
   deleteGlobalEventAutomation,
   updateGlobalEventAutomation,
+  getMaxEventAutomationCount,
 } from "@/app/actions/event-automations";
 import {
   Loader2,
@@ -18,9 +19,13 @@ import {
   Zap,
   X,
   Pencil,
+  AlertCircle,
+  Table as TableIcon,
+  CalendarPlus,
 } from "lucide-react";
 import { EventAutomationBuilder } from "./EventAutomationBuilder";
 import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
+import { getCurrentAuthUser } from "@/app/actions/auth";
 
 interface GlobalEventAutomationsModalProps {
   isOpen: boolean;
@@ -35,6 +40,9 @@ export function GlobalEventAutomationsModal({
   const [loading, setLoading] = useState(false);
   const [showBuilder, setShowBuilder] = useState(false);
 
+  const [userPlan, setUserPlan] = useState("basic");
+  const [maxSpecificCount, setMaxSpecificCount] = useState(0);
+
   // Edit State
   const [editingAutoId, setEditingAutoId] = useState<number | null>(null);
   const [editingAutoData, setEditingAutoData] = useState<any>(null);
@@ -42,6 +50,16 @@ export function GlobalEventAutomationsModal({
   useEffect(() => {
     if (isOpen) {
       loadAutomations();
+      getCurrentAuthUser().then((res) => {
+        if (res.success && res.data) {
+          setUserPlan((res.data as any).isPremium || "basic");
+        }
+      });
+      getMaxEventAutomationCount().then((res) => {
+        if (res.success) {
+          setMaxSpecificCount(res.count || 0);
+        }
+      });
     }
   }, [isOpen]);
 
@@ -105,6 +123,38 @@ export function GlobalEventAutomationsModal({
     setShowBuilder(true);
   };
 
+  const handleOpenBuilder = () => {
+    // Check global limits
+    const limit =
+      userPlan === "super" ? Infinity : userPlan === "premium" ? 6 : 2;
+
+    // Check if adding another global automation would violate the limit for ANY existing event
+    // that already has specific automations
+    const potentialTotal = automations.length + maxSpecificCount;
+
+    // However, if we add a global one, it adds 1 to the global count for everyone.
+    // If I have 6 specials on one event, and 0 globals.
+    // I try to add 1 global. New total for that event = 6 + 1 = 7 > 6. BLOCKED.
+
+    // Wait, the logic is: Global Count (existing) + 1 (new) + Max Specific <= Limit
+
+    if (automations.length + 1 + maxSpecificCount > limit) {
+      alert(
+        `לא ניתן להוסיף אוטומציה קבועה נוספת.\n\n` +
+          `נמצא אירוע ביומן שיש לו ${maxSpecificCount} אוטומציות ספציפיות.\n` +
+          `הוספת אוטומציה קבועה תביא לחריגה מהמגבלה של ${limit} אוטומציות לאותו אירוע.`,
+      );
+      return;
+    }
+
+    if (automations.length >= limit) {
+      alert(`הגעת למגבלת האוטומציות הקבועות (${limit}). שדרג כדי להוסיף עוד.`);
+      return;
+    }
+
+    setShowBuilder(true);
+  };
+
   const handleCloseBuilder = () => {
     setShowBuilder(false);
     setEditingAutoId(null);
@@ -124,6 +174,9 @@ export function GlobalEventAutomationsModal({
             onSave={handleSaveAutomation}
             onCancel={handleCloseBuilder}
             initialData={editingAutoData}
+            userPlan={userPlan}
+            globalCount={automations.length}
+            specificCount={0} // Global builder doesn't know about specific context
           />
         ) : (
           <>
@@ -154,6 +207,56 @@ export function GlobalEventAutomationsModal({
               </button>
             </div>
 
+            {/* Disclaimer Bar */}
+            <div className="bg-indigo-50 border-b border-indigo-100 px-6 py-4 flex items-start gap-3">
+              <AlertCircle
+                className="text-indigo-600 shrink-0 mt-0.5"
+                size={18}
+              />
+              <div className="text-sm text-indigo-900 flex-1">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-bold">
+                    סטטוס מנוי:{" "}
+                    {userPlan === "super"
+                      ? "Super (ללא הגבלה)"
+                      : userPlan === "premium"
+                        ? "Premium (עד 6 אוטומציות)"
+                        : "Basic (עד 2 אוטומציות)"}
+                  </p>
+                  {userPlan !== "super" && (
+                    <span className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full text-xs font-bold border border-indigo-200">
+                      {automations.length} מתוך {userPlan === "premium" ? 6 : 2}{" "}
+                      אוטומציות קבועות בשימוש
+                    </span>
+                  )}
+                </div>
+                {userPlan !== "super" && (
+                  <div className="mb-2">
+                    <div className="w-full bg-indigo-100 rounded-full h-2 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          automations.length >= (userPlan === "premium" ? 6 : 2)
+                            ? "bg-red-500"
+                            : automations.length >=
+                                (userPlan === "premium" ? 4 : 1)
+                              ? "bg-yellow-500"
+                              : "bg-indigo-600"
+                        }`}
+                        style={{
+                          width: `${Math.min(100, (automations.length / (userPlan === "premium" ? 6 : 2)) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+                <p className="text-indigo-700 text-xs">
+                  {userPlan === "super"
+                    ? "ניתן ליצור כמות בלתי מוגבלת של אוטומציות קבועות וספציפיות."
+                    : `המגבלה כוללת את סכום האוטומציות הקבועות והספציפיות יחד. המערכת תוודא שלא תחרגו מהמגבלה בכל אירוע.`}
+                </p>
+              </div>
+            </div>
+
             <div className="flex-1 overflow-y-auto p-8 bg-gray-50">
               {/* List */}
               <div className="space-y-4">
@@ -177,7 +280,7 @@ export function GlobalEventAutomationsModal({
                       יקר ביצירת אירועים חוזרים.
                     </p>
                     <button
-                      onClick={() => setShowBuilder(true)}
+                      onClick={handleOpenBuilder}
                       className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center mx-auto gap-2"
                     >
                       <Plus size={20} />
@@ -191,7 +294,7 @@ export function GlobalEventAutomationsModal({
                         האוטומציות שלי ({automations.length})
                       </h3>
                       <button
-                        onClick={() => setShowBuilder(true)}
+                        onClick={handleOpenBuilder}
                         className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all flex items-center gap-2"
                       >
                         <Plus size={16} />
@@ -236,7 +339,12 @@ export function GlobalEventAutomationsModal({
                                       ? "bg-green-50 text-green-600"
                                       : auto.actionType === "SEND_WHATSAPP"
                                         ? "bg-[#e6f7ee] text-green-700"
-                                        : "bg-purple-50 text-purple-600"
+                                        : auto.actionType === "CREATE_RECORD"
+                                          ? "bg-blue-50 text-blue-600"
+                                          : auto.actionType ===
+                                              "CREATE_CALENDAR_EVENT"
+                                            ? "bg-indigo-50 text-indigo-600"
+                                            : "bg-purple-50 text-purple-600"
                                 }`}
                               >
                                 {auto.actionType === "SEND_NOTIFICATION" ? (
@@ -245,6 +353,11 @@ export function GlobalEventAutomationsModal({
                                   <CheckSquare size={24} />
                                 ) : auto.actionType === "SEND_WHATSAPP" ? (
                                   <WhatsAppIcon size={24} />
+                                ) : auto.actionType === "CREATE_RECORD" ? (
+                                  <TableIcon size={24} />
+                                ) : auto.actionType ===
+                                  "CREATE_CALENDAR_EVENT" ? (
+                                  <CalendarPlus size={24} />
                                 ) : (
                                   <Webhook size={24} />
                                 )}
@@ -272,7 +385,12 @@ export function GlobalEventAutomationsModal({
                                         ? "משימה אוטומטית"
                                         : auto.actionType === "SEND_WHATSAPP"
                                           ? "הודעת WhatsApp"
-                                          : "Webhook"}
+                                          : auto.actionType === "CREATE_RECORD"
+                                            ? "יצירת רשומה בטבלה"
+                                            : auto.actionType ===
+                                                "CREATE_CALENDAR_EVENT"
+                                              ? "יצירת אירוע נוסף ביומן"
+                                              : "Webhook"}
                                   </span>
                                 </div>
                               </div>

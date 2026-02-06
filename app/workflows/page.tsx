@@ -34,6 +34,7 @@ export default async function WorkflowsPage() {
             initialWorkflows={workflows}
             initialInstances={instances}
             users={users}
+            currentUser={user}
           />
         </Suspense>
       </div>

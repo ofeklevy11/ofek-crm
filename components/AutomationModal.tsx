@@ -27,6 +27,7 @@ import {
   Pencil,
   CheckSquare,
   Phone,
+  AlertCircle,
 } from "lucide-react";
 import { getAllFiles } from "@/app/actions/storage";
 
@@ -66,7 +67,7 @@ export default function AutomationModal({
   const totalSteps = 4;
 
   // Calculate max actions based on user plan
-  const maxActions = userPlan === "premium" || userPlan === "super" ? 5 : 2;
+  const maxActions = userPlan === "premium" || userPlan === "super" ? 6 : 2;
 
   // --- Form State ---
   const [name, setName] = useState(editingRule?.name || "");
@@ -1085,9 +1086,25 @@ export default function AutomationModal({
 
   const renderStep3 = () => (
     <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-      <label className="block text-sm font-medium text-gray-700 mb-3">
-        פעולות לביצוע
-      </label>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          פעולות לביצוע
+        </label>
+        <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 flex items-start gap-2 mb-2">
+          <AlertCircle size={16} className="text-blue-500 mt-0.5 shrink-0" />
+          <div className="text-xs text-blue-700 leading-relaxed">
+            {maxActions === 2 ? (
+              <>
+                כמשתמש רגיל, ניתן להגדיר עד 2 פעולות באוטומציה זו.
+                <br />
+                למשתמשי פרימיום ניתן להגדיר עד 6 פעולות.
+              </>
+            ) : (
+              <>כמשתמש פרימיום, ניתן להגדיר עד 6 פעולות באוטומציה זו.</>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* List of Configured Actions */}
       {actions.length > 0 && (

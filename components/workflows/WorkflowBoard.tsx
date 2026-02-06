@@ -13,6 +13,7 @@ interface WorkflowBoardProps {
   onStageCreated?: (stage: WorkflowStage) => void;
   onStageUpdated?: (stage: WorkflowStage) => void;
   onStageDeleted?: (stageId: number) => void;
+  currentUser: any;
 }
 
 export function WorkflowBoard({
@@ -20,9 +21,10 @@ export function WorkflowBoard({
   onStageCreated,
   onStageUpdated,
   onStageDeleted,
+  currentUser,
 }: WorkflowBoardProps) {
   const [selectedStage, setSelectedStage] = useState<WorkflowStage | null>(
-    null
+    null,
   );
   const [isCreatingStage, setIsCreatingStage] = useState(false);
   const router = useRouter();
@@ -126,6 +128,8 @@ export function WorkflowBoard({
         onClose={() => setSelectedStage(null)}
         onUpdate={onStageUpdated}
         onDelete={onStageDeleted}
+        currentUser={currentUser}
+        allStages={workflow.stages}
       />
 
       <StageDetailModal
@@ -134,6 +138,8 @@ export function WorkflowBoard({
         onClose={() => setIsCreatingStage(false)}
         isCreating={true}
         onSave={handleSaveNewStage}
+        currentUser={currentUser}
+        allStages={workflow.stages}
       />
     </div>
   );

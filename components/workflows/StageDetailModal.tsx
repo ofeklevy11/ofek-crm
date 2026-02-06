@@ -50,6 +50,8 @@ interface StageDetailModalProps {
   onSave?: (data: any) => Promise<void>;
   onUpdate?: (stage: WorkflowStage) => void;
   onDelete?: (stageId: number) => void;
+  currentUser?: any;
+  allStages?: WorkflowStage[];
 }
 
 // ----------------------------------------------------------------------
@@ -458,11 +460,63 @@ function AutomationConfigModal({
   if (!isOpen || !type) return null;
 
   const handleSave = () => {
+    // --- Validation Logic ---
+    let validationError = null;
+
     if (
       (type.id === "update_record" || type.id === "delete_record") &&
       !fields.recordId
     ) {
-      setError("חובה להזין מזהה רשומה");
+      validationError = "חובה להזין מזהה רשומה";
+    } else if (type.id === "create_task" && !fields.title) {
+      validationError = "חובה להזין כותרת למשימה";
+    } else if (
+      (type.id === "update_task" || type.id === "delete_task") &&
+      !fields.taskId
+    ) {
+      validationError = "חובה להזין מזהה משימה";
+    } else if (type.id === "create_record") {
+      if (!fields.tableId) {
+        validationError = "חובה לבחור טבלה";
+      } else if (
+        !fields.values ||
+        Object.keys(fields.values).length === 0 ||
+        Object.values(fields.values).every((v) => v === "")
+      ) {
+        validationError = "חובה להזין ערך לפחות לשדה אחד ברשומה";
+      }
+    } else if (
+      type.id === "update_record" &&
+      (!fields.tableId || !fields.fieldName)
+    ) {
+      validationError = "חובה לבחור טבלה ושדה לעדכון";
+    } else if (type.id === "delete_record" && !fields.tableId) {
+      validationError = "חובה לבחור טבלה";
+    } else if (type.id === "create_event" && !fields.title) {
+      validationError = "חובה להזין כותרת לאירוע";
+    } else if (
+      (type.id === "update_event" || type.id === "delete_event") &&
+      !fields.eventId
+    ) {
+      validationError = "חובה להזין מזהה אירוע";
+    } else if (type.id === "notification") {
+      if (!fields.recipientId) validationError = "חובה לבחור נמען";
+      else if (!fields.message) validationError = "חובה להזין תוכן התראה";
+    } else if (type.id === "whatsapp") {
+      if (!fields.phoneColumnId && waTargetType === "private")
+        validationError = "חובה לבחור נמען או להזין מספר";
+      else if (!fields.phoneColumnId && waTargetType === "group")
+        validationError = "חובה להזין מזהה קבוצה";
+      else if (waMessageType === "media" && !fields.mediaFileId)
+        validationError = "חובה לבחור קובץ מדיה";
+      // else if (waMessageType === "private" && !fields.content) // Optional validation for text content
+      //   validationError = "חובה להזין תוכן הודעה";
+    } else if (type.id === "webhook" && !fields.url) {
+      validationError = "חובה להזין כתובת URL";
+    }
+
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -1580,19 +1634,27 @@ function AutomationConfigModal({
           )}
         </div>
 
-        <div className="p-4 flex justify-end gap-2 bg-gray-50 border-t border-gray-100">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded border border-gray-300 bg-white"
-          >
-            ביטול
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-4 py-2 rounded bg-indigo-600 text-white"
-          >
-            שמור
-          </button>
+        <div className="p-4 flex flex-col gap-3 bg-gray-50 border-t border-gray-100">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded text-sm flex items-center gap-2">
+              <AlertTriangle size={16} />
+              {error}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded border border-gray-300 bg-white"
+            >
+              ביטול
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-2 rounded bg-indigo-600 text-white"
+            >
+              שמור
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1958,9 +2020,41 @@ export function StageDetailModal({
   onSave,
   onUpdate,
   onDelete,
+  currentUser,
+  allStages = [],
 }: StageDetailModalProps) {
   const router = useRouter();
   const [formData, setFormData] = useState<any>(null);
+
+  // Automation Limits Logic
+  const planInfo = (() => {
+    const isSuper = currentUser?.isPremium === "super";
+    const isPremium =
+      currentUser?.isPremium === "premium" ||
+      currentUser?.isPremium === true ||
+      currentUser?.isPremium === "true";
+
+    if (isSuper)
+      return { name: "סופר (Super)", limit: Infinity, type: "super" };
+    if (isPremium) return { name: "פרימיום", limit: 6, type: "premium" };
+    return { name: "רגיל", limit: 2, type: "regular" };
+  })();
+
+  const otherStagesAutomationsCount = allStages
+    .filter((s) => s.id !== stage?.id)
+    .reduce((acc, s) => {
+      const details = typeof s.details === "object" ? (s.details as any) : {};
+      const actions = Array.isArray(details.systemActions)
+        ? details.systemActions
+        : [];
+      return acc + actions.length;
+    }, 0);
+
+  const currentStageAutomationsCount = formData?.systemActions?.length || 0;
+  const totalAutomationsCount =
+    otherStagesAutomationsCount + currentStageAutomationsCount;
+
+  const isLimitReached = totalAutomationsCount >= planInfo.limit;
 
   // Selection Modal State
   const [isAutomationModalOpen, setIsAutomationModalOpen] = useState(false);
@@ -2107,6 +2201,10 @@ export function StageDetailModal({
     summary: string;
     config: any;
   }) => {
+    if (!data.config || Object.keys(data.config).length === 0) {
+      alert("שגיאה: אוטומציה ריקה לא יכולה להישמר.");
+      return;
+    }
     setFormData((prev: any) => ({
       ...prev,
       systemActions: [...(prev.systemActions || []), data],
@@ -2354,13 +2452,58 @@ export function StageDetailModal({
               })}
 
               {isEditing && (
-                <button
-                  onClick={() => setIsAutomationModalOpen(true)}
-                  className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-500 hover:border-orange-200 hover:text-orange-600 hover:bg-orange-50 transition-all flex items-center justify-center gap-2 text-sm font-medium"
-                >
-                  <Plus size={16} />
-                  הוסף פעולה אוטומטית
-                </button>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => {
+                      if (!isLimitReached) {
+                        setIsAutomationModalOpen(true);
+                      }
+                    }}
+                    disabled={isLimitReached}
+                    className={`w-full py-3 border-2 border-dashed rounded-xl transition-all flex items-center justify-center gap-2 text-sm font-medium
+                            ${
+                              isLimitReached
+                                ? "border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50"
+                                : "border-gray-200 text-gray-500 hover:border-orange-200 hover:text-orange-600 hover:bg-orange-50"
+                            }
+                        `}
+                  >
+                    {isLimitReached ? <Lock size={16} /> : <Plus size={16} />}
+                    {isLimitReached
+                      ? "הגעת למכסת האוטומציות"
+                      : "הוסף פעולה אוטומטית"}
+                  </button>
+
+                  {/* Plan Disclaimer */}
+                  <div
+                    className={`text-xs px-3 py-2 rounded-lg flex items-center justify-between
+                        ${planInfo.type === "regular" ? "bg-gray-100 text-gray-600" : ""}
+                        ${planInfo.type === "premium" ? "bg-purple-50 text-purple-700 border border-purple-100" : ""}
+                        ${planInfo.type === "super" ? "bg-indigo-50 text-indigo-700 border border-indigo-100" : ""}
+                    `}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {planInfo.type === "super" ? (
+                        <Zap size={12} className="fill-current" />
+                      ) : (
+                        <Info size={12} />
+                      )}
+                      <span>
+                        סוג משתמש: <strong>{planInfo.name}</strong>
+                      </span>
+                    </div>
+                    <div className="font-mono bg-white/50 px-2 py-0.5 rounded">
+                      {planInfo.limit === Infinity ? (
+                        "ללא הגבלה"
+                      ) : (
+                        <span>
+                          {totalAutomationsCount} / {planInfo.limit} נוצלו (סה"כ
+                          בתהליך)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           </section>
