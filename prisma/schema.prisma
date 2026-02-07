@@ -676,6 +676,7 @@ model Quote {
   updatedAt       DateTime @updatedAt
 
   isPriceWithVat  Boolean  @default(false) // Whether unit prices include VAT
+  title           String?  // Optional title for the quotation
 
   company         Company  @relation(fields: [companyId], references: [id])
   client          Client?  @relation(fields: [clientId], references: [id])

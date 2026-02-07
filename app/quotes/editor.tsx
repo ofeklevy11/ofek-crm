@@ -33,7 +33,7 @@ export default function QuoteEditor({
       : "",
     status: initialQuote?.status || "DRAFT",
     isPriceWithVat: initialQuote?.isPriceWithVat ?? false,
-    // title: initialQuote?.title || "", // Removed
+    title: initialQuote?.title || "",
   });
 
   const [items, setItems] = useState<any[]>(initialQuote?.items || []);
@@ -208,7 +208,7 @@ export default function QuoteEditor({
           ? new Date(formData.validUntil)
           : undefined,
         status: formData.status,
-        // title: formData.title, // Removed
+        title: formData.title || undefined,
         items: items.map((item) => ({
           productId: item.productId ? parseInt(item.productId) : undefined,
           description: item.description,
@@ -364,7 +364,19 @@ export default function QuoteEditor({
             <h3 className="font-semibold text-gray-900">הגדרות וסטטוס</h3>
           </div>
           <div className="p-6 space-y-4">
-            {/* Title field removed per schema change */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                כותרת הצעה (אופציונלי)
+              </label>
+              <input
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
+                placeholder="לדוגמה: הצעת מחיר לפרויקט בניית אתר"
+                value={formData.title}
+                onChange={(e) =>
+                  setFormData({ ...formData, title: e.target.value })
+                }
+              />
+            </div>
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
                 סטטוס

@@ -76,6 +76,7 @@ export async function createQuote(data: {
   clientTaxId?: string;
   clientAddress?: string;
   validUntil?: Date;
+  title?: string;
   items: {
     productId?: number;
     description: string;
@@ -117,6 +118,7 @@ export async function createQuote(data: {
       clientTaxId: data.clientTaxId,
       clientAddress: data.clientAddress,
       validUntil: data.validUntil,
+      title: data.title,
       total,
       status: "DRAFT",
       items: {
@@ -159,6 +161,7 @@ export async function updateQuote(
     clientAddress?: string;
     validUntil?: Date;
     status?: string;
+    title?: string;
     items: {
       id?: number; // If present, update. If not, create.
       productId?: number;
@@ -195,6 +198,7 @@ export async function updateQuote(
         clientAddress: data.clientAddress,
         validUntil: data.validUntil,
         status: data.status,
+        title: data.title,
         total,
         isPriceWithVat: data.isPriceWithVat,
         pdfUrl: null, // Reset cached PDF on update

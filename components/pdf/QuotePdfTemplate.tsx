@@ -7,19 +7,15 @@ import {
   Text,
   View,
   StyleSheet,
-  Font,
-  Image,
 } from "@react-pdf/renderer";
 import { Quote, Company, QuoteItem, Product, Client } from "@prisma/client";
 
-// Define types (mirroring QuoteDocument.tsx for consistency)
 type CompanyWithSettings = Company & {
   businessType?: string | null;
   taxId?: string | null;
   businessAddress?: string | null;
   businessWebsite?: string | null;
   businessEmail?: string | null;
-  logoUrl?: string | null; // Assuming this might exist or we can pass it
 };
 
 export type FullQuote = Quote & {
@@ -34,123 +30,184 @@ interface QuotePdfTemplateProps {
   quote: FullQuote;
 }
 
-// Styles
 const styles = StyleSheet.create({
   page: {
     padding: 40,
     fontFamily: "Rubik",
     fontSize: 10,
-    color: "#000000",
+    color: "#111827",
     backgroundColor: "#ffffff",
   },
   header: {
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     justifyContent: "space-between",
-    marginBottom: 30,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-    paddingBottom: 20,
-  },
-  headerLeft: {
-    width: "40%",
-  },
-  headerRight: {
-    width: "50%",
-    alignItems: "flex-end",
+    alignItems: "flex-start",
+    marginBottom: 16,
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "bold",
-    color: "#4f95ff", // Blue as per guidelines
-    marginBottom: 5,
+    color: "#111827",
   },
-  subtitle: {
-    fontSize: 10,
-    color: "#6b7280",
+  quoteNumber: {
+    fontSize: 9,
+    color: "#9ca3af",
+    marginTop: 2,
   },
   companyName: {
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: "bold",
-    marginTop: 5,
+    color: "#111827",
+    textAlign: "left",
   },
-  section: {
+  companySubtext: {
+    fontSize: 8,
+    color: "#9ca3af",
+    textAlign: "left",
+    marginTop: 2,
+  },
+  quoteTitle: {
+    fontSize: 13,
+    fontWeight: "bold",
+    color: "#374151",
+    textAlign: "right",
+    marginBottom: 8,
+  },
+  separator: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+    marginBottom: 16,
+  },
+  totalsRow: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
     marginBottom: 20,
   },
-  gridTwo: {
-    flexDirection: "row-reverse", // RTL layout helper
-    justifyContent: "space-between",
-    marginBottom: 30,
+  dateInfo: {
+    textAlign: "right",
   },
-  column: {
+  dateText: {
+    fontSize: 8,
+    color: "#6b7280",
+    marginBottom: 2,
+  },
+  totalsBlock: {
+    alignItems: "flex-start",
+    width: "35%",
+  },
+  totalsLine: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    width: "100%",
+    marginBottom: 3,
+  },
+  totalsLabel: {
+    fontSize: 8,
+    color: "#6b7280",
+    textAlign: "right",
+  },
+  totalsValue: {
+    fontSize: 8,
+    color: "#6b7280",
+  },
+  grandTotalLine: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    width: "100%",
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+    paddingTop: 4,
+    marginTop: 2,
+  },
+  grandTotalLabel: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#111827",
+    textAlign: "right",
+  },
+  grandTotalValue: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#111827",
+  },
+  infoGrid: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  infoColumn: {
     width: "45%",
   },
-  label: {
-    fontSize: 9,
-    color: "#a24ec1", // Purple as per guidelines
-    fontWeight: "bold",
-    marginBottom: 4,
+  infoLabel: {
+    fontSize: 8,
+    color: "#9ca3af",
+    marginBottom: 3,
+    textAlign: "right",
   },
-  value: {
-    fontSize: 10,
-    marginBottom: 2,
-    lineHeight: 1.4,
+  infoText: {
+    fontSize: 9,
+    color: "#374151",
+    marginBottom: 1,
+    textAlign: "right",
+  },
+  infoTextBold: {
+    fontSize: 9,
+    fontWeight: "bold",
+    color: "#111827",
+    marginBottom: 1,
+    textAlign: "right",
   },
   table: {
     width: "100%",
-    marginTop: 20,
+    marginTop: 8,
   },
   tableHeader: {
     flexDirection: "row-reverse",
-    backgroundColor: "#4f95ff",
-    color: "#ffffff",
-    padding: 8,
-    borderRadius: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+    paddingBottom: 6,
+    marginBottom: 4,
   },
   tableRow: {
     flexDirection: "row-reverse",
     borderBottomWidth: 1,
     borderBottomColor: "#f3f4f6",
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingVertical: 6,
   },
-  colDesc: { flex: 4, textAlign: "right" },
-  colQty: { flex: 1, textAlign: "center" },
-  colPrice: { flex: 2, textAlign: "left" }, // numeric usually LTR? keeping align consistent
-  colTotal: { flex: 2, textAlign: "left" },
-
-  summary: {
-    marginTop: 20,
-    alignItems: "flex-start", // Left align for LTR numbers or adjust for RTL
-    width: "40%",
-    alignSelf: "flex-start", // PDF render is LTR by default layout, we need to handle alignment visually
-    marginLeft: 0,
-    marginRight: "auto", // Push to left (which is end in RTL visual flow but start in LTR coord system?)
+  colNum: { width: "5%", textAlign: "right" },
+  colDesc: { width: "45%", textAlign: "right", paddingHorizontal: 4 },
+  colQty: { width: "12%", textAlign: "center" },
+  colPrice: { width: "18%", textAlign: "left" },
+  colTotal: { width: "20%", textAlign: "left" },
+  thText: {
+    fontSize: 8,
+    color: "#9ca3af",
   },
-  summaryRow: {
-    flexDirection: "row-reverse",
-    justifyContent: "space-between",
-    marginBottom: 5,
-    width: "100%",
+  tdNum: {
+    fontSize: 8,
+    color: "#9ca3af",
   },
-  summaryLabel: {
+  tdName: {
+    fontSize: 9,
     fontWeight: "bold",
+    color: "#111827",
+    textAlign: "right",
   },
-  summaryValue: {
-    // fontFamily: "Helvetica", // Removed to inherit Rubik
+  tdDesc: {
+    fontSize: 8,
+    color: "#9ca3af",
+    textAlign: "right",
+    marginTop: 1,
   },
-  grandTotal: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-    flexDirection: "row-reverse",
-    justifyContent: "space-between",
-    width: "100%",
+  tdText: {
+    fontSize: 9,
+    color: "#374151",
   },
-  grandTotalText: {
-    fontSize: 14,
+  tdBold: {
+    fontSize: 9,
     fontWeight: "bold",
-    color: "#4f95ff",
+    color: "#111827",
   },
   footer: {
     position: "absolute",
@@ -159,13 +216,13 @@ const styles = StyleSheet.create({
     right: 40,
     textAlign: "center",
     color: "#9ca3af",
-    fontSize: 8,
+    fontSize: 7,
     borderTopWidth: 1,
     borderTopColor: "#f3f4f6",
-    paddingTop: 10,
+    paddingTop: 8,
   },
   hebrewText: {
-    textAlign: "right", // Ensure right alignment for Hebrew
+    textAlign: "right",
   },
 });
 
@@ -198,108 +255,128 @@ const getBusinessTypeLabel = (type: string | null | undefined): string => {
 const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
   const vatRate = 0.18;
   const isVatExempt = quote.company.businessType === "exempt";
-  const subtotal = Number(quote.total);
-  // Cast to any since types might not be regenerated yet
+  const total = Number(quote.total);
   const isIncludeVat = (quote as any).isPriceWithVat;
   const businessTypeLabel = getBusinessTypeLabel(quote.company.businessType);
 
-  let displaySubtotal = subtotal;
+  let displaySubtotal = total;
   let vatResult = 0;
-  let finalTotal = subtotal;
+  let finalTotal = total;
 
   if (!isVatExempt) {
     if (isIncludeVat) {
-      // Total includes VAT
-      finalTotal = subtotal;
+      finalTotal = total;
       displaySubtotal = finalTotal / (1 + vatRate);
       vatResult = finalTotal - displaySubtotal;
     } else {
-      // Total is before VAT
-      vatResult = subtotal * vatRate;
-      finalTotal = subtotal + vatResult;
+      vatResult = total * vatRate;
+      finalTotal = total + vatResult;
     }
-  } else {
-    // Exempt
-    vatResult = 0;
-    finalTotal = subtotal;
   }
+
+  const quoteNumber = quote.quoteNumber
+    ? String(quote.quoteNumber).padStart(5, "0")
+    : quote.id.slice(-6).toUpperCase();
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerRight}>
+          <View>
             <Text style={styles.title}>הצעת מחיר</Text>
-            <Text style={styles.subtitle}>
-              #
-              {quote.quoteNumber
-                ? String(quote.quoteNumber).padStart(5, "0")
-                : quote.id.slice(-6).toUpperCase()}
-            </Text>
-            <Text style={[styles.subtitle, { marginTop: 4 }]}>
+            <Text style={styles.quoteNumber}>#{quoteNumber}</Text>
+          </View>
+          <View>
+            <Text style={styles.companyName}>{quote.company.name}</Text>
+            {businessTypeLabel && quote.company.taxId && (
+              <Text style={styles.companySubtext}>
+                {businessTypeLabel} | {quote.company.taxId}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* Title */}
+        {(quote as any).title && (
+          <Text style={styles.quoteTitle}>{(quote as any).title}</Text>
+        )}
+
+        {/* Separator */}
+        <View style={styles.separator} />
+
+        {/* Totals BEFORE items */}
+        <View style={styles.totalsRow}>
+          <View style={styles.dateInfo}>
+            <Text style={styles.dateText}>
               תאריך: {formatDate(quote.createdAt)}
             </Text>
             {quote.validUntil && (
-              <Text style={styles.subtitle}>
+              <Text style={styles.dateText}>
                 בתוקף עד: {formatDate(quote.validUntil)}
               </Text>
             )}
           </View>
-
-          <View style={styles.headerLeft}>
-            {quote.company.logoUrl && (
-              <Image
-                src={quote.company.logoUrl}
-                style={{ width: 50, height: 50, marginBottom: 5 }}
-              />
+          <View style={styles.totalsBlock}>
+            {!isVatExempt && (
+              <>
+                <View style={styles.totalsLine}>
+                  <Text style={styles.totalsLabel}>
+                    סיכום{isIncludeVat ? " (לפני מע״מ)" : ""}
+                  </Text>
+                  <Text style={styles.totalsValue}>
+                    ₪{formatCurrency(displaySubtotal)}
+                  </Text>
+                </View>
+                <View style={styles.totalsLine}>
+                  <Text style={styles.totalsLabel}>מע״מ (18%)</Text>
+                  <Text style={styles.totalsValue}>
+                    ₪{formatCurrency(vatResult)}
+                  </Text>
+                </View>
+              </>
             )}
-            <Text style={[styles.companyName, styles.hebrewText]}>
-              {quote.company.name}
-            </Text>
-            <Text style={[styles.subtitle, styles.hebrewText]}>
-              {businessTypeLabel}{" "}
-              {quote.company.taxId ? `/ ${quote.company.taxId}` : ""}
-            </Text>
+            {isVatExempt && (
+              <View style={styles.totalsLine}>
+                <Text style={styles.totalsLabel}>פטור ממע״מ</Text>
+              </View>
+            )}
+            <View style={styles.grandTotalLine}>
+              <Text style={styles.grandTotalLabel}>סה״כ</Text>
+              <Text style={styles.grandTotalValue}>
+                ₪{formatCurrency(finalTotal)}
+              </Text>
+            </View>
           </View>
         </View>
 
-        {/* Client & Company Details */}
-        <View style={styles.gridTwo}>
-          <View style={styles.column}>
-            <Text style={[styles.label, styles.hebrewText]}>עבור:</Text>
-            <Text style={[styles.value, styles.hebrewText]}>
-              {quote.clientName}
-            </Text>
+        {/* Client & Company Info */}
+        <View style={styles.infoGrid}>
+          <View style={styles.infoColumn}>
+            <Text style={styles.infoLabel}>עבור</Text>
+            <Text style={styles.infoTextBold}>{quote.clientName}</Text>
             {quote.clientTaxId && (
-              <Text style={[styles.value, styles.hebrewText]}>
+              <Text style={styles.infoText}>
                 ח.פ / ת.ז: {quote.clientTaxId}
               </Text>
             )}
             {quote.clientAddress && (
-              <Text style={[styles.value, styles.hebrewText]}>
-                {quote.clientAddress}
-              </Text>
+              <Text style={styles.infoText}>{quote.clientAddress}</Text>
             )}
             {quote.clientPhone && (
-              <Text style={[styles.value, styles.hebrewText]}>
-                {quote.clientPhone}
-              </Text>
+              <Text style={styles.infoText}>{quote.clientPhone}</Text>
             )}
           </View>
-
-          <View style={styles.column}>
-            <Text style={[styles.label, styles.hebrewText]}>מאת:</Text>
-            <Text style={[styles.value, styles.hebrewText]}>
-              {quote.company.name}
-            </Text>
+          <View style={styles.infoColumn}>
+            <Text style={styles.infoLabel}>מאת</Text>
+            <Text style={styles.infoTextBold}>{quote.company.name}</Text>
             {quote.company.businessAddress && (
-              <Text style={[styles.value, styles.hebrewText]}>
+              <Text style={styles.infoText}>
                 {quote.company.businessAddress}
               </Text>
             )}
             {quote.company.businessEmail && (
-              <Text style={[styles.value, styles.hebrewText]}>
+              <Text style={styles.infoText}>
                 {quote.company.businessEmail}
               </Text>
             )}
@@ -309,84 +386,56 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
         {/* Items Table */}
         <View style={styles.table}>
           <View style={styles.tableHeader}>
-            <Text style={styles.colDesc}>תיאור</Text>
-            <Text style={styles.colQty}>כמות</Text>
-            <Text style={styles.colPrice}>מחיר יחידה</Text>
-            <Text style={styles.colTotal}>סה״כ</Text>
+            <View style={styles.colNum}>
+              <Text style={styles.thText}>#</Text>
+            </View>
+            <View style={styles.colDesc}>
+              <Text style={styles.thText}>תיאור</Text>
+            </View>
+            <View style={styles.colQty}>
+              <Text style={styles.thText}>כמות</Text>
+            </View>
+            <View style={styles.colPrice}>
+              <Text style={styles.thText}>מחיר יחידה</Text>
+            </View>
+            <View style={styles.colTotal}>
+              <Text style={styles.thText}>סה״כ</Text>
+            </View>
           </View>
 
           {quote.items.map((item, index) => (
             <View key={index} style={styles.tableRow}>
+              <View style={styles.colNum}>
+                <Text style={styles.tdNum}>{index + 1}</Text>
+              </View>
               <View style={styles.colDesc}>
-                <Text style={[styles.hebrewText, { fontWeight: "bold" }]}>
+                <Text style={styles.tdName}>
                   {item.product?.name || "פריט כללי"}
                 </Text>
                 {item.description && (
-                  <Text
-                    style={[
-                      styles.hebrewText,
-                      { color: "#6b7280", fontSize: 9 },
-                    ]}
-                  >
-                    {item.description}
-                  </Text>
+                  <Text style={styles.tdDesc}>{item.description}</Text>
                 )}
               </View>
-              <Text style={styles.colQty}>{item.quantity}</Text>
-              <Text style={styles.colPrice}>
-                ₪{formatCurrency(Number(item.unitPrice))}
-              </Text>
-              <Text style={styles.colTotal}>
-                ₪
-                {formatCurrency(Number(item.quantity) * Number(item.unitPrice))}
-              </Text>
+              <View style={styles.colQty}>
+                <Text style={styles.tdText}>{item.quantity}</Text>
+              </View>
+              <View style={styles.colPrice}>
+                <Text style={styles.tdText}>
+                  ₪{formatCurrency(Number(item.unitPrice))}
+                </Text>
+              </View>
+              <View style={styles.colTotal}>
+                <Text style={styles.tdBold}>
+                  ₪{formatCurrency(Number(item.quantity) * Number(item.unitPrice))}
+                </Text>
+              </View>
             </View>
           ))}
         </View>
 
-        {/* Summary */}
-        <View style={{ flexDirection: "row", marginTop: 20 }}>
-          <View style={{ flex: 1 }} />
-          <View style={styles.summary}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>
-                סיכום ביניים{isIncludeVat && !isVatExempt ? " (לפני מע״מ)" : ""}
-                :
-              </Text>
-              <Text style={styles.summaryValue}>
-                ₪{formatCurrency(displaySubtotal)}
-              </Text>
-            </View>
-            {!isVatExempt ? (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>
-                  מע״מ ({(vatRate * 100).toFixed(0)}%):
-                </Text>
-                <Text style={styles.summaryValue}>
-                  ₪{formatCurrency(vatResult)}
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>מע״מ:</Text>
-                <Text style={styles.summaryValue}>פטור</Text>
-              </View>
-            )}
-            <View style={styles.grandTotal}>
-              <Text style={[styles.grandTotalText, { fontSize: 12 }]}>
-                סה״כ לתשלום:
-              </Text>
-              <Text style={styles.grandTotalText}>
-                ₪{formatCurrency(finalTotal)}
-              </Text>
-            </View>
-          </View>
-        </View>
-
         {/* Footer */}
         <View style={styles.footer}>
-          <Text>Powered by COOL CRM</Text>
-          <Text style={{ marginTop: 4 }}>
+          <Text>
             מסמך זה הינו הצעת מחיר ואינו מהווה חשבונית מס.
           </Text>
         </View>

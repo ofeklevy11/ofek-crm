@@ -1,7 +1,6 @@
 import React from "react";
 import { Quote, Company, QuoteItem, Product, Client } from "@prisma/client";
 
-// Extend Company type with business settings
 type CompanyWithSettings = Company & {
   businessType?: string | null;
   taxId?: string | null;
@@ -10,7 +9,6 @@ type CompanyWithSettings = Company & {
   businessEmail?: string | null;
 };
 
-// Define the full type including relations
 type FullQuote = Quote & {
   company: CompanyWithSettings;
   client: Client | null;
@@ -24,7 +22,6 @@ interface QuoteDocumentProps {
   quote: FullQuote;
 }
 
-// Helper to get business type label in Hebrew
 const getBusinessTypeLabel = (type: string | null | undefined): string => {
   switch (type) {
     case "exempt":
@@ -38,7 +35,6 @@ const getBusinessTypeLabel = (type: string | null | undefined): string => {
   }
 };
 
-// Check if business is VAT exempt
 const isVatExempt = (type: string | null | undefined): boolean => {
   return type === "exempt";
 };
@@ -48,141 +44,176 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
   const vatExempt = isVatExempt(quote.company.businessType);
   const vatRate = 0.18;
 
+  const total = Number(quote.total);
+  const isIncludeVat = (quote as any).isPriceWithVat;
+  let subtotal = total;
+  let vat = 0;
+  let finalTotal = total;
+
+  if (!vatExempt) {
+    if (isIncludeVat) {
+      subtotal = total / (1 + vatRate);
+      vat = total - subtotal;
+      finalTotal = total;
+    } else {
+      vat = total * vatRate;
+      finalTotal = total + vat;
+    }
+  }
+
+  const quoteNumber = quote.quoteNumber
+    ? String(quote.quoteNumber).padStart(5, "0")
+    : quote.id.slice(-6).toUpperCase();
+
   return (
     <div
-      className="max-w-[210mm] mx-auto bg-white p-8 md:p-16 text-sm md:text-base text-right"
+      className="max-w-[210mm] mx-auto bg-white p-8 md:p-12 text-sm text-right"
       dir="rtl"
     >
-      {/* Header */}
-      <div className="flex justify-between items-start border-b border-primary/20 pb-8">
+      {/* Header - minimal */}
+      <div className="flex justify-between items-start pb-6">
         <div>
-          <h1 className="text-4xl font-bold text-primary tracking-tight">
-            הצעת מחיר
-          </h1>
-          <p className="text-gray-500 mt-2 font-mono">
-            #
-            {quote.quoteNumber
-              ? String(quote.quoteNumber).padStart(5, "0")
-              : quote.id.slice(-6).toUpperCase()}
-          </p>
-          <div className="mt-4 space-y-1 text-gray-600">
-            <p>
-              <span className="font-semibold">תאריך הפקה:</span>{" "}
-              {new Date(quote.createdAt).toLocaleDateString("he-IL")}
-            </p>
-            {quote.validUntil && (
-              <p>
-                <span className="font-semibold">בתוקף עד:</span>{" "}
-                {new Date(quote.validUntil).toLocaleDateString("he-IL")}
-              </p>
-            )}
-          </div>
+          <h1 className="text-2xl font-bold text-gray-900">הצעת מחיר</h1>
+          <p className="text-gray-400 text-xs mt-1 font-mono">#{quoteNumber}</p>
         </div>
         <div className="text-left">
-          <h3 className="font-bold text-xl text-gray-900">
-            {quote.company.name}
-          </h3>
+          <p className="font-semibold text-gray-900">{quote.company.name}</p>
           {businessTypeLabel && quote.company.taxId && (
-            <p className="text-gray-500 text-sm">
-              {businessTypeLabel} / {quote.company.taxId}
+            <p className="text-gray-400 text-xs">
+              {businessTypeLabel} | {quote.company.taxId}
             </p>
           )}
         </div>
       </div>
 
-      {/* Client & Company Info */}
-      <div className="grid grid-cols-2 gap-12 mt-8">
-        <div>
-          <h4 className="font-semibold text-primary mb-3">עבור:</h4>
-          <div className="text-gray-700 space-y-1 bg-gray-50 p-4 rounded-lg border border-gray-100">
-            <p className="font-bold text-lg">{quote.clientName}</p>
-            {quote.clientTaxId && (
-              <p className="text-sm">ח.פ / ת.ז: {quote.clientTaxId}</p>
-            )}
-            {quote.clientEmail && (
-              <p className="text-sm">{quote.clientEmail}</p>
-            )}
-            {quote.clientPhone && (
-              <p className="text-sm">{quote.clientPhone}</p>
-            )}
-            {quote.clientAddress && (
-              <p className="whitespace-pre-wrap text-sm mt-2 text-gray-500">
-                {quote.clientAddress}
-              </p>
-            )}
-          </div>
+      {/* Title if exists */}
+      {(quote as any).title && (
+        <div className="pb-4">
+          <p className="text-lg font-semibold text-gray-700">
+            {(quote as any).title}
+          </p>
         </div>
-        <div>
-          <h4 className="font-semibold text-primary mb-3">מאת:</h4>
-          <div className="text-gray-700 space-y-1 bg-gray-50 p-4 rounded-lg border border-gray-100">
-            <p className="font-bold text-lg">{quote.company.name}</p>
-            {businessTypeLabel && (
-              <p className="text-sm text-gray-600">{businessTypeLabel}</p>
-            )}
-            {quote.company.taxId && (
-              <p className="text-sm">
-                {quote.company.businessType === "ltd" ? "ח.פ" : "מספר עוסק"}:{" "}
-                {quote.company.taxId}
-              </p>
-            )}
-            {quote.company.businessAddress && (
-              <p className="text-sm text-gray-500">
-                {quote.company.businessAddress}
-              </p>
-            )}
-            {quote.company.businessEmail && (
-              <p className="text-sm">{quote.company.businessEmail}</p>
-            )}
-            {quote.company.businessWebsite && (
-              <p className="text-sm text-primary">
-                {quote.company.businessWebsite}
-              </p>
-            )}
+      )}
+
+      {/* Thin separator */}
+      <div className="border-t border-gray-200 mb-6" />
+
+      {/* Totals Section - BEFORE items */}
+      <div className="mb-8 flex justify-between items-end">
+        <div className="text-gray-500 text-xs space-y-1">
+          <p>
+            תאריך: {new Date(quote.createdAt).toLocaleDateString("he-IL")}
+          </p>
+          {quote.validUntil && (
+            <p>
+              בתוקף עד: {new Date(quote.validUntil).toLocaleDateString("he-IL")}
+            </p>
+          )}
+        </div>
+        <div className="text-left space-y-1">
+          {!vatExempt && (
+            <>
+              <div className="flex justify-between gap-8 text-xs text-gray-500">
+                <span>
+                  סיכום{isIncludeVat ? " (לפני מע״מ)" : ""}
+                </span>
+                <span className="font-mono">
+                  ₪{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between gap-8 text-xs text-gray-500">
+                <span>מע״מ (18%)</span>
+                <span className="font-mono">
+                  ₪{vat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            </>
+          )}
+          {vatExempt && (
+            <div className="flex justify-between gap-8 text-xs text-gray-400">
+              <span>פטור ממע״מ</span>
+            </div>
+          )}
+          <div className="flex justify-between gap-8 text-lg font-bold text-gray-900 border-t border-gray-200 pt-1">
+            <span>סה״כ</span>
+            <span className="font-mono">
+              ₪{finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Items Table */}
-      <div className="mt-12">
+      {/* Client & Company Info - compact */}
+      <div className="grid grid-cols-2 gap-8 mb-6 text-xs">
+        <div>
+          <p className="text-gray-400 mb-1">עבור</p>
+          <p className="font-semibold text-gray-900">{quote.clientName}</p>
+          {quote.clientTaxId && (
+            <p className="text-gray-500">ח.פ / ת.ז: {quote.clientTaxId}</p>
+          )}
+          {quote.clientEmail && <p className="text-gray-500">{quote.clientEmail}</p>}
+          {quote.clientPhone && <p className="text-gray-500">{quote.clientPhone}</p>}
+          {quote.clientAddress && (
+            <p className="text-gray-400 mt-1">{quote.clientAddress}</p>
+          )}
+        </div>
+        <div>
+          <p className="text-gray-400 mb-1">מאת</p>
+          <p className="font-semibold text-gray-900">{quote.company.name}</p>
+          {businessTypeLabel && (
+            <p className="text-gray-500">{businessTypeLabel}</p>
+          )}
+          {quote.company.taxId && (
+            <p className="text-gray-500">
+              {quote.company.businessType === "ltd" ? "ח.פ" : "מספר עוסק"}:{" "}
+              {quote.company.taxId}
+            </p>
+          )}
+          {quote.company.businessAddress && (
+            <p className="text-gray-400">{quote.company.businessAddress}</p>
+          )}
+          {quote.company.businessEmail && (
+            <p className="text-gray-500">{quote.company.businessEmail}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Items Table - clean minimal */}
+      <div>
         <table className="w-full text-right">
-          <thead className="bg-primary/5 text-primary">
-            <tr>
-              <th className="py-3 px-4 font-semibold rounded-r-lg w-[40%]">
-                תיאור
-              </th>
-              <th className="py-3 px-4 font-semibold text-center w-[15%]">
-                כמות
-              </th>
-              <th className="py-3 px-4 font-semibold text-left w-[20%]">
-                מחיר יחידה
-              </th>
-              <th className="py-3 px-4 font-semibold text-left rounded-l-lg w-[25%]">
-                סה״כ
-              </th>
+          <thead>
+            <tr className="border-b border-gray-200 text-xs text-gray-400">
+              <th className="py-2 px-2 font-medium w-[5%]">#</th>
+              <th className="py-2 px-2 font-medium w-[45%]">תיאור</th>
+              <th className="py-2 px-2 font-medium text-center w-[12%]">כמות</th>
+              <th className="py-2 px-2 font-medium text-left w-[18%]">מחיר יחידה</th>
+              <th className="py-2 px-2 font-medium text-left w-[20%]">סה״כ</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody>
             {quote.items.map((item, i) => (
-              <tr key={i}>
-                <td className="py-4 px-4 align-top">
-                  <p className="font-bold text-gray-900">
+              <tr key={i} className="border-b border-gray-100">
+                <td className="py-3 px-2 text-gray-400 text-xs align-top">
+                  {i + 1}
+                </td>
+                <td className="py-3 px-2 align-top">
+                  <p className="font-medium text-gray-900 text-sm">
                     {item.product?.name || "פריט כללי"}
                   </p>
-                  <p className="text-gray-500 text-sm mt-1 whitespace-pre-wrap leading-relaxed">
-                    {item.description}
-                  </p>
+                  {item.description && (
+                    <p className="text-gray-400 text-xs mt-0.5 whitespace-pre-wrap leading-relaxed">
+                      {item.description}
+                    </p>
+                  )}
                 </td>
-                <td className="py-4 px-4 text-center align-top font-mono">
+                <td className="py-3 px-2 text-center align-top text-sm font-mono text-gray-700">
                   {item.quantity}
                 </td>
-                <td className="py-4 px-4 text-left align-top font-mono">
+                <td className="py-3 px-2 text-left align-top text-sm font-mono text-gray-700">
                   ₪{Number(item.unitPrice).toLocaleString()}
                 </td>
-                <td className="py-4 px-4 text-left align-top font-bold font-mono text-gray-900">
-                  ₪
-                  {(
-                    Number(item.quantity) * Number(item.unitPrice)
-                  ).toLocaleString()}
+                <td className="py-3 px-2 text-left align-top text-sm font-mono font-medium text-gray-900">
+                  ₪{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
                 </td>
               </tr>
             ))}
@@ -190,101 +221,21 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
         </table>
       </div>
 
-      {/* Totals */}
-      <div className="flex justify-end pt-8 mt-8 border-t border-gray-100">
-        <div className="w-72 space-y-3 bg-gray-50 p-6 rounded-xl border border-gray-100">
-          {(() => {
-            const total = Number(quote.total);
-            const isIncludeVat = (quote as any).isPriceWithVat;
-            let subtotal = total;
-            let vat = 0;
-            let finalTotal = total;
-
-            if (!vatExempt) {
-              if (isIncludeVat) {
-                subtotal = total / (1 + vatRate);
-                vat = total - subtotal;
-                finalTotal = total;
-              } else {
-                vat = total * vatRate;
-                finalTotal = total + vat;
-              }
-            }
-
-            return (
-              <>
-                <div className="flex justify-between text-gray-600">
-                  <span>
-                    סיכום ביניים
-                    {isIncludeVat && !vatExempt ? " (לפני מע״מ)" : ""}:
-                  </span>
-                  <span className="font-mono">
-                    ₪
-                    {subtotal.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </span>
-                </div>
-                {vatExempt ? (
-                  <div className="flex justify-between text-gray-500 text-sm">
-                    <span>פטור ממע״מ</span>
-                    <span>-</span>
-                  </div>
-                ) : (
-                  <div className="flex justify-between text-gray-600">
-                    <span>מע״מ (18%):</span>
-                    <span className="font-mono">
-                      ₪
-                      {vat.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between border-t border-gray-200 pt-3 text-xl font-bold text-primary">
-                  <span>סה״כ לתשלום:</span>
-                  <span className="font-mono">
-                    ₪
-                    {finalTotal.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </span>
-                </div>
-              </>
-            );
-          })()}
-        </div>
-      </div>
-
-      {/* Footer / Notes */}
-      <div className="pt-16 pb-8 text-center">
-        <p className="text-primary font-medium">תודה שבחרתם בנו!</p>
-        <p className="mt-2 text-sm text-gray-400">
-          מסמך זה הינו הצעת מחיר ואינו מהווה חשבונית מס.
-          <br />
-          ההצעה בתוקף עד{" "}
+      {/* Footer */}
+      <div className="pt-12 pb-4 text-center text-xs text-gray-400">
+        <p>
+          מסמך זה הינו הצעת מחיר ואינו מהווה חשבונית מס. ההצעה בתוקף עד{" "}
           {quote.validUntil
             ? new Date(quote.validUntil).toLocaleDateString("he-IL")
             : "30 יום מיום הפקתה"}
           .
         </p>
-        {/* Business contact info in footer */}
         {(quote.company.businessWebsite || quote.company.businessEmail) && (
-          <div className="mt-4 pt-4 border-t border-gray-100 space-y-1">
-            {quote.company.businessWebsite && (
-              <p className="text-sm text-gray-500">
-                {quote.company.businessWebsite}
-              </p>
-            )}
-            {quote.company.businessEmail && (
-              <p className="text-sm text-gray-500">
-                {quote.company.businessEmail}
-              </p>
-            )}
-          </div>
+          <p className="mt-2">
+            {[quote.company.businessWebsite, quote.company.businessEmail]
+              .filter(Boolean)
+              .join(" | ")}
+          </p>
         )}
       </div>
     </div>
