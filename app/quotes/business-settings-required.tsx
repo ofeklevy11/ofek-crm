@@ -13,6 +13,7 @@ import {
   ImagePlus,
   X,
 } from "lucide-react";
+import ImageCropper from "@/components/ImageCropper";
 import {
   updateBusinessSettings,
   BusinessSettings,
@@ -32,7 +33,10 @@ const BUSINESS_TYPES = [
   { value: "ltd", label: "חברה בע״מ" },
 ];
 
-export default function BusinessSettingsRequired({ initialSettings, onSaved }: Props) {
+export default function BusinessSettingsRequired({
+  initialSettings,
+  onSaved,
+}: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -45,7 +49,10 @@ export default function BusinessSettingsRequired({ initialSettings, onSaved }: P
     logoUrl: initialSettings?.logoUrl || "",
   });
 
-  const [logoPreview, setLogoPreview] = useState<string>(initialSettings?.logoUrl || "");
+  const [logoPreview, setLogoPreview] = useState<string>(
+    initialSettings?.logoUrl || "",
+  );
+  const [croppingImage, setCroppingImage] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -61,11 +68,26 @@ export default function BusinessSettingsRequired({ initialSettings, onSaved }: P
       return;
     }
 
+    // Show cropper
+    const previewUrl = URL.createObjectURL(file);
+    setCroppingImage(previewUrl);
+    // Reset input so the same file can be selected again if cancelled
+    e.target.value = "";
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    setCroppingImage(null);
+    setUploadingLogo(true);
+
+    // Create a File from the Blob
+    const file = new File([croppedBlob], "logo-cropped.png", {
+      type: "image/png",
+    });
+
     // Show preview immediately
     const previewUrl = URL.createObjectURL(file);
     setLogoPreview(previewUrl);
 
-    setUploadingLogo(true);
     try {
       const res = await startUpload([file]);
       if (res && res[0]) {
@@ -88,7 +110,7 @@ export default function BusinessSettingsRequired({ initialSettings, onSaved }: P
     } catch (error) {
       console.error("Logo upload failed:", error);
       alert("שגיאה בהעלאת הלוגו");
-      setLogoPreview(formData.logoUrl);
+      setLogoPreview(formData.logoUrl); // Revert to old logo if failed
     } finally {
       setUploadingLogo(false);
     }
@@ -147,7 +169,7 @@ export default function BusinessSettingsRequired({ initialSettings, onSaved }: P
       <div className="w-full max-w-2xl">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-l from-[#4f95ff] to-[#a24ec1] p-8 text-white">
+          <div className="bg-linear-to-l from-[#4f95ff] to-[#a24ec1] p-8 text-white">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
                 <Building2 className="w-7 h-7" />
@@ -163,7 +185,7 @@ export default function BusinessSettingsRequired({ initialSettings, onSaved }: P
 
           {/* Alert */}
           <div className="mx-6 mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="text-sm text-amber-800">
               <p className="font-medium">שדות חובה</p>
               <p className="mt-1">
@@ -386,7 +408,7 @@ export default function BusinessSettingsRequired({ initialSettings, onSaved }: P
             <button
               type="submit"
               disabled={loading || uploadingLogo}
-              className="w-full py-4 bg-gradient-to-l from-[#4f95ff] to-[#a24ec1] text-white rounded-xl font-medium hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full py-4 bg-linear-to-l from-[#4f95ff] to-[#a24ec1] text-white rounded-xl font-medium hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Save className="w-5 h-5" />
               {loading ? "שומר..." : "שמור והמשך ליצירת הצעת מחיר"}
@@ -394,6 +416,15 @@ export default function BusinessSettingsRequired({ initialSettings, onSaved }: P
           </form>
         </div>
       </div>
+
+      {croppingImage && (
+        <ImageCropper
+          imageSrc={croppingImage}
+          onCropComplete={handleCropComplete}
+          onCancel={() => setCroppingImage(null)}
+          aspectRatio={1} // Square logo
+        />
+      )}
     </div>
   );
 }

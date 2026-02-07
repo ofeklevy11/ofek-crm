@@ -45,7 +45,9 @@ const colors = {
 
 const styles = StyleSheet.create({
   page: {
-    padding: 40,
+    paddingTop: 0,
+    paddingBottom: 40,
+    paddingHorizontal: 40,
     fontFamily: "Rubik",
     fontSize: 10,
     color: colors.black,
@@ -54,7 +56,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center", // Align vertically
     marginBottom: 16,
   },
   title: {
@@ -333,7 +335,7 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
             {quote.company.logoUrl && (
               <Image
                 src={quote.company.logoUrl}
-                style={{ width: 40, height: 40, objectFit: "contain" }}
+                style={{ width: 120, height: 120, objectFit: "contain" }}
               />
             )}
             <View>

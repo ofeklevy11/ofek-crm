@@ -11,13 +11,25 @@ const TOKENIZER_REGEX = /([.,:;!?%/]| +)/;
 const RTLText: FC<RTLTextProps> = ({ children, style, ...props }) => {
   const text = String(children || "");
 
+  // אם אין עברית בכלל, נציג רגיל (LTR) כדי לא להפוך אנגלית/מספרים
+  // בודק טווח יוניקוד של עברית
+  const hasHebrew = /[\u0590-\u05FF]/.test(text);
+
+  if (!hasHebrew) {
+    return (
+      <Text style={style} {...props}>
+        {text}
+      </Text>
+    );
+  }
+
   // טיפול ב־newline
   if (text.includes("\n")) {
     return (
       <View style={{ flexDirection: "column" }}>
         {text.split("\n").map((line, i) => (
           <RTLText key={i} style={style} {...props}>
-            {line}
+            {line === "" ? " " : line}
           </RTLText>
         ))}
       </View>
