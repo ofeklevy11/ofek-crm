@@ -193,34 +193,69 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
       {/* Totals */}
       <div className="flex justify-end pt-8 mt-8 border-t border-gray-100">
         <div className="w-72 space-y-3 bg-gray-50 p-6 rounded-xl border border-gray-100">
-          <div className="flex justify-between text-gray-600">
-            <span>סיכום ביניים:</span>
-            <span className="font-mono">
-              ₪{Number(quote.total).toLocaleString()}
-            </span>
-          </div>
-          {vatExempt ? (
-            <div className="flex justify-between text-gray-500 text-sm">
-              <span>פטור ממע״מ</span>
-              <span>-</span>
-            </div>
-          ) : (
-            <div className="flex justify-between text-gray-600">
-              <span>מע״מ (18%):</span>
-              <span className="font-mono">
-                ₪{(Number(quote.total) * vatRate).toLocaleString()}
-              </span>
-            </div>
-          )}
-          <div className="flex justify-between border-t border-gray-200 pt-3 text-xl font-bold text-primary">
-            <span>סה״כ לתשלום:</span>
-            <span className="font-mono">
-              ₪
-              {(
-                Number(quote.total) * (vatExempt ? 1 : 1 + vatRate)
-              ).toLocaleString()}
-            </span>
-          </div>
+          {(() => {
+            const total = Number(quote.total);
+            const isIncludeVat = (quote as any).isPriceWithVat;
+            let subtotal = total;
+            let vat = 0;
+            let finalTotal = total;
+
+            if (!vatExempt) {
+              if (isIncludeVat) {
+                subtotal = total / (1 + vatRate);
+                vat = total - subtotal;
+                finalTotal = total;
+              } else {
+                vat = total * vatRate;
+                finalTotal = total + vat;
+              }
+            }
+
+            return (
+              <>
+                <div className="flex justify-between text-gray-600">
+                  <span>
+                    סיכום ביניים
+                    {isIncludeVat && !vatExempt ? " (לפני מע״מ)" : ""}:
+                  </span>
+                  <span className="font-mono">
+                    ₪
+                    {subtotal.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+                {vatExempt ? (
+                  <div className="flex justify-between text-gray-500 text-sm">
+                    <span>פטור ממע״מ</span>
+                    <span>-</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between text-gray-600">
+                    <span>מע״מ (18%):</span>
+                    <span className="font-mono">
+                      ₪
+                      {vat.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-gray-200 pt-3 text-xl font-bold text-primary">
+                  <span>סה״כ לתשלום:</span>
+                  <span className="font-mono">
+                    ₪
+                    {finalTotal.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
 

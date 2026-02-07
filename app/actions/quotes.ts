@@ -83,6 +83,7 @@ export async function createQuote(data: {
     unitPrice: number;
     unitCost?: number;
   }[];
+  isPriceWithVat?: boolean;
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
@@ -90,7 +91,7 @@ export async function createQuote(data: {
   // Calculate total
   const total = data.items.reduce(
     (acc, item) => acc + item.quantity * item.unitPrice,
-    0
+    0,
   );
 
   // Get the next quote number for this company
@@ -127,6 +128,7 @@ export async function createQuote(data: {
           unitCost: item.unitCost,
         })),
       },
+      isPriceWithVat: data.isPriceWithVat ?? false,
     },
     include: {
       items: true,
@@ -165,7 +167,8 @@ export async function updateQuote(
       unitPrice: number;
       unitCost?: number;
     }[];
-  }
+    isPriceWithVat?: boolean;
+  },
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
@@ -173,7 +176,7 @@ export async function updateQuote(
   // Calculate total
   const total = data.items.reduce(
     (acc, item) => acc + item.quantity * item.unitPrice,
-    0
+    0,
   );
 
   // Transaction to update quote and replace items safely?
@@ -193,6 +196,8 @@ export async function updateQuote(
         validUntil: data.validUntil,
         status: data.status,
         total,
+        isPriceWithVat: data.isPriceWithVat,
+        pdfUrl: null, // Reset cached PDF on update
       },
     });
 

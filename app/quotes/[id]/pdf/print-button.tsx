@@ -32,7 +32,11 @@ export default function PrintButton({
     setDownloading(true);
     try {
       const response = await fetch(`/api/quotes/${quoteId}/download`);
-      if (!response.ok) throw new Error("ההורדה נכשלה");
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "ההורדה נכשלה");
+      }
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -43,9 +47,9 @@ export default function PrintButton({
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("שגיאה ביצירת ה-PDF. נסה שוב.");
+      alert(`שגיאה ביצירת ה-PDF: ${error.message}`);
     } finally {
       setDownloading(false);
     }

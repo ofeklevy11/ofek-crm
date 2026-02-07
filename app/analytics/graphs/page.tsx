@@ -5,7 +5,15 @@ import {
   getAnalyticsData,
   deleteAnalyticsView,
   updateAnalyticsViewOrder,
+  refreshAnalyticsItem,
 } from "@/app/actions/analytics";
+import {
+  checkAnalyticsRefreshEligibility,
+  logAnalyticsRefresh,
+  getAnalyticsRefreshUsage,
+} from "@/app/actions/analytics-refresh";
+import { getCurrentAuthUser } from "@/app/actions/auth";
+import { hasUserFlag } from "@/lib/permissions";
 import AnalyticsGraph from "@/components/analytics/AnalyticsGraph";
 import {
   ArrowLeft,
@@ -14,6 +22,7 @@ import {
   Edit3,
   Trash2,
   GripVertical,
+  RefreshCw,
 } from "lucide-react";
 import CreateAnalyticsViewModal from "@/components/analytics/CreateAnalyticsViewModal";
 import {
@@ -39,10 +48,14 @@ function SortableGraphCard({
   view,
   onEdit,
   onDelete,
+  onRefresh,
+  isRefreshing,
 }: {
   view: any;
   onEdit: (view: any) => void;
   onDelete: (id: number) => void;
+  onRefresh: (view: any) => void;
+  isRefreshing: boolean;
 }) {
   const {
     attributes,
@@ -89,9 +102,20 @@ function SortableGraphCard({
           <div>
             <h3 className="font-bold text-gray-900 text-lg">{view.ruleName}</h3>
             <p className="text-sm text-gray-500">{view.stats?.subMetric}</p>
+            {view.tableName && view.tableName !== "..." && (
+              <p className="text-xs text-gray-400 mt-0.5">מקור: {view.tableName}</p>
+            )}
           </div>
         </div>
         <div className="flex gap-1 transition-opacity">
+          <button
+            onClick={() => onRefresh(view)}
+            disabled={isRefreshing}
+            className="p-1.5 text-gray-400 hover:text-green-600 rounded-full hover:bg-gray-50 disabled:opacity-50"
+            title="רענן גרף"
+          >
+            <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
+          </button>
           <button
             onClick={() => onEdit(view)}
             className="p-1.5 text-gray-400 hover:text-blue-600 rounded-full hover:bg-gray-50"
@@ -134,6 +158,11 @@ export default function GraphsPage() {
   const [views, setViews] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingView, setEditingView] = useState<any | null>(null);
+  const [refreshingViewId, setRefreshingViewId] = useState<string | null>(null);
+  const [refreshUsage, setRefreshUsage] = useState(0);
+  const [nextResetTime, setNextResetTime] = useState<string | null>(null);
+  const [userPlan, setUserPlan] = useState<string>("basic");
+  const [toast, setToast] = useState<{ message: string; type: "error" | "success" } | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -163,7 +192,66 @@ export default function GraphsPage() {
 
   useEffect(() => {
     fetchData();
+    // Fetch user plan and refresh usage
+    getCurrentAuthUser().then((res) => {
+      if (res.success && res.data) {
+        setUserPlan(res.data.isPremium || "basic");
+      }
+    });
+    getAnalyticsRefreshUsage().then((res) => {
+      if (res.success) {
+        setRefreshUsage(res.usage);
+        setNextResetTime(res.nextResetTime ?? null);
+      }
+    });
   }, []);
+
+  let maxRefreshes = 3;
+  if (userPlan === "premium") maxRefreshes = 10;
+  else if (userPlan === "super") maxRefreshes = 9999;
+  const refreshesLeft = Math.max(0, maxRefreshes - refreshUsage);
+
+  const handleRefreshSingle = async (view: any) => {
+    if (refreshingViewId) return;
+
+    const viewId = view.id;
+    setRefreshingViewId(viewId);
+    try {
+      const eligibility = await checkAnalyticsRefreshEligibility();
+      if (!eligibility.success) {
+        setToast({ message: eligibility.error || "הגעת למגבלת הרענונים", type: "error" });
+        setTimeout(() => setToast(null), 4000);
+        setRefreshingViewId(null);
+        return;
+      }
+
+      await logAnalyticsRefresh();
+
+      const result = await refreshAnalyticsItem(view.viewId, "CUSTOM");
+
+      if (result.success && result.data) {
+        setViews((prev) =>
+          prev.map((v) => (v.id === viewId ? { ...result.data } : v))
+        );
+        setToast({ message: "הגרף עודכן בהצלחה", type: "success" });
+        setTimeout(() => setToast(null), 3000);
+      } else {
+        setToast({ message: result.error || "שגיאה ברענון הגרף", type: "error" });
+        setTimeout(() => setToast(null), 4000);
+      }
+
+      const usageRes = await getAnalyticsRefreshUsage();
+      if (usageRes.success) {
+        setRefreshUsage(usageRes.usage);
+        setNextResetTime(usageRes.nextResetTime ?? null);
+      }
+    } catch (error) {
+      setToast({ message: "שגיאה ברענון הגרף", type: "error" });
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setRefreshingViewId(null);
+    }
+  };
 
   const handleDelete = async (id: number) => {
     if (!confirm("האם אתה בטוח שברצונך למחוק תרשים זה?")) return;
@@ -235,6 +323,48 @@ export default function GraphsPage() {
           </div>
         </div>
 
+        {/* Cache Info Banner */}
+        <div className="bg-gradient-to-l from-blue-50 to-indigo-50 border border-blue-100/80 rounded-xl px-5 py-3.5 mb-8 flex items-start gap-3">
+          <div className="bg-blue-100 rounded-lg p-2 shrink-0">
+            <RefreshCw size={16} className="text-blue-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-blue-900 font-semibold">מערכת קאש חכמה</p>
+            <p className="text-xs text-blue-700/80 mt-1 leading-relaxed">
+              הנתונים מתעדכנים אוטומטית כל 4 שעות ונשמרים בקאש לטעינה מהירה.
+              ניתן לרענן כל גרף בנפרד בלחיצה על כפתור הרענון בפינת כל כרטיס.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px]">
+              {userPlan !== "super" ? (
+                <span className="bg-blue-100/80 text-blue-800 px-2.5 py-1 rounded-lg font-medium">
+                  {refreshesLeft > 0
+                    ? `נותרו ${refreshesLeft} מתוך ${maxRefreshes} רענונים`
+                    : "נגמרה מכסת הרענונים"}
+                </span>
+              ) : (
+                <span className="bg-blue-100/80 text-blue-800 px-2.5 py-1 rounded-lg font-medium">
+                  רענונים ללא הגבלה
+                </span>
+              )}
+              {nextResetTime && userPlan !== "super" && (
+                <span className="text-blue-600/70">
+                  איפוס ב-
+                  {new Date(nextResetTime).toLocaleTimeString("he-IL", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              )}
+              <span className="text-blue-600/50">
+                {userPlan === "basic" && "בסיסית: 3 רענונים"}
+                {userPlan === "premium" && "Premium: 10 רענונים"}
+                {userPlan === "super" && "Super: ללא הגבלה"}
+                {" כל 4 שעות"}
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* Content */}
         {loading ? (
           <div className="flex justify-center items-center h-64">
@@ -276,6 +406,8 @@ export default function GraphsPage() {
                     view={view}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
+                    onRefresh={handleRefreshSingle}
+                    isRefreshing={refreshingViewId === view.id}
                   />
                 ))}
               </div>
@@ -298,6 +430,19 @@ export default function GraphsPage() {
           }}
         />
       </div>
+
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-lg text-sm font-medium ${
+            toast.type === "error"
+              ? "bg-red-600 text-white"
+              : "bg-green-600 text-white"
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }

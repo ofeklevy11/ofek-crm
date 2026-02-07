@@ -9,12 +9,20 @@ import { UTApi } from "uploadthing/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+import { registerFonts } from "@/lib/pdf-fonts";
+
+// Register fonts once at module level (optional, but calling inside handler is safer for paths)
+// moved to inside handler
+
 const utapi = new UTApi();
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // Ensure fonts are registered before rendering
+  registerFonts();
+
   const resolvedParams = await params;
   const user = await getCurrentUser();
   if (!user) {

@@ -1,3 +1,5 @@
+import "server-only";
+
 import React from "react";
 import {
   Document,
@@ -9,21 +11,6 @@ import {
   Image,
 } from "@react-pdf/renderer";
 import { Quote, Company, QuoteItem, Product, Client } from "@prisma/client";
-
-// Register Hebrew Font (Rubik)
-// Font.register({
-//   family: "Rubik",
-//   fonts: [
-//     {
-//       src: "https://fonts.gstatic.com/s/rubik/v28/iJWKBXyIfDnIV7nBrXw.ttf", // Regular
-//       fontWeight: "normal",
-//     },
-//     {
-//       src: "https://fonts.gstatic.com/s/rubik/v28/iJWZBXyIfDnIV5PNhY1KTN7Z-Yh-4I3.ttf", // Bold
-//       fontWeight: "bold",
-//     },
-//   ],
-// });
 
 // Define types (mirroring QuoteDocument.tsx for consistency)
 type CompanyWithSettings = Company & {
@@ -51,7 +38,7 @@ interface QuotePdfTemplateProps {
 const styles = StyleSheet.create({
   page: {
     padding: 40,
-    fontFamily: "Helvetica",
+    fontFamily: "Rubik",
     fontSize: 10,
     color: "#000000",
     backgroundColor: "#ffffff",
@@ -149,7 +136,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   summaryValue: {
-    fontFamily: "Helvetica",
+    // fontFamily: "Helvetica", // Removed to inherit Rubik
   },
   grandTotal: {
     marginTop: 10,
@@ -212,9 +199,30 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
   const vatRate = 0.18;
   const isVatExempt = quote.company.businessType === "exempt";
   const subtotal = Number(quote.total);
-  const vatAmount = subtotal * vatRate;
-  const grandTotal = isVatExempt ? subtotal : subtotal + vatAmount;
+  // Cast to any since types might not be regenerated yet
+  const isIncludeVat = (quote as any).isPriceWithVat;
   const businessTypeLabel = getBusinessTypeLabel(quote.company.businessType);
+
+  let displaySubtotal = subtotal;
+  let vatResult = 0;
+  let finalTotal = subtotal;
+
+  if (!isVatExempt) {
+    if (isIncludeVat) {
+      // Total includes VAT
+      finalTotal = subtotal;
+      displaySubtotal = finalTotal / (1 + vatRate);
+      vatResult = finalTotal - displaySubtotal;
+    } else {
+      // Total is before VAT
+      vatResult = subtotal * vatRate;
+      finalTotal = subtotal + vatResult;
+    }
+  } else {
+    // Exempt
+    vatResult = 0;
+    finalTotal = subtotal;
+  }
 
   return (
     <Document>
@@ -241,7 +249,6 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
 
           <View style={styles.headerLeft}>
             {quote.company.logoUrl && (
-              /* Assuming logoUrl is valid image url */
               <Image
                 src={quote.company.logoUrl}
                 style={{ width: 50, height: 50, marginBottom: 5 }}
@@ -339,13 +346,15 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
 
         {/* Summary */}
         <View style={{ flexDirection: "row", marginTop: 20 }}>
-          {/* Using flex row to push summary to the left side (which visualy is left in PDF) */}
           <View style={{ flex: 1 }} />
           <View style={styles.summary}>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>סיכום ביניים:</Text>
+              <Text style={styles.summaryLabel}>
+                סיכום ביניים{isIncludeVat && !isVatExempt ? " (לפני מע״מ)" : ""}
+                :
+              </Text>
               <Text style={styles.summaryValue}>
-                ₪{formatCurrency(subtotal)}
+                ₪{formatCurrency(displaySubtotal)}
               </Text>
             </View>
             {!isVatExempt ? (
@@ -354,7 +363,7 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
                   מע״מ ({(vatRate * 100).toFixed(0)}%):
                 </Text>
                 <Text style={styles.summaryValue}>
-                  ₪{formatCurrency(vatAmount)}
+                  ₪{formatCurrency(vatResult)}
                 </Text>
               </View>
             ) : (
@@ -368,7 +377,7 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
                 סה״כ לתשלום:
               </Text>
               <Text style={styles.grandTotalText}>
-                ₪{formatCurrency(grandTotal)}
+                ₪{formatCurrency(finalTotal)}
               </Text>
             </View>
           </View>

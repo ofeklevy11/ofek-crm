@@ -2,6 +2,7 @@ import { getProducts } from "@/app/actions/products";
 import { getClientsForDropdown, getQuoteById } from "@/app/actions/quotes";
 import QuoteEditor from "../editor";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { getBusinessSettings } from "@/app/actions/business-settings";
 import { redirect } from "next/navigation";
 
 export default async function EditQuotePage({
@@ -13,10 +14,11 @@ export default async function EditQuotePage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [products, clients, quote] = await Promise.all([
+  const [products, clients, quote, businessSettings] = await Promise.all([
     getProducts(),
     getClientsForDropdown(),
     getQuoteById(resolvedParams.id),
+    getBusinessSettings(),
   ]);
 
   if (!quote) {
@@ -41,6 +43,7 @@ export default async function EditQuotePage({
       products={plainProducts}
       clients={clients}
       initialQuote={quote}
+      isVatExempt={businessSettings.businessType === "exempt"}
     />
   );
 }

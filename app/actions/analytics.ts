@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { canManageAnalytics } from "@/lib/permissions";
+import { revalidatePath } from "next/cache";
 
 /**
  * Helper function to parse duration string "Xd Yh Zm Qs" to total seconds
@@ -151,6 +152,19 @@ const getTableName = async (id: number) => {
   tableNameCache.set(id, name);
   return name;
 };
+
+/**
+ * Resolve tableName from a view's config without fetching records.
+ */
+async function resolveTableNameFromConfig(config: any): Promise<string> {
+  if (config.model === "Task") return "משימות מערכת";
+  if (config.model === "Retainer") return "פיננסים: ריטיינרים";
+  if (config.model === "OneTimePayment") return "פיננסים: תשלומים";
+  if (config.model === "Transaction") return "פיננסים: תנועות";
+  if (config.model === "CalendarEvent") return "יומן: אירועים";
+  if (config.tableId) return await getTableName(Number(config.tableId));
+  return "System";
+}
 
 /**
  * Calculates stats and items for a SINGLE custom view.
@@ -410,6 +424,141 @@ export async function calculateViewStats(view: any) {
   return { stats, items, tableName };
 }
 
+/**
+ * Calculates stats and items for a single automation rule.
+ */
+async function calculateRuleStats(rule: any): Promise<{ stats: any; items: any[]; tableName: string }> {
+  let items: any[] = [];
+  let stats: any = null;
+  const triggerConfig = rule.triggerConfig as any;
+  const mainTableId = triggerConfig.tableId ? parseInt(triggerConfig.tableId) : 0;
+  const tableName = rule.triggerType === "TASK_STATUS_CHANGE"
+    ? "משימות"
+    : await getTableName(mainTableId);
+
+  if (rule.actionType === "CALCULATE_MULTI_EVENT_DURATION") {
+    const eventTableMap = new Map<string, string>();
+    if (triggerConfig.eventChain && Array.isArray(triggerConfig.eventChain)) {
+      for (const event of triggerConfig.eventChain) {
+        const tId = event.tableId ? Number(event.tableId) : mainTableId;
+        if (tId) {
+          eventTableMap.set(event.eventName, await getTableName(tId));
+        }
+      }
+    }
+
+    const multiEventDurations = await prisma.multiEventDuration.findMany({
+      where: {
+        automationRuleId: rule.id,
+        createdAt: { gte: rule.createdAt },
+      },
+      include: { record: true, task: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    items = multiEventDurations.map((d: any) => {
+      let title = "Unknown";
+      if (d.task) title = d.task.title;
+      else if (d.record) {
+        const data = d.record.data as any;
+        const titleField =
+          Object.keys(data).find(
+            (k) =>
+              k.toLowerCase().includes("name") ||
+              k.toLowerCase().includes("title") ||
+              (typeof data[k] === "string" && data[k].length < 50),
+          ) || "Record";
+        title = data[titleField] ? String(data[titleField]) : `Record #${d.record.id}`;
+      }
+
+      const eventChain = d.eventChain as any[];
+      const eventNames = eventChain
+        .map((e: any) => {
+          const tName = e.tableName || eventTableMap.get(e.eventName);
+          return tName ? `${e.eventName} (${tName})` : e.eventName;
+        })
+        .join(" → ");
+
+      return {
+        id: d.id,
+        title,
+        status: eventNames,
+        duration: d.totalDurationString,
+        totalDurationSeconds: d.totalDurationSeconds,
+        weightedScore: d.weightedScore,
+        updatedAt: d.createdAt,
+        type: tableName,
+      };
+    });
+
+    if (items.length > 0) {
+      const totalSeconds = items.reduce((acc, item) => acc + item.totalDurationSeconds, 0);
+      const avg = Math.round(totalSeconds / items.length);
+      const min = Math.min(...items.map((i) => i.totalDurationSeconds));
+      const max = Math.max(...items.map((i) => i.totalDurationSeconds));
+      stats = {
+        averageDuration: formatSecondsToHebrew(avg),
+        minDuration: formatSecondsToHebrew(min),
+        maxDuration: formatSecondsToHebrew(max),
+        totalRecords: items.length,
+        averageSeconds: avg,
+      };
+    }
+  } else if (rule.actionType === "CALCULATE_DURATION") {
+    const durations = await prisma.statusDuration.findMany({
+      where: {
+        automationRuleId: rule.id,
+        createdAt: { gte: rule.createdAt },
+      },
+      include: { record: true, task: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    items = durations.map((d: any) => {
+      let title = "Unknown";
+      if (d.task) title = d.task.title;
+      else if (d.record) {
+        const data = d.record.data as any;
+        const titleField =
+          Object.keys(data).find(
+            (k) =>
+              k.toLowerCase().includes("name") ||
+              k.toLowerCase().includes("title") ||
+              (typeof data[k] === "string" && data[k].length < 50),
+          ) || "Record";
+        title = data[titleField] ? String(data[titleField]) : `Record #${d.record.id}`;
+      }
+
+      let statusDisplay = d.toValue || "N/A";
+      if (d.fromValue && d.toValue) statusDisplay = `${d.fromValue} -> ${d.toValue}`;
+
+      return {
+        id: d.id,
+        title,
+        status: statusDisplay,
+        duration: d.durationString,
+        durationSeconds: d.durationSeconds,
+        updatedAt: d.createdAt,
+        type: tableName,
+      };
+    });
+
+    if (items.length > 0) {
+      const totalSeconds = items.reduce((acc, item) => acc + item.durationSeconds, 0);
+      const avg = Math.round(totalSeconds / items.length);
+      stats = {
+        averageDuration: formatSecondsToHebrew(avg),
+        minDuration: formatSecondsToHebrew(Math.min(...items.map((i) => i.durationSeconds))),
+        maxDuration: formatSecondsToHebrew(Math.max(...items.map((i) => i.durationSeconds))),
+        totalRecords: items.length,
+        averageSeconds: avg,
+      };
+    }
+  }
+
+  return { stats, items, tableName };
+}
+
 export async function createAnalyticsView(data: {
   title: string;
   type: string;
@@ -516,7 +665,44 @@ export async function getAnalyticsData() {
 
     // --- Process Automation Rules ---
     for (const rule of rules) {
+      // 1. Check Cache Validity (4 hours)
+      const CACHE_DURATION = 4 * 60 * 60 * 1000;
+      const now = new Date();
+      const lastCached = rule.lastCachedAt ? new Date(rule.lastCachedAt) : null;
+      const isCacheValid =
+        lastCached && now.getTime() - lastCached.getTime() < CACHE_DURATION;
+
+      if (isCacheValid && rule.cachedStats) {
+        // USE CACHE
+        const cachedData = rule.cachedStats as any;
+        views.push({
+          id: `rule_${rule.id}`,
+          ruleId: rule.id,
+          ruleName: rule.name,
+          tableName:
+            rule.triggerType === "TASK_STATUS_CHANGE"
+              ? "משימות"
+              : await getTableName(
+                  parseInt((rule.triggerConfig as any).tableId || "0"),
+                ),
+          type:
+            rule.actionType === "CALCULATE_MULTI_EVENT_DURATION"
+              ? "multi-event"
+              : "single-event",
+          data: cachedData.items || [],
+          stats: cachedData.stats || null, // Ensure stats are passed
+          order: rule.analyticsOrder ?? 0,
+          color: rule.analyticsColor ?? "bg-white",
+          source: "AUTOMATION",
+          folderId: rule.folderId,
+          lastRefreshed: rule.lastCachedAt, // Add timestamp
+        });
+        continue; // Skip calculation
+      }
+
+      // 2. Calculate Fresh Data (Existing Logic)
       let items: any[] = [];
+      let stats: any = null;
       const ruleName = rule.name;
       const triggerConfig = rule.triggerConfig as any;
       const mainTableId = triggerConfig.tableId
@@ -529,7 +715,6 @@ export async function getAnalyticsData() {
           : await getTableName(mainTableId);
 
       if (rule.actionType === "CALCULATE_MULTI_EVENT_DURATION") {
-        // ... (Existing Logic for Multi Event)
         const eventTableMap = new Map<string, string>();
         if (
           triggerConfig.eventChain &&
@@ -546,14 +731,13 @@ export async function getAnalyticsData() {
         const multiEventDurations = await prisma.multiEventDuration.findMany({
           where: {
             automationRuleId: rule.id,
-            createdAt: { gte: rule.createdAt }, // CRITICAL: Only count stats from rule creation onwards
+            createdAt: { gte: rule.createdAt },
           },
           include: { record: true, task: true },
           orderBy: { createdAt: "desc" },
         });
 
         items = multiEventDurations.map((d: any) => {
-          // ... simplify title logic repeated ...
           let title = "Unknown";
           if (d.task) title = d.task.title;
           else if (d.record) {
@@ -590,8 +774,6 @@ export async function getAnalyticsData() {
           };
         });
 
-        // Calculate Stats
-        let stats: any = null;
         if (items.length > 0) {
           const totalSeconds = items.reduce(
             (acc, item) => acc + item.totalDurationSeconds,
@@ -608,26 +790,11 @@ export async function getAnalyticsData() {
             averageSeconds: avg,
           };
         }
-
-        views.push({
-          id: `rule_${rule.id}`, // Unified ID
-          ruleId: rule.id, // Keep for backward compat if needed
-          ruleName: ruleName,
-          tableName: tableName,
-          type: "multi-event",
-          data: items,
-          stats: stats,
-          order: rule.analyticsOrder ?? 0,
-          color: rule.analyticsColor ?? "bg-white",
-          source: "AUTOMATION",
-          folderId: rule.folderId,
-        });
       } else if (rule.actionType === "CALCULATE_DURATION") {
-        // ... (Existing Logic for Duration)
         const durations = await prisma.statusDuration.findMany({
           where: {
             automationRuleId: rule.id,
-            createdAt: { gte: rule.createdAt }, // CRITICAL: Only count stats from rule creation onwards
+            createdAt: { gte: rule.createdAt },
           },
           include: { record: true, task: true },
           orderBy: { createdAt: "desc" },
@@ -665,7 +832,6 @@ export async function getAnalyticsData() {
           };
         });
 
-        let stats: any = null;
         if (items.length > 0) {
           const totalSeconds = items.reduce(
             (acc, item) => acc + item.durationSeconds,
@@ -684,26 +850,78 @@ export async function getAnalyticsData() {
             averageSeconds: avg,
           };
         }
-
-        views.push({
-          id: `rule_${rule.id}`,
-          ruleId: rule.id,
-          ruleName: ruleName,
-          tableName: tableName,
-          type: "single-event",
-          data: items,
-          stats: stats,
-          order: rule.analyticsOrder ?? 0,
-          color: rule.analyticsColor ?? "bg-white",
-          source: "AUTOMATION",
-          folderId: rule.folderId,
-        });
       }
+
+      // 3. Update Cache & Push View
+      // Save to DB
+      await prisma.automationRule.update({
+        where: { id: rule.id },
+        data: {
+          cachedStats: { stats, items }, // Store both stats and items
+          lastCachedAt: new Date(),
+        },
+      });
+
+      views.push({
+        id: `rule_${rule.id}`,
+        ruleId: rule.id,
+        ruleName: ruleName,
+        tableName: tableName,
+        type:
+          rule.actionType === "CALCULATE_MULTI_EVENT_DURATION"
+            ? "multi-event"
+            : "single-event",
+        data: items,
+        stats: stats,
+        order: rule.analyticsOrder ?? 0,
+        color: rule.analyticsColor ?? "bg-white",
+        source: "AUTOMATION",
+        folderId: rule.folderId,
+        lastRefreshed: new Date(),
+      });
     }
 
     // --- Process Custom Views ---
     for (const view of customViews) {
+      // 1. Check Cache Validity (4 hours)
+      const CACHE_DURATION = 4 * 60 * 60 * 1000;
+      const now = new Date();
+      const lastCached = view.lastCachedAt ? new Date(view.lastCachedAt) : null;
+      const isCacheValid =
+        lastCached && now.getTime() - lastCached.getTime() < CACHE_DURATION;
+
+      if (isCacheValid && view.cachedStats) {
+        const cachedData = view.cachedStats as any;
+        const resolvedTableName = cachedData.tableName || await resolveTableNameFromConfig(view.config as any);
+        views.push({
+          id: `view_${view.id}`,
+          viewId: view.id,
+          ruleName: view.title,
+          tableName: resolvedTableName,
+          type: view.type,
+          data: cachedData.items || [],
+          stats: cachedData.stats || null,
+          order: view.order,
+          color: view.color,
+          source: "CUSTOM",
+          config: view.config,
+          folderId: view.folderId,
+          lastRefreshed: view.lastCachedAt,
+        });
+        continue;
+      }
+
+      // 2. Calculate Fresh Data
       const { stats, items, tableName } = await calculateViewStats(view);
+
+      // 3. Update Cache & Push
+      await prisma.analyticsView.update({
+        where: { id: view.id },
+        data: {
+          cachedStats: { stats, items, tableName },
+          lastCachedAt: new Date(),
+        },
+      });
 
       views.push({
         id: `view_${view.id}`,
@@ -716,8 +934,9 @@ export async function getAnalyticsData() {
         order: view.order,
         color: view.color,
         source: "CUSTOM",
-        config: view.config, // Pass config for editing
+        config: view.config,
         folderId: view.folderId,
+        lastRefreshed: new Date(),
       });
     }
 
@@ -726,6 +945,105 @@ export async function getAnalyticsData() {
   } catch (error) {
     console.error("Error fetching analytics data:", error);
     return { success: false, error: "Failed to fetch analytics data" };
+  }
+}
+
+/**
+ * Force refresh a specific analytics item (Rule or View).
+ * Returns the freshly calculated view data so the client can update in-place.
+ */
+export async function refreshAnalyticsItem(
+  id: number,
+  type: "AUTOMATION" | "CUSTOM",
+) {
+  try {
+    const user = await getCurrentUser();
+    if (!user || !canManageAnalytics(user)) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    if (type === "AUTOMATION") {
+      const rule = await prisma.automationRule.findUnique({ where: { id } });
+      if (!rule) return { success: false, error: "Rule not found" };
+
+      const { stats, items, tableName } = await calculateRuleStats(rule);
+
+      // Update cache
+      await prisma.automationRule.update({
+        where: { id },
+        data: {
+          cachedStats: { stats, items },
+          lastCachedAt: new Date(),
+        },
+      });
+
+      // Revalidate pages that display analytics
+      revalidatePath("/");
+      revalidatePath("/analytics");
+      revalidatePath("/analytics/graphs");
+
+      return {
+        success: true,
+        data: {
+          id: `rule_${rule.id}`,
+          ruleId: rule.id,
+          ruleName: rule.name,
+          tableName,
+          type:
+            rule.actionType === "CALCULATE_MULTI_EVENT_DURATION"
+              ? "multi-event"
+              : "single-event",
+          data: items,
+          stats,
+          order: rule.analyticsOrder ?? 0,
+          color: rule.analyticsColor ?? "bg-white",
+          source: "AUTOMATION",
+          folderId: rule.folderId,
+          lastRefreshed: new Date(),
+        },
+      };
+    } else {
+      const view = await prisma.analyticsView.findUnique({ where: { id } });
+      if (!view) return { success: false, error: "View not found" };
+
+      const { stats, items, tableName } = await calculateViewStats(view);
+
+      // Update cache
+      await prisma.analyticsView.update({
+        where: { id },
+        data: {
+          cachedStats: { stats, items },
+          lastCachedAt: new Date(),
+        },
+      });
+
+      // Revalidate pages that display analytics
+      revalidatePath("/");
+      revalidatePath("/analytics");
+      revalidatePath("/analytics/graphs");
+
+      return {
+        success: true,
+        data: {
+          id: `view_${view.id}`,
+          viewId: view.id,
+          ruleName: view.title,
+          tableName,
+          type: view.type,
+          data: items,
+          stats,
+          order: view.order,
+          color: view.color,
+          source: "CUSTOM",
+          config: view.config,
+          folderId: view.folderId,
+          lastRefreshed: new Date(),
+        },
+      };
+    }
+  } catch (error) {
+    console.error("Error refreshing analytics item:", error);
+    return { success: false, error: "Failed to refresh item" };
   }
 }
 

@@ -32,5 +32,11 @@ export default async function NewQuotePage() {
     cost: product.cost ?? null,
   }));
 
-  return <QuoteEditor products={plainProducts} clients={clients} />;
+  return (
+    <QuoteEditor
+      products={plainProducts}
+      clients={clients}
+      isVatExempt={businessSettings.businessType === "exempt"}
+    />
+  );
 }

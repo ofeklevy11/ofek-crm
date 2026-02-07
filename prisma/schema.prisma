@@ -106,6 +106,7 @@ model User {
   ticketComments       TicketComment[]
   ticketActivityLogs   TicketActivityLog[]
   viewRefreshLogs      ViewRefreshLog[]
+  analyticsRefreshLogs AnalyticsRefreshLog[]
   importJobs           ImportJob[]
   
   @@index([companyId])
@@ -183,32 +184,36 @@ model AutomationRule {
   id            Int      @id @default(autoincrement())
   companyId     Int
   name          String
+  description   String?
   triggerType   String   // 'MANUAL', 'TASK_STATUS_CHANGE', 'RECORD_CREATE', 'MULTI_EVENT_DURATION', 'DIRECT_DIAL'
   triggerConfig Json?    // Configuration for the trigger (e.g., fromStatus, toStatus, tableId for DIRECT_DIAL)
   actionType    String   // 'SEND_NOTIFICATION', 'CALCULATE_DURATION', 'CALCULATE_MULTI_EVENT_DURATION', 'UPDATE_RECORD_FIELD'
   actionConfig  Json?    // Configuration for the action (e.g., recipientId, message, columnId, value for UPDATE_RECORD_FIELD)
   isActive      Boolean  @default(true)
-  createdBy     Int
+  createdBy     Int?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  creator       User     @relation(fields: [createdBy], references: [id])
-  
+  lastRunAt     DateTime?
+  creator       User?    @relation(fields: [createdBy], references: [id])
+
   // Relation to the new time tracking tables
   statusDurations StatusDuration[]
   multiEventDurations MultiEventDuration[]
   executedLogs    AutomationLog[]
 
-  // Analytics View Configuration
-  analyticsOrder Int?     @default(0)
-  analyticsColor String?  @default("bg-white") // Stores Tailwind class or color key
-  
+  // Analytics Extensions
+  analyticsOrder Int?
+  analyticsColor String?
+  cachedStats    Json?
+  lastCachedAt   DateTime?
+
   folderId      Int?
   folder        ViewFolder? @relation(fields: [folderId], references: [id])
   company       Company     @relation(fields: [companyId], references: [id])
 
   calendarEventId String?
   calendarEvent   CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
-  
+
   @@index([companyId])
   @@index([companyId, isActive, triggerType]) // For filtering active rules by trigger type
   @@index([calendarEventId])
@@ -535,6 +540,10 @@ model AnalyticsView {
   config      Json     // Stores: tableId, field, filter, groupBy, etc.
   order       Int      @default(0)
   color       String?  @default("bg-white")
+  
+  cachedStats  Json?
+  lastCachedAt DateTime?
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -665,6 +674,8 @@ model Quote {
   validUntil      DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  isPriceWithVat  Boolean  @default(false) // Whether unit prices include VAT
 
   company         Company  @relation(fields: [companyId], references: [id])
   client          Client?  @relation(fields: [clientId], references: [id])
@@ -1346,6 +1357,17 @@ model ViewRefreshLog {
   view      View?    @relation(fields: [viewId], references: [id], onDelete: SetNull)
 
   @@index([userId, viewId, timestamp])
+}
+
+model AnalyticsRefreshLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  timestamp DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([timestamp])
 }
 
 model AutomationLog {

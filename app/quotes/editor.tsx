@@ -10,12 +10,14 @@ interface QuoteEditorProps {
   initialQuote?: any;
   clients: any[];
   products: any[];
+  isVatExempt?: boolean;
 }
 
 export default function QuoteEditor({
   initialQuote,
   clients,
   products,
+  isVatExempt = false,
 }: QuoteEditorProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -30,6 +32,7 @@ export default function QuoteEditor({
       ? new Date(initialQuote.validUntil).toISOString().split("T")[0]
       : "",
     status: initialQuote?.status || "DRAFT",
+    isPriceWithVat: initialQuote?.isPriceWithVat ?? false,
     // title: initialQuote?.title || "", // Removed
   });
 
@@ -128,8 +131,57 @@ export default function QuoteEditor({
 
   const total = calculateTotal();
   const totalCost = calculateTotalCost();
-  const margin = total - totalCost;
-  const marginPercent = total > 0 ? (margin / total) * 100 : 0;
+
+  // VAT Calculations
+  const vatRate = 0.18;
+  const calculateVatDisplay = () => {
+    if (isVatExempt) {
+      return {
+        subtotal: total,
+        vat: 0,
+        finalTotal: total,
+      };
+    }
+
+    if (formData.isPriceWithVat) {
+      // Prices include VAT
+      // total is roughly sum of (Net + VAT)
+      // Net = Total / 1.18
+      const net = total / (1 + vatRate);
+      const vat = total - net;
+      return {
+        subtotal: net,
+        vat: vat,
+        finalTotal: total,
+      };
+    } else {
+      // Prices are before VAT
+      const vat = total * vatRate;
+      return {
+        subtotal: total,
+        vat: vat,
+        finalTotal: total + vat,
+      };
+    }
+  };
+
+  const {
+    subtotal: displaySubtotal,
+    vat: displayVat,
+    finalTotal: displayTotal,
+  } = calculateVatDisplay();
+
+  // Margin always calculated from Net Income vs Cost
+  // If price includes VAT, revenue is Net (total / 1.18)
+  // If price is before VAT, revenue is Total (which is Net)
+  const revenue = isVatExempt
+    ? total
+    : formData.isPriceWithVat
+      ? total / (1 + vatRate)
+      : total;
+
+  const margin = revenue - totalCost;
+  const marginPercent = revenue > 0 ? (margin / revenue) * 100 : 0;
 
   const handleSave = async () => {
     if (loading) return;
@@ -160,10 +212,11 @@ export default function QuoteEditor({
         items: items.map((item) => ({
           productId: item.productId ? parseInt(item.productId) : undefined,
           description: item.description,
-          quantity: parseFloat(item.quantity.toString()),
+          quantity: Math.round(parseFloat(item.quantity.toString())), // Ensure integer for schema compatibility
           unitPrice: parseFloat(item.unitPrice.toString()),
           unitCost: parseFloat(item.unitCost?.toString() || "0"),
         })),
+        isPriceWithVat: formData.isPriceWithVat,
       };
 
       if (initialQuote) {
@@ -343,13 +396,38 @@ export default function QuoteEditor({
               />
             </div>
 
+            {!isVatExempt && (
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="isPriceWithVat"
+                  className="w-4 h-4 text-[#4f95ff] border-gray-300 rounded focus:ring-[#4f95ff]"
+                  checked={formData.isPriceWithVat}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      isPriceWithVat: e.target.checked,
+                    })
+                  }
+                />
+                <label
+                  htmlFor="isPriceWithVat"
+                  className="text-sm text-gray-700 select-none"
+                >
+                  המחיר כולל מע״מ
+                </label>
+              </div>
+            )}
+
+            {/* Removed orphaned div start */}
+
             <div className="border-t pt-4 mt-4">
               <label className="text-sm font-medium text-gray-700">
                 רווחיות פנימית
               </label>
               <div className="mt-2 text-sm space-y-1 bg-gray-50 p-3 rounded-md border border-gray-100">
                 <div className="flex justify-between">
-                  <span>הכנסה:</span> <span>₪{total.toFixed(2)}</span>
+                  <span>הכנסה (נטו):</span> <span>₪{revenue.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-red-500">
                   <span>עלות משוערת:</span> <span>₪{totalCost.toFixed(2)}</span>
@@ -461,11 +539,25 @@ export default function QuoteEditor({
             <Plus className="w-4 h-4" /> הוסף פריט
           </button>
 
-          <div className="flex justify-start pt-4">
-            <div className="text-right space-y-1">
-              <div className="text-sm text-gray-500">סיכום ביניים</div>
-              <div className="text-3xl font-bold text-gray-900">
-                ₪{total.toFixed(2)}
+          <div className="flex justify-end pt-6">
+            <div className="w-64 space-y-2 bg-gray-50 p-4 rounded-lg border border-gray-100">
+              <div className="flex justify-between text-gray-600 text-sm">
+                <span>
+                  סה״כ ביניים{formData.isPriceWithVat ? " (לפני מע״מ)" : ""}:
+                </span>
+                <span className="font-mono">₪{displaySubtotal.toFixed(2)}</span>
+              </div>
+
+              {!isVatExempt && (
+                <div className="flex justify-between text-gray-600 text-sm">
+                  <span>מע״מ (18%):</span>
+                  <span className="font-mono">₪{displayVat.toFixed(2)}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between border-t border-gray-200 pt-2 text-xl font-bold text-gray-900">
+                <span>סה״כ לתשלום:</span>
+                <span className="font-mono">₪{displayTotal.toFixed(2)}</span>
               </div>
             </div>
           </div>
