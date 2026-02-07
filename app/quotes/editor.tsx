@@ -21,6 +21,7 @@ export default function QuoteEditor({
 }: QuoteEditorProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [descriptionPopupIndex, setDescriptionPopupIndex] = useState<number | null>(null);
 
   const [formData, setFormData] = useState({
     clientId: initialQuote?.clientId?.toString() || "new",
@@ -489,15 +490,18 @@ export default function QuoteEditor({
                       </option>
                     ))}
                   </select>
-                  <textarea
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none text-sm bg-white"
-                    placeholder="תיאור הפריט"
-                    value={item.description}
-                    onChange={(e) =>
-                      updateItem(index, "description", e.target.value)
-                    }
-                    rows={2}
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setDescriptionPopupIndex(index)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md hover:border-[#4f95ff] outline-none text-sm bg-white text-right flex items-center justify-between gap-2 transition-colors"
+                  >
+                    <span className="text-gray-400">
+                      לחץ כאן להוספת/קריאת התיאור
+                    </span>
+                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
                 </div>
 
                 <div className="w-24 space-y-2">
@@ -575,6 +579,53 @@ export default function QuoteEditor({
           </div>
         </div>
       </div>
+
+      {descriptionPopupIndex !== null && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh]">
+            <div className="flex justify-between items-center p-5 border-b border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-900">תיאור הפריט</h3>
+              <button
+                type="button"
+                onClick={() => setDescriptionPopupIndex(null)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-5">
+              <textarea
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] outline-none transition-all bg-white resize-none"
+                value={items[descriptionPopupIndex]?.description || ""}
+                onChange={(e) =>
+                  updateItem(descriptionPopupIndex, "description", e.target.value)
+                }
+                placeholder="כתוב תיאור מפורט לפריט..."
+                rows={22}
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-start gap-3 p-5 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setDescriptionPopupIndex(null)}
+                className="px-6 py-2.5 text-sm font-medium text-white bg-[#4f95ff] rounded-xl hover:bg-[#3b82f6] transition-all shadow-lg hover:shadow-xl"
+              >
+                שמור
+              </button>
+              <button
+                type="button"
+                onClick={() => setDescriptionPopupIndex(null)}
+                className="px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                סגור
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -225,7 +225,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: colors.black,
     textAlign: "right",
-    direction: "rtl",
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     paddingBottom: 6,
@@ -239,14 +238,12 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: colors.dark,
     textAlign: "right",
-    direction: "rtl",
     marginBottom: 3,
   },
   descriptionItemText: {
     fontSize: 9,
     color: colors.medium,
     textAlign: "right",
-    direction: "rtl",
     lineHeight: 1.6,
   },
   footer: {
@@ -287,6 +284,15 @@ const getBusinessTypeLabel = (type: string | null | undefined): string => {
     default:
       return "";
   }
+};
+
+// Wrap each line with Unicode RTL embedding to fix punctuation direction
+// without using CSS direction:rtl which corrupts characters in @react-pdf
+const toRtl = (text: string): string => {
+  return text
+    .split("\n")
+    .map((line) => `\u202B${line}\u202C`)
+    .join("\n");
 };
 
 const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
@@ -459,6 +465,11 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
                 <Text style={styles.tdName}>
                   {item.product?.name || "פריט כללי"}
                 </Text>
+                {(item.description || item.product?.description) && (
+                  <Text style={{ fontSize: 8, color: colors.medium, textAlign: "right", marginTop: 2, lineHeight: 1.5 }}>
+                    {item.description || item.product?.description}
+                  </Text>
+                )}
               </View>
               <View style={styles.colQty}>
                 <Text style={styles.tdText}>{item.quantity}</Text>
@@ -485,10 +496,10 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
               item.description ? (
                 <View key={index} style={styles.descriptionItem}>
                   <Text style={styles.descriptionItemTitle}>
-                    {item.product?.name || "פריט כללי"}
+                    {toRtl(item.product?.name || "פריט כללי")}
                   </Text>
                   <Text style={styles.descriptionItemText}>
-                    {item.description}
+                    {toRtl(item.description!)}
                   </Text>
                 </View>
               ) : null,

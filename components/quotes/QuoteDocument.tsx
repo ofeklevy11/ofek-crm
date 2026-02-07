@@ -213,6 +213,11 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
                   <p className="font-medium text-gray-900 text-sm">
                     {item.product?.name || "פריט כללי"}
                   </p>
+                  {(item.description || item.product?.description) && (
+                    <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap leading-relaxed">
+                      {item.description || item.product?.description}
+                    </p>
+                  )}
                 </td>
                 <td className="py-3 px-2 text-center align-top text-sm font-mono text-gray-800">
                   {item.quantity}
