@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Trash, Plus, Printer, Save, ArrowRight } from "lucide-react";
+import { addWeeks, addMonths, format } from "date-fns";
 import { createQuote, updateQuote } from "@/app/actions/quotes";
 import { useRouter } from "next/navigation";
 // removed ui imports
@@ -21,7 +22,9 @@ export default function QuoteEditor({
 }: QuoteEditorProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [descriptionPopupIndex, setDescriptionPopupIndex] = useState<number | null>(null);
+  const [descriptionPopupIndex, setDescriptionPopupIndex] = useState<
+    number | null
+  >(null);
 
   const [formData, setFormData] = useState({
     clientId: initialQuote?.clientId?.toString() || "new",
@@ -38,6 +41,20 @@ export default function QuoteEditor({
   });
 
   const [items, setItems] = useState<any[]>(initialQuote?.items || []);
+
+  const [customDuration, setCustomDuration] = useState(1);
+  const [customUnit, setCustomUnit] = useState<"weeks" | "months">("months");
+
+  const applyDuration = (duration: number, unit: "weeks" | "months") => {
+    const today = new Date();
+    const newDate =
+      unit === "weeks" ? addWeeks(today, duration) : addMonths(today, duration);
+
+    setFormData((prev) => ({
+      ...prev,
+      validUntil: format(newDate, "yyyy-MM-dd"),
+    }));
+  };
 
   const handleClientChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     // ... existing client logic ...
@@ -395,18 +412,74 @@ export default function QuoteEditor({
                 <option value="REJECTED">נדחתה</option>
               </select>
             </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                בתוקף עד
-              </label>
-              <input
-                type="date"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
-                value={formData.validUntil}
-                onChange={(e) =>
-                  setFormData({ ...formData, validUntil: e.target.value })
-                }
-              />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  בתוקף עד
+                </label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
+                  value={formData.validUntil}
+                  onChange={(e) =>
+                    setFormData({ ...formData, validUntil: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="space-y-3 pt-2 border-t border-gray-100">
+                <label className="text-xs font-medium text-gray-500">
+                  קיצורי דרך לתוקף
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => applyDuration(1, "weeks")}
+                    className="px-3 py-1.5 text-xs bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-md text-gray-700 transition-colors"
+                  >
+                    שבוע מהיום
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyDuration(1, "months")}
+                    className="px-3 py-1.5 text-xs bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-md text-gray-700 transition-colors"
+                  >
+                    חודש מהיום
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 whitespace-nowrap">
+                    עוד:
+                  </span>
+                  <input
+                    type="number"
+                    min="1"
+                    className="w-16 px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
+                    value={customDuration}
+                    onChange={(e) =>
+                      setCustomDuration(parseInt(e.target.value) || 1)
+                    }
+                  />
+                  <select
+                    className="px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
+                    value={customUnit}
+                    onChange={(e) =>
+                      setCustomUnit(e.target.value as "weeks" | "months")
+                    }
+                  >
+                    <option value="weeks">שבועות</option>
+                    <option value="months">חודשים</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => applyDuration(customDuration, customUnit)}
+                    className="px-3 py-1.5 text-xs bg-[#4f95ff] text-white rounded-md hover:bg-[#3d7de0] transition-colors"
+                  >
+                    החל
+                  </button>
+                </div>
+              </div>
             </div>
 
             {!isVatExempt && (
@@ -498,8 +571,18 @@ export default function QuoteEditor({
                     <span className="text-gray-400">
                       לחץ כאן להוספת/קריאת התיאור
                     </span>
-                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    <svg
+                      className="w-4 h-4 text-gray-400 flex-shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                      />
                     </svg>
                   </button>
                 </div>
@@ -581,17 +664,32 @@ export default function QuoteEditor({
       </div>
 
       {descriptionPopupIndex !== null && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          dir="rtl"
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh]">
             <div className="flex justify-between items-center p-5 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900">תיאור הפריט</h3>
+              <h3 className="text-lg font-semibold text-gray-900">
+                תיאור הפריט
+              </h3>
               <button
                 type="button"
                 onClick={() => setDescriptionPopupIndex(null)}
                 className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -600,7 +698,11 @@ export default function QuoteEditor({
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] outline-none transition-all bg-white resize-none"
                 value={items[descriptionPopupIndex]?.description || ""}
                 onChange={(e) =>
-                  updateItem(descriptionPopupIndex, "description", e.target.value)
+                  updateItem(
+                    descriptionPopupIndex,
+                    "description",
+                    e.target.value,
+                  )
                 }
                 placeholder="כתוב תיאור מפורט לפריט..."
                 rows={22}
