@@ -142,8 +142,8 @@ export default function AnalyticsGraph({
         );
 
       case "pie":
-        const outerRadius = height / 2 - 30; // Reduced padding to make it a bit larger
-        const innerRadius = outerRadius - 30; // Slightly thicker ring
+        const outerRadius = height / 2 - 60; // Increased padding to prevent label cutoff
+        const innerRadius = outerRadius - 40; // Maintain ring thickness
 
         return (
           <PieChart>
@@ -168,7 +168,7 @@ export default function AnalyticsGraph({
                 percent,
               }) => {
                 const RADIAN = Math.PI / 180;
-                const radius = 25 + innerRadius + (outerRadius - innerRadius);
+                const radius = outerRadius + 20; // Adjusted for better label positioning
                 const x = cx + radius * Math.cos(-midAngle * RADIAN);
                 const y = cy + radius * Math.sin(-midAngle * RADIAN);
 

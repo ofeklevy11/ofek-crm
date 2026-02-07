@@ -61,6 +61,7 @@ export default async function QuotePdfPage({
             quoteId={quote.id}
             quoteNumber={(quote as any).quoteNumber}
             clientName={(quote as any).clientName}
+            clientPhone={(quote as any).clientPhone}
           />
         </div>
       </div>

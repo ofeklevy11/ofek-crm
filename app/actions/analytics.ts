@@ -45,6 +45,11 @@ function formatSecondsToHebrew(totalSeconds: number): string {
  * Helper to extract value from record, handling custom fields, system fields, and relations (objects with name/title).
  */
 function extractValue(record: any, key: string): any {
+  // 0. Handle virtual "clientName" field for finance records
+  if (key === "clientName") {
+    return record.client?.name || null;
+  }
+
   // 1. Try custom data
   let val = (record.data as any)?.[key];
 

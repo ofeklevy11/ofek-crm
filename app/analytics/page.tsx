@@ -524,11 +524,21 @@ function SortableGraphCard({ view }: { view: any }) {
     opacity: isDragging ? 0.8 : 1,
   };
 
+  // Determine if this card should span 2 columns (for pie charts with many items)
+  const isPieChart = view.config?.chartType?.toLowerCase() === "pie";
+  const dataCount = view.data?.length || 0;
+  const shouldSpanTwo = isPieChart && dataCount > 8;
+
+  // Dynamic height based on data count for pie charts
+  const chartHeight = shouldSpanTwo ? 450 : 300;
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
+      className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow ${
+        shouldSpanTwo ? "md:col-span-2" : ""
+      }`}
     >
       <div className="p-4 border-b border-gray-50 flex justify-between items-start">
         <div className="flex items-start gap-2">
@@ -551,7 +561,7 @@ function SortableGraphCard({ view }: { view: any }) {
         <AnalyticsGraph
           data={view.data}
           type={view.config.chartType}
-          height={300}
+          height={chartHeight}
         />
       </div>
 
@@ -1040,7 +1050,7 @@ export default function AnalyticsPage() {
                 href="/analytics/graphs"
                 className="px-4 py-2 text-sm font-medium text-pink-600 hover:text-pink-700 hover:bg-pink-50 rounded-lg transition-colors flex items-center gap-2"
               >
-לעריכת ומחיקת גרפים                <ArrowLeft size={14} />
+                לעריכת ומחיקת גרפים <ArrowLeft size={14} />
               </a>
             </div>
             <DndContext

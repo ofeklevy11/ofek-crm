@@ -402,6 +402,7 @@ export default function CreateAnalyticsViewModal({
     },
     { systemName: "amount", displayName: "סכום", type: "number" },
     { systemName: "title", displayName: "כותרת", type: "text" },
+    { systemName: "clientName", displayName: "שם לקוח", type: "text" },
   ];
 
   const SYSTEM_PAYMENT_FIELDS = [
@@ -413,6 +414,7 @@ export default function CreateAnalyticsViewModal({
     },
     { systemName: "amount", displayName: "סכום", type: "number" },
     { systemName: "title", displayName: "כותרת", type: "text" },
+    { systemName: "clientName", displayName: "שם לקוח", type: "text" },
   ];
 
   const SYSTEM_TRANSACTION_FIELDS = [
@@ -424,6 +426,7 @@ export default function CreateAnalyticsViewModal({
     },
     { systemName: "amount", displayName: "סכום", type: "number" },
     { systemName: "relatedType", displayName: "סוג", type: "text" },
+    { systemName: "clientName", displayName: "שם לקוח", type: "text" },
   ];
 
   const SYSTEM_CALENDAR_FIELDS = [

@@ -7,16 +7,21 @@ interface PrintButtonProps {
   quoteId: string;
   quoteNumber?: number | null;
   clientName?: string;
+  clientPhone?: string | null;
 }
 
 export default function PrintButton({
   quoteId,
   quoteNumber,
   clientName = "לקוח",
+  clientPhone,
 }: PrintButtonProps) {
   const [downloading, setDownloading] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [phone, setPhone] = useState("");
+  const [sendOption, setSendOption] = useState<"client" | "custom">(
+    clientPhone ? "client" : "custom",
+  );
 
   // Format quote number for display/filename
   const formattedNumber = quoteNumber
@@ -47,13 +52,15 @@ export default function PrintButton({
   };
 
   const handleSendWhatsApp = () => {
-    if (!phone) {
+    const targetPhone = sendOption === "client" ? clientPhone : phone;
+
+    if (!targetPhone) {
       alert("נא להזין מספר טלפון");
       return;
     }
 
     // 1. Normalize phone
-    let cleanPhone = phone.replace(/\D/g, ""); // Remove non-digits
+    let cleanPhone = targetPhone.replace(/\D/g, ""); // Remove non-digits
     if (cleanPhone.startsWith("0")) {
       cleanPhone = "972" + cleanPhone.slice(1);
     }
@@ -134,21 +141,61 @@ ${downloadLink}`;
             </div>
 
             <div className="space-y-4 py-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  מספר טלפון לשליחה
+              <div className="space-y-4">
+                {clientPhone && (
+                  <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="radio"
+                      name="sendOption"
+                      value="client"
+                      checked={sendOption === "client"}
+                      onChange={() => setSendOption("client")}
+                      className="w-4 h-4 text-[#4f95ff] focus:ring-[#4f95ff]"
+                    />
+                    <div>
+                      <span className="block font-medium text-gray-900">
+                        שלח למספר של הלקוח
+                      </span>
+                      <span className="block text-sm text-gray-500 ltr text-right">
+                        {clientPhone}
+                      </span>
+                    </div>
+                  </label>
+                )}
+
+                <label
+                  className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ${
+                    !clientPhone ? "border-[#4f95ff] bg-blue-50/50" : ""
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="sendOption"
+                    value="custom"
+                    checked={sendOption === "custom"}
+                    onChange={() => setSendOption("custom")}
+                    className="w-4 h-4 text-[#4f95ff] focus:ring-[#4f95ff]"
+                  />
+                  <span className="font-medium text-gray-900">
+                    הזן מספר אחר
+                  </span>
                 </label>
-                <input
-                  type="tel"
-                  autoFocus
-                  placeholder="הכנס מספר טלפון"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f95ff] outline-none text-left bg-gray-50 focus:bg-white transition-all text-lg"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSendWhatsApp();
-                  }}
-                />
+
+                {sendOption === "custom" && (
+                  <div className="mr-7 animate-in slide-in-from-top-2 duration-200">
+                    <input
+                      type="tel"
+                      autoFocus
+                      placeholder="הכנס מספר טלפון (050...)"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f95ff] outline-none text-left bg-gray-50 focus:bg-white transition-all text-lg"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSendWhatsApp();
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
