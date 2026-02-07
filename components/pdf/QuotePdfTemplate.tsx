@@ -286,14 +286,7 @@ const getBusinessTypeLabel = (type: string | null | undefined): string => {
   }
 };
 
-// Wrap each line with Unicode RTL embedding to fix punctuation direction
-// without using CSS direction:rtl which corrupts characters in @react-pdf
-const toRtl = (text: string): string => {
-  return text
-    .split("\n")
-    .map((line) => `\u202B${line}\u202C`)
-    .join("\n");
-};
+import { toVisual } from "@/lib/bidi-engine";
 
 const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
   const vatRate = 0.18;
@@ -329,8 +322,8 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.title}>הצעת מחיר</Text>
-            <Text style={styles.quoteNumber}>#{quoteNumber}</Text>
+            <Text style={styles.title}>{toVisual("הצעת מחיר")}</Text>
+            <Text style={styles.quoteNumber}>#{toVisual(quoteNumber)}</Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             {quote.company.logoUrl && (
@@ -340,10 +333,12 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
               />
             )}
             <View>
-              <Text style={styles.companyName}>{quote.company.name}</Text>
+              <Text style={styles.companyName}>
+                {toVisual(quote.company.name)}
+              </Text>
               {businessTypeLabel && quote.company.taxId && (
                 <Text style={styles.companySubtext}>
-                  {businessTypeLabel} | {quote.company.taxId}
+                  {toVisual(`${businessTypeLabel} | ${quote.company.taxId}`)}
                 </Text>
               )}
             </View>
@@ -352,7 +347,9 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
 
         {/* Title */}
         {(quote as any).title && (
-          <Text style={styles.quoteTitle}>{(quote as any).title}</Text>
+          <Text style={styles.quoteTitle}>
+            {toVisual((quote as any).title)}
+          </Text>
         )}
 
         {/* Separator */}
@@ -362,11 +359,11 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
         <View style={styles.totalsRow}>
           <View style={styles.dateInfo}>
             <Text style={styles.dateText}>
-              תאריך: {formatDate(quote.createdAt)}
+              {toVisual(`תאריך: ${formatDate(quote.createdAt)}`)}
             </Text>
             {quote.validUntil && (
               <Text style={styles.dateText}>
-                בתוקף עד: {formatDate(quote.validUntil)}
+                {toVisual(`בתוקף עד: ${formatDate(quote.validUntil)}`)}
               </Text>
             )}
           </View>
@@ -375,14 +372,16 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
               <>
                 <View style={styles.totalsLine}>
                   <Text style={styles.totalsLabel}>
-                    סיכום{isIncludeVat ? " (לפני מע״מ)" : ""}
+                    {toVisual(`סיכום${isIncludeVat ? " (לפני מע״מ)" : ""}`)}
                   </Text>
                   <Text style={styles.totalsValue}>
                     ₪{formatCurrency(displaySubtotal)}
                   </Text>
                 </View>
                 <View style={styles.totalsLine}>
-                  <Text style={styles.totalsLabel}>מע״מ (18%)</Text>
+                  <Text style={styles.totalsLabel}>
+                    {toVisual("מע״מ (18%)")}
+                  </Text>
                   <Text style={styles.totalsValue}>
                     ₪{formatCurrency(vatResult)}
                   </Text>
@@ -391,11 +390,11 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
             )}
             {isVatExempt && (
               <View style={styles.totalsLine}>
-                <Text style={styles.totalsLabel}>פטור ממע״מ</Text>
+                <Text style={styles.totalsLabel}>{toVisual("פטור ממע״מ")}</Text>
               </View>
             )}
             <View style={styles.grandTotalLine}>
-              <Text style={styles.grandTotalLabel}>סה״כ</Text>
+              <Text style={styles.grandTotalLabel}>{toVisual("סה״כ")}</Text>
               <Text style={styles.grandTotalValue}>
                 ₪{formatCurrency(finalTotal)}
               </Text>
@@ -406,32 +405,36 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
         {/* Client & Company Info */}
         <View style={styles.infoGrid}>
           <View style={styles.infoColumn}>
-            <Text style={styles.infoLabel}>עבור</Text>
-            <Text style={styles.infoTextBold}>{quote.clientName}</Text>
+            <Text style={styles.infoLabel}>{toVisual("עבור")}</Text>
+            <Text style={styles.infoTextBold}>
+              {toVisual(quote.clientName)}
+            </Text>
             {quote.clientTaxId && (
               <Text style={styles.infoText}>
-                ח.פ / ת.ז: {quote.clientTaxId}
+                {toVisual(`ח.פ / ת.ז: ${quote.clientTaxId}`)}
               </Text>
             )}
             {quote.clientAddress && (
-              <Text style={styles.infoText}>{quote.clientAddress}</Text>
+              <Text style={styles.infoText}>
+                {toVisual(quote.clientAddress)}
+              </Text>
             )}
             {quote.clientPhone && (
-              <Text style={styles.infoText}>{quote.clientPhone}</Text>
+              <Text style={styles.infoText}>{toVisual(quote.clientPhone)}</Text>
             )}
           </View>
           <View style={styles.infoColumn}>
-            <Text style={styles.infoLabel}>מאת</Text>
-            <Text style={styles.infoTextBold}>{quote.company.name}</Text>
+            <Text style={styles.infoLabel}>{toVisual("מאת")}</Text>
+            <Text style={styles.infoTextBold}>
+              {toVisual(quote.company.name)}
+            </Text>
             {quote.company.businessAddress && (
               <Text style={styles.infoText}>
-                {quote.company.businessAddress}
+                {toVisual(quote.company.businessAddress)}
               </Text>
             )}
             {quote.company.businessEmail && (
-              <Text style={styles.infoText}>
-                {quote.company.businessEmail}
-              </Text>
+              <Text style={styles.infoText}>{quote.company.businessEmail}</Text>
             )}
           </View>
         </View>
@@ -443,16 +446,16 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
               <Text style={styles.thText}>#</Text>
             </View>
             <View style={styles.colDesc}>
-              <Text style={styles.thText}>תיאור</Text>
+              <Text style={styles.thText}>{toVisual("תיאור")}</Text>
             </View>
             <View style={styles.colQty}>
-              <Text style={styles.thText}>כמות</Text>
+              <Text style={styles.thText}>{toVisual("כמות")}</Text>
             </View>
             <View style={styles.colPrice}>
-              <Text style={styles.thText}>מחיר יחידה</Text>
+              <Text style={styles.thText}>{toVisual("מחיר יחידה")}</Text>
             </View>
             <View style={styles.colTotal}>
-              <Text style={styles.thText}>סה״כ</Text>
+              <Text style={styles.thText}>{toVisual("סה״כ")}</Text>
             </View>
           </View>
 
@@ -463,13 +466,8 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
               </View>
               <View style={styles.colDesc}>
                 <Text style={styles.tdName}>
-                  {item.product?.name || "פריט כללי"}
+                  {toVisual(item.product?.name || "פריט כללי")}
                 </Text>
-                {(item.description || item.product?.description) && (
-                  <Text style={{ fontSize: 8, color: colors.medium, textAlign: "right", marginTop: 2, lineHeight: 1.5 }}>
-                    {item.description || item.product?.description}
-                  </Text>
-                )}
               </View>
               <View style={styles.colQty}>
                 <Text style={styles.tdText}>{item.quantity}</Text>
@@ -481,7 +479,10 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
               </View>
               <View style={styles.colTotal}>
                 <Text style={styles.tdBold}>
-                  ₪{formatCurrency(Number(item.quantity) * Number(item.unitPrice))}
+                  ₪
+                  {formatCurrency(
+                    Number(item.quantity) * Number(item.unitPrice),
+                  )}
                 </Text>
               </View>
             </View>
@@ -491,15 +492,17 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
         {/* Full-width descriptions section */}
         {hasDescriptions && (
           <View style={styles.descriptionSection}>
-            <Text style={styles.descriptionHeading}>הערות נוספות</Text>
+            <Text style={styles.descriptionHeading}>
+              {toVisual("הערות נוספות")}
+            </Text>
             {quote.items.map((item, index) =>
               item.description ? (
                 <View key={index} style={styles.descriptionItem}>
                   <Text style={styles.descriptionItemTitle}>
-                    {toRtl(item.product?.name || "פריט כללי")}
+                    {toVisual(item.product?.name || "פריט כללי")}
                   </Text>
                   <Text style={styles.descriptionItemText}>
-                    {toRtl(item.description!)}
+                    {toVisual(item.description!)}
                   </Text>
                 </View>
               ) : null,
@@ -509,9 +512,7 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text>
-            מסמך זה הינו הצעת מחיר ואינו מהווה חשבונית מס.
-          </Text>
+          <Text>מסמך זה הינו הצעת מחיר ואינו מהווה חשבונית מס.</Text>
         </View>
       </Page>
     </Document>
