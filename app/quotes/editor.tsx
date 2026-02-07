@@ -269,7 +269,7 @@ export default function QuoteEditor({
                 window.open(`/quotes/${initialQuote.id}/pdf`, "_blank")
               }
             >
-              <Printer className="w-4 h-4" /> הדפסה / PDF
+              <Printer className="w-4 h-4" /> הדפסה / PDF / שליחה בWhatsapp
             </button>
           )}
           <button

@@ -225,6 +225,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: colors.black,
     textAlign: "right",
+    direction: "rtl",
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     paddingBottom: 6,
@@ -238,12 +239,14 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: colors.dark,
     textAlign: "right",
+    direction: "rtl",
     marginBottom: 3,
   },
   descriptionItemText: {
     fontSize: 9,
     color: colors.medium,
     textAlign: "right",
+    direction: "rtl",
     lineHeight: 1.6,
   },
   footer: {
