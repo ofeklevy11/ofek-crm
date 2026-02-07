@@ -10,6 +10,7 @@ export interface BusinessSettings {
   businessAddress: string | null;
   businessWebsite: string | null;
   businessEmail: string | null;
+  logoUrl: string | null;
   name: string;
 }
 
@@ -26,6 +27,7 @@ export async function getBusinessSettings(): Promise<BusinessSettings | null> {
       businessAddress: true,
       businessWebsite: true,
       businessEmail: true,
+      logoUrl: true,
     },
   });
 
@@ -39,6 +41,7 @@ export async function updateBusinessSettings(data: {
   businessAddress: string;
   businessWebsite?: string;
   businessEmail?: string;
+  logoUrl?: string;
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
@@ -52,6 +55,7 @@ export async function updateBusinessSettings(data: {
       businessAddress: data.businessAddress,
       businessWebsite: data.businessWebsite || null,
       businessEmail: data.businessEmail || null,
+      logoUrl: data.logoUrl || null,
     },
   });
 

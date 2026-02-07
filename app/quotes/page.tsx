@@ -1,4 +1,5 @@
 import { getQuotes } from "@/app/actions/quotes";
+import { getBusinessSettings } from "@/app/actions/business-settings";
 import QuotesPageClient from "./client";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
@@ -15,7 +16,16 @@ export default async function QuotesPage({ searchParams }: Props) {
 
   const params = await searchParams;
   const showTrashed = params.trash === "true";
-  const quotes = await getQuotes(showTrashed);
+  const [quotes, businessSettings] = await Promise.all([
+    getQuotes(showTrashed),
+    getBusinessSettings(),
+  ]);
 
-  return <QuotesPageClient quotes={quotes} showTrashed={showTrashed} />;
+  return (
+    <QuotesPageClient
+      quotes={quotes}
+      showTrashed={showTrashed}
+      businessSettings={businessSettings}
+    />
+  );
 }

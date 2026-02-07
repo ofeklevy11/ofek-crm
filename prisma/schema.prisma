@@ -19,6 +19,7 @@ model Company {
   businessAddress String?   // כתובת העסק
   businessWebsite String?   // קישור לאתר (אופציונלי)
   businessEmail   String?   // אימייל עסקי (אופציונלי)
+  logoUrl         String?   // לוגו העסק (URL)
   
   users               User[]
   tables              TableMeta[]
@@ -840,6 +841,7 @@ model File {
 
   name        String
   displayName String?  // Optional custom display name
+  source      String?  // Origin label (e.g. "לוגו של הגדרות עסק (הצעות מחיר)")
   url         String
   key         String   
   size        Int      

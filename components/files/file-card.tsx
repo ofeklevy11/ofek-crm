@@ -283,7 +283,7 @@ export function FileCard({
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 ) : (
-                  <span className="text-muted-foreground">ידנית</span>
+                  <span className="text-muted-foreground">{(file as any).source || "ידנית"}</span>
                 )}
               </div>
             </div>
@@ -358,7 +358,7 @@ export function FileCard({
                 <ExternalLink className="w-3 h-3" />
               </a>
             ) : (
-              <span className="text-muted-foreground">ידנית</span>
+              <span className="text-muted-foreground">{(file as any).source || "ידנית"}</span>
             )}
           </div>
         </div>
@@ -437,7 +437,7 @@ export function FileCard({
                 <ExternalLink className="w-3 h-3" />
               </a>
             ) : (
-              <span className="text-xs text-muted-foreground">מקור: ידנית</span>
+              <span className="text-xs text-muted-foreground">מקור: {(file as any).source || "ידנית"}</span>
             )}
           </div>
         </div>

@@ -7,6 +7,7 @@ import {
   Text,
   View,
   StyleSheet,
+  Image,
 } from "@react-pdf/renderer";
 import { Quote, Company, QuoteItem, Product, Client } from "@prisma/client";
 
@@ -16,6 +17,7 @@ type CompanyWithSettings = Company & {
   businessAddress?: string | null;
   businessWebsite?: string | null;
   businessEmail?: string | null;
+  logoUrl?: string | null;
 };
 
 export type FullQuote = Quote & {
@@ -30,12 +32,23 @@ interface QuotePdfTemplateProps {
   quote: FullQuote;
 }
 
+// Color palette - light black instead of gray
+const colors = {
+  black: "#111827",
+  dark: "#1f2937",
+  medium: "#374151",
+  light: "#4b5563",
+  subtle: "#6b7280",
+  border: "#e5e7eb",
+  borderLight: "#f3f4f6",
+};
+
 const styles = StyleSheet.create({
   page: {
     padding: 40,
     fontFamily: "Rubik",
     fontSize: 10,
-    color: "#111827",
+    color: colors.black,
     backgroundColor: "#ffffff",
   },
   header: {
@@ -47,35 +60,35 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#111827",
+    color: colors.black,
   },
   quoteNumber: {
     fontSize: 9,
-    color: "#9ca3af",
+    color: colors.subtle,
     marginTop: 2,
   },
   companyName: {
     fontSize: 11,
     fontWeight: "bold",
-    color: "#111827",
+    color: colors.black,
     textAlign: "left",
   },
   companySubtext: {
     fontSize: 8,
-    color: "#9ca3af",
+    color: colors.subtle,
     textAlign: "left",
     marginTop: 2,
   },
   quoteTitle: {
     fontSize: 13,
     fontWeight: "bold",
-    color: "#374151",
+    color: colors.medium,
     textAlign: "right",
     marginBottom: 8,
   },
   separator: {
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomColor: colors.border,
     marginBottom: 16,
   },
   totalsRow: {
@@ -89,7 +102,7 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 8,
-    color: "#6b7280",
+    color: colors.light,
     marginBottom: 2,
   },
   totalsBlock: {
@@ -104,32 +117,32 @@ const styles = StyleSheet.create({
   },
   totalsLabel: {
     fontSize: 8,
-    color: "#6b7280",
+    color: colors.light,
     textAlign: "right",
   },
   totalsValue: {
     fontSize: 8,
-    color: "#6b7280",
+    color: colors.light,
   },
   grandTotalLine: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
     width: "100%",
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
+    borderTopColor: colors.border,
     paddingTop: 4,
     marginTop: 2,
   },
   grandTotalLabel: {
     fontSize: 14,
     fontWeight: "bold",
-    color: "#111827",
+    color: colors.black,
     textAlign: "right",
   },
   grandTotalValue: {
     fontSize: 14,
     fontWeight: "bold",
-    color: "#111827",
+    color: colors.black,
   },
   infoGrid: {
     flexDirection: "row-reverse",
@@ -141,20 +154,20 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 8,
-    color: "#9ca3af",
+    color: colors.subtle,
     marginBottom: 3,
     textAlign: "right",
   },
   infoText: {
     fontSize: 9,
-    color: "#374151",
+    color: colors.medium,
     marginBottom: 1,
     textAlign: "right",
   },
   infoTextBold: {
     fontSize: 9,
     fontWeight: "bold",
-    color: "#111827",
+    color: colors.black,
     marginBottom: 1,
     textAlign: "right",
   },
@@ -165,14 +178,14 @@ const styles = StyleSheet.create({
   tableHeader: {
     flexDirection: "row-reverse",
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomColor: colors.border,
     paddingBottom: 6,
     marginBottom: 4,
   },
   tableRow: {
     flexDirection: "row-reverse",
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: colors.borderLight,
     paddingVertical: 6,
   },
   colNum: { width: "5%", textAlign: "right" },
@@ -182,32 +195,56 @@ const styles = StyleSheet.create({
   colTotal: { width: "20%", textAlign: "left" },
   thText: {
     fontSize: 8,
-    color: "#9ca3af",
+    color: colors.subtle,
   },
   tdNum: {
     fontSize: 8,
-    color: "#9ca3af",
+    color: colors.subtle,
   },
   tdName: {
     fontSize: 9,
     fontWeight: "bold",
-    color: "#111827",
+    color: colors.black,
     textAlign: "right",
-  },
-  tdDesc: {
-    fontSize: 8,
-    color: "#9ca3af",
-    textAlign: "right",
-    marginTop: 1,
   },
   tdText: {
     fontSize: 9,
-    color: "#374151",
+    color: colors.medium,
   },
   tdBold: {
     fontSize: 9,
     fontWeight: "bold",
-    color: "#111827",
+    color: colors.black,
+  },
+  // Full-width description section
+  descriptionSection: {
+    marginTop: 20,
+  },
+  descriptionHeading: {
+    fontSize: 10,
+    fontWeight: "bold",
+    color: colors.black,
+    textAlign: "right",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingBottom: 6,
+    marginBottom: 10,
+  },
+  descriptionItem: {
+    marginBottom: 10,
+  },
+  descriptionItemTitle: {
+    fontSize: 9,
+    fontWeight: "bold",
+    color: colors.dark,
+    textAlign: "right",
+    marginBottom: 3,
+  },
+  descriptionItemText: {
+    fontSize: 9,
+    color: colors.medium,
+    textAlign: "right",
+    lineHeight: 1.6,
   },
   footer: {
     position: "absolute",
@@ -215,14 +252,11 @@ const styles = StyleSheet.create({
     left: 40,
     right: 40,
     textAlign: "center",
-    color: "#9ca3af",
+    color: colors.subtle,
     fontSize: 7,
     borderTopWidth: 1,
-    borderTopColor: "#f3f4f6",
+    borderTopColor: colors.borderLight,
     paddingTop: 8,
-  },
-  hebrewText: {
-    textAlign: "right",
   },
 });
 
@@ -278,6 +312,8 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
     ? String(quote.quoteNumber).padStart(5, "0")
     : quote.id.slice(-6).toUpperCase();
 
+  const hasDescriptions = quote.items.some((item) => item.description);
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -287,13 +323,21 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
             <Text style={styles.title}>הצעת מחיר</Text>
             <Text style={styles.quoteNumber}>#{quoteNumber}</Text>
           </View>
-          <View>
-            <Text style={styles.companyName}>{quote.company.name}</Text>
-            {businessTypeLabel && quote.company.taxId && (
-              <Text style={styles.companySubtext}>
-                {businessTypeLabel} | {quote.company.taxId}
-              </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {quote.company.logoUrl && (
+              <Image
+                src={quote.company.logoUrl}
+                style={{ width: 40, height: 40, objectFit: "contain" }}
+              />
             )}
+            <View>
+              <Text style={styles.companyName}>{quote.company.name}</Text>
+              {businessTypeLabel && quote.company.taxId && (
+                <Text style={styles.companySubtext}>
+                  {businessTypeLabel} | {quote.company.taxId}
+                </Text>
+              )}
+            </View>
           </View>
         </View>
 
@@ -383,7 +427,7 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
           </View>
         </View>
 
-        {/* Items Table */}
+        {/* Items Table - no description in rows */}
         <View style={styles.table}>
           <View style={styles.tableHeader}>
             <View style={styles.colNum}>
@@ -412,9 +456,6 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
                 <Text style={styles.tdName}>
                   {item.product?.name || "פריט כללי"}
                 </Text>
-                {item.description && (
-                  <Text style={styles.tdDesc}>{item.description}</Text>
-                )}
               </View>
               <View style={styles.colQty}>
                 <Text style={styles.tdText}>{item.quantity}</Text>
@@ -432,6 +473,25 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
             </View>
           ))}
         </View>
+
+        {/* Full-width descriptions section */}
+        {hasDescriptions && (
+          <View style={styles.descriptionSection}>
+            <Text style={styles.descriptionHeading}>הערות נוספות</Text>
+            {quote.items.map((item, index) =>
+              item.description ? (
+                <View key={index} style={styles.descriptionItem}>
+                  <Text style={styles.descriptionItemTitle}>
+                    {item.product?.name || "פריט כללי"}
+                  </Text>
+                  <Text style={styles.descriptionItemText}>
+                    {item.description}
+                  </Text>
+                </View>
+              ) : null,
+            )}
+          </View>
+        )}
 
         {/* Footer */}
         <View style={styles.footer}>

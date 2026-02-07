@@ -40,17 +40,20 @@ export const ourFileRouter = {
       console.log("File uploaded:", file.name, file.url);
 
       try {
-        await prisma.file.create({
-          data: {
-            name: file.name,
-            url: file.url,
-            key: file.key,
-            size: file.size,
-            type: file.type || "unknown", // Uploadthing type might be missing sometimes
-            folderId: metadata.folderId,
-            companyId: metadata.companyId,
-          },
-        });
+        const existing = await prisma.file.findFirst({ where: { key: file.key } });
+        if (!existing) {
+          await prisma.file.create({
+            data: {
+              name: file.name,
+              url: file.url,
+              key: file.key,
+              size: file.size,
+              type: file.type || "unknown",
+              folderId: metadata.folderId,
+              companyId: metadata.companyId,
+            },
+          });
+        }
         console.log("File metadata saved to DB successfully on server");
       } catch (e) {
         console.error("Failed to save file metadata on server:", e);

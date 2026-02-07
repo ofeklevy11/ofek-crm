@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Building2,
   Save,
@@ -10,15 +10,20 @@ import {
   MapPin,
   FileText,
   Check,
+  ImagePlus,
+  X,
 } from "lucide-react";
 import {
   updateBusinessSettings,
   BusinessSettings,
 } from "@/app/actions/business-settings";
+import { saveFileMetadata } from "@/app/actions/storage";
 import { useRouter } from "next/navigation";
+import { useUploadThing } from "@/lib/uploadthing";
 
 interface Props {
   initialSettings: BusinessSettings | null;
+  onSaved?: () => void;
 }
 
 const BUSINESS_TYPES = [
@@ -27,7 +32,7 @@ const BUSINESS_TYPES = [
   { value: "ltd", label: "חברה בע״מ" },
 ];
 
-export default function BusinessSettingsRequired({ initialSettings }: Props) {
+export default function BusinessSettingsRequired({ initialSettings, onSaved }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -37,7 +42,65 @@ export default function BusinessSettingsRequired({ initialSettings }: Props) {
     businessAddress: initialSettings?.businessAddress || "",
     businessWebsite: initialSettings?.businessWebsite || "",
     businessEmail: initialSettings?.businessEmail || "",
+    logoUrl: initialSettings?.logoUrl || "",
   });
+
+  const [logoPreview, setLogoPreview] = useState<string>(initialSettings?.logoUrl || "");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { startUpload } = useUploadThing("companyFiles");
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate it's an image
+    if (!file.type.startsWith("image/")) {
+      alert("נא לבחור קובץ תמונה בלבד");
+      return;
+    }
+
+    // Show preview immediately
+    const previewUrl = URL.createObjectURL(file);
+    setLogoPreview(previewUrl);
+
+    setUploadingLogo(true);
+    try {
+      const res = await startUpload([file]);
+      if (res && res[0]) {
+        const uploaded = res[0];
+        // Explicitly save file to /files so it appears there
+        await saveFileMetadata(
+          {
+            name: uploaded.name,
+            url: uploaded.url,
+            key: uploaded.key,
+            size: uploaded.size,
+            type: uploaded.type || file.type || "image/png",
+            source: "לוגו של הגדרות עסק (הצעות מחיר)",
+          },
+          null, // folderId = null (root)
+        );
+        setFormData((prev) => ({ ...prev, logoUrl: uploaded.url }));
+        setLogoPreview(uploaded.url);
+      }
+    } catch (error) {
+      console.error("Logo upload failed:", error);
+      alert("שגיאה בהעלאת הלוגו");
+      setLogoPreview(formData.logoUrl);
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const removeLogo = () => {
+    setFormData((prev) => ({ ...prev, logoUrl: "" }));
+    setLogoPreview("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,7 +126,11 @@ export default function BusinessSettingsRequired({ initialSettings }: Props) {
     setLoading(true);
     try {
       await updateBusinessSettings(finalFormData);
-      router.refresh();
+      if (onSaved) {
+        onSaved();
+      } else {
+        router.refresh();
+      }
     } catch (error) {
       console.error(error);
       alert("שגיאה בשמירת ההגדרות");
@@ -72,13 +139,9 @@ export default function BusinessSettingsRequired({ initialSettings }: Props) {
     }
   };
 
-  const getBusinessTypeLabel = (type: string) => {
-    return BUSINESS_TYPES.find((t) => t.value === type)?.label || type;
-  };
-
   return (
     <div
-      className="min-h-screen bg-[#f4f8f8] flex items-center justify-center p-6"
+      className={`${onSaved ? "" : "min-h-screen"} bg-[#f4f8f8] flex items-center justify-center p-6`}
       dir="rtl"
     >
       <div className="w-full max-w-2xl">
@@ -112,6 +175,70 @@ export default function BusinessSettingsRequired({ initialSettings }: Props) {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            {/* Logo Upload */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                <ImagePlus className="w-4 h-4 inline ml-1" />
+                לוגו העסק{" "}
+                <span className="text-gray-400 text-xs">(אופציונלי)</span>
+              </label>
+              <div className="flex items-center gap-4">
+                {logoPreview ? (
+                  <div className="relative">
+                    <img
+                      src={logoPreview}
+                      alt="לוגו העסק"
+                      className="w-20 h-20 object-contain rounded-xl border border-gray-200 bg-white p-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={removeLogo}
+                      className="absolute -top-2 -left-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-20 h-20 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:border-[#4f95ff] hover:text-[#4f95ff] transition-colors"
+                  >
+                    <ImagePlus className="w-6 h-6" />
+                  </button>
+                )}
+                <div className="flex-1">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleLogoUpload}
+                  />
+                  {logoPreview ? (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-sm text-[#4f95ff] hover:underline"
+                    >
+                      {uploadingLogo ? "מעלה..." : "החלף לוגו"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-sm text-[#4f95ff] hover:underline"
+                    >
+                      {uploadingLogo ? "מעלה..." : "העלה לוגו"}
+                    </button>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    גודל מומלץ: 300x300 פיקסלים. פורמט: PNG או SVG עם רקע שקוף.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Business Name */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
@@ -258,7 +385,7 @@ export default function BusinessSettingsRequired({ initialSettings }: Props) {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || uploadingLogo}
               className="w-full py-4 bg-gradient-to-l from-[#4f95ff] to-[#a24ec1] text-white rounded-xl font-medium hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Save className="w-5 h-5" />

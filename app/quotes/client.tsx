@@ -12,11 +12,14 @@ import {
   RotateCcw,
   Eye,
   Edit,
-  MoreHorizontal,
   Archive,
+  Settings,
+  X,
 } from "lucide-react";
 import { trashQuote, restoreQuote } from "@/app/actions/quotes";
+import { BusinessSettings } from "@/app/actions/business-settings";
 import { useRouter } from "next/navigation";
+import BusinessSettingsRequired from "./business-settings-required";
 
 const formatMoney = (amount: number) => {
   return new Intl.NumberFormat("he-IL", {
@@ -28,12 +31,14 @@ const formatMoney = (amount: number) => {
 interface Props {
   quotes: any[];
   showTrashed: boolean;
+  businessSettings: BusinessSettings | null;
 }
 
-export default function QuotesPageClient({ quotes, showTrashed }: Props) {
+export default function QuotesPageClient({ quotes, showTrashed, businessSettings }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const handleTrash = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -125,6 +130,12 @@ export default function QuotesPageClient({ quotes, showTrashed }: Props) {
             </a>
           ) : (
             <>
+              <button
+                onClick={() => setShowSettingsModal(true)}
+                className="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 font-medium transition-colors"
+              >
+                <Settings className="w-4 h-4" /> הגדרות עסק
+              </button>
               <a href="/quotes?trash=true">
                 <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 font-medium transition-colors">
                   <Archive className="w-4 h-4" /> פח זבל
@@ -301,6 +312,31 @@ export default function QuotesPageClient({ quotes, showTrashed }: Props) {
           </div>
         )}
       </div>
+
+      {/* Business Settings Modal */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setShowSettingsModal(false)}
+          />
+          <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl">
+            <button
+              onClick={() => setShowSettingsModal(false)}
+              className="absolute top-4 left-4 z-20 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-sm"
+            >
+              <X className="w-4 h-4 text-gray-600" />
+            </button>
+            <BusinessSettingsRequired
+              initialSettings={businessSettings}
+              onSaved={() => {
+                setShowSettingsModal(false);
+                router.refresh();
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

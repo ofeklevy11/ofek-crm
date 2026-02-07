@@ -182,6 +182,7 @@ export async function saveFileMetadata(
     size: number;
     type: string;
     displayName?: string;
+    source?: string;
   },
   folderId: number | null,
   recordId?: number,
@@ -194,6 +195,14 @@ export async function saveFileMetadata(
   }
 
   try {
+    // Check if file with same key already exists (avoid duplicates)
+    const existing = await prisma.file.findFirst({ where: { key: fileData.key } });
+    if (existing) {
+      console.log("File already exists in DB:", existing.id);
+      revalidatePath("/files");
+      return existing;
+    }
+
     const newFile = await prisma.file.create({
       data: {
         name: fileData.name,
@@ -202,19 +211,19 @@ export async function saveFileMetadata(
         size: fileData.size,
         type: fileData.type,
         displayName: fileData.displayName || null,
+        source: fileData.source || null,
         folderId,
         recordId,
         companyId: user.companyId,
       },
     });
     console.log("File saved to DB:", newFile.id);
+    revalidatePath("/files");
     return newFile;
   } catch (error) {
     console.error("Error saving to DB:", error);
     throw error;
   }
-
-  revalidatePath("/files");
 }
 
 export async function updateFile(
