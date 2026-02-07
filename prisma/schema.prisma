@@ -659,6 +659,7 @@ model Quote {
   
   total           Decimal  @db.Decimal(10, 2)
   status          String   @default("DRAFT") // DRAFT, SENT, ACCEPTED, REJECTED
+  pdfUrl          String?  // Cached PDF URL
   isTrashed       Boolean  @default(false)   // Soft delete - move to trash
   
   validUntil      DateTime?
