@@ -32,7 +32,6 @@ const RTLText: FC<RTLTextProps> = ({ children, style, ...props }) => {
         flexDirection: "row-reverse",
         flexWrap: "wrap",
         justifyContent: "flex-start",
-        width: "100%",
       }}
     >
       {tokens.map((token, index) => {
@@ -42,8 +41,8 @@ const RTLText: FC<RTLTextProps> = ({ children, style, ...props }) => {
           <Text
             key={index}
             style={[
-              style,
-              isSpace && { marginLeft: 4 }, // רווח ויזואלי יציב
+              style || {},
+              isSpace ? { marginLeft: 4 } : {}, // רווח ויזואלי יציב
             ]}
             {...props}
           >

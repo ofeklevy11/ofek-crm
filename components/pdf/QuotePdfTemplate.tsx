@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   },
   totalsBlock: {
     alignItems: "flex-start",
-    width: "35%",
+    width: "45%",
   },
   totalsLine: {
     flexDirection: "row-reverse",
@@ -362,13 +362,33 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
         {/* Totals BEFORE items */}
         <View style={styles.totalsRow}>
           <View style={styles.dateInfo}>
-            <RTLText style={styles.dateText}>
-              {`תאריך: ${formatDate(quote.createdAt)}`}
-            </RTLText>
+            <View
+              style={{
+                flexDirection: "row-reverse",
+                justifyContent: "flex-start",
+                marginBottom: 2,
+                alignItems: "center",
+              }}
+            >
+              <RTLText style={styles.dateText}>תאריך:</RTLText>
+              <Text style={[styles.dateText, { marginRight: 4 }]}>
+                {formatDate(quote.createdAt)}
+              </Text>
+            </View>
             {quote.validUntil ? (
-              <RTLText style={styles.dateText}>
-                {`בתוקף עד: ${formatDate(quote.validUntil)}`}
-              </RTLText>
+              <View
+                style={{
+                  flexDirection: "row-reverse",
+                  justifyContent: "flex-start",
+                  marginBottom: 2,
+                  alignItems: "center",
+                }}
+              >
+                <RTLText style={styles.dateText}>בתוקף עד:</RTLText>
+                <Text style={[styles.dateText, { marginRight: 4 }]}>
+                  {formatDate(quote.validUntil)}
+                </Text>
+              </View>
             ) : null}
           </View>
           <View style={styles.totalsBlock}>
@@ -382,8 +402,18 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
                     ₪{formatCurrency(displaySubtotal)}
                   </Text>
                 </View>
-                <View style={styles.totalsLine}>
-                  <RTLText style={styles.totalsLabel}>מע״מ (18%)</RTLText>
+                <View style={[styles.totalsLine, { alignItems: "center" }]}>
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                    }}
+                  >
+                    <RTLText style={styles.totalsLabel}>מע״מ</RTLText>
+                    <Text style={[styles.totalsLabel, { marginRight: 4 }]}>
+                      (18%)
+                    </Text>
+                  </View>
                   <Text style={styles.totalsValue}>
                     ₪{formatCurrency(vatResult)}
                   </Text>
@@ -434,9 +464,9 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
               </RTLText>
             ) : null}
             {quote.company.businessEmail ? (
-              <RTLText style={styles.infoText}>
+              <Text style={styles.infoText}>
                 {String(quote.company.businessEmail ?? "")}
-              </RTLText>
+              </Text>
             ) : null}
           </View>
         </View>
@@ -512,7 +542,7 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text>מסמך זה הינו הצעת מחיר ואינו מהווה חשבונית מס.</Text>
+          <Text>מסמך זה הינו הצעת מחיר ואינו מהווה חשבונית מס</Text>
         </View>
       </Page>
     </Document>

@@ -114,9 +114,7 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
       {/* Totals Section - BEFORE items */}
       <div className="mb-8 flex justify-between items-end">
         <div className="text-gray-600 text-xs space-y-1">
-          <p>
-            תאריך: {new Date(quote.createdAt).toLocaleDateString("he-IL")}
-          </p>
+          <p>תאריך: {new Date(quote.createdAt).toLocaleDateString("he-IL")}</p>
           {quote.validUntil && (
             <p>
               בתוקף עד: {new Date(quote.validUntil).toLocaleDateString("he-IL")}
@@ -127,17 +125,23 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
           {!vatExempt && (
             <>
               <div className="flex justify-between gap-8 text-xs text-gray-600">
-                <span>
-                  סיכום{isIncludeVat ? " (לפני מע״מ)" : ""}
-                </span>
+                <span>סיכום{isIncludeVat ? " (לפני מע״מ)" : ""}</span>
                 <span className="font-mono">
-                  ₪{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ₪
+                  {subtotal.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </span>
               </div>
               <div className="flex justify-between gap-8 text-xs text-gray-600">
                 <span>מע״מ (18%)</span>
                 <span className="font-mono">
-                  ₪{vat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ₪
+                  {vat.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </span>
               </div>
             </>
@@ -150,7 +154,11 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
           <div className="flex justify-between gap-8 text-lg font-bold text-gray-900 border-t border-gray-200 pt-1">
             <span>סה״כ</span>
             <span className="font-mono">
-              ₪{finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₪
+              {finalTotal.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </span>
           </div>
         </div>
@@ -164,8 +172,12 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
           {quote.clientTaxId && (
             <p className="text-gray-700">ח.פ / ת.ז: {quote.clientTaxId}</p>
           )}
-          {quote.clientEmail && <p className="text-gray-700">{quote.clientEmail}</p>}
-          {quote.clientPhone && <p className="text-gray-700">{quote.clientPhone}</p>}
+          {quote.clientEmail && (
+            <p className="text-gray-700">{quote.clientEmail}</p>
+          )}
+          {quote.clientPhone && (
+            <p className="text-gray-700">{quote.clientPhone}</p>
+          )}
           {quote.clientAddress && (
             <p className="text-gray-600 mt-1">{quote.clientAddress}</p>
           )}
@@ -198,8 +210,12 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
             <tr className="border-b border-gray-200 text-xs text-gray-600">
               <th className="py-2 px-2 font-medium w-[5%]">#</th>
               <th className="py-2 px-2 font-medium w-[45%]">תיאור</th>
-              <th className="py-2 px-2 font-medium text-center w-[12%]">כמות</th>
-              <th className="py-2 px-2 font-medium text-left w-[18%]">מחיר יחידה</th>
+              <th className="py-2 px-2 font-medium text-center w-[12%]">
+                כמות
+              </th>
+              <th className="py-2 px-2 font-medium text-left w-[18%]">
+                מחיר יחידה
+              </th>
               <th className="py-2 px-2 font-medium text-left w-[20%]">סה״כ</th>
             </tr>
           </thead>
@@ -213,11 +229,6 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
                   <p className="font-medium text-gray-900 text-sm">
                     {item.product?.name || "פריט כללי"}
                   </p>
-                  {(item.description || item.product?.description) && (
-                    <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap leading-relaxed">
-                      {item.description || item.product?.description}
-                    </p>
-                  )}
                 </td>
                 <td className="py-3 px-2 text-center align-top text-sm font-mono text-gray-800">
                   {item.quantity}
@@ -226,7 +237,10 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
                   ₪{Number(item.unitPrice).toLocaleString()}
                 </td>
                 <td className="py-3 px-2 text-left align-top text-sm font-mono font-medium text-gray-900">
-                  ₪{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
+                  ₪
+                  {(
+                    Number(item.quantity) * Number(item.unitPrice)
+                  ).toLocaleString()}
                 </td>
               </tr>
             ))}
