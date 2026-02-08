@@ -1115,7 +1115,7 @@ export default function AnalyticsDashboard({
 
         {/* AI Creator Panel */}
         {isAIMode && (
-          <div className="mt-8 mb-8 animate-in  slide-in-from-top-4 duration-300">
+          <div className="mt-8 mb-8 animate-in slide-in-from-top-4 duration-300">
             <AIAnalyticsCreator
               onClose={() => setIsAIMode(false)}
               onSuccess={handleAIResults}
