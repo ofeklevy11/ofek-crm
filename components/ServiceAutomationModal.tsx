@@ -99,6 +99,13 @@ export default function ServiceAutomationModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate recipient is selected before proceeding
+    if (actionType === "SEND_NOTIFICATION" && !recipientId) {
+      alert("יש לבחור נמען להתראה");
+      return;
+    }
+
     setLoading(true);
 
     try {

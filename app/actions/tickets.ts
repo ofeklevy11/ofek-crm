@@ -103,20 +103,20 @@ export async function createTicket(data: {
       // Calculate resolve time (slaDueDate)
       if (!calculatedSlaDueDate && slaPolicy.resolveTimeMinutes) {
         calculatedSlaDueDate = new Date(
-          Date.now() + slaPolicy.resolveTimeMinutes * 60 * 1000
+          Date.now() + slaPolicy.resolveTimeMinutes * 60 * 1000,
         );
         console.log(
-          `[SLA] Auto-calculated slaDueDate for priority ${data.priority}: ${calculatedSlaDueDate}`
+          `[SLA] Auto-calculated slaDueDate for priority ${data.priority}: ${calculatedSlaDueDate}`,
         );
       }
 
       // Calculate response time (slaResponseDueDate)
       if (!calculatedSlaResponseDueDate && slaPolicy.responseTimeMinutes) {
         calculatedSlaResponseDueDate = new Date(
-          Date.now() + slaPolicy.responseTimeMinutes * 60 * 1000
+          Date.now() + slaPolicy.responseTimeMinutes * 60 * 1000,
         );
         console.log(
-          `[SLA] Auto-calculated slaResponseDueDate for priority ${data.priority}: ${calculatedSlaResponseDueDate}`
+          `[SLA] Auto-calculated slaResponseDueDate for priority ${data.priority}: ${calculatedSlaResponseDueDate}`,
         );
       }
     }
@@ -134,7 +134,7 @@ export async function createTicket(data: {
 
   if (data.assigneeId) {
     console.log(
-      `Creating notification for ticket assignment: Ticket #${ticket.id} to user ${data.assigneeId}`
+      `Creating notification for ticket assignment: Ticket #${ticket.id} to user ${data.assigneeId}`,
     );
     try {
       await createNotification({
@@ -164,7 +164,7 @@ export async function updateTicket(
     assigneeId?: number;
     tags?: string[];
     slaDueDate?: Date;
-  }
+  },
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
@@ -190,7 +190,7 @@ export async function updateTicket(
 
   if (data.priority && data.priority !== currentTicket.priority) {
     console.log(
-      `[SLA] Priority change detected for ticket ${id}: ${currentTicket.priority} -> ${data.priority}`
+      `[SLA] Priority change detected for ticket ${id}: ${currentTicket.priority} -> ${data.priority}`,
     );
 
     // Get the SLA policy for the new priority
@@ -210,10 +210,10 @@ export async function updateTicket(
 
       if (slaPolicy.resolveTimeMinutes) {
         updateData.slaDueDate = new Date(
-          now + slaPolicy.resolveTimeMinutes * 60 * 1000
+          now + slaPolicy.resolveTimeMinutes * 60 * 1000,
         );
         console.log(
-          `[SLA] Recalculated slaDueDate for new priority ${data.priority}: ${updateData.slaDueDate}`
+          `[SLA] Recalculated slaDueDate for new priority ${data.priority}: ${updateData.slaDueDate}`,
         );
       }
 
@@ -221,17 +221,17 @@ export async function updateTicket(
       const newStatus = data.status || currentTicket.status;
       if (newStatus === "OPEN" && slaPolicy.responseTimeMinutes) {
         (updateData as any).slaResponseDueDate = new Date(
-          now + slaPolicy.responseTimeMinutes * 60 * 1000
+          now + slaPolicy.responseTimeMinutes * 60 * 1000,
         );
         console.log(
           `[SLA] Recalculated slaResponseDueDate for new priority ${
             data.priority
-          }: ${(updateData as any).slaResponseDueDate}`
+          }: ${(updateData as any).slaResponseDueDate}`,
         );
       }
     } else {
       console.log(
-        `[SLA] No SLA policy found for priority ${data.priority}, clearing SLA dates`
+        `[SLA] No SLA policy found for priority ${data.priority}, clearing SLA dates`,
       );
       // If there's no SLA policy for the new priority, clear the SLA dates
       updateData.slaDueDate = undefined;
@@ -257,15 +257,15 @@ export async function updateTicket(
       user.companyId,
       ticket.title,
       currentTicket.status,
-      data.status
+      data.status,
     ).catch((e) =>
-      console.error("Failed to process ticket status automation", e)
+      console.error("Failed to process ticket status automation", e),
     );
   }
 
   if (data.assigneeId) {
     console.log(
-      `Creating notification for ticket update: Ticket #${ticket.id} to user ${data.assigneeId}`
+      `Creating notification for ticket update: Ticket #${ticket.id} to user ${data.assigneeId}`,
     );
     await createNotification({
       userId: data.assigneeId,
@@ -282,7 +282,7 @@ export async function updateTicket(
 export async function addTicketComment(
   ticketId: number,
   content: string,
-  isInternal: boolean = false
+  isInternal: boolean = false,
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
@@ -304,7 +304,7 @@ export async function addTicketComment(
 
   if (ticket && ticket.assigneeId) {
     console.log(
-      `Creating notification for comment: Ticket #${ticket.id} to user ${ticket.assigneeId}`
+      `Creating notification for comment: Ticket #${ticket.id} to user ${ticket.assigneeId}`,
     );
     await createNotification({
       userId: ticket.assigneeId,
@@ -497,10 +497,10 @@ async function processTicketStatusChange(
   companyId: number, // Added companyId
   ticketTitle: string,
   fromStatus: string,
-  toStatus: string
+  toStatus: string,
 ) {
   console.log(
-    `[Automation] Processing status change for Ticket #${ticketId} (Company ${companyId}): ${fromStatus} -> ${toStatus}`
+    `[Automation] Processing status change for Ticket #${ticketId} (Company ${companyId}): ${fromStatus} -> ${toStatus}`,
   );
 
   try {
@@ -513,7 +513,7 @@ async function processTicketStatusChange(
     });
 
     console.log(
-      `[Automation] Found ${rules.length} active rules for company ${companyId}`
+      `[Automation] Found ${rules.length} active rules for company ${companyId}`,
     );
 
     // Translate statuses to Hebrew for display
@@ -524,7 +524,7 @@ async function processTicketStatusChange(
       const triggerConfig = rule.triggerConfig as any;
       console.log(
         `[Automation] Checking Rule #${rule.id}: ${rule.name}`,
-        triggerConfig
+        triggerConfig,
       );
 
       // Check "From Status" condition
@@ -534,7 +534,7 @@ async function processTicketStatusChange(
         triggerConfig.fromStatus !== fromStatus
       ) {
         console.log(
-          `[Automation] Rule #${rule.id} skipped: fromStatus mismatch (${triggerConfig.fromStatus} != ${fromStatus})`
+          `[Automation] Rule #${rule.id} skipped: fromStatus mismatch (${triggerConfig.fromStatus} != ${fromStatus})`,
         );
         continue;
       }
@@ -546,16 +546,23 @@ async function processTicketStatusChange(
         triggerConfig.toStatus !== toStatus
       ) {
         console.log(
-          `[Automation] Rule #${rule.id} skipped: toStatus mismatch (${triggerConfig.toStatus} != ${toStatus})`
+          `[Automation] Rule #${rule.id} skipped: toStatus mismatch (${triggerConfig.toStatus} != ${toStatus})`,
         );
         continue;
       }
 
       console.log(`[Automation] Rule #${rule.id} MATCHED! Executing action...`);
+      console.log(
+        `[Automation] Rule #${rule.id} actionType: ${rule.actionType}, actionConfig:`,
+        JSON.stringify(rule.actionConfig),
+      );
 
       if (rule.actionType === "SEND_NOTIFICATION") {
         const actionConfig = rule.actionConfig as any;
-        if (actionConfig.recipientId) {
+        console.log(
+          `[Automation] Rule #${rule.id} recipientId check: ${actionConfig.recipientId}, type: ${typeof actionConfig.recipientId}, isValid: ${!!actionConfig.recipientId && !isNaN(actionConfig.recipientId)}`,
+        );
+        if (actionConfig.recipientId && !isNaN(actionConfig.recipientId)) {
           const message = (
             actionConfig.messageTemplate ||
             "הקריאה {ticketTitle} עברה לסטטוס {toStatus}"
@@ -573,7 +580,11 @@ async function processTicketStatusChange(
             link: `/service`,
           });
           console.log(
-            `[Automation] Notification sent to valid user associated with company ${companyId}`
+            `[Automation] Notification sent to valid user associated with company ${companyId}`,
+          );
+        } else {
+          console.log(
+            `[Automation] Rule #${rule.id} skipped notification: invalid or missing recipientId (${actionConfig.recipientId})`,
           );
         }
       }

@@ -85,6 +85,10 @@ export async function createQuote(data: {
     unitCost?: number;
   }[];
   isPriceWithVat?: boolean;
+  currency?: string;
+  exchangeRate?: number;
+  discountType?: string;
+  discountValue?: number;
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
@@ -131,6 +135,10 @@ export async function createQuote(data: {
         })),
       },
       isPriceWithVat: data.isPriceWithVat ?? false,
+      currency: data.currency || "ILS",
+      exchangeRate: data.exchangeRate,
+      discountType: data.discountType || null,
+      discountValue: data.discountValue || null,
     },
     include: {
       items: true,
@@ -171,6 +179,10 @@ export async function updateQuote(
       unitCost?: number;
     }[];
     isPriceWithVat?: boolean;
+    currency?: string;
+    exchangeRate?: number;
+    discountType?: string;
+    discountValue?: number;
   },
 ) {
   const user = await getCurrentUser();
@@ -201,6 +213,10 @@ export async function updateQuote(
         title: data.title,
         total,
         isPriceWithVat: data.isPriceWithVat,
+        currency: data.currency || "ILS",
+        exchangeRate: data.exchangeRate,
+        discountType: data.discountType || null,
+        discountValue: data.discountValue || null,
         pdfUrl: null, // Reset cached PDF on update
       },
     });

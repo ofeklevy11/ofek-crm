@@ -19,7 +19,7 @@ interface TriggerConfig {
   toValue?: any;
   fromValue?: any;
   viewId?: number | string;
-  operator?: "lt" | "gt";
+  operator?: "lt" | "lte" | "gt" | "gte" | "eq" | "neq";
   threshold?: number | string;
   [key: string]: any;
 }
@@ -465,13 +465,26 @@ export async function executeRuleActions(
       }
     } catch (e) {
       console.error(`[Automations] Error executing action ${type}:`, e);
+      throw e; // Re-throw so callers know the action failed
     }
   };
 
   if (rule.actionType === "MULTI_ACTION") {
     const actions = rule.actionConfig?.actions || [];
+    const errors: string[] = [];
     for (const action of actions) {
-      await executeSingle(action.type, action.config);
+      try {
+        await executeSingle(action.type, action.config);
+      } catch (e: any) {
+        errors.push(`${action.type}: ${e.message || e}`);
+        // Continue executing remaining actions even if one fails
+      }
+    }
+    if (errors.length > 0) {
+      console.error(
+        `[Automations] ${errors.length} action(s) failed in MULTI_ACTION for rule ${ruleId}:`,
+        errors,
+      );
     }
   } else {
     await executeSingle(rule.actionType, rule.actionConfig);
@@ -568,9 +581,12 @@ export async function executeWhatsAppAction(
   const config = rule.actionConfig;
   const phoneColumnId = config.phoneColumnId;
 
-  if (!phoneColumnId) return;
-
-  if (!phoneColumnId) return;
+  if (!phoneColumnId) {
+    console.error(
+      `[Automations] WhatsApp action: No phoneColumnId configured in rule`,
+    );
+    throw new Error("WhatsApp action missing phoneColumnId");
+  }
 
   let phone = "";
   if (phoneColumnId.startsWith("manual:")) {
@@ -580,10 +596,10 @@ export async function executeWhatsAppAction(
   }
 
   if (!phone) {
-    console.log(
-      `[Automations] WhatsApp action: No phone number resolved from ${phoneColumnId}`,
+    console.error(
+      `[Automations] WhatsApp action: No phone number resolved from ${phoneColumnId}. RecordData keys: ${Object.keys(recordData || {}).join(", ")}`,
     );
-    return;
+    throw new Error(`WhatsApp action: No phone resolved from ${phoneColumnId}`);
   }
 
   // Resolve content
@@ -595,33 +611,31 @@ export async function executeWhatsAppAction(
     content = content.split(`{${key}}`).join(String(val || ""));
   }
 
-  try {
-    if (config.messageType === "media" && config.mediaFileId) {
-      const file = await prisma.file.findUnique({
-        where: { id: Number(config.mediaFileId) },
-      });
+  console.log(
+    `[Automations] WhatsApp: Sending to ${phone}, content length: ${content.length}, companyId: ${companyId}`,
+  );
 
-      if (file && file.url) {
-        await sendGreenApiFile(
-          companyId,
-          String(phone),
-          file.url,
-          file.name,
-          content,
-        );
-        console.log(`[Automations] WhatsApp file sent to ${phone}`);
-      } else {
-        console.error(
-          `[Automations] WhatsApp file not found: ${config.mediaFileId}`,
-        );
-      }
+  if (config.messageType === "media" && config.mediaFileId) {
+    const file = await prisma.file.findUnique({
+      where: { id: Number(config.mediaFileId) },
+    });
+
+    if (file && file.url) {
+      await sendGreenApiFile(
+        companyId,
+        String(phone),
+        file.url,
+        file.name,
+        content,
+      );
+      console.log(`[Automations] WhatsApp file sent to ${phone}`);
     } else {
-      // Normal message (private or just text)
-      await sendGreenApiMessage(companyId, String(phone), content);
-      console.log(`[Automations] WhatsApp message sent to ${phone}`);
+      throw new Error(`WhatsApp file not found: ${config.mediaFileId}`);
     }
-  } catch (err) {
-    console.error(`[Automations] WhatsApp Send Error:`, err);
+  } else {
+    // Normal message (private or just text)
+    await sendGreenApiMessage(companyId, String(phone), content);
+    console.log(`[Automations] WhatsApp message sent to ${phone}`);
   }
 }
 
@@ -1171,201 +1185,196 @@ export async function processViewAutomations(
     );
 
     for (const rule of rules) {
-      const triggerConfig = rule.triggerConfig as TriggerConfig;
+      try {
+        const triggerConfig = rule.triggerConfig as TriggerConfig;
 
-      // --- Business Hours Check ---
-      if (!checkBusinessHours(triggerConfig)) continue;
+        // --- Business Hours Check ---
+        if (!checkBusinessHours(triggerConfig)) continue;
 
-      // Basic Validation
-      if (!triggerConfig || !triggerConfig.viewId) {
+        // Basic Validation
+        if (!triggerConfig || !triggerConfig.viewId) {
+          console.log(
+            `[Automations DEBUG] Rule ${rule.id} missing viewId in config.`,
+          );
+          continue;
+        }
+
         console.log(
-          `[Automations DEBUG] Rule ${rule.id} missing viewId in config.`,
+          `[Automations DEBUG] Processing Rule ${rule.id} for View ${triggerConfig.viewId}`,
         );
-        continue;
-      }
 
-      console.log(
-        `[Automations DEBUG] Processing Rule ${rule.id} for View ${triggerConfig.viewId}`,
-      );
+        const view = await prisma.analyticsView.findUnique({
+          where: { id: Number(triggerConfig.viewId) },
+        });
 
-      const view = await prisma.analyticsView.findUnique({
-        where: { id: Number(triggerConfig.viewId) },
-      });
+        if (!view) {
+          console.log(
+            `[Automations DEBUG] View ${triggerConfig.viewId} not found.`,
+          );
+          continue;
+        }
 
-      if (!view) {
-        console.log(
-          `[Automations DEBUG] View ${triggerConfig.viewId} not found.`,
-        );
-        continue;
-      }
+        const viewConfig = view.config as any;
+        let shouldCheck = false;
 
-      const viewConfig = view.config as any;
-      let shouldCheck = false;
-
-      // Smart Matching Logic
-      // If no specific context provided, check all views
-      if (!tableId && !taskId) {
-        shouldCheck = true;
-      } else {
-        // If taskId provided, only check Task-based views
-        if (taskId && viewConfig.model === "Task") shouldCheck = true;
-        // If tableId provided, only check views for that table
-        if (
-          tableId &&
-          viewConfig.tableId &&
-          String(viewConfig.tableId) === String(tableId)
-        ) {
+        // Smart Matching Logic
+        // If no specific context provided, check all views
+        if (!tableId && !taskId) {
           shouldCheck = true;
-        }
-      }
-
-      // Fallback: If we can't definitively determine, maybe checking anyway is safer?
-      if (!shouldCheck) {
-        console.log(
-          `[Automations DEBUG] Skipping Rule ${rule.id} because context doesn't match view config.`,
-          {
-            requestedTable: tableId,
-            requestedTask: taskId,
-            viewTable: viewConfig.tableId,
-            viewModel: viewConfig.model,
-          },
-        );
-        continue;
-      }
-
-      console.log(
-        `[Automations DEBUG] ✅ Context Matched. Calculating stats for ${view.title}`,
-      );
-
-      const { stats } = await calculateViewStats(view);
-
-      if (!stats || stats.rawMetric === undefined) {
-        console.log(
-          `[Automations DEBUG] No valid metric data (rawMetric) for view ${view.id}`,
-          stats,
-        );
-        continue;
-      }
-
-      const currentVal = stats.rawMetric;
-      // Ensure threshold is number
-      const threshold = parseFloat(String(triggerConfig.threshold));
-
-      let triggered = false;
-
-      if (triggerConfig.operator === "lt") {
-        triggered = currentVal < threshold;
-      } else if (triggerConfig.operator === "gt") {
-        triggered = currentVal > threshold;
-      }
-
-      console.log(
-        `[Automations DEBUG] Metric Check: ${currentVal} ${triggerConfig.operator} ${threshold} = ${triggered}`,
-      );
-
-      if (triggered) {
-        // --- Frequency Check ---
-        const frequency = triggerConfig.frequency || "always";
-        const lastRunAt = triggerConfig.lastRunAt
-          ? new Date(triggerConfig.lastRunAt)
-          : null;
-
-        let shouldRunFrequency = true;
-        const now = new Date();
-
-        if (frequency === "once" && lastRunAt) {
-          shouldRunFrequency = false;
-          console.log(
-            `[Automations] ⏳ Skipping Rule ${rule.id} (Frequency: ONCE, already ran at ${lastRunAt})`,
-          );
-        } else if (frequency === "daily" && lastRunAt) {
-          const diffHours =
-            (now.getTime() - lastRunAt.getTime()) / (1000 * 60 * 60);
-          if (diffHours < 24) {
-            shouldRunFrequency = false;
-            console.log(
-              `[Automations] ⏳ Skipping Rule ${
-                rule.id
-              } (Frequency: DAILY, ran ${diffHours.toFixed(1)}h ago)`,
-            );
-          }
-        } else if (frequency === "weekly" && lastRunAt) {
-          const diffDays =
-            (now.getTime() - lastRunAt.getTime()) / (1000 * 60 * 60 * 24);
-          if (diffDays < 7) {
-            shouldRunFrequency = false;
-            console.log(
-              `[Automations] ⏳ Skipping Rule ${
-                rule.id
-              } (Frequency: WEEKLY, ran ${diffDays.toFixed(1)}d ago)`,
-            );
+        } else {
+          // If taskId provided, only check Task-based views
+          if (taskId && viewConfig.model === "Task") shouldCheck = true;
+          // If tableId provided, only check views for that table
+          if (
+            tableId &&
+            viewConfig.tableId &&
+            String(viewConfig.tableId) === String(tableId)
+          ) {
+            shouldCheck = true;
           }
         }
 
-        if (!shouldRunFrequency) {
-          continue; // Skip execution
+        // Fallback: If we can't definitively determine, maybe checking anyway is safer?
+        if (!shouldCheck) {
+          console.log(
+            `[Automations DEBUG] Skipping Rule ${rule.id} because context doesn't match view config.`,
+            {
+              requestedTable: tableId,
+              requestedTask: taskId,
+              viewTable: viewConfig.tableId,
+              viewModel: viewConfig.model,
+            },
+          );
+          continue;
         }
 
         console.log(
-          `[Automations] 🔔 Rule ${rule.id} TRIGGERED! Executing Action...`,
+          `[Automations DEBUG] ✅ Context Matched. Calculating stats for ${view.title}`,
         );
 
-        let actionSuccess = false;
+        const { stats } = await calculateViewStats(view);
 
-        if (rule.actionType === "SEND_NOTIFICATION") {
-          const actionConfig = rule.actionConfig as ActionConfig;
+        if (!stats || stats.rawMetric === undefined) {
           console.log(
-            `[Automations] Sending notification to ${actionConfig.recipientId}`,
+            `[Automations DEBUG] No valid metric data (rawMetric) for view ${view.id}`,
+            stats,
           );
+          continue;
+        }
 
-          if (actionConfig.recipientId) {
-            try {
-              const result = await sendNotification({
-                userId: actionConfig.recipientId,
-                title: actionConfig.titleTemplate || "התראת תצוגה",
-                message: (actionConfig.messageTemplate || "התנאי התקיים")
-                  .replace("{value}", String(currentVal))
-                  .replace("{threshold}", String(threshold)),
-                link: "/analytics",
-              });
-              console.log(`[Automations] Notification send result:`, result);
-              actionSuccess = true;
-            } catch (err) {
-              console.error(`[Automations] Failed to send notification:`, err);
+        const currentVal = stats.rawMetric;
+        const currentSnapshot = JSON.stringify(stats);
+        // Ensure threshold is number
+        const threshold = parseFloat(String(triggerConfig.threshold));
+
+        let triggered = false;
+
+        switch (triggerConfig.operator) {
+          case "lt":
+            triggered = currentVal < threshold;
+            break;
+          case "lte":
+            triggered = currentVal <= threshold;
+            break;
+          case "gt":
+            triggered = currentVal > threshold;
+            break;
+          case "gte":
+            triggered = currentVal >= threshold;
+            break;
+          case "eq":
+            triggered = currentVal === threshold;
+            break;
+          case "neq":
+            triggered = currentVal !== threshold;
+            break;
+        }
+
+        console.log(
+          `[Automations DEBUG] Metric Check: ${currentVal} ${triggerConfig.operator} ${threshold} = ${triggered}`,
+        );
+
+        if (triggered) {
+          // --- Frequency Check ---
+          const frequency = triggerConfig.frequency || "always";
+          const lastRunAt = triggerConfig.lastRunAt
+            ? new Date(triggerConfig.lastRunAt)
+            : null;
+
+          let shouldRunFrequency = true;
+          const now = new Date();
+
+          if (frequency === "once" && lastRunAt) {
+            shouldRunFrequency = false;
+            console.log(
+              `[Automations] ⏳ Skipping Rule ${rule.id} (Frequency: ONCE, already ran at ${lastRunAt})`,
+            );
+          } else if (frequency === "daily" && lastRunAt) {
+            const diffHours =
+              (now.getTime() - lastRunAt.getTime()) / (1000 * 60 * 60);
+            if (diffHours < 24) {
+              shouldRunFrequency = false;
+              console.log(
+                `[Automations] ⏳ Skipping Rule ${
+                  rule.id
+                } (Frequency: DAILY, ran ${diffHours.toFixed(1)}h ago)`,
+              );
             }
-          } else {
-            console.warn(
-              "[Automations] No recipientId configured for notification",
+          } else if (frequency === "weekly" && lastRunAt) {
+            const diffDays =
+              (now.getTime() - lastRunAt.getTime()) / (1000 * 60 * 60 * 24);
+            if (diffDays < 7) {
+              shouldRunFrequency = false;
+              console.log(
+                `[Automations] ⏳ Skipping Rule ${
+                  rule.id
+                } (Frequency: WEEKLY, ran ${diffDays.toFixed(1)}d ago)`,
+              );
+            }
+          } else if (
+            frequency === "always" &&
+            triggerConfig.lastDataSnapshot === currentSnapshot
+          ) {
+            // Smart "always" mode: only run if data actually changed
+            shouldRunFrequency = false;
+            console.log(
+              `[Automations] ⏳ Skipping Rule ${rule.id} (Frequency: ALWAYS, data unchanged since last check)`,
             );
           }
-        } else if (rule.actionType === "CREATE_TASK") {
-          const actionConfig = rule.actionConfig as ActionConfig;
-          try {
-            const taskData: any = {
-              title: actionConfig.title || "משימה אוטומטית",
-              description: actionConfig.description,
-              status: actionConfig.status || "todo",
-            };
 
-            if (actionConfig.priority)
-              taskData.priority = actionConfig.priority;
-            if (actionConfig.dueDate)
-              taskData.dueDate = new Date(actionConfig.dueDate);
-            if (actionConfig.assigneeId)
-              taskData.assignee = String(actionConfig.assigneeId);
-
-            await prisma.task.create({
-              data: taskData,
-            });
-            console.log(`[Automations] Task created for rule ${rule.id}`);
-            actionSuccess = true;
-          } catch (err) {
-            console.error(`[Automations] Failed to create task:`, err);
+          if (!shouldRunFrequency) {
+            continue; // Skip execution
           }
-        }
 
-        // Update lastRunAt if successful
-        if (actionSuccess) {
+          console.log(
+            `[Automations] 🔔 Rule ${rule.id} TRIGGERED! Executing Action: ${rule.actionType}`,
+          );
+          console.log(
+            `[Automations] Action Config:`,
+            JSON.stringify(rule.actionConfig).substring(0, 500),
+          );
+
+          // Use the unified executeRuleActions with view-specific context
+          let actionSuccess = false;
+          try {
+            await executeRuleActions(rule, {
+              recordData: {
+                value: String(currentVal),
+                threshold: String(threshold),
+                viewName: view.title || "",
+              },
+              tableName: "Analytics",
+            });
+            actionSuccess = true;
+          } catch (execErr) {
+            console.error(
+              `[Automations] Failed to execute actions for rule ${rule.id}:`,
+              execErr,
+            );
+          }
+
+          // Update lastRunAt - always update so frequency checks work
+          // Even if some actions failed, we don't want to spam retries
           try {
             await prisma.automationRule.update({
               where: { id: rule.id },
@@ -1373,11 +1382,12 @@ export async function processViewAutomations(
                 triggerConfig: {
                   ...triggerConfig,
                   lastRunAt: new Date().toISOString(),
+                  lastDataSnapshot: currentSnapshot,
                 },
               },
             });
             console.log(
-              `[Automations] ✅ Updated lastRunAt for rule ${rule.id}`,
+              `[Automations] ✅ Updated lastRunAt for rule ${rule.id} (actionSuccess: ${actionSuccess})`,
             );
           } catch (updateErr) {
             console.error(
@@ -1385,9 +1395,15 @@ export async function processViewAutomations(
               updateErr,
             );
           }
+        } else {
+          console.log(`[Automations DEBUG] Rule condition not met.`);
         }
-      } else {
-        console.log(`[Automations DEBUG] Rule condition not met.`);
+      } catch (ruleError) {
+        console.error(
+          `[Automations] Error processing rule ${rule.id}:`,
+          ruleError,
+        );
+        // Continue to next rule - don't let one rule crash the entire loop
       }
     }
   } catch (e) {
@@ -1443,9 +1459,6 @@ export async function processTaskStatusChange(
       };
       await executeRuleActions(rule, context);
     }
-
-    // Check view automations with company context
-    await processViewAutomations(undefined, taskId, task.companyId);
   } catch (error) {
     console.error("Error processing task status automations:", error);
   }
@@ -1554,9 +1567,6 @@ export async function processNewRecordTrigger(
         recordId,
       });
     }
-
-    // Check all view automations to ensure they trigger correctly
-    await processViewAutomations(tableId, undefined, record.companyId);
 
     // --- REAL TEME FINANCE SYNC ---
     // Check if this table is source for any sync rule
@@ -1696,13 +1706,6 @@ export async function processRecordUpdate(
         console.error("[Automations] Multi-Event background error:", err),
     );
 
-    // Check all view automations to ensure they trigger correctly
-    console.log(
-      `[Automations] 🎯 About to check VIEW AUTOMATIONS after record update`,
-    );
-    await processViewAutomations(tableId, undefined, record.companyId);
-    console.log(`[Automations] ✅ Finished checking VIEW AUTOMATIONS`);
-
     // --- REAL TEME FINANCE SYNC (ON UPDATE) ---
     try {
       const syncRules = await prisma.financeSyncRule.findMany({
@@ -1746,6 +1749,56 @@ export async function getViewAutomations(viewId: number) {
   } catch (error) {
     console.error("Error fetching view automations:", error);
     return { success: false, error: "Failed to fetch view automations" };
+  }
+}
+
+/**
+ * Count total automation actions across all analytics views for the current company.
+ * This is used to enforce plan-based limits:
+ * - Basic: 10 actions
+ * - Premium: 30 actions
+ * - Super: unlimited
+ */
+export async function getAnalyticsAutomationsActionCount() {
+  try {
+    // Get current user using the existing auth function
+    const { getCurrentAuthUser } = await import("./auth");
+    const authResult = await getCurrentAuthUser();
+
+    if (!authResult.success || !authResult.data?.companyId) {
+      console.log("[Analytics Actions] No auth or companyId found");
+      return { success: false, error: "Unauthorized", count: 0 };
+    }
+
+    const companyId = authResult.data.companyId;
+
+    // Get all VIEW_METRIC_THRESHOLD rules for this company
+    const rules = await prisma.automationRule.findMany({
+      where: {
+        companyId: companyId,
+        triggerType: "VIEW_METRIC_THRESHOLD",
+      },
+      select: {
+        actionType: true,
+        actionConfig: true,
+      },
+    });
+
+    // Count total actions
+    let totalActions = 0;
+    for (const rule of rules) {
+      if (rule.actionType === "MULTI_ACTION") {
+        const config = rule.actionConfig as any;
+        totalActions += config?.actions?.length || 0;
+      } else if (rule.actionType) {
+        totalActions += 1;
+      }
+    }
+
+    return { success: true, count: totalActions };
+  } catch (error) {
+    console.error("Error counting analytics automation actions:", error);
+    return { success: false, error: "Failed to count actions", count: 0 };
   }
 }
 

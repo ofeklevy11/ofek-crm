@@ -31,7 +31,7 @@ export default async function QuotePdfPage({
   }
 
   return (
-    <div className="fixed inset-0 bg-white z-50 overflow-auto">
+    <div className="fixed inset-0 bg-white z-50 overflow-auto quote-print-area">
       <div className="print:hidden w-full sticky top-0 z-[60]">
         <Navbar />
       </div>
@@ -72,22 +72,23 @@ export default async function QuotePdfPage({
       <style
         dangerouslySetInnerHTML={{
           __html: `
+        @page {
+          margin: 36mm 10mm;
+        }
         @media print {
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
           body * {
             visibility: hidden;
           }
-          .fixed.inset-0.bg-white.z-50 * {
+          .quote-print-area, .quote-print-area * {
              visibility: visible;
           }
-          .fixed.inset-0.bg-white.z-50 {
-             position: absolute;
-             left: 0;
-             top: 0;
+          .quote-print-area {
+             position: static !important;
              width: 100%;
-             height: 100%;
-             z-index: 9999;
-             padding: 0;
-             margin: 0;
              overflow: visible;
           }
           .print\\:hidden {

@@ -121,7 +121,7 @@ export default async function Navbar() {
                       prefetch={false}
                       className={linkClass}
                     >
-                      שירותים
+                      מוצרים ושירותים
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewQuotes") && (

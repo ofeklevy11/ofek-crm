@@ -36,20 +36,6 @@ export async function PUT(
       },
     });
 
-    // Trigger view automations
-    console.log(
-      `[Calendar API] Updated event ${event.id}, triggering automations`
-    );
-    try {
-      const { processViewAutomations } = await import(
-        "@/app/actions/automations"
-      );
-      await processViewAutomations();
-      console.log(`[Calendar API] View automations triggered successfully`);
-    } catch (autoError) {
-      console.error("[Calendar API] Failed to trigger automations:", autoError);
-    }
-
     return NextResponse.json(event);
   } catch (error) {
     console.error("Error updating calendar event:", error);
@@ -85,17 +71,7 @@ export async function DELETE(
       where: { id },
     });
 
-    // Trigger view automations
-    console.log(`[Calendar API] Deleted event ${id}, triggering automations`);
-    try {
-      const { processViewAutomations } = await import(
-        "@/app/actions/automations"
-      );
-      await processViewAutomations();
-      console.log(`[Calendar API] View automations triggered successfully`);
-    } catch (autoError) {
-      console.error("[Calendar API] Failed to trigger automations:", autoError);
-    }
+
 
     return NextResponse.json({ success: true });
   } catch (error) {

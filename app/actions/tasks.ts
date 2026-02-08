@@ -116,7 +116,6 @@ export async function createTask(data: {
         assigneeId: data.assigneeId,
         priority: data.priority,
         tags: data.tags || [],
-        tags: data.tags || [],
         dueDate: dueDate,
         creatorId: user.id,
       },
@@ -139,17 +138,6 @@ export async function createTask(data: {
 
     revalidatePath("/tasks");
     revalidatePath("/");
-
-    // Trigger automations
-    console.log(
-      `[Task Actions] Created task ${newTask.id}, triggering automations`,
-    );
-    try {
-      const { processViewAutomations } = await import("./automations");
-      await processViewAutomations();
-    } catch (autoError) {
-      console.error("[Task Actions] Failed to trigger automations:", autoError);
-    }
 
     return { success: true, data: newTask };
   } catch (error) {
@@ -261,17 +249,6 @@ export async function updateTask(
     revalidatePath("/tasks");
     revalidatePath("/");
 
-    // Trigger automations for any update (not just status change)
-    try {
-      const { processViewAutomations } = await import("./automations");
-      await processViewAutomations();
-    } catch (autoError) {
-      console.error(
-        "[Task Actions] Failed to trigger view automations:",
-        autoError,
-      );
-    }
-
     return { success: true, data: task };
   } catch (error) {
     console.error("Error updating task:", error);
@@ -309,15 +286,6 @@ export async function deleteTask(id: string) {
 
     revalidatePath("/tasks");
     revalidatePath("/");
-
-    // Trigger automations
-    console.log(`[Task Actions] Deleted task ${id}, triggering automations`);
-    try {
-      const { processViewAutomations } = await import("./automations");
-      await processViewAutomations();
-    } catch (autoError) {
-      console.error("[Task Actions] Failed to trigger automations:", autoError);
-    }
 
     return { success: true };
   } catch (error) {

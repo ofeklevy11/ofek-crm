@@ -262,6 +262,13 @@ const styles = StyleSheet.create({
   },
 });
 
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  ILS: "₪",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+};
+
 const formatCurrency = (amount: number | string | null | undefined) => {
   if (amount == null) return "0.00";
   return Number(amount).toLocaleString("he-IL", {
@@ -299,18 +306,39 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
     getBusinessTypeLabel(quote.company.businessType) || "",
   );
 
-  let displaySubtotal = total;
+  const currency = (quote as any).currency || "ILS";
+  const exchangeRate = (quote as any).exchangeRate ? Number((quote as any).exchangeRate) : null;
+  const sym = CURRENCY_SYMBOLS[currency] || "₪";
+
+  const toDisplay = (ilsAmount: number) => {
+    if (currency === "ILS" || !exchangeRate) return ilsAmount;
+    return ilsAmount / exchangeRate;
+  };
+
+  const discountType = (quote as any).discountType || null;
+  const discountValue = (quote as any).discountValue ? Number((quote as any).discountValue) : 0;
+
+  let discountILS = 0;
+  if (discountType === "percent" && discountValue > 0) {
+    discountILS = total * (discountValue / 100);
+  } else if (discountType === "fixed" && discountValue > 0) {
+    discountILS = currency !== "ILS" && exchangeRate ? discountValue * exchangeRate : discountValue;
+  }
+  const totalAfterDiscount = total - discountILS;
+  const hasDiscount = discountILS > 0;
+
+  let displaySubtotal = totalAfterDiscount;
   let vatResult = 0;
-  let finalTotal = total;
+  let finalTotal = totalAfterDiscount;
 
   if (!isVatExempt) {
     if (isIncludeVat) {
-      finalTotal = total;
+      finalTotal = totalAfterDiscount;
       displaySubtotal = finalTotal / (1 + vatRate);
       vatResult = finalTotal - displaySubtotal;
     } else {
-      vatResult = total * vatRate;
-      finalTotal = total + vatResult;
+      vatResult = totalAfterDiscount * vatRate;
+      finalTotal = totalAfterDiscount + vatResult;
     }
   }
 
@@ -394,6 +422,24 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
             ) : null}
           </View>
           <View style={styles.totalsBlock}>
+            {hasDiscount ? (
+              <>
+                <View style={styles.totalsLine}>
+                  <RTLText style={styles.totalsLabel}>סה״כ פריטים</RTLText>
+                  <Text style={styles.totalsValue}>
+                    {sym}{formatCurrency(toDisplay(total))}
+                  </Text>
+                </View>
+                <View style={styles.totalsLine}>
+                  <RTLText style={[styles.totalsLabel, { color: "#16a34a" }]}>
+                    {`הנחה${discountType === "percent" ? ` (${discountValue}%)` : ""}`}
+                  </RTLText>
+                  <Text style={[styles.totalsValue, { color: "#16a34a" }]}>
+                    -{sym}{formatCurrency(toDisplay(discountILS))}
+                  </Text>
+                </View>
+              </>
+            ) : null}
             {!isVatExempt && (
               <>
                 <View style={styles.totalsLine}>
@@ -401,7 +447,7 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
                     {`סיכום${isIncludeVat ? " (לפני מע״מ)" : ""}`}
                   </RTLText>
                   <Text style={styles.totalsValue}>
-                    ₪{formatCurrency(displaySubtotal)}
+                    {sym}{formatCurrency(toDisplay(displaySubtotal))}
                   </Text>
                 </View>
                 <View style={[styles.totalsLine, { alignItems: "center" }]}>
@@ -417,7 +463,7 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
                     </Text>
                   </View>
                   <Text style={styles.totalsValue}>
-                    ₪{formatCurrency(vatResult)}
+                    {sym}{formatCurrency(toDisplay(vatResult))}
                   </Text>
                 </View>
               </>
@@ -430,7 +476,7 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
             <View style={styles.grandTotalLine}>
               <RTLText style={styles.grandTotalLabel}>סה״כ</RTLText>
               <Text style={styles.grandTotalValue}>
-                ₪{formatCurrency(finalTotal)}
+                {sym}{formatCurrency(toDisplay(finalTotal))}
               </Text>
             </View>
           </View>
@@ -508,14 +554,14 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
               </View>
               <View style={styles.colPrice}>
                 <Text style={styles.tdText}>
-                  ₪{formatCurrency(Number(item.unitPrice))}
+                  {sym}{formatCurrency(toDisplay(Number(item.unitPrice)))}
                 </Text>
               </View>
               <View style={styles.colTotal}>
                 <Text style={styles.tdBold}>
-                  ₪
+                  {sym}
                   {formatCurrency(
-                    Number(item.quantity) * Number(item.unitPrice),
+                    toDisplay(Number(item.quantity) * Number(item.unitPrice)),
                   )}
                 </Text>
               </View>

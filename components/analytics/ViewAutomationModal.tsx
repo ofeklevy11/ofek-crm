@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import {
   X,
   Loader2,
-  ChevronRight,
-  ChevronLeft,
   Bell,
   CheckSquare,
   ArrowRight,
@@ -14,6 +12,13 @@ import {
   Edit2,
   Zap,
   Power,
+  MessageSquare,
+  Pencil,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  ChevronDown,
+  Copy,
 } from "lucide-react";
 import {
   createAutomationRule,
@@ -21,14 +26,31 @@ import {
   deleteAutomationRule,
   updateAutomationRule,
   toggleAutomationRule,
+  getAnalyticsAutomationsActionCount,
 } from "@/app/actions/automations";
 import { getUsers } from "@/app/actions/users";
+import { getAllFiles } from "@/app/actions/storage";
+
+// Plan limits for analytics automation actions
+const PLAN_LIMITS: Record<string, number> = {
+  basic: 10,
+  premium: 30,
+  super: Infinity,
+};
+
+const PLAN_LABELS: Record<string, string> = {
+  basic: "בייסיק",
+  premium: "פרימיום",
+  super: "סופר",
+};
 
 interface ViewAutomationModalProps {
   view: any;
   onClose: () => void;
-  onSuccess: () => void;
-  userId: number;
+  onSuccess?: () => void;
+  userId?: number;
+  isOpen?: boolean;
+  userPlan?: string;
 }
 
 export default function ViewAutomationModal({
@@ -36,6 +58,7 @@ export default function ViewAutomationModal({
   onClose,
   onSuccess,
   userId,
+  userPlan = "basic",
 }: ViewAutomationModalProps) {
   // Mode: list, create, edit
   const [mode, setMode] = useState<"list" | "create" | "edit">("list");
@@ -51,7 +74,7 @@ export default function ViewAutomationModal({
   const fetchRules = async () => {
     setLoadingRules(true);
     try {
-      const res = await getViewAutomations(view.viewId || view.id); // Handle custom view ID
+      const res = await getViewAutomations(view.viewId || view.id);
       if (res.success && res.data) {
         setRules(res.data);
       }
@@ -62,23 +85,44 @@ export default function ViewAutomationModal({
     }
   };
 
+  // --- Fetch total actions usage ---
+  const refreshActionCount = async () => {
+    try {
+      const res = await getAnalyticsAutomationsActionCount();
+      if (res.success) {
+        setTotalActionsUsed(res.count);
+      }
+    } catch (e) {
+      console.error("Failed to fetch action count", e);
+    }
+  };
+
   useEffect(() => {
     fetchRules();
   }, [view]);
 
   // --- Form State (Used for both Create and Edit) ---
   const [name, setName] = useState("");
-  const [metric, setMetric] = useState("rawMetric"); // 'rawMetric' maps to the raw value we exposed
+  const [metric, setMetric] = useState("rawMetric");
   const [operator, setOperator] = useState("lt");
   const [threshold, setThreshold] = useState("0");
-  const [frequency, setFrequency] = useState("always"); // always, once, daily, weekly
-  const [actionType, setActionType] = useState("SEND_NOTIFICATION");
+  const [frequency, setFrequency] = useState("always");
 
-  // Action: Notification
+  // --- Multi-Action State ---
+  const [actions, setActions] = useState<{ type: string; config: any }[]>([]);
+  const [isAddingAction, setIsAddingAction] = useState(false);
+  const [currentActionType, setCurrentActionType] = useState<
+    "SEND_NOTIFICATION" | "SEND_WHATSAPP" | "WEBHOOK" | "CREATE_TASK" | ""
+  >("");
+  const [editingActionIndex, setEditingActionIndex] = useState<number | null>(
+    null,
+  );
+
+  // Action: Notification (temporary editing state)
   const [recipientId, setRecipientId] = useState("");
   const [messageTemplate, setMessageTemplate] = useState("");
 
-  // Action: Task
+  // Action: Task (temporary editing state)
   const [taskTitle, setTaskTitle] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [description, setDescription] = useState("");
@@ -86,9 +130,44 @@ export default function ViewAutomationModal({
   const [taskPriority, setTaskPriority] = useState("medium");
   const [dueDate, setDueDate] = useState("");
 
+  // Action: WhatsApp (temporary editing state)
+  const [waPhoneColumnId, setWaPhoneColumnId] = useState("");
+  const [waContent, setWaContent] = useState("");
+  const [waMessageType, setWaMessageType] = useState<"private" | "media">(
+    "private",
+  );
+  const [waMediaFileId, setWaMediaFileId] = useState("");
+  const [waDelay, setWaDelay] = useState(0);
+
+  // Action: Webhook (temporary editing state)
+  const [webhookUrl, setWebhookUrl] = useState("");
+
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [availableFiles, setAvailableFiles] = useState<any[]>([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+
+  // Analytics automation limits
+  const [totalActionsUsed, setTotalActionsUsed] = useState(0);
+  const [loadingUsage, setLoadingUsage] = useState(true);
+  const [editingOriginalActionsCount, setEditingOriginalActionsCount] =
+    useState(0); // Track original actions when editing
+  const globalLimit = PLAN_LIMITS[userPlan] ?? 10;
+
+  // When editing, subtract the original actions from totalActionsUsed since they're already in the count
+  const effectiveUsed =
+    mode === "edit"
+      ? totalActionsUsed - editingOriginalActionsCount + actions.length
+      : totalActionsUsed;
+  const remainingActions =
+    userPlan === "super" ? Infinity : Math.max(0, globalLimit - effectiveUsed);
+  const isAtLimit = userPlan !== "super" && effectiveUsed >= globalLimit;
+
+  // Local max actions per automation (can be up to 4, but limited by remaining)
+  const maxActions =
+    userPlan === "super" ? 4 : Math.min(4, remainingActions + actions.length);
 
   useEffect(() => {
     getUsers().then((res) => {
@@ -98,27 +177,167 @@ export default function ViewAutomationModal({
     });
   }, []);
 
-  // --- Handlers ---
+  // Fetch total actions usage across all analytics automations - only once on mount
+  useEffect(() => {
+    setLoadingUsage(true);
+    refreshActionCount().finally(() => setLoadingUsage(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleCreateNew = () => {
-    // Reset Form
-    setName(`Automation for ${view.ruleName}`);
-    setMetric("rawMetric");
-    setOperator("lt");
-    setThreshold("10"); // Default example
-    setFrequency("always");
-    setActionType("SEND_NOTIFICATION");
+  // Load files when WhatsApp media is selected
+  useEffect(() => {
+    if (waMessageType === "media") {
+      setLoadingFiles(true);
+      getAllFiles()
+        .then((files) => {
+          setAvailableFiles(files);
+        })
+        .finally(() => setLoadingFiles(false));
+    }
+  }, [waMessageType]);
+
+  // --- Action Management ---
+  const resetActionFields = () => {
+    setCurrentActionType("");
     setRecipientId("");
-    setMessageTemplate(
-      "Alert: The metric for {view} is {value}, which is {operator} {threshold}."
-    );
-    setTaskTitle(`Action required: ${view.ruleName}`);
+    setMessageTemplate("");
+    setTaskTitle("");
     setAssigneeId("");
-    setDescription(`Triggered by view automation.`);
+    setDescription("");
     setTaskStatus("todo");
     setTaskPriority("medium");
     setDueDate("");
+    setWaPhoneColumnId("");
+    setWaContent("");
+    setWaMessageType("private");
+    setWaMediaFileId("");
+    setWaDelay(0);
+    setWebhookUrl("");
+  };
 
+  const validateCurrentAction = () => {
+    if (!currentActionType) return false;
+    if (currentActionType === "SEND_NOTIFICATION")
+      return !!recipientId && !!messageTemplate;
+    if (currentActionType === "SEND_WHATSAPP") {
+      // Check actual phone number, not just the "manual:" prefix
+      const actualPhone = waPhoneColumnId.replace("manual:", "").trim();
+      if (!actualPhone) return false;
+      if (!waContent) return false;
+      if (waMessageType === "media" && !waMediaFileId) return false;
+      const waBeforeCount =
+        editingActionIndex !== null
+          ? actions.filter(
+              (a, i) => a.type === "SEND_WHATSAPP" && i < editingActionIndex,
+            ).length
+          : actions.filter((a) => a.type === "SEND_WHATSAPP").length;
+      if (waBeforeCount > 0) {
+        const minDelay = waBeforeCount >= 2 ? 20 : 10;
+        if (!waDelay || waDelay < minDelay) return false;
+      }
+      return true;
+    }
+    if (currentActionType === "WEBHOOK") {
+      return !!webhookUrl && webhookUrl.startsWith("http");
+    }
+    if (currentActionType === "CREATE_TASK") {
+      return !!taskTitle;
+    }
+    return false;
+  };
+
+  const handleConfirmAction = () => {
+    if (!validateCurrentAction()) return;
+
+    const newActionConfig: any =
+      currentActionType === "WEBHOOK"
+        ? { webhookUrl }
+        : currentActionType === "SEND_NOTIFICATION"
+          ? {
+              recipientId: parseInt(recipientId),
+              messageTemplate,
+              titleTemplate: `התראה: ${view.ruleName}`,
+            }
+          : currentActionType === "SEND_WHATSAPP"
+            ? {
+                phoneColumnId: waPhoneColumnId,
+                messageType: waMessageType,
+                content: waContent,
+                mediaFileId: waMediaFileId ? Number(waMediaFileId) : null,
+                delay: waDelay,
+              }
+            : currentActionType === "CREATE_TASK"
+              ? {
+                  title: taskTitle,
+                  description,
+                  status: taskStatus,
+                  priority: taskPriority,
+                  assigneeId: assigneeId ? Number(assigneeId) : null,
+                  dueDate,
+                }
+              : {};
+
+    const actionObj = { type: currentActionType, config: newActionConfig };
+
+    if (editingActionIndex !== null) {
+      const newActions = [...actions];
+      newActions[editingActionIndex] = actionObj;
+      setActions(newActions);
+      setEditingActionIndex(null);
+    } else {
+      setActions([...actions, actionObj]);
+    }
+
+    setIsAddingAction(false);
+    resetActionFields();
+  };
+
+  const removeAction = (index: number) => {
+    const newActions = [...actions];
+    newActions.splice(index, 1);
+    setActions(newActions);
+  };
+
+  const editAction = (index: number) => {
+    const action = actions[index];
+    setCurrentActionType(action.type as any);
+
+    if (action.type === "SEND_NOTIFICATION") {
+      setRecipientId(action.config.recipientId?.toString() || "");
+      setMessageTemplate(action.config.messageTemplate || "");
+    } else if (action.type === "SEND_WHATSAPP") {
+      setWaPhoneColumnId(action.config.phoneColumnId || "");
+      setWaMessageType(action.config.messageType || "private");
+      setWaContent(action.config.content || "");
+      setWaMediaFileId(action.config.mediaFileId?.toString() || "");
+      setWaDelay(action.config.delay || 0);
+    } else if (action.type === "WEBHOOK") {
+      setWebhookUrl(action.config.webhookUrl || "");
+    } else if (action.type === "CREATE_TASK") {
+      setTaskTitle(action.config.title || "");
+      setAssigneeId(action.config.assigneeId?.toString() || "");
+      setDescription(action.config.description || "");
+      setTaskStatus(action.config.status || "todo");
+      setTaskPriority(action.config.priority || "medium");
+      setDueDate(action.config.dueDate || "");
+    }
+
+    setEditingActionIndex(index);
+    setIsAddingAction(true);
+  };
+
+  // --- Handlers ---
+
+  const handleCreateNew = () => {
+    setName(`Automation for ${view.ruleName}`);
+    setMetric("rawMetric");
+    setOperator("lt");
+    setThreshold("10");
+    setFrequency("always");
+    setActions([]);
+    setEditingOriginalActionsCount(0); // Reset for new automation
+    setIsAddingAction(true);
+    resetActionFields();
     setMode("create");
   };
 
@@ -132,20 +351,19 @@ export default function ViewAutomationModal({
     setThreshold(String(tConfig.threshold || "0"));
     setFrequency(tConfig.frequency || "always");
 
-    setActionType(rule.actionType);
-    const aConfig = rule.actionConfig as any;
-
-    if (rule.actionType === "SEND_NOTIFICATION") {
-      setRecipientId(String(aConfig.recipientId || ""));
-      setMessageTemplate(aConfig.messageTemplate || "");
-    } else {
-      setTaskTitle(aConfig.title || "");
-      setAssigneeId(String(aConfig.assigneeId || ""));
-      setDescription(aConfig.description || "");
-      setTaskStatus(aConfig.status || "todo");
-      setTaskPriority(aConfig.priority || "medium");
-      setDueDate(aConfig.dueDate || "");
+    // Parse actions and remember original count
+    let originalActions: any[] = [];
+    if (rule.actionType === "MULTI_ACTION") {
+      originalActions = rule.actionConfig?.actions || [];
+    } else if (rule.actionType) {
+      originalActions = [
+        { type: rule.actionType, config: rule.actionConfig || {} },
+      ];
     }
+    setActions(originalActions);
+    setEditingOriginalActionsCount(originalActions.length); // Remember for limit calculation
+    setIsAddingAction(false);
+    resetActionFields();
 
     setMode("edit");
   };
@@ -154,45 +372,38 @@ export default function ViewAutomationModal({
     if (!confirm("Are you sure you want to delete this automation?")) return;
     await deleteAutomationRule(id);
     fetchRules();
+    refreshActionCount(); // Refresh action count after delete
   };
 
   const handleToggle = async (rule: any) => {
     try {
       const newState = !rule.isActive;
-      // Optimistic update
       setRules((prev) =>
-        prev.map((r) => (r.id === rule.id ? { ...r, isActive: newState } : r))
+        prev.map((r) => (r.id === rule.id ? { ...r, isActive: newState } : r)),
       );
-
       const result = await toggleAutomationRule(rule.id, newState);
       if (!result.success) {
         throw new Error(result.error);
       }
     } catch (err) {
       console.error("Failed to toggle rule", err);
-      // Revert on error
       fetchRules();
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setError("");
     setLoading(true);
 
-    if (actionType === "SEND_NOTIFICATION" && !recipientId) {
-      setError("Please select a recipient.");
-      setLoading(false);
-      return;
-    }
-    if (actionType === "CREATE_TASK" && !taskTitle) {
-      setError("Please enter a task title.");
+    if (actions.length === 0) {
+      setError("נא להוסיף לפחות פעולה אחת.");
       setLoading(false);
       return;
     }
 
     const triggerConfig = {
-      viewId: view.viewId || view.id, // Custom View ID
+      viewId: view.viewId || view.id,
       metric,
       operator,
       threshold: parseFloat(threshold),
@@ -201,18 +412,16 @@ export default function ViewAutomationModal({
       viewConfig: view.config,
     };
 
-    const actionConfig: any = {};
-    if (actionType === "SEND_NOTIFICATION") {
-      actionConfig.recipientId = parseInt(recipientId);
-      actionConfig.messageTemplate = messageTemplate;
-      actionConfig.titleTemplate = `התראה: ${view.ruleName}`;
-    } else if (actionType === "CREATE_TASK") {
-      actionConfig.title = taskTitle;
-      if (assigneeId) actionConfig.assigneeId = parseInt(assigneeId);
-      actionConfig.description = description;
-      actionConfig.status = taskStatus;
-      actionConfig.priority = taskPriority;
-      actionConfig.dueDate = dueDate;
+    // Build final action payload
+    let finalActionType = "";
+    let finalActionConfig: any = {};
+
+    if (actions.length > 1) {
+      finalActionType = "MULTI_ACTION";
+      finalActionConfig = { actions };
+    } else {
+      finalActionType = actions[0].type;
+      finalActionConfig = actions[0].config;
     }
 
     try {
@@ -221,26 +430,25 @@ export default function ViewAutomationModal({
           name,
           triggerType: "VIEW_METRIC_THRESHOLD",
           triggerConfig,
-          actionType,
-          actionConfig,
+          actionType: finalActionType,
+          actionConfig: finalActionConfig,
         });
         if (!result.success) throw new Error(result.error);
       } else {
-        // Edit
         if (!editingRuleId) return;
         const result = await updateAutomationRule(editingRuleId, {
           name,
           triggerType: "VIEW_METRIC_THRESHOLD",
           triggerConfig,
-          actionType,
-          actionConfig,
+          actionType: finalActionType,
+          actionConfig: finalActionConfig,
         });
         if (!result.success) throw new Error(result.error);
       }
 
-      // Success: Go back to list
       setMode("list");
       fetchRules();
+      refreshActionCount(); // Refresh action count after save
     } catch (err: any) {
       setError(err.message || "Failed to save automation");
     } finally {
@@ -248,10 +456,41 @@ export default function ViewAutomationModal({
     }
   };
 
+  // --- Action type display helpers ---
+  const getActionIcon = (type: string) => {
+    switch (type) {
+      case "SEND_NOTIFICATION":
+        return <Bell size={20} />;
+      case "SEND_WHATSAPP":
+        return <MessageSquare size={20} />;
+      case "WEBHOOK":
+        return <div className="font-bold text-xs">API</div>;
+      case "CREATE_TASK":
+        return <CheckSquare size={20} />;
+      default:
+        return <Zap size={20} />;
+    }
+  };
+
+  const getActionName = (type: string) => {
+    switch (type) {
+      case "SEND_NOTIFICATION":
+        return "שליחת התראה";
+      case "SEND_WHATSAPP":
+        return "שליחת WhatsApp";
+      case "WEBHOOK":
+        return "Webhook";
+      case "CREATE_TASK":
+        return "יצירת משימה";
+      default:
+        return type;
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]"
         dir="rtl"
       >
         {/* Header */}
@@ -262,8 +501,8 @@ export default function ViewAutomationModal({
               {mode === "list"
                 ? "אוטומציות לתצוגה"
                 : mode === "edit"
-                ? "עריכת אוטומציה"
-                : "אוטומציה חדשה"}
+                  ? "עריכת אוטומציה"
+                  : "אוטומציה חדשה"}
             </h2>
             <p className="text-sm text-gray-500 mt-1">{view.ruleName}</p>
           </div>
@@ -279,6 +518,71 @@ export default function ViewAutomationModal({
         <div className="flex-1 overflow-y-auto p-6">
           {mode === "list" && (
             <div className="space-y-4">
+              {/* Plan Usage Disclaimer */}
+              {!loadingUsage && (
+                <div
+                  className={`p-4 rounded-xl border ${
+                    isAtLimit
+                      ? "bg-red-50 border-red-200"
+                      : userPlan === "super"
+                        ? "bg-green-50 border-green-200"
+                        : "bg-blue-50 border-blue-200"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`p-2 rounded-lg ${
+                        isAtLimit
+                          ? "bg-red-100 text-red-600"
+                          : userPlan === "super"
+                            ? "bg-green-100 text-green-600"
+                            : "bg-blue-100 text-blue-600"
+                      }`}
+                    >
+                      <AlertCircle size={20} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900">
+                        תוכנית: {PLAN_LABELS[userPlan] || userPlan}
+                      </div>
+                      {userPlan === "super" ? (
+                        <p className="text-sm text-green-700 mt-1">
+                          ללא הגבלה על מספר פעולות האוטומציה.
+                        </p>
+                      ) : (
+                        <>
+                          <p className="text-sm text-gray-600 mt-1">
+                            {isAtLimit
+                              ? `הגעת למגבלת הפעולות (${globalLimit}). שדרג את התוכנית להוספת פעולות נוספות.`
+                              : `${totalActionsUsed} מתוך ${globalLimit} פעולות בשימוש. נשארו ${remainingActions} פעולות.`}
+                          </p>
+                          {/* Progress bar */}
+                          <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full transition-all ${
+                                isAtLimit ? "bg-red-500" : "bg-blue-500"
+                              }`}
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  (totalActionsUsed / globalLimit) * 100,
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                          {/* Clarifying note */}
+                          <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                            <span className="inline-block w-1 h-1 bg-gray-400 rounded-full"></span>
+                            הספירה כוללת את כל פעולות האוטומציה מכל האנליטיקות
+                            ביחד
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {loadingRules ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="animate-spin text-blue-500" />
@@ -307,18 +611,26 @@ export default function ViewAutomationModal({
                           )}
                           {rule.name}
                         </h3>
-                        <div className="text-xs text-gray-500 mt-1 flex gap-2">
+                        <div className="text-xs text-gray-500 mt-1 flex gap-2 flex-wrap">
                           <span className="bg-blue-100 text-blue-700 px-1.5 rounded">
-                            {rule.actionType === "SEND_NOTIFICATION"
-                              ? "התראה"
-                              : "משימה"}
+                            {rule.actionType === "MULTI_ACTION"
+                              ? `${rule.actionConfig?.actions?.length || 0} פעולות`
+                              : getActionName(rule.actionType)}
                           </span>
                           <span>
                             מתי:{" "}
                             {rule.triggerConfig?.metric === "rawMetric"
                               ? "ערך"
                               : rule.triggerConfig?.metric}{" "}
-                            {rule.triggerConfig?.operator === "lt" ? "<" : ">"}{" "}
+                            {{
+                              lt: "<",
+                              lte: "≤",
+                              gt: ">",
+                              gte: "≥",
+                              eq: "=",
+                              neq: "≠",
+                            }[rule.triggerConfig?.operator as string] ||
+                              rule.triggerConfig?.operator}{" "}
                             {rule.triggerConfig?.threshold}
                           </span>
                         </div>
@@ -358,18 +670,45 @@ export default function ViewAutomationModal({
                 </div>
               )}
 
-              <button
-                onClick={handleCreateNew}
-                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-500 hover:text-blue-500 hover:bg-blue-50 transition-all flex justify-center items-center gap-2 font-medium"
-              >
-                <Plus size={20} />
-                צור אוטומציה חדשה
-              </button>
+              {/* Create New Button - disabled if at limit */}
+              {isAtLimit ? (
+                <div className="w-full py-3 border-2 border-dashed border-red-200 rounded-lg text-red-400 bg-red-50/50 flex justify-center items-center gap-2 font-medium cursor-not-allowed">
+                  <AlertCircle size={20} />
+                  הגעת למגבלה - שדרג תוכנית להוספת אוטומציות
+                </div>
+              ) : (
+                <button
+                  onClick={handleCreateNew}
+                  className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-500 hover:text-blue-500 hover:bg-blue-50 transition-all flex justify-center items-center gap-2 font-medium"
+                >
+                  <Plus size={20} />
+                  צור אוטומציה חדשה
+                </button>
+              )}
             </div>
           )}
 
           {(mode === "create" || mode === "edit") && (
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-6">
+              {/* Plan Usage Banner */}
+              {userPlan !== "super" && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <span className="font-medium">
+                      תוכנית {PLAN_LABELS[userPlan]}:
+                    </span>
+                    <span>
+                      {effectiveUsed} / {globalLimit} פעולות
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-500 bg-white px-2 py-1 rounded border border-gray-200">
+                    {remainingActions === Infinity
+                      ? "ללא הגבלה"
+                      : `נותרו ${Math.floor(remainingActions)} פעולות`}
+                  </div>
+                </div>
+              )}
+
               {mode === "edit" && (
                 <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-2 rounded-md text-sm mb-4">
                   אתה עורך אוטומציה קיימת. שינויים יישמרו מיידית.
@@ -385,7 +724,7 @@ export default function ViewAutomationModal({
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition-colors"
                   placeholder="לדוגמה: התראה על ירידה בהמרה"
                   required
                 />
@@ -415,12 +754,33 @@ export default function ViewAutomationModal({
                 <p className="text-xs text-gray-500 mt-1">
                   קובע כמה פעמים האוטומציה תפעל אם התנאי ממשיך להתקיים.
                 </p>
+                {frequency === "always" && (
+                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <p className="text-sm text-blue-700">
+                      באוטומציה זו, הפעולה תתבצע רק אם הנתונים השתנו מאז הבדיקה
+                      האחרונה. אם הנתונים זהים (אותה כמות רשומות, אותם אחוזי
+                      המרה וכו׳) - האוטומציה לא תפעל גם אם התנאי עדיין מתקיים.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* 2. Trigger */}
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-4">
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
                 <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                  <Zap size={16} className="text-gray-500" />
+                  <Zap size={16} className="text-amber-500" />
                   תנאי (Trigger)
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -434,7 +794,6 @@ export default function ViewAutomationModal({
                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                     >
                       <option value="rawMetric">ערך מוצג (ראשי)</option>
-                      {/* Future: Add more sub-metrics if available */}
                     </select>
                   </div>
                   <div>
@@ -446,8 +805,12 @@ export default function ViewAutomationModal({
                       onChange={(e) => setOperator(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                     >
-                      <option value="lt">קטן מ- (Less Than)</option>
-                      <option value="gt">גדול מ- (Greater Than)</option>
+                      <option value="lt">&lt; קטן מ-</option>
+                      <option value="lte">&le; קטן או שווה ל-</option>
+                      <option value="gt">&gt; גדול מ-</option>
+                      <option value="gte">&ge; גדול או שווה ל-</option>
+                      <option value="eq">= שווה ל-</option>
+                      <option value="neq">&ne; שונה מ-</option>
                     </select>
                   </div>
                   <div>
@@ -465,178 +828,516 @@ export default function ViewAutomationModal({
                 </div>
                 <p className="text-xs text-gray-500">
                   האוטומציה תפעל כאשר הערך הנוכחי של התצוגה יהיה{" "}
-                  {operator === "lt" ? "קטן מ" : "גדול מ"} {threshold}.
+                  {{
+                    lt: "קטן מ",
+                    lte: "קטן או שווה ל",
+                    gt: "גדול מ",
+                    gte: "גדול או שווה ל",
+                    eq: "שווה ל",
+                    neq: "שונה מ",
+                  }[operator] || operator}{" "}
+                  {threshold}.
                 </p>
               </div>
 
-              {/* 3. Action */}
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 space-y-4">
-                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                  <ArrowRight size={16} className="text-blue-500" />
-                  פעולה (Action)
-                </h3>
-
-                {/* Action Type Selector */}
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="actionType"
-                      value="SEND_NOTIFICATION"
-                      checked={actionType === "SEND_NOTIFICATION"}
-                      onChange={(e) => setActionType(e.target.value)}
-                      className="w-4 h-4 text-blue-600"
-                    />
-                    <span className="text-sm font-medium">שלח התראה</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="actionType"
-                      value="CREATE_TASK"
-                      checked={actionType === "CREATE_TASK"}
-                      onChange={(e) => setActionType(e.target.value)}
-                      className="w-4 h-4 text-blue-600"
-                    />
-                    <span className="text-sm font-medium">צור משימה</span>
-                  </label>
+              {/* 3. Actions - Game-like UI */}
+              <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                    <ArrowRight size={16} className="text-blue-500" />
+                    פעולות (Actions)
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <div className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-medium">
+                      {actions.length}/{maxActions}
+                    </div>
+                    {userPlan !== "super" && (
+                      <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                        נשארו {remainingActions} פעולות
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Config based on Type */}
-                {actionType === "SEND_NOTIFICATION" ? (
-                  <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
-                        למי לשלוח?
-                      </label>
-                      <select
-                        value={recipientId}
-                        onChange={(e) => setRecipientId(e.target.value)}
-                        className="w-full px-3 py-2 border border-blue-200 rounded-md text-sm"
+                {/* List of Configured Actions */}
+                {actions.length > 0 && (
+                  <div className="space-y-3">
+                    {actions.map((act, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl shadow-sm"
                       >
-                        <option value="">בחר משתמש...</option>
-                        {users.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.name || u.email}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
-                        הודעה (תבנית)
-                      </label>
-                      <textarea
-                        value={messageTemplate}
-                        onChange={(e) => setMessageTemplate(e.target.value)}
-                        rows={2}
-                        className="w-full px-3 py-2 border border-blue-200 rounded-md text-sm"
-                        placeholder="Alert: Value is {value}"
-                      />
-                      <div className="text-[10px] text-gray-400 mt-1 flex gap-2">
-                        <span>משתנים זמינים:</span>
-                        <code className="bg-white px-1 rounded border border-gray-200">{`{value}`}</code>
-                        <code className="bg-white px-1 rounded border border-gray-200">{`{threshold}`}</code>
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                            {getActionIcon(act.type)}
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              {getActionName(act.type)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              פעולה #{idx + 1}
+                            </div>
+                          </div>
+                        </div>
+                        {!isAddingAction && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => editAction(idx)}
+                              className="text-blue-500 hover:text-blue-700 p-2 hover:bg-blue-50 rounded-full transition-colors"
+                              title="ערוך פעולה"
+                            >
+                              <Pencil size={18} />
+                            </button>
+                            <button
+                              onClick={() => removeAction(idx)}
+                              className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-full transition-colors"
+                              title="מחק פעולה"
+                            >
+                              <X size={18} />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    </div>
+                    ))}
                   </div>
+                )}
+
+                {/* Add Action Section */}
+                {isAddingAction ? (
+                  <div className="border-t border-blue-100 pt-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="font-medium text-gray-800">
+                        {editingActionIndex !== null
+                          ? `עריכת פעולה #${editingActionIndex + 1}`
+                          : `הוספת פעולה חדשה (${actions.length + 1}/${maxActions})`}
+                      </h4>
+                      {actions.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setIsAddingAction(false);
+                            setEditingActionIndex(null);
+                            resetActionFields();
+                          }}
+                          className="text-sm text-gray-500 hover:text-gray-700"
+                        >
+                          ביטול
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Action Type Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      <ActionCard
+                        title="שליחת התראה"
+                        description="שלח הודעה למערכת"
+                        icon={<Bell className="text-yellow-500" size={24} />}
+                        selected={currentActionType === "SEND_NOTIFICATION"}
+                        onClick={() =>
+                          setCurrentActionType("SEND_NOTIFICATION")
+                        }
+                      />
+                      <ActionCard
+                        title="שליחת WhatsApp"
+                        description="שלח הודעה דרך Green API"
+                        icon={
+                          <MessageSquare className="text-green-600" size={24} />
+                        }
+                        selected={currentActionType === "SEND_WHATSAPP"}
+                        onClick={() => setCurrentActionType("SEND_WHATSAPP")}
+                      />
+                      <ActionCard
+                        title="Webhook"
+                        description="שלח נתונים למערכת חיצונית"
+                        icon={
+                          <div className="font-bold text-gray-600 text-lg">
+                            Api
+                          </div>
+                        }
+                        selected={currentActionType === "WEBHOOK"}
+                        onClick={() => setCurrentActionType("WEBHOOK")}
+                      />
+                      <ActionCard
+                        title="יצירת משימה"
+                        description="צור משימה חדשה אוטומטית"
+                        icon={
+                          <CheckSquare className="text-blue-500" size={24} />
+                        }
+                        selected={currentActionType === "CREATE_TASK"}
+                        onClick={() => setCurrentActionType("CREATE_TASK")}
+                      />
+                    </div>
+
+                    {/* Action Config Forms */}
+                    {currentActionType === "SEND_NOTIFICATION" && (
+                      <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 space-y-4 animate-in slide-in-from-top-2">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            למי לשלוח?
+                          </label>
+                          <select
+                            value={recipientId}
+                            onChange={(e) => setRecipientId(e.target.value)}
+                            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+                          >
+                            <option value="">בחר משתמש...</option>
+                            {users.map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.name || u.email}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            הודעה (תבנית)
+                          </label>
+                          <textarea
+                            value={messageTemplate}
+                            onChange={(e) => setMessageTemplate(e.target.value)}
+                            rows={2}
+                            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+                            placeholder="Alert: Value is {value}"
+                          />
+                          <div className="text-[10px] text-gray-400 mt-1 flex gap-2">
+                            <span>משתנים זמינים:</span>
+                            <code className="bg-white px-1 rounded border border-gray-200">{`{value}`}</code>
+                            <code className="bg-white px-1 rounded border border-gray-200">{`{threshold}`}</code>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {currentActionType === "SEND_WHATSAPP" && (
+                      <div className="bg-green-50 p-6 rounded-xl border border-green-100 space-y-5 animate-in slide-in-from-top-2">
+                        <div className="flex items-center gap-2 mb-2 text-green-800 font-medium pb-2 border-b border-green-200">
+                          <MessageSquare size={18} />
+                          הגדרות הודעת WhatsApp
+                        </div>
+
+                        {/* Phone number - manual only for analytics (no table context) */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            מספר טלפון לשליחה
+                          </label>
+                          <input
+                            type="text"
+                            value={waPhoneColumnId.replace("manual:", "")}
+                            onChange={(e) =>
+                              setWaPhoneColumnId(`manual:${e.target.value}`)
+                            }
+                            placeholder="הכנס מספר טלפון (לדוגמה: 0501234567)"
+                            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500"
+                            dir="ltr"
+                          />
+                          {waPhoneColumnId.replace("manual:", "") && (
+                            <div className="mt-2 text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
+                              <strong>תצוגה מקדימה לשליחה:</strong>{" "}
+                              <span dir="ltr" className="font-mono">
+                                {formatPhonePreview(
+                                  waPhoneColumnId.replace("manual:", ""),
+                                )}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Delay Logic */}
+                        {(() => {
+                          const waBeforeCount =
+                            editingActionIndex !== null
+                              ? actions.filter(
+                                  (a, i) =>
+                                    a.type === "SEND_WHATSAPP" &&
+                                    i < editingActionIndex,
+                                ).length
+                              : actions.filter(
+                                  (a) => a.type === "SEND_WHATSAPP",
+                                ).length;
+
+                          if (waBeforeCount > 0) {
+                            const minDelay = waBeforeCount >= 2 ? 20 : 10;
+                            return (
+                              <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 animate-in slide-in-from-top-2">
+                                <div className="flex items-center gap-2 text-orange-800 font-medium mb-2">
+                                  <Clock size={16} />
+                                  השהייה לפני שליחה (בשניות)
+                                </div>
+                                <p className="text-xs text-orange-600 mb-3">
+                                  נא להגדיר השהייה של לפחות {minDelay} שניות כדי
+                                  למנוע חסימה ע"י Green API.
+                                </p>
+                                <input
+                                  type="number"
+                                  min={minDelay}
+                                  value={waDelay}
+                                  onChange={(e) =>
+                                    setWaDelay(parseInt(e.target.value) || 0)
+                                  }
+                                  className={`w-full px-4 py-2 bg-white border rounded-lg shadow-sm ${waDelay < minDelay ? "border-red-500 ring-1 ring-red-500" : "border-orange-200"}`}
+                                />
+                                {waDelay < minDelay && (
+                                  <p className="text-xs text-red-500 mt-1">
+                                    הערך נמוך מהמינימום הנדרש ({minDelay})
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+
+                        {/* Message Type */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            סוג הודעה
+                          </label>
+                          <div className="flex gap-4">
+                            <label className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-green-300 transition-colors flex-1">
+                              <input
+                                type="radio"
+                                name="waMessageType"
+                                value="private"
+                                checked={waMessageType === "private"}
+                                onChange={() => setWaMessageType("private")}
+                                className="text-green-600 focus:ring-green-500"
+                              />
+                              <span className="font-medium text-gray-700">
+                                הודעה רגילה
+                              </span>
+                            </label>
+                            <label className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-green-300 transition-colors flex-1">
+                              <input
+                                type="radio"
+                                name="waMessageType"
+                                value="media"
+                                checked={waMessageType === "media"}
+                                onChange={() => setWaMessageType("media")}
+                                className="text-green-600 focus:ring-green-500"
+                              />
+                              <span className="font-medium text-gray-700">
+                                הודעה עם מדיה
+                              </span>
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Media Selection */}
+                        {waMessageType === "media" && (
+                          <div className="animate-in slide-in-from-top-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              בחר קובץ לשליחה
+                            </label>
+                            {loadingFiles ? (
+                              <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                                <Loader2 className="animate-spin" size={16} />{" "}
+                                טוען קבצים...
+                              </div>
+                            ) : (
+                              <select
+                                value={waMediaFileId}
+                                onChange={(e) =>
+                                  setWaMediaFileId(e.target.value)
+                                }
+                                className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+                              >
+                                <option value="">בחר קובץ מהמערכת...</option>
+                                {availableFiles.map((file) => (
+                                  <option key={file.id} value={file.id}>
+                                    {file.name} ({file.type})
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                            <p className="text-xs text-gray-500 mt-1">
+                              הקובץ יישלח כקובץ מצורף יחד עם ההודעה.
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Content */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {waMessageType === "media"
+                              ? "כיתוב (Caption)"
+                              : "תוכן ההודעה"}
+                          </label>
+                          <textarea
+                            value={waContent}
+                            onChange={(e) => setWaContent(e.target.value)}
+                            rows={4}
+                            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                            placeholder="הקלד את ההודעה כאן..."
+                          />
+                          <div className="text-[10px] text-gray-400 mt-1 flex gap-2">
+                            <span>משתנים זמינים:</span>
+                            <code className="bg-white px-1 rounded border border-gray-200">{`{value}`}</code>
+                            <code className="bg-white px-1 rounded border border-gray-200">{`{threshold}`}</code>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {currentActionType === "WEBHOOK" && (
+                      <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 space-y-5 animate-in slide-in-from-top-2">
+                        <div className="flex items-center gap-2 mb-2 text-gray-800 font-medium pb-2 border-b border-gray-200">
+                          Webhook Configuration
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            כתובת ה-URL לשליחה (POST)
+                          </label>
+                          <input
+                            type="url"
+                            value={webhookUrl}
+                            onChange={(e) => setWebhookUrl(e.target.value)}
+                            placeholder="https://api.example.com/webhook"
+                            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm font-mono text-sm"
+                            dir="ltr"
+                          />
+                          <p className="text-xs text-gray-500 mt-2">
+                            המערכת תשלח בקשת POST לכתובת זו עם כל הנתונים
+                            הרלוונטיים (JSON).
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {currentActionType === "CREATE_TASK" && (
+                      <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 space-y-5 animate-in slide-in-from-top-2">
+                        <div className="flex items-center gap-2 mb-2 text-blue-800 font-medium pb-2 border-b border-blue-200">
+                          <CheckSquare size={18} />
+                          הגדרות משימה חדשה
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            כותרת המשימה
+                          </label>
+                          <input
+                            type="text"
+                            value={taskTitle}
+                            onChange={(e) => setTaskTitle(e.target.value)}
+                            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            placeholder="לדוגמה: לבדוק את הנתונים"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            תיאור
+                          </label>
+                          <textarea
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            rows={3}
+                            placeholder="פרטים נוספים למשימה..."
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              נציג מטפל
+                            </label>
+                            <select
+                              value={assigneeId}
+                              onChange={(e) => setAssigneeId(e.target.value)}
+                              className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+                            >
+                              <option value="">בחר משתמש...</option>
+                              {users.map((u) => (
+                                <option key={u.id} value={u.id}>
+                                  {u.name || u.email}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              סטטוס
+                            </label>
+                            <select
+                              value={taskStatus}
+                              onChange={(e) => setTaskStatus(e.target.value)}
+                              className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+                            >
+                              <option value="todo">לביצוע</option>
+                              <option value="in_progress">בטיפול</option>
+                              <option value="waiting_client">
+                                ממתין ללקוח
+                              </option>
+                              <option value="done">בוצע</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              עדיפות
+                            </label>
+                            <select
+                              value={taskPriority}
+                              onChange={(e) => setTaskPriority(e.target.value)}
+                              className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+                            >
+                              <option value="low">נמוכה</option>
+                              <option value="medium">בינונית</option>
+                              <option value="high">גבוהה</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              תאריך יעד
+                            </label>
+                            <input
+                              type="date"
+                              value={dueDate}
+                              onChange={(e) => setDueDate(e.target.value)}
+                              className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Confirm Action Button */}
+                    {currentActionType && (
+                      <div className="mt-6 flex justify-end">
+                        <button
+                          onClick={handleConfirmAction}
+                          disabled={!validateCurrentAction()}
+                          className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                        >
+                          <CheckCircle2 size={16} />
+                          {editingActionIndex !== null
+                            ? "שמור שינויים"
+                            : "אשר פעולה"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : actions.length < maxActions ? (
+                  <button
+                    onClick={() => setIsAddingAction(true)}
+                    className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-500 hover:text-blue-500 hover:bg-blue-50 transition-all flex justify-center items-center gap-2 font-medium"
+                  >
+                    <Plus size={18} />
+                    הוסף פעולה נוספת ({actions.length}/{maxActions})
+                  </button>
                 ) : (
-                  <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
-                        כותרת המשימה
-                      </label>
-                      <input
-                        type="text"
-                        value={taskTitle}
-                        onChange={(e) => setTaskTitle(e.target.value)}
-                        className="w-full px-3 py-2 border border-blue-200 rounded-md text-sm"
-                        placeholder="Check metrics..."
-                        required
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">
-                          נציג מטפל
-                        </label>
-                        <select
-                          value={assigneeId}
-                          onChange={(e) => setAssigneeId(e.target.value)}
-                          className="w-full px-3 py-2 border border-blue-200 rounded-md text-sm"
-                        >
-                          <option value="">בחר משתמש...</option>
-                          {users.map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.name || u.email}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">
-                          סטטוס
-                        </label>
-                        <select
-                          value={taskStatus}
-                          onChange={(e) => setTaskStatus(e.target.value)}
-                          className="w-full px-3 py-2 border border-blue-200 rounded-md text-sm"
-                        >
-                          <option value="todo">לביצוע</option>
-                          <option value="in_progress">בטיפול</option>
-                          <option value="waiting_client">ממתין ללקוח</option>
-                          <option value="done">בוצע</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">
-                          עדיפות
-                        </label>
-                        <select
-                          value={taskPriority}
-                          onChange={(e) => setTaskPriority(e.target.value)}
-                          className="w-full px-3 py-2 border border-blue-200 rounded-md text-sm"
-                        >
-                          <option value="medium">בינונית</option>
-                          <option value="low">נמוכה</option>
-                          <option value="high">גבוהה</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">
-                          תאריך יעד
-                        </label>
-                        <input
-                          type="date"
-                          value={dueDate}
-                          onChange={(e) => setDueDate(e.target.value)}
-                          className="w-full px-3 py-2 border border-blue-200 rounded-md text-sm"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
-                        תיאור
-                      </label>
-                      <textarea
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-blue-200 rounded-md text-sm"
-                        placeholder="פרטים נוספים למשימה..."
-                      />
-                    </div>
+                  <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 text-sm text-yellow-800 flex items-start gap-2">
+                    <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+                    הגעת למקסימום הפעולות ({maxActions}) עבור אוטומציה זו.
                   </div>
                 )}
               </div>
 
               {error && <div className="text-red-500 text-sm">{error}</div>}
-            </form>
+            </div>
           )}
         </div>
 
@@ -663,11 +1364,12 @@ export default function ViewAutomationModal({
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={loading}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium shadow-sm disabled:opacity-50 flex items-center gap-2"
+                disabled={loading || actions.length === 0 || isAddingAction}
+                className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium shadow-lg shadow-green-200 disabled:opacity-50 flex items-center gap-2 transition-all"
               >
                 {loading && <Loader2 className="animate-spin" size={16} />}
                 {mode === "edit" ? "שמור שינויים" : "צור אוטומציה"}
+                <CheckCircle2 size={16} />
               </button>
             </>
           )}
@@ -675,4 +1377,63 @@ export default function ViewAutomationModal({
       </div>
     </div>
   );
+}
+
+// --- Action Card Component (game-like UI) ---
+function ActionCard({
+  title,
+  description,
+  icon,
+  selected,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className={`relative p-5 rounded-xl border-2 cursor-pointer transition-all duration-200 group ${
+        selected
+          ? "border-blue-500 bg-blue-50 shadow-md ring-2 ring-blue-200 ring-offset-2"
+          : "border-gray-100 bg-white hover:border-blue-200 hover:bg-gray-50"
+      }`}
+    >
+      <div className="flex items-start gap-4">
+        <div
+          className={`p-3 rounded-lg ${selected ? "bg-white" : "bg-gray-100 group-hover:bg-white"} transition-colors`}
+        >
+          {icon}
+        </div>
+        <div>
+          <h4
+            className={`font-bold text-lg mb-1 ${selected ? "text-blue-900" : "text-gray-800"}`}
+          >
+            {title}
+          </h4>
+          <p className="text-sm text-gray-500 leading-relaxed">{description}</p>
+        </div>
+      </div>
+      {selected && (
+        <div className="absolute top-4 left-4 text-blue-500">
+          <CheckCircle2
+            size={20}
+            fill="currentColor"
+            className="text-blue-100"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatPhonePreview(phone: string) {
+  if (!phone) return "";
+  let clean = phone.trim().replace(/\D/g, "");
+  if (clean.startsWith("0")) clean = "972" + clean.substring(1);
+  if (!clean.endsWith("@c.us")) clean = clean + "@c.us";
+  return clean;
 }

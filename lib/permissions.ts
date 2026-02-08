@@ -26,7 +26,7 @@ export const USER_FLAGS = [
   { key: "canViewTasks", label: "גישה למשימות" },
   { key: "canViewNurtureHub", label: "גישה לטיפוח לקוחות (CRM)" },
   { key: "canViewWorkflows", label: "גישה לתהליכים" },
-  { key: "canViewServices", label: "גישה לשירותים" },
+  { key: "canViewServices", label: "גישה למוצרים ושירותים" },
   { key: "canViewServiceCalls", label: "גישה לקריאות שירות" },
   { key: "canViewQuotes", label: "גישה להצעות מחיר" },
   { key: "canViewFiles", label: "גישה לקבצים" },

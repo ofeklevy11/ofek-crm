@@ -40,25 +40,54 @@ const isVatExempt = (type: string | null | undefined): boolean => {
   return type === "exempt";
 };
 
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  ILS: "₪",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+};
+
 export default function QuoteDocument({ quote }: QuoteDocumentProps) {
   const businessTypeLabel = getBusinessTypeLabel(quote.company.businessType);
   const vatExempt = isVatExempt(quote.company.businessType);
   const vatRate = 0.18;
 
+  const currency = (quote as any).currency || "ILS";
+  const exchangeRate = (quote as any).exchangeRate ? Number((quote as any).exchangeRate) : null;
+  const sym = CURRENCY_SYMBOLS[currency] || "₪";
+
+  const toDisplay = (ilsAmount: number) => {
+    if (currency === "ILS" || !exchangeRate) return ilsAmount;
+    return ilsAmount / exchangeRate;
+  };
+
   const total = Number(quote.total);
   const isIncludeVat = (quote as any).isPriceWithVat;
-  let subtotal = total;
+  const discountType = (quote as any).discountType || null;
+  const discountValue = (quote as any).discountValue ? Number((quote as any).discountValue) : 0;
+
+  // Calculate discount in ILS
+  let discountILS = 0;
+  if (discountType === "percent" && discountValue > 0) {
+    discountILS = total * (discountValue / 100);
+  } else if (discountType === "fixed" && discountValue > 0) {
+    discountILS = currency !== "ILS" && exchangeRate ? discountValue * exchangeRate : discountValue;
+  }
+  const totalAfterDiscount = total - discountILS;
+  const hasDiscount = discountILS > 0;
+
+  let subtotal = totalAfterDiscount;
   let vat = 0;
-  let finalTotal = total;
+  let finalTotal = totalAfterDiscount;
 
   if (!vatExempt) {
     if (isIncludeVat) {
-      subtotal = total / (1 + vatRate);
-      vat = total - subtotal;
-      finalTotal = total;
+      subtotal = totalAfterDiscount / (1 + vatRate);
+      vat = totalAfterDiscount - subtotal;
+      finalTotal = totalAfterDiscount;
     } else {
-      vat = total * vatRate;
-      finalTotal = total + vat;
+      vat = totalAfterDiscount * vatRate;
+      finalTotal = totalAfterDiscount + vat;
     }
   }
 
@@ -122,13 +151,37 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
           )}
         </div>
         <div className="text-left space-y-1">
+          {hasDiscount && (
+            <>
+              <div className="flex justify-between gap-8 text-xs text-gray-600">
+                <span>סה״כ פריטים</span>
+                <span className="font-mono">
+                  {sym}
+                  {toDisplay(total).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+              <div className="flex justify-between gap-8 text-xs text-green-600">
+                <span>הנחה{discountType === "percent" ? ` (${discountValue}%)` : ""}</span>
+                <span className="font-mono">
+                  -{sym}
+                  {toDisplay(discountILS).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+            </>
+          )}
           {!vatExempt && (
             <>
               <div className="flex justify-between gap-8 text-xs text-gray-600">
                 <span>סיכום{isIncludeVat ? " (לפני מע״מ)" : ""}</span>
                 <span className="font-mono">
-                  ₪
-                  {subtotal.toLocaleString(undefined, {
+                  {sym}
+                  {toDisplay(subtotal).toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
@@ -137,8 +190,8 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
               <div className="flex justify-between gap-8 text-xs text-gray-600">
                 <span>מע״מ (18%)</span>
                 <span className="font-mono">
-                  ₪
-                  {vat.toLocaleString(undefined, {
+                  {sym}
+                  {toDisplay(vat).toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
@@ -154,8 +207,8 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
           <div className="flex justify-between gap-8 text-lg font-bold text-gray-900 border-t border-gray-200 pt-1">
             <span>סה״כ</span>
             <span className="font-mono">
-              ₪
-              {finalTotal.toLocaleString(undefined, {
+              {sym}
+              {toDisplay(finalTotal).toLocaleString(undefined, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
@@ -234,13 +287,13 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
                   {item.quantity}
                 </td>
                 <td className="py-3 px-2 text-left align-top text-sm font-mono text-gray-800">
-                  ₪{Number(item.unitPrice).toLocaleString()}
+                  {sym}{toDisplay(Number(item.unitPrice)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
                 <td className="py-3 px-2 text-left align-top text-sm font-mono font-medium text-gray-900">
-                  ₪
-                  {(
+                  {sym}
+                  {toDisplay(
                     Number(item.quantity) * Number(item.unitPrice)
-                  ).toLocaleString()}
+                  ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
               </tr>
             ))}

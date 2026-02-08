@@ -642,6 +642,7 @@ model Product {
   companyId   Int
   name        String
   description String?
+  sku         String?
   type        String   @default("SERVICE") // SERVICE, PRODUCT, PACKAGE
   price       Decimal  @db.Decimal(10, 2)
   cost        Decimal? @db.Decimal(10, 2)
@@ -678,6 +679,10 @@ model Quote {
 
   isPriceWithVat  Boolean  @default(false) // Whether unit prices include VAT
   title           String?  // Optional title for the quotation
+  currency        String   @default("ILS")  // ILS, USD, EUR, GBP
+  exchangeRate    Decimal? @db.Decimal(10, 4) // Exchange rate at time of creation
+  discountType    String?  // "percent" or "fixed"
+  discountValue   Decimal? @db.Decimal(10, 2) // Discount amount (% or fixed in display currency)
 
   company         Company  @relation(fields: [companyId], references: [id])
   client          Client?  @relation(fields: [clientId], references: [id])

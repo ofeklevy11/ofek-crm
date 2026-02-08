@@ -79,7 +79,7 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-4xl font-bold tracking-tight  text-gray-900">
-            שירותים ומוצרים
+            מוצרים ושירותים
           </h1>
           <p className="text-gray-500 mt-2 text-lg">
             ניהול הקטלוג העסקי וניתוח רווחיות
@@ -151,6 +151,7 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
                 <th className="px-6 py-4 font-medium first:rounded-tr-lg">
                   שם הפריט
                 </th>
+                <th className="px-6 py-4 font-medium">מק״ט</th>
                 <th className="px-6 py-4 font-medium">סוג</th>
                 <th className="px-6 py-4 font-medium">מחיר מחירון</th>
                 <th className="px-6 py-4 font-medium">עלות מוערכת</th>
@@ -183,6 +184,9 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td className="px-6 py-4 text-gray-500">
+                      {product.sku || "-"}
                     </td>
                     <td className="px-6 py-4">
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#f4f8f8] text-gray-700 border border-gray-200">
@@ -225,7 +229,7 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
               {products.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-6 py-16 text-center text-gray-500 bg-gray-50/20"
                   >
                     <div>

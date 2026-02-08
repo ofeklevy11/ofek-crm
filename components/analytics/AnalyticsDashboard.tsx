@@ -143,7 +143,9 @@ function ConfigDetails({ config, type }: { config: any; type: string }) {
             className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-50 text-gray-600 border border-gray-100"
           >
             <span className="opacity-60 ml-1">{translate(key)}:</span>
-            <span>{val ? translate(String(val)) : "כל הערכים (ללא סינון)"}</span>
+            <span>
+              {val ? translate(String(val)) : "כל הערכים (ללא סינון)"}
+            </span>
           </span>
         ))}
       </div>
@@ -591,7 +593,9 @@ function SortableGraphCard({ view }: { view: any }) {
             <h3 className="font-bold text-gray-900 text-lg">{view.ruleName}</h3>
             <p className="text-sm text-gray-500">{view.stats?.subMetric}</p>
             {view.tableName && view.tableName !== "..." && (
-              <p className="text-xs text-gray-400 mt-0.5">מקור: {view.tableName}</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                מקור: {view.tableName}
+              </p>
             )}
           </div>
         </div>
@@ -629,7 +633,9 @@ export default function AnalyticsDashboard({
   initialRefreshUsage,
 }: AnalyticsDashboardProps) {
   const router = useRouter();
-  const [views, setViews] = useState<any[]>(() => initialViews.filter((v: any) => v.type !== "GRAPH"));
+  const [views, setViews] = useState<any[]>(() =>
+    initialViews.filter((v: any) => v.type !== "GRAPH"),
+  );
   const [folders, setFolders] = useState<any[]>(initialFolders);
   const [refreshUsage, setRefreshUsage] = useState(
     initialRefreshUsage.usage || 0,
@@ -651,15 +657,15 @@ export default function AnalyticsDashboard({
   const [userPlan, setUserPlan] = useState<string>("basic");
 
   // Folder State
-  const [currentFolder, setCurrentFolder] = useState<number | "all">(
-    "all",
-  );
+  const [currentFolder, setCurrentFolder] = useState<number | "all">("all");
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [movingView, setMovingView] = useState<any>(null); // View being moved
 
   // Graph Views State
-  const [graphViews, setGraphViews] = useState<any[]>(() => initialViews.filter((v: any) => v.type === "GRAPH"));
+  const [graphViews, setGraphViews] = useState<any[]>(() =>
+    initialViews.filter((v: any) => v.type === "GRAPH"),
+  );
   const [refreshingViewId, setRefreshingViewId] = useState<string | null>(null);
 
   // Sync state when props change (e.g. after router.refresh())
@@ -726,7 +732,10 @@ export default function AnalyticsDashboard({
       // 1. Check Eligibility
       const eligibility = await checkAnalyticsRefreshEligibility();
       if (!eligibility.success) {
-        setToast({ message: eligibility.error || "הגעת למגבלת הרענונים", type: "error" });
+        setToast({
+          message: eligibility.error || "הגעת למגבלת הרענונים",
+          type: "error",
+        });
         setTimeout(() => setToast(null), 4000);
         setRefreshingViewId(null);
         return;
@@ -738,23 +747,29 @@ export default function AnalyticsDashboard({
       // 3. Refresh specific item
       const itemId = view.source === "AUTOMATION" ? view.ruleId : view.viewId;
       const itemType = view.source === "AUTOMATION" ? "AUTOMATION" : "CUSTOM";
-      const result = await refreshAnalyticsItem(itemId, itemType as "AUTOMATION" | "CUSTOM");
+      const result = await refreshAnalyticsItem(
+        itemId,
+        itemType as "AUTOMATION" | "CUSTOM",
+      );
 
       if (result.success && result.data) {
         // 4. Update local state with fresh data
         if (view.type === "GRAPH") {
           setGraphViews((prev) =>
-            prev.map((v) => (v.id === viewId ? { ...result.data } : v))
+            prev.map((v) => (v.id === viewId ? { ...result.data } : v)),
           );
         } else {
           setViews((prev) =>
-            prev.map((v) => (v.id === viewId ? { ...result.data } : v))
+            prev.map((v) => (v.id === viewId ? { ...result.data } : v)),
           );
         }
         setToast({ message: "הנתון עודכן בהצלחה", type: "success" });
         setTimeout(() => setToast(null), 3000);
       } else {
-        setToast({ message: result.error || "שגיאה ברענון הנתון", type: "error" });
+        setToast({
+          message: result.error || "שגיאה ברענון הנתון",
+          type: "error",
+        });
         setTimeout(() => setToast(null), 4000);
       }
 
@@ -836,9 +851,6 @@ export default function AnalyticsDashboard({
     if (!newFolderName.trim()) return;
     const res = await createViewFolder(newFolderName);
     if (res.success) {
-      // Re-fetch folders is handled by router.refresh usually but here we strictly rely on SSR?
-      // Actually actions revalidate usually.
-      // But for fast UI let's add locally
       setFolders([...folders, res.data]);
       setIsFolderModalOpen(false);
       setNewFolderName("");
@@ -853,7 +865,7 @@ export default function AnalyticsDashboard({
 
     await moveViewToFolder(viewId, type, folderId);
     setMovingView(null);
-    router.refresh(); // Fetch new structure
+    router.refresh();
   };
 
   const handleDeleteFolder = async (id: number) => {
@@ -865,7 +877,7 @@ export default function AnalyticsDashboard({
       return;
     await deleteViewFolder(id);
     setFolders(folders.filter((f) => f.id !== id));
-    if (currentFolder === id) setCurrentFolder("all"); // Go back to all
+    if (currentFolder === id) setCurrentFolder("all");
     router.refresh();
   };
 
@@ -910,8 +922,6 @@ export default function AnalyticsDashboard({
   };
 
   const handleAIResults = (newViews: any[]) => {
-    // This is optimistically updating, but real data comes from server refresh
-    // For now we assume user will refresh or we trigger it
     router.refresh();
   };
 
@@ -1113,13 +1123,41 @@ export default function AnalyticsDashboard({
           </div>
         )}
 
+        {/* Automations Guide Banner */}
+        <div className="bg-gradient-to-l from-amber-50 to-orange-50 border border-amber-100/80 rounded-xl px-5 py-3.5 mt-6 flex items-start gap-3">
+          <div className="bg-amber-100 rounded-lg p-2 shrink-0">
+            <Zap size={16} className="text-amber-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-amber-900 font-semibold">
+              אוטומציות אנליטיקה
+            </p>
+            <p className="text-xs text-amber-700/80 mt-1 leading-relaxed">
+              ניתן להגדיר אוטומציות על כל כרטיס נתון באמצעות כפתור ה-&#9889;
+              בתחתית הכרטיס. פעולות אפשריות: התראה, הודעת WhatsApp, Webhook או
+              יצירת משימה.
+            </p>
+            <p className="text-[11px] text-amber-800 bg-amber-100/80 mt-2 px-2.5 py-1.5 rounded-lg font-medium leading-relaxed">
+              &#9888;&#65039; חשוב: האוטומציות בודקות את הערך הנוכחי{" "}
+              <span className="font-bold underline">רק בזמן רענון נתונים</span>{" "}
+              &mdash; כל עוד לא לחצתם על כפתור הרענון או שבוצע רענון אוטומטי,
+              האוטומציה לא תיבדק ולא תפעל.
+            </p>
+            <p className="text-[11px] text-amber-600/70 mt-1.5">
+              לדוגמה: &quot;שלח לי התראה כשמספר הלקוחות גדול מ-100&quot;
+            </p>
+          </div>
+        </div>
+
         {/* Cache Info Banner */}
-        <div className="bg-gradient-to-l from-blue-50 to-indigo-50 border border-blue-100/80 rounded-xl px-5 py-3.5 mt-6 flex items-start gap-3">
+        <div className="bg-gradient-to-l from-blue-50 to-indigo-50 border border-blue-100/80 rounded-xl px-5 py-3.5 mt-3 flex items-start gap-3">
           <div className="bg-blue-100 rounded-lg p-2 shrink-0">
             <RefreshCw size={16} className="text-blue-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-blue-900 font-semibold">מערכת קאש חכמה</p>
+            <p className="text-sm text-blue-900 font-semibold">
+              מערכת קאש חכמה
+            </p>
             <p className="text-xs text-blue-700/80 mt-1 leading-relaxed">
               הנתונים מתעדכנים אוטומטית כל 4 שעות ונשמרים בקאש לטעינה מהירה.
               ניתן לרענן כל נתון בנפרד בלחיצה על כפתור הרענון בתחתית כל כרטיס.
@@ -1279,6 +1317,7 @@ export default function AnalyticsDashboard({
           view={viewAutomationTarget}
           isOpen={!!viewAutomationTarget}
           onClose={() => setViewAutomationTarget(null)}
+          userPlan={userPlan}
         />
       )}
 

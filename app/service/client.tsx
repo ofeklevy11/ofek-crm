@@ -510,22 +510,15 @@ function DraggableTicketCard({
   ticket: any;
   onSelect: (t: any) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
+  const { attributes, listeners, setNodeRef, isDragging } =
     useDraggable({
       id: ticket.id,
     });
 
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-      }
-    : undefined;
-
   return (
     <div
       ref={setNodeRef}
-      style={style}
-      className={cn(isDragging && "opacity-50 grayscale")}
+      className={cn(isDragging && "opacity-30")}
     >
       <TicketCard
         ticket={ticket}

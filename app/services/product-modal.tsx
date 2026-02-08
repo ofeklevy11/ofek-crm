@@ -8,6 +8,7 @@ interface Product {
   id: number;
   name: string;
   description: string | null;
+  sku: string | null;
   type: string;
   price: any;
   cost: any | null;
@@ -32,6 +33,7 @@ export function ProductModal({
   const [formData, setFormData] = useState({
     name: "",
     description: "",
+    sku: "",
     type: "SERVICE",
     price: "",
     cost: "",
@@ -42,6 +44,7 @@ export function ProductModal({
       setFormData({
         name: productToEdit.name,
         description: productToEdit.description || "",
+        sku: productToEdit.sku || "",
         type: productToEdit.type,
         price: productToEdit.price.toString(),
         cost: productToEdit.cost?.toString() || "",
@@ -50,6 +53,7 @@ export function ProductModal({
       setFormData({
         name: "",
         description: "",
+        sku: "",
         type: "SERVICE",
         price: "",
         cost: "",
@@ -66,6 +70,7 @@ export function ProductModal({
       const payload = {
         name: formData.name,
         description: formData.description,
+        sku: formData.sku || undefined,
         type: formData.type,
         price: parseFloat(formData.price) || 0,
         cost: parseFloat(formData.cost) || 0,
@@ -155,6 +160,20 @@ export function ProductModal({
                 <option value="PACKAGE">חבילה</option>
               </select>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              מק״ט (אופציונלי)
+            </label>
+            <input
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] outline-none transition-all bg-white"
+              value={formData.sku}
+              onChange={(e) =>
+                setFormData({ ...formData, sku: e.target.value })
+              }
+              placeholder="לדוגמה: SKU-001"
+            />
           </div>
 
           <div className="space-y-2">

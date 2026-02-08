@@ -51,20 +51,6 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Trigger view automations
-    console.log(
-      `[Tasks API] Created task ${newTask.id}, triggering automations`
-    );
-    try {
-      const { processViewAutomations } = await import(
-        "@/app/actions/automations"
-      );
-      await processViewAutomations();
-      console.log(`[Tasks API] View automations triggered successfully`);
-    } catch (autoError) {
-      console.error("[Tasks API] Failed to trigger automations:", autoError);
-    }
-
     return NextResponse.json(newTask, { status: 201 });
   } catch (error) {
     console.error("Error creating task:", error);

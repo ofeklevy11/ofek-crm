@@ -27,6 +27,10 @@ export async function GET(request: Request) {
       await import("@/app/actions/event-automations");
     await processEventAutomations();
 
+    // Run SLA breach check automations
+    const { checkSlaBreaches } = await import("@/app/actions/sla-check");
+    await checkSlaBreaches();
+
     return NextResponse.json({
       success: true,
       message: "Automations processed",

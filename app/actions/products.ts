@@ -23,6 +23,7 @@ export async function getProducts() {
 export async function createProduct(data: {
   name: string;
   description?: string;
+  sku?: string;
   type: string;
   price: number;
   cost?: number;
@@ -35,6 +36,7 @@ export async function createProduct(data: {
       companyId: user.companyId,
       name: data.name,
       description: data.description,
+      sku: data.sku,
       type: data.type,
       price: data.price,
       cost: data.cost,
@@ -54,6 +56,7 @@ export async function updateProduct(
   data: {
     name: string;
     description?: string;
+    sku?: string;
     type: string;
     price: number;
     cost?: number;

@@ -1,11 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Trash, Plus, Printer, Save, ArrowRight } from "lucide-react";
 import { addWeeks, addMonths, format } from "date-fns";
 import { createQuote, updateQuote } from "@/app/actions/quotes";
+import { getExchangeRate } from "@/app/actions/exchange-rate";
 import { useRouter } from "next/navigation";
 // removed ui imports
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  ILS: "₪",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+};
+
+const CURRENCY_NAMES: Record<string, string> = {
+  ILS: "₪ שקל ישראלי",
+  USD: "$ דולר אמריקאי",
+  EUR: "€ אירו",
+  GBP: "£ לירה שטרלינג",
+};
 
 interface QuoteEditorProps {
   initialQuote?: any;
@@ -32,6 +47,7 @@ export default function QuoteEditor({
     clientEmail: initialQuote?.clientEmail || "",
     clientPhone: initialQuote?.clientPhone || "",
     clientAddress: initialQuote?.clientAddress || "",
+    clientTaxId: initialQuote?.clientTaxId || "",
     validUntil: initialQuote?.validUntil
       ? new Date(initialQuote.validUntil).toISOString().split("T")[0]
       : "",
@@ -41,6 +57,42 @@ export default function QuoteEditor({
   });
 
   const [items, setItems] = useState<any[]>(initialQuote?.items || []);
+
+  const [currency, setCurrency] = useState(initialQuote?.currency || "ILS");
+  const [exchangeRate, setExchangeRate] = useState<number | null>(
+    initialQuote?.exchangeRate ? Number(initialQuote.exchangeRate) : null,
+  );
+  const [loadingRate, setLoadingRate] = useState(false);
+
+  const currencySymbol = CURRENCY_SYMBOLS[currency] || "₪";
+
+  useEffect(() => {
+    if (currency === "ILS") {
+      setExchangeRate(null);
+      return;
+    }
+    setLoadingRate(true);
+    getExchangeRate(currency)
+      .then((rate) => setExchangeRate(rate))
+      .catch(() => {
+        alert("שגיאה בשליפת שער יציג");
+        setCurrency("ILS");
+        setExchangeRate(null);
+      })
+      .finally(() => setLoadingRate(false));
+  }, [currency]);
+
+  const toForeign = (ilsAmount: number) => {
+    if (currency === "ILS" || !exchangeRate) return ilsAmount;
+    return ilsAmount / exchangeRate;
+  };
+
+  const [discountType, setDiscountType] = useState<"none" | "percent" | "fixed">(
+    initialQuote?.discountType || "none",
+  );
+  const [discountValue, setDiscountValue] = useState<number>(
+    initialQuote?.discountValue ? Number(initialQuote.discountValue) : 0,
+  );
 
   const [customDuration, setCustomDuration] = useState(1);
   const [customUnit, setCustomUnit] = useState<"weeks" | "months">("months");
@@ -67,6 +119,7 @@ export default function QuoteEditor({
         clientEmail: "",
         clientPhone: "",
         clientAddress: "",
+        clientTaxId: "",
       }));
       return;
     }
@@ -79,6 +132,7 @@ export default function QuoteEditor({
         clientEmail: client.email || "",
         clientPhone: client.phone || "",
         clientAddress: client.address || "",
+        clientTaxId: "",
       }));
     } else {
       setFormData((prev) => ({ ...prev, clientId }));
@@ -150,53 +204,71 @@ export default function QuoteEditor({
   const total = calculateTotal();
   const totalCost = calculateTotalCost();
 
+  // Discount calculation (in ILS, before VAT)
+  const calculateDiscountILS = () => {
+    if (discountType === "none" || discountValue <= 0) return 0;
+    if (discountType === "percent") {
+      return total * (discountValue / 100);
+    }
+    // fixed - value is in display currency, convert to ILS
+    if (currency !== "ILS" && exchangeRate) {
+      return discountValue * exchangeRate;
+    }
+    return discountValue;
+  };
+
+  const discountILS = calculateDiscountILS();
+  const totalAfterDiscount = total - discountILS;
+
   // VAT Calculations
   const vatRate = 0.18;
   const calculateVatDisplay = () => {
     if (isVatExempt) {
       return {
-        subtotal: total,
+        subtotalBeforeDiscount: total,
+        discount: discountILS,
+        subtotal: totalAfterDiscount,
         vat: 0,
-        finalTotal: total,
+        finalTotal: totalAfterDiscount,
       };
     }
 
     if (formData.isPriceWithVat) {
-      // Prices include VAT
-      // total is roughly sum of (Net + VAT)
-      // Net = Total / 1.18
-      const net = total / (1 + vatRate);
-      const vat = total - net;
+      const net = totalAfterDiscount / (1 + vatRate);
+      const vat = totalAfterDiscount - net;
       return {
+        subtotalBeforeDiscount: total,
+        discount: discountILS,
         subtotal: net,
         vat: vat,
-        finalTotal: total,
+        finalTotal: totalAfterDiscount,
       };
     } else {
-      // Prices are before VAT
-      const vat = total * vatRate;
+      const vat = totalAfterDiscount * vatRate;
       return {
-        subtotal: total,
+        subtotalBeforeDiscount: total,
+        discount: discountILS,
+        subtotal: totalAfterDiscount,
         vat: vat,
-        finalTotal: total + vat,
+        finalTotal: totalAfterDiscount + vat,
       };
     }
   };
 
   const {
+    subtotalBeforeDiscount: displaySubtotalBeforeDiscount,
+    discount: displayDiscount,
     subtotal: displaySubtotal,
     vat: displayVat,
     finalTotal: displayTotal,
   } = calculateVatDisplay();
 
   // Margin always calculated from Net Income vs Cost
-  // If price includes VAT, revenue is Net (total / 1.18)
-  // If price is before VAT, revenue is Total (which is Net)
   const revenue = isVatExempt
-    ? total
+    ? totalAfterDiscount
     : formData.isPriceWithVat
-      ? total / (1 + vatRate)
-      : total;
+      ? totalAfterDiscount / (1 + vatRate)
+      : totalAfterDiscount;
 
   const margin = revenue - totalCost;
   const marginPercent = revenue > 0 ? (margin / revenue) * 100 : 0;
@@ -221,6 +293,7 @@ export default function QuoteEditor({
         clientName: formData.clientName,
         clientEmail: formData.clientEmail,
         clientPhone: formData.clientPhone,
+        clientTaxId: formData.clientTaxId || undefined,
         clientAddress: formData.clientAddress,
         validUntil: formData.validUntil
           ? new Date(formData.validUntil)
@@ -235,6 +308,10 @@ export default function QuoteEditor({
           unitCost: parseFloat(item.unitCost?.toString() || "0"),
         })),
         isPriceWithVat: formData.isPriceWithVat,
+        currency,
+        exchangeRate: exchangeRate || undefined,
+        discountType: discountType !== "none" ? discountType : undefined,
+        discountValue: discountType !== "none" && discountValue > 0 ? discountValue : undefined,
       };
 
       if (initialQuote) {
@@ -363,6 +440,19 @@ export default function QuoteEditor({
               </div>
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">
+                  ח.פ / ת.ז
+                </label>
+                <input
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
+                  placeholder="מספר ח.פ או ת.ז"
+                  value={formData.clientTaxId}
+                  onChange={(e) =>
+                    setFormData({ ...formData, clientTaxId: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
                   כתובת / פרטים נוספים
                 </label>
                 <input
@@ -412,6 +502,31 @@ export default function QuoteEditor({
                 <option value="REJECTED">נדחתה</option>
               </select>
             </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                מטבע
+              </label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+              >
+                {Object.entries(CURRENCY_NAMES).map(([code, name]) => (
+                  <option key={code} value={code}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              {loadingRate && (
+                <p className="text-xs text-gray-400">טוען שער יציג...</p>
+              )}
+              {currency !== "ILS" && exchangeRate && !loadingRate && (
+                <p className="text-xs text-green-600">
+                  שער יציג: 1{currencySymbol} = ₪{exchangeRate.toFixed(4)}
+                </p>
+              )}
+            </div>
+
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">
@@ -559,7 +674,7 @@ export default function QuoteEditor({
                     <option value="custom">פריט מותאם אישית</option>
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name} - ₪{p.price}
+                        {p.name} - {currencySymbol}{toForeign(Number(p.price)).toFixed(2)}
                       </option>
                     ))}
                   </select>
@@ -604,7 +719,7 @@ export default function QuoteEditor({
 
                 <div className="w-32 space-y-2">
                   <label className="text-xs font-medium text-gray-500">
-                    מחיר (₪)
+                    מחיר ({currencySymbol})
                   </label>
                   <input
                     type="number"
@@ -618,7 +733,7 @@ export default function QuoteEditor({
                 </div>
 
                 <div className="w-24 space-y-2 pt-8 text-left font-medium text-sm">
-                  ₪{(item.quantity * item.unitPrice).toFixed(2)}
+                  {currencySymbol}{toForeign(item.quantity * item.unitPrice).toFixed(2)}
                 </div>
 
                 <button
@@ -638,25 +753,82 @@ export default function QuoteEditor({
             <Plus className="w-4 h-4" /> הוסף פריט
           </button>
 
-          <div className="flex justify-end pt-6">
-            <div className="w-64 space-y-2 bg-gray-50 p-4 rounded-lg border border-gray-100">
-              <div className="flex justify-between text-gray-600 text-sm">
-                <span>
-                  סה״כ ביניים{formData.isPriceWithVat ? " (לפני מע״מ)" : ""}:
-                </span>
-                <span className="font-mono">₪{displaySubtotal.toFixed(2)}</span>
+          {/* Discount section */}
+          <div className="flex items-end gap-3 pt-4 border-t border-gray-100">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-500">הנחה</label>
+              <select
+                className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none text-sm bg-white"
+                value={discountType}
+                onChange={(e) => setDiscountType(e.target.value as "none" | "percent" | "fixed")}
+              >
+                <option value="none">ללא הנחה</option>
+                <option value="percent">אחוז (%)</option>
+                <option value="fixed">סכום קבוע ({currencySymbol})</option>
+              </select>
+            </div>
+            {discountType !== "none" && (
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-500">
+                  {discountType === "percent" ? "אחוז הנחה" : `סכום (${currencySymbol})`}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step={discountType === "percent" ? "1" : "0.01"}
+                  max={discountType === "percent" ? "100" : undefined}
+                  className="w-28 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none text-sm bg-white"
+                  value={discountValue}
+                  onChange={(e) => setDiscountValue(parseFloat(e.target.value) || 0)}
+                />
               </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-6">
+            <div className="w-72 space-y-2 bg-gray-50 p-4 rounded-lg border border-gray-100">
+              <div className="flex justify-between text-gray-600 text-sm">
+                <span>סה״כ פריטים:</span>
+                <span className="font-mono">{currencySymbol}{toForeign(displaySubtotalBeforeDiscount).toFixed(2)}</span>
+              </div>
+
+              {displayDiscount > 0 && (
+                <div className="flex justify-between text-green-600 text-sm">
+                  <span>
+                    הנחה{discountType === "percent" ? ` (${discountValue}%)` : ""}:
+                  </span>
+                  <span className="font-mono">-{currencySymbol}{toForeign(displayDiscount).toFixed(2)}</span>
+                </div>
+              )}
+
+              {displayDiscount > 0 && (
+                <div className="flex justify-between text-gray-600 text-sm">
+                  <span>
+                    סה״כ אחרי הנחה{formData.isPriceWithVat ? " (לפני מע״מ)" : ""}:
+                  </span>
+                  <span className="font-mono">{currencySymbol}{toForeign(displaySubtotal).toFixed(2)}</span>
+                </div>
+              )}
+
+              {!displayDiscount && (
+                <div className="flex justify-between text-gray-600 text-sm">
+                  <span>
+                    סה״כ ביניים{formData.isPriceWithVat ? " (לפני מע״מ)" : ""}:
+                  </span>
+                  <span className="font-mono">{currencySymbol}{toForeign(displaySubtotal).toFixed(2)}</span>
+                </div>
+              )}
 
               {!isVatExempt && (
                 <div className="flex justify-between text-gray-600 text-sm">
                   <span>מע״מ (18%):</span>
-                  <span className="font-mono">₪{displayVat.toFixed(2)}</span>
+                  <span className="font-mono">{currencySymbol}{toForeign(displayVat).toFixed(2)}</span>
                 </div>
               )}
 
               <div className="flex justify-between border-t border-gray-200 pt-2 text-xl font-bold text-gray-900">
                 <span>סה״כ לתשלום:</span>
-                <span className="font-mono">₪{displayTotal.toFixed(2)}</span>
+                <span className="font-mono">{currencySymbol}{toForeign(displayTotal).toFixed(2)}</span>
               </div>
             </div>
           </div>

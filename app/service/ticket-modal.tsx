@@ -45,6 +45,7 @@ export default function TicketModal({
     description: "",
     priority: "MEDIUM",
     type: "SERVICE",
+    status: "OPEN",
     clientId: "",
     assigneeId: "",
   });
@@ -57,11 +58,10 @@ export default function TicketModal({
     try {
       await createTicket({
         ...formData,
-        clientId: formData.clientId ? parseInt(formData.clientId) : undefined,
+        clientId: formData.clientId && formData.clientId !== "0" ? parseInt(formData.clientId) : undefined,
         assigneeId: formData.assigneeId
           ? parseInt(formData.assigneeId)
           : undefined,
-        status: "OPEN",
       });
 
       toast({
@@ -75,6 +75,7 @@ export default function TicketModal({
         description: "",
         priority: "MEDIUM",
         type: "SERVICE",
+        status: "OPEN",
         clientId: "",
         assigneeId: "",
       });
@@ -163,8 +164,30 @@ export default function TicketModal({
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="status" className="text-right block">
+              סטטוס
+            </Label>
+            <Select
+              value={formData.status}
+              onValueChange={(val) =>
+                setFormData((d) => ({ ...d, status: val }))
+              }
+            >
+              <SelectTrigger className="text-right" dir="rtl">
+                <SelectValue placeholder="בחר סטטוס" />
+              </SelectTrigger>
+              <SelectContent dir="rtl">
+                <SelectItem value="OPEN">פתוח</SelectItem>
+                <SelectItem value="IN_PROGRESS">בטיפול</SelectItem>
+                <SelectItem value="WAITING">ממתין</SelectItem>
+                <SelectItem value="RESOLVED">טופל</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="client" className="text-right block">
-              לקוח
+              לקוח (אופציונלי)
             </Label>
             <Select
               value={formData.clientId}
@@ -173,9 +196,10 @@ export default function TicketModal({
               }
             >
               <SelectTrigger className="text-right" dir="rtl">
-                <SelectValue placeholder="בחר לקוח" />
+                <SelectValue placeholder="ללא לקוח" />
               </SelectTrigger>
               <SelectContent dir="rtl">
+                <SelectItem value="0">ללא לקוח</SelectItem>
                 {clients.map((client) => (
                   <SelectItem key={client.id} value={client.id.toString()}>
                     {client.name}

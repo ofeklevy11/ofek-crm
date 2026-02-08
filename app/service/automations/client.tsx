@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import ServiceAutomationModal from "@/components/ServiceAutomationModal";
+import SlaAutomationModal from "@/components/SlaAutomationModal";
 import {
   toggleAutomationRule,
   deleteAutomationRule,
@@ -59,7 +59,7 @@ export default function ServiceAutomationsClient({
     const editId = searchParams.get("editId");
     if (editId) {
       const ruleToEdit = initialAutomations.find(
-        (r) => r.id === Number(editId)
+        (r) => r.id === Number(editId),
       );
       if (ruleToEdit) {
         setEditingRule(ruleToEdit);
@@ -85,7 +85,7 @@ export default function ServiceAutomationsClient({
   const handleToggle = async (id: number, currentStatus: boolean) => {
     // Optimistic
     setAutomations((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, isActive: !currentStatus } : a))
+      prev.map((a) => (a.id === id ? { ...a, isActive: !currentStatus } : a)),
     );
 
     try {
@@ -95,7 +95,7 @@ export default function ServiceAutomationsClient({
       console.error("Failed to toggle rule");
       // Revert
       setAutomations((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, isActive: currentStatus } : a))
+        prev.map((a) => (a.id === id ? { ...a, isActive: currentStatus } : a)),
       );
     }
   };
@@ -185,7 +185,7 @@ export default function ServiceAutomationsClient({
         )}
       </div>
 
-      <ServiceAutomationModal
+      <SlaAutomationModal
         open={modalOpen}
         onOpenChange={(open) => {
           setModalOpen(open);
@@ -212,6 +212,32 @@ function AutomationCard({
   onDelete: () => void;
   onEdit: () => void;
 }) {
+  // Calculate number of actions
+  const getActionCount = () => {
+    if (rule.actionType === "MULTI_ACTION") {
+      return rule.actionConfig?.actions?.length || 0;
+    }
+    return rule.actionType ? 1 : 0;
+  };
+
+  const getActionSummary = () => {
+    const actionLabels: Record<string, string> = {
+      SEND_NOTIFICATION: "התראה",
+      SEND_WHATSAPP: "WhatsApp",
+      WEBHOOK: "Webhook",
+      CREATE_TASK: "משימה",
+    };
+
+    if (rule.actionType === "MULTI_ACTION") {
+      const actions = rule.actionConfig?.actions || [];
+      const types = actions.map((a: any) => actionLabels[a.type] || a.type);
+      return types.join(", ");
+    }
+    return actionLabels[rule.actionType] || rule.actionType;
+  };
+
+  const actionCount = getActionCount();
+
   return (
     <div
       className={`bg-white p-5 rounded-xl border shadow-sm transition-all hover:shadow-md relative overflow-hidden group ${
@@ -243,6 +269,14 @@ function AutomationCard({
               <CheckCircle2 className="w-5 h-5" />
             )}
           </div>
+          {actionCount > 0 && (
+            <Badge
+              variant="outline"
+              className="text-xs bg-purple-50 text-purple-600 border-purple-200"
+            >
+              {actionCount} פעולות
+            </Badge>
+          )}
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -274,9 +308,15 @@ function AutomationCard({
         {rule.name}
       </h3>
 
-      <div className="text-sm text-slate-500 mb-4 h-10 line-clamp-2">
+      <div className="text-sm text-slate-500 mb-2 line-clamp-2">
         {getTriggerDescription(rule)}
       </div>
+
+      {actionCount > 0 && (
+        <div className="text-xs text-slate-400 mb-3 line-clamp-1">
+          ← {getActionSummary()}
+        </div>
+      )}
 
       <div className="flex items-center justify-between pt-4 border-t mt-2">
         <div className="flex items-center gap-2">

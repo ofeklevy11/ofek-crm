@@ -427,14 +427,19 @@ export async function calculateViewStats(view: any) {
 /**
  * Calculates stats and items for a single automation rule.
  */
-async function calculateRuleStats(rule: any): Promise<{ stats: any; items: any[]; tableName: string }> {
+async function calculateRuleStats(
+  rule: any,
+): Promise<{ stats: any; items: any[]; tableName: string }> {
   let items: any[] = [];
   let stats: any = null;
   const triggerConfig = rule.triggerConfig as any;
-  const mainTableId = triggerConfig.tableId ? parseInt(triggerConfig.tableId) : 0;
-  const tableName = rule.triggerType === "TASK_STATUS_CHANGE"
-    ? "משימות"
-    : await getTableName(mainTableId);
+  const mainTableId = triggerConfig.tableId
+    ? parseInt(triggerConfig.tableId)
+    : 0;
+  const tableName =
+    rule.triggerType === "TASK_STATUS_CHANGE"
+      ? "משימות"
+      : await getTableName(mainTableId);
 
   if (rule.actionType === "CALCULATE_MULTI_EVENT_DURATION") {
     const eventTableMap = new Map<string, string>();
@@ -468,7 +473,9 @@ async function calculateRuleStats(rule: any): Promise<{ stats: any; items: any[]
               k.toLowerCase().includes("title") ||
               (typeof data[k] === "string" && data[k].length < 50),
           ) || "Record";
-        title = data[titleField] ? String(data[titleField]) : `Record #${d.record.id}`;
+        title = data[titleField]
+          ? String(data[titleField])
+          : `Record #${d.record.id}`;
       }
 
       const eventChain = d.eventChain as any[];
@@ -492,7 +499,10 @@ async function calculateRuleStats(rule: any): Promise<{ stats: any; items: any[]
     });
 
     if (items.length > 0) {
-      const totalSeconds = items.reduce((acc, item) => acc + item.totalDurationSeconds, 0);
+      const totalSeconds = items.reduce(
+        (acc, item) => acc + item.totalDurationSeconds,
+        0,
+      );
       const avg = Math.round(totalSeconds / items.length);
       const min = Math.min(...items.map((i) => i.totalDurationSeconds));
       const max = Math.max(...items.map((i) => i.totalDurationSeconds));
@@ -526,11 +536,14 @@ async function calculateRuleStats(rule: any): Promise<{ stats: any; items: any[]
               k.toLowerCase().includes("title") ||
               (typeof data[k] === "string" && data[k].length < 50),
           ) || "Record";
-        title = data[titleField] ? String(data[titleField]) : `Record #${d.record.id}`;
+        title = data[titleField]
+          ? String(data[titleField])
+          : `Record #${d.record.id}`;
       }
 
       let statusDisplay = d.toValue || "N/A";
-      if (d.fromValue && d.toValue) statusDisplay = `${d.fromValue} -> ${d.toValue}`;
+      if (d.fromValue && d.toValue)
+        statusDisplay = `${d.fromValue} -> ${d.toValue}`;
 
       return {
         id: d.id,
@@ -544,12 +557,19 @@ async function calculateRuleStats(rule: any): Promise<{ stats: any; items: any[]
     });
 
     if (items.length > 0) {
-      const totalSeconds = items.reduce((acc, item) => acc + item.durationSeconds, 0);
+      const totalSeconds = items.reduce(
+        (acc, item) => acc + item.durationSeconds,
+        0,
+      );
       const avg = Math.round(totalSeconds / items.length);
       stats = {
         averageDuration: formatSecondsToHebrew(avg),
-        minDuration: formatSecondsToHebrew(Math.min(...items.map((i) => i.durationSeconds))),
-        maxDuration: formatSecondsToHebrew(Math.max(...items.map((i) => i.durationSeconds))),
+        minDuration: formatSecondsToHebrew(
+          Math.min(...items.map((i) => i.durationSeconds)),
+        ),
+        maxDuration: formatSecondsToHebrew(
+          Math.max(...items.map((i) => i.durationSeconds)),
+        ),
         totalRecords: items.length,
         averageSeconds: avg,
       };
@@ -557,6 +577,106 @@ async function calculateRuleStats(rule: any): Promise<{ stats: any; items: any[]
   }
 
   return { stats, items, tableName };
+}
+
+// Plan limits for analytics views
+const ANALYTICS_LIMITS = {
+  basic: { regular: 5, graph: 3 },
+  premium: { regular: 15, graph: 10 },
+  super: { regular: Infinity, graph: Infinity },
+};
+
+/**
+ * Count analytics views by type for the current company.
+ * Returns counts for regular (CONVERSION, COUNT) and graph (GRAPH) views.
+ */
+export async function getAnalyticsViewCounts() {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return {
+        success: false,
+        error: "Unauthorized",
+        regularCount: 0,
+        graphCount: 0,
+      };
+    }
+
+    // Count regular analytics (CONVERSION, COUNT)
+    const regularCount = await prisma.analyticsView.count({
+      where: {
+        companyId: user.companyId,
+        type: { in: ["CONVERSION", "COUNT"] },
+      },
+    });
+
+    // Count graph analytics
+    const graphCount = await prisma.analyticsView.count({
+      where: {
+        companyId: user.companyId,
+        type: "GRAPH",
+      },
+    });
+
+    return { success: true, regularCount, graphCount };
+  } catch (error) {
+    console.error("Error counting analytics views:", error);
+    return {
+      success: false,
+      error: "Failed to count views",
+      regularCount: 0,
+      graphCount: 0,
+    };
+  }
+}
+
+/**
+ * Get analytics limits based on user plan.
+ */
+export async function getAnalyticsLimits() {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    if (!user.companyId) {
+      console.error("User missing companyId:", user.id);
+      return { success: false, error: "User has no company" };
+    }
+
+    // Use user's premium status as the plan source (Company model does not have 'plan')
+    const plan = (
+      user.isPremium || "basic"
+    ).toLowerCase() as keyof typeof ANALYTICS_LIMITS;
+    const limits = ANALYTICS_LIMITS[plan] || ANALYTICS_LIMITS.basic;
+
+    // Get current counts (pass successful user object to avoid re-fetching if possible, but existing func fetches again)
+    const countsResult = await getAnalyticsViewCounts();
+    if (!countsResult.success) {
+      return { success: false, error: countsResult.error };
+    }
+
+    return {
+      success: true,
+      plan,
+      limits,
+      currentCounts: {
+        regular: countsResult.regularCount,
+        graph: countsResult.graphCount,
+      },
+      remaining: {
+        regular: Math.max(0, limits.regular - countsResult.regularCount),
+        graph: Math.max(0, limits.graph - countsResult.graphCount),
+      },
+    };
+  } catch (error) {
+    console.error("Error getting analytics limits:", error);
+    return {
+      success: false,
+      error: "Failed to get limits (Internal Error)",
+    };
+  }
 }
 
 export async function createAnalyticsView(data: {
@@ -570,6 +690,33 @@ export async function createAnalyticsView(data: {
     const user = await getCurrentUser();
     if (!user || !canManageAnalytics(user)) {
       return { success: false, error: "Unauthorized" };
+    }
+
+    // Check plan limits
+    const limitsResult = await getAnalyticsLimits();
+    if (!limitsResult.success) {
+      return { success: false, error: limitsResult.error };
+    }
+
+    const { plan, remaining } = limitsResult;
+
+    // Check if creating a graph or regular analytics
+    const isGraph = data.type === "GRAPH";
+
+    // Super users have no limits
+    if (plan !== "super") {
+      if (isGraph && remaining!.graph <= 0) {
+        return {
+          success: false,
+          error: `הגעת למגבלת הגרפים (${ANALYTICS_LIMITS[plan as keyof typeof ANALYTICS_LIMITS].graph}). שדרג את התוכנית להוספת גרפים נוספים.`,
+        };
+      }
+      if (!isGraph && remaining!.regular <= 0) {
+        return {
+          success: false,
+          error: `הגעת למגבלת האנליטיקות (${ANALYTICS_LIMITS[plan as keyof typeof ANALYTICS_LIMITS].regular}). שדרג את התוכנית להוספת אנליטיקות נוספות.`,
+        };
+      }
     }
 
     const view = await prisma.analyticsView.create({
@@ -892,7 +1039,9 @@ export async function getAnalyticsData() {
 
       if (isCacheValid && view.cachedStats) {
         const cachedData = view.cachedStats as any;
-        const resolvedTableName = cachedData.tableName || await resolveTableNameFromConfig(view.config as any);
+        const resolvedTableName =
+          cachedData.tableName ||
+          (await resolveTableNameFromConfig(view.config as any));
         views.push({
           id: `view_${view.id}`,
           viewId: view.id,
@@ -941,6 +1090,7 @@ export async function getAnalyticsData() {
     }
 
     views.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
     return { success: true, data: views };
   } catch (error) {
     console.error("Error fetching analytics data:", error);
@@ -962,6 +1112,8 @@ export async function refreshAnalyticsItem(
       return { success: false, error: "Unauthorized" };
     }
 
+    let result: any;
+
     if (type === "AUTOMATION") {
       const rule = await prisma.automationRule.findUnique({ where: { id } });
       if (!rule) return { success: false, error: "Rule not found" };
@@ -977,12 +1129,7 @@ export async function refreshAnalyticsItem(
         },
       });
 
-      // Revalidate pages that display analytics
-      revalidatePath("/");
-      revalidatePath("/analytics");
-      revalidatePath("/analytics/graphs");
-
-      return {
+      result = {
         success: true,
         data: {
           id: `rule_${rule.id}`,
@@ -1017,12 +1164,7 @@ export async function refreshAnalyticsItem(
         },
       });
 
-      // Revalidate pages that display analytics
-      revalidatePath("/");
-      revalidatePath("/analytics");
-      revalidatePath("/analytics/graphs");
-
-      return {
+      result = {
         success: true,
         data: {
           id: `view_${view.id}`,
@@ -1041,6 +1183,24 @@ export async function refreshAnalyticsItem(
         },
       };
     }
+
+    // Revalidate pages that display analytics
+    revalidatePath("/");
+    revalidatePath("/analytics");
+    revalidatePath("/analytics/graphs");
+
+    // Check view automations on the freshly refreshed data
+    try {
+      const { processViewAutomations } = await import("./automations");
+      await processViewAutomations(undefined, undefined, user.companyId);
+    } catch (autoError) {
+      console.error(
+        "[Analytics] Failed to process view automations after refresh:",
+        autoError,
+      );
+    }
+
+    return result;
   } catch (error) {
     console.error("Error refreshing analytics item:", error);
     return { success: false, error: "Failed to refresh item" };

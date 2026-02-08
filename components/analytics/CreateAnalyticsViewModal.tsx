@@ -16,13 +16,22 @@ import {
   AreaChart,
   Eye,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { getTables } from "@/app/actions/tables";
 import {
   createAnalyticsView,
   updateAnalyticsView,
   previewAnalyticsView,
+  getAnalyticsLimits,
 } from "@/app/actions/analytics";
+
+// Plan labels for display
+const PLAN_LABELS: Record<string, string> = {
+  basic: "בייסיק",
+  premium: "פרימיום",
+  super: "סופר",
+};
 
 interface CreateAnalyticsViewModalProps {
   isOpen: boolean;
@@ -121,6 +130,11 @@ export default function CreateAnalyticsViewModal({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
+  // Plan limits state
+  const [limitsData, setLimitsData] = useState<any>(null);
+  const [loadingLimits, setLoadingLimits] = useState(true);
+  const [submitError, setSubmitError] = useState("");
+
   // Initialize from initialData when opening
   useEffect(() => {
     if (isOpen) {
@@ -160,8 +174,24 @@ export default function CreateAnalyticsViewModal({
     });
   }, []);
 
+  // Fetch plan limits on mount
+  useEffect(() => {
+    if (isOpen) {
+      setLoadingLimits(true);
+      setSubmitError("");
+      getAnalyticsLimits()
+        .then((res) => {
+          if (res.success) {
+            setLimitsData(res);
+          }
+        })
+        .finally(() => setLoadingLimits(false));
+    }
+  }, [isOpen]);
+
   const handleSubmit = async () => {
     setLoading(true);
+    setSubmitError("");
     try {
       if (initialData && initialData.viewId) {
         // Update
@@ -173,6 +203,8 @@ export default function CreateAnalyticsViewModal({
         if (res.success) {
           onSuccess();
           onClose();
+        } else {
+          setSubmitError(res.error || "שגיאה בשמירה");
         }
       } else {
         // Create
@@ -184,10 +216,13 @@ export default function CreateAnalyticsViewModal({
         if (res.success) {
           onSuccess();
           onClose();
+        } else {
+          setSubmitError(res.error || "שגיאה ביצירה");
         }
       }
     } catch (error) {
       console.error("Failed to save view", error);
+      setSubmitError("שגיאה בלתי צפויה");
     } finally {
       setLoading(false);
     }
@@ -329,10 +364,51 @@ export default function CreateAnalyticsViewModal({
               ? config.chartType === item.id
               : selectedType === item.id;
 
+          // Check Limits
+          let isLimitReached = false;
+          let limitMessage = "";
+
+          // Only enforce limits if we are creating new (not editing)
+          if (
+            !initialData?.viewId &&
+            limitsData?.success &&
+            limitsData?.remaining
+          ) {
+            if (mode === "graph") {
+              // Creating a graph view
+              if (limitsData.remaining.graph <= 0) {
+                isLimitReached = true;
+                limitMessage = `הגעת למגבלת הגרפים (${limitsData.limits.graph})`;
+              }
+            } else {
+              // General mode
+              if (item.id === "GRAPH") {
+                if (limitsData.remaining.graph <= 0) {
+                  isLimitReached = true;
+                  limitMessage = `הגעת למגבלת הגרפים (${limitsData.limits.graph})`;
+                }
+              } else {
+                // Regular analytics (Conversion, Count)
+                if (limitsData.remaining.regular <= 0) {
+                  isLimitReached = true;
+                  limitMessage = `הגעת למגבלת האנליטיקות (${limitsData.limits.regular})`;
+                }
+              }
+            }
+          }
+
+          // Super users bypass limits (backend handles this too via 'Infinity', but explicit check is safe)
+          if (limitsData?.plan === "super") {
+            isLimitReached = false;
+          }
+
           return (
             <button
               key={item.id}
+              disabled={isLimitReached}
               onClick={() => {
+                if (isLimitReached) return;
+
                 if (mode === "graph") {
                   setSelectedType("GRAPH");
                   setConfig({ ...config, chartType: item.id });
@@ -340,18 +416,36 @@ export default function CreateAnalyticsViewModal({
                   setSelectedType(item.id);
                 }
               }}
-              className={`p-4 rounded-xl border-2 text-right transition-all flex flex-col gap-3 hover:border-blue-500 hover:shadow-md ${
+              className={`p-4 rounded-xl border-2 text-right transition-all flex flex-col gap-3 ${
+                isLimitReached
+                  ? "opacity-50 cursor-not-allowed border-gray-100 bg-gray-50"
+                  : "hover:border-blue-500 hover:shadow-md"
+              } ${
                 isSelected
                   ? "border-blue-600 bg-blue-50/50"
-                  : "border-gray-100 bg-white"
+                  : !isLimitReached
+                    ? "border-gray-100 bg-white"
+                    : ""
               }`}
             >
-              <div className={`p-3 rounded-lg w-fit ${item.color}`}>
+              <div
+                className={`p-3 rounded-lg w-fit ${isLimitReached ? "bg-gray-200 text-gray-400" : item.color}`}
+              >
                 <Icon size={24} />
               </div>
               <div>
-                <h3 className="font-bold text-gray-900">{item.label}</h3>
+                <h3
+                  className={`font-bold ${isLimitReached ? "text-gray-400" : "text-gray-900"}`}
+                >
+                  {item.label}
+                </h3>
                 <p className="text-sm text-gray-500 mt-1">{item.description}</p>
+                {isLimitReached && (
+                  <p className="text-xs text-red-500 font-bold mt-2 flex items-center gap-1">
+                    <AlertCircle size={12} />
+                    {limitMessage}
+                  </p>
+                )}
               </div>
             </button>
           );
@@ -1021,6 +1115,54 @@ export default function CreateAnalyticsViewModal({
         </div>
 
         <div className="flex-1 overflow-auto p-6">
+          {/* Plan Limits Banner */}
+          {!loadingLimits &&
+            limitsData &&
+            limitsData.plan !== "super" &&
+            !initialData && (
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
+                    <AlertCircle size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-gray-900">
+                      תוכנית: {PLAN_LABELS[limitsData.plan] || limitsData.plan}
+                    </div>
+                    <div className="text-sm text-gray-600 mt-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span>אנליטיקות רגילות:</span>
+                        <span className="font-medium">
+                          {limitsData.currentCounts.regular} /{" "}
+                          {limitsData.limits.regular}
+                          <span className="text-gray-400 mr-1">
+                            (נשארו {limitsData.remaining.regular})
+                          </span>
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>גרפים:</span>
+                        <span className="font-medium">
+                          {limitsData.currentCounts.graph} /{" "}
+                          {limitsData.limits.graph}
+                          <span className="text-gray-400 mr-1">
+                            (נשארו {limitsData.remaining.graph})
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          {/* Submit Error */}
+          {submitError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              {submitError}
+            </div>
+          )}
+
           {/* Title Input always nice to have */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">

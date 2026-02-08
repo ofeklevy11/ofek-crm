@@ -6,7 +6,7 @@ interface RTLTextProps extends TextProps {
 }
 
 // פיצול מלא: מילים / פיסוק / רווחים
-const TOKENIZER_REGEX = /([.,:;!?%/]| +)/;
+const TOKENIZER_REGEX = /([.,:;!?%/'"()\-]| +)/;
 
 const RTLText: FC<RTLTextProps> = ({ children, style, ...props }) => {
   const text = String(children || "");
@@ -49,6 +49,13 @@ const RTLText: FC<RTLTextProps> = ({ children, style, ...props }) => {
       {tokens.map((token, index) => {
         const isSpace = token.trim() === "";
 
+        // Fix for parentheses mirroring in RTL
+        let displayToken = token;
+        if (hasHebrew) {
+          if (token === "(") displayToken = ")";
+          else if (token === ")") displayToken = "(";
+        }
+
         return (
           <Text
             key={index}
@@ -58,7 +65,7 @@ const RTLText: FC<RTLTextProps> = ({ children, style, ...props }) => {
             ]}
             {...props}
           >
-            {isSpace ? "" : token}
+            {isSpace ? "" : displayToken}
           </Text>
         );
       })}
