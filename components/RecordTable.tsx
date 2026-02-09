@@ -322,43 +322,108 @@ export default function RecordTable({
     }
   };
 
-  // Fetch related data
+  // Fetch related data (batched: single API call for all relation fields)
   useEffect(() => {
     const fetchRelatedData = async () => {
       const relationFields = schema.filter(
         (f) => f.type === "relation" && f.relationTableId,
       );
-      const newRelatedData: Record<string, any> = {};
+      if (relationFields.length === 0) {
+        setRelatedData({});
+        return;
+      }
 
-      await Promise.all(
-        relationFields.map(async (field) => {
-          if (!field.relationTableId) return;
-          try {
-            const res = await fetch(
-              `/api/tables/${field.relationTableId}/records`,
-            );
-            if (res.ok) {
-              const data = await res.json();
-              const dataMap: Record<number, any> = {};
-              data.forEach((r: any) => {
-                dataMap[r.id] = r;
-              });
-              newRelatedData[field.relationTableId!] = dataMap;
+      // Build a map of tableId -> { recordIds, displayField }
+      // Deduplicate table IDs and collect only referenced record IDs from actual data
+      const tablesRequest: Record<
+        string,
+        { recordIds: number[]; displayField?: string }
+      > = {};
+
+      for (const field of relationFields) {
+        const tableId = String(field.relationTableId!);
+        if (!tablesRequest[tableId]) {
+          tablesRequest[tableId] = {
+            recordIds: [],
+            displayField: field.displayField,
+          };
+        }
+
+        // Collect all referenced record IDs from the current records
+        for (const record of records) {
+          const val = record.data?.[field.name];
+          if (val === null || val === undefined) continue;
+          if (Array.isArray(val)) {
+            for (const id of val) {
+              const numId = Number(id);
+              if (!isNaN(numId)) tablesRequest[tableId].recordIds.push(numId);
             }
-          } catch (error) {
-            console.error(
-              `Failed to fetch related table ${field.relationTableId}`,
-              error,
-            );
+          } else {
+            const numId = Number(val);
+            if (!isNaN(numId)) tablesRequest[tableId].recordIds.push(numId);
           }
-        }),
-      );
+        }
 
-      setRelatedData(newRelatedData);
+        // Deduplicate record IDs
+        tablesRequest[tableId].recordIds = [
+          ...new Set(tablesRequest[tableId].recordIds),
+        ];
+      }
+
+      // Remove tables with no referenced records
+      for (const tableId of Object.keys(tablesRequest)) {
+        if (tablesRequest[tableId].recordIds.length === 0) {
+          delete tablesRequest[tableId];
+        }
+      }
+
+      if (Object.keys(tablesRequest).length === 0) {
+        setRelatedData({});
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/tables/batch-related", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tables: tablesRequest }),
+        });
+
+        if (!res.ok) {
+          console.error("Failed to fetch batch related data");
+          return;
+        }
+
+        const batchResult = await res.json();
+
+        // Transform batch result into the format expected by the rendering code:
+        // { [tableId]: { [recordId]: { data: { [displayField]: displayValue } } } }
+        const newRelatedData: Record<string, any> = {};
+        for (const [tableId, recordMap] of Object.entries(batchResult)) {
+          const dataMap: Record<number, any> = {};
+          const displayField = tablesRequest[tableId]?.displayField;
+          for (const [recordId, info] of Object.entries(
+            recordMap as Record<string, { displayValue: string }>,
+          )) {
+            // Build a minimal record object matching what getLabel() expects
+            dataMap[Number(recordId)] = {
+              id: Number(recordId),
+              data: displayField
+                ? { [displayField]: (info as any).displayValue }
+                : { _first: (info as any).displayValue },
+            };
+          }
+          newRelatedData[tableId] = dataMap;
+        }
+
+        setRelatedData(newRelatedData);
+      } catch (error) {
+        console.error("Failed to fetch batch related data", error);
+      }
     };
 
     fetchRelatedData();
-  }, [schema]);
+  }, [schema, records]);
 
   // Scroll to highlighted record
   useEffect(() => {
