@@ -76,7 +76,7 @@ export function DatePickerPopup({
 
       {/* Popup */}
       <div
-        className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 md:absolute md:top-full md:left-0 md:transform-none md:mt-2 bg-white rounded-lg shadow-xl border border-gray-200 z-50 p-4 w-80"
+        className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 md:absolute md:top-16 md:left-1/2 md:transform md:-translate-x-1/2 md:translate-y-0 bg-white rounded-lg shadow-xl border border-gray-200 z-50 p-4 w-80"
         dir="rtl"
       >
         {/* Header */}

@@ -1108,8 +1108,9 @@ export default function SlaAutomationModal({
     <div
       className="fixed inset-0 bg-black/60 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4"
       dir="rtl"
+      onClick={() => onOpenChange(false)}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="bg-[#f4f8f8] px-8 py-5 border-b border-gray-100 flex justify-between items-center">
           <div className="flex flex-col">

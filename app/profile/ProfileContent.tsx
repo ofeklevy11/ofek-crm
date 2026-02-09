@@ -13,6 +13,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -36,6 +44,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { getApiKeys, createApiKey, deleteApiKey } from "@/app/actions/api-keys";
+import { updateCompanyName } from "@/app/actions/update-company-name";
 import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -51,6 +60,14 @@ export default function ProfileContent({ user }: ProfileContentProps) {
   const [creating, setCreating] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Company name update states
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState("");
+  const [password, setPassword] = useState("");
+  const [updatingCompanyName, setUpdatingCompanyName] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updateSuccess, setUpdateSuccess] = useState(false);
 
   const isAdmin = user.role === "admin";
 
@@ -113,6 +130,43 @@ export default function ProfileContent({ user }: ProfileContentProps) {
       await navigator.clipboard.writeText(text);
       setCopiedKey(text);
       setTimeout(() => setCopiedKey(null), 2000);
+    }
+  }
+
+  async function handleUpdateCompanyName() {
+    if (!newCompanyName.trim() || !password) {
+      setUpdateError("נא למלא את כל השדות");
+      return;
+    }
+
+    setUpdatingCompanyName(true);
+    setUpdateError(null);
+    setUpdateSuccess(false);
+
+    try {
+      const res = await updateCompanyName({
+        newCompanyName: newCompanyName.trim(),
+        password,
+      });
+
+      if (res.success) {
+        setUpdateSuccess(true);
+        setNewCompanyName("");
+        setPassword("");
+        // Refresh the page to show the new company name
+        setTimeout(() => {
+          router.refresh();
+          setUpdateSuccess(false);
+          setIsDialogOpen(false);
+        }, 2000);
+      } else {
+        setUpdateError(res.error || "שגיאה לא ידועה");
+      }
+    } catch (error) {
+      console.error("Error updating company name:", error);
+      setUpdateError("שגיאה בעדכון שם הארגון");
+    } finally {
+      setUpdatingCompanyName(false);
     }
   }
 
@@ -225,6 +279,115 @@ export default function ProfileContent({ user }: ProfileContentProps) {
               </div>
             </CardContent>
           </Card>
+
+          {/* Change Organization Name Button (Admin Only) */}
+          {isAdmin && (
+            <Card className="border-amber-200 shadow-sm overflow-hidden">
+              <CardHeader className="bg-amber-50 border-b border-amber-100 pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Lock className="w-5 h-5 text-amber-600" />
+                  ניהול ארגון
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="w-full bg-amber-600 hover:bg-amber-700 text-white">
+                      <Building2 className="w-4 h-4 ml-2" />
+                      עדכון שם הארגון
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px]" dir="rtl">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <Lock className="w-5 h-5 text-amber-600" />
+                        עדכון שם הארגון
+                      </DialogTitle>
+                      <DialogDescription>
+                        שנה את שם הארגון. נדרשת אימות סיסמה לאישור השינוי.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">
+                          שם ארגון נוכחי
+                        </label>
+                        <div className="p-3 bg-slate-50 rounded-md border border-slate-200 text-slate-900 font-medium">
+                          {user.company?.name || "לא משויך"}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">
+                          שם ארגון חדש
+                        </label>
+                        <Input
+                          placeholder="הזן שם ארגון חדש"
+                          value={newCompanyName}
+                          onChange={(e) => setNewCompanyName(e.target.value)}
+                          disabled={updatingCompanyName}
+                          className="bg-white"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">
+                          סיסמה לאימות
+                        </label>
+                        <Input
+                          type="password"
+                          placeholder="הזן את הסיסמה שלך"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          disabled={updatingCompanyName}
+                          className="bg-white"
+                        />
+                      </div>
+
+                      {updateError && (
+                        <Alert className="bg-red-50 border-red-200">
+                          <AlertDescription className="text-red-800">
+                            {updateError}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                      {updateSuccess && (
+                        <Alert className="bg-green-50 border-green-200">
+                          <AlertDescription className="text-green-800 flex items-center gap-2">
+                            <Check className="w-4 h-4" />
+                            שם הארגון עודכן בהצלחה!
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                      <Button
+                        onClick={handleUpdateCompanyName}
+                        disabled={
+                          updatingCompanyName ||
+                          !newCompanyName.trim() ||
+                          !password
+                        }
+                        className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                      >
+                        {updatingCompanyName ? (
+                          <>
+                            <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                            מעדכן...
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-4 h-4 ml-2" />
+                            עדכן שם ארגון
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Right Column: API Management & Integrations */}

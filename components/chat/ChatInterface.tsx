@@ -639,8 +639,8 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
 
       {/* Create Group Modal */}
       {isCreateGroupModalOpen && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={() => setIsCreateGroupModalOpen(false)}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-xl font-bold mb-4 text-gray-800">
               יצירת קבוצה חדשה
             </h3>

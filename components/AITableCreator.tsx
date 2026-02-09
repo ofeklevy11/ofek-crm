@@ -249,10 +249,14 @@ export default function AITableCreator({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
       <div
         className="bg-card w-full max-w-6xl h-[80vh] rounded-3xl shadow-2xl flex overflow-hidden border border-border flex-col md:flex-row"
         dir="rtl"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Chat Section */}
         <div

@@ -488,10 +488,11 @@ export default function ViewAutomationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
       <div
         className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]"
         dir="rtl"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-gray-100">
@@ -499,7 +500,7 @@ export default function ViewAutomationModal({
             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
               <Zap className="text-amber-500" size={24} />
               {mode === "list"
-                ? "אוטומציות לתצוגה"
+                ? "אוטומציות לאנליטיקה"
                 : mode === "edit"
                   ? "עריכת אוטומציה"
                   : "אוטומציה חדשה"}

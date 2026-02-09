@@ -6,7 +6,7 @@ import {
   X,
   Zap,
   Target,
-  GitCommit,
+
   Info,
   Trash2,
   Save,
@@ -18,11 +18,12 @@ import {
   Bell,
   Edit3,
   Globe,
-  ToggleRight,
-  Equal,
+
+
   Clock,
   FileText,
-  TrendingUp,
+
+
   ChevronRight,
   Lock,
   MessageCircle,
@@ -74,40 +75,6 @@ const AVAILABLE_ICONS = [
 ];
 const AVAILABLE_COLORS = ["blue", "green", "purple", "orange", "gray", "red"];
 
-const CONDITION_TYPES = [
-  {
-    id: "status",
-    label: "סטטוס שווה ל...",
-    icon: ToggleRight,
-    color: "bg-blue-50 text-blue-600",
-  },
-  {
-    id: "field",
-    label: "ערך שדה תואם",
-    icon: Equal,
-    color: "bg-green-50 text-green-600",
-  },
-  {
-    id: "time",
-    label: "עבר זמן מסוים (Time Delay)",
-    icon: Clock,
-    color: "bg-orange-50 text-orange-600",
-  },
-  {
-    id: "form",
-    label: "טופס מולא",
-    icon: FileText,
-    color: "bg-slate-100 text-slate-400",
-    comingSoon: true,
-  },
-  {
-    id: "score",
-    label: "ניקוד מעל סף",
-    icon: TrendingUp,
-    color: "bg-slate-100 text-slate-400",
-    comingSoon: true,
-  },
-];
 
 const AUTOMATION_CATEGORIES = [
   {
@@ -238,8 +205,9 @@ function ActionSelectionModal({
     <div
       className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200"
       style={{ margin: 0 }}
+      onClick={onClose}
     >
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
         <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <div className="flex items-center gap-2">
             {selectedCategory && (
@@ -1661,304 +1629,6 @@ function AutomationConfigModal({
   );
 }
 
-// ----------------------------------------------------------------------
-// CONDITION CONFIG MODAL
-// ----------------------------------------------------------------------
-
-function ConditionConfigModal({
-  isOpen,
-  onClose,
-  onSave,
-  type,
-  tables,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (description: string) => void;
-  type: any;
-  tables: any[];
-}) {
-  const [fields, setFields] = useState<any>({});
-
-  if (!isOpen || !type) return null;
-
-  const handleSave = () => {
-    let desc = `${type.label}`;
-
-    if (type.id === "status") {
-      desc = `כאשר הסטטוס בטבלת "${
-        tables.find((t) => t.id.toString() === fields.tableId)?.name || "?"
-      }" הוא "${fields.status || "?"}"`;
-    } else if (type.id === "field") {
-      const t = tables.find((t) => t.id.toString() === fields.tableId);
-      desc = `כאשר שדה "${fields.fieldName || "?"}" בטבלת "${
-        t?.name || "?"
-      }" שווה ל-"${fields.value || "?"}"`;
-    } else if (type.id === "time") {
-      desc = `המתן ${fields.amount || "0"} ${
-        fields.unit === "hours" ? "שעות" : "ימים"
-      }`;
-    }
-
-    onSave(desc);
-    setFields({});
-    onClose();
-  };
-
-  // Helper for table columns
-  const selectedTable = tables.find((t) => t.id.toString() === fields.tableId);
-  let tableFields: string[] = [];
-  if (selectedTable && selectedTable.schemaJson) {
-    try {
-      const schema =
-        typeof selectedTable.schemaJson === "string"
-          ? JSON.parse(selectedTable.schemaJson)
-          : selectedTable.schemaJson;
-      if (Array.isArray(schema)) {
-        tableFields = schema.map((col: any) => col.name);
-      }
-    } catch (e) {}
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-purple-50">
-          <div className="flex items-center gap-2">
-            <h3 className="font-bold text-purple-900">{type.label}</h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-purple-100 rounded-full text-purple-400"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-4">
-          {type.id === "time" && (
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  כמות
-                </label>
-                <input
-                  type="number"
-                  className="w-full p-2 border rounded-md"
-                  value={fields.amount || ""}
-                  onChange={(e) =>
-                    setFields({ ...fields, amount: e.target.value })
-                  }
-                />
-              </div>
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  יחידת זמן
-                </label>
-                <select
-                  className="w-full p-2 border rounded-md"
-                  value={fields.unit || "days"}
-                  onChange={(e) =>
-                    setFields({ ...fields, unit: e.target.value })
-                  }
-                >
-                  <option value="days">ימים</option>
-                  <option value="hours">שעות</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {type.id === "status" && (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  בחר טבלה לבדיקה
-                </label>
-                <select
-                  className="w-full p-2 border rounded-md"
-                  onChange={(e) =>
-                    setFields({ ...fields, tableId: e.target.value })
-                  }
-                  value={fields.tableId || ""}
-                >
-                  <option value="">בחר טבלה...</option>
-                  {tables.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  סטטוס נדרש
-                </label>
-                <input
-                  className="w-full p-2 border rounded-md"
-                  placeholder="לדוגמה: בוצע / בטיפול"
-                  onChange={(e) =>
-                    setFields({ ...fields, status: e.target.value })
-                  }
-                  value={fields.status || ""}
-                />
-              </div>
-            </>
-          )}
-
-          {type.id === "field" && (
-            <>
-              {tables.length === 0 ? (
-                <div className="text-center py-4 bg-orange-50 rounded-lg border border-orange-100">
-                  <AlertTriangle
-                    className="mx-auto text-orange-500 mb-2"
-                    size={24}
-                  />
-                  <div>
-                    <p className="text-sm font-semibold text-orange-800">
-                      לא נמצאו טבלאות
-                    </p>
-                    <p className="text-xs text-orange-600 mt-1">
-                      יש ליצור טבלה כדי להשתמש בתנאי מבוסס שדות.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      בחר טבלה לבדיקה
-                    </label>
-                    <select
-                      className="w-full p-2 border rounded-md"
-                      onChange={(e) =>
-                        setFields({
-                          ...fields,
-                          tableId: e.target.value,
-                          fieldName: "",
-                        })
-                      }
-                      value={fields.tableId || ""}
-                    >
-                      <option value="">בחר טבלה...</option>
-                      {tables.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      שדה לבדיקה
-                    </label>
-                    <select
-                      className="w-full p-2 border rounded-md disabled:bg-gray-100"
-                      onChange={(e) =>
-                        setFields({ ...fields, fieldName: e.target.value })
-                      }
-                      disabled={!fields.tableId}
-                      value={fields.fieldName || ""}
-                    >
-                      <option value="">בחר שדה...</option>
-                      {tableFields.map((f) => (
-                        <option key={f} value={f}>
-                          {f}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      חייב להיות שווה ל-
-                    </label>
-                    <input
-                      className="w-full p-2 border rounded-md"
-                      placeholder="הערך הנדרש..."
-                      onChange={(e) =>
-                        setFields({ ...fields, value: e.target.value })
-                      }
-                    />
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        <div className="p-4 bg-gray-50 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg text-sm"
-          >
-            ביטול
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={
-              (type.id === "status" || type.id === "field") &&
-              tables.length === 0
-            }
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            שמור תנאי
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ----------------------------------------------------------------------
-// SUB-MODALS
-// ----------------------------------------------------------------------
-
-function ConditionSelectionModal({ isOpen, onClose, onSelect }: any) {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-          <h3 className="font-bold text-gray-900">בחר תנאי מעבר</h3>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-gray-200 rounded-full text-gray-500"
-          >
-            <X size={20} />
-          </button>
-        </div>
-        <div className="p-2 grid gap-2">
-          {CONDITION_TYPES.map((item) => (
-            <button
-              key={item.id}
-              disabled={item.comingSoon}
-              onClick={() => {
-                if (!item.comingSoon) onSelect(item);
-              }}
-              className={`flex items-center gap-4 p-3 rounded-lg text-right transition-colors border border-transparent group relative ${
-                item.comingSoon ? "opacity-60 bg-gray-50" : "hover:bg-purple-50"
-              }`}
-            >
-              <div className={`p-2 rounded-lg ${item.color}`}>
-                <item.icon size={20} />
-              </div>
-              <div className="flex-1">
-                <div className="font-semibold text-gray-900">{item.label}</div>
-                {item.comingSoon && (
-                  <span className="text-[10px] bg-gray-200 px-1 rounded">
-                    בקרוב
-                  </span>
-                )}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ----------------------------------------------------------------------
 // DELETE CONFIRMATION MODAL
@@ -2058,10 +1728,8 @@ export function StageDetailModal({
 
   // Selection Modal State
   const [isAutomationModalOpen, setIsAutomationModalOpen] = useState(false);
-  const [isConditionModalOpen, setIsConditionModalOpen] = useState(false);
 
   const [configuringAutomation, setConfiguringAutomation] = useState<any>(null);
-  const [configuringCondition, setConfiguringCondition] = useState<any>(null);
   const [automationToDelete, setAutomationToDelete] = useState<number | null>(
     null,
   );
@@ -2105,7 +1773,6 @@ export function StageDetailModal({
           ? details.systemActions
           : [],
         goals: details.goals || "",
-        conditions: Array.isArray(details.conditions) ? details.conditions : [],
       });
       setIsEditing(false);
     } else if (isCreating) {
@@ -2116,7 +1783,6 @@ export function StageDetailModal({
         whatHappens: "",
         systemActions: [],
         goals: "",
-        conditions: [],
       });
       setIsEditing(true);
     }
@@ -2137,7 +1803,6 @@ export function StageDetailModal({
         whatHappens: formData.whatHappens,
         systemActions: formData.systemActions,
         goals: formData.goals,
-        conditions: formData.conditions,
       };
 
       if (isCreating && onSave) {
@@ -2211,14 +1876,7 @@ export function StageDetailModal({
     }));
   };
 
-  const addCondition = (description: string) => {
-    setFormData((prev: any) => ({
-      ...prev,
-      conditions: [...(prev.conditions || []), description],
-    }));
-  };
-
-  const removeItem = (field: "systemActions" | "conditions", index: number) => {
+  const removeItem = (field: "systemActions", index: number) => {
     setFormData((prev: any) => {
       const newItems = [...(prev[field] || [])];
       newItems.splice(index, 1);
@@ -2274,7 +1932,7 @@ export function StageDetailModal({
               )}
             </div>
             <p className="text-gray-500 text-sm mr-12">
-              הגדרת פרטי שלב, אוטומציות ותנאי מעבר
+              הגדרת פרטי שלב ואוטומציות
             </p>
           </div>
 
@@ -2347,45 +2005,6 @@ export function StageDetailModal({
               <p className="text-gray-600 text-sm border-r-2 border-emerald-500 pr-4 whitespace-pre-wrap">
                 {formData.goals || "לא הוגדר."}
               </p>
-            )}
-          </section>
-
-          {/* Section: Conditions */}
-          <section>
-            <div className="flex items-center gap-2 mb-3 text-gray-900 font-medium">
-              <GitCommit size={18} className="text-purple-500" />
-              <h3>תנאי מעבר</h3>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {formData.conditions.map((cond: string, i: number) => (
-                <span
-                  key={i}
-                  className="px-3 py-1 bg-purple-50 text-purple-700 text-xs rounded-full border border-purple-100 flex items-center gap-2 group"
-                >
-                  {cond}
-                  {isEditing && (
-                    <button
-                      onClick={() => removeItem("conditions", i)}
-                      className="hover:text-purple-900 bg-purple-100 rounded-full p-0.5"
-                    >
-                      <X size={10} />
-                    </button>
-                  )}
-                </span>
-              ))}
-              {isEditing && (
-                <button
-                  onClick={() => setIsConditionModalOpen(true)}
-                  className="px-3 py-1 bg-gray-50 text-gray-600 text-xs rounded-full border border-gray-200 border-dashed hover:border-purple-300 hover:text-purple-600 flex items-center gap-1 transition-all"
-                >
-                  <Plus size={12} />
-                  הוסף תנאי
-                </button>
-              )}
-            </div>
-            {formData.conditions.length === 0 && !isEditing && (
-              <p className="text-gray-400 text-sm italic">אין תנאי מעבר.</p>
             )}
           </section>
 
@@ -2620,30 +2239,8 @@ export function StageDetailModal({
         }}
       />
 
-      <ConditionSelectionModal
-        isOpen={isConditionModalOpen}
-        onClose={() => setIsConditionModalOpen(false)}
-        onSelect={(item: any) => {
-          setIsConditionModalOpen(false);
-          if (
-            item.id === "time" ||
-            item.id === "status" ||
-            item.id === "field"
-          ) {
-            setConfiguringCondition(item);
-          } else {
-            addCondition(item.label);
-          }
-        }}
-      />
 
-      <ConditionConfigModal
-        isOpen={!!configuringCondition}
-        type={configuringCondition}
-        tables={tables}
-        onClose={() => setConfiguringCondition(null)}
-        onSave={addCondition}
-      />
+
     </>
   );
 }

@@ -223,14 +223,12 @@ export default function TableCard({
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
         onConfirm={handleConfirmDelete}
-        title="Delete Table"
-        description={`Are you sure you want to delete "${
-          table.name
-        }"? This will permanently delete all ${table._count.records} ${
-          table._count.records === 1 ? "record" : "records"
-        }, and this action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
+        title="מחיקת טבלה"
+        description={`האם אתה בטוח שברצונך למחוק את "${table.name}"? פעולה זו תמחק לצמיתות את כל ${table._count.records} ${
+          table._count.records === 1 ? "הרשומה" : "הרשומות"
+        }, ולא ניתן יהיה לבטל אותה.`}
+        confirmText="מחק"
+        cancelText="ביטול"
         isDestructive
       />
 

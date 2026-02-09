@@ -167,6 +167,15 @@ export function GlobalEventAutomationsModal({
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] backdrop-blur-sm p-4"
       dir="rtl"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          if (showBuilder) {
+            handleCloseBuilder();
+          } else {
+            onClose();
+          }
+        }
+      }}
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[85vh] overflow-hidden flex flex-col">
         {showBuilder ? (

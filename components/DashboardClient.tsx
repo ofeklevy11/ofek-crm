@@ -1011,10 +1011,17 @@ export default function DashboardClient({
 
         {/* Add Widget Modal Overlay */}
         {isAddModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={() => {
+              setIsAddModalOpen(false);
+              setEditingWidgetId(null);
+            }}
+          >
             <div
               className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto"
               dir="rtl"
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-lg font-bold">
@@ -1317,10 +1324,17 @@ export default function DashboardClient({
 
       {/* Mini Dashboard Modal */}
       {isMiniDashboardModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => {
+            setIsMiniDashboardModalOpen(false);
+            setEditingMiniDashboardId(null);
+          }}
+        >
           <div
             className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto flex flex-col"
             dir="rtl"
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-6 shrink-0">
               <h3 className="text-xl font-bold flex items-center gap-2">
@@ -1510,10 +1524,17 @@ export default function DashboardClient({
 
       {/* Goals Table Modal */}
       {isGoalsTableModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => {
+            setIsGoalsTableModalOpen(false);
+            setEditingGoalsTableId(null);
+          }}
+        >
           <div
             className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto flex flex-col"
             dir="rtl"
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-6 shrink-0">
               <h3 className="text-xl font-bold flex items-center gap-2">
@@ -1638,10 +1659,17 @@ export default function DashboardClient({
 
       {/* Analytics Table Modal */}
       {isAnalyticsTableModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => {
+            setIsAnalyticsTableModalOpen(false);
+            setEditingAnalyticsTableId(null);
+          }}
+        >
           <div
             className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto flex flex-col"
             dir="rtl"
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-6 shrink-0">
               <h3 className="text-xl font-bold flex items-center gap-2">

@@ -289,6 +289,13 @@ export function EventModal({
       <div
         className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70]"
         dir="rtl"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowBuilder(false);
+            setEditingAutoId(null);
+            setEditingAutoData(null);
+          }
+        }}
       >
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] md:h-[800px] mx-4 relative overflow-hidden flex flex-col">
           <EventAutomationBuilder
@@ -314,6 +321,11 @@ export function EventModal({
     <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
       dir="rtl"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleClose();
+        }
+      }}
     >
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header with Tabs */}

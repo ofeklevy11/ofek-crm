@@ -94,8 +94,12 @@ export default function EditPaymentModal({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
       dir="rtl"
+      onClick={onClose}
     >
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden text-right">
+      <div
+        className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden text-right"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex justify-between items-center p-4 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">עריכת תשלום</h2>
           <button

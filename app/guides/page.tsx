@@ -5,7 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowRight, Workflow, CheckSquare, Calendar } from "lucide-react";
+import { ArrowRight, Workflow, CheckSquare, Calendar, Info } from "lucide-react";
 import Link from "next/link";
 
 export default function GuidesPage() {
@@ -49,6 +49,25 @@ export default function GuidesPage() {
             למד כיצד להפיק את המרב ממערכת ה-CRM שלך.
           </p>
         </div>
+
+        <Card className="mb-8 border-amber-200 bg-amber-50">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-amber-900 font-medium">
+                  על מנת לעבוד מול Make או לבצע קריאות אחרות למערכת יש לדבר עם אופק מנהל המערכת{" "}
+                  <a
+                    href="mailto:ofekconnect4@gmail.com"
+                    className="text-amber-700 hover:text-amber-800 underline"
+                  >
+                    ofekconnect4@gmail.com
+                  </a>
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {guides.map((guide, index) => (
