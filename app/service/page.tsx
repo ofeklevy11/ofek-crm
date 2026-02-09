@@ -16,17 +16,16 @@ export default async function ServicePage() {
     redirect("/login");
   }
 
-  const [tickets, clients, slaPolicies, stats] = await Promise.all([
+  const [tickets, clients, slaPolicies, stats, users] = await Promise.all([
     getTickets(),
     getClients(),
     getSlaPolicies(),
     getTicketStats(),
+    prisma.user.findMany({
+      where: { companyId: user.companyId },
+      select: { id: true, name: true, email: true },
+    }),
   ]);
-
-  const users = await prisma.user.findMany({
-    where: { companyId: user.companyId },
-    select: { id: true, name: true, email: true },
-  });
 
   return (
     <ServicePageClient

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   createAutomationRule,
   updateAutomationRule,
@@ -208,42 +208,58 @@ export default function AutomationModal({
     setTaskTags(taskTags.filter((t) => t !== tagToRemove));
   };
 
-  // Fetch columns when table/trigger changes
+  // Cache: avoid re-fetching columns when only triggerType changes (same tableId)
+  const columnsCache = useRef<Record<number, any[]>>({});
+  // Cache: avoid re-fetching files on every media type toggle
+  const filesCached = useRef(false);
+
+  // Fetch columns when table changes (triggerType only controls whether columns are shown)
   useEffect(() => {
-    if (
-      tableId &&
-      (triggerType === "RECORD_FIELD_CHANGE" ||
-        triggerType === "TIME_SINCE_CREATION" ||
-        triggerType === "NEW_RECORD" ||
-        triggerType === "DIRECT_DIAL")
-    ) {
-      setLoadingColumns(true);
-      getTableById(Number(tableId))
-        .then((res) => {
-          if (res.success && res.data && res.data.schemaJson) {
-            const schema = res.data.schemaJson as any;
-            if (Array.isArray(schema)) {
-              setColumns(schema);
-            } else if (schema && Array.isArray(schema.columns)) {
-              setColumns(schema.columns);
-            } else {
-              setColumns([]);
-            }
-          }
-        })
-        .finally(() => setLoadingColumns(false));
-    } else {
+    const needsColumns =
+      triggerType === "RECORD_FIELD_CHANGE" ||
+      triggerType === "TIME_SINCE_CREATION" ||
+      triggerType === "NEW_RECORD" ||
+      triggerType === "DIRECT_DIAL";
+
+    if (!tableId || !needsColumns) {
       setColumns([]);
+      return;
     }
+
+    const numTableId = Number(tableId);
+
+    // Return cached columns if available for this table
+    if (columnsCache.current[numTableId]) {
+      setColumns(columnsCache.current[numTableId]);
+      return;
+    }
+
+    setLoadingColumns(true);
+    getTableById(numTableId)
+      .then((res) => {
+        if (res.success && res.data && res.data.schemaJson) {
+          const schema = res.data.schemaJson as any;
+          let cols: any[] = [];
+          if (Array.isArray(schema)) {
+            cols = schema;
+          } else if (schema && Array.isArray(schema.columns)) {
+            cols = schema.columns;
+          }
+          columnsCache.current[numTableId] = cols;
+          setColumns(cols);
+        }
+      })
+      .finally(() => setLoadingColumns(false));
   }, [tableId, triggerType]);
 
-  // Load files when WhatsApp media is selected
+  // Load files when WhatsApp media is selected (cached — only fetch once)
   useEffect(() => {
-    if (waMessageType === "media") {
+    if (waMessageType === "media" && !filesCached.current) {
       setLoadingFiles(true);
       getAllFiles()
         .then((files) => {
           setAvailableFiles(files);
+          filesCached.current = true;
         })
         .finally(() => setLoadingFiles(false));
     }

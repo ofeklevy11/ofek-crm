@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,8 @@ interface RelationPickerProps {
   allowMultiple?: boolean;
   displayField?: string;
   className?: string;
+  // Shared cache across multiple pickers in the same form (keyed by tableId)
+  sharedCache?: React.MutableRefObject<Record<number, any[]>>;
 }
 
 export default function RelationPicker({
@@ -28,39 +30,88 @@ export default function RelationPicker({
   allowMultiple = false,
   displayField,
   className,
+  sharedCache,
 }: RelationPickerProps) {
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [open, setOpen] = useState(false);
+  // Cache for selected record labels (so we can display them without re-fetching everything)
+  const selectedRecordsCache = useRef<Record<number, any>>({});
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (open && records.length === 0) {
-      fetchRecords();
+  // Fetch records from server with optional search query
+  const fetchRecords = useCallback(async (query: string = "") => {
+    // For initial load (no query), check shared cache first
+    if (!query && sharedCache?.current[tableId]) {
+      const cached = sharedCache.current[tableId];
+      setRecords(cached);
+      cached.forEach((r: any) => {
+        selectedRecordsCache.current[r.id] = r;
+      });
+      return;
     }
-  }, [open]);
 
-  // Also fetch records if we have a value but no records (to display the selected label)
-  useEffect(() => {
-    if (value && records.length === 0) {
-      fetchRecords();
-    }
-  }, [value]);
-
-  const fetchRecords = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/tables/${tableId}/records`);
+      const params = new URLSearchParams({ for: "picker", limit: "50" });
+      if (query) params.set("q", query);
+      const res = await fetch(`/api/tables/${tableId}/records?${params}`);
       if (res.ok) {
         const data = await res.json();
         setRecords(data);
+        // Update per-picker cache
+        data.forEach((r: any) => {
+          selectedRecordsCache.current[r.id] = r;
+        });
+        // Populate shared cache for initial loads (no search query)
+        if (!query && sharedCache) {
+          sharedCache.current[tableId] = data;
+        }
       }
     } catch (error) {
       console.error("Failed to fetch relation records", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [tableId, sharedCache]);
+
+  // Fetch selected records for label display (only IDs not already cached)
+  useEffect(() => {
+    if (!value) return;
+    const ids = Array.isArray(value) ? value : [value];
+    const uncachedIds = ids.filter((id: number) => !selectedRecordsCache.current[id]);
+    if (uncachedIds.length === 0) return;
+
+    // Fetch initial records to populate cache for selected values
+    fetchRecords();
+  }, [value, fetchRecords]);
+
+  // Fetch initial records when popover opens
+  useEffect(() => {
+    if (open) {
+      fetchRecords(searchTerm);
+    }
+  }, [open]);
+
+  // Debounced server-side search
+  useEffect(() => {
+    if (!open) return;
+
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+
+    debounceTimer.current = setTimeout(() => {
+      fetchRecords(searchTerm);
+    }, 300);
+
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, [searchTerm, open, fetchRecords]);
 
   const getRecordLabel = (record: any) => {
     if (!record) return "";
@@ -71,19 +122,14 @@ export default function RelationPicker({
     return String(Object.values(record.data)[0] || "ללא כותרת");
   };
 
-  const filteredRecords = records
-    .filter((r) => {
-      if (!searchTerm) return true;
-      const searchStr = searchTerm.toLowerCase();
-      // Search in display field if available, otherwise all fields
-      if (displayField && r.data[displayField]) {
-        return String(r.data[displayField]).toLowerCase().includes(searchStr);
-      }
-      return Object.values(r.data).some((v) =>
-        String(v).toLowerCase().includes(searchStr)
-      );
-    })
-    .slice(0, 50);
+  // Get label for a selected record (from cache or current records)
+  const getSelectedLabel = (id: number) => {
+    const cached = selectedRecordsCache.current[id];
+    if (cached) return getRecordLabel(cached);
+    const found = records.find((r) => r.id === id);
+    if (found) return getRecordLabel(found);
+    return `#${id}`;
+  };
 
   const handleSelect = (recordId: number) => {
     if (allowMultiple) {
@@ -133,14 +179,13 @@ export default function RelationPicker({
                     );
                   }
                   return selectedIds.map((id: number) => {
-                    const record = records.find((r) => r.id === id);
                     return (
                       <Badge
                         key={id}
                         variant="secondary"
                         className="text-xs px-2 py-0.5 gap-1 hover:bg-secondary/80 bg-primary/10 text-primary border-primary/20"
                       >
-                        {record ? getRecordLabel(record) : `#${id}`}
+                        {getSelectedLabel(id)}
                         <div
                           className="cursor-pointer hover:text-destructive transition-colors rounded-full p-0.5"
                           onPointerDown={(e) => {
@@ -156,16 +201,15 @@ export default function RelationPicker({
                 })()
               : // Single select
                 (() => {
-                  const selectedRecord = records.find((r) => r.id === value);
                   return (
                     <span
                       className={cn(
                         "truncate font-normal",
-                        !selectedRecord && "text-muted-foreground"
+                        !value && "text-muted-foreground"
                       )}
                     >
-                      {selectedRecord
-                        ? getRecordLabel(selectedRecord)
+                      {value
+                        ? getSelectedLabel(value)
                         : "בחר רשומה..."}
                     </span>
                   );
@@ -189,12 +233,12 @@ export default function RelationPicker({
             <div className="py-6 text-center text-sm text-muted-foreground">
               טוען...
             </div>
-          ) : filteredRecords.length === 0 ? (
+          ) : records.length === 0 ? (
             <div className="py-6 text-center text-sm text-muted-foreground">
               לא נמצאו תוצאות.
             </div>
           ) : (
-            filteredRecords.map((record) => {
+            records.map((record) => {
               const selected = isSelected(record.id);
               return (
                 <div

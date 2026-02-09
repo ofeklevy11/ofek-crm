@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { uploadFiles } from "@/lib/uploadthing";
 import { saveFileMetadata } from "@/app/actions/storage";
@@ -52,6 +52,10 @@ export default function AddRecordForm({
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<Record<string, any>>({});
+  // Cache for lookup fetches: keyed by record ID to avoid re-fetching the same related record
+  const lookupCache = useRef<Record<number, any>>({});
+  // Shared cache for RelationPicker: keyed by tableId, avoids duplicate fetches across pickers
+  const relationPickerCache = useRef<Record<number, any[]>>({});
   // Enhanced state for files and links
   const [attachmentsData, setAttachmentsData] = useState<
     Array<{
@@ -459,6 +463,7 @@ export default function AddRecordForm({
                             value={formData[field.name]}
                             allowMultiple={field.allowMultiple}
                             displayField={field.displayField}
+                            sharedCache={relationPickerCache}
                             className="min-h-11 text-base p-3 w-full"
                             onChange={async (val) => {
                               const newFormData = {
@@ -476,11 +481,17 @@ export default function AddRecordForm({
                               if (lookupFields.length > 0) {
                                 if (val && !Array.isArray(val)) {
                                   try {
-                                    const res = await fetch(
-                                      `/api/records/${val}`,
-                                    );
-                                    if (res.ok) {
-                                      const relatedRecord = await res.json();
+                                    let relatedRecord = lookupCache.current[val];
+                                    if (!relatedRecord) {
+                                      const res = await fetch(
+                                        `/api/records/${val}`,
+                                      );
+                                      if (res.ok) {
+                                        relatedRecord = await res.json();
+                                        lookupCache.current[val] = relatedRecord;
+                                      }
+                                    }
+                                    if (relatedRecord) {
                                       const updates: Record<string, any> = {};
 
                                       lookupFields.forEach((lf) => {

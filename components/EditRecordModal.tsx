@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import RelationPicker from "./RelationPicker";
 import {
@@ -82,16 +82,13 @@ export default function EditRecordModal({
   // State for editing existing file
   const [editingFileId, setEditingFileId] = useState<number | null>(null);
   const [editFileName, setEditFileName] = useState("");
+  // Cache for lookup fetches: keyed by record ID to avoid re-fetching the same related record
+  const lookupCache = useRef<Record<number, any>>({});
+  // Shared cache for RelationPicker: keyed by tableId, avoids duplicate fetches across pickers
+  const relationPickerCache = useRef<Record<number, any[]>>({});
 
   // Auto-focus logic already exists...
   // ...
-
-  // Update fetchAttachments to also fetch files?
-  // Or fetch files separately.
-  // The record object passed in might already have files if we updated the query.
-  // But for live updates after upload, we might need to fetch.
-  // Let's check schema. Record now has files relation.
-  // If record prop is stale, we need to fetch fresh data.
 
   useEffect(() => {
     // Initialize form data from record
@@ -139,38 +136,11 @@ export default function EditRecordModal({
       setDialedAt(date.toISOString().split("T")[0]);
     }
 
-    fetchAttachments();
-    fetchFiles();
+    fetchRecordData();
   }, [record, schema]);
 
-  const fetchAttachments = async () => {
-    try {
-      const res = await fetch(`/api/records/${record.id}/attachments`);
-      if (res.ok) {
-        const data = await res.json();
-        setAttachments(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch attachments", error);
-    }
-  };
-
-  // New function to fetch files (we might need a new API route or just use generic storage action?)
-  // Using server action from client might be cleaner if allowed, but here we are in 'use client'.
-  // We can use a server action wrapper or just assume record.files is passed?
-  // record.files might be stale.
-  // Let's create a small function to re-fetch record files?
-  // Or use the storage action `getStorageData` but filtered?
-  // The easiest way is probably to assume `saveFileMetadata` works and then we manually add to state.
-  // But for deletion we need ID.
-  // Let's rely on record prop initially, but we need to refresh.
-  // Actually, let's fetch the record fresh from API which includes files.
-
-  const fetchFiles = async () => {
-    // We can reuse the record fetch API?
-    // GET /api/tables/:id/records currently returns all records.
-    // We assume there is a GET /api/records/:id route?
-    // Yes, RelationPicker uses `/api/records/${val}`.
+  // Single fetch that gets attachments, files, and fresh metadata in one API call
+  const fetchRecordData = async () => {
     try {
       const res = await fetch(`/api/records/${record.id}`);
       if (res.ok) {
@@ -208,7 +178,7 @@ export default function EditRecordModal({
         }
       }
     } catch (err) {
-      console.error("Failed to fetch fresh files", err);
+      console.error("Failed to fetch record data", err);
     }
   };
 
@@ -302,7 +272,7 @@ export default function EditRecordModal({
         );
 
         // Refresh files
-        fetchFiles();
+        fetchRecordData();
         router.refresh();
       }
     } catch (error: any) {
@@ -356,7 +326,7 @@ export default function EditRecordModal({
       if (res.ok) {
         setNewAttachmentUrl("");
         setNewAttachmentName("");
-        fetchAttachments(); // re-fetch attachments
+        fetchRecordData(); // re-fetch attachments
         router.refresh();
       }
     } catch (error) {
@@ -697,6 +667,7 @@ export default function EditRecordModal({
                         value={formData[field.name]}
                         allowMultiple={field.allowMultiple}
                         displayField={field.displayField}
+                        sharedCache={relationPickerCache}
                         onChange={async (val) => {
                           const newFormData = {
                             ...formData,
@@ -713,9 +684,15 @@ export default function EditRecordModal({
                           if (lookupFields.length > 0) {
                             if (val && !Array.isArray(val)) {
                               try {
-                                const res = await fetch(`/api/records/${val}`);
-                                if (res.ok) {
-                                  const relatedRecord = await res.json();
+                                let relatedRecord = lookupCache.current[val];
+                                if (!relatedRecord) {
+                                  const res = await fetch(`/api/records/${val}`);
+                                  if (res.ok) {
+                                    relatedRecord = await res.json();
+                                    lookupCache.current[val] = relatedRecord;
+                                  }
+                                }
+                                if (relatedRecord) {
                                   const updates: Record<string, any> = {};
 
                                   lookupFields.forEach((lf) => {

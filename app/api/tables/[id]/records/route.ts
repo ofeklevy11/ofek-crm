@@ -32,10 +32,41 @@ export async function GET(
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
 
-    // Now get records (they inherit companyId from table)
+    // Support lightweight picker mode with server-side search and pagination
+    const url = new URL(request.url);
+    const forPicker = url.searchParams.get("for") === "picker";
+    const searchQuery = url.searchParams.get("q") || "";
+    const limit = parseInt(url.searchParams.get("limit") || "0") || 0;
+
+    if (forPicker) {
+      // Lightweight mode for RelationPicker: only id + data, with optional search
+      let records;
+      if (searchQuery) {
+        // Server-side ILIKE search on JSON data
+        records = await prisma.$queryRaw<{ id: number; data: any }[]>`
+          SELECT id, data FROM "Record"
+          WHERE "tableId" = ${tableId}
+          AND "companyId" = ${currentUser.companyId}
+          AND "data"::text ILIKE ${`%${searchQuery}%`}
+          ORDER BY "createdAt" DESC
+          LIMIT ${limit || 50}
+        `;
+      } else {
+        records = await prisma.record.findMany({
+          where: { tableId, companyId: currentUser.companyId },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          take: limit || 50,
+          select: { id: true, data: true },
+        });
+      }
+      return NextResponse.json(records);
+    }
+
+    // Full mode: includes relations and attachments (used by table page)
     const records = await prisma.record.findMany({
       where: { tableId, companyId: currentUser.companyId },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      ...(limit > 0 ? { take: limit } : {}),
       include: {
         creator: {
           select: { id: true, name: true, email: true },

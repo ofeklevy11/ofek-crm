@@ -56,34 +56,38 @@ export default async function TableDetailsPage({
 
   let records;
   let totalCount = 0;
+  let views;
+
+  // Views query is independent — start it immediately and run in parallel with record queries
+  const viewsPromise = prisma.view.findMany({
+    where: { tableId },
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+  });
 
   if (q) {
-    // Raw query with ILIKE on JSON data
-    // OPTIMIZATION: Added LIMIT to prevent full table scans on large tables
-    // The new composite index [tableId, companyId, createdAt DESC] helps with ordering
-    // Note: For very large tables (100K+ records), consider implementing
-    // a dedicated search solution (e.g., PostgreSQL Full-Text Search or Elasticsearch)
+    // Search case: count + paginated IDs + views all run in parallel
+    const [countResult, rawRecords, viewsData] = await Promise.all([
+      prisma.$queryRaw<{ count: bigint }[]>`
+        SELECT COUNT(*) as count FROM "Record"
+        WHERE "tableId" = ${tableId}
+        AND "companyId" = ${user.companyId}
+        AND "data"::text ILIKE ${`%${q}%`}
+        LIMIT 1000
+      `,
+      prisma.$queryRaw<{ id: number }[]>`
+        SELECT id FROM "Record"
+        WHERE "tableId" = ${tableId}
+        AND "companyId" = ${user.companyId}
+        AND "data"::text ILIKE ${`%${q}%`}
+        ORDER BY "createdAt" DESC
+        LIMIT ${pageSize}
+        OFFSET ${(currentPage - 1) * pageSize}
+      `,
+      viewsPromise,
+    ]);
 
-    // First, get the total count for pagination (limited to improve performance)
-    const countResult = await prisma.$queryRaw<{ count: bigint }[]>`
-      SELECT COUNT(*) as count FROM "Record"
-      WHERE "tableId" = ${tableId}
-      AND "companyId" = ${user.companyId}
-      AND "data"::text ILIKE ${`%${q}%`}
-      LIMIT 1000
-    `;
     totalCount = Math.min(Number(countResult[0]?.count || 0), 1000);
-
-    // Get paginated IDs with OFFSET/LIMIT for efficiency
-    const rawRecords = await prisma.$queryRaw<{ id: number }[]>`
-      SELECT id FROM "Record"
-      WHERE "tableId" = ${tableId}
-      AND "companyId" = ${user.companyId}
-      AND "data"::text ILIKE ${`%${q}%`}
-      ORDER BY "createdAt" DESC
-      LIMIT ${pageSize}
-      OFFSET ${(currentPage - 1) * pageSize}
-    `;
+    views = viewsData;
     const ids = rawRecords.map((r: { id: number }) => r.id);
 
     records = await prisma.record.findMany({
@@ -95,26 +99,33 @@ export default async function TableDetailsPage({
       },
     });
   } else {
-    // CRITICAL: Filter by companyId
-    totalCount = await prisma.record.count({
-      where: {
-        tableId,
-        companyId: user.companyId,
-      },
-    });
-    records = await prisma.record.findMany({
-      where: {
-        tableId,
-        companyId: user.companyId,
-      },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      skip: (currentPage - 1) * pageSize,
-      take: pageSize,
-      include: {
-        attachments: true,
-        files: true,
-      },
-    });
+    // Non-search case: count + records + views all run in parallel
+    const [countVal, recordsVal, viewsData] = await Promise.all([
+      prisma.record.count({
+        where: {
+          tableId,
+          companyId: user.companyId,
+        },
+      }),
+      prisma.record.findMany({
+        where: {
+          tableId,
+          companyId: user.companyId,
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (currentPage - 1) * pageSize,
+        take: pageSize,
+        include: {
+          attachments: true,
+          files: true,
+        },
+      }),
+      viewsPromise,
+    ]);
+
+    totalCount = countVal;
+    records = recordsVal;
+    views = viewsData;
   }
 
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -128,13 +139,6 @@ export default async function TableDetailsPage({
   } catch (e) {
     console.error("Invalid schema JSON", e);
   }
-
-  // Load views for this table
-  // Since we verified table belongs to company, views belonging to this table are safe.
-  const views = await prisma.view.findMany({
-    where: { tableId },
-    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
-  });
 
   return (
     <div className="min-h-screen bg-muted/40 p-4 lg:p-6" dir="rtl">

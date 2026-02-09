@@ -20,7 +20,6 @@ import {
   deleteViewFolder,
   moveViewToFolder,
 } from "@/app/actions/view-folders";
-import { getCurrentAuthUser } from "@/app/actions/auth";
 import {
   Loader2,
   List,
@@ -65,7 +64,6 @@ import {
   Trash2,
   GripVertical,
 } from "lucide-react";
-import { hasUserFlag } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 
 // Available colors for the cards
@@ -625,12 +623,14 @@ interface AnalyticsDashboardProps {
   initialViews: any[];
   initialFolders: any[];
   initialRefreshUsage: { usage: number; nextResetTime: string | null };
+  currentUser: { id: number; canManage: boolean; plan: string };
 }
 
 export default function AnalyticsDashboard({
   initialViews,
   initialFolders,
   initialRefreshUsage,
+  currentUser,
 }: AnalyticsDashboardProps) {
   const router = useRouter();
   const [views, setViews] = useState<any[]>(() =>
@@ -648,13 +648,13 @@ export default function AnalyticsDashboard({
   const [selectedView, setSelectedView] = useState<any | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingView, setEditingView] = useState<any | null>(null);
-  const [canManage, setCanManage] = useState(false);
+  const canManage = currentUser.canManage;
   const [isAIMode, setIsAIMode] = useState(false);
 
   // Automation Modal State
   const [viewAutomationTarget, setViewAutomationTarget] = useState<any>(null);
-  const [currentUserId, setCurrentUserId] = useState<number>(0);
-  const [userPlan, setUserPlan] = useState<string>("basic");
+  const currentUserId = currentUser.id;
+  const userPlan = currentUser.plan;
 
   // Folder State
   const [currentFolder, setCurrentFolder] = useState<number | "all">("all");
@@ -710,18 +710,6 @@ export default function AnalyticsDashboard({
     }),
   );
 
-  useEffect(() => {
-    getCurrentAuthUser().then((res) => {
-      if (res.success && res.data) {
-        if (!hasUserFlag(res.data as any, "canViewAnalytics")) {
-          // router.push("/"); // Handled by server component maybe? keep it safe
-        }
-        setCanManage(hasUserFlag(res.data as any, "canManageAnalytics"));
-        setCurrentUserId(res.data.id);
-        setUserPlan(res.data.isPremium || "basic");
-      }
-    });
-  }, []);
 
   const handleRefreshSingle = async (view: any) => {
     if (refreshingViewId) return;

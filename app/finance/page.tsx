@@ -30,6 +30,7 @@ export default async function FinancePage() {
     pendingPayments,
     clientCount,
     transactionStats,
+    cancelledRetainersCount,
   ] = await Promise.all([
     prisma.transaction.findMany({
       where: {
@@ -79,6 +80,13 @@ export default async function FinancePage() {
           },
           { paidDate: { not: null } },
         ],
+      },
+    }),
+    // Cancelled retainers count for churn rate (was sequential, now parallel)
+    prisma.retainer.count({
+      where: {
+        status: "cancelled",
+        client: { companyId: user.companyId },
       },
     }),
   ]);
@@ -138,14 +146,6 @@ export default async function FinancePage() {
   // Churn Rate Calculation
   // All retainers moved to "cancelled" are considered churn.
   // Formula: Cancelled / (Active + Cancelled) * 100
-  // We need to fetch count of cancelled retainers first.
-  const cancelledRetainersCount = await prisma.retainer.count({
-    where: {
-      status: "cancelled",
-      client: { companyId: user.companyId },
-    },
-  });
-
   const totalRetainersForChurn =
     activeRetainers.length + cancelledRetainersCount;
   const churnRate =

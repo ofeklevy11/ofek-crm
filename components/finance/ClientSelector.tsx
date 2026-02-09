@@ -46,48 +46,36 @@ export default function ClientSelector({
   const [isLoadingTables, setIsLoadingTables] = useState(true);
   const [isLoadingFinanceClients, setIsLoadingFinanceClients] = useState(false);
 
-  // Fetch available tables
+  // Fetch tables and finance clients in parallel on mount
   useEffect(() => {
-    async function fetchTables() {
+    async function fetchInitialData() {
+      setIsLoadingFinanceClients(true);
       try {
-        const response = await fetch("/api/tables");
-        if (response.ok) {
-          const data = await response.json();
-          setTables(data);
+        const [tablesRes, financeRes] = await Promise.all([
+          fetch("/api/tables"),
+          fetch("/api/finance/clients"),
+        ]);
+
+        if (tablesRes.ok) {
+          setTables(await tablesRes.json());
         } else {
           console.error("Failed to fetch tables");
         }
-      } catch (error) {
-        console.error("Error fetching tables:", error);
-      } finally {
-        setIsLoadingTables(false);
-      }
-    }
-    fetchTables();
-  }, []);
 
-  // Fetch finance clients when switching to finance source
-  useEffect(() => {
-    async function fetchFinanceClients() {
-      if (sourceType !== "finance" || !isOpen) return;
-
-      setIsLoadingFinanceClients(true);
-      try {
-        const response = await fetch("/api/finance/clients");
-        if (response.ok) {
-          const data = await response.json();
-          setFinanceClients(data);
+        if (financeRes.ok) {
+          setFinanceClients(await financeRes.json());
         } else {
           console.error("Failed to fetch finance clients");
         }
       } catch (error) {
-        console.error("Error fetching finance clients:", error);
+        console.error("Error fetching initial data:", error);
       } finally {
+        setIsLoadingTables(false);
         setIsLoadingFinanceClients(false);
       }
     }
-    fetchFinanceClients();
-  }, [sourceType, isOpen]);
+    fetchInitialData();
+  }, []);
 
   // Debounced search function for table clients
   const searchClients = useCallback(

@@ -29,6 +29,11 @@ export default async function AnalyticsPage() {
       initialViews={updatedViews}
       initialFolders={updatedFolders}
       initialRefreshUsage={refreshUsage}
+      currentUser={{
+        id: user.id,
+        canManage: hasUserFlag(user, "canManageAnalytics"),
+        plan: user.isPremium || "basic",
+      }}
     />
   );
 }
