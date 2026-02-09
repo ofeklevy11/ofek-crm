@@ -244,3 +244,46 @@ export async function getCustomTableData(
     return { success: false, error: "Failed to fetch data" };
   }
 }
+
+/**
+ * Batch fetch table data for multiple widgets in a single server action call.
+ * Eliminates the N+1 pattern where each widget triggers a separate request.
+ */
+export async function getBatchTableData(
+  requests: Array<{
+    widgetId: string;
+    tableId: number;
+    viewId: number | string;
+    settings?: any;
+  }>,
+) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
+    const results = await Promise.all(
+      requests.map(async ({ widgetId, tableId, viewId, settings }) => {
+        try {
+          let res;
+          if (typeof viewId === "string" && viewId === "custom") {
+            res = await getCustomTableData(tableId, settings || {});
+          } else {
+            res = await getTableViewData(
+              tableId,
+              typeof viewId === "string" ? Number(viewId) : viewId,
+            );
+          }
+          return { widgetId, ...res };
+        } catch (err) {
+          console.error(`Error fetching data for widget ${widgetId}`, err);
+          return { widgetId, success: false, error: "Failed to fetch data" };
+        }
+      }),
+    );
+
+    return { success: true, results };
+  } catch (error) {
+    console.error("Error in batch table data fetch", error);
+    return { success: false, error: "Failed to fetch batch data" };
+  }
+}

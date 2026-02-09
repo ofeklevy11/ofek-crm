@@ -36,7 +36,7 @@ import GoalsTableWidget from "./dashboard/GoalsTableWidget";
 import AnalyticsTableWidget from "./dashboard/AnalyticsTableWidget";
 import AnalyticsDetailsModal from "./AnalyticsDetailsModal";
 import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
-import { getTableViewData, getCustomTableData } from "@/app/actions/dashboard";
+import { getTableViewData, getCustomTableData, getBatchTableData } from "@/app/actions/dashboard";
 import {
   getDashboardWidgets,
   addDashboardWidget,
@@ -369,23 +369,59 @@ export default function DashboardClient({
     loadWidgets();
   }, []);
 
-  // Fetch data for table widgets
+  // Fetch data for table widgets (batched to avoid N+1)
   useEffect(() => {
-    widgets.forEach((widget) => {
-      if (widget.type === "TABLE" && widget.tableId && widget.referenceId) {
-        // Skip fetching if the widget is collapsed
-        if (widget.settings?.collapsed) return;
+    const pending = widgets.filter(
+      (w) =>
+        w.type === "TABLE" &&
+        w.tableId &&
+        w.referenceId &&
+        !w.settings?.collapsed &&
+        !tableData[w.id] &&
+        !tableLoading[w.id],
+    );
 
-        if (!tableData[widget.id] && !tableLoading[widget.id]) {
-          fetchTableData(
-            widget.id,
-            widget.tableId,
-            widget.referenceId,
-            (widget as any).settings, // pass settings
-          );
-        }
-      }
+    if (pending.length === 0) return;
+
+    // Mark all pending widgets as loading
+    setTableLoading((prev) => {
+      const next = { ...prev };
+      pending.forEach((w) => { next[w.id] = true; });
+      return next;
     });
+
+    // Single batched server action call
+    getBatchTableData(
+      pending.map((w) => ({
+        widgetId: w.id,
+        tableId: w.tableId!,
+        viewId: w.referenceId!,
+        settings: (w as any).settings,
+      })),
+    )
+      .then((res) => {
+        if (res.success && res.results) {
+          setTableData((prev) => {
+            const next = { ...prev };
+            for (const r of res.results!) {
+              if (r.success && r.data) {
+                next[r.widgetId] = r.data;
+              }
+            }
+            return next;
+          });
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching batch table data", err);
+      })
+      .finally(() => {
+        setTableLoading((prev) => {
+          const next = { ...prev };
+          pending.forEach((w) => { next[w.id] = false; });
+          return next;
+        });
+      });
   }, [widgets]);
 
   const fetchTableData = async (
