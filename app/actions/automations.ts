@@ -1577,15 +1577,23 @@ export async function processNewRecordTrigger(
 
       if (syncRules.length > 0) {
         console.log(
-          `[Automations] Found ${syncRules.length} sync rules for Table ${tableId}. Triggering sync...`,
+          `[Automations] Found ${syncRules.length} sync rules for Table ${tableId}. Enqueuing sync jobs...`,
         );
-        const { runSyncRule } = await import("./finance-sync");
+        const { inngest } = await import("@/lib/inngest/client");
         for (const rule of syncRules) {
-          // Run sync asynchronously to not block the user response
-          // We use processTableRecord logic there which handles "exists" checks efficiently
-          runSyncRule(rule.id).catch((e) =>
-            console.error(`[Auto-Sync] Failed to run rule ${rule.id}`, e),
-          );
+          // Dedup: skip if already queued/running
+          const existing = await prisma.financeSyncJob.findFirst({
+            where: { syncRuleId: rule.id, companyId: rule.companyId, status: { in: ["QUEUED", "RUNNING"] } },
+          });
+          if (existing) continue;
+
+          const job = await prisma.financeSyncJob.create({
+            data: { companyId: rule.companyId, syncRuleId: rule.id, status: "QUEUED" },
+          });
+          inngest.send({
+            name: "finance-sync/job.started",
+            data: { jobId: job.id, syncRuleId: rule.id, companyId: rule.companyId },
+          }).catch((e) => console.error(`[Auto-Sync] Failed to enqueue rule ${rule.id}`, e));
         }
       }
     } catch (err) {
@@ -1714,13 +1722,22 @@ export async function processRecordUpdate(
 
       if (syncRules.length > 0) {
         console.log(
-          `[Automations] Record update in Table ${tableId}. Triggering ${syncRules.length} sync rules...`,
+          `[Automations] Record update in Table ${tableId}. Enqueuing ${syncRules.length} sync jobs...`,
         );
-        const { runSyncRule } = await import("./finance-sync");
+        const { inngest } = await import("@/lib/inngest/client");
         for (const rule of syncRules) {
-          runSyncRule(rule.id).catch((e) =>
-            console.error(`[Auto-Sync] Failed to run rule ${rule.id}`, e),
-          );
+          const existing = await prisma.financeSyncJob.findFirst({
+            where: { syncRuleId: rule.id, companyId: rule.companyId, status: { in: ["QUEUED", "RUNNING"] } },
+          });
+          if (existing) continue;
+
+          const job = await prisma.financeSyncJob.create({
+            data: { companyId: rule.companyId, syncRuleId: rule.id, status: "QUEUED" },
+          });
+          inngest.send({
+            name: "finance-sync/job.started",
+            data: { jobId: job.id, syncRuleId: rule.id, companyId: rule.companyId },
+          }).catch((e) => console.error(`[Auto-Sync] Failed to enqueue rule ${rule.id}`, e));
         }
       }
     } catch (err) {

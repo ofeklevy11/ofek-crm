@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
+import { inngest } from "@/lib/inngest/client";
 
 export async function getTasks() {
   try {
@@ -236,14 +237,21 @@ export async function updateTask(
         },
       });
 
-      const { processTaskStatusChange } = await import("./automations");
-      // Now passing taskId and correct fromStatus
-      await processTaskStatusChange(
-        task.id,
-        task.title,
-        existingTask.status,
-        data.status,
-      );
+      // Send automation event (async via Inngest)
+      try {
+        await inngest.send({
+          name: "automation/task-status-change",
+          data: {
+            taskId: task.id,
+            taskTitle: task.title,
+            fromStatus: existingTask.status,
+            toStatus: data.status,
+            companyId: user.companyId,
+          },
+        });
+      } catch (autoError) {
+        console.error(`[Tasks] Failed to send automation event:`, autoError);
+      }
     }
 
     revalidatePath("/tasks");

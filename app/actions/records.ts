@@ -5,6 +5,7 @@ import { createAuditLog } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { canWriteTable, canReadTable } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
+import { inngest } from "@/lib/inngest/client";
 
 export async function getRecordsByTableId(tableId: number) {
   try {
@@ -71,20 +72,23 @@ export async function createRecord(data: {
 
     await createAuditLog(record.id, actualCreatedBy, "CREATE", recordData);
 
-    // Trigger automations for new record
+    // Trigger automations for new record (async via Inngest)
     try {
-      const { processNewRecordTrigger } = await import("./automations");
       const table = await prisma.tableMeta.findUnique({
         where: { id: tableId },
         select: { name: true },
       });
-      await processNewRecordTrigger(
-        tableId,
-        table?.name || "Unknown Table",
-        record.id,
-      );
+      await inngest.send({
+        name: "automation/new-record",
+        data: {
+          tableId,
+          tableName: table?.name || "Unknown Table",
+          recordId: record.id,
+          companyId: user.companyId,
+        },
+      });
     } catch (autoError) {
-      console.error(`[Records] Failed to process automations:`, autoError);
+      console.error(`[Records] Failed to send automation event:`, autoError);
     }
 
     revalidatePath(`/tables/${tableId}`);
@@ -158,19 +162,21 @@ export async function updateRecord(
 
     await createAuditLog(record.id, actualUpdatedBy, "UPDATE", recordData);
 
-    // Trigger Automation
-    console.log(`[Records] Triggering automations for Table ${record.tableId}`);
+    // Trigger Automation (async via Inngest)
+    console.log(`[Records] Sending automation event for Table ${record.tableId}`);
     try {
-      const { processRecordUpdate } = await import("./automations");
-      // existingRecord.data is Json, cast it
-      await processRecordUpdate(
-        record.tableId,
-        record.id,
-        existingRecord.data as any,
-        recordData,
-      );
+      await inngest.send({
+        name: "automation/record-update",
+        data: {
+          tableId: record.tableId,
+          recordId: record.id,
+          oldData: existingRecord.data as Record<string, unknown>,
+          newData: recordData,
+          companyId: user.companyId,
+        },
+      });
     } catch (autoError) {
-      console.error(`[Records] Failed to process automations:`, autoError);
+      console.error(`[Records] Failed to send automation event:`, autoError);
     }
 
     revalidatePath(`/tables/${record.tableId}`);

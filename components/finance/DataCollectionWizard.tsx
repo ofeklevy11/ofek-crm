@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -26,7 +26,7 @@ import {
   Settings2,
   ArrowDownToLine,
 } from "lucide-react";
-import { createSyncRule, runSyncRule } from "@/app/actions/finance-sync";
+import { createSyncRule, enqueueSyncJob } from "@/app/actions/finance-sync";
 import { useToast } from "@/hooks/use-toast";
 
 interface TableMeta {
@@ -44,6 +44,7 @@ export default function DataCollectionWizard({
   const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const sourceType = "TABLE"; // Only table source is now available through wizard
 
@@ -69,6 +70,17 @@ export default function DataCollectionWizard({
     (c) => c.type === "number" || c.type === "currency",
   );
 
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
+
   const handleCreateAndRun = async () => {
     if (!formData.name) {
       toast({
@@ -91,6 +103,7 @@ export default function DataCollectionWizard({
     }
 
     setLoading(true);
+    stopPolling();
     try {
       const ruleData: any = {
         name: formData.name,
@@ -114,36 +127,69 @@ export default function DataCollectionWizard({
       };
 
       const rule = await createSyncRule(ruleData);
-      const result = await runSyncRule(rule.id);
+      const { jobId } = await enqueueSyncJob(rule.id);
 
-      toast({
-        title: "תהליך הסתיים בהצלחה!",
-        description: `נוצרו ${result.count} רשומות חדשות.`,
-      });
+      // Auto-stop polling after 2 minutes
+      const timeoutId = setTimeout(() => {
+        stopPolling();
+        setLoading(false);
+        toast({
+          title: "זמן המתנה עבר",
+          description: "הסנכרון עדיין רץ ברקע. רענן את הדף בעוד מספר דקות.",
+        });
+      }, 120_000);
 
-      router.refresh();
-      setStep(1);
-      setFormData((p) => ({
-        ...p,
-        name: "",
-        sourceId: "",
-        mapping: {
-          amountField: "",
-          dateField: "",
-          titleField: "",
-          categoryField: "static",
-          categoryValue: "",
-        },
-      }));
+      // Poll for completion
+      pollRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/finance-sync/status/${jobId}`);
+          if (!res.ok) return;
+          const data = await res.json();
+
+          if (data.status === "COMPLETED") {
+            stopPolling();
+            clearTimeout(timeoutId);
+            setLoading(false);
+            toast({
+              title: "תהליך הסתיים בהצלחה!",
+              description: `נוצרו ${data.created} רשומות חדשות.`,
+            });
+            router.refresh();
+            setStep(1);
+            setFormData((p) => ({
+              ...p,
+              name: "",
+              sourceId: "",
+              mapping: {
+                amountField: "",
+                dateField: "",
+                titleField: "",
+                categoryField: "static",
+                categoryValue: "",
+              },
+            }));
+          } else if (data.status === "FAILED") {
+            stopPolling();
+            clearTimeout(timeoutId);
+            setLoading(false);
+            toast({
+              title: "שגיאה",
+              description: data.error || "נכשלה פעולת הסנכרון",
+              variant: "destructive",
+            });
+          }
+        } catch {
+          // Ignore polling errors
+        }
+      }, 2000);
     } catch (error) {
       console.error(error);
+      setLoading(false);
       toast({
         title: "שגיאה",
         description: "נכשלה פעולת הסנכרון",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 

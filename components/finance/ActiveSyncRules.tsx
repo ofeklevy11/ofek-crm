@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Trash2,
@@ -13,7 +14,7 @@ import {
   Calendar,
   ShieldAlert,
 } from "lucide-react";
-import { deleteSyncRule, runSyncRule } from "@/app/actions/finance-sync";
+import { deleteSyncRule, enqueueSyncJob } from "@/app/actions/finance-sync";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import {
@@ -33,40 +34,90 @@ import {
 
 export default function ActiveSyncRules({ rules }: { rules: any[] }) {
   const { toast } = useToast();
+  const router = useRouter();
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [showEditBlocker, setShowEditBlocker] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
 
   const handleRun = async (id: number) => {
     setLoadingId(id);
+    stopPolling();
     try {
-      const res = await runSyncRule(id);
-      const { created, updated, skippedError } = res.stats;
+      const { jobId } = await enqueueSyncJob(id);
 
-      if (created > 0 || (updated && updated > 0)) {
+      // Auto-stop polling after 2 minutes to prevent infinite polling
+      const timeoutId = setTimeout(() => {
+        stopPolling();
+        setLoadingId(null);
         toast({
-          title: "סנכרון הושלם בהצלחה",
-          description: `נוצרו ${created} חדשים, עודכנו ${updated || 0} קיימים.`,
+          title: "זמן המתנה עבר",
+          description: "הסנכרון עדיין רץ ברקע. רענן את הדף בעוד מספר דקות.",
         });
-      } else if (skippedError > 0) {
-        toast({
-          title: "זוהו שגיאות בסנכרון",
-          description: `נכשלו: ${skippedError} רשומות.`,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "הנתונים עדכניים",
-          description: "לא נמצאו רשומות חדשות או שינויים.",
-        });
-      }
+      }, 120_000);
+
+      // Poll for completion
+      pollRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/finance-sync/status/${jobId}`);
+          if (!res.ok) return;
+          const data = await res.json();
+
+          if (data.status === "COMPLETED") {
+            stopPolling();
+            clearTimeout(timeoutId);
+            setLoadingId(null);
+            const { created, updated, skippedError } = data;
+
+            if (created > 0 || (updated && updated > 0)) {
+              toast({
+                title: "סנכרון הושלם בהצלחה",
+                description: `נוצרו ${created} חדשים, עודכנו ${updated || 0} קיימים.`,
+              });
+            } else if (skippedError > 0) {
+              toast({
+                title: "זוהו שגיאות בסנכרון",
+                description: `נכשלו: ${skippedError} רשומות.`,
+                variant: "destructive",
+              });
+            } else {
+              toast({
+                title: "הנתונים עדכניים",
+                description: "לא נמצאו רשומות חדשות או שינויים.",
+              });
+            }
+            router.refresh();
+          } else if (data.status === "FAILED") {
+            stopPolling();
+            clearTimeout(timeoutId);
+            setLoadingId(null);
+            toast({
+              title: "שגיאה",
+              description: data.error || "הסנכרון נכשל",
+              variant: "destructive",
+            });
+          }
+        } catch {
+          // Ignore polling errors, keep trying
+        }
+      }, 2000);
     } catch (e) {
+      setLoadingId(null);
       toast({
         title: "שגיאה",
         description: "הסנכרון נכשל (ראה קונסול)",
         variant: "destructive",
       });
-    } finally {
-      setLoadingId(null);
     }
   };
 

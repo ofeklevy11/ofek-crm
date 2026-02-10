@@ -87,8 +87,8 @@ export default function ImportRecordsModal({
       // Basic client-side check is fine, uploadthing has its own checks too
       // but let's keep 32MB check or just rely on server
       // Server allows 32MB now for tableImport
-      if (selectedFile.size > 32 * 1024 * 1024) {
-        toast.error("הקובץ גדול מדי (מקסימום 32MB)");
+      if (selectedFile.size > 5 * 1024 * 1024) {
+        toast.error("הקובץ גדול מדי (5MB מקסימום)");
         return;
       }
       setFile(selectedFile);

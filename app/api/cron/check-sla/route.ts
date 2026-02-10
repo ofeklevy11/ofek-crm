@@ -1,20 +1,19 @@
 import { NextResponse } from "next/server";
-import { checkSlaBreaches } from "@/app/actions/sla-check";
+import { inngest } from "@/lib/inngest/client";
 
 /**
- * API Route to check SLA breaches
+ * API Route to trigger SLA breach check.
  *
- * Can be called:
- * 1. Manually: GET /api/cron/check-sla
- * 2. Via external cron service (e.g., cron-job.org, Vercel Cron)
- * 3. Via internal scheduler
+ * With Inngest cron, the sla-scan function runs automatically every minute.
+ * This endpoint remains as a manual trigger / fallback for:
+ * 1. Manual: GET /api/cron/check-sla
+ * 2. External cron service (e.g., cron-job.org, Vercel Cron)
  *
- * Optional: Add a secret key for security in production
- * e.g., ?key=YOUR_SECRET_KEY
+ * It sends an Inngest event which triggers the same sla-scan logic,
+ * so the heavy work happens in the background (not inline in this HTTP request).
  */
 export async function GET(request: Request) {
-  // Optional: Security check for production
-  // Security: Verify CRON_SECRET check from Vercel
+  // Security: Verify CRON_SECRET
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -23,21 +22,25 @@ export async function GET(request: Request) {
   console.log("[CRON] SLA check triggered at", new Date().toISOString());
 
   try {
-    const result = await checkSlaBreaches();
+    await inngest.send({
+      name: "sla/manual-scan",
+      data: { triggeredAt: new Date().toISOString() },
+    });
 
     return NextResponse.json({
-      ...result,
+      success: true,
+      message: "SLA scan dispatched to background",
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[CRON] SLA check failed:", error);
+    console.error("[CRON] Failed to dispatch SLA scan:", error);
     return NextResponse.json(
       {
         success: false,
         error: String(error),
         timestamp: new Date().toISOString(),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

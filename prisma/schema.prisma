@@ -65,6 +65,7 @@ model Company {
 
   apiKeys             ApiKey[]
   importJobs          ImportJob[]
+  financeSyncJobs     FinanceSyncJob[]
 }
 
 model User {
@@ -964,8 +965,25 @@ model FinanceSyncRule {
   
   company     Company  @relation(fields: [companyId], references: [id])
   records     FinanceRecord[]
+  syncJobs    FinanceSyncJob[]
 
   @@index([companyId])
+}
+
+model FinanceSyncJob {
+  id          String   @id @default(cuid())
+  companyId   Int
+  syncRuleId  Int
+  status      String   @default("QUEUED") // QUEUED, RUNNING, COMPLETED, FAILED
+  summary     Json?    // { scanned, created, updated, skippedExists, skippedError, errors[] }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company          @relation(fields: [companyId], references: [id])
+  syncRule    FinanceSyncRule   @relation(fields: [syncRuleId], references: [id])
+
+  @@index([companyId, syncRuleId])
+  @@index([status])
 }
 
 model FixedExpense {

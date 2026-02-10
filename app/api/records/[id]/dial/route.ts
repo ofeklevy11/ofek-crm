@@ -55,31 +55,26 @@ export async function POST(
       },
     });
 
-    // Trigger DIRECT_DIAL automations synchronously to ensure we return updated data
-    const { processDirectDialTrigger } =
-      await import("@/app/actions/automations");
-
-    await processDirectDialTrigger(
-      existingRecord.tableId,
-      recordId,
-      currentUser.companyId,
-    );
-
-    // Fetch the latest record data potentially updated by automations
-    const updatedRecord = await prisma.record.findUnique({
-      where: { id: recordId },
-      include: {
-        dialedBy: {
-          select: { id: true, name: true, email: true },
+    // Trigger DIRECT_DIAL automations asynchronously via Inngest
+    try {
+      const { inngest } = await import("@/lib/inngest/client");
+      await inngest.send({
+        name: "automation/direct-dial",
+        data: {
+          tableId: existingRecord.tableId,
+          recordId,
+          companyId: currentUser.companyId,
         },
-      },
-    });
+      });
+    } catch (autoError) {
+      console.error("Failed to send direct dial automation event:", autoError);
+    }
 
     return NextResponse.json({
       success: true,
-      dialedBy: updatedRecord?.dialedBy,
-      dialedAt: updatedRecord?.dialedAt,
-      recordData: updatedRecord?.data,
+      dialedBy: record.dialedBy,
+      dialedAt: record.dialedAt,
+      recordData: record.data,
     });
   } catch (error) {
     console.error("Error recording dial:", error);

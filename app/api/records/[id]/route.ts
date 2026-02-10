@@ -116,23 +116,25 @@ export async function PUT(
 
     await createAuditLog(record.id, currentUser.id, "UPDATE", data);
 
-    // Trigger Automations
+    // Trigger Automations (async via Inngest)
     console.log(
-      `[API Records] About to trigger automations for record ${record.id}, table ${record.tableId}`,
+      `[API Records] Sending automation event for record ${record.id}, table ${record.tableId}`,
     );
     try {
-      const { processRecordUpdate } = await import("@/app/actions/automations");
-      // Run in background / parallel to not block response?
-      // Ideally await to ensure it runs, but errors shouldn't fail the request.
-      await processRecordUpdate(
-        record.tableId,
-        record.id,
-        existingRecord.data as any,
-        data,
-      );
-      console.log(`[API Records] Successfully triggered automations`);
+      const { inngest } = await import("@/lib/inngest/client");
+      await inngest.send({
+        name: "automation/record-update",
+        data: {
+          tableId: record.tableId,
+          recordId: record.id,
+          oldData: existingRecord.data as Record<string, unknown>,
+          newData: data,
+          companyId: currentUser.companyId,
+        },
+      });
+      console.log(`[API Records] Successfully sent automation event`);
     } catch (autoError) {
-      console.error("Failed to process automations:", autoError);
+      console.error("Failed to send automation event:", autoError);
     }
 
     return NextResponse.json(record);

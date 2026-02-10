@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { processTimeBasedAutomations } from "@/app/actions/automations";
+import { inngest } from "@/lib/inngest/client";
 
 export const dynamic = "force-dynamic"; // static by default, unless reading the request
 
@@ -27,9 +28,11 @@ export async function GET(request: Request) {
       await import("@/app/actions/event-automations");
     await processEventAutomations();
 
-    // Run SLA breach check automations
-    const { checkSlaBreaches } = await import("@/app/actions/sla-check");
-    await checkSlaBreaches();
+    // Run SLA breach check automations (dispatched to Inngest background)
+    await inngest.send({
+      name: "sla/manual-scan",
+      data: { triggeredAt: new Date().toISOString() },
+    });
 
     return NextResponse.json({
       success: true,

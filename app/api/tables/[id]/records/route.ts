@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
-import { processNewRecordTrigger } from "@/app/actions/automations";
+import { inngest } from "@/lib/inngest/client";
 
 export async function GET(
   request: Request,
@@ -145,17 +145,23 @@ export async function POST(
 
     await createAuditLog(record.id, currentUser.id, "CREATE", data);
 
-    // Trigger automations
-    const table = await prisma.tableMeta.findUnique({
-      where: { id: tableId },
-      select: { name: true },
-    });
-
-    if (table) {
-      // Don't await strictly to not block response
-      processNewRecordTrigger(tableId, table.name, record.id).catch(
-        console.error,
-      );
+    // Trigger automations (async via Inngest)
+    try {
+      const table = await prisma.tableMeta.findUnique({
+        where: { id: tableId },
+        select: { name: true },
+      });
+      await inngest.send({
+        name: "automation/new-record",
+        data: {
+          tableId,
+          tableName: table?.name || "Unknown Table",
+          recordId: record.id,
+          companyId: currentUser.companyId,
+        },
+      });
+    } catch (autoError) {
+      console.error("Failed to send automation event:", autoError);
     }
 
     return NextResponse.json(record);

@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
+import { inngest } from "@/lib/inngest/client";
 
 export interface SyncMapping {
   amountField: string;
@@ -60,7 +61,11 @@ export async function updateSyncRule(
   revalidatePath("/finance/income-expenses");
 }
 
-export async function runSyncRule(ruleId: number) {
+/**
+ * Enqueue a finance sync job to run in the background via Inngest.
+ * Returns immediately with the jobId for polling.
+ */
+export async function enqueueSyncJob(ruleId: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
@@ -69,6 +74,51 @@ export async function runSyncRule(ruleId: number) {
   });
 
   if (!rule || rule.companyId !== user.companyId)
+    throw new Error("Rule not found");
+
+  // Dedup: skip if there's already a QUEUED or RUNNING job for this rule
+  const existingJob = await prisma.financeSyncJob.findFirst({
+    where: {
+      syncRuleId: ruleId,
+      companyId: user.companyId,
+      status: { in: ["QUEUED", "RUNNING"] },
+    },
+  });
+
+  if (existingJob) {
+    return { jobId: existingJob.id };
+  }
+
+  const job = await prisma.financeSyncJob.create({
+    data: {
+      companyId: user.companyId,
+      syncRuleId: ruleId,
+      status: "QUEUED",
+    },
+  });
+
+  await inngest.send({
+    name: "finance-sync/job.started",
+    data: {
+      jobId: job.id,
+      syncRuleId: ruleId,
+      companyId: user.companyId,
+    },
+  });
+
+  return { jobId: job.id };
+}
+
+/**
+ * Core sync logic extracted for background execution.
+ * Does NOT call getCurrentUser() or revalidatePath() — safe for Inngest context.
+ */
+export async function executeSyncRule(ruleId: number, companyId: number) {
+  const rule = await prisma.financeSyncRule.findUnique({
+    where: { id: ruleId },
+  });
+
+  if (!rule || rule.companyId !== companyId)
     throw new Error("Rule not found");
 
   let stats = {
@@ -80,320 +130,340 @@ export async function runSyncRule(ruleId: number) {
     errors: [] as string[],
   };
 
-  try {
-    if (rule.sourceType === "TABLE" && rule.sourceId) {
-      // --- TABLE SOURCE ---
-      const records = await prisma.record.findMany({
-        where: { tableId: rule.sourceId, companyId: user.companyId },
-        select: { id: true, data: true, createdAt: true },
-      });
+  // Track all valid origin IDs during sync — reused for garbage collection
+  const currentOriginIds: string[] = [];
 
-      stats.scanned = records.length;
-      const mapping = rule.fieldMapping as any as SyncMapping;
-
-      for (const record of records) {
-        const res = await processTableRecord(
-          rule,
-          record.id.toString(),
-          record.data,
-          mapping,
-          user.companyId,
-          record.createdAt,
-        );
-        if (res.status === "created") stats.created++;
-        else if (res.status === "updated") stats.updated++;
-        else if (res.status === "exists") stats.skippedExists++;
-        else {
-          stats.skippedError++;
-          if (stats.errors.length < 5)
-            stats.errors.push(`Record #${record.id}: ${res.error}`);
-        }
-      }
-    } else if (
-      rule.sourceType === "TRANSACTIONS" ||
-      rule.sourceType === "PAYMENTS_RETAINERS"
-    ) {
-      // --- SYSTEM PAYMENTS SOURCE ---
-      // 1. Fetch from Transactions table (Legacy or specific transactions)
-      const transactions = await prisma.transaction.findMany({
-        where: {
-          client: { companyId: user.companyId },
-          status: { in: ["manual-marked-paid", "paid", "Pd", "PAID"] }, // Support various paid statuses
-        },
-        include: { client: true },
-      });
-
-      // 2. Fetch from OneTimePayments (The main payment system)
-      const payments = await prisma.oneTimePayment.findMany({
-        where: {
-          client: { companyId: user.companyId },
-          status: { in: ["paid", "PAID"] }, // Ensure we catch 'paid' status
-        },
-        include: { client: true },
-      });
-
-      stats.scanned = transactions.length + payments.length;
-
-      // Process Transactions
-      for (const t of transactions) {
-        const date = t.paidDate || t.attemptDate || t.createdAt;
-        const title = t.notes || `System Transaction #${t.id}`;
-        // Ensure 2 decimal precision to avoid floating point artifacts
-        const amount =
-          Math.round((Number(t.amount) + Number.EPSILON) * 100) / 100;
-
-        if (amount > 0) {
-          const res = await createFinanceRecord(
-            rule,
-            `trans_${t.id}`,
-            {
-              title,
-              amount,
-              date,
-              category: "System Transaction",
-              clientId: t.clientId,
-            },
-            user.companyId,
-          );
-
-          if (res === "created") stats.created++;
-          else if (res === "updated") stats.updated++;
-          else stats.skippedExists++;
-        } else {
-          stats.skippedError++;
-        }
-      }
-
-      // Process Payments
-      for (const p of payments) {
-        const date = p.paidDate || p.dueDate || p.createdAt;
-        const title = p.title || `Payment #${p.id}`;
-        // Ensure 2 decimal precision to avoid floating point artifacts
-        const amount =
-          Math.round((Number(p.amount) + Number.EPSILON) * 100) / 100;
-
-        if (amount > 0) {
-          const res = await createFinanceRecord(
-            rule,
-            `payment_${p.id}`,
-            {
-              title,
-              amount,
-              date,
-              category: "Payment System",
-              clientId: p.clientId,
-            },
-            user.companyId,
-            "INCOME", // Force Income for Client Payments
-          );
-
-          if (res === "created") stats.created++;
-          else if (res === "updated") stats.updated++;
-          else stats.skippedExists++;
-        } else {
-          stats.skippedError++;
-        }
-      }
-    } else if (rule.sourceType === "FIXED_EXPENSES") {
-      // --- FIXED EXPENSES SOURCE ---
-      // 1. Ensure all fixed expenses have generated their records
-      const { processFixedExpenses } = await import("./fixed-expenses");
-      const generatedCount = (await processFixedExpenses()) || 0;
-
-      // 2. Link unlinked fixed expense records to this rule
-      // Find records that start with "fixed_" and have no syncRuleId (or different one, but usually none)
-      const unlinkedRecords = await prisma.financeRecord.findMany({
-        where: {
-          companyId: user.companyId,
-          originId: { startsWith: "fixed_" },
-          syncRuleId: null,
-        },
-      });
-
-      stats.scanned = unlinkedRecords.length;
-
-      if (unlinkedRecords.length > 0) {
-        await prisma.financeRecord.updateMany({
-          where: {
-            id: { in: unlinkedRecords.map((r) => r.id) },
-          },
-          data: {
-            syncRuleId: rule.id,
-          },
-        });
-        stats.created = generatedCount; // Use generated count as "new" action indicator
-        stats.updated = unlinkedRecords.length; // These were linked
-      } else {
-        stats.created = generatedCount;
-      }
-    }
-
-    // --- GARBAGE COLLECTION ---
-    // Remove FinanceRecords linked to this rule whose source no longer exists.
-    const currentOriginIds: string[] = [];
-
-    if (rule.sourceType === "TABLE" && rule.sourceId) {
-      const records = await prisma.record.findMany({
-        where: { tableId: rule.sourceId, companyId: user.companyId },
-        select: { id: true },
-      });
-      records.forEach((r) => currentOriginIds.push(r.id.toString()));
-    } else if (
-      rule.sourceType === "TRANSACTIONS" ||
-      rule.sourceType === "PAYMENTS_RETAINERS"
-    ) {
-      const transactions = await prisma.transaction.findMany({
-        where: {
-          client: { companyId: user.companyId },
-          status: { in: ["manual-marked-paid", "paid", "Pd", "PAID"] },
-        },
-        select: { id: true },
-      });
-      transactions.forEach((t) => currentOriginIds.push(`trans_${t.id}`));
-
-      const payments = await prisma.oneTimePayment.findMany({
-        where: {
-          client: { companyId: user.companyId },
-          status: { in: ["paid", "PAID"] },
-        },
-        select: { id: true },
-      });
-      payments.forEach((p) => currentOriginIds.push(`payment_${p.id}`));
-    }
-
-    if (
-      currentOriginIds.length > 0 &&
-      rule.sourceType !== "FIXED_EXPENSES" // Skip for fixed expenses
-    ) {
-      await prisma.financeRecord.deleteMany({
-        where: {
-          syncRuleId: rule.id,
-          originId: { notIn: currentOriginIds },
-        },
-      });
-    } else if (
-      currentOriginIds.length === 0 &&
-      (rule.sourceType === "TRANSACTIONS" ||
-        rule.sourceType === "PAYMENTS_RETAINERS" ||
-        rule.sourceType === "TABLE")
-    ) {
-      // If no source items found, delete ALL records for this rule (source was emptied)
-      await prisma.financeRecord.deleteMany({
-        where: { syncRuleId: rule.id },
-      });
-    }
-
-    // Update last run time
-    await prisma.financeSyncRule.update({
-      where: { id: rule.id },
-      data: { lastRunAt: new Date() },
+  if (rule.sourceType === "TABLE" && rule.sourceId) {
+    // --- TABLE SOURCE ---
+    const records = await prisma.record.findMany({
+      where: { tableId: rule.sourceId, companyId },
+      select: { id: true, data: true, createdAt: true },
     });
 
-    revalidatePath("/finance/income-expenses");
-    revalidatePath("/finance/collect");
+    stats.scanned = records.length;
+    const mapping = rule.fieldMapping as any as SyncMapping;
 
-    console.log(`Sync Rule #${ruleId} Finished:`, stats);
-    return { success: true, count: stats.created, stats };
-  } catch (error) {
-    console.error("Sync Error:", error);
-    throw new Error("Failed to process sync rule");
+    // Collect origin IDs for GC reuse
+    records.forEach((r) => currentOriginIds.push(r.id.toString()));
+
+    // Batch: fetch all existing finance records for this rule in one query
+    const existingRecords = await prisma.financeRecord.findMany({
+      where: { syncRuleId: rule.id },
+      select: { id: true, originId: true, amount: true, title: true, type: true, category: true, date: true, clientId: true },
+    });
+    const existingMap = new Map(existingRecords.map((r) => [r.originId, r]));
+
+    // Prepare batch arrays
+    const toCreate: any[] = [];
+    const toUpdate: { id: number; data: any }[] = [];
+
+    for (const record of records) {
+      const parsed = parseTableRecord(record.id.toString(), record.data, mapping, record.createdAt);
+      if (parsed.status === "error") {
+        stats.skippedError++;
+        if (stats.errors.length < 5)
+          stats.errors.push(`Record #${record.id}: ${parsed.error}`);
+        continue;
+      }
+
+      const originId = record.id.toString();
+      const existing = existingMap.get(originId);
+
+      if (!existing) {
+        toCreate.push({
+          companyId,
+          title: parsed.title,
+          amount: parsed.amount,
+          type: rule.targetType,
+          category: parsed.category,
+          date: parsed.date,
+          status: "COMPLETED",
+          syncRuleId: rule.id,
+          originId,
+        });
+      } else {
+        const isDifferent =
+          Number(existing.amount) !== parsed.amount ||
+          existing.title !== parsed.title ||
+          existing.type !== rule.targetType ||
+          existing.category !== parsed.category ||
+          existing.date.getTime() !== parsed.date.getTime();
+
+        if (isDifferent) {
+          toUpdate.push({
+            id: existing.id,
+            data: {
+              title: parsed.title,
+              amount: parsed.amount,
+              type: rule.targetType,
+              category: parsed.category,
+              date: parsed.date,
+            },
+          });
+        } else {
+          stats.skippedExists++;
+        }
+      }
+    }
+
+    // Batch create
+    if (toCreate.length > 0) {
+      await prisma.financeRecord.createMany({ data: toCreate });
+      stats.created = toCreate.length;
+    }
+
+    // Batch update (Prisma doesn't have updateMany with different data, so we use Promise.all in chunks)
+    if (toUpdate.length > 0) {
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < toUpdate.length; i += CHUNK_SIZE) {
+        const chunk = toUpdate.slice(i, i + CHUNK_SIZE);
+        await Promise.all(
+          chunk.map((u) =>
+            prisma.financeRecord.update({ where: { id: u.id }, data: u.data }),
+          ),
+        );
+      }
+      stats.updated = toUpdate.length;
+    }
+  } else if (
+    rule.sourceType === "TRANSACTIONS" ||
+    rule.sourceType === "PAYMENTS_RETAINERS"
+  ) {
+    // --- SYSTEM PAYMENTS SOURCE ---
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        client: { companyId },
+        status: { in: ["manual-marked-paid", "paid", "Pd", "PAID"] },
+      },
+      include: { client: true },
+    });
+
+    const payments = await prisma.oneTimePayment.findMany({
+      where: {
+        client: { companyId },
+        status: { in: ["paid", "PAID"] },
+      },
+      include: { client: true },
+    });
+
+    stats.scanned = transactions.length + payments.length;
+
+    // Collect origin IDs for GC reuse
+    transactions.forEach((t) => currentOriginIds.push(`trans_${t.id}`));
+    payments.forEach((p) => currentOriginIds.push(`payment_${p.id}`));
+
+    // Batch: fetch all existing finance records for this rule in one query
+    const existingRecords = await prisma.financeRecord.findMany({
+      where: { syncRuleId: rule.id },
+      select: { id: true, originId: true, amount: true, title: true, type: true, category: true, date: true, clientId: true },
+    });
+    const existingMap = new Map(existingRecords.map((r) => [r.originId, r]));
+
+    const toCreate: any[] = [];
+    const toUpdate: { id: number; data: any }[] = [];
+
+    for (const t of transactions) {
+      const date = t.paidDate || t.attemptDate || t.createdAt;
+      const title = t.notes || `System Transaction #${t.id}`;
+      const amount =
+        Math.round((Number(t.amount) + Number.EPSILON) * 100) / 100;
+
+      if (amount <= 0) {
+        stats.skippedError++;
+        continue;
+      }
+
+      const originId = `trans_${t.id}`;
+      const targetType = rule.targetType;
+      const existing = existingMap.get(originId);
+
+      if (!existing) {
+        toCreate.push({
+          companyId,
+          title,
+          amount,
+          type: targetType,
+          category: "System Transaction",
+          date,
+          status: "COMPLETED",
+          syncRuleId: rule.id,
+          originId,
+          clientId: t.clientId,
+        });
+      } else {
+        const isDifferent =
+          Number(existing.amount) !== amount ||
+          existing.title !== title ||
+          existing.type !== targetType ||
+          existing.category !== "System Transaction" ||
+          existing.date.getTime() !== date.getTime() ||
+          (t.clientId && existing.clientId !== t.clientId);
+
+        if (isDifferent) {
+          toUpdate.push({
+            id: existing.id,
+            data: { title, amount, type: targetType, category: "System Transaction", date, clientId: t.clientId },
+          });
+        } else {
+          stats.skippedExists++;
+        }
+      }
+    }
+
+    for (const p of payments) {
+      const date = p.paidDate || p.dueDate || p.createdAt;
+      const title = p.title || `Payment #${p.id}`;
+      const amount =
+        Math.round((Number(p.amount) + Number.EPSILON) * 100) / 100;
+
+      if (amount <= 0) {
+        stats.skippedError++;
+        continue;
+      }
+
+      const originId = `payment_${p.id}`;
+      const existing = existingMap.get(originId);
+
+      if (!existing) {
+        toCreate.push({
+          companyId,
+          title,
+          amount,
+          type: "INCOME",
+          category: "Payment System",
+          date,
+          status: "COMPLETED",
+          syncRuleId: rule.id,
+          originId,
+          clientId: p.clientId,
+        });
+      } else {
+        const isDifferent =
+          Number(existing.amount) !== amount ||
+          existing.title !== title ||
+          existing.type !== "INCOME" ||
+          existing.category !== "Payment System" ||
+          existing.date.getTime() !== date.getTime() ||
+          (p.clientId && existing.clientId !== p.clientId);
+
+        if (isDifferent) {
+          toUpdate.push({
+            id: existing.id,
+            data: { title, amount, type: "INCOME", category: "Payment System", date, clientId: p.clientId },
+          });
+        } else {
+          stats.skippedExists++;
+        }
+      }
+    }
+
+    // Batch create
+    if (toCreate.length > 0) {
+      await prisma.financeRecord.createMany({ data: toCreate });
+      stats.created = toCreate.length;
+    }
+
+    // Batch update in chunks
+    if (toUpdate.length > 0) {
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < toUpdate.length; i += CHUNK_SIZE) {
+        const chunk = toUpdate.slice(i, i + CHUNK_SIZE);
+        await Promise.all(
+          chunk.map((u) =>
+            prisma.financeRecord.update({ where: { id: u.id }, data: u.data }),
+          ),
+        );
+      }
+      stats.updated = toUpdate.length;
+    }
+  } else if (rule.sourceType === "FIXED_EXPENSES") {
+    // --- FIXED EXPENSES SOURCE ---
+    const { processFixedExpenses } = await import("./fixed-expenses");
+    const generatedCount = (await processFixedExpenses()) || 0;
+
+    const unlinkedRecords = await prisma.financeRecord.findMany({
+      where: {
+        companyId,
+        originId: { startsWith: "fixed_" },
+        syncRuleId: null,
+      },
+    });
+
+    stats.scanned = unlinkedRecords.length;
+
+    if (unlinkedRecords.length > 0) {
+      await prisma.financeRecord.updateMany({
+        where: {
+          id: { in: unlinkedRecords.map((r) => r.id) },
+        },
+        data: {
+          syncRuleId: rule.id,
+        },
+      });
+      stats.created = generatedCount;
+      stats.updated = unlinkedRecords.length;
+    } else {
+      stats.created = generatedCount;
+    }
   }
+
+  // --- GARBAGE COLLECTION (reuses currentOriginIds from sync phase) ---
+  if (
+    currentOriginIds.length > 0 &&
+    rule.sourceType !== "FIXED_EXPENSES"
+  ) {
+    await prisma.financeRecord.deleteMany({
+      where: {
+        syncRuleId: rule.id,
+        originId: { notIn: currentOriginIds },
+      },
+    });
+  } else if (
+    currentOriginIds.length === 0 &&
+    (rule.sourceType === "TRANSACTIONS" ||
+      rule.sourceType === "PAYMENTS_RETAINERS" ||
+      rule.sourceType === "TABLE")
+  ) {
+    await prisma.financeRecord.deleteMany({
+      where: { syncRuleId: rule.id },
+    });
+  }
+
+  console.log(`Sync Rule #${ruleId} Finished:`, stats);
+  return stats;
 }
 
 // --- HELPERS ---
 
-async function createFinanceRecord(
-  rule: any,
-  originId: string,
-  data: {
-    title: string;
-    amount: number;
-    date: Date;
-    category: string;
-    clientId?: number;
-  },
-  companyId: number,
-  forcedType?: "INCOME" | "EXPENSE",
-): Promise<"created" | "exists" | "updated"> {
-  const exists = await prisma.financeRecord.findUnique({
-    where: {
-      syncRuleId_originId: {
-        syncRuleId: rule.id,
-        originId: originId,
-      },
-    },
-  });
-
-  if (!exists) {
-    await prisma.financeRecord.create({
-      data: {
-        companyId: companyId,
-        title: data.title,
-        amount: data.amount,
-        type: forcedType || rule.targetType,
-        category: data.category,
-        date: data.date,
-        status: "COMPLETED",
-        syncRuleId: rule.id,
-        originId: originId,
-        clientId: data.clientId,
-      },
-    });
-    return "created";
-  } else {
-    // Check if update is needed
-    // Normalize dates for comparison (ignoring slight time diffs if they are just date imports, but here we compare strict)
-    // We strictly compare amount, title, type.
-    const isDifferent =
-      Number(exists.amount) !== data.amount ||
-      exists.title !== data.title ||
-      exists.type !== (forcedType || rule.targetType) ||
-      exists.category !== data.category ||
-      exists.date.getTime() !== data.date.getTime() ||
-      (data.clientId && exists.clientId !== data.clientId);
-
-    if (isDifferent) {
-      await prisma.financeRecord.update({
-        where: { id: exists.id },
-        data: {
-          title: data.title,
-          amount: data.amount,
-          type: forcedType || rule.targetType,
-          category: data.category,
-          date: data.date,
-          clientId: data.clientId, // Update client ID if changed/missing
-        },
-      });
-      return "updated";
-    }
-  }
-
-  return "exists";
-}
-
-async function processTableRecord(
-  rule: any,
+/** Pure parsing function — no DB calls. Returns parsed data or error. */
+function parseTableRecord(
   originId: string,
   data: any,
   mapping: SyncMapping,
-  companyId: number,
   defaultDate: Date,
-): Promise<{
-  status: "created" | "exists" | "updated" | "error";
+): {
+  status: "ok" | "error";
   error?: string;
-}> {
+  title: string;
+  amount: number;
+  date: Date;
+  category: string;
+} {
   const rawAmount = data[mapping.amountField];
 
-  // If amount field is missing in data, it's a mapping error
   if (rawAmount === undefined || rawAmount === null || rawAmount === "") {
     return {
       status: "error",
       error: `Missing amount in field '${mapping.amountField}'`,
+      title: "",
+      amount: 0,
+      date: defaultDate,
+      category: "",
     };
   }
 
   let rawDate = mapping.dateField ? data[mapping.dateField] : defaultDate;
-  if (!rawDate) rawDate = defaultDate; // Fallback if specific field is empty
+  if (!rawDate) rawDate = defaultDate;
 
   const title = data[mapping.titleField] || `Imported #${originId}`;
 
@@ -401,7 +471,6 @@ async function processTableRecord(
     ? data[mapping.categoryField]
     : mapping.categoryValue || "General";
 
-  // Robust Parsing
   let amount = 0;
   if (typeof rawAmount === "number") amount = rawAmount;
   else if (typeof rawAmount === "string") {
@@ -409,30 +478,21 @@ async function processTableRecord(
     amount = parseFloat(cleaned);
   }
 
-  // Ensure 2 decimal precision
   amount = Math.round((amount + Number.EPSILON) * 100) / 100;
 
   if (isNaN(amount) || amount === 0) {
-    return { status: "error", error: `Invalid amount value: ${rawAmount}` };
+    return { status: "error", error: `Invalid amount value: ${rawAmount}`, title: "", amount: 0, date: defaultDate, category: "" };
   }
 
   let date = rawDate instanceof Date ? rawDate : new Date(rawDate);
   if (isNaN(date.getTime())) {
-    // Try fallback to default date if specific parse failed
     date = defaultDate;
-    // If still invalid (shouldn't happen for createdAt), then error
     if (isNaN(date.getTime())) {
-      return { status: "error", error: `Invalid date value: ${rawDate}` };
+      return { status: "error", error: `Invalid date value: ${rawDate}`, title: "", amount: 0, date: defaultDate, category: "" };
     }
   }
 
-  const status = await createFinanceRecord(
-    rule,
-    originId,
-    { title, amount, date, category },
-    companyId,
-  );
-  return { status };
+  return { status: "ok", title, amount, date, category };
 }
 
 export async function deleteSyncRule(id: number) {
@@ -488,22 +548,19 @@ async function ensureDefaultRules(companyId: number) {
   });
 
   if (!paymentsRule) {
-    // Check if legacy rule exists
     const legacyRule = await prisma.financeSyncRule.findFirst({
       where: { companyId, sourceType: "TRANSACTIONS" },
     });
 
     if (legacyRule) {
-      // Update legacy to new type
       await prisma.financeSyncRule.update({
         where: { id: legacyRule.id },
         data: {
           sourceType: "PAYMENTS_RETAINERS",
-          name: "תשלומים וריטיינרים", // Update name to reflect current purpose
+          name: "תשלומים וריטיינרים",
         },
       });
     } else {
-      // Create new
       await prisma.financeSyncRule.create({
         data: {
           companyId,
@@ -526,15 +583,43 @@ export async function triggerSyncByType(
       where: {
         companyId,
         sourceType,
-        isActive: true, // Only trigger active rules
+        isActive: true,
       },
     });
 
     if (rule) {
-      // Run in background without awaiting if possible, but Server Actions await result usually.
-      // We await it to ensure consistency, but wrap in try-catch to not block UI on error.
-      await runSyncRule(rule.id);
-      console.log(`[AutoSync] Triggered sync for ${sourceType}`);
+      // Dedup: skip if there's already a QUEUED/RUNNING job for this rule
+      const existingJob = await prisma.financeSyncJob.findFirst({
+        where: {
+          syncRuleId: rule.id,
+          companyId,
+          status: { in: ["QUEUED", "RUNNING"] },
+        },
+      });
+
+      if (existingJob) {
+        console.log(`[AutoSync] Skipping ${sourceType} — job already queued/running`);
+        return;
+      }
+
+      const job = await prisma.financeSyncJob.create({
+        data: {
+          companyId,
+          syncRuleId: rule.id,
+          status: "QUEUED",
+        },
+      });
+
+      await inngest.send({
+        name: "finance-sync/job.started",
+        data: {
+          jobId: job.id,
+          syncRuleId: rule.id,
+          companyId,
+        },
+      });
+
+      console.log(`[AutoSync] Enqueued sync job for ${sourceType}`);
     }
   } catch (error) {
     console.error(`[AutoSync] Failed to trigger sync for ${sourceType}`, error);
