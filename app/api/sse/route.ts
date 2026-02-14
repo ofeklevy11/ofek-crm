@@ -1,86 +1,96 @@
 import { NextRequest, NextResponse } from "next/server";
-import { redis } from "@/lib/redis"; // Using the subscriber instance setup would be better but reusing logic is fine for now
+import { sharedSubscriber } from "@/lib/redis-subscriber";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const userId = searchParams.get("userId");
-
-  if (!userId) {
-    return new NextResponse("Missing userId", { status: 400 });
+  // Derive userId entirely from session — never from query params
+  const user = await getCurrentUser();
+  if (!user) {
+    return new NextResponse("Unauthorized", { status: 401 });
   }
+
+  // Rate limit SSE connections per user
+  const rateLimited = await checkRateLimit(String(user.id), RATE_LIMITS.sse);
+  if (rateLimited) return rateLimited;
+
+  const userId = String(user.id);
+  const companyId = String(user.companyId);
 
   const encoder = new TextEncoder();
 
-  // Create a dedicated subscriber client for this connection
-  // We cannot reuse the global one for blocking subscription operations in a unique stream per user effectively
-  // or we need a cleaner way.
-  // Standard pattern: Create a new connection for subscription to avoid blocking other ops if sharing clients.
-  // BUT: Vercel serverless has limits.
-  // Optimization: In a real heavy prod, you'd use a shared subscriber process or Ably.
-  // Since we are strictly asked for Redis on Vercel:
-  // We MUST create a new redis client for this subscription or use a multiplexer.
-  // Let's create a specialized duplicate for this request to ensure isolation.
-  const subscriber = redis.duplicate();
-  // Prevent crash on connection error (common when closing)
-  subscriber.on("error", (err) => {
-    // console.error("Redis Subscriber Error (Ignored):", err);
-  });
+  // Shared cleanup state accessible by both start() and cancel()
+  let unsubscribe: (() => void) | null = null;
+  let interval: ReturnType<typeof setInterval> | null = null;
+
+  const cleanup = () => {
+    if (interval) {
+      clearInterval(interval);
+      interval = null;
+    }
+    if (unsubscribe) {
+      unsubscribe();
+      unsubscribe = null;
+    }
+  };
 
   const stream = new ReadableStream({
     async start(controller) {
-      // 1. Connect and Subscribe
-      await subscriber.subscribe(
-        `user:${userId}:notifications`,
-        `user:${userId}:chat`,
-      );
-
       // Wrapper to safely write to controller
       const safeEnqueue = (data: string) => {
         if (req.signal.aborted) return;
         try {
           controller.enqueue(encoder.encode(data));
-        } catch (e) {
+        } catch {
           // Controller might be closed
-          // console.error("SSE Controller closed", e);
         }
       };
 
-      // 2. Handle messages
-      subscriber.on("message", (channel, message) => {
-        if (req.signal.aborted) {
-          // Ensure we quit if we get message after abort but before cleanup listener fired
-          subscriber.quit();
-          return;
-        }
+      // Subscribe via shared subscriber (single Redis connection for all SSE clients)
+      // Company-prefixed channels for defense-in-depth tenant isolation
+      const channels = [
+        `company:${companyId}:user:${userId}:notifications`,
+        `company:${companyId}:user:${userId}:chat`,
+      ];
 
-        const data = JSON.stringify({
-          channel,
-          data: JSON.parse(message),
-        });
+      try {
+        unsubscribe = await sharedSubscriber.subscribe(
+          channels,
+          (channel, message) => {
+            if (req.signal.aborted) return;
 
-        // SSE formatting: "data: ... \n\n"
-        safeEnqueue(`data: ${data}\n\n`);
-      });
+            const data = JSON.stringify({
+              channel,
+              data: JSON.parse(message),
+            });
+
+            // SSE formatting: "data: ... \n\n"
+            safeEnqueue(`data: ${data}\n\n`);
+          },
+        );
+      } catch (err) {
+        console.error(`[SSE] Redis subscribe failed for user=${userId}, company=${companyId}:`, err);
+        controller.close();
+        return;
+      }
 
       // Keep alive heartbeat
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         if (req.signal.aborted) {
-          clearInterval(interval);
+          cleanup();
           return;
         }
         safeEnqueue(":keepalive\n\n");
       }, 15000);
 
-      // 3. Cleanup on close
-      req.signal.addEventListener("abort", () => {
-        clearInterval(interval);
-        subscriber.quit();
-      });
+      // Cleanup on close
+      req.signal.addEventListener("abort", cleanup);
     },
     cancel() {
-      subscriber.quit();
+      // Safety net: if abort signal doesn't fire (e.g. forceful disconnect on Vercel)
+      cleanup();
     },
   });
 
@@ -88,6 +98,7 @@ export async function GET(req: NextRequest) {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
       Connection: "keep-alive",
     },
   });

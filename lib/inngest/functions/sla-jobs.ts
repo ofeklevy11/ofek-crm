@@ -27,6 +27,7 @@ export const slaScan = inngest.createFunction(
     id: "sla-scan",
     name: "SLA Breach Scanner",
     retries: 2,
+    timeouts: { finish: "120s" },
     concurrency: { limit: 1 },
   },
   [{ cron: "* * * * *" }, { event: "sla/manual-scan" }],
@@ -35,6 +36,7 @@ export const slaScan = inngest.createFunction(
 
     // Step 1: Find companies that have overdue tickets (lightweight query)
     const companyIds = await step.run("find-companies", async () => {
+      const COMPANY_LIMIT = 500;
       const responseCompanies = await prisma.ticket.findMany({
         where: {
           status: "OPEN",
@@ -42,6 +44,7 @@ export const slaScan = inngest.createFunction(
         },
         select: { companyId: true },
         distinct: ["companyId"],
+        take: COMPANY_LIMIT,
       });
 
       const resolveCompanies = await prisma.ticket.findMany({
@@ -51,7 +54,12 @@ export const slaScan = inngest.createFunction(
         },
         select: { companyId: true },
         distinct: ["companyId"],
+        take: COMPANY_LIMIT,
       });
+
+      if (responseCompanies.length >= COMPANY_LIMIT || resolveCompanies.length >= COMPANY_LIMIT) {
+        console.warn(`[SLA] ${COMPANY_LIMIT}+ companies with overdue tickets — some may be skipped`);
+      }
 
       const ids = new Set([
         ...responseCompanies.map((t) => t.companyId),
@@ -71,8 +79,6 @@ export const slaScan = inngest.createFunction(
       const companyBreaches = await step.run(
         `scan-company-${companyId}`,
         async () => {
-          const breaches: BreachEvent[] = [];
-
           // --- RESPONSE breaches ---
           const openTickets = await prisma.ticket.findMany({
             where: {
@@ -93,40 +99,18 @@ export const slaScan = inngest.createFunction(
                 select: { slaDueDate: true },
               },
             },
+            take: 500,
           });
 
-          for (const ticket of openTickets) {
-            const alreadyBreached = ticket.breaches.some(
-              (b) =>
-                b.slaDueDate.getTime() ===
-                ticket.slaResponseDueDate?.getTime(),
-            );
-            if (alreadyBreached) continue;
-
-            const breach = await prisma.slaBreach.create({
-              data: {
-                companyId: ticket.companyId,
-                ticketId: ticket.id,
-                priority: ticket.priority,
-                slaDueDate: ticket.slaResponseDueDate!,
-                breachType: "RESPONSE",
-                breachedAt: now,
-                status: "PENDING",
-              },
-            });
-
-            breaches.push({
-              ticketId: ticket.id,
-              companyId: ticket.companyId,
-              breachId: breach.id,
-              breachType: "RESPONSE",
-              ticketTitle: ticket.title,
-              ticketPriority: ticket.priority,
-              ticketStatus: ticket.status,
-              assigneeName: ticket.assignee?.name || null,
-              assigneeId: ticket.assignee?.id || null,
-            });
-          }
+          // Filter to tickets that don't already have a breach for this due date
+          const responseTickets = openTickets.filter(
+            (ticket) =>
+              !ticket.breaches.some(
+                (b) =>
+                  b.slaDueDate.getTime() ===
+                  ticket.slaResponseDueDate?.getTime(),
+              ),
+          );
 
           // --- RESOLVE breaches ---
           const unresolvedTickets = await prisma.ticket.findMany({
@@ -148,39 +132,80 @@ export const slaScan = inngest.createFunction(
                 select: { slaDueDate: true },
               },
             },
+            take: 500,
           });
 
-          for (const ticket of unresolvedTickets) {
-            const alreadyBreached = ticket.breaches.some(
-              (b) =>
-                b.slaDueDate.getTime() === ticket.slaDueDate?.getTime(),
-            );
-            if (alreadyBreached) continue;
+          const resolveTickets = unresolvedTickets.filter(
+            (ticket) =>
+              !ticket.breaches.some(
+                (b) =>
+                  b.slaDueDate.getTime() === ticket.slaDueDate?.getTime(),
+              ),
+          );
 
-            const breach = await prisma.slaBreach.create({
-              data: {
-                companyId: ticket.companyId,
-                ticketId: ticket.id,
-                priority: ticket.priority,
-                slaDueDate: ticket.slaDueDate!,
-                breachType: "RESOLVE",
-                breachedAt: now,
-                status: "PENDING",
-              },
+          // Issue 31: Batch all breach inserts with createMany + skipDuplicates
+          const breachData = [
+            ...responseTickets.map((ticket) => ({
+              companyId: ticket.companyId,
+              ticketId: ticket.id,
+              priority: ticket.priority,
+              slaDueDate: ticket.slaResponseDueDate!,
+              breachType: "RESPONSE" as const,
+              breachedAt: now,
+              status: "PENDING",
+            })),
+            ...resolveTickets.map((ticket) => ({
+              companyId: ticket.companyId,
+              ticketId: ticket.id,
+              priority: ticket.priority,
+              slaDueDate: ticket.slaDueDate!,
+              breachType: "RESOLVE" as const,
+              breachedAt: now,
+              status: "PENDING",
+            })),
+          ];
+
+          if (breachData.length > 0) {
+            await prisma.slaBreach.createMany({
+              data: breachData,
+              skipDuplicates: true,
             });
+          }
 
-            breaches.push({
+          // Query back created breaches to get IDs for fan-out events
+          const createdBreaches = breachData.length > 0
+            ? await prisma.slaBreach.findMany({
+                where: {
+                  companyId,
+                  breachedAt: now,
+                  status: "PENDING",
+                },
+                select: { id: true, ticketId: true, breachType: true },
+              })
+            : [];
+
+          const breachMap = new Map(
+            createdBreaches.map((b) => [`${b.ticketId}-${b.breachType}`, b.id]),
+          );
+
+          const allTickets = [
+            ...responseTickets.map((t) => ({ ...t, _breachType: "RESPONSE" as const })),
+            ...resolveTickets.map((t) => ({ ...t, _breachType: "RESOLVE" as const })),
+          ];
+
+          const breaches: BreachEvent[] = allTickets
+            .filter((t) => breachMap.has(`${t.id}-${t._breachType}`))
+            .map((ticket) => ({
               ticketId: ticket.id,
               companyId: ticket.companyId,
-              breachId: breach.id,
-              breachType: "RESOLVE",
+              breachId: breachMap.get(`${ticket.id}-${ticket._breachType}`)!,
+              breachType: ticket._breachType,
               ticketTitle: ticket.title,
               ticketPriority: ticket.priority,
               ticketStatus: ticket.status,
               assigneeName: ticket.assignee?.name || null,
               assigneeId: ticket.assignee?.id || null,
-            });
-          }
+            }));
 
           return breaches;
         },
@@ -218,6 +243,7 @@ export const slaBreachHandler = inngest.createFunction(
     id: "sla-breach-handler",
     name: "SLA Breach Automation Handler",
     retries: 3,
+    timeouts: { finish: "120s" },
     concurrency: {
       limit: 10,
       key: "event.data.companyId",
@@ -237,6 +263,19 @@ export const slaBreachHandler = inngest.createFunction(
       assigneeId,
     } = event.data;
 
+    // SECURITY: Re-validate ticketId belongs to companyId (defense-in-depth)
+    const ticketValid = await step.run("validate-ticket", async () => {
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: ticketId, companyId },
+        select: { id: true },
+      });
+      return !!ticket;
+    });
+
+    if (!ticketValid) {
+      return { breachId, ticketId, breachType, error: "Ticket not found for company" };
+    }
+
     // Step 1: Fetch matching automation rules
     const rules = await step.run("fetch-rules", async () => {
       return prisma.automationRule.findMany({
@@ -245,6 +284,7 @@ export const slaBreachHandler = inngest.createFunction(
           isActive: true,
           triggerType: "SLA_BREACH",
         },
+        take: 500, // P75: Bound automation rules query
       });
     });
 
@@ -301,21 +341,24 @@ export const slaBreachHandler = inngest.createFunction(
           ? (rule.actionConfig as any)?.actions || []
           : [{ type: rule.actionType, config: rule.actionConfig }];
 
-      for (const action of actions) {
+      for (let actionIdx = 0; actionIdx < actions.length; actionIdx++) {
+        const action = actions[actionIdx];
         // WhatsApp delay: use Inngest step.sleep instead of setTimeout
         if (
           action.type === "SEND_WHATSAPP" &&
           action.config?.delay &&
           action.config.delay > 0
         ) {
+          // YY: Include action index to prevent step ID collision in MULTI_ACTION rules
           await step.sleep(
-            `whatsapp-delay-rule-${rule.id}`,
+            `whatsapp-delay-rule-${rule.id}-action-${actionIdx}`,
             `${action.config.delay}s`,
           );
         }
 
+        // YY: Include action index in step ID for uniqueness
         await step.run(
-          `execute-rule-${rule.id}-${action.type}`,
+          `execute-rule-${rule.id}-${action.type}-${actionIdx}`,
           async () => {
             await executeSlaAction(
               action.type,
@@ -379,7 +422,7 @@ async function executeSlaAction(
             "הקריאה {ticketTitle} חרגה מ{breachType}! עדיפות: {priority}",
         );
 
-        await createNotificationForCompany({
+        const notifRes = await createNotificationForCompany({
           companyId,
           userId: actionConfig.recipientId,
           title:
@@ -389,6 +432,12 @@ async function executeSlaAction(
           link: `/service`,
         });
 
+        if (!notifRes.success) {
+          throw new Error(
+            `[SLA] Notification failed for user ${actionConfig.recipientId}: ${notifRes.error}`,
+          );
+        }
+
         console.log(
           `[SLA] Notification sent to user ${actionConfig.recipientId} for ticket #${contextData.ticketId}`,
         );
@@ -397,73 +446,64 @@ async function executeSlaAction(
     }
 
     case "SEND_WHATSAPP": {
-      const { sendGreenApiMessage, sendGreenApiFile } = await import(
-        "@/app/actions/green-api"
-      );
-
       let phone = "";
       if (actionConfig.phoneColumnId?.startsWith("manual:")) {
         phone = actionConfig.phoneColumnId.replace("manual:", "");
       }
 
       if (!phone) {
-        console.error(`[SLA] WhatsApp action: No phone number configured`);
-        return;
+        throw new Error(
+          `[SLA] WhatsApp action: No phone number configured for rule ${rule.id} ("${rule.name}")`,
+        );
       }
 
       const content = replaceTemplateVars(actionConfig.content || "");
 
-      // NOTE: delay is handled by step.sleep() in the caller — no setTimeout here
-
-      if (actionConfig.messageType === "media" && actionConfig.mediaFileId) {
-        const file = await prisma.file.findUnique({
-          where: { id: Number(actionConfig.mediaFileId) },
-        });
-
-        if (file && file.url) {
-          await sendGreenApiFile(
-            companyId,
-            phone,
-            file.url,
-            file.name,
-            content,
-          );
-          console.log(`[SLA] WhatsApp file sent to ${phone}`);
-        }
-      } else {
-        await sendGreenApiMessage(companyId, phone, content);
-        console.log(`[SLA] WhatsApp message sent to ${phone}`);
-      }
+      // Dispatch to dedicated Inngest WhatsApp job for retry + rate limiting
+      const { inngest: slaInngest } = await import("@/lib/inngest/client");
+      await slaInngest.send({
+        id: `wa-sla-${companyId}-${rule.id}-${contextData.ticketId}-${breachType}`,
+        name: "automation/send-whatsapp",
+        data: {
+          companyId,
+          phone: String(phone),
+          content,
+          messageType: actionConfig.messageType,
+          mediaFileId: actionConfig.mediaFileId,
+        },
+      });
+      console.log(`[SLA] WhatsApp job enqueued for ${phone}`);
       break;
     }
 
     case "WEBHOOK": {
       const url = actionConfig.webhookUrl || actionConfig.url;
       if (!url) {
-        console.warn(`[SLA] Webhook action missing URL for Rule ${rule.id}`);
-        return;
+        throw new Error(
+          `[SLA] Webhook action missing URL for Rule ${rule.id} ("${rule.name}")`
+        );
       }
 
-      const payload = {
-        ruleId: rule.id,
-        ruleName: rule.name,
-        triggerType: "SLA_BREACH",
-        companyId,
-        timestamp: new Date().toISOString(),
-        data: contextData,
-      };
-
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      // Dispatch to dedicated Inngest webhook job for retry + rate limiting
+      const { inngest: slaWebhookInngest } = await import("@/lib/inngest/client");
+      await slaWebhookInngest.send({
+        id: `webhook-sla-${companyId}-${rule.id}-${contextData.ticketId}-${breachType}`,
+        name: "automation/send-webhook",
+        data: {
+          url,
+          companyId,
+          ruleId: rule.id,
+          payload: {
+            ruleId: rule.id,
+            ruleName: rule.name,
+            triggerType: "SLA_BREACH",
+            companyId,
+            timestamp: new Date().toISOString(),
+            data: contextData,
+          },
+        },
       });
-
-      if (!response.ok) {
-        console.error(`[SLA] Webhook failed with status ${response.status}`);
-      } else {
-        console.log(`[SLA] Webhook sent successfully to ${url}`);
-      }
+      console.log(`[SLA] Webhook job enqueued for ${url}`);
       break;
     }
 
@@ -488,13 +528,23 @@ async function executeSlaAction(
         dueDate = date;
       }
 
+      // SECURITY: Validate assigneeId belongs to the same company
+      let validAssigneeId: number | null = assigneeId ? Number(assigneeId) : null;
+      if (validAssigneeId) {
+        const validUser = await prisma.user.findFirst({
+          where: { id: validAssigneeId, companyId },
+          select: { id: true },
+        });
+        if (!validUser) validAssigneeId = null;
+      }
+
       await prisma.task.create({
         data: {
           title: finalTitle,
           description: finalDesc,
           status: status || "todo",
           priority: priority || "high",
-          assigneeId: assigneeId ? Number(assigneeId) : null,
+          assigneeId: validAssigneeId,
           dueDate: dueDate,
           tags: tags || ["SLA"],
           companyId: companyId,

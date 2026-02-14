@@ -12,7 +12,7 @@ export default async function NotificationsPage() {
   }
 
   // Fetch all notifications for the full page view
-  const response = await getNotifications(user.id, null);
+  const response = await getNotifications(null);
   const notifications = response.success ? response.data : [];
 
   return (

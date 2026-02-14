@@ -21,7 +21,7 @@ export async function GET(
 
     const searchParams = request.nextUrl.searchParams;
     const searchQuery = searchParams.get("q") || "";
-    const limit = parseInt(searchParams.get("limit") || "5");
+    const limit = Math.min(parseInt(searchParams.get("limit") || "5"), 100);
     const searchFieldsParam = searchParams.get("searchFields") || "";
     const displayFieldsParam = searchParams.get("displayFields") || "";
 
@@ -69,7 +69,8 @@ export async function GET(
     // OPTIMIZED: Use raw SQL with ILIKE to filter directly in DB
     // instead of fetching 200 records and filtering in memory
     // This is much more efficient for large tables
-    const searchPattern = `%${searchQuery}%`;
+    const escapedQuery = searchQuery.replace(/[%_\\]/g, '\\$&');
+    const searchPattern = `%${escapedQuery}%`;
 
     // Build SQL query that searches in specified JSON fields
     // Using @> for JSONB containment or casting to text for ILIKE
@@ -118,40 +119,63 @@ export async function GET(
     // Limit results
     const limitedRecords = filteredRecords.slice(0, limit);
 
-    // Fetch related data for relation fields
-    const relationFields = schema.filter((f) => f.type === "relation");
+    // Fetch related data ONLY for specific IDs referenced in search results
+    const relationFields = schema.filter((f: any) => f.type === "relation");
     const relatedDataMap: Record<number, Record<number, any>> = {};
 
-    // Fetch all related records needed - FILTERED BY COMPANY
-    await Promise.all(
-      relationFields.map(async (field) => {
-        if (!field.relationTableId) return;
+    // P144: Collect only the specific record IDs referenced in results
+    const neededIdsByTable: Record<number, Set<number>> = {};
+    for (const field of relationFields) {
+      if (!field.relationTableId) continue;
+      const idSet = new Set<number>();
+      for (const record of limitedRecords) {
+        let data = record.data as any;
+        if (typeof data === "string") {
+          try { data = JSON.parse(data); } catch { continue; }
+        }
+        const val = data?.[field.name];
+        if (val == null) continue;
+        if (Array.isArray(val)) {
+          val.forEach((v: any) => { const n = Number(v); if (!isNaN(n)) idSet.add(n); });
+        } else {
+          const n = Number(val);
+          if (!isNaN(n)) idSet.add(n);
+        }
+      }
+      if (idSet.size > 0) {
+        neededIdsByTable[field.relationTableId] = neededIdsByTable[field.relationTableId]
+          ? new Set([...neededIdsByTable[field.relationTableId], ...idSet])
+          : idSet;
+      }
+    }
 
+    // Fetch only the needed related records (not entire tables)
+    await Promise.all(
+      Object.entries(neededIdsByTable).map(async ([tableIdStr, idSet]) => {
+        const relTableId = Number(tableIdStr);
         try {
           const relatedRecords = await prisma.record.findMany({
             where: {
-              tableId: field.relationTableId,
-              companyId: user.companyId, // Ensure related records are also accessible
+              id: { in: [...idSet] },
+              tableId: relTableId,
+              companyId: user.companyId,
             },
+            take: 5000, // P227: Cap related records to prevent unbounded query
           });
 
           const dataMap: Record<number, any> = {};
           relatedRecords.forEach((r) => {
             let data = r.data as any;
             if (typeof data === "string") {
-              try {
-                data = JSON.parse(data);
-              } catch (e) {
-                data = {};
-              }
+              try { data = JSON.parse(data); } catch { data = {}; }
             }
             dataMap[r.id] = data;
           });
 
-          relatedDataMap[field.relationTableId] = dataMap;
+          relatedDataMap[relTableId] = dataMap;
         } catch (error) {
           console.error(
-            `Failed to fetch related table ${field.relationTableId}`,
+            `Failed to fetch related table ${relTableId}`,
             error
           );
         }

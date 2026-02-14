@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import { inngest } from "@/lib/inngest/client";
+import { validateUserInCompany } from "@/lib/company-validation";
 
 export async function getTasks() {
   try {
@@ -38,6 +39,7 @@ export async function getTasks() {
         },
       },
       orderBy: { createdAt: "desc" },
+      take: 5000, // P117: Bound task list query
     });
     return { success: true, data: tasks };
   } catch (error) {
@@ -104,6 +106,13 @@ export async function createTask(data: {
 
     if (!canCreate) {
       return { success: false, error: "אין לך הרשאה ליצור משימות" };
+    }
+
+    // SECURITY: Validate assigneeId belongs to same company
+    if (data.assigneeId) {
+      if (!(await validateUserInCompany(data.assigneeId, user.companyId))) {
+        return { success: false, error: "Invalid assignee" };
+      }
     }
 
     const dueDate = data.dueDate ? new Date(data.dueDate) : null;
@@ -199,8 +208,15 @@ export async function updateTask(
       return { success: false, error: "אין לך הרשאה לערוך משימה זו" };
     }
 
+    // SECURITY: Validate assigneeId belongs to same company
+    if (data.assigneeId) {
+      if (!(await validateUserInCompany(data.assigneeId, user.companyId))) {
+        return { success: false, error: "Invalid assignee" };
+      }
+    }
+
     const task = await prisma.task.update({
-      where: { id },
+      where: { id, companyId: user.companyId },
       data: updateData,
       include: {
         assignee: {
@@ -225,21 +241,21 @@ export async function updateTask(
         data: {
           taskId: id,
           action: "UPDATE",
+          companyId: user.companyId, // SECURITY: Tag audit log with companyId (Issue E)
+          userId: user.id,
           diffJson: {
             status: {
               from: existingTask.status,
               to: data.status,
             },
           },
-          // Assuming system user or currently logged in user triggers this.
-          // Since updateTask is generic server action, we might not have userId easily here without auth context.
-          // For now leaving userId null or we could get it if we had auth in scope.
         },
       });
 
       // Send automation event (async via Inngest)
       try {
         await inngest.send({
+          id: `task-status-${user.companyId}-${task.id}-${data.status}`,
           name: "automation/task-status-change",
           data: {
             taskId: task.id,
@@ -289,7 +305,7 @@ export async function deleteTask(id: string) {
     }
 
     await prisma.task.delete({
-      where: { id },
+      where: { id, companyId: user.companyId },
     });
 
     revalidatePath("/tasks");

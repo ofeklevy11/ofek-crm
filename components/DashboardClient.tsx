@@ -324,6 +324,11 @@ export default function DashboardClient({
   // Track initialization to prevent duplicate loading
   const isInitialized = useRef(false);
 
+  // Per-widget cooldown to prevent cache-bypass spam (5s cooldown)
+  // Tracks both time and settings key so settings changes bypass cooldown
+  const lastFetchTime = useRef<Record<string, { time: number; settingsKey: string }>>({});
+  const FETCH_COOLDOWN_MS = 5000;
+
   // Load widgets from database on mount
   useEffect(() => {
     if (isInitialized.current) return;
@@ -430,15 +435,25 @@ export default function DashboardClient({
     viewId: number | string,
     settings?: any,
   ) => {
+    // Per-widget cooldown — only throttle identical settings requests
+    const now = Date.now();
+    const settingsKey = JSON.stringify(settings || {});
+    const lastEntry = lastFetchTime.current[widgetId];
+    if (lastEntry && now - lastEntry.time < FETCH_COOLDOWN_MS && lastEntry.settingsKey === settingsKey) {
+      return;
+    }
+    lastFetchTime.current[widgetId] = { time: now, settingsKey };
+
     setTableLoading((prev) => ({ ...prev, [widgetId]: true }));
     try {
       let res;
       if (typeof viewId === "string" && viewId === "custom") {
-        res = await getCustomTableData(tableId, settings || {});
+        res = await getCustomTableData(tableId, settings || {}, true);
       } else {
         res = await getTableViewData(
           tableId,
           typeof viewId === "string" ? Number(viewId) : viewId,
+          true,
         );
       }
 
@@ -685,15 +700,17 @@ export default function DashboardClient({
   // const hasGoals = availableGoals.length > 0; // Not explicitly used but good context
 
   const handleWidgetSettingsChange = (widgetId: string, newSettings: any) => {
-    // 1. Update local widgets state
+    // Read widget info BEFORE async state update to avoid stale closure
+    const widget = widgets.find((w) => w.id === widgetId);
+
+    // Update local widgets state
     setWidgets((prev) =>
       prev.map((w) =>
         w.id === widgetId ? { ...w, settings: newSettings } : w,
       ),
     );
 
-    // 2. Fetch data with new settings directly
-    const widget = widgets.find((w) => w.id === widgetId);
+    // Fetch data with new settings
     if (widget && widget.type === "TABLE" && widget.tableId) {
       if (newSettings?.collapsed) return;
       fetchTableData(widgetId, widget.tableId, widget.referenceId, newSettings);

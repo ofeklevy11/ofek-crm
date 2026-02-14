@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   getAnalyticsData,
   updateAnalyticsViewOrder,
@@ -667,6 +667,14 @@ export default function AnalyticsDashboard({
     initialViews.filter((v: any) => v.type === "GRAPH"),
   );
   const [refreshingViewId, setRefreshingViewId] = useState<string | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup polling interval on unmount (handles Next.js client navigation)
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
 
   // Sync state when props change (e.g. after router.refresh())
   useEffect(() => {
@@ -732,7 +740,7 @@ export default function AnalyticsDashboard({
       // 2. Log Refresh
       await logAnalyticsRefresh();
 
-      // 3. Refresh specific item
+      // 3. Trigger background refresh (returns immediately)
       const itemId = view.source === "AUTOMATION" ? view.ruleId : view.viewId;
       const itemType = view.source === "AUTOMATION" ? "AUTOMATION" : "CUSTOM";
       const result = await refreshAnalyticsItem(
@@ -740,25 +748,29 @@ export default function AnalyticsDashboard({
         itemType as "AUTOMATION" | "CUSTOM",
       );
 
-      if (result.success && result.data) {
-        // 4. Update local state with fresh data
-        if (view.type === "GRAPH") {
-          setGraphViews((prev) =>
-            prev.map((v) => (v.id === viewId ? { ...result.data } : v)),
-          );
-        } else {
-          setViews((prev) =>
-            prev.map((v) => (v.id === viewId ? { ...result.data } : v)),
-          );
-        }
-        setToast({ message: "הנתון עודכן בהצלחה", type: "success" });
-        setTimeout(() => setToast(null), 3000);
+      if (result.success) {
+        // 4. Poll for updated data instead of fixed delay
+        setToast({ message: "מרענן נתונים ברקע...", type: "success" });
+        setTimeout(() => setToast(null), 5000);
+
+        let attempts = 0;
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = setInterval(() => {
+          attempts++;
+          router.refresh();
+          if (attempts >= 5) { // 5 × 2s = 10s max
+            clearInterval(pollIntervalRef.current!);
+            pollIntervalRef.current = null;
+            setRefreshingViewId(null);
+          }
+        }, 2000);
       } else {
         setToast({
           message: result.error || "שגיאה ברענון הנתון",
           type: "error",
         });
         setTimeout(() => setToast(null), 4000);
+        setRefreshingViewId(null);
       }
 
       // 5. Update Usage Stats
@@ -770,7 +782,6 @@ export default function AnalyticsDashboard({
     } catch (error) {
       setToast({ message: "שגיאה ברענון הנתון", type: "error" });
       setTimeout(() => setToast(null), 4000);
-    } finally {
       setRefreshingViewId(null);
     }
   };

@@ -14,6 +14,7 @@ export async function GET() {
     const tables = await prisma.tableMeta.findMany({
       where: { companyId: user.companyId },
       orderBy: { createdAt: "desc" },
+      take: 500,
     });
     return NextResponse.json(tables);
   } catch (error) {
@@ -50,6 +51,22 @@ export async function POST(request: Request) {
       );
     }
 
+    // SECURITY: Validate categoryId belongs to user's company
+    let validatedCategoryId: number | undefined;
+    if (body.categoryId) {
+      const category = await prisma.tableCategory.findFirst({
+        where: { id: Number(body.categoryId), companyId: user.companyId },
+        select: { id: true },
+      });
+      if (!category) {
+        return NextResponse.json(
+          { error: "Invalid category" },
+          { status: 400 }
+        );
+      }
+      validatedCategoryId = category.id;
+    }
+
     const table = await prisma.tableMeta.create({
       data: {
         name,
@@ -57,7 +74,7 @@ export async function POST(request: Request) {
         schemaJson: schemaJson || {},
         companyId: user.companyId,
         createdBy: user.id,
-        categoryId: body.categoryId ? Number(body.categoryId) : undefined,
+        categoryId: validatedCategoryId,
       },
     });
 

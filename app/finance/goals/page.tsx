@@ -2,6 +2,7 @@ import { getGoalsWithProgress, getGoalCreationData } from "@/app/actions/goals";
 import GoalList from "@/components/finance/GoalList";
 import GoalModal from "@/components/finance/GoalModal";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { Target, TrendingUp, ArrowRight, Archive, Plus } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -11,6 +12,9 @@ export default async function GoalsPage() {
   const user = await getCurrentUser();
   if (!user) {
     redirect("/login");
+  }
+  if (!hasUserFlag(user, "canViewGoals")) {
+    redirect("/");
   }
 
   // Fetch data

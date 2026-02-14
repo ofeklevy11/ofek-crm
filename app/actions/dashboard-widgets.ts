@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { Prisma } from "@prisma/client";
+import { inngest } from "@/lib/inngest/client";
 
 interface DashboardWidgetInput {
   widgetType: "ANALYTICS" | "TABLE" | "GOAL" | "TABLE_VIEWS_DASHBOARD";
@@ -22,8 +23,9 @@ export async function getDashboardWidgets() {
     }
 
     const widgets = await prisma.dashboardWidget.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, companyId: user.companyId },
       orderBy: { order: "asc" },
+      take: 200,
     });
 
     return { success: true, data: widgets };
@@ -45,21 +47,33 @@ export async function addDashboardWidget(data: DashboardWidgetInput) {
 
     // Get max order to place new widget at end
     const maxOrderWidget = await prisma.dashboardWidget.findFirst({
-      where: { userId: user.id },
+      where: { userId: user.id, companyId: user.companyId },
       orderBy: { order: "desc" },
     });
     const nextOrder = (maxOrderWidget?.order ?? -1) + 1;
 
     const widget = await prisma.dashboardWidget.create({
       data: {
+        companyId: user.companyId,
         userId: user.id,
         widgetType: data.widgetType,
-        referenceId: data.referenceId || "custom", // Default to "custom" if not provided
+        referenceId: data.referenceId || "custom",
         tableId: data.tableId,
         settings: data.settings ?? undefined,
         order: nextOrder,
       },
     });
+
+    // Pre-compute cache for the new widget
+    try {
+      await inngest.send({
+        id: `dash-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
+        name: "dashboard/refresh-widgets",
+        data: { companyId: user.companyId },
+      });
+    } catch (e) {
+      console.error("[DashboardWidgets] Failed to send refresh:", e);
+    }
 
     return { success: true, data: widget };
   } catch (error) {
@@ -78,18 +92,30 @@ export async function removeDashboardWidget(widgetId: string) {
       return { success: false, error: "Unauthorized" };
     }
 
-    // Verify ownership
-    const widget = await prisma.dashboardWidget.findUnique({
-      where: { id: widgetId },
+    // Verify ownership (defense-in-depth: companyId in query)
+    const widget = await prisma.dashboardWidget.findFirst({
+      where: { id: widgetId, userId: user.id, companyId: user.companyId },
     });
 
-    if (!widget || widget.userId !== user.id) {
+    if (!widget) {
       return { success: false, error: "Widget not found or unauthorized" };
     }
 
+    // SECURITY: Atomic companyId + userId check in delete WHERE clause
     await prisma.dashboardWidget.delete({
-      where: { id: widgetId },
+      where: { id: widgetId, companyId: user.companyId, userId: user.id },
     });
+
+    // Trigger cache cleanup for orphaned widget entries
+    try {
+      await inngest.send({
+        id: `dash-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
+        name: "dashboard/refresh-widgets",
+        data: { companyId: user.companyId },
+      });
+    } catch (e) {
+      console.error("[DashboardWidgets] Failed to send refresh:", e);
+    }
 
     return { success: true };
   } catch (error) {
@@ -108,10 +134,14 @@ export async function updateDashboardWidgetOrder(widgetIds: string[]) {
       return { success: false, error: "Unauthorized" };
     }
 
+    if (widgetIds.length > 200) {
+      return { success: false, error: "Too many widgets to reorder" };
+    }
+
     // Update each widget's order in a transaction
     const updates = widgetIds.map((id, index) =>
       prisma.dashboardWidget.updateMany({
-        where: { id, userId: user.id },
+        where: { id, userId: user.id, companyId: user.companyId },
         data: { order: index },
       }),
     );
@@ -140,7 +170,7 @@ export async function migrateDashboardWidgets(
 
     // Check if user already has widgets in DB
     const existingCount = await prisma.dashboardWidget.count({
-      where: { userId: user.id },
+      where: { userId: user.id, companyId: user.companyId },
     });
 
     if (existingCount > 0) {
@@ -150,6 +180,7 @@ export async function migrateDashboardWidgets(
 
     // Create all widgets
     const data = localStorageWidgets.map((w, index) => ({
+      companyId: user.companyId,
       userId: user.id,
       widgetType: w.widgetType,
       referenceId: w.referenceId,
@@ -184,12 +215,12 @@ export async function updateDashboardWidget(
       return { success: false, error: "Unauthorized" };
     }
 
-    // Verify ownership
-    const widget = await prisma.dashboardWidget.findUnique({
-      where: { id: widgetId },
+    // Verify ownership (defense-in-depth: companyId in query)
+    const widget = await prisma.dashboardWidget.findFirst({
+      where: { id: widgetId, userId: user.id, companyId: user.companyId },
     });
 
-    if (!widget || widget.userId !== user.id) {
+    if (!widget) {
       return { success: false, error: "Widget not found" };
     }
 
@@ -202,10 +233,22 @@ export async function updateDashboardWidget(
       updateData.settings = data.settings ?? Prisma.DbNull;
     // We don't typically update widgetType, but could if needed
 
+    // SECURITY: Atomic companyId + userId check in update WHERE clause
     await prisma.dashboardWidget.update({
-      where: { id: widgetId },
+      where: { id: widgetId, companyId: user.companyId, userId: user.id },
       data: updateData,
     });
+
+    // Refresh cache with updated widget settings
+    try {
+      await inngest.send({
+        id: `dash-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
+        name: "dashboard/refresh-widgets",
+        data: { companyId: user.companyId },
+      });
+    } catch (e) {
+      console.error("[DashboardWidgets] Failed to send refresh:", e);
+    }
 
     return { success: true };
   } catch (error) {

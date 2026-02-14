@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createAutomationRule } from "@/app/actions/automations";
+import { useAIJob } from "@/hooks/use-ai-job";
 
 interface Message {
   role: "user" | "model";
@@ -46,8 +47,14 @@ export default function AIAutomationCreator({
     null
   );
   const [creating, setCreating] = useState(false);
+  const { dispatch, cancel } = useAIJob();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Cancel polling when modal closes (B1)
+  useEffect(() => {
+    if (!isOpen) cancel();
+  }, [isOpen, cancel]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -75,24 +82,17 @@ export default function AIAutomationCreator({
         .join("\n");
       const usersStr = users.map((u) => `${u.name} (ID: ${u.id})`).join(", ");
 
-      const response = await fetch("/api/ai/generate-automation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = await dispatch<{ automation: AutomationSchema }>(
+        "/api/ai/generate-automation",
+        {
           prompt: messageToSend,
           tables: tablesStr,
           users: usersStr,
           existingAutomations: "",
-        }),
-      });
+        }
+      );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to generate automation");
-      }
-
-      if (data.automation) {
+      if (data.automation && data.automation.triggerType && data.automation.actionType) {
         setCurrentSchema(data.automation);
         setMessages((prev) => [
           ...prev,
@@ -111,7 +111,13 @@ export default function AIAutomationCreator({
           },
         ]);
       }
-    } catch (error) {
+      setLoading(false);
+    } catch (error: any) {
+      // Ignore abort errors (from unmount or cancel)
+      if (error?.name === "AbortError" || error?.message === "Aborted") {
+        setLoading(false);
+        return;
+      }
       console.error(error);
       setMessages((prev) => [
         ...prev,
@@ -120,7 +126,6 @@ export default function AIAutomationCreator({
           content: "מצטער, משהו השתבש. אנא נסה שוב.",
         },
       ]);
-    } finally {
       setLoading(false);
     }
   };

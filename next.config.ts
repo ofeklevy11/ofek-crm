@@ -30,9 +30,26 @@ const nextConfig: NextConfig = {
             key: "Referrer-Policy",
             value: "strict-origin-when-cross-origin",
           },
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https://utfs.io",
+              "font-src 'self' data:",
+              "connect-src 'self' https://utfs.io https://*.uploadthing.com https://*.inngest.com",
+              "frame-ancestors 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+            ].join("; "),
+          },
         ],
       },
     ];
+  },
+  outputFileTracingIncludes: {
+    "/api/inngest": ["./pdf/static/*.ttf"],
   },
   webpack: (config) => {
     config.ignoreWarnings = [

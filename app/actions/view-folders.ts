@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { validateViewFolderInCompany } from "@/lib/company-validation";
 
 export async function createViewFolder(name: string) {
   try {
@@ -31,6 +32,7 @@ export async function getViewFolders() {
     const folders = await prisma.viewFolder.findMany({
       where: { companyId: user.companyId },
       orderBy: { order: "asc" },
+      take: 200,
     });
     return { success: true, data: folders };
   } catch (error) {
@@ -63,7 +65,7 @@ export async function deleteViewFolder(id: number) {
         data: { folderId: null },
       }),
       prisma.viewFolder.delete({
-        where: { id },
+        where: { id, companyId: user.companyId },
       }),
     ]);
 
@@ -83,6 +85,13 @@ export async function moveViewToFolder(
   try {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+
+    // SECURITY: Validate target folderId belongs to same company
+    if (folderId) {
+      if (!(await validateViewFolderInCompany(folderId, user.companyId))) {
+        return { success: false, error: "Invalid folder" };
+      }
+    }
 
     if (type === "CUSTOM") {
       await prisma.analyticsView.update({

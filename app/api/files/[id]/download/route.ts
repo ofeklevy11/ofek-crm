@@ -35,7 +35,9 @@ export async function GET(
     }
 
     // Fetch the file content from the external URL
-    const response = await fetch(file.url);
+    const response = await fetch(file.url, {
+      signal: AbortSignal.timeout(15_000), // P214: 15s timeout to prevent hanging on slow storage
+    });
 
     if (!response.ok) {
       return NextResponse.json(

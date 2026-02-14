@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import crypto from "crypto";
+import { hashApiKey, maskApiKey } from "@/lib/api-key-utils";
 
 export async function getApiKeys() {
   const user = await getCurrentUser();
@@ -19,6 +20,7 @@ export async function getApiKeys() {
           select: { name: true },
         },
       },
+      take: 100, // P91: Bound API keys query
     });
 
     return { success: true, data: keys };
@@ -37,26 +39,23 @@ export async function createApiKey(name: string) {
   // Generate a secure random key
   // Format: sk_live_[random_hex]
   const randomBytes = crypto.randomBytes(24).toString("hex");
-  const key = `sk_live_${randomBytes}`;
-
-  console.log(
-    "Creating API Key for user:",
-    user.id,
-    "Company:",
-    user.companyId
-  );
+  const fullKey = `sk_live_${randomBytes}`;
+  const keyHash = hashApiKey(fullKey);
+  const maskedKey = maskApiKey(fullKey);
 
   try {
     const newKey = await prisma.apiKey.create({
       data: {
         companyId: user.companyId,
-        key,
+        key: maskedKey,
+        keyHash,
         name,
         createdBy: user.id,
       },
     });
 
-    return { success: true, data: newKey };
+    // Return the full key ONCE — it can never be retrieved again
+    return { success: true, data: { ...newKey, fullKey } };
   } catch (error) {
     console.error("Error creating API key:", error);
     return {
@@ -86,7 +85,7 @@ export async function deleteApiKey(id: number) {
     }
 
     await prisma.apiKey.delete({
-      where: { id },
+      where: { id, companyId: user.companyId },
     });
 
     return { success: true };

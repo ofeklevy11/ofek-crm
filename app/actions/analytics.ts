@@ -4,580 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { canManageAnalytics } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
-
-/**
- * Helper function to parse duration string "Xd Yh Zm Qs" to total seconds
- */
-function parseDurationToSeconds(durationStr: string): number {
-  if (!durationStr) return 0;
-  const cleanDuration = durationStr.split("|")[0];
-  const daysMatch = cleanDuration.match(/(\d+)d/);
-  const hoursMatch = cleanDuration.match(/(\d+)h/);
-  const minutesMatch = cleanDuration.match(/(\d+)m/);
-  const secondsMatch = cleanDuration.match(/(\d+)s/);
-  const days = daysMatch ? parseInt(daysMatch[1]) : 0;
-  const hours = hoursMatch ? parseInt(hoursMatch[1]) : 0;
-  const minutes = minutesMatch ? parseInt(minutesMatch[1]) : 0;
-  const seconds = secondsMatch ? parseInt(secondsMatch[1]) : 0;
-  return days * 24 * 3600 + hours * 3600 + minutes * 60 + seconds;
-}
-
-/**
- * Helper function to format seconds back to readable string
- */
-function formatSecondsToHebrew(totalSeconds: number): string {
-  if (totalSeconds === 0) return "0 שניות";
-  const days = Math.floor(totalSeconds / (24 * 3600));
-  const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  /* const parts: string[] = [];  // Explicit type added */
-  const parts: string[] = [];
-  if (days > 0) parts.push(`${days} ${days === 1 ? "יום" : "ימים"}`);
-  if (hours > 0) parts.push(`${hours} ${hours === 1 ? "שעה" : "שעות"}`);
-  if (minutes > 0) parts.push(`${minutes} ${minutes === 1 ? "דקה" : "דקות"}`);
-  if (seconds > 0)
-    parts.push(`${seconds} ${seconds === 1 ? "שנייה" : "שניות"}`);
-  if (parts.length === 0) return "0 שניות";
-  return parts.join(", ");
-}
-
-/**
- * Helper to extract value from record, handling custom fields, system fields, and relations (objects with name/title).
- */
-function extractValue(record: any, key: string): any {
-  // 0. Handle virtual "clientName" field for finance records
-  if (key === "clientName") {
-    return record.client?.name || null;
-  }
-
-  // 1. Try custom data
-  let val = (record.data as any)?.[key];
-
-  // 2. Try top-level system field
-  if (val === undefined) {
-    val = (record as any)[key];
-  }
-
-  // 3. Handle relations (e.g. assignee is an User object)
-  if (val && typeof val === "object" && !Array.isArray(val)) {
-    if ("name" in val) return val.name;
-    if ("title" in val) return val.title;
-  }
-
-  return val;
-}
-
-function extractNumericValue(record: any, key: string): number {
-  let val = (record.data as any)?.[key];
-  if (val === undefined) val = (record as any)[key];
-  if (typeof val === "string") val = val.replace(/[^0-9.-]+/g, ""); // Clean currency/text
-  const num = parseFloat(val);
-  return isNaN(num) ? 0 : num;
-}
-
-/**
- * Helper for flexible matching (case-insensitive, trimmed, string conversion)
- * Also handles "no filter" case properly
- */
-function filterRecords(records: any[], filter: any) {
-  if (!filter || Object.keys(filter).length === 0) return records;
-  return records.filter((r) => {
-    return Object.entries(filter).every(([key, value]) => {
-      if (!value) return true;
-
-      const dataVal = extractValue(r, key);
-
-      if (dataVal === undefined || dataVal === null) return false;
-
-      const strDataVal = String(dataVal).trim().toLowerCase();
-
-      // Support comma-separated OR logic
-      const filterValues = String(value)
-        .split(",")
-        .map((v) => v.trim().toLowerCase());
-
-      return filterValues.includes(strDataVal);
-    });
-  });
-}
-
-function getDateFilter(config: any) {
-  if (!config.dateRangeType || config.dateRangeType === "all") return undefined;
-
-  const now = new Date();
-  let startDate: Date | undefined;
-  let endDate: Date | undefined;
-
-  switch (config.dateRangeType) {
-    case "this_week":
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - now.getDay()); // Sunday
-      startDate.setHours(0, 0, 0, 0);
-
-      endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + 6); // Saturday
-      endDate.setHours(23, 59, 59, 999);
-      break;
-    case "last_30_days":
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - 30);
-      break;
-    case "last_year":
-      startDate = new Date(now);
-      startDate.setFullYear(now.getFullYear() - 1);
-      break;
-    case "custom":
-      if (config.customStartDate) startDate = new Date(config.customStartDate);
-      if (config.customEndDate) {
-        endDate = new Date(config.customEndDate);
-        endDate.setHours(23, 59, 59, 999);
-      }
-      break;
-  }
-
-  const filter: any = {};
-  if (startDate) filter.gte = startDate;
-  if (endDate) filter.lte = endDate;
-
-  return Object.keys(filter).length > 0 ? filter : undefined;
-}
-
-const tableNameCache = new Map<number, string>();
-const getTableName = async (id: number) => {
-  if (!id) return "Unknown Table";
-  if (tableNameCache.has(id)) return tableNameCache.get(id)!;
-  const t = await prisma.tableMeta.findUnique({ where: { id } });
-  const name = t ? t.name : "טבלה לא ידועה";
-  tableNameCache.set(id, name);
-  return name;
-};
-
-/**
- * Resolve tableName from a view's config without fetching records.
- */
-async function resolveTableNameFromConfig(config: any): Promise<string> {
-  if (config.model === "Task") return "משימות מערכת";
-  if (config.model === "Retainer") return "פיננסים: ריטיינרים";
-  if (config.model === "OneTimePayment") return "פיננסים: תשלומים";
-  if (config.model === "Transaction") return "פיננסים: תנועות";
-  if (config.model === "CalendarEvent") return "יומן: אירועים";
-  if (config.tableId) return await getTableName(Number(config.tableId));
-  return "System";
-}
-
-/**
- * Calculates stats and items for a SINGLE custom view.
- * Useful for automations to check current value without fetching everything.
- */
-export async function calculateViewStats(view: any) {
-  const config = view.config as any;
-  let tableName = "System";
-  let rawData: any[] = [];
-
-  const dateRange = getDateFilter(config);
-
-  const dateField =
-    config.model === "CalendarEvent" ? "startTime" : "createdAt";
-  const dateFilter = dateRange ? { [dateField]: dateRange } : {};
-
-  // 1. Fetch Data Source
-  if (config.model === "Task") {
-    tableName = "משימות מערכת";
-    rawData = await prisma.task.findMany({
-      where: dateFilter,
-      take: 1000,
-      orderBy: { createdAt: "desc" },
-      include: { assignee: true }, // Include assignee for filtering by name
-    });
-  } else if (config.model === "Retainer") {
-    tableName = "פיננסים: ריטיינרים";
-    rawData = await prisma.retainer.findMany({
-      where: dateFilter,
-      take: 1000,
-      orderBy: { createdAt: "desc" },
-      include: { client: true },
-    });
-  } else if (config.model === "OneTimePayment") {
-    tableName = "פיננסים: תשלומים";
-    rawData = await prisma.oneTimePayment.findMany({
-      where: dateFilter,
-      take: 1000,
-      orderBy: { createdAt: "desc" },
-      include: { client: true },
-    });
-  } else if (config.model === "Transaction") {
-    tableName = "פיננסים: תנועות";
-    rawData = await prisma.transaction.findMany({
-      where: dateFilter,
-      take: 1000,
-      orderBy: { createdAt: "desc" },
-      include: { client: true },
-    });
-  } else if (config.model === "CalendarEvent") {
-    tableName = "יומן: אירועים";
-    rawData = await prisma.calendarEvent.findMany({
-      where: dateFilter,
-      take: 1000,
-      orderBy: { startTime: "desc" },
-    });
-  } else if (config.tableId) {
-    tableName = await getTableName(Number(config.tableId));
-    rawData = await prisma.record.findMany({
-      where: { tableId: Number(config.tableId), ...dateFilter },
-      orderBy: { createdAt: "desc" },
-      take: 1000,
-    });
-  }
-
-  let stats: any = null;
-  let items: any[] = [];
-
-  // 2. Process View Type
-  if (view.type === "CONVERSION") {
-    // Smart Logic: If filters share the same key AND both have values, implicit inclusive OR for denominator
-    // This solves "Conversion from New to Completed" where a record cannot be both New and Completed at once.
-    // We treat the Total as "Funnel Start" which should include "Funnel End".
-    // IMPORTANT: If totalFilter value is empty, it means "count ALL records" - don't modify it!
-    const enhancedTotalFilter = { ...config.totalFilter };
-    if (config.totalFilter && config.successFilter) {
-      Object.keys(config.totalFilter).forEach((key) => {
-        const totalVal = String(config.totalFilter[key] || "").trim();
-        const successVal = String(config.successFilter[key] || "").trim();
-
-        // Only enhance if totalFilter has a NON-EMPTY value
-        // If totalFilter value is empty, it means "count all" - don't modify!
-        if (totalVal && successVal && !totalVal.includes(successVal)) {
-          enhancedTotalFilter[key] = `${totalVal},${successVal}`;
-        }
-      });
-    }
-
-    if (config.groupByField) {
-      const groups: Record<string, { total: number; success: number }> = {};
-      rawData.forEach((r) => {
-        // Use enhanced total filter
-        if (filterRecords([r], enhancedTotalFilter).length > 0) {
-          let rawKey = extractValue(r, config.groupByField);
-
-          const key = rawKey ? String(rawKey) : "ללא";
-          if (!groups[key]) groups[key] = { total: 0, success: 0 };
-          groups[key].total++;
-
-          if (filterRecords([r], config.successFilter).length > 0) {
-            groups[key].success++;
-          }
-        }
-      });
-
-      items = Object.entries(groups)
-        .map(([key, val]) => {
-          const rate = val.total > 0 ? (val.success / val.total) * 100 : 0;
-          return {
-            id: key,
-            title: key,
-            status: `${val.success} / ${val.total}`,
-            value: `${rate.toFixed(1)}%`,
-            count: val.total,
-            type: "conversion-group",
-            // rawRate for logic checks
-            rawRate: rate,
-          };
-        })
-        .sort((a, b) => b.count - a.count);
-
-      const totalAll = Object.values(groups).reduce(
-        (acc, g) => acc + g.total,
-        0,
-      );
-      const successAll = Object.values(groups).reduce(
-        (acc, g) => acc + g.success,
-        0,
-      );
-      const globalRate =
-        totalAll > 0 ? ((successAll / totalAll) * 100).toFixed(1) : "0";
-      stats = {
-        mainMetric: `${globalRate}%`,
-        subMetric: `סה"כ המרה (${successAll}/${totalAll})`,
-        label: "ממוצע כללי",
-        rawMetric: parseFloat(globalRate), // For automations
-      };
-    } else {
-      const totalSet = filterRecords(rawData, enhancedTotalFilter);
-      const successSet = filterRecords(rawData, config.successFilter);
-      const rate =
-        totalSet.length > 0
-          ? ((successSet.length / totalSet.length) * 100).toFixed(1)
-          : "0";
-      stats = {
-        mainMetric: `${rate}%`,
-        subMetric: `${successSet.length} / ${totalSet.length}`,
-        label: "אחוז המרה",
-        rawMetric: parseFloat(rate), // For automations
-      };
-
-      items = successSet.slice(0, 50).map((r) => ({
-        id: r.id,
-        title:
-          r.title ||
-          (r.data as any)?.name ||
-          (r.data as any)?.title ||
-          `Record ${r.id}`,
-        status: r.status || "הושלם",
-        updatedAt: r.updatedAt,
-      }));
-    }
-  } else if (view.type === "COUNT") {
-    const filtered = filterRecords(rawData, config.filter);
-
-    if (config.groupByField) {
-      const groups: Record<string, number> = {};
-      filtered.forEach((r) => {
-        let rawKey = extractValue(r, config.groupByField);
-        const key = rawKey ? String(rawKey) : "ללא";
-        groups[key] = (groups[key] || 0) + 1;
-      });
-
-      items = Object.entries(groups)
-        .map(([key, count]) => ({
-          id: key,
-          title: key,
-          value: String(count),
-          type: "count-group",
-        }))
-        .sort((a, b) => Number(b.value) - Number(a.value));
-
-      stats = {
-        mainMetric: String(filtered.length),
-        subMetric: "רשומות",
-        label: "סה״כ",
-        rawMetric: filtered.length,
-      };
-    } else {
-      stats = {
-        mainMetric: String(filtered.length),
-        subMetric: "רשומות",
-        label: "כמות",
-        rawMetric: filtered.length,
-      };
-      items = filtered.slice(0, 50).map((r) => ({
-        id: r.id,
-        title:
-          r.title ||
-          (r.data as any)?.name ||
-          (r.data as any)?.title ||
-          `Record ${r.id}`,
-        status: r.status || (r.client ? r.client.name : "-"),
-        value: r.amount ? `₪${Number(r.amount).toLocaleString()}` : undefined,
-        updatedAt: r.updatedAt,
-      }));
-    }
-  } else if (view.type === "GRAPH") {
-    const filtered = filterRecords(rawData, config.filter);
-    const groups: Record<string, { count: number; sum: number }> = {};
-
-    filtered.forEach((r) => {
-      let rawKey = extractValue(r, config.groupByField);
-      if (rawKey instanceof Date) {
-        rawKey = rawKey.toLocaleDateString("he-IL");
-      }
-      const key = rawKey ? String(rawKey) : "ללא";
-
-      if (!groups[key]) groups[key] = { count: 0, sum: 0 };
-      groups[key].count++;
-
-      if (config.yAxisMeasure && config.yAxisMeasure !== "count") {
-        groups[key].sum += extractNumericValue(r, config.yAxisField);
-      }
-    });
-
-    items = Object.entries(groups)
-      .map(([key, val]) => {
-        let value = val.count;
-        if (config.yAxisMeasure === "sum") value = val.sum;
-        if (config.yAxisMeasure === "avg")
-          value = val.count > 0 ? val.sum / val.count : 0;
-
-        return {
-          name: key,
-          value: parseFloat(value.toFixed(2)),
-          formatted: value.toLocaleString(),
-          count: val.count,
-        };
-      })
-      .sort((a, b) => b.value - a.value);
-
-    const totalValue = items.reduce((acc, i) => acc + i.value, 0);
-    stats = {
-      mainMetric: totalValue.toLocaleString(),
-      subMetric:
-        config.yAxisMeasure === "count"
-          ? "סה״כ רשומות"
-          : config.yAxisMeasure === "avg"
-            ? "ממוצע כולל"
-            : "סכום כולל",
-      label: config.chartType || "Graph",
-      rawMetric: totalValue,
-    };
-  }
-
-  return { stats, items, tableName };
-}
-
-/**
- * Calculates stats and items for a single automation rule.
- */
-async function calculateRuleStats(
-  rule: any,
-): Promise<{ stats: any; items: any[]; tableName: string }> {
-  let items: any[] = [];
-  let stats: any = null;
-  const triggerConfig = rule.triggerConfig as any;
-  const mainTableId = triggerConfig.tableId
-    ? parseInt(triggerConfig.tableId)
-    : 0;
-  const tableName =
-    rule.triggerType === "TASK_STATUS_CHANGE"
-      ? "משימות"
-      : await getTableName(mainTableId);
-
-  if (rule.actionType === "CALCULATE_MULTI_EVENT_DURATION") {
-    const eventTableMap = new Map<string, string>();
-    if (triggerConfig.eventChain && Array.isArray(triggerConfig.eventChain)) {
-      for (const event of triggerConfig.eventChain) {
-        const tId = event.tableId ? Number(event.tableId) : mainTableId;
-        if (tId) {
-          eventTableMap.set(event.eventName, await getTableName(tId));
-        }
-      }
-    }
-
-    const multiEventDurations = await prisma.multiEventDuration.findMany({
-      where: {
-        automationRuleId: rule.id,
-        createdAt: { gte: rule.createdAt },
-      },
-      include: { record: true, task: true },
-      orderBy: { createdAt: "desc" },
-    });
-
-    items = multiEventDurations.map((d: any) => {
-      let title = "Unknown";
-      if (d.task) title = d.task.title;
-      else if (d.record) {
-        const data = d.record.data as any;
-        const titleField =
-          Object.keys(data).find(
-            (k) =>
-              k.toLowerCase().includes("name") ||
-              k.toLowerCase().includes("title") ||
-              (typeof data[k] === "string" && data[k].length < 50),
-          ) || "Record";
-        title = data[titleField]
-          ? String(data[titleField])
-          : `Record #${d.record.id}`;
-      }
-
-      const eventChain = d.eventChain as any[];
-      const eventNames = eventChain
-        .map((e: any) => {
-          const tName = e.tableName || eventTableMap.get(e.eventName);
-          return tName ? `${e.eventName} (${tName})` : e.eventName;
-        })
-        .join(" → ");
-
-      return {
-        id: d.id,
-        title,
-        status: eventNames,
-        duration: d.totalDurationString,
-        totalDurationSeconds: d.totalDurationSeconds,
-        weightedScore: d.weightedScore,
-        updatedAt: d.createdAt,
-        type: tableName,
-      };
-    });
-
-    if (items.length > 0) {
-      const totalSeconds = items.reduce(
-        (acc, item) => acc + item.totalDurationSeconds,
-        0,
-      );
-      const avg = Math.round(totalSeconds / items.length);
-      const min = Math.min(...items.map((i) => i.totalDurationSeconds));
-      const max = Math.max(...items.map((i) => i.totalDurationSeconds));
-      stats = {
-        averageDuration: formatSecondsToHebrew(avg),
-        minDuration: formatSecondsToHebrew(min),
-        maxDuration: formatSecondsToHebrew(max),
-        totalRecords: items.length,
-        averageSeconds: avg,
-      };
-    }
-  } else if (rule.actionType === "CALCULATE_DURATION") {
-    const durations = await prisma.statusDuration.findMany({
-      where: {
-        automationRuleId: rule.id,
-        createdAt: { gte: rule.createdAt },
-      },
-      include: { record: true, task: true },
-      orderBy: { createdAt: "desc" },
-    });
-
-    items = durations.map((d: any) => {
-      let title = "Unknown";
-      if (d.task) title = d.task.title;
-      else if (d.record) {
-        const data = d.record.data as any;
-        const titleField =
-          Object.keys(data).find(
-            (k) =>
-              k.toLowerCase().includes("name") ||
-              k.toLowerCase().includes("title") ||
-              (typeof data[k] === "string" && data[k].length < 50),
-          ) || "Record";
-        title = data[titleField]
-          ? String(data[titleField])
-          : `Record #${d.record.id}`;
-      }
-
-      let statusDisplay = d.toValue || "N/A";
-      if (d.fromValue && d.toValue)
-        statusDisplay = `${d.fromValue} -> ${d.toValue}`;
-
-      return {
-        id: d.id,
-        title,
-        status: statusDisplay,
-        duration: d.durationString,
-        durationSeconds: d.durationSeconds,
-        updatedAt: d.createdAt,
-        type: tableName,
-      };
-    });
-
-    if (items.length > 0) {
-      const totalSeconds = items.reduce(
-        (acc, item) => acc + item.durationSeconds,
-        0,
-      );
-      const avg = Math.round(totalSeconds / items.length);
-      stats = {
-        averageDuration: formatSecondsToHebrew(avg),
-        minDuration: formatSecondsToHebrew(
-          Math.min(...items.map((i) => i.durationSeconds)),
-        ),
-        maxDuration: formatSecondsToHebrew(
-          Math.max(...items.map((i) => i.durationSeconds)),
-        ),
-        totalRecords: items.length,
-        averageSeconds: avg,
-      };
-    }
-  }
-
-  return { stats, items, tableName };
-}
+import { inngest } from "@/lib/inngest/client";
+import {
+  calculateViewStats,
+  resolveTableNameFromConfig,
+} from "@/lib/analytics/calculate";
+import { getFullAnalyticsCache, isRefreshLockHeld } from "@/lib/services/analytics-cache";
 
 // Plan limits for analytics views
 const ANALYTICS_LIMITS = {
@@ -744,7 +176,7 @@ export async function deleteAnalyticsView(id: number) {
     if (!user || !canManageAnalytics(user)) {
       return { success: false, error: "Unauthorized" };
     }
-    await prisma.analyticsView.delete({ where: { id } });
+    await prisma.analyticsView.delete({ where: { id, companyId: user.companyId } });
     return { success: true };
   } catch (error) {
     console.error("Error deleting analytics view:", error);
@@ -769,7 +201,7 @@ export async function updateAnalyticsView(
     }
 
     const view = await prisma.analyticsView.update({
-      where: { id },
+      where: { id, companyId: user.companyId },
       data: {
         title: data.title,
         type: data.type,
@@ -787,309 +219,132 @@ export async function updateAnalyticsView(
 
 export async function getAnalyticsData() {
   try {
-    // 1. Fetch Automation Rules (Existing) - FILTERED BY COMPANY
     const user = await getCurrentUser();
     if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
+    const companyId = user.companyId;
+
+    // 1. Try Redis full cache first — instant return
+    const cachedViews = await getFullAnalyticsCache(companyId);
+    if (cachedViews) {
+      return { success: true, data: cachedViews };
+    }
+
+    // 2. Redis miss — build views from DB cached data (no inline calculation)
     const rules = await prisma.automationRule.findMany({
       where: {
-        companyId: user.companyId, // CRITICAL: Filter by companyId
+        companyId,
         isActive: true,
         actionType: {
-          in: ["CALCULATE_DURATION", "CALCULATE_MULTI_EVENT_DURATION"],
+          in: ["CALCULATE_DURATION", "CALCULATE_MULTI_EVENT_DURATION", "MULTI_ACTION"],
         },
       },
+      take: 500, // P85: Bound rules query
     });
 
-    // 2. Fetch Custom Analytics Views (New) - FILTERED BY COMPANY
+    // Filter MULTI_ACTION rules to only those containing a duration action
+    const filteredRules = rules.filter((r: any) => {
+      if (r.actionType !== "MULTI_ACTION") return true;
+      const actions = (r.actionConfig as any)?.actions || [];
+      return actions.some((a: any) => a.type === "CALCULATE_DURATION" || a.type === "CALCULATE_MULTI_EVENT_DURATION");
+    });
+
     const customViews = await prisma.analyticsView.findMany({
-      where: { companyId: user.companyId },
+      where: { companyId },
+      take: 500, // P85: Bound views query
     });
 
     const views: any[] = [];
 
-    // --- Process Automation Rules ---
-    for (const rule of rules) {
-      // 1. Check Cache Validity (4 hours)
-      const CACHE_DURATION = 4 * 60 * 60 * 1000;
-      const now = new Date();
-      const lastCached = rule.lastCachedAt ? new Date(rule.lastCachedAt) : null;
-      const isCacheValid =
-        lastCached && now.getTime() - lastCached.getTime() < CACHE_DURATION;
+    // Batch-fetch all table names to avoid sequential N+1 queries
+    const ruleTableIds = filteredRules
+      .filter((r: any) => r.triggerType !== "TASK_STATUS_CHANGE")
+      .map((r: any) => parseInt((r.triggerConfig as any).tableId || "0"))
+      .filter((id: number) => id > 0);
+    const viewTableIds = customViews
+      .map((v: any) => Number((v.config as any)?.tableId || 0))
+      .filter((id: number) => id > 0);
+    const uniqueTableIds = [...new Set([...ruleTableIds, ...viewTableIds])];
+    const tables = uniqueTableIds.length > 0
+      ? await prisma.tableMeta.findMany({ where: { id: { in: uniqueTableIds } } })
+      : [];
+    const tableMap = new Map(tables.map((t: any) => [t.id, t.name]));
 
-      if (isCacheValid && rule.cachedStats) {
-        // USE CACHE
-        const cachedData = rule.cachedStats as any;
-        views.push({
-          id: `rule_${rule.id}`,
-          ruleId: rule.id,
-          ruleName: rule.name,
-          tableName:
-            rule.triggerType === "TASK_STATUS_CHANGE"
-              ? "משימות"
-              : await getTableName(
-                  parseInt((rule.triggerConfig as any).tableId || "0"),
-                ),
-          type:
-            rule.actionType === "CALCULATE_MULTI_EVENT_DURATION"
-              ? "multi-event"
-              : "single-event",
-          data: cachedData.items || [],
-          stats: cachedData.stats || null, // Ensure stats are passed
-          order: rule.analyticsOrder ?? 0,
-          color: rule.analyticsColor ?? "bg-white",
-          source: "AUTOMATION",
-          folderId: rule.folderId,
-          lastRefreshed: rule.lastCachedAt, // Add timestamp
-        });
-        continue; // Skip calculation
-      }
-
-      // 2. Calculate Fresh Data (Existing Logic)
-      let items: any[] = [];
-      let stats: any = null;
-      const ruleName = rule.name;
-      const triggerConfig = rule.triggerConfig as any;
-      const mainTableId = triggerConfig.tableId
-        ? parseInt(triggerConfig.tableId)
-        : 0;
-
-      const tableName =
-        rule.triggerType === "TASK_STATUS_CHANGE"
-          ? "משימות"
-          : await getTableName(mainTableId);
-
-      if (rule.actionType === "CALCULATE_MULTI_EVENT_DURATION") {
-        const eventTableMap = new Map<string, string>();
-        if (
-          triggerConfig.eventChain &&
-          Array.isArray(triggerConfig.eventChain)
-        ) {
-          for (const event of triggerConfig.eventChain) {
-            const tId = event.tableId ? Number(event.tableId) : mainTableId;
-            if (tId) {
-              eventTableMap.set(event.eventName, await getTableName(tId));
-            }
-          }
-        }
-
-        const multiEventDurations = await prisma.multiEventDuration.findMany({
-          where: {
-            automationRuleId: rule.id,
-            createdAt: { gte: rule.createdAt },
-          },
-          include: { record: true, task: true },
-          orderBy: { createdAt: "desc" },
-        });
-
-        items = multiEventDurations.map((d: any) => {
-          let title = "Unknown";
-          if (d.task) title = d.task.title;
-          else if (d.record) {
-            const data = d.record.data as any;
-            const titleField =
-              Object.keys(data).find(
-                (k) =>
-                  k.toLowerCase().includes("name") ||
-                  k.toLowerCase().includes("title") ||
-                  (typeof data[k] === "string" && data[k].length < 50),
-              ) || "Record";
-            title = data[titleField]
-              ? String(data[titleField])
-              : `Record #${d.record.id}`;
-          }
-
-          const eventChain = d.eventChain as any[];
-          const eventNames = eventChain
-            .map((e: any) => {
-              const tName = e.tableName || eventTableMap.get(e.eventName);
-              return tName ? `${e.eventName} (${tName})` : e.eventName;
-            })
-            .join(" → ");
-
-          return {
-            id: d.id,
-            title,
-            status: eventNames,
-            duration: d.totalDurationString,
-            totalDurationSeconds: d.totalDurationSeconds,
-            weightedScore: d.weightedScore,
-            updatedAt: d.createdAt,
-            type: tableName,
-          };
-        });
-
-        if (items.length > 0) {
-          const totalSeconds = items.reduce(
-            (acc, item) => acc + item.totalDurationSeconds,
-            0,
-          );
-          const avg = Math.round(totalSeconds / items.length);
-          const min = Math.min(...items.map((i) => i.totalDurationSeconds));
-          const max = Math.max(...items.map((i) => i.totalDurationSeconds));
-          stats = {
-            averageDuration: formatSecondsToHebrew(avg),
-            minDuration: formatSecondsToHebrew(min),
-            maxDuration: formatSecondsToHebrew(max),
-            totalRecords: items.length,
-            averageSeconds: avg,
-          };
-        }
-      } else if (rule.actionType === "CALCULATE_DURATION") {
-        const durations = await prisma.statusDuration.findMany({
-          where: {
-            automationRuleId: rule.id,
-            createdAt: { gte: rule.createdAt },
-          },
-          include: { record: true, task: true },
-          orderBy: { createdAt: "desc" },
-        });
-
-        items = durations.map((d: any) => {
-          let title = "Unknown";
-          if (d.task) title = d.task.title;
-          else if (d.record) {
-            const data = d.record.data as any;
-            const titleField =
-              Object.keys(data).find(
-                (k) =>
-                  k.toLowerCase().includes("name") ||
-                  k.toLowerCase().includes("title") ||
-                  (typeof data[k] === "string" && data[k].length < 50),
-              ) || "Record";
-            title = data[titleField]
-              ? String(data[titleField])
-              : `Record #${d.record.id}`;
-          }
-
-          let statusDisplay = d.toValue || "N/A";
-          if (d.fromValue && d.toValue)
-            statusDisplay = `${d.fromValue} -> ${d.toValue}`;
-
-          return {
-            id: d.id,
-            title,
-            status: statusDisplay,
-            duration: d.durationString,
-            durationSeconds: d.durationSeconds,
-            updatedAt: d.createdAt,
-            type: tableName,
-          };
-        });
-
-        if (items.length > 0) {
-          const totalSeconds = items.reduce(
-            (acc, item) => acc + item.durationSeconds,
-            0,
-          );
-          const avg = Math.round(totalSeconds / items.length);
-          stats = {
-            averageDuration: formatSecondsToHebrew(avg),
-            minDuration: formatSecondsToHebrew(
-              Math.min(...items.map((i) => i.durationSeconds)),
-            ),
-            maxDuration: formatSecondsToHebrew(
-              Math.max(...items.map((i) => i.durationSeconds)),
-            ),
-            totalRecords: items.length,
-            averageSeconds: avg,
-          };
-        }
-      }
-
-      // 3. Update Cache & Push View
-      // Save to DB
-      await prisma.automationRule.update({
-        where: { id: rule.id },
-        data: {
-          cachedStats: { stats, items }, // Store both stats and items
-          lastCachedAt: new Date(),
-        },
-      });
-
+    // Build views from DB cachedStats — never calculate inline
+    for (const rule of filteredRules) {
+      const cachedData = rule.cachedStats as any;
+      const ruleTableId = parseInt((rule.triggerConfig as any).tableId || "0");
+      // Determine the effective duration action type for MULTI_ACTION rules
+      const effectiveActionType = rule.actionType === "MULTI_ACTION"
+        ? ((rule.actionConfig as any)?.actions || []).find((a: any) => a.type === "CALCULATE_MULTI_EVENT_DURATION")
+          ? "CALCULATE_MULTI_EVENT_DURATION"
+          : "CALCULATE_DURATION"
+        : rule.actionType;
       views.push({
         id: `rule_${rule.id}`,
         ruleId: rule.id,
-        ruleName: ruleName,
-        tableName: tableName,
+        ruleName: rule.name,
+        tableName:
+          rule.triggerType === "TASK_STATUS_CHANGE"
+            ? "משימות"
+            : (tableMap.get(ruleTableId) || "טבלה לא ידועה"),
         type:
-          rule.actionType === "CALCULATE_MULTI_EVENT_DURATION"
+          effectiveActionType === "CALCULATE_MULTI_EVENT_DURATION"
             ? "multi-event"
             : "single-event",
-        data: items,
-        stats: stats,
+        data: cachedData?.items || [],
+        stats: cachedData?.stats || null,
         order: rule.analyticsOrder ?? 0,
         color: rule.analyticsColor ?? "bg-white",
         source: "AUTOMATION",
         folderId: rule.folderId,
-        lastRefreshed: new Date(),
+        lastRefreshed: rule.lastCachedAt,
       });
     }
 
-    // --- Process Custom Views ---
     for (const view of customViews) {
-      // 1. Check Cache Validity (4 hours)
-      const CACHE_DURATION = 4 * 60 * 60 * 1000;
-      const now = new Date();
-      const lastCached = view.lastCachedAt ? new Date(view.lastCachedAt) : null;
-      const isCacheValid =
-        lastCached && now.getTime() - lastCached.getTime() < CACHE_DURATION;
-
-      if (isCacheValid && view.cachedStats) {
-        const cachedData = view.cachedStats as any;
-        const resolvedTableName =
-          cachedData.tableName ||
-          (await resolveTableNameFromConfig(view.config as any));
-        views.push({
-          id: `view_${view.id}`,
-          viewId: view.id,
-          ruleName: view.title,
-          tableName: resolvedTableName,
-          type: view.type,
-          data: cachedData.items || [],
-          stats: cachedData.stats || null,
-          order: view.order,
-          color: view.color,
-          source: "CUSTOM",
-          config: view.config,
-          folderId: view.folderId,
-          lastRefreshed: view.lastCachedAt,
-        });
-        continue;
-      }
-
-      // 2. Calculate Fresh Data
-      const { stats, items, tableName } = await calculateViewStats(view);
-
-      // 3. Update Cache & Push
-      await prisma.analyticsView.update({
-        where: { id: view.id },
-        data: {
-          cachedStats: { stats, items, tableName },
-          lastCachedAt: new Date(),
-        },
-      });
-
+      const cachedData = view.cachedStats as any;
+      const viewConfig = view.config as any;
+      const viewTableId = Number(viewConfig?.tableId || 0);
+      const resolvedTableName =
+        cachedData?.tableName ||
+        (viewTableId > 0 && tableMap.has(viewTableId)
+          ? tableMap.get(viewTableId)!
+          : await resolveTableNameFromConfig(viewConfig, companyId));
       views.push({
         id: `view_${view.id}`,
         viewId: view.id,
         ruleName: view.title,
-        tableName: tableName,
+        tableName: resolvedTableName,
         type: view.type,
-        data: items,
-        stats: stats,
+        data: cachedData?.items || [],
+        stats: cachedData?.stats || null,
         order: view.order,
         color: view.color,
         source: "CUSTOM",
         config: view.config,
         folderId: view.folderId,
-        lastRefreshed: new Date(),
+        lastRefreshed: view.lastCachedAt,
       });
     }
 
     views.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    // 3. Fire background refresh to populate Redis for next request (only if not already running)
+    try {
+      const alreadyRefreshing = await isRefreshLockHeld(companyId);
+      if (!alreadyRefreshing) {
+        await inngest.send({
+          id: `analytics-refresh-${companyId}-${Math.floor(Date.now() / 60000)}`,
+          name: "analytics/refresh-company",
+          data: { companyId },
+        });
+      }
+    } catch (err) {
+      console.error("[getAnalyticsData] Failed to trigger background refresh:", err);
+    }
 
     return { success: true, data: views };
   } catch (error) {
@@ -1100,7 +355,7 @@ export async function getAnalyticsData() {
 
 /**
  * Force refresh a specific analytics item (Rule or View).
- * Returns the freshly calculated view data so the client can update in-place.
+ * Triggers a background Inngest job — returns immediately with { refreshing: true }.
  */
 export async function refreshAnalyticsItem(
   id: number,
@@ -1112,95 +367,22 @@ export async function refreshAnalyticsItem(
       return { success: false, error: "Unauthorized" };
     }
 
-    let result: any;
-
-    if (type === "AUTOMATION") {
-      const rule = await prisma.automationRule.findUnique({ where: { id } });
-      if (!rule) return { success: false, error: "Rule not found" };
-
-      const { stats, items, tableName } = await calculateRuleStats(rule);
-
-      // Update cache
-      await prisma.automationRule.update({
-        where: { id },
-        data: {
-          cachedStats: { stats, items },
-          lastCachedAt: new Date(),
-        },
-      });
-
-      result = {
-        success: true,
-        data: {
-          id: `rule_${rule.id}`,
-          ruleId: rule.id,
-          ruleName: rule.name,
-          tableName,
-          type:
-            rule.actionType === "CALCULATE_MULTI_EVENT_DURATION"
-              ? "multi-event"
-              : "single-event",
-          data: items,
-          stats,
-          order: rule.analyticsOrder ?? 0,
-          color: rule.analyticsColor ?? "bg-white",
-          source: "AUTOMATION",
-          folderId: rule.folderId,
-          lastRefreshed: new Date(),
-        },
-      };
-    } else {
-      const view = await prisma.analyticsView.findUnique({ where: { id } });
-      if (!view) return { success: false, error: "View not found" };
-
-      const { stats, items, tableName } = await calculateViewStats(view);
-
-      // Update cache
-      await prisma.analyticsView.update({
-        where: { id },
-        data: {
-          cachedStats: { stats, items },
-          lastCachedAt: new Date(),
-        },
-      });
-
-      result = {
-        success: true,
-        data: {
-          id: `view_${view.id}`,
-          viewId: view.id,
-          ruleName: view.title,
-          tableName,
-          type: view.type,
-          data: items,
-          stats,
-          order: view.order,
-          color: view.color,
-          source: "CUSTOM",
-          config: view.config,
-          folderId: view.folderId,
-          lastRefreshed: new Date(),
-        },
-      };
-    }
+    // Trigger background job
+    await inngest.send({
+      name: "analytics/refresh-item",
+      data: {
+        companyId: user.companyId,
+        itemId: id,
+        itemType: type,
+      },
+    });
 
     // Revalidate pages that display analytics
     revalidatePath("/");
     revalidatePath("/analytics");
     revalidatePath("/analytics/graphs");
 
-    // Check view automations on the freshly refreshed data
-    try {
-      const { processViewAutomations } = await import("./automations");
-      await processViewAutomations(undefined, undefined, user.companyId);
-    } catch (autoError) {
-      console.error(
-        "[Analytics] Failed to process view automations after refresh:",
-        autoError,
-      );
-    }
-
-    return result;
+    return { success: true, data: { refreshing: true } };
   } catch (error) {
     console.error("Error refreshing analytics item:", error);
     return { success: false, error: "Failed to refresh item" };
@@ -1219,12 +401,12 @@ export async function updateAnalyticsViewOrder(
     const updates = items.map((item) => {
       if (item.type === "AUTOMATION") {
         return prisma.automationRule.update({
-          where: { id: item.id },
+          where: { id: item.id, companyId: user.companyId },
           data: { analyticsOrder: item.order },
         });
       } else {
         return prisma.analyticsView.update({
-          where: { id: item.id },
+          where: { id: item.id, companyId: user.companyId },
           data: { order: item.order },
         });
       }
@@ -1251,12 +433,12 @@ export async function updateAnalyticsViewColor(
 
     if (type === "AUTOMATION") {
       await prisma.automationRule.update({
-        where: { id },
+        where: { id, companyId: user.companyId },
         data: { analyticsColor: color },
       });
     } else {
       await prisma.analyticsView.update({
-        where: { id },
+        where: { id, companyId: user.companyId },
         data: { color },
       });
     }
@@ -1288,7 +470,7 @@ export async function previewAnalyticsView(data: {
       config: data.config,
     };
 
-    const { stats, items, tableName } = await calculateViewStats(tempView);
+    const { stats, items, tableName } = await calculateViewStats(tempView, user.companyId);
 
     return {
       success: true,

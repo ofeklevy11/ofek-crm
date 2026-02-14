@@ -71,9 +71,17 @@ export async function createTicketActivityLogs(
   userId: number,
   oldTicket: any,
   newData: any,
-  userLookup?: Map<number, string>, // For caching user names
-  clientLookup?: Map<number, string> // For caching client names
+  userLookup: Map<number, string> | undefined, // For caching user names
+  clientLookup: Map<number, string> | undefined, // For caching client names
+  companyId: number, // SECURITY: Required for ownership verification (Issue B)
 ) {
+  // SECURITY: Verify ticket belongs to the expected company
+  const ticket = await prisma.ticket.findFirst({
+    where: { id: ticketId, companyId },
+    select: { id: true },
+  });
+  if (!ticket) throw new Error("Ticket not found or access denied");
+
   const changes: ChangeLogEntry[] = [];
 
   // Fields to track
@@ -184,12 +192,12 @@ export async function getTicketActivityLogs(ticketId: number) {
   if (!user) return [];
 
   // First verify the ticket belongs to the user's company
-  const ticket = await prisma.ticket.findUnique({
-    where: { id: ticketId },
-    select: { companyId: true },
+  const ticket = await prisma.ticket.findFirst({
+    where: { id: ticketId, companyId: user.companyId },
+    select: { id: true },
   });
 
-  if (!ticket || ticket.companyId !== user.companyId) {
+  if (!ticket) {
     return [];
   }
 
@@ -199,6 +207,7 @@ export async function getTicketActivityLogs(ticketId: number) {
       user: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
+    take: 500,
   });
 }
 
@@ -213,19 +222,17 @@ export async function deleteTicketActivityLog(logId: number) {
   }
 
   // Find the log to verify it belongs to the user's company
-  const log = await prisma.ticketActivityLog.findUnique({
-    where: { id: logId },
-    include: {
-      ticket: { select: { companyId: true } },
-    },
+  const log = await prisma.ticketActivityLog.findFirst({
+    where: { id: logId, ticket: { companyId: user.companyId } },
   });
 
-  if (!log || log.ticket.companyId !== user.companyId) {
+  if (!log) {
     throw new Error("Unauthorized");
   }
 
-  await prisma.ticketActivityLog.delete({
-    where: { id: logId },
+  // SECURITY: Scope delete via ticket companyId join to prevent TOCTOU
+  await prisma.ticketActivityLog.deleteMany({
+    where: { id: logId, ticket: { companyId: user.companyId } },
   });
 
   revalidatePath("/service");

@@ -77,6 +77,13 @@ export async function POST(request: Request) {
       return NextResponse.json({});
     }
 
+    if (allRecordIds.length > 5000) {
+      return NextResponse.json(
+        { error: "Too many record IDs requested (max 5000)" },
+        { status: 400 },
+      );
+    }
+
     // Fetch all needed records in a single query
     const records = await prisma.record.findMany({
       where: {

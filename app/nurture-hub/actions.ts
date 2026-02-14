@@ -192,11 +192,15 @@ export async function getTableFields(
   tableId: string
 ): Promise<FieldDefinition[]> {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return [];
+
     const id = parseInt(tableId);
     if (isNaN(id)) return [];
 
-    const table = await prisma.tableMeta.findUnique({
-      where: { id },
+    const table = await prisma.tableMeta.findFirst({
+      where: { id, companyId: currentUser.companyId },
       select: { schemaJson: true },
     });
 
@@ -261,10 +265,15 @@ export async function getRawTableRecords(tableId: string) {
 
 export async function getNurtureSubscribers(slug: string) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return [];
+
     // @ts-ignore
     const list = await prisma.nurtureList.findFirst({
       where: {
         slug,
+        companyId: currentUser.companyId,
       },
       include: {
         subscribers: {
@@ -285,11 +294,11 @@ export async function getNurtureSubscribers(slug: string) {
       ),
     ];
 
-    // Fetch table names in bulk
+    // Fetch table names in bulk (scoped to company)
     const tables =
       tableIds.length > 0
         ? await prisma.tableMeta.findMany({
-            where: { id: { in: tableIds as number[] } },
+            where: { id: { in: tableIds as number[] }, companyId: currentUser.companyId },
             select: { id: true, name: true },
           })
         : [];
@@ -424,10 +433,21 @@ export async function updateNurtureSubscriber(
   data: { emailActive?: boolean; phoneActive?: boolean }
 ) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
     const subscriberId = parseInt(id);
     if (isNaN(subscriberId)) {
       return { success: false, error: "Invalid subscriber ID" };
     }
+
+    // Verify subscriber belongs to user's company via nurtureList relation
+    // @ts-ignore
+    const subscriber = await prisma.nurtureSubscriber.findFirst({
+      where: { id: subscriberId, nurtureList: { companyId: user.companyId } },
+    });
+    if (!subscriber) return { success: false, error: "Not found" };
 
     // @ts-ignore
     await prisma.nurtureSubscriber.update({
@@ -448,10 +468,21 @@ export async function updateNurtureSubscriber(
 // Delete a subscriber
 export async function deleteNurtureSubscriber(id: string) {
   try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
     const subscriberId = parseInt(id);
     if (isNaN(subscriberId)) {
       return { success: false, error: "Invalid subscriber ID" };
     }
+
+    // Verify subscriber belongs to user's company via nurtureList relation
+    // @ts-ignore
+    const subscriber = await prisma.nurtureSubscriber.findFirst({
+      where: { id: subscriberId, nurtureList: { companyId: user.companyId } },
+    });
+    if (!subscriber) return { success: false, error: "Not found" };
 
     // @ts-ignore
     await prisma.nurtureSubscriber.delete({

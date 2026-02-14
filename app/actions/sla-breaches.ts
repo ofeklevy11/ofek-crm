@@ -8,6 +8,7 @@ export async function getSlaBreaches() {
   if (!user) return { success: false, error: "Unauthorized" };
 
   try {
+    // P141: Add take limit to bound SLA breaches query
     const breaches = await prisma.slaBreach.findMany({
       where: { companyId: user.companyId },
       include: {
@@ -23,6 +24,7 @@ export async function getSlaBreaches() {
         },
       },
       orderBy: { breachedAt: "desc" },
+      take: 1000,
     });
 
     return { success: true, data: breaches };

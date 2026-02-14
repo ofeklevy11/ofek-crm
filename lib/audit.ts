@@ -6,7 +6,11 @@ export async function createAuditLog(
   action: string,
   diffJson: any = null,
   tx: any = prisma,
+  companyId: number,
 ) {
+  if (!companyId) {
+    throw new Error("[Audit] createAuditLog called without companyId");
+  }
   try {
     await tx.auditLog.create({
       data: {
@@ -14,6 +18,7 @@ export async function createAuditLog(
         userId,
         action,
         diffJson: diffJson ? diffJson : undefined,
+        companyId,
       },
     });
   } catch (error) {
@@ -28,6 +33,7 @@ export async function createAuditLogsBatch(
     userId: number | null;
     action: string;
     diffJson?: any;
+    companyId: number;
   }[],
   tx: any = prisma,
 ) {
@@ -40,6 +46,7 @@ export async function createAuditLogsBatch(
         userId: log.userId,
         action: log.action,
         diffJson: log.diffJson ? log.diffJson : undefined,
+        companyId: log.companyId,
       })),
     });
   } catch (error) {

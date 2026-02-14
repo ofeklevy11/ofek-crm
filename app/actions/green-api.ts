@@ -25,6 +25,7 @@ export async function saveGreenApiCredentials(
   try {
     const response = await fetch(
       `${GREEN_API_BASE_URL}/waInstance${instanceId}/getStateInstance/${token}`,
+      { signal: AbortSignal.timeout(15_000) },
     );
 
     if (!response.ok) {
@@ -109,7 +110,7 @@ export async function getGreenApiStatus() {
   try {
     const response = await fetch(
       `${GREEN_API_BASE_URL}/waInstance${greenApiInstanceId}/getStateInstance/${greenApiToken}`,
-      { cache: "no-store" },
+      { cache: "no-store", signal: AbortSignal.timeout(15_000) },
     );
 
     if (!response.ok) {
@@ -147,111 +148,6 @@ export async function disconnectGreenApi() {
   return { success: true };
 }
 
-// --- Sending Utils ---
-
-export async function sendGreenApiMessage(
-  companyId: number,
-  to: string,
-  message: string,
-) {
-  const company = await db.company.findUnique({
-    where: { id: companyId },
-    select: { greenApiInstanceId: true, greenApiToken: true },
-  });
-
-  if (!company?.greenApiInstanceId || !company?.greenApiToken) {
-    throw new Error("Green API not connected for this company");
-  }
-
-  const { greenApiInstanceId, greenApiToken } = company;
-
-  // Format phone number logic
-  const chatId = formatGreenApiPhone(to);
-
-  const url = `${GREEN_API_BASE_URL}/waInstance${greenApiInstanceId}/sendMessage/${greenApiToken}`;
-
-  const payload = {
-    chatId: chatId,
-    message: message,
-  };
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    console.error("Green API Send Error:", err);
-    throw new Error("Failed to send WhatsApp message");
-  }
-
-  return await res.json();
-}
-
-export async function sendGreenApiFile(
-  companyId: number,
-  to: string,
-  fileUrl: string,
-  fileName: string,
-  caption?: string,
-) {
-  const company = await db.company.findUnique({
-    where: { id: companyId },
-    select: { greenApiInstanceId: true, greenApiToken: true },
-  });
-
-  if (!company?.greenApiInstanceId || !company?.greenApiToken) {
-    throw new Error("Green API not connected for this company");
-  }
-
-  const { greenApiInstanceId, greenApiToken } = company;
-
-  const chatId = formatGreenApiPhone(to);
-
-  const url = `${GREEN_API_BASE_URL}/waInstance${greenApiInstanceId}/sendFileByUrl/${greenApiToken}`;
-
-  const payload = {
-    chatId: chatId,
-    urlFile: fileUrl,
-    fileName: fileName,
-    caption: caption,
-  };
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    console.error("Green API Send File Error:", err);
-    throw new Error("Failed to send WhatsApp file");
-  }
-
-  return await res.json();
-}
-
-function formatGreenApiPhone(phone: string): string {
-  let chatId = phone.trim();
-  if (chatId.endsWith("@g.us")) {
-    return chatId;
-  }
-
-  // Remove all non-digit characters
-  chatId = chatId.replace(/\D/g, "");
-
-  // If israel number starting with 0, replace with 972
-  if (chatId.startsWith("0")) {
-    chatId = "972" + chatId.substring(1);
-  }
-
-  // Ensure @c.us suffix
-  if (!chatId.endsWith("@c.us")) {
-    chatId = chatId + "@c.us";
-  }
-
-  return chatId;
-}
+// Sending utilities moved to lib/services/green-api.ts (non-server-action file)
+// to prevent exposure as server action endpoints.
+// Import from "@/lib/services/green-api" for sendGreenApiMessage/sendGreenApiFile.

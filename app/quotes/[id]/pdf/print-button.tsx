@@ -8,6 +8,7 @@ interface PrintButtonProps {
   quoteNumber?: number | null;
   clientName?: string;
   clientPhone?: string | null;
+  shareToken?: string | null;
 }
 
 export default function PrintButton({
@@ -15,6 +16,7 @@ export default function PrintButton({
   quoteNumber,
   clientName = "לקוח",
   clientPhone,
+  shareToken,
 }: PrintButtonProps) {
   const [downloading, setDownloading] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
@@ -31,22 +33,46 @@ export default function PrintButton({
   const handleDownloadPdf = async () => {
     setDownloading(true);
     try {
-      const response = await fetch(`/api/quotes/${quoteId}/download`);
+      const maxAttempts = 15;
+      const pollInterval = 2000; // 2 seconds
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || "ההורדה נכשלה");
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const response = await fetch(`/api/quotes/${quoteId}/download`);
+
+        if (response.ok) {
+          // PDF is ready — download it
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `הצעת-מחיר-${formattedNumber}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          return;
+        }
+
+        if (response.status === 202 || response.status === 502) {
+          // 202 = PDF generating, 502 = storage temporarily unavailable — wait and retry
+          if (attempt < maxAttempts - 1) {
+            await new Promise((r) => setTimeout(r, pollInterval));
+            continue;
+          }
+          throw new Error("ה-PDF עדיין בהכנה, נסה שוב בעוד כמה שניות");
+        }
+
+        // Other error (401, 404, etc.)
+        let errorMsg = "ההורדה נכשלה";
+        const text = await response.text();
+        try {
+          const json = JSON.parse(text);
+          errorMsg = json.message || errorMsg;
+        } catch {
+          if (text) errorMsg = text;
+        }
+        throw new Error(errorMsg);
       }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `הצעת-מחיר-${formattedNumber}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
     } catch (error: any) {
       console.error(error);
       alert(`שגיאה ביצירת ה-PDF: ${error.message}`);
@@ -70,7 +96,7 @@ export default function PrintButton({
     }
 
     // 2. Prepare link
-    const downloadLink = `${window.location.origin}/p/quotes/${quoteId}`;
+    const downloadLink = `${window.location.origin}/p/quotes/${quoteId}${shareToken ? `?token=${shareToken}` : ""}`;
 
     // 3. Prepare text
     const text = `שלום ${clientName}
@@ -109,7 +135,7 @@ ${downloadLink}`;
           ) : (
             <Download className="w-4 h-4" />
           )}
-          {downloading ? "מייצר..." : "הורד PDF"}
+          {downloading ? "מכין PDF..." : "הורד PDF"}
         </button>
         <button
           className="flex items-center gap-2 px-4 py-2 border border-green-500 text-green-600 bg-white rounded-md hover:bg-green-50 font-medium transition-colors"

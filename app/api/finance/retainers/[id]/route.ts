@@ -57,24 +57,7 @@ export async function PATCH(
     const retainerId = parseInt(id);
     const data = await request.json();
 
-    // Verify ownership via client
-    const existingRetainer = await prisma.retainer.findFirst({
-      where: {
-        id: retainerId,
-        client: {
-          companyId: user.companyId,
-        },
-      },
-    });
-
-    if (!existingRetainer) {
-      return NextResponse.json(
-        { error: "Retainer not found" },
-        { status: 404 }
-      );
-    }
-
-    // Validate status if provided
+    // Validate status if provided (before transaction to avoid holding locks)
     if (
       data.status &&
       !["active", "paused", "cancelled"].includes(data.status)
@@ -82,17 +65,40 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
 
-    const updatedRetainer = await prisma.retainer.update({
-      where: { id: retainerId },
-      data: {
-        title: data.title,
-        amount: data.amount ? parseFloat(data.amount) : undefined,
-        frequency: data.frequency,
-        status: data.status,
-        nextDueDate: data.nextDueDate ? new Date(data.nextDueDate) : undefined,
-        notes: data.notes,
+    // RepeatableRead transaction eliminates TOCTOU between ownership check and update
+    const updatedRetainer = await prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.retainer.findFirst({
+          where: {
+            id: retainerId,
+            client: { companyId: user.companyId },
+          },
+        });
+        if (!existing) return null;
+
+        return tx.retainer.update({
+          where: { id: retainerId },
+          data: {
+            title: data.title,
+            amount: data.amount ? parseFloat(data.amount) : undefined,
+            frequency: data.frequency,
+            status: data.status,
+            nextDueDate: data.nextDueDate
+              ? new Date(data.nextDueDate)
+              : undefined,
+            notes: data.notes,
+          },
+        });
       },
-    });
+      { isolationLevel: "RepeatableRead" },
+    );
+
+    if (!updatedRetainer) {
+      return NextResponse.json(
+        { error: "Retainer not found" },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json(updatedRetainer);
   } catch (error) {
@@ -117,26 +123,20 @@ export async function DELETE(
     const { id } = await params;
     const retainerId = parseInt(id);
 
-    // Verify ownership via client
-    const existingRetainer = await prisma.retainer.findFirst({
+    // Atomic delete scoped to company — eliminates TOCTOU
+    const { count } = await prisma.retainer.deleteMany({
       where: {
         id: retainerId,
-        client: {
-          companyId: user.companyId,
-        },
+        client: { companyId: user.companyId },
       },
     });
 
-    if (!existingRetainer) {
+    if (count === 0) {
       return NextResponse.json(
         { error: "Retainer not found" },
         { status: 404 }
       );
     }
-
-    await prisma.retainer.delete({
-      where: { id: retainerId },
-    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

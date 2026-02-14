@@ -121,7 +121,7 @@ export default function GoalContextExplanation({
               </DetailRow>
               <DetailRow label="סוג חישוב">
                 <Badge variant="purple">
-                  {metricType === "REVENUE"
+                  {targetType === "SUM"
                     ? "סיכום הכנסות (₪)"
                     : "ספירת עסקאות"}
                 </Badge>
@@ -160,7 +160,7 @@ export default function GoalContextExplanation({
               </DetailRow>
               <DetailRow label="סוג חישוב">
                 <Badge variant="purple">
-                  {metricType === "REVENUE" ? "סיכום ערך כספי" : "ספירת רשומות"}
+                  {targetType === "SUM" ? "סיכום ערך כספי" : "ספירת רשומות"}
                 </Badge>
               </DetailRow>
               {filters.columnKey && (
@@ -431,7 +431,11 @@ export default function GoalContextExplanation({
               </DetailRow>
             )}
             <DetailRow label="יעד">
-              <Badge variant="blue">שווי ריטיינרים חודשי (MRR)</Badge>
+              <Badge variant="blue">
+                {targetType === "SUM"
+                  ? "שווי ריטיינרים חודשי (MRR)"
+                  : "כמות ריטיינרים (יחידות)"}
+              </Badge>
             </DetailRow>
           </div>
         );

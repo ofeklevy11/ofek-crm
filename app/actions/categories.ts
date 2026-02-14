@@ -18,6 +18,7 @@ export async function getCategories() {
           select: { id: true },
         },
       },
+      take: 200, // P92: Bound categories query
     });
     return { success: true, data: categories };
   } catch (error) {

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { getTables } from "@/app/actions/tables";
 import { createAnalyticsView } from "@/app/actions/analytics";
+import { useAIJob } from "@/hooks/use-ai-job";
 
 interface AIAnalyticsCreatorProps {
   isOpen: boolean;
@@ -29,8 +30,14 @@ export default function AIAnalyticsCreator({
   const [error, setError] = useState<string | null>(null);
   const [tables, setTables] = useState<any[]>([]);
   const [generatedView, setGeneratedView] = useState<any | null>(null);
+  const { dispatch, cancel } = useAIJob();
 
   const [suggestions, setSuggestions] = useState<string[]>([]);
+
+  // Cancel polling when modal closes (B1)
+  useEffect(() => {
+    if (!isOpen) cancel();
+  }, [isOpen, cancel]);
 
   useEffect(() => {
     if (isOpen) {
@@ -106,31 +113,33 @@ export default function AIAnalyticsCreator({
     setGeneratedView(null);
 
     try {
-      const res = await fetch("/api/ai/generate-analytics", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = await dispatch<{ view: any }>(
+        "/api/ai/generate-analytics",
+        {
           prompt: promptToUse,
           tables: tables.map((t) => ({
             id: t.id,
             name: t.name,
             schemaJson: t.schemaJson,
           })),
-        }),
-      });
+        }
+      );
 
-      if (!res.ok) {
-        throw new Error("Failed to generate analytics view");
+      if (!data.view || !data.view.type || !data.view.config) {
+        setError("התוצאה שהתקבלה לא תקינה. נסה לנסח את הבקשה מחדש.");
+        setLoading(false);
+        return;
       }
-
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-
       setGeneratedView(data.view);
+      setLoading(false);
     } catch (err: any) {
+      // Ignore abort errors (from unmount or cancel)
+      if (err?.name === "AbortError" || err?.message === "Aborted") {
+        setLoading(false);
+        return;
+      }
       console.error(err);
       setError(err.message || "שגיאה ביצירת התצוגה אנא נסה שוב.");
-    } finally {
       setLoading(false);
     }
   };

@@ -37,12 +37,14 @@ export async function GET(
       );
     }
 
+    // P110: Add take limit to prevent OOM on large table exports
     const records = await prisma.record.findMany({
       where: {
         tableId: tableIdNum,
         companyId: user.companyId,
       },
       orderBy: { createdAt: "desc" },
+      take: 10000, // P222: Lowered from 50K — 50K records + joins causes OOM on serverless
       include: {
         creator: {
           select: { name: true, email: true },

@@ -8,9 +8,11 @@ export async function getProducts() {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
+  // P137: Add take limit to bound products query
   const products = await db.product.findMany({
     where: { companyId: user.companyId },
     orderBy: { name: "asc" },
+    take: 1000,
   });
 
   return products.map((p) => ({

@@ -70,6 +70,7 @@ export async function getGlobalEventAutomations() {
         calendarEventId: null, // Global template
       },
       orderBy: { createdAt: "desc" },
+      take: 200, // P73: Bound UI-facing query
     });
 
     return { success: true, data: rules };
@@ -132,13 +133,11 @@ export async function createEventAutomation(data: EventAutomationData) {
 
     if (!data.eventId) return { success: false, error: "Event ID is required" };
 
-    const event = await prisma.calendarEvent.findUnique({
-      where: { id: data.eventId },
+    const event = await prisma.calendarEvent.findFirst({
+      where: { id: data.eventId, companyId: currentUser.companyId },
     });
 
     if (!event) return { success: false, error: "Event not found" };
-    if (event.companyId !== currentUser.companyId)
-      return { success: false, error: "Unauthorized" };
 
     // Inject current user as recipient for notifications if not specified
     let finalActionConfig = data.actionConfig;
@@ -183,6 +182,7 @@ export async function getEventAutomations(eventId: string) {
         companyId: currentUser.companyId,
       },
       orderBy: { createdAt: "desc" },
+      take: 200, // P74: Bound UI-facing query
     });
 
     return { success: true, data: rules };
@@ -244,108 +244,156 @@ export async function deleteEventAutomation(ruleId: number) {
 
 // --- CRON Logic ---
 
-export async function processEventAutomations() {
-  console.log("⏰ Checking event-based automations...");
+export async function processEventAutomations(companyId?: number) {
+  if (!companyId) {
+    throw new Error("[EventAutomations] companyId is required — skipping to prevent cross-tenant query");
+  }
+  console.log(`⏰ Checking event-based automations for company ${companyId}...`);
   try {
+    // Issue O fix: Only fetch rules for events within the last 24h to avoid loading stale past events
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const rules = await prisma.automationRule.findMany({
       where: {
         isActive: true,
         triggerType: "EVENT_TIME",
-        // calendarEventId must not be null
         calendarEventId: { not: null },
+        ...(companyId ? { companyId } : {}),
+        calendarEvent: {
+          startTime: { gte: cutoff },
+        },
       },
       include: {
         calendarEvent: true,
       },
+      take: 500,
     });
 
     console.log(`[Event Automations] Found ${rules.length} active rules.`);
 
     const now = new Date();
 
-    for (const rule of rules) {
-      if (!rule.calendarEvent) continue;
-
+    // Filter to only rules whose trigger time has passed and have a valid event
+    const eligibleRules = rules.filter((rule) => {
+      if (!rule.calendarEvent) return false;
       const eventStart = new Date(rule.calendarEvent.startTime);
-      const triggerConfig = rule.triggerConfig as any;
-      const minutesBefore = Number(triggerConfig?.minutesBefore || 0);
-
-      // Calculate the trigger time
+      const minutesBefore = Number((rule.triggerConfig as any)?.minutesBefore || 0);
       const targetTime = new Date(eventStart.getTime() - minutesBefore * 60000);
+      return now >= targetTime;
+    });
 
-      // Check if NOW is past the target time
-      // Check if NOW is past the target time
-      if (now >= targetTime) {
-        try {
-          // Check execution log
-          const executed = await prisma.automationLog.findUnique({
-            where: {
-              automationRuleId_calendarEventId: {
-                automationRuleId: rule.id,
-                calendarEventId: rule.calendarEventId as string,
-              },
-            },
-          });
+    if (eligibleRules.length === 0) return;
 
-          if (!executed) {
-            console.log(
-              `[Event Automations] 🔔 Triggering rule ${rule.id} (Type: ${rule.actionType}) for event ${rule.calendarEvent.title}`,
-            );
+    // Issue A fix: Batch-fetch all automation logs upfront to avoid N+1
+    const logKeys = eligibleRules.map((r) => ({
+      automationRuleId: r.id,
+      calendarEventId: r.calendarEventId as string,
+    }));
+    const existingLogs = await prisma.automationLog.findMany({
+      where: {
+        OR: logKeys,
+      },
+      select: { automationRuleId: true, calendarEventId: true },
+      take: 5000,
+    });
+    const executedSet = new Set(
+      existingLogs.map((l) => `${l.automationRuleId}:${l.calendarEventId}`),
+    );
 
-            // Prepare Context
-            const eventRecordData = {
-              title: rule.calendarEvent.title,
-              description: rule.calendarEvent.description,
-              start: rule.calendarEvent.startTime.toISOString(),
-              end: rule.calendarEvent.endTime.toISOString(),
-              // Aliases for templates
-              taskTitle: rule.calendarEvent.title,
-              eventTitle: rule.calendarEvent.title,
-              eventStart: rule.calendarEvent.startTime.toLocaleString("he-IL"),
-              eventEnd: rule.calendarEvent.endTime.toLocaleString("he-IL"),
-              // Granular Date/Time for Inputs
-              eventStartDate: rule.calendarEvent.startTime
-                .toISOString()
-                .split("T")[0],
-              eventStartTime: rule.calendarEvent.startTime
-                .toTimeString()
-                .slice(0, 5),
-              eventEndDate: rule.calendarEvent.endTime
-                .toISOString()
-                .split("T")[0],
-              eventEndTime: rule.calendarEvent.endTime
-                .toTimeString()
-                .slice(0, 5),
-              // Legacy support for older templates
-              time: rule.calendarEvent.startTime.toLocaleString("he-IL"),
-            };
+    // Filter to only unexecuted rules
+    const unexecutedRules = eligibleRules.filter(
+      (r) => !executedSet.has(`${r.id}:${r.calendarEventId}`),
+    );
 
-            await executeRuleActions(rule, {
-              recordData: eventRecordData,
-              tableName: "Calendar",
-              // We pass null for recordId/taskId since this is event based
-            });
+    if (unexecutedRules.length === 0) return;
 
-            // Log execution
+    console.log(`[Event Automations] ${unexecutedRules.length} rules to execute.`);
+
+    // Issue C fix: Process rules in parallel with concurrency limit of 5
+    const RULE_CONCURRENCY = 5;
+    let totalFailures = 0;
+    for (let i = 0; i < unexecutedRules.length; i += RULE_CONCURRENCY) {
+      const batch = unexecutedRules.slice(i, i + RULE_CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map(async (rule) => {
+          // Issue B fix: Create log FIRST to claim execution, then execute.
+          // If another worker already claimed it, the unique constraint will throw P2002.
+          try {
             await prisma.automationLog.create({
               data: {
                 automationRuleId: rule.id,
                 calendarEventId: rule.calendarEventId as string,
               },
             });
-            console.log(
-              `[Event Automations] ✅ Rule ${rule.id} executed successfully.`,
-            );
+          } catch (createErr: any) {
+            if (createErr?.code === "P2002") {
+              // Another worker already claimed this — skip
+              console.log(`[Event Automations] Rule ${rule.id} already claimed by another worker, skipping.`);
+              return;
+            }
+            throw createErr;
           }
-        } catch (ruleError) {
+
+          console.log(
+            `[Event Automations] 🔔 Triggering rule ${rule.id} (Type: ${rule.actionType}) for event ${rule.calendarEvent!.title}`,
+          );
+
+          const event = rule.calendarEvent!;
+          const eventRecordData = {
+            title: event.title,
+            description: event.description,
+            start: event.startTime.toISOString(),
+            end: event.endTime.toISOString(),
+            taskTitle: event.title,
+            eventTitle: event.title,
+            eventStart: event.startTime.toLocaleString("he-IL"),
+            eventEnd: event.endTime.toLocaleString("he-IL"),
+            eventStartDate: event.startTime.toISOString().split("T")[0],
+            eventStartTime: event.startTime.toTimeString().slice(0, 5),
+            eventEndDate: event.endTime.toISOString().split("T")[0],
+            eventEndTime: event.endTime.toTimeString().slice(0, 5),
+            time: event.startTime.toLocaleString("he-IL"),
+          };
+
+          try {
+            await executeRuleActions(rule, {
+              recordData: eventRecordData,
+              tableName: "Calendar",
+            });
+            console.log(`[Event Automations] ✅ Rule ${rule.id} executed successfully.`);
+          } catch (execErr) {
+            // Execution failed but log is already created — delete it so it can be retried
+            try {
+              await prisma.automationLog.delete({
+                where: {
+                  automationRuleId_calendarEventId: {
+                    automationRuleId: rule.id,
+                    calendarEventId: rule.calendarEventId as string,
+                  },
+                },
+              });
+            } catch { /* best effort cleanup */ }
+            throw execErr;
+          }
+        }),
+      );
+
+      for (let j = 0; j < results.length; j++) {
+        if (results[j].status === "rejected") {
+          totalFailures++;
           console.error(
-            `[Event Automations] ❌ Error processing rule ${rule.id}:`,
-            ruleError,
+            `[Event Automations] ❌ Error processing rule ${batch[j].id}:`,
+            (results[j] as PromiseRejectedResult).reason,
           );
         }
       }
     }
+
+    // Signal failure to Inngest so it can retry if majority of rules failed
+    if (totalFailures > 0 && totalFailures >= unexecutedRules.length * 0.5) {
+      throw new Error(`[Event Automations] ${totalFailures}/${unexecutedRules.length} event rules failed — triggering Inngest retry`);
+    }
   } catch (error) {
     console.error("Error processing event automations:", error);
+    throw error; // Re-throw so Inngest sees the failure
   }
 }

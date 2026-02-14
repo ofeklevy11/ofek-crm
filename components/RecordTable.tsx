@@ -2,7 +2,7 @@
 
 import { uploadFiles } from "@/lib/uploadthing";
 import { saveFileMetadata, updateFile } from "@/app/actions/storage";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
 import { useRouter } from "next/navigation";
 import AdvancedSearch from "./AdvancedSearch";
@@ -99,15 +99,35 @@ export default function RecordTable({
 }: RecordTableProps) {
   const router = useRouter();
   const [records, setRecords] = useState<any[]>(initialRecords ?? []);
+  // Track IDs of records pending async deletion (Inngest processing).
+  // Map stores id → timestamp (Date.now()) so we can expire stale entries.
+  const pendingDeleteIdsRef = useRef<Map<number, number>>(new Map());
 
   useEffect(() => {
     if (initialRecords) {
-      setRecords(initialRecords);
+      if (pendingDeleteIdsRef.current.size > 0) {
+        const serverIds = new Set(initialRecords.map((r: any) => r.id));
+        const now = Date.now();
+        for (const [id, ts] of pendingDeleteIdsRef.current) {
+          if (!serverIds.has(id)) {
+            // Confirmed deleted — remove from pending
+            pendingDeleteIdsRef.current.delete(id);
+          } else if (now - ts > 60_000) {
+            // Safety valve: ID still in server data after 60s — job likely failed, let it reappear
+            pendingDeleteIdsRef.current.delete(id);
+          }
+        }
+        // Merge server data but filter out still-pending deletes
+        setRecords(initialRecords.filter((r: any) => !pendingDeleteIdsRef.current.has(r.id)));
+      } else {
+        setRecords(initialRecords);
+      }
     }
   }, [initialRecords]);
 
   const [showImportModal, setShowImportModal] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editingRecord, setEditingRecord] = useState<any | null>(null);
   const [editingField, setEditingField] = useState<string | undefined>(
@@ -322,108 +342,113 @@ export default function RecordTable({
     }
   };
 
-  // Fetch related data (batched: single API call for all relation fields)
+  // Stable key that only changes when the set of record IDs changes (not on data edits).
+  const recordIdKey = useMemo(
+    () => records.map((r) => r.id).sort((a: number, b: number) => a - b).join(","),
+    [records],
+  );
+
+  // Fetch related data (batched: single API call for all relation fields).
+  // Debounced by 300ms and keyed on record IDs — avoids redundant fetches
+  // when record data changes without ID changes (e.g. optimistic updates).
   useEffect(() => {
-    const fetchRelatedData = async () => {
-      const relationFields = schema.filter(
-        (f) => f.type === "relation" && f.relationTableId,
-      );
-      if (relationFields.length === 0) {
-        setRelatedData({});
-        return;
-      }
-
-      // Build a map of tableId -> { recordIds, displayField }
-      // Deduplicate table IDs and collect only referenced record IDs from actual data
-      const tablesRequest: Record<
-        string,
-        { recordIds: number[]; displayField?: string }
-      > = {};
-
-      for (const field of relationFields) {
-        const tableId = String(field.relationTableId!);
-        if (!tablesRequest[tableId]) {
-          tablesRequest[tableId] = {
-            recordIds: [],
-            displayField: field.displayField,
-          };
-        }
-
-        // Collect all referenced record IDs from the current records
-        for (const record of records) {
-          const val = record.data?.[field.name];
-          if (val === null || val === undefined) continue;
-          if (Array.isArray(val)) {
-            for (const id of val) {
-              const numId = Number(id);
-              if (!isNaN(numId)) tablesRequest[tableId].recordIds.push(numId);
-            }
-          } else {
-            const numId = Number(val);
-            if (!isNaN(numId)) tablesRequest[tableId].recordIds.push(numId);
-          }
-        }
-
-        // Deduplicate record IDs
-        tablesRequest[tableId].recordIds = [
-          ...new Set(tablesRequest[tableId].recordIds),
-        ];
-      }
-
-      // Remove tables with no referenced records
-      for (const tableId of Object.keys(tablesRequest)) {
-        if (tablesRequest[tableId].recordIds.length === 0) {
-          delete tablesRequest[tableId];
-        }
-      }
-
-      if (Object.keys(tablesRequest).length === 0) {
-        setRelatedData({});
-        return;
-      }
-
-      try {
-        const res = await fetch("/api/tables/batch-related", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tables: tablesRequest }),
-        });
-
-        if (!res.ok) {
-          console.error("Failed to fetch batch related data");
+    const timer = setTimeout(() => {
+      const fetchRelatedData = async () => {
+        const relationFields = schema.filter(
+          (f) => f.type === "relation" && f.relationTableId,
+        );
+        if (relationFields.length === 0) {
+          setRelatedData({});
           return;
         }
 
-        const batchResult = await res.json();
+        // Build a map of tableId -> { recordIds, displayField }
+        const tablesRequest: Record<
+          string,
+          { recordIds: number[]; displayField?: string }
+        > = {};
 
-        // Transform batch result into the format expected by the rendering code:
-        // { [tableId]: { [recordId]: { data: { [displayField]: displayValue } } } }
-        const newRelatedData: Record<string, any> = {};
-        for (const [tableId, recordMap] of Object.entries(batchResult)) {
-          const dataMap: Record<number, any> = {};
-          const displayField = tablesRequest[tableId]?.displayField;
-          for (const [recordId, info] of Object.entries(
-            recordMap as Record<string, { displayValue: string }>,
-          )) {
-            // Build a minimal record object matching what getLabel() expects
-            dataMap[Number(recordId)] = {
-              id: Number(recordId),
-              data: displayField
-                ? { [displayField]: (info as any).displayValue }
-                : { _first: (info as any).displayValue },
+        for (const field of relationFields) {
+          const tableId = String(field.relationTableId!);
+          if (!tablesRequest[tableId]) {
+            tablesRequest[tableId] = {
+              recordIds: [],
+              displayField: field.displayField,
             };
           }
-          newRelatedData[tableId] = dataMap;
+
+          for (const record of records) {
+            const val = record.data?.[field.name];
+            if (val === null || val === undefined) continue;
+            if (Array.isArray(val)) {
+              for (const id of val) {
+                const numId = Number(id);
+                if (!isNaN(numId)) tablesRequest[tableId].recordIds.push(numId);
+              }
+            } else {
+              const numId = Number(val);
+              if (!isNaN(numId)) tablesRequest[tableId].recordIds.push(numId);
+            }
+          }
+
+          tablesRequest[tableId].recordIds = [
+            ...new Set(tablesRequest[tableId].recordIds),
+          ];
         }
 
-        setRelatedData(newRelatedData);
-      } catch (error) {
-        console.error("Failed to fetch batch related data", error);
-      }
-    };
+        for (const tableId of Object.keys(tablesRequest)) {
+          if (tablesRequest[tableId].recordIds.length === 0) {
+            delete tablesRequest[tableId];
+          }
+        }
 
-    fetchRelatedData();
-  }, [schema, records]);
+        if (Object.keys(tablesRequest).length === 0) {
+          setRelatedData({});
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/tables/batch-related", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tables: tablesRequest }),
+          });
+
+          if (!res.ok) {
+            console.error("Failed to fetch batch related data");
+            return;
+          }
+
+          const batchResult = await res.json();
+
+          const newRelatedData: Record<string, any> = {};
+          for (const [tableId, recordMap] of Object.entries(batchResult)) {
+            const dataMap: Record<number, any> = {};
+            const displayField = tablesRequest[tableId]?.displayField;
+            for (const [recordId, info] of Object.entries(
+              recordMap as Record<string, { displayValue: string }>,
+            )) {
+              dataMap[Number(recordId)] = {
+                id: Number(recordId),
+                data: displayField
+                  ? { [displayField]: (info as any).displayValue }
+                  : { _first: (info as any).displayValue },
+              };
+            }
+            newRelatedData[tableId] = dataMap;
+          }
+
+          setRelatedData(newRelatedData);
+        } catch (error) {
+          console.error("Failed to fetch batch related data", error);
+        }
+      };
+
+      fetchRelatedData();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [schema, recordIdKey]);
 
   // Scroll to highlighted record
   useEffect(() => {
@@ -537,7 +562,7 @@ export default function RecordTable({
   };
 
   const toggleSelect = (id: number) => {
-    if (selectedIds.includes(id)) {
+    if (selectedIdSet.has(id)) {
       setSelectedIds(selectedIds.filter((sid) => sid !== id));
     } else {
       setSelectedIds([...selectedIds, id]);
@@ -559,9 +584,14 @@ export default function RecordTable({
         throw new Error(errData.error || "Failed to delete");
       }
 
-      setRecords((prev) => prev.filter((r) => !selectedIds.includes(r.id)));
+      // Track deleted IDs so useEffect filters them from incoming server data
+      // until they're confirmed gone from the DB.
+      const now = Date.now();
+      for (const id of selectedIds) {
+        pendingDeleteIdsRef.current.set(id, now);
+      }
+      setRecords((prev) => prev.filter((r) => !selectedIdSet.has(r.id)));
       setSelectedIds([]);
-      router.refresh();
     } catch (error: any) {
       console.error(error);
       alert(error.message || "שגיאה במחיקת רשומות");
@@ -609,7 +639,7 @@ export default function RecordTable({
   const handleExportCSV = () => {
     const recordsToExport =
       selectedIds.length > 0
-        ? records.filter((r) => selectedIds.includes(r.id))
+        ? records.filter((r) => selectedIdSet.has(r.id))
         : records;
 
     if (recordsToExport.length === 0) {
@@ -665,7 +695,7 @@ export default function RecordTable({
   const handleExportTXT = () => {
     const recordsToExport =
       selectedIds.length > 0
-        ? records.filter((r) => selectedIds.includes(r.id))
+        ? records.filter((r) => selectedIdSet.has(r.id))
         : records;
 
     if (recordsToExport.length === 0) {
@@ -1073,7 +1103,7 @@ export default function RecordTable({
                   >
                     <TableCell className="text-center">
                       <Checkbox
-                        checked={selectedIds.includes(record.id)}
+                        checked={selectedIdSet.has(record.id)}
                         onCheckedChange={() => toggleSelect(record.id)}
                         className="border-gray-400 bg-white mr-4"
                       />
@@ -1449,11 +1479,11 @@ export default function RecordTable({
                               // Display mode
                               <div className="flex items-center justify-between w-full">
                                 <a
-                                  href={att.url}
+                                  href={`/api/attachments/${att.id}/download`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center gap-1 truncate hover:underline text-blue-600 flex-1 min-w-0"
-                                  title={att.url}
+                                  title={att.displayName || att.filename}
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <Paperclip className="h-3 w-3 shrink-0" />
@@ -1555,11 +1585,11 @@ export default function RecordTable({
                               // Normal Mode
                               <div className="flex items-center justify-between group">
                                 <a
-                                  href={file.url}
+                                  href={`/api/files/${file.id}/download`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center gap-1 truncate hover:underline text-blue-600 dark:text-blue-400 flex-1"
-                                  title={file.url}
+                                  title={file.displayName || file.name}
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <FileIcon className="h-3 w-3 shrink-0" />

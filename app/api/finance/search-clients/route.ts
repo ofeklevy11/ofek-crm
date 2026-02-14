@@ -34,7 +34,8 @@ export async function GET(request: NextRequest) {
     let records: { id: number; data: any }[];
 
     if (searchQuery) {
-      const searchPattern = `%${searchQuery}%`;
+      const escapedQuery = searchQuery.replace(/[%_\\]/g, '\\$&');
+      const searchPattern = `%${escapedQuery}%`;
       records = await prisma.$queryRaw<{ id: number; data: any }[]>`
         SELECT id, data FROM "Record"
         WHERE "tableId" = ${table.id}

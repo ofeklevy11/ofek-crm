@@ -16,6 +16,13 @@ export async function POST(
       return NextResponse.json({ error: "Invalid record ID" }, { status: 400 });
     }
 
+    // Validate URL scheme (must be http or https)
+    if (url != null && url !== "") {
+      if (typeof url !== "string" || url.length > 2048 || !/^https?:\/\//i.test(url)) {
+        return NextResponse.json({ error: "Invalid URL: must be http or https" }, { status: 400 });
+      }
+    }
+
     // Get the current authenticated user from session
     const currentUser = await getCurrentUser();
 
@@ -49,7 +56,10 @@ export async function POST(
       },
     });
 
-    return NextResponse.json(attachment);
+    return NextResponse.json({
+      ...attachment,
+      downloadUrl: `/api/attachments/${attachment.id}/download`,
+    });
   } catch (error) {
     console.error("Error adding attachment:", error);
     return NextResponse.json(
@@ -90,11 +100,18 @@ export async function GET(
     }
 
     const attachments = await prisma.attachment.findMany({
-      where: { recordId },
+      where: { recordId, record: { companyId: currentUser.companyId } },
       orderBy: { uploadedAt: "desc" },
+      take: 500,
     });
 
-    return NextResponse.json(attachments);
+    // Add proxied download URLs alongside the user-entered link URLs
+    const sanitized = attachments.map((att) => ({
+      ...att,
+      downloadUrl: `/api/attachments/${att.id}/download`,
+    }));
+
+    return NextResponse.json(sanitized);
   } catch (error) {
     console.error("Error fetching attachments:", error);
     return NextResponse.json(

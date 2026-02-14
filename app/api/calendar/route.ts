@@ -10,8 +10,10 @@ export async function GET() {
     }
 
     // CRITICAL: Filter by companyId for multi-tenancy
+    // P111: Add take limit matching server action bounds
     const events = await prisma.calendarEvent.findMany({
       where: { companyId: user.companyId },
+      take: 5000,
     });
     return NextResponse.json(events);
   } catch (error) {

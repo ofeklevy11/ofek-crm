@@ -145,7 +145,7 @@ export function FileCard({
       <DropdownMenuContent align={align} className="text-right">
         <DropdownMenuItem asChild className="gap-2">
           <a
-            href={file.url}
+            href={`/api/files/${file.id}/download`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center"
@@ -291,7 +291,7 @@ export function FileCard({
             {/* Direct action buttons */}
             <div className="mt-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <a
-                href={file.url}
+                href={`/api/files/${file.id}/download`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-primary/10 text-primary rounded-md hover:bg-primary/20 transition-colors"
@@ -374,7 +374,7 @@ export function FileCard({
         {/* Direct action buttons */}
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <a
-            href={file.url}
+            href={`/api/files/${file.id}/download`}
             target="_blank"
             rel="noopener noreferrer"
             className="p-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"

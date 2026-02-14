@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { findApiKeyByValue } from "@/lib/api-key-utils";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
   try {
@@ -22,10 +24,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Validate Company API Key
-    const keyRecord = await prisma.apiKey.findUnique({
-      where: { key: apiKey },
-    });
+    // Validate Company API Key (looked up by hash)
+    const keyRecord = await findApiKeyByValue(apiKey);
 
     if (!keyRecord || !keyRecord.isActive) {
       return NextResponse.json(
@@ -34,23 +34,17 @@ export async function POST(req: Request) {
       );
     }
 
+    // Rate limit per company
+    const rateLimited = await checkRateLimit(String(keyRecord.companyId), RATE_LIMITS.webhook);
+    if (rateLimited) return rateLimited;
+
     const body = await req.json();
 
-    // Verify company scope
-    // We already extracted table_slug, now we verify company_id match
-    if (body.company_id && Number(body.company_id) !== keyRecord.companyId) {
-      return NextResponse.json(
-        { error: "Forbidden: API Key does not match the requested company_id" },
-        { status: 403 }
-      );
-    }
+    // Always derive companyId from the validated API key — never from request body
+    const companyId = keyRecord.companyId;
 
-    // If company_id was NOT sent in body, we can actually infer it!
-    // But previous requirement said 'make company_id mandatory in body'.
-    // So we just enforce consistency.
-
-    // Extract table identifier and other system fields
-    const { table_slug, company_id, ...recordData } = body;
+    // Extract table identifier and strip system fields from record data
+    const { table_slug, company_id: _ignoredCompanyId, ...recordData } = body;
 
     if (!table_slug) {
       return NextResponse.json(
@@ -59,26 +53,18 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!company_id) {
-      return NextResponse.json(
-        { error: "Missing company_id in request body" },
-        { status: 400 }
-      );
-    }
-
-    // Find the table by slug AND companyId
-    // We use findFirst because slugs might not be globally unique anymore (unique per company)
+    // Find the table by slug scoped to the API key's company
     const table = await prisma.tableMeta.findFirst({
       where: {
         slug: table_slug,
-        companyId: Number(company_id),
+        companyId,
       },
     });
 
     if (!table) {
       return NextResponse.json(
         {
-          error: `Table with slug "${table_slug}" not found in company ${company_id}`,
+          error: `Table with slug "${table_slug}" not found`,
         },
         { status: 404 }
       );

@@ -20,11 +20,11 @@ export async function GET(
       return NextResponse.json({ error: "אין הרשאה" }, { status: 401 });
     }
 
-    const job = await prisma.financeSyncJob.findUnique({
-      where: { id: jobId },
+    const job = await prisma.financeSyncJob.findFirst({
+      where: { id: jobId, companyId: user.companyId },
     });
 
-    if (!job || job.companyId !== user.companyId) {
+    if (!job) {
       return NextResponse.json(
         { error: "Job not found or access denied" },
         { status: 404 },

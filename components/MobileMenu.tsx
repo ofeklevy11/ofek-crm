@@ -63,7 +63,9 @@ export default function MobileMenu({ user }: MobileMenuProps) {
               - במידה ותרצו להשתמש בכל הפיצ&apos;רים בצורה מלאה יש להשתמש במחשב.
             </p>
           </div>
-          <LinkItem href="/">לוח בקרה</LinkItem>
+          {hasUserFlag(user, "canViewDashboardData") && (
+            <LinkItem href="/">לוח בקרה</LinkItem>
+          )}
 
           {hasUserFlag(user, "canViewTables") && (
             <LinkItem href="/tables">טבלאות</LinkItem>
@@ -94,7 +96,7 @@ export default function MobileMenu({ user }: MobileMenuProps) {
             <LinkItem href="/users">משתמשים</LinkItem>
           )}
 
-          {hasUserFlag(user, "canViewFinance") && (
+          {hasUserFlag(user, "canViewGoals") && (
             <Link
               href="/finance/goals"
               className="text-lg font-medium py-3 px-4 bg-[#22c55e]/10 text-[#22c55e] hover:bg-[#22c55e]/20 rounded-md transition-colors text-right block mb-1"

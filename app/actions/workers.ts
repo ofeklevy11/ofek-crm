@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { validateUserInCompany, validateWorkerInCompany } from "@/lib/company-validation";
 
 // ==========================================
 // DEPARTMENTS
@@ -20,6 +21,7 @@ export async function getDepartments() {
       },
     },
     orderBy: { name: "asc" },
+    take: 500,
   });
 }
 
@@ -50,6 +52,13 @@ export async function createDepartment(data: {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
+  // SECURITY: Validate managerId belongs to same company
+  if (data.managerId) {
+    if (!(await validateUserInCompany(data.managerId, user.companyId))) {
+      throw new Error("Invalid manager");
+    }
+  }
+
   const department = await prisma.department.create({
     data: {
       ...data,
@@ -75,14 +84,16 @@ export async function updateDepartment(
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
-  // CRITICAL: Verify department belongs to user's company
-  const existing = await prisma.department.findFirst({
-    where: { id, companyId: user.companyId },
-  });
-  if (!existing) throw new Error("Department not found or access denied");
+  // SECURITY: Validate managerId belongs to same company
+  if (data.managerId) {
+    if (!(await validateUserInCompany(data.managerId, user.companyId))) {
+      throw new Error("Invalid manager");
+    }
+  }
 
+  // SECURITY: Atomic companyId check in update WHERE clause
   const department = await prisma.department.update({
-    where: { id },
+    where: { id, companyId: user.companyId },
     data,
   });
 
@@ -94,12 +105,6 @@ export async function deleteDepartment(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
-  // CRITICAL: Verify department belongs to user's company
-  const existing = await prisma.department.findFirst({
-    where: { id, companyId: user.companyId },
-  });
-  if (!existing) throw new Error("Department not found or access denied");
-
   // Check if department has workers
   const workersCount = await prisma.worker.count({
     where: { departmentId: id, companyId: user.companyId },
@@ -109,8 +114,9 @@ export async function deleteDepartment(id: number) {
     throw new Error("Cannot delete department with active workers");
   }
 
+  // SECURITY: Atomic companyId check in delete WHERE clause
   await prisma.department.delete({
-    where: { id },
+    where: { id, companyId: user.companyId },
   });
 
   revalidatePath("/workers");
@@ -153,6 +159,7 @@ export async function getWorkers(filters?: {
       },
     },
     orderBy: [{ status: "asc" }, { firstName: "asc" }],
+    take: 2000,
   });
 }
 
@@ -197,6 +204,20 @@ export async function createWorker(data: {
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+
+  // SECURITY: Validate departmentId belongs to user's company
+  const dept = await prisma.department.findFirst({
+    where: { id: data.departmentId, companyId: user.companyId },
+    select: { id: true },
+  });
+  if (!dept) throw new Error("Department not found or access denied");
+
+  // SECURITY: Validate linkedUserId belongs to same company
+  if (data.linkedUserId) {
+    if (!(await validateUserInCompany(data.linkedUserId, user.companyId))) {
+      throw new Error("Invalid linked user");
+    }
+  }
 
   const worker = await prisma.worker.create({
     data: {
@@ -253,8 +274,24 @@ export async function updateWorker(
   });
   if (!existing) throw new Error("Worker not found or access denied");
 
+  // SECURITY: Validate departmentId belongs to user's company if provided
+  if (data.departmentId) {
+    const dept = await prisma.department.findFirst({
+      where: { id: data.departmentId, companyId: user.companyId },
+      select: { id: true },
+    });
+    if (!dept) throw new Error("Department not found or access denied");
+  }
+
+  // SECURITY: Validate linkedUserId belongs to same company
+  if (data.linkedUserId) {
+    if (!(await validateUserInCompany(data.linkedUserId, user.companyId))) {
+      throw new Error("Invalid linked user");
+    }
+  }
+
   const worker = await prisma.worker.update({
-    where: { id },
+    where: { id, companyId: user.companyId },
     data: data as any,
   });
 
@@ -273,7 +310,7 @@ export async function deleteWorker(id: number) {
   if (!existing) throw new Error("Worker not found or access denied");
 
   await prisma.worker.delete({
-    where: { id },
+    where: { id, companyId: user.companyId },
   });
 
   revalidatePath("/workers");
@@ -301,6 +338,7 @@ export async function getOnboardingPaths(departmentId?: number) {
       },
     },
     orderBy: { name: "asc" },
+    take: 500,
   });
 }
 
@@ -378,8 +416,8 @@ export async function updateOnboardingPath(
 
   // If setting as default, unset other defaults for this department
   if (data.isDefault) {
-    const currentPath = await prisma.onboardingPath.findUnique({
-      where: { id },
+    const currentPath = await prisma.onboardingPath.findFirst({
+      where: { id, companyId: user.companyId },
     });
     const deptId = data.departmentId || currentPath?.departmentId;
     if (deptId) {
@@ -396,7 +434,7 @@ export async function updateOnboardingPath(
   }
 
   const path = await prisma.onboardingPath.update({
-    where: { id },
+    where: { id, companyId: user.companyId },
     data,
   });
 
@@ -416,12 +454,12 @@ export async function deleteOnboardingPath(id: number) {
 
   // Delete all related WorkerOnboarding records first (WorkerOnboardingStep will cascade delete)
   await prisma.workerOnboarding.deleteMany({
-    where: { pathId: id },
+    where: { pathId: id, path: { companyId: user.companyId } },
   });
 
   // Now delete the path (OnboardingStep will cascade delete due to onDelete: Cascade)
   await prisma.onboardingPath.delete({
-    where: { id },
+    where: { id, companyId: user.companyId },
   });
 
   revalidatePath("/workers");
@@ -446,6 +484,13 @@ export async function createOnboardingStep(data: {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
+  // SECURITY: Verify pathId belongs to user's company
+  const path = await prisma.onboardingPath.findFirst({
+    where: { id: data.pathId, companyId: user.companyId },
+    select: { id: true },
+  });
+  if (!path) throw new Error("Onboarding path not found or access denied");
+
   // Get max order if not specified
   if (data.order === undefined) {
     const maxOrder = await prisma.onboardingStep.aggregate({
@@ -456,7 +501,7 @@ export async function createOnboardingStep(data: {
   }
 
   const step = await prisma.onboardingStep.create({
-    data,
+    data: { ...data, companyId: user.companyId },
   });
 
   revalidatePath("/workers");
@@ -480,9 +525,20 @@ export async function updateOnboardingStep(
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
-  const step = await prisma.onboardingStep.update({
-    where: { id },
-    data: data as any,
+  // P115: Atomic verify+update in transaction to prevent TOCTOU
+  const step = await prisma.$transaction(async (tx) => {
+    const existing = await tx.onboardingStep.findFirst({
+      where: { id, path: { companyId: user.companyId } },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new Error("Step not found or access denied");
+    }
+
+    return tx.onboardingStep.update({
+      where: { id },
+      data: data as any,
+    });
   });
 
   revalidatePath("/workers");
@@ -493,8 +549,19 @@ export async function deleteOnboardingStep(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
-  await prisma.onboardingStep.delete({
-    where: { id },
+  // P115: Atomic verify+delete in transaction to prevent TOCTOU
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.onboardingStep.findFirst({
+      where: { id, path: { companyId: user.companyId } },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new Error("Step not found or access denied");
+    }
+
+    await tx.onboardingStep.delete({
+      where: { id },
+    });
   });
 
   revalidatePath("/workers");
@@ -508,14 +575,23 @@ export async function reorderOnboardingSteps(
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
-  await Promise.all(
-    stepIds.map((id, index) =>
-      prisma.onboardingStep.update({
-        where: { id },
-        data: { order: index },
-      }),
-    ),
+  if (stepIds.length > 200) {
+    throw new Error("Too many steps to reorder");
+  }
+
+  // P115: Verify path belongs to user's company
+  const path = await prisma.onboardingPath.findFirst({
+    where: { id: pathId, companyId: user.companyId },
+  });
+  if (!path) throw new Error("Path not found or access denied");
+
+  const transaction = stepIds.map((id, index) =>
+    prisma.onboardingStep.updateMany({
+      where: { id, pathId, path: { companyId: user.companyId } },
+      data: { order: index },
+    }),
   );
+  await prisma.$transaction(transaction);
 
   revalidatePath("/workers");
   return { success: true };
@@ -529,17 +605,24 @@ export async function assignOnboardingPath(workerId: number, pathId: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
-  // Get path with steps
-  const path = await prisma.onboardingPath.findUnique({
-    where: { id: pathId },
+  const path = await prisma.onboardingPath.findFirst({
+    where: { id: pathId, companyId: user.companyId },
     include: { steps: true },
   });
 
   if (!path) throw new Error("Onboarding path not found");
 
+  // SECURITY: Verify worker belongs to user's company
+  const worker = await prisma.worker.findFirst({
+    where: { id: workerId, companyId: user.companyId },
+    select: { id: true },
+  });
+  if (!worker) throw new Error("Worker not found or access denied");
+
   // Create worker onboarding
   const onboarding = await prisma.workerOnboarding.create({
     data: {
+      companyId: user.companyId,
       workerId,
       pathId,
       status: "IN_PROGRESS",
@@ -549,6 +632,7 @@ export async function assignOnboardingPath(workerId: number, pathId: number) {
   // Create step progress for all steps
   await prisma.workerOnboardingStep.createMany({
     data: path.steps.map((step) => ({
+      companyId: user.companyId,
       onboardingId: onboarding.id,
       stepId: step.id,
       status: "PENDING",
@@ -572,9 +656,9 @@ export async function updateStepProgress(
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
-  // Get the step with its onCompleteActions
-  const step = await prisma.onboardingStep.findUnique({
-    where: { id: stepId },
+  // Get the step with its onCompleteActions — scoped by companyId
+  const step = await prisma.onboardingStep.findFirst({
+    where: { id: stepId, path: { companyId: user.companyId } },
     select: {
       id: true,
       title: true,
@@ -584,6 +668,17 @@ export async function updateStepProgress(
       },
     },
   });
+
+  if (!step) {
+    throw new Error("Step not found or access denied");
+  }
+
+  // SECURITY: Verify onboardingId belongs to user's company (Issue C)
+  const onboardingCheck = await prisma.workerOnboarding.findFirst({
+    where: { id: onboardingId, worker: { companyId: user.companyId } },
+    select: { id: true },
+  });
+  if (!onboardingCheck) throw new Error("Onboarding not found or access denied");
 
   const stepProgress = await prisma.workerOnboardingStep.upsert({
     where: {
@@ -597,6 +692,7 @@ export async function updateStepProgress(
       completedAt: data.status === "COMPLETED" ? new Date() : null,
     },
     create: {
+      companyId: user.companyId,
       onboardingId,
       stepId,
       status: data.status,
@@ -619,9 +715,9 @@ export async function updateStepProgress(
           `[Workers] Executing ${actions.length} automations for step ${step.title}`,
         );
 
-        // Fetch worker for automation context
-        const onboardingRec = await prisma.workerOnboarding.findUnique({
-          where: { id: onboardingId },
+        // Fetch worker for automation context — scope via worker.companyId
+        const onboardingRec = await prisma.workerOnboarding.findFirst({
+          where: { id: onboardingId, worker: { companyId: user.companyId } },
           include: { worker: true },
         });
 
@@ -640,14 +736,15 @@ export async function updateStepProgress(
     }
   }
 
-  // Check onboarding completion status
-  const onboarding = await prisma.workerOnboarding.findUnique({
-    where: { id: onboardingId },
+  // Check onboarding completion status — scope via worker.companyId
+  const onboarding = await prisma.workerOnboarding.findFirst({
+    where: { id: onboardingId, worker: { companyId: user.companyId } },
     include: {
       path: {
         include: { steps: true },
       },
       stepProgress: true,
+      worker: { select: { id: true } },
     },
   });
 
@@ -665,32 +762,32 @@ export async function updateStepProgress(
 
     if (allRequiredCompleted && onboarding.status !== "COMPLETED") {
       // All required steps completed - mark onboarding as complete
-      await prisma.workerOnboarding.update({
-        where: { id: onboardingId },
+      await prisma.workerOnboarding.updateMany({
+        where: { id: onboardingId, worker: { companyId: user.companyId } },
         data: {
           status: "COMPLETED",
           completedAt: new Date(),
         },
       });
 
-      // Update worker status
+      // SECURITY: Update worker status with companyId guard
       await prisma.worker.update({
-        where: { id: onboarding.workerId },
+        where: { id: onboarding.worker.id, companyId: user.companyId },
         data: { status: "ACTIVE" },
       });
     } else if (!allRequiredCompleted && onboarding.status === "COMPLETED") {
       // Not all required steps completed but status is COMPLETED - revert to IN_PROGRESS
-      await prisma.workerOnboarding.update({
-        where: { id: onboardingId },
+      await prisma.workerOnboarding.updateMany({
+        where: { id: onboardingId, worker: { companyId: user.companyId } },
         data: {
           status: "IN_PROGRESS",
           completedAt: null,
         },
       });
 
-      // Revert worker status to ONBOARDING
+      // SECURITY: Revert worker status with companyId guard
       await prisma.worker.update({
-        where: { id: onboarding.workerId },
+        where: { id: onboarding.worker.id, companyId: user.companyId },
         data: { status: "ONBOARDING" },
       });
     }
@@ -724,6 +821,7 @@ export async function getWorkersByOnboardingPath(pathId: number) {
       },
     },
     orderBy: { createdAt: "desc" },
+    take: 2000,
   });
 
   return workerProgress.map((wp) => {
@@ -773,6 +871,7 @@ export async function getWorkerTasks(workerId?: number) {
       worker: true,
     },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    take: 5000,
   });
 }
 
@@ -785,6 +884,11 @@ export async function createWorkerTask(data: {
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+
+  // SECURITY: Validate workerId belongs to same company
+  if (!(await validateWorkerInCompany(data.workerId, user.companyId))) {
+    throw new Error("Worker not found or access denied");
+  }
 
   const task = await prisma.workerTask.create({
     data: {
@@ -816,8 +920,9 @@ export async function updateWorkerTask(
     data.completedAt = new Date();
   }
 
+  // P115: Add companyId to prevent cross-tenant worker task updates
   const task = await prisma.workerTask.update({
-    where: { id },
+    where: { id, companyId: user.companyId },
     data,
   });
 
@@ -829,8 +934,9 @@ export async function deleteWorkerTask(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
+  // P115: Add companyId to prevent cross-tenant worker task deletes
   await prisma.workerTask.delete({
-    where: { id },
+    where: { id, companyId: user.companyId },
   });
 
   revalidatePath("/workers");
@@ -904,8 +1010,7 @@ async function executeOnboardingStepAutomations(
 ) {
   if (!actions || !Array.isArray(actions) || actions.length === 0) return;
 
-  const { executeWhatsAppAction, executeWebhookAction } =
-    await import("./automations");
+  const { inngest } = await import("@/lib/inngest/client");
 
   console.log(
     `[Workers] Executing ${actions.length} automations for step: ${step.title}`,
@@ -924,7 +1029,7 @@ async function executeOnboardingStepAutomations(
           await executeCreateTaskAction(action.config, user);
           break;
         case "UPDATE_TASK":
-          await executeUpdateTaskAction(action.config);
+          await executeUpdateTaskAction(action.config, step.path.companyId);
           break;
         case "CREATE_FINANCE":
           await executeCreateFinanceAction(action.config, step.path.companyId);
@@ -990,20 +1095,22 @@ async function executeOnboardingStepAutomations(
             }
 
             if (phoneNumber) {
-              // Adapt config for executeWhatsAppAction format
-              const adaptedConfig = {
-                ...action.config,
-                // Map phone to 'manual:PHONE' format required by action
-                phoneColumnId: `manual:${phoneNumber}`,
-                // Map 'message' to 'content'
-                content: action.config.message,
-              };
-
-              await executeWhatsAppAction(
-                { actionConfig: adaptedConfig },
-                workerData,
-                step.path.companyId,
-              );
+              try {
+                await inngest.send({
+                  id: `wa-worker-${step.path.companyId}-${phoneNumber}-${step.id}-${Math.floor(Date.now() / 5000)}`,
+                  name: "automation/send-whatsapp",
+                  data: {
+                    companyId: step.path.companyId,
+                    phone: String(phoneNumber),
+                    content: action.config.message || "",
+                    messageType: action.config.messageType,
+                    mediaFileId: action.config.mediaFileId,
+                    delay: action.config.delay,
+                  },
+                });
+              } catch (err) {
+                console.error("[Workers] Failed to enqueue WhatsApp job:", err);
+              }
             } else {
               console.warn(
                 "[Workers] WhatsApp: No valid phone number available",
@@ -1020,16 +1127,31 @@ async function executeOnboardingStepAutomations(
               pathName: step.path.name,
               actorName: user.name,
             };
-            await executeWebhookAction(
-              {
-                id: 0, // Mock ID for onboarding automation
-                name: `Onboarding: ${step.title}`,
-                triggerType: "ONBOARDING_STEP_COMPLETED",
-                actionConfig: action.config,
-              },
-              webhookData,
-              step.path.companyId,
-            );
+            const webhookUrl = action.config.webhookUrl || action.config.url;
+            if (webhookUrl) {
+              try {
+                await inngest.send({
+                  id: `webhook-worker-${step.path.companyId}-${step.id}-${Math.floor(Date.now() / 5000)}`,
+                  name: "automation/send-webhook",
+                  data: {
+                    url: webhookUrl,
+                    companyId: step.path.companyId,
+                    ruleId: 0,
+                    payload: {
+                      ruleId: 0,
+                      ruleName: `Onboarding: ${step.title}`,
+                      triggerType: "ONBOARDING_STEP_COMPLETED",
+                      companyId: step.path.companyId,
+                      data: webhookData,
+                    },
+                  },
+                });
+              } catch (err) {
+                console.error("[Workers] Failed to enqueue Webhook job:", err);
+              }
+            } else {
+              console.error("[Workers] Webhook: No URL configured");
+            }
           }
           break;
         case "CREATE_CALENDAR_EVENT":
@@ -1039,7 +1161,10 @@ async function executeOnboardingStepAutomations(
           console.warn(`[Workers] Unknown action type: ${action.actionType}`);
       }
     } catch (error) {
-      console.error(`[Workers] Failed to execute ${action.actionType}:`, error);
+      console.error(
+        `[Workers] Failed to execute ${action.actionType} for step "${step.title}" (path "${step.path.name}", company ${step.path.companyId}):`,
+        error,
+      );
     }
   }
 }
@@ -1098,7 +1223,7 @@ async function executeUpdateRecordAction(
   const newData = { ...currentData, ...updates };
 
   await prisma.record.update({
-    where: { id: recordId },
+    where: { id: recordId, companyId },
     data: { data: JSON.parse(JSON.stringify(newData)) },
   });
 
@@ -1116,6 +1241,13 @@ async function executeCreateRecordAction(
   };
 
   if (!tableId) return;
+
+  // SECURITY: Validate tableId belongs to same company
+  const tableOk = await prisma.tableMeta.findFirst({
+    where: { id: tableId, companyId },
+    select: { id: true },
+  });
+  if (!tableOk) return;
 
   await prisma.record.create({
     data: {
@@ -1145,6 +1277,13 @@ async function executeCreateTaskAction(
 
   if (!title) return;
 
+  // SECURITY: Validate assigneeId at execution time
+  let validatedAssigneeId: number | null = null;
+  if (assigneeId) {
+    const ok = await validateUserInCompany(assigneeId, user.companyId);
+    if (ok) validatedAssigneeId = assigneeId;
+  }
+
   await prisma.task.create({
     data: {
       companyId: user.companyId,
@@ -1152,7 +1291,7 @@ async function executeCreateTaskAction(
       description: description || null,
       status: status || "todo",
       priority: priority || null,
-      assigneeId: assigneeId || null,
+      assigneeId: validatedAssigneeId,
       dueDate: dueDate ? new Date(dueDate) : null,
     },
   });
@@ -1162,7 +1301,7 @@ async function executeCreateTaskAction(
 }
 
 // Update an existing task
-async function executeUpdateTaskAction(config: Record<string, unknown>) {
+async function executeUpdateTaskAction(config: Record<string, unknown>, companyId: number) {
   const { taskId, updates } = config as {
     taskId: string;
     updates: Record<string, unknown>;
@@ -1180,7 +1319,7 @@ async function executeUpdateTaskAction(config: Record<string, unknown>) {
     updateData.description = updates.description;
 
   await prisma.task.update({
-    where: { id: taskId },
+    where: { id: taskId, companyId },
     data: updateData,
   });
 
@@ -1204,6 +1343,16 @@ async function executeCreateFinanceAction(
 
   if (!title || !amount || !type) return;
 
+  // SECURITY: Validate clientId belongs to same company
+  let validatedClientId: number | null = null;
+  if (clientId) {
+    const clientOk = await prisma.client.findFirst({
+      where: { id: clientId, companyId },
+      select: { id: true },
+    });
+    if (clientOk) validatedClientId = clientId;
+  }
+
   await prisma.financeRecord.create({
     data: {
       companyId,
@@ -1211,7 +1360,7 @@ async function executeCreateFinanceAction(
       amount,
       type, // "INCOME" or "EXPENSE"
       category: category || null,
-      clientId: clientId || null,
+      clientId: validatedClientId,
       description: description || null,
       status: "COMPLETED",
     },
@@ -1246,8 +1395,9 @@ async function executeSendNotificationAction(
     .replace("{pathName}", step.path.name)
     .replace("{userName}", user.name);
 
-  const { sendNotification } = await import("./notifications");
-  await sendNotification({
+  const { createNotificationForCompany } = await import("./notifications");
+  await createNotificationForCompany({
+    companyId: step.path.companyId,
     userId: recipientId,
     title: finalTitle,
     message: finalMessage,

@@ -18,6 +18,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAIJob } from "@/hooks/use-ai-job";
 import {
   Select,
   SelectContent,
@@ -72,6 +73,7 @@ export default function AITableCreator({
   const [currentSchema, setCurrentSchema] = useState<TableSchema | null>(null);
   const [existingTablesStr, setExistingTablesStr] = useState("");
   const [creating, setCreating] = useState(false);
+  const { dispatch, cancel } = useAIJob();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -96,6 +98,11 @@ export default function AITableCreator({
     }
   }, [isOpen]);
 
+  // Cancel polling when modal closes (B1)
+  useEffect(() => {
+    if (!isOpen) cancel();
+  }, [isOpen, cancel]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -109,26 +116,30 @@ export default function AITableCreator({
     setLoading(true);
 
     try {
-      const response = await fetch("/api/ai/generate-schema", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = await dispatch<{ schema: TableSchema }>(
+        "/api/ai/generate-schema",
+        {
           prompt: messageToSend,
           existingTables: existingTablesStr,
           currentSchema: currentSchema,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to generate schema");
-      }
+        }
+      );
 
       if (data.schema) {
         // Safeguard: ensure fields is an array
         if (!Array.isArray(data.schema.fields)) {
           data.schema.fields = [];
+        }
+        if (data.schema.fields.length === 0) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "model",
+              content: "לא הצלחתי ליצור שדות לטבלה. נסה לתאר שוב מה הטבלה צריכה להכיל.",
+            },
+          ]);
+          setLoading(false);
+          return;
         }
         setCurrentSchema(data.schema);
         setMessages((prev) => [
@@ -147,7 +158,13 @@ export default function AITableCreator({
           },
         ]);
       }
-    } catch (error) {
+      setLoading(false);
+    } catch (error: any) {
+      // Ignore abort errors (from unmount or cancel)
+      if (error?.name === "AbortError" || error?.message === "Aborted") {
+        setLoading(false);
+        return;
+      }
       console.error(error);
       setMessages((prev) => [
         ...prev,
@@ -156,7 +173,6 @@ export default function AITableCreator({
           content: "מצטערים, משהו השתבש. אנא נסה שנית.",
         },
       ]);
-    } finally {
       setLoading(false);
     }
   };

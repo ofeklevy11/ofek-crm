@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
+import { validateViewFolderInCompany } from "@/lib/company-validation";
 
 export type FolderType = "ANALYTICS" | "AUTOMATION";
 
@@ -17,6 +18,7 @@ export async function getFolders(type: FolderType) {
         type,
       },
       orderBy: { order: "asc" },
+      take: 500,
       include: {
         _count: {
           select: {
@@ -103,6 +105,13 @@ export async function moveItemToFolder(
   if (!user) return { success: false, error: "Unauthorized" };
 
   try {
+    // SECURITY: Validate target folderId belongs to same company
+    if (folderId) {
+      if (!(await validateViewFolderInCompany(folderId, user.companyId))) {
+        return { success: false, error: "Invalid folder" };
+      }
+    }
+
     if (itemType === "AUTOMATION") {
       await prisma.automationRule.update({
         where: { id: itemId, companyId: user.companyId },

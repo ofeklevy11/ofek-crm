@@ -36,7 +36,8 @@ export async function GET(
     const url = new URL(request.url);
     const forPicker = url.searchParams.get("for") === "picker";
     const searchQuery = url.searchParams.get("q") || "";
-    const limit = parseInt(url.searchParams.get("limit") || "0") || 0;
+    const rawLimit = parseInt(url.searchParams.get("limit") || "0") || 0;
+    const limit = Math.min(Math.max(rawLimit, 0), forPicker ? 200 : 1000);
 
     if (forPicker) {
       // Lightweight mode for RelationPicker: only id + data, with optional search
@@ -47,7 +48,7 @@ export async function GET(
           SELECT id, data FROM "Record"
           WHERE "tableId" = ${tableId}
           AND "companyId" = ${currentUser.companyId}
-          AND "data"::text ILIKE ${`%${searchQuery}%`}
+          AND "data"::text ILIKE ${`%${searchQuery.replace(/[%_\\]/g, '\\$&')}%`}
           ORDER BY "createdAt" DESC
           LIMIT ${limit || 50}
         `;
@@ -63,10 +64,12 @@ export async function GET(
     }
 
     // Full mode: includes relations and attachments (used by table page)
+    // P198: Default to 5000 when limit is 0 or invalid, cap at 5000
+    const effectiveLimit = limit > 0 ? Math.min(limit, 5000) : 5000;
     const records = await prisma.record.findMany({
       where: { tableId, companyId: currentUser.companyId },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      ...(limit > 0 ? { take: limit } : {}),
+      take: effectiveLimit,
       include: {
         creator: {
           select: { id: true, name: true, email: true },
@@ -81,7 +84,17 @@ export async function GET(
       },
     });
 
-    return NextResponse.json(records);
+    // Add proxied download URLs to attachments
+    // Attachments keep their url because they are user-entered links, not storage secrets
+    const sanitized = records.map((record) => ({
+      ...record,
+      attachments: record.attachments.map((att) => ({
+        ...att,
+        downloadUrl: `/api/attachments/${att.id}/download`,
+      })),
+    }));
+
+    return NextResponse.json(sanitized);
   } catch (error) {
     console.error("Error fetching records:", error);
     return NextResponse.json(
@@ -125,6 +138,26 @@ export async function POST(
       );
     }
 
+    // SECURITY: Verify table belongs to user's company (Issue A)
+    const tableCheck = await prisma.tableMeta.findFirst({
+      where: { id: tableId, companyId: currentUser.companyId },
+      select: { id: true },
+    });
+    if (!tableCheck) {
+      return NextResponse.json({ error: "Table not found" }, { status: 404 });
+    }
+
+    // Validate attachment URLs (must be http or https)
+    if (Array.isArray(body.attachments)) {
+      for (const att of body.attachments) {
+        if (att.url != null && att.url !== "") {
+          if (typeof att.url !== "string" || att.url.length > 2048 || !/^https?:\/\//i.test(att.url)) {
+            return NextResponse.json({ error: "Invalid attachment URL: must be http or https" }, { status: 400 });
+          }
+        }
+      }
+    }
+
     const record = await prisma.record.create({
       data: {
         tableId,
@@ -143,12 +176,12 @@ export async function POST(
       },
     });
 
-    await createAuditLog(record.id, currentUser.id, "CREATE", data);
+    await createAuditLog(record.id, currentUser.id, "CREATE", data, undefined, currentUser.companyId);
 
     // Trigger automations (async via Inngest)
     try {
-      const table = await prisma.tableMeta.findUnique({
-        where: { id: tableId },
+      const table = await prisma.tableMeta.findFirst({
+        where: { id: tableId, companyId: currentUser.companyId },
         select: { name: true },
       });
       await inngest.send({

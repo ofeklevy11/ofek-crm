@@ -8,6 +8,7 @@ export async function getWorkflows() {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
+  // P142: Add take limit to bound workflows query
   return await prisma.workflow.findMany({
     where: { companyId: user.companyId },
     include: {
@@ -16,6 +17,7 @@ export async function getWorkflows() {
       },
     },
     orderBy: { createdAt: "desc" },
+    take: 200,
   });
 }
 
@@ -53,7 +55,7 @@ export async function updateWorkflow(
   if (!exists) throw new Error("Not found");
 
   const workflow = await prisma.workflow.update({
-    where: { id },
+    where: { id, companyId: user.companyId },
     data,
   });
 
@@ -70,7 +72,7 @@ export async function deleteWorkflow(id: number) {
   });
   if (!exists) throw new Error("Not found");
 
-  await prisma.workflow.delete({ where: { id } });
+  await prisma.workflow.delete({ where: { id, companyId: user.companyId } });
   revalidatePath("/workflows");
 }
 
@@ -93,9 +95,9 @@ export async function createStage(
   });
   if (!workflow) throw new Error("Workflow not found");
 
-  // get max order
+  // get max order — scoped by companyId for defense-in-depth
   const lastStage = await prisma.workflowStage.findFirst({
-    where: { workflowId },
+    where: { workflowId, workflow: { companyId: user.companyId } },
     orderBy: { order: "desc" },
   });
   const order = (lastStage?.order ?? -1) + 1;
@@ -128,18 +130,17 @@ export async function updateStage(
 
   // We should verify ownership through the workflow, but for simplicity assuming ID check on update is sufficient if we trust the ID structure.
   // Ideally we join to workflow to check companyId.
-  const stage = await prisma.workflowStage.findFirst({
-    where: { id },
-    include: { workflow: true },
-  });
+  const updated = await prisma.$transaction(async (tx) => {
+    const stage = await tx.workflowStage.findFirst({
+      where: { id, workflow: { companyId: user.companyId } },
+      select: { id: true, workflowId: true },
+    });
+    if (!stage) throw new Error("Unauthorized or not found");
 
-  if (!stage || stage.workflow.companyId !== user.companyId) {
-    throw new Error("Unauthorized or not found");
-  }
-
-  const updated = await prisma.workflowStage.update({
-    where: { id },
-    data,
+    return tx.workflowStage.update({
+      where: { id, workflowId: stage.workflowId },
+      data,
+    });
   });
 
   revalidatePath("/workflows");
@@ -150,16 +151,15 @@ export async function deleteStage(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  const stage = await prisma.workflowStage.findFirst({
-    where: { id },
-    include: { workflow: true },
+  await prisma.$transaction(async (tx) => {
+    const stage = await tx.workflowStage.findFirst({
+      where: { id, workflow: { companyId: user.companyId } },
+      select: { id: true, workflowId: true },
+    });
+    if (!stage) throw new Error("Unauthorized or not found");
+
+    await tx.workflowStage.delete({ where: { id, workflowId: stage.workflowId } });
   });
-
-  if (!stage || stage.workflow.companyId !== user.companyId) {
-    throw new Error("Unauthorized or not found");
-  }
-
-  await prisma.workflowStage.delete({ where: { id } });
   revalidatePath("/workflows");
 }
 
@@ -173,8 +173,8 @@ export async function reorderStages(workflowId: number, orderedIds: number[]) {
   if (!workflow) throw new Error("Workflow not found");
 
   const transaction = orderedIds.map((id, index) =>
-    prisma.workflowStage.update({
-      where: { id },
+    prisma.workflowStage.updateMany({
+      where: { id, workflowId, workflow: { companyId: user.companyId } },
       data: { order: index },
     })
   );
@@ -197,7 +197,7 @@ export async function updateWorkflowInstance(
   if (!instance) throw new Error("Not found");
 
   await prisma.workflowInstance.update({
-    where: { id },
+    where: { id, companyId: user.companyId },
     data,
   });
 
@@ -214,6 +214,6 @@ export async function deleteWorkflowInstance(id: number) {
 
   if (!instance) throw new Error("Not found");
 
-  await prisma.workflowInstance.delete({ where: { id } });
+  await prisma.workflowInstance.delete({ where: { id, companyId: user.companyId } });
   revalidatePath("/workflows");
 }

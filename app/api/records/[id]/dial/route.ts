@@ -41,9 +41,9 @@ export async function POST(
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
-    // Update the record with dial information
+    // SECURITY: Atomic companyId check in update WHERE clause
     const record = await prisma.record.update({
-      where: { id: recordId },
+      where: { id: recordId, companyId: currentUser.companyId },
       data: {
         dialedById: currentUser.id,
         dialedAt: new Date(),
@@ -59,11 +59,13 @@ export async function POST(
     try {
       const { inngest } = await import("@/lib/inngest/client");
       await inngest.send({
+        id: `direct-dial-${currentUser.companyId}-${recordId}-${Math.floor(Date.now() / 1000)}`,
         name: "automation/direct-dial",
         data: {
           tableId: existingRecord.tableId,
           recordId,
           companyId: currentUser.companyId,
+          previousDialedAt: existingRecord.dialedAt?.toISOString() || null,
         },
       });
     } catch (autoError) {

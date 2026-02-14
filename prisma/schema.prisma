@@ -56,9 +56,13 @@ model Company {
   workers             Worker[]
   onboardingPaths     OnboardingPath[]
   workerTasks         WorkerTask[]
+  onboardingSteps     OnboardingStep[]
+  workerOnboardings   WorkerOnboarding[]
+  workerOnboardingSteps WorkerOnboardingStep[]
 
   // Nurture Hub
   nurtureLists        NurtureList[]
+  auditLogs           AuditLog[]
 
   greenApiInstanceId String?  // Green API Instance ID
   greenApiToken      String?  // Green API Token
@@ -66,6 +70,10 @@ model Company {
   apiKeys             ApiKey[]
   importJobs          ImportJob[]
   financeSyncJobs     FinanceSyncJob[]
+  dashboardWidgets    DashboardWidget[]
+  views               View[]
+  statusDurations     StatusDuration[]
+  multiEventDurations MultiEventDuration[]
 }
 
 model User {
@@ -117,20 +125,21 @@ model User {
 model ApiKey {
   id        Int      @id @default(autoincrement())
   companyId Int
-  key       String   @unique
+  key       String   // Masked preview only (e.g. "sk_live_...abc123"), NOT the actual key
+  keyHash   String   @unique // SHA-256 hash of the full key for secure lookups
   name      String   // Description/Name for the key (e.g. "Zapier Main")
   isActive  Boolean  @default(true)
-  
+
   createdBy Int
   creator   User     @relation("KeyCreator", fields: [createdBy], references: [id])
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   company   Company  @relation(fields: [companyId], references: [id])
 
   @@index([companyId])
-  @@index([key])
+  @@index([keyHash])
 }
 
 model Message {
@@ -235,6 +244,8 @@ model Notification {
   
   @@index([companyId])
   @@index([userId, read, createdAt(sort: Desc)]) // For user's unread notifications
+  @@index([userId, companyId, createdAt(sort: Desc)]) // For getNotifications query
+  @@index([read, createdAt]) // For cleanup cron job queries
 }
 
 model TableMeta {
@@ -273,6 +284,7 @@ model TableCategory {
 
 model View {
   id         Int       @id @default(autoincrement())
+  companyId  Int
   tableId    Int
   name       String
   slug       String
@@ -281,10 +293,12 @@ model View {
   order      Int       @default(0)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+  company    Company   @relation(fields: [companyId], references: [id])
   table      TableMeta @relation("TableViews", fields: [tableId], references: [id], onDelete: Cascade)
   refreshLogs ViewRefreshLog[]
 
   @@unique([tableId, slug])
+  @@index([companyId])
   @@index([tableId])
   @@index([tableId, order])
 }
@@ -328,19 +342,25 @@ model Attachment {
   displayName String?  // Optional custom display name for links
   uploadedBy  Int
   uploadedAt  DateTime @default(now())
-  record      Record   @relation(fields: [recordId], references: [id])
+  record      Record   @relation(fields: [recordId], references: [id], onDelete: Cascade)
 }
 
 model AuditLog {
   id        Int      @id @default(autoincrement())
+  companyId Int
   recordId  Int?
   userId    Int?
   taskId    String?
   action    String
   diffJson  Json?
   timestamp DateTime @default(now())
-  record    Record?  @relation(fields: [recordId], references: [id])
+  company   Company  @relation(fields: [companyId], references: [id])
+  record    Record?  @relation(fields: [recordId], references: [id], onDelete: SetNull)
   user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([companyId])
+  @@index([recordId, action, timestamp])
+  @@index([taskId, action, timestamp])
 }
 
 model Task {
@@ -364,8 +384,9 @@ model Task {
   multiEventDurations MultiEventDuration[]
   taskSheetItems  TaskSheetItem[]
   company     Company   @relation(fields: [companyId], references: [id])
-  
+
   @@index([companyId])
+  @@index([companyId, assigneeId, createdAt(sort: Desc)]) // Issue 34: For getTasks query
 }
 
 model CalendarEvent {
@@ -475,24 +496,28 @@ model PaymentMethodInternal {
 // NEW TABLE FOR DURATION TRACKING
 model StatusDuration {
   id               Int            @id @default(autoincrement())
-  
+
+  companyId        Int
+  company          Company        @relation(fields: [companyId], references: [id])
+
   automationRuleId Int
   automationRule   AutomationRule @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
-  
+
   recordId         Int?
   record           Record?        @relation(fields: [recordId], references: [id], onDelete: Cascade)
-  
+
   taskId           String?
   task             Task?          @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   durationSeconds  Int
   durationString   String // For display: "Xd Yh Zm Qs"
-  
+
   fromValue        String?
   toValue          String?
-  
+
   createdAt        DateTime       @default(now())
-  
+
+  @@index([companyId])
   @@index([automationRuleId])
   @@index([recordId])
 }
@@ -500,37 +525,43 @@ model StatusDuration {
 // TABLE FOR MULTI-EVENT DURATION TRACKING
 model MultiEventDuration {
   id               Int            @id @default(autoincrement())
-  
+
+  companyId        Int
+  company          Company        @relation(fields: [companyId], references: [id])
+
   automationRuleId Int
   automationRule   AutomationRule @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
-  
+
   recordId         Int?
   record           Record?        @relation(fields: [recordId], references: [id], onDelete: Cascade)
-  
+
   taskId           String?
   task             Task?          @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  
+
   // Stores the event chain as JSON:
   // [{ eventName: "ליד נוצר", timestamp: "...", value: "..." }, ...]
   eventChain       Json
-  
+
   // Stores the calculated deltas between events as JSON:
   // [{ from: "ליד נוצר", to: "בטיפול", durationSeconds: 3600, durationString: "1h" }, ...]
   eventDeltas      Json
-  
+
   // Overall metrics
   totalDurationSeconds Int
   totalDurationString  String
-  
+
   // Weighted metric (if applicable)
   weightedScore    Float?
-  
+
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
-  
+
+  @@unique([automationRuleId, recordId]) // P99: Prevent duplicate durations per rule+record
+  @@index([companyId])
   @@index([automationRuleId])
   @@index([recordId])
   @@index([taskId])
+  @@index([automationRuleId, recordId, createdAt(sort: Desc)])
 }
 
 model AnalyticsView {
@@ -672,6 +703,7 @@ model Quote {
   total           Decimal  @db.Decimal(10, 2)
   status          String   @default("DRAFT") // DRAFT, SENT, ACCEPTED, REJECTED
   pdfUrl          String?  // Cached PDF URL
+  shareToken      String?  @unique // Random token for public share links (validated on public download)
   isTrashed       Boolean  @default(false)   // Soft delete - move to trash
   
   validUntil      DateTime?
@@ -745,6 +777,8 @@ model Ticket {
   @@index([companyId, status])       // For filtering tickets by status
   @@index([clientId])
   @@index([assigneeId])
+  @@index([status, slaResponseDueDate]) // Issue 28: SLA scan queries
+  @@index([status, slaDueDate])         // Issue 28: SLA scan queries
 }
 
 model TicketComment {
@@ -817,6 +851,7 @@ model SlaBreach {
   ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   company     Company  @relation(fields: [companyId], references: [id])
   
+  @@unique([ticketId, breachType, slaDueDate]) // P100: Prevent duplicate SLA breach entries
   @@index([companyId])
   @@index([ticketId])
   @@index([breachedAt])
@@ -1181,62 +1216,69 @@ model OnboardingPath {
 // OnboardingStep - Individual step in an onboarding path
 model OnboardingStep {
   id          Int      @id @default(autoincrement())
+  companyId   Int
   pathId      Int
-  
+
   title       String               // Step name
   description String?              // Detailed instructions
-  
+
   type        String   @default("TASK") // TASK, TRAINING, DOCUMENT, MEETING, CHECKLIST
-  
+
   order       Int      @default(0) // Display order
-  
+
   estimatedMinutes Int?            // Expected time to complete
-  
+
   // For TRAINING type - link to materials
   resourceUrl String?
   resourceType String?             // VIDEO, PDF, LINK, INTERNAL
-  
+
   // Required dependencies (step IDs that must be completed first)
   requiresSteps Int[]  @default([])
-  
+
   // Automation when completed
   onCompleteActions Json? @default("[]") // Similar to TaskSheet items
-  
+
   isRequired  Boolean  @default(true)
-  
+
   workerProgress WorkerOnboardingStep[]
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
+  company     Company  @relation(fields: [companyId], references: [id])
   path        OnboardingPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
-  
+
+  @@index([companyId])
   @@index([pathId])
 }
 
 // WorkerOnboarding - Tracks a worker's progress through an onboarding path
 model WorkerOnboarding {
   id          Int      @id @default(autoincrement())
-  
+  companyId   Int
+
   workerId    Int
   worker      Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  
+
   pathId      Int
   path        OnboardingPath @relation(fields: [pathId], references: [id])
-  
+
   status      String   @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED, PAUSED
-  
+
   startedAt   DateTime @default(now())
   completedAt DateTime?
-  
+
   stepProgress WorkerOnboardingStep[]
-  
+
   notes       String?
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
+  company     Company  @relation(fields: [companyId], references: [id])
+
   @@unique([workerId, pathId])
+  @@index([companyId])
   @@index([workerId])
   @@index([pathId])
 }
@@ -1244,26 +1286,30 @@ model WorkerOnboarding {
 // WorkerOnboardingStep - Tracks completion of individual steps
 model WorkerOnboardingStep {
   id          Int      @id @default(autoincrement())
-  
+  companyId   Int
+
   onboardingId Int
   onboarding   WorkerOnboarding @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
-  
+
   stepId      Int
   step        OnboardingStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  
+
   status      String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, SKIPPED
-  
+
   completedAt DateTime?
   notes       String?
-  
+
   // Score/feedback if it's a training step
   score       Int?
   feedback    String?
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
+  company     Company  @relation(fields: [companyId], references: [id])
+
   @@unique([onboardingId, stepId])
+  @@index([companyId])
   @@index([onboardingId])
   @@index([stepId])
 }
@@ -1343,27 +1389,28 @@ model NurtureSubscriber {
 // Dashboard Widget Configuration - stores user's dashboard layout
 model DashboardWidget {
   id          String   @id @default(cuid())
+  companyId   Int
   userId      Int
-  
+
   widgetType  String   // 'ANALYTICS' | 'TABLE'
   referenceId String?  // ID of the analytics view or table view
   tableId     Int?     // Only for TABLE type widgets
-  
+
   settings    Json?    // Custom configuration (columns, sort, limit, etc.)
-  
+
   order       Int      @default(0)
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  company     Company  @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
   @@index([userId])
   @@index([userId, order])
 }
 
 
-model TestCiCdPipeline2 {
-  id Int @id @default(autoincrement())
-}
 
 model CachedMetric {
   key       String   @id

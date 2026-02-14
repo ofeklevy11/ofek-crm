@@ -49,7 +49,21 @@ export async function GET(
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
-    return NextResponse.json(record);
+    // Strip raw storage URLs from files — clients must use proxied download endpoints
+    // Attachments keep their url because they are user-entered links, not storage secrets
+    const sanitized = {
+      ...record,
+      attachments: record.attachments.map((att) => ({
+        ...att,
+        downloadUrl: `/api/attachments/${att.id}/download`,
+      })),
+      files: record.files.map(({ url, key, ...file }) => ({
+        ...file,
+        downloadUrl: `/api/files/${file.id}/download`,
+      })),
+    };
+
+    return NextResponse.json(sanitized);
   } catch (error) {
     console.error("Error fetching record:", error);
     return NextResponse.json(
@@ -105,8 +119,9 @@ export async function PUT(
       );
     }
 
+    // SECURITY: Atomic companyId check in update WHERE clause
     const record = await prisma.record.update({
-      where: { id: recordId },
+      where: { id: recordId, companyId: currentUser.companyId },
       data: {
         data,
         updatedBy: currentUser.id,
@@ -114,7 +129,7 @@ export async function PUT(
       },
     });
 
-    await createAuditLog(record.id, currentUser.id, "UPDATE", data);
+    await createAuditLog(record.id, currentUser.id, "UPDATE", data, undefined, currentUser.companyId);
 
     // Trigger Automations (async via Inngest)
     console.log(
@@ -123,6 +138,7 @@ export async function PUT(
     try {
       const { inngest } = await import("@/lib/inngest/client");
       await inngest.send({
+        id: `api-record-update-${currentUser.companyId}-${record.id}-${Math.floor(Date.now() / 1000)}`,
         name: "automation/record-update",
         data: {
           tableId: record.tableId,
@@ -192,11 +208,24 @@ export async function DELETE(
       );
     }
 
-    await prisma.record.delete({
-      where: { id: recordId },
+    const { deleteRecordWithCleanup } = await import("@/lib/record-cleanup");
+    await deleteRecordWithCleanup(recordId, {
+      companyId: currentUser.companyId,
+      tableId: existingRecord.tableId,
+      userId: currentUser.id,
     });
 
-    await createAuditLog(recordId, currentUser.id, "DELETE");
+    // Refresh dashboard widgets after delete (matches server action behavior)
+    try {
+      const { inngest } = await import("@/lib/inngest/client");
+      await inngest.send({
+        id: `api-dash-refresh-${currentUser.companyId}-${Math.floor(Date.now() / 5000)}`,
+        name: "dashboard/refresh-widgets",
+        data: { companyId: currentUser.companyId },
+      });
+    } catch (e) {
+      console.error("[Records API] Failed to send dashboard refresh:", e);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -4,7 +4,19 @@
       "Bash(npx tsc:*)",
       "Bash(npx prisma generate:*)",
       "Bash(npx prisma db push:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(cd:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(findstr:*)",
+      "Bash(find:*)",
+      "Bash(npx next build:*)",
+      "Bash(grep:*)",
+      "Bash(npx prisma validate:*)",
+      "Bash(xargs:*)",
+      "Bash(node --version:*)",
+      "Bash(cat:*)",
+      "Bash(wc:*)",
+      "Bash(sed:*)"
     ]
   }
 }

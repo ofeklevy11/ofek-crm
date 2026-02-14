@@ -977,11 +977,11 @@ export default function EditRecordModal({
                     // Display mode
                     <div className="flex items-center justify-between">
                       <a
-                        href={att.url}
+                        href={`/api/attachments/${att.id}/download`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-primary hover:underline truncate max-w-[200px] flex items-center gap-1"
-                        title={att.url}
+                        title={att.displayName || att.filename}
                       >
                         {att.displayName || att.filename}{" "}
                         <ExternalLink className="h-3 w-3" />
@@ -1077,11 +1077,11 @@ export default function EditRecordModal({
                     // Normal Mode
                     <div className="flex items-center justify-between">
                       <a
-                        href={file.url}
+                        href={`/api/files/${file.id}/download`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[200px] flex items-center gap-1"
-                        title={file.url}
+                        title={(file as any).displayName || file.name}
                       >
                         📄 {(file as any).displayName || file.name}
                       </a>

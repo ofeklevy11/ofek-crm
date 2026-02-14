@@ -62,6 +62,7 @@ export default async function QuotePdfPage({
             quoteNumber={(quote as any).quoteNumber}
             clientName={(quote as any).clientName}
             clientPhone={(quote as any).clientPhone}
+            shareToken={(quote as any).shareToken}
           />
         </div>
       </div>

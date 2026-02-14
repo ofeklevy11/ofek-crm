@@ -590,10 +590,10 @@ function TicketCard({
           )}
           <span>{ticket.assignee?.name.split(" ")[0] || "לא משויך"}</span>
         </div>
-        {ticket.comments.length > 0 && (
+        {ticket._count?.comments > 0 && (
           <div className="flex items-center gap-1">
             <MessageSquare className="w-3 h-3" />
-            <span>{ticket.comments.length}</span>
+            <span>{ticket._count.comments}</span>
           </div>
         )}
       </div>

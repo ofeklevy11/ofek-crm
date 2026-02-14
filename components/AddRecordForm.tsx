@@ -722,15 +722,12 @@ export default function AddRecordForm({
                               className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg"
                             >
                               <div className="flex items-center gap-2 overflow-hidden flex-1">
-                                <a
-                                  href={att.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-purple-600 dark:text-purple-400 hover:underline truncate text-sm"
-                                  title={att.url}
+                                <span
+                                  className="text-purple-600 dark:text-purple-400 truncate text-sm"
+                                  title={att.displayName || att.filename || "attachment"}
                                 >
-                                  {att.displayName || att.filename || att.url}
-                                </a>
+                                  {att.displayName || att.filename || "attachment"}
+                                </span>
                               </div>
                               <Button
                                 type="button"

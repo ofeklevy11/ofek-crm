@@ -47,7 +47,7 @@ export default function ChatNavbarLink({ userId }: ChatNavbarLinkProps) {
   // Realtime Subscription
   useRealtime(userId, (msg) => {
     if (
-      msg.channel === `user:${userId}:chat` &&
+      msg.channel.endsWith(`:user:${userId}:chat`) &&
       msg.data.type === "new-message"
     ) {
       // Ideally we check if it's from someone else or we just increment.
@@ -56,7 +56,7 @@ export default function ChatNavbarLink({ userId }: ChatNavbarLinkProps) {
       // Let's re-fetch for accuracy as it's fast and reliable.
       fetchUnread();
     } else if (
-      msg.channel === `user:${userId}:chat` &&
+      msg.channel.endsWith(`:user:${userId}:chat`) &&
       msg.data.type === "messages-read"
     ) {
       // Refresh count when messages are marked as read elsewhere (or by ChatInterface)

@@ -90,66 +90,83 @@ export default function TableViewsDashboardWidget({
   useEffect(() => {
     if (isCollapsed) return;
 
-    views.forEach(async (view, index) => {
+    let cancelled = false;
+
+    // Mark all views as loading
+    const initialState: Record<string, ViewData> = {};
+    for (const view of views) {
       const key = `${view.tableId}-${view.viewId}`;
-      if (viewsData[key]?.isLoading) return;
+      initialState[key] = { count: 0, label: view.viewName || "טוען...", isLoading: true };
+    }
+    setViewsData(initialState);
 
-      setViewsData((prev) => ({
-        ...prev,
-        [key]: { count: 0, label: view.viewName || "טוען...", isLoading: true },
-      }));
+    const fetchAll = async () => {
+      const results = await Promise.allSettled(
+        views.map(async (view) => {
+          const key = `${view.tableId}-${view.viewId}`;
+          const res = await getTableViewData(view.tableId, view.viewId);
+          return { key, view, res };
+        }),
+      );
 
-      try {
-        const res = await getTableViewData(view.tableId, view.viewId);
-        if (res.success && res.data) {
-          const data = res.data.data;
-          let count = 0;
+      if (cancelled) return;
 
-          // Handle different view types
-          if (data?.result !== undefined) {
-            count = data.result;
-          } else if (data?.count !== undefined) {
-            count = data.count;
-          } else if (data?.groups) {
-            count = data.groups.reduce(
-              (sum: number, g: any) => sum + (g.count || 0),
-              0,
-            );
-          } else if (data?.totalCount !== undefined) {
-            count = data.totalCount;
-          }
+      setViewsData((prev) => {
+        const next = { ...prev };
+        for (const result of results) {
+          if (result.status === "fulfilled") {
+            const { key, view, res } = result.value;
+            if (res.success && res.data) {
+              const data = res.data.data;
+              let count = 0;
 
-          const table = availableTables.find((t) => t.id === view.tableId);
-          const viewInfo = table?.views?.find((v: any) => v.id === view.viewId);
-          const viewName = viewInfo?.name || view.viewName || "תצוגה";
+              if (data?.result !== undefined) {
+                count = data.result;
+              } else if (data?.count !== undefined) {
+                count = data.count;
+              } else if (data?.groups) {
+                count = data.groups.reduce(
+                  (sum: number, g: any) => sum + (g.count || 0),
+                  0,
+                );
+              } else if (data?.totalCount !== undefined) {
+                count = data.totalCount;
+              }
 
-          setViewsData((prev) => ({
-            ...prev,
-            [key]: { count, label: viewName, isLoading: false },
-          }));
-        } else {
-          setViewsData((prev) => ({
-            ...prev,
-            [key]: {
+              const table = availableTables.find((t) => t.id === view.tableId);
+              const viewInfo = table?.views?.find((v: any) => v.id === view.viewId);
+              const viewName = viewInfo?.name || view.viewName || "תצוגה";
+
+              next[key] = { count, label: viewName, isLoading: false };
+            } else {
+              next[key] = {
+                count: 0,
+                label: view.viewName || "שגיאה",
+                isLoading: false,
+                error: res.error,
+              };
+            }
+          } else {
+            // rejected
+            const view = views[results.indexOf(result)];
+            const key = `${view.tableId}-${view.viewId}`;
+            next[key] = {
               count: 0,
               label: view.viewName || "שגיאה",
               isLoading: false,
-              error: res.error,
-            },
-          }));
+              error: "Failed to load",
+            };
+          }
         }
-      } catch (err) {
-        setViewsData((prev) => ({
-          ...prev,
-          [key]: {
-            count: 0,
-            label: view.viewName || "שגיאה",
-            isLoading: false,
-            error: "Failed to load",
-          },
-        }));
-      }
-    });
+        return next;
+      });
+    };
+
+    fetchAll();
+
+    return () => {
+      cancelled = true;
+    };
   }, [views, isCollapsed, availableTables]);
 
   const handleToggleCollapse = async (e: React.MouseEvent) => {

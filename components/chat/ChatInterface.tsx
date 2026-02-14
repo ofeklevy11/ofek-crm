@@ -114,7 +114,7 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
   useRealtime(currentUser.id, async (msg) => {
     // 1. New Message
     if (
-      msg.channel === `user:${currentUser.id}:chat` &&
+      msg.channel.endsWith(`:user:${currentUser.id}:chat`) &&
       msg.data.type === "new-message"
     ) {
       // If current chat is open with the sender
@@ -137,7 +137,7 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
     }
 
     // 2. Notification (Optional: Check if we want to show chat badge update on notification too?)
-    if (msg.channel === `user:${currentUser.id}:notifications`) {
+    if (msg.channel.endsWith(`:user:${currentUser.id}:notifications`)) {
       // Maybe just update unread counts just in case system notifications relate to chat
       const unreadData = await getUnreadCounts();
       setUnreadCounts(unreadData);

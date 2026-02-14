@@ -13,6 +13,7 @@ export async function getRetainers() {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
 
+    // P200: Lowered from 5K — includes client join
     const retainers = await prisma.retainer.findMany({
       where: {
         client: {
@@ -23,6 +24,7 @@ export async function getRetainers() {
         client: true,
       },
       orderBy: { createdAt: "desc" },
+      take: 2000,
     });
     return {
       success: true,
@@ -40,8 +42,8 @@ export async function getRetainerById(id: number) {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
 
-    const retainer = await prisma.retainer.findUnique({
-      where: { id },
+    const retainer = await prisma.retainer.findFirst({
+      where: { id, client: { companyId: user.companyId } },
       include: {
         client: true,
       },
@@ -49,11 +51,6 @@ export async function getRetainerById(id: number) {
 
     if (!retainer) {
       return { success: false, error: "Retainer not found" };
-    }
-
-    // Authorization check
-    if (retainer.client.companyId !== user.companyId) {
-      return { success: false, error: "Unauthorized" };
     }
 
     return {
@@ -91,10 +88,10 @@ export async function createRetainer(data: {
     } = data;
 
     // Verify client belongs to company
-    const client = await prisma.client.findUnique({
-      where: { id: Number(clientId) },
+    const client = await prisma.client.findFirst({
+      where: { id: Number(clientId), companyId: user.companyId },
     });
-    if (!client || client.companyId !== user.companyId) {
+    if (!client) {
       return { success: false, error: "Invalid client" };
     }
 
@@ -160,25 +157,25 @@ export async function updateRetainer(
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
 
-    // Verify ownership
-    const existing = await prisma.retainer.findUnique({
-      where: { id },
-      include: { client: true },
-    });
-
-    if (!existing || existing.client.companyId !== user.companyId) {
-      return { success: false, error: "Unauthorized" };
-    }
-
     const updateData: Record<string, unknown> = { ...data };
 
     if (data.nextDueDate) {
       updateData.nextDueDate = new Date(data.nextDueDate);
     }
 
-    const retainer = await prisma.retainer.update({
-      where: { id },
-      data: updateData,
+    // SECURITY: Atomic verify+update in transaction to prevent TOCTOU race
+    const retainer = await prisma.$transaction(async (tx) => {
+      const existing = await tx.retainer.findFirst({
+        where: { id, client: { companyId: user.companyId } },
+        include: { client: { select: { companyId: true } } },
+      });
+      if (!existing) {
+        throw new Error("Unauthorized");
+      }
+      return tx.retainer.update({
+        where: { id, client: { companyId: user.companyId } },
+        data: updateData,
+      });
     });
 
     revalidatePath("/finance");
@@ -201,27 +198,27 @@ export async function deleteRetainer(id: number) {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
 
-    // Verify ownership
-    const existing = await prisma.retainer.findUnique({
-      where: { id },
-      include: { client: true },
-    });
+    // SECURITY: Atomic verify+delete in transaction to prevent TOCTOU race
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.retainer.findFirst({
+        where: { id, client: { companyId: user.companyId } },
+        include: { client: { select: { companyId: true, id: true } } },
+      });
+      if (!existing) {
+        throw new Error("Unauthorized");
+      }
 
-    if (!existing || existing.client.companyId !== user.companyId) {
-      return { success: false, error: "Unauthorized" };
-    }
+      await tx.oneTimePayment.deleteMany({
+        where: {
+          clientId: existing.client.id,
+          notes: { contains: `ריטיינר #${id}` },
+          client: { companyId: user.companyId },
+        },
+      });
 
-    await prisma.oneTimePayment.deleteMany({
-      where: {
-        AND: [
-          { clientId: existing.clientId },
-          { notes: { contains: `ריטיינר #${id}` } },
-        ],
-      },
-    });
-
-    await prisma.retainer.delete({
-      where: { id },
+      await tx.retainer.delete({
+        where: { id, client: { companyId: user.companyId } },
+      });
     });
 
     revalidatePath("/finance");
@@ -243,6 +240,7 @@ export async function getPayments() {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
 
+    // P131: Add take limit to bound payments query
     const payments = await prisma.oneTimePayment.findMany({
       where: {
         client: { companyId: user.companyId },
@@ -251,6 +249,7 @@ export async function getPayments() {
         client: true,
       },
       orderBy: { createdAt: "desc" },
+      take: 5000,
     });
     return {
       success: true,
@@ -268,8 +267,8 @@ export async function getPaymentById(id: number) {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
 
-    const payment = await prisma.oneTimePayment.findUnique({
-      where: { id },
+    const payment = await prisma.oneTimePayment.findFirst({
+      where: { id, client: { companyId: user.companyId } },
       include: {
         client: true,
       },
@@ -277,10 +276,6 @@ export async function getPaymentById(id: number) {
 
     if (!payment) {
       return { success: false, error: "Payment not found" };
-    }
-
-    if (payment.client.companyId !== user.companyId) {
-      return { success: false, error: "Unauthorized" };
     }
 
     return {
@@ -308,10 +303,10 @@ export async function createPayment(data: {
     const { title, clientId, amount, dueDate, notes } = data;
 
     // Verify client belongs to company
-    const client = await prisma.client.findUnique({
-      where: { id: Number(clientId) },
+    const client = await prisma.client.findFirst({
+      where: { id: Number(clientId), companyId: user.companyId },
     });
-    if (!client || client.companyId !== user.companyId) {
+    if (!client) {
       return { success: false, error: "Invalid client" };
     }
 
@@ -355,24 +350,26 @@ export async function updatePayment(
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
 
-    // Verify
-    const existing = await prisma.oneTimePayment.findUnique({
-      where: { id },
-      include: { client: true },
-    });
-    if (!existing || existing.client.companyId !== user.companyId) {
-      return { success: false, error: "Unauthorized" };
-    }
-
     const updateData: Record<string, unknown> = { ...data };
 
     if (data.dueDate) {
       updateData.dueDate = new Date(data.dueDate);
     }
 
-    const payment = await prisma.oneTimePayment.update({
-      where: { id },
-      data: updateData,
+    // SECURITY: Atomic verify+update in transaction to prevent TOCTOU race
+    const { payment, clientCompanyId } = await prisma.$transaction(async (tx) => {
+      const existing = await tx.oneTimePayment.findFirst({
+        where: { id, client: { companyId: user.companyId } },
+        include: { client: { select: { companyId: true } } },
+      });
+      if (!existing) {
+        throw new Error("Unauthorized");
+      }
+      const updated = await tx.oneTimePayment.update({
+        where: { id, client: { companyId: user.companyId } },
+        data: updateData,
+      });
+      return { payment: updated, clientCompanyId: existing.client.companyId };
     });
 
     // --- REAL-TIME FINANCE SYNC FOR PAYMENTS ---
@@ -388,7 +385,7 @@ export async function updatePayment(
       try {
         const { triggerSyncByType } = await import("./finance-sync");
         await triggerSyncByType(
-          existing.client.companyId,
+          clientCompanyId,
           "PAYMENTS_RETAINERS",
         );
       } catch (err) {
@@ -420,17 +417,18 @@ export async function deletePayment(id: number) {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
 
-    // Verify
-    const existing = await prisma.oneTimePayment.findUnique({
-      where: { id },
-      include: { client: true },
-    });
-    if (!existing || existing.client.companyId !== user.companyId) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    await prisma.oneTimePayment.delete({
-      where: { id },
+    // SECURITY: Atomic verify+delete in transaction to prevent TOCTOU race
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.oneTimePayment.findFirst({
+        where: { id, client: { companyId: user.companyId } },
+        include: { client: { select: { companyId: true } } },
+      });
+      if (!existing) {
+        throw new Error("Unauthorized");
+      }
+      await tx.oneTimePayment.delete({
+        where: { id, client: { companyId: user.companyId } },
+      });
     });
 
     revalidatePath("/finance");
@@ -489,18 +487,15 @@ export async function searchClients(searchTerm: string) {
       return { success: true, data: clients };
     }
 
-    // If we want to stick to the Record model for custom fields:
-    const records = await prisma.record.findMany({
-      where: {
-        tableId: clientTable.id,
-        companyId: user.companyId, // Filter by company
-      },
-    });
-
-    const filteredRecords = records.filter((record) => {
-      const dataStr = JSON.stringify(record.data).toLowerCase();
-      return dataStr.includes(searchTerm.toLowerCase());
-    });
+    // Issue 25: Use DB-level jsonb text search instead of loading all records into memory
+    const filteredRecords = await prisma.$queryRaw`
+      SELECT id, "tableId", "companyId", data, "createdBy", "createdAt", "updatedAt"
+      FROM "Record"
+      WHERE "tableId" = ${clientTable.id}
+        AND "companyId" = ${user.companyId}
+        AND "data"::text ILIKE ${'%' + searchTerm + '%'}
+      LIMIT 50
+    `;
 
     return { success: true, data: filteredRecords };
   } catch (error) {
@@ -519,6 +514,7 @@ export async function getFinanceClients() {
     const clients = await prisma.client.findMany({
       where: { companyId: user.companyId },
       orderBy: { createdAt: "desc" },
+      take: 1000,
     });
 
     if (clients.length > 0) {
@@ -534,11 +530,14 @@ export async function getFinanceClients() {
     });
 
     if (clientTable) {
+      // P126: Add companyId filter and take limit
       const records = await prisma.record.findMany({
         where: {
           tableId: clientTable.id,
+          companyId: user.companyId,
         },
         orderBy: { createdAt: "desc" },
+        take: 5000,
       });
       return { success: true, data: records };
     }

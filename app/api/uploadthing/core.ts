@@ -40,7 +40,7 @@ export const ourFileRouter = {
       console.log("File uploaded:", file.name, file.url);
 
       try {
-        const existing = await prisma.file.findFirst({ where: { key: file.key } });
+        const existing = await prisma.file.findFirst({ where: { key: file.key, companyId: metadata.companyId } });
         if (!existing) {
           await prisma.file.create({
             data: {
@@ -60,7 +60,7 @@ export const ourFileRouter = {
       }
 
       console.log("Uploadthing onUploadComplete finished");
-      return { uploadedBy: metadata.userId, url: file.url };
+      return { uploadedBy: metadata.userId };
     }),
 
   tableImport: f(

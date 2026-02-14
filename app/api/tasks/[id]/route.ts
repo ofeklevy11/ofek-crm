@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { validateUserInCompany } from "@/lib/company-validation";
 
 // GET a single task
 export async function GET(
@@ -65,17 +66,24 @@ export async function PATCH(
 
     const body = await request.json();
 
-    // Convert dueDate string to Date object if present
-    const dataToUpdate = { ...body };
-    if (dataToUpdate.dueDate) {
-      dataToUpdate.dueDate = new Date(dataToUpdate.dueDate);
+    // SECURITY: Validate assigneeId belongs to same company
+    if (body.assigneeId) {
+      if (!(await validateUserInCompany(body.assigneeId, user.companyId))) {
+        return NextResponse.json({ error: "Invalid assignee" }, { status: 400 });
+      }
     }
 
-    // Prevent changing companyId via update
-    delete dataToUpdate.companyId;
+    // Whitelist allowed update fields to prevent mass assignment
+    const allowedFields = ["title", "description", "status", "assigneeId", "priority", "dueDate", "tags"] as const;
+    const dataToUpdate: Record<string, unknown> = {};
+    for (const field of allowedFields) {
+      if (body[field] !== undefined) {
+        dataToUpdate[field] = field === "dueDate" ? new Date(body[field]) : body[field];
+      }
+    }
 
     const updated = await prisma.task.update({
-      where: { id },
+      where: { id, companyId: user.companyId },
       data: dataToUpdate,
     });
 
@@ -119,8 +127,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    await prisma.task.delete({
-      where: { id },
+    await prisma.task.deleteMany({
+      where: { id, companyId: user.companyId },
     });
 
     return NextResponse.json({ success: true });

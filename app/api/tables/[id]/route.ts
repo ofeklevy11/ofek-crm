@@ -78,9 +78,19 @@ export async function PATCH(
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
 
-    // Update table
+    // SECURITY: Validate categoryId belongs to user's company before assignment
+    if (body.categoryId !== undefined && body.categoryId !== null) {
+      const category = await prisma.tableCategory.findFirst({
+        where: { id: body.categoryId, companyId: user.companyId },
+      });
+      if (!category) {
+        return NextResponse.json({ error: "Category not found" }, { status: 400 });
+      }
+    }
+
+    // SECURITY: Atomic companyId check in update WHERE clause
     const updatedTable = await prisma.tableMeta.update({
-      where: { id: parseInt(id) },
+      where: { id: parseInt(id), companyId: user.companyId },
       data: {
         ...(name && { name }),
         ...(slug && { slug }),
@@ -138,6 +148,7 @@ export async function DELETE(
       where: {
         record: {
           tableId: parseInt(id),
+          companyId: existingTable.companyId,
         },
       },
     });
@@ -152,14 +163,37 @@ export async function DELETE(
       );
     }
 
-    // Delete all records first
+    // Clean up orphaned FinanceRecords linked to records in this table
+    const tableIdNum = parseInt(id);
+    const syncRules = await prisma.financeSyncRule.findMany({
+      where: { sourceType: "TABLE", sourceId: tableIdNum, companyId: existingTable.companyId },
+      select: { id: true },
+    });
+    if (syncRules.length > 0) {
+      const recordIds = await prisma.record.findMany({
+        where: { tableId: tableIdNum, companyId: existingTable.companyId },
+        select: { id: true },
+        take: 50000, // P221: Safety cap — prevents unbounded ID array in memory
+      });
+      if (recordIds.length > 0) {
+        await prisma.financeRecord.deleteMany({
+          where: {
+            companyId: existingTable.companyId,
+            syncRuleId: { in: syncRules.map((r) => r.id) },
+            originId: { in: recordIds.map((r) => r.id.toString()) },
+          },
+        });
+      }
+    }
+
+    // Delete all records
     await prisma.record.deleteMany({
-      where: { tableId: parseInt(id) },
+      where: { tableId: tableIdNum, companyId: existingTable.companyId },
     });
 
-    // Delete table
+    // SECURITY: Atomic companyId check in delete WHERE clause
     await prisma.tableMeta.delete({
-      where: { id: parseInt(id) },
+      where: { id: parseInt(id), companyId: user.companyId },
     });
 
     return NextResponse.json({ success: true });

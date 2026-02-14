@@ -394,6 +394,14 @@ export default function UsersPage() {
                                         icon: "⬇",
                                         color: "amber",
                                       },
+                                      canViewGoals: {
+                                        icon: "🎯",
+                                        color: "green",
+                                      },
+                                      canViewDashboardData: {
+                                        icon: "📋",
+                                        color: "indigo",
+                                      },
                                     };
 
                                     const flag = flagLabels[key] || {

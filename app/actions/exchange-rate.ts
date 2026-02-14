@@ -11,6 +11,7 @@ async function fetchAllRates(): Promise<Record<string, number>> {
 
   const res = await fetch("https://boi.org.il/PublicApi/GetExchangeRates", {
     next: { revalidate: 3600 },
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!res.ok) {

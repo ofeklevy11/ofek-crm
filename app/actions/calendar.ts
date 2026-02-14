@@ -14,6 +14,7 @@ export async function getCalendarEvents() {
     // CRITICAL: Filter by companyId
     const events = await prisma.calendarEvent.findMany({
       where: { companyId: user.companyId },
+      take: 1000, // P79: Bound calendar events query
     });
     return { success: true, data: events };
   } catch (error) {
@@ -84,6 +85,7 @@ export async function createCalendarEvent(data: {
           calendarEventId: null,
           isActive: true, // Only copy ACTIVE rules
         },
+        take: 200, // P78: Bound global rules fetch
       });
 
       if (globalRules.length > 0) {
@@ -161,7 +163,7 @@ export async function updateCalendarEvent(
     if (data.color !== undefined) updateData.color = data.color;
 
     const event = await prisma.calendarEvent.update({
-      where: { id },
+      where: { id, companyId: user.companyId },
       data: updateData,
     });
 
@@ -195,7 +197,7 @@ export async function deleteCalendarEvent(id: string) {
     }
 
     await prisma.calendarEvent.delete({
-      where: { id },
+      where: { id, companyId: user.companyId },
     });
 
     revalidatePath("/calendar");

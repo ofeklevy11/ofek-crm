@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { getDashboardInitialData } from "@/app/actions/dashboard";
 import DashboardClient from "@/components/DashboardClient";
 import { ArrowLeft, CheckCircle2, LayoutDashboard, Zap } from "lucide-react";
@@ -134,8 +135,11 @@ export default async function Home() {
     );
   }
 
-  // Fetch Dashboard Data
-  const { analyticsViews, tables, goals } = await getDashboardInitialData();
+  // Fetch Dashboard Data only if user has permission
+  const canView = hasUserFlag(user, "canViewDashboardData");
+  const { analyticsViews, tables, goals } = canView
+    ? await getDashboardInitialData()
+    : { analyticsViews: [], tables: [], goals: [] };
 
   return (
     <div className="min-h-screen bg-muted/40 p-4 md:p-8" dir="rtl">

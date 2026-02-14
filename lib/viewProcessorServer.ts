@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { ViewConfig } from "@/app/actions/views";
 import { getCachedMetric } from "@/lib/services/cache-service";
 
+// Allowlist pattern for field names used in raw SQL: alphanumeric, underscore, dash, space, Hebrew chars.
+// Rejects any field name that could break out of a SQL identifier or JSON accessor.
+const SAFE_FIELD_NAME = /^[\w\u0590-\u05FF\s\-\.]+$/;
+
 interface ViewProcessParams {
   tableId: number;
   companyId: number;
@@ -65,11 +69,13 @@ function buildWhereClause(
         continue;
 
       const field = filter.field;
+      // Validate field name to prevent SQL injection via Prisma.raw()
+      if (!SAFE_FIELD_NAME.test(field)) continue;
       // Check if it's a system field or data field
       const isSystemField = ["createdAt", "updatedAt"].includes(field);
       const columnRef = isSystemField
         ? Prisma.raw(`"${field}"`)
-        : Prisma.raw(`"data"->>'${field.replace(/'/g, "''")}'`); // Basic sanitization
+        : Prisma.raw(`"data"->>'${field.replace(/'/g, "''")}'`);
 
       switch (filter.operator) {
         case "equals":
@@ -128,7 +134,7 @@ function buildWhereClause(
       startDate: customStart,
       endDate: customEnd,
     } = config.dateFilter;
-    if (field) {
+    if (field && SAFE_FIELD_NAME.test(field)) {
       const isSystemField = ["createdAt", "updatedAt"].includes(field);
       const columnRef = isSystemField
         ? Prisma.raw(`"${field}"`)
@@ -276,7 +282,7 @@ async function processAggregationServer(
     cacheKey,
     async () => {
       // Check for Group By
-      if (config.groupByField) {
+      if (config.groupByField && SAFE_FIELD_NAME.test(config.groupByField)) {
         const field = config.groupByField;
         const isSystem = ["createdAt", "updatedAt"].includes(field);
         const col = isSystem
@@ -304,11 +310,18 @@ async function processAggregationServer(
               FROM "Record"
               WHERE ${whereClause}
               GROUP BY ${col}
+              ORDER BY count DESC
+              LIMIT 500
           `;
 
-        const groups = await prisma.$queryRaw<any[]>(query);
+        const [groups, totalRes] = await Promise.all([
+          prisma.$queryRaw<any[]>(query),
+          prisma.$queryRaw<[{ count: bigint }]>(
+            Prisma.sql`SELECT COUNT(*) as count FROM "Record" WHERE ${whereClause}`,
+          ),
+        ]);
 
-        const totalCount = groups.reduce((acc, g) => acc + Number(g.count), 0);
+        const totalCount = Number(totalRes[0].count);
         const processedGroups = groups.map((g) => ({
           label: g.label || "N/A", // Handle nulls
           count: Number(g.count),
@@ -348,7 +361,7 @@ async function processAggregationServer(
         };
       }
 
-      if (config.targetField) {
+      if (config.targetField && SAFE_FIELD_NAME.test(config.targetField)) {
         const tf = config.targetField;
         const targetCol = Prisma.raw(
           `("data"->>'${tf.replace(/'/g, "''")}')::numeric`,
@@ -395,7 +408,7 @@ async function processLegendServer(
   config: ViewConfig,
 ) {
   // Legend view counts items based on legend field
-  if (!config.legendField) {
+  if (!config.legendField || !SAFE_FIELD_NAME.test(config.legendField)) {
     return {
       type: "legend",
       title: config.title,
@@ -411,16 +424,15 @@ async function processLegendServer(
     : Prisma.raw(`"data"->>'${field.replace(/'/g, "''")}'`);
 
   const query = Prisma.sql`
-        SELECT ${col} as label, COUNT(*) as count 
-        FROM "Record" 
-        WHERE ${whereClause} 
+        SELECT ${col} as label, COUNT(*) as count
+        FROM "Record"
+        WHERE ${whereClause}
         GROUP BY ${col}
+        ORDER BY count DESC
     `;
 
   const groups = await prisma.$queryRaw<any[]>(query);
-  const totalCountQuery = Prisma.sql`SELECT COUNT(*) as count FROM "Record" WHERE ${whereClause}`;
-  const totalRes = await prisma.$queryRaw<[{ count: bigint }]>(totalCountQuery);
-  const totalCount = Number(totalRes[0].count);
+  const totalCount = groups.reduce((acc, g) => acc + Number(g.count), 0);
 
   const items = config.legendItems || [];
   const itemsWithCounts = items.map((item) => {

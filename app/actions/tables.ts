@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { canReadTable, canManageTables, hasUserFlag } from "@/lib/permissions";
+import { validateCategoryInCompany } from "@/lib/company-validation";
 
 export async function getTables() {
   try {
@@ -16,6 +17,7 @@ export async function getTables() {
     const tables = await prisma.tableMeta.findMany({
       where: { companyId: user.companyId },
       orderBy: { createdAt: "desc" },
+      take: 500,
     });
 
     // Filter tables based on user permissions
@@ -84,7 +86,14 @@ export async function createTable(data: {
       return { success: false, error: "אין לך הרשאה ליצור טבלאות" };
     }
 
-    // Ensure slug uniqueness
+    // SECURITY: Validate categoryId belongs to same company
+    if (categoryId) {
+      if (!(await validateCategoryInCompany(categoryId, user.companyId))) {
+        return { success: false, error: "Invalid category" };
+      }
+    }
+
+    // P204: Ensure slug uniqueness with retry on race condition
     let finalSlug = slug;
     let counter = 0;
     while (true) {
@@ -97,23 +106,36 @@ export async function createTable(data: {
       if (counter > 10) throw new Error("Could not generate unique slug");
     }
 
-    const table = await prisma.tableMeta.create({
-      data: {
-        name,
-        slug: finalSlug,
-        schemaJson: (schemaJson || {}) as any,
-        companyId: user.companyId,
-        createdBy: user.id,
-        categoryId: categoryId ? Number(categoryId) : undefined,
-      },
-    });
+    // Retry loop to handle check-then-create race condition (P2002)
+    let table;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        table = await prisma.tableMeta.create({
+          data: {
+            name,
+            slug: finalSlug,
+            schemaJson: (schemaJson || {}) as any,
+            companyId: user.companyId,
+            createdBy: user.id,
+            categoryId: categoryId ? Number(categoryId) : undefined,
+          },
+        });
+        break; // success
+      } catch (createErr: any) {
+        if (createErr.code === "P2002" && attempt < 2) {
+          // Race condition: another request took this slug — generate a new one and retry
+          finalSlug = `${slug}-${Math.random().toString(36).substring(2, 7)}`;
+          continue;
+        }
+        throw createErr; // re-throw on last attempt or non-P2002 error
+      }
+    }
 
     revalidatePath("/");
     revalidatePath("/tables");
 
     return { success: true, data: table };
   } catch (error: any) {
-    // Check if it's a unique constraint violation just in case our check missed it (race condition)
     if (error.code === "P2002") {
       return {
         success: false,
@@ -151,8 +173,16 @@ export async function updateTable(
       return { success: false, error: "אין לך הרשאה לערוך טבלאות" };
     }
 
+    // SECURITY: Validate categoryId belongs to same company
+    if (data.categoryId) {
+      if (!(await validateCategoryInCompany(data.categoryId, user.companyId))) {
+        return { success: false, error: "Invalid category" };
+      }
+    }
+
+    // P112: Add companyId to prevent cross-tenant table updates
     const table = await prisma.tableMeta.update({
-      where: { id },
+      where: { id, companyId: user.companyId },
       data: updateData,
     });
 
@@ -174,8 +204,9 @@ export async function deleteTable(id: number) {
       return { success: false, error: "אין לך הרשאה למחוק טבלאות" };
     }
 
+    // P113: Add companyId to prevent cross-tenant table deletes
     await prisma.tableMeta.delete({
-      where: { id },
+      where: { id, companyId: user.companyId },
     });
 
     revalidatePath("/");
@@ -190,25 +221,26 @@ export async function deleteTable(id: number) {
 
 export async function exportTableData(tableId: number) {
   try {
-    const table = await prisma.tableMeta.findUnique({
-      where: { id: tableId },
-      include: {
-        records: true,
-      },
-    });
-
-    if (!table) {
-      return { success: false, error: "Table not found" };
-    }
-
+    // AAA: Auth check BEFORE loading data to prevent memory waste on unauthorized access
     const user = await getCurrentUser();
     if (!user || !canReadTable(user, tableId)) {
       return { success: false, error: "אין לך הרשאה לייצא טבלה זו" };
     }
 
-    // Check if user has export permission
     if (!hasUserFlag(user, "canExportTables")) {
       return { success: false, error: "אין לך הרשאה לייצא נתונים" };
+    }
+
+    // AAA: Use findFirst with companyId filter instead of findUnique
+    const table = await prisma.tableMeta.findFirst({
+      where: { id: tableId, companyId: user.companyId },
+      include: {
+        records: { take: 5000 }, // P220: Lowered from 50K — prevents OOM on serverless
+      },
+    });
+
+    if (!table) {
+      return { success: false, error: "Table not found" };
     }
 
     return { success: true, data: table };
@@ -220,32 +252,34 @@ export async function exportTableData(tableId: number) {
 
 export async function searchInTable(tableId: number, searchTerm: string) {
   try {
-    const table = await prisma.tableMeta.findUnique({
-      where: { id: tableId },
+    const user = await getCurrentUser();
+    if (!user || !canReadTable(user, tableId)) {
+      return { success: false, error: "אין לך הרשאה לחפש בטבלה זו" };
+    }
+
+    // P109: Add companyId filter to table lookup
+    const table = await prisma.tableMeta.findFirst({
+      where: { id: tableId, companyId: user.companyId },
     });
 
     if (!table) {
       return { success: false, error: "Table not found" };
     }
 
-    const user = await getCurrentUser();
-    if (!user || !canReadTable(user, tableId)) {
-      return { success: false, error: "אין לך הרשאה לחפש בטבלה זו" };
-    }
-
-    // Check if user has search permission
     if (!hasUserFlag(user, "canSearchTables")) {
       return { success: false, error: "אין לך הרשאה לחפש בטבלאות" };
     }
 
+    // P106: Add companyId filter and take limit to prevent OOM
     const records = await prisma.record.findMany({
       where: {
         tableId,
+        companyId: user.companyId, // P109: Cross-tenant filter
       },
       orderBy: { createdAt: "desc" },
+      take: 5000, // P106: Bound search query
     });
 
-    // Filter records based on search term
     const filteredRecords = records.filter((record) => {
       const dataStr = JSON.stringify(record.data).toLowerCase();
       return dataStr.includes(searchTerm.toLowerCase());
@@ -268,9 +302,14 @@ export async function updateTablesOrder(
       return { success: false, error: "Unauthorized" };
     }
 
+    // BBB: Limit batch size and add companyId to prevent cross-tenant reorder
+    if (updates.length > 500) {
+      return { success: false, error: "Too many tables to reorder" };
+    }
+
     const transaction = updates.map((update) =>
       prisma.tableMeta.update({
-        where: { id: update.id },
+        where: { id: update.id, companyId: user.companyId },
         data: { order: update.order },
       }),
     );
@@ -302,7 +341,7 @@ export async function duplicateTable(id: number) {
         companyId: user.companyId,
       },
       include: {
-        records: true,
+        records: { take: 5000 }, // P220: Lowered from 50K — prevents OOM on serverless
         views: true,
       },
     });
@@ -358,6 +397,7 @@ export async function duplicateTable(id: number) {
     if (originalTable.views.length > 0) {
       await prisma.view.createMany({
         data: originalTable.views.map((view) => ({
+          companyId: user.companyId,
           tableId: newTable.id,
           name: view.name,
           slug: view.slug,

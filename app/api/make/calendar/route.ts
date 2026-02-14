@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { findApiKeyByValue } from "@/lib/api-key-utils";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 const parseIsraelDate = (dateStr: string): Date => {
   // Check if string has timezone info (Z or +/-HH:mm)
@@ -36,7 +38,7 @@ const parseIsraelDate = (dateStr: string): Date => {
 
 export async function POST(req: Request) {
   try {
-    // 1. Authentication Check
+    // 1. Validate global webhook secret
     const secret = process.env.MAKE_WEBHOOK_SECRET;
     const authHeader = req.headers.get("x-api-secret");
 
@@ -47,23 +49,37 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = await req.json();
-    const { title, description, email, start_time, end_time, color } = body;
-
-    // 2. Validate Required Fields
-    if (!title) {
+    // 2. Validate per-company API key (prevents cross-company writes)
+    const apiKey = req.headers.get("x-company-api-key");
+    if (!apiKey) {
       return NextResponse.json(
-        { error: "Missing required field: title" },
-        { status: 400 }
+        { error: "Unauthorized: Missing x-company-api-key header" },
+        { status: 401 }
       );
     }
 
-    if (!email) {
+    const keyRecord = await findApiKeyByValue(apiKey);
+
+    if (!keyRecord || !keyRecord.isActive) {
       return NextResponse.json(
-        {
-          error:
-            "Missing required field: email (required to identify user and company)",
-        },
+        { error: "Unauthorized: Invalid or inactive Company API Key" },
+        { status: 401 }
+      );
+    }
+
+    // Rate limit per company
+    const rateLimited = await checkRateLimit(String(keyRecord.companyId), RATE_LIMITS.webhook);
+    if (rateLimited) return rateLimited;
+
+    const companyId = keyRecord.companyId;
+
+    const body = await req.json();
+    const { title, description, start_time, end_time, color } = body;
+
+    // 3. Validate Required Fields
+    if (!title) {
+      return NextResponse.json(
+        { error: "Missing required field: title" },
         { status: 400 }
       );
     }
@@ -75,18 +91,6 @@ export async function POST(req: Request) {
             "Missing required fields: start_time and end_time are required",
         },
         { status: 400 }
-      );
-    }
-
-    // 3. User & Company Context
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { error: `User with email "${email}" not found` },
-        { status: 404 }
       );
     }
 
@@ -111,15 +115,15 @@ export async function POST(req: Request) {
       );
     }
 
-    // 5. Create Calendar Event
+    // 5. Create Calendar Event scoped to the API key's company
     const event = await prisma.calendarEvent.create({
       data: {
-        companyId: user.companyId,
+        companyId,
         title,
         description: description || null,
         startTime: startDate,
         endTime: endDate,
-        color: color || "blue", // Default color if not provided
+        color: color || "blue",
       },
     });
 

@@ -51,12 +51,12 @@ export async function POST(
       );
     }
 
-    // 1. Get Job and validate access
-    const job = await prisma.importJob.findUnique({
-      where: { id: importJobId },
+    // 1. Get Job and validate access — companyId in query
+    const job = await prisma.importJob.findFirst({
+      where: { id: importJobId, tableId, companyId: user.companyId },
     });
 
-    if (!job || job.tableId !== tableId || job.companyId !== user.companyId) {
+    if (!job) {
       return NextResponse.json(
         { error: "Job not found or access denied" },
         { status: 404 },
@@ -77,9 +77,9 @@ export async function POST(
       );
     }
 
-    // Verify table exists
-    const table = await prisma.tableMeta.findUnique({
-      where: { id: tableId },
+    // Verify table exists and belongs to user's company
+    const table = await prisma.tableMeta.findFirst({
+      where: { id: tableId, companyId: user.companyId },
     });
 
     if (!table) {
@@ -88,7 +88,7 @@ export async function POST(
 
     // 2. Update status to QUEUED
     await prisma.importJob.update({
-      where: { id: job.id },
+      where: { id: job.id, companyId: user.companyId },
       data: {
         status: "QUEUED",
         summary: {
@@ -100,6 +100,7 @@ export async function POST(
 
     // 3. Send event to Inngest for background processing
     await inngest.send({
+      id: `import-${job.id}`,
       name: "import/job.started",
       data: {
         importJobId: job.id,

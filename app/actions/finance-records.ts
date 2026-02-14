@@ -28,13 +28,7 @@ export async function getFinanceRecords(filters?: {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  // Trigger automatic processing of fixed expenses
-  try {
-    const { processFixedExpenses } = await import("./fixed-expenses");
-    await processFixedExpenses();
-  } catch (e) {
-    console.error("[Finance] Auto-process fixed expenses failed:", e);
-  }
+  // Issue 27: Removed processFixedExpenses() from read path — use scheduled cron instead
 
   const where: any = {
     companyId: user.companyId,
@@ -49,19 +43,21 @@ export async function getFinanceRecords(filters?: {
     ...(filters?.categoryId && { category: filters.categoryId }),
   };
 
+  // P119: Add take limit to prevent unbounded finance record loads
   const records = await prisma.financeRecord.findMany({
     where,
     orderBy: { date: "desc" },
+    take: 5000,
     include: {
       client: { select: { id: true, name: true } },
       syncRule: { select: { sourceType: true, name: true } },
     },
   });
 
-  // Calculate totals
+  // Issue 26: Apply same filters to totals so they match the filtered records view
   const totals = await prisma.financeRecord.groupBy({
     by: ["type"],
-    where: { companyId: user.companyId },
+    where,
     _sum: { amount: true },
   });
 
@@ -82,6 +78,15 @@ export async function getFinanceRecords(filters?: {
 export async function addFinanceRecord(data: CreateFinanceRecordInput) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+
+  // SECURITY: Validate clientId belongs to user's company
+  if (data.clientId) {
+    const client = await prisma.client.findFirst({
+      where: { id: data.clientId, companyId: user.companyId },
+      select: { id: true },
+    });
+    if (!client) throw new Error("Invalid client");
+  }
 
   console.log(
     `[Finance] Creating record for User ${user.id} in Company ${user.companyId}`
@@ -121,7 +126,7 @@ export async function deleteFinanceRecord(id: number) {
 
   // 1. Delete the finance record
   await prisma.financeRecord.delete({
-    where: { id },
+    where: { id, companyId: user.companyId },
   });
 
   // 2. Cascade delete source record if applicable
@@ -134,14 +139,18 @@ export async function deleteFinanceRecord(id: number) {
       const sourceRecordId = parseInt(financeRecord.originId);
       // Verify the record still exists and belongs to user's company (via table permissions usually, but here we trust the link)
       // Check if record exists specifically
-      const sourceRecord = await prisma.record.findUnique({
-        where: { id: sourceRecordId },
+      const sourceRecord = await prisma.record.findFirst({
+        where: { id: sourceRecordId, companyId: user.companyId },
         include: { table: true },
       });
 
-      if (sourceRecord && sourceRecord.table.companyId === user.companyId) {
-        await prisma.record.delete({
-          where: { id: sourceRecordId },
+      if (sourceRecord) {
+        const { deleteRecordWithCleanup } = await import("@/lib/record-cleanup");
+        await deleteRecordWithCleanup(sourceRecordId, {
+          companyId: user.companyId,
+          tableId: sourceRecord.table.id,
+          userId: user.id,
+          skipFinanceCascade: true,
         });
         console.log(
           `[Finance] Cascaded delete to Source Record #${sourceRecordId}`

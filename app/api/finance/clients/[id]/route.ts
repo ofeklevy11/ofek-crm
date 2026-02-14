@@ -63,7 +63,7 @@ export async function PATCH(
     }
 
     const updatedClient = await prisma.client.update({
-      where: { id: clientId },
+      where: { id: clientId, companyId: user.companyId },
       data: {
         name: data.name,
         email: data.email,
@@ -106,21 +106,23 @@ export async function DELETE(
     }
 
     // Delete all related records first (cascade delete)
+    // Defense-in-depth: scope every DELETE to companyId
+    const companyId = existingClient.companyId;
     await prisma.$transaction([
       prisma.transaction.deleteMany({
-        where: { clientId },
+        where: { clientId, client: { companyId } },
       }),
       prisma.retainer.deleteMany({
-        where: { clientId },
+        where: { clientId, client: { companyId } },
       }),
       prisma.oneTimePayment.deleteMany({
-        where: { clientId },
+        where: { clientId, client: { companyId } },
       }),
       prisma.financeRecord.deleteMany({
-        where: { clientId },
+        where: { clientId, companyId },
       }),
-      prisma.client.delete({
-        where: { id: clientId },
+      prisma.client.deleteMany({
+        where: { id: clientId, companyId },
       }),
     ]);
 

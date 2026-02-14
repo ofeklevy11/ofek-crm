@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
 import { createNotificationForCompany } from "@/app/actions/notifications";
+import { validateUserInCompany } from "@/lib/company-validation";
 
 export async function getWorkflowInstances() {
   const user = await getCurrentUser();
@@ -25,6 +26,7 @@ export async function getWorkflowInstances() {
       creator: true,
     },
     orderBy: { updatedAt: "desc" },
+    take: 1000,
   });
 }
 
@@ -43,6 +45,13 @@ export async function createWorkflowInstance(data: {
   });
 
   if (!workflow) throw new Error("Workflow not found or access denied");
+
+  // SECURITY: Validate assigneeId belongs to same company
+  if (data.assigneeId) {
+    if (!(await validateUserInCompany(data.assigneeId, user.companyId))) {
+      throw new Error("Invalid assignee");
+    }
+  }
 
   const instance = await prisma.workflowInstance.create({
     data: {
@@ -98,7 +107,7 @@ export async function updateWorkflowInstanceStage(
     const nextStage = instance.workflow.stages[currentStageIndex + 1];
 
     await prisma.workflowInstance.update({
-      where: { id: instanceId },
+      where: { id: instanceId, companyId: user.companyId },
       data: {
         completedStages: currentCompleted,
         currentStageId: nextStage ? nextStage.id : null,
@@ -119,7 +128,7 @@ export async function updateWorkflowInstanceStage(
 
     // If we revert, we probably set the current stage back to this one
     await prisma.workflowInstance.update({
-      where: { id: instanceId },
+      where: { id: instanceId, companyId: user.companyId },
       data: {
         completedStages: currentCompleted,
         currentStageId: stageId,
@@ -143,7 +152,7 @@ export async function deleteWorkflowInstance(instanceId: number) {
   if (!instance) throw new Error("Instance not found or access denied");
 
   await prisma.workflowInstance.delete({
-    where: { id: instanceId },
+    where: { id: instanceId, companyId: user.companyId },
   });
 
   revalidatePath("/workflows");
@@ -166,7 +175,7 @@ export async function resetWorkflowInstance(instanceId: number) {
   const firstStage = instance.workflow.stages[0];
 
   await prisma.workflowInstance.update({
-    where: { id: instanceId },
+    where: { id: instanceId, companyId: user.companyId },
     data: {
       completedStages: [],
       currentStageId: firstStage ? firstStage.id : null,
@@ -212,14 +221,19 @@ async function executeStageAutomations(stage: any, instance: any, user: any) {
               dueDate.setDate(dueDate.getDate() + Number(config.dueDateOffset));
             }
 
+            // SECURITY: Validate assigneeId at execution time
+            let validatedAssigneeId: number | null = null;
+            if (config.assigneeId) {
+              const assigneeOk = await validateUserInCompany(Number(config.assigneeId), user.companyId);
+              if (assigneeOk) validatedAssigneeId = Number(config.assigneeId);
+            }
+
             await prisma.task.create({
               data: {
                 companyId: user.companyId,
                 title: config.title,
                 status: config.status || "todo",
-                assigneeId: config.assigneeId
-                  ? Number(config.assigneeId)
-                  : null,
+                assigneeId: validatedAssigneeId,
                 priority: config.priority || "normal",
                 description: config.description || "",
                 dueDate: dueDate,
@@ -247,13 +261,18 @@ async function executeStageAutomations(stage: any, instance: any, user: any) {
 
         case "create_record":
           if (config.tableId) {
-            // For records, we strictly need data. Since modal might not capture it fully yet, we create an empty/stub record
-            // Or if we fixed the modal to save 'values' in config:
+            const tId = Number(config.tableId);
+            const targetTable = await prisma.tableMeta.findFirst({
+              where: { id: tId, companyId: user.companyId },
+              select: { id: true },
+            });
+            if (!targetTable) break;
+
             const recordData = config.values || {};
             await prisma.record.create({
               data: {
                 companyId: user.companyId,
-                tableId: Number(config.tableId),
+                tableId: tId,
                 data: recordData,
                 createdBy: user.id,
               },
@@ -309,8 +328,9 @@ async function executeStageAutomations(stage: any, instance: any, user: any) {
 
               newData[field] = val;
 
+              // SECURITY: Add companyId to prevent cross-tenant record mutation
               await prisma.record.update({
-                where: { id: recordId },
+                where: { id: recordId, companyId: user.companyId },
                 data: { data: newData },
               });
               console.log(
@@ -386,51 +406,61 @@ async function executeStageAutomations(stage: any, instance: any, user: any) {
             // For now we only support manual or we'd need record context
           }
 
-          const isGroup = config.targetType === "group";
-
-          console.log(
-            `[Automation] Sending WhatsApp via GreenAPI to ${target} (${isGroup ? "Group" : "Private"})`,
-          );
-
-          try {
-            const { sendGreenApiMessage, sendGreenApiFile } =
-              await import("./green-api");
-
-            if (config.messageType === "media" && config.mediaFileId) {
-              // If media logic is needed in future, we check file URL here.
-              await sendGreenApiMessage(
-                user.companyId,
-                target,
-                config.content || "",
-              );
-            } else {
-              await sendGreenApiMessage(
-                user.companyId,
-                target,
-                config.content || "",
-              );
+          if (target) {
+            // Dispatch to Inngest for retry + rate limiting instead of direct API call
+            try {
+              const { inngest } = await import("@/lib/inngest/client");
+              await inngest.send({
+                id: `wa-workflow-${user.companyId}-${target}-${stage.id}-${Math.floor(Date.now() / 5000)}`,
+                name: "automation/send-whatsapp",
+                data: {
+                  companyId: user.companyId,
+                  phone: String(target),
+                  content: config.content || "",
+                  messageType: config.messageType,
+                  mediaFileId: config.mediaFileId,
+                },
+              });
+              console.log(`[Automation] WhatsApp job enqueued for ${target}`);
+            } catch (e) {
+              console.error("[Automation] Failed to enqueue WhatsApp job:", e);
             }
-
-            console.log("[Automation] GreenAPI call successful");
-          } catch (e) {
-            console.error("[Automation] GreenAPI failed:", e);
+          } else {
+            console.warn("[Automation] WhatsApp: No phone number resolved");
           }
           break;
 
         case "webhook":
           if (config.url) {
-            // Fire and forget webhook
-            fetch(config.url, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                event: "stage_completed",
-                workflow: instance.name,
-                stage: stage.name,
-                user: user.name,
-                timestamp: new Date().toISOString(),
-              }),
-            }).catch((e) => console.error("Webhook failed", e));
+            // Dispatch to Inngest for retry + rate limiting instead of direct fetch
+            try {
+              const { inngest } = await import("@/lib/inngest/client");
+              const urlHost = (() => { try { return new URL(config.url).hostname; } catch { return "invalid"; } })();
+              await inngest.send({
+                id: `webhook-workflow-${user.companyId}-${stage.id}-${urlHost}-${Math.floor(Date.now() / 5000)}`,
+                name: "automation/send-webhook",
+                data: {
+                  url: config.url,
+                  companyId: user.companyId,
+                  ruleId: 0,
+                  payload: {
+                    ruleId: 0,
+                    ruleName: `Workflow: ${instance.name}`,
+                    triggerType: "STAGE_COMPLETED",
+                    companyId: user.companyId,
+                    data: {
+                      event: "stage_completed",
+                      workflow: instance.name,
+                      stage: stage.name,
+                      user: user.name,
+                    },
+                  },
+                },
+              });
+              console.log(`[Automation] Webhook job enqueued to ${config.url}`);
+            } catch (e) {
+              console.error("[Automation] Failed to enqueue webhook job:", e);
+            }
           }
           break;
       }

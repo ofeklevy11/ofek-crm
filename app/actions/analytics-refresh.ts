@@ -95,6 +95,17 @@ export async function getAnalyticsRefreshUsage() {
       }
     }
 
+    // Cleanup old logs (older than 24 hours) to prevent unbounded growth
+    // Scoped to current user to avoid cross-tenant side effects
+    try {
+      const cleanupCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      await prisma.analyticsRefreshLog.deleteMany({
+        where: { userId: user.id, timestamp: { lt: cleanupCutoff } },
+      });
+    } catch (cleanupErr) {
+      console.error("Error cleaning up old refresh logs:", cleanupErr);
+    }
+
     return { success: true, usage: usageCount, nextResetTime };
   } catch (error) {
     console.error("Error getting analytics refresh usage:", error);

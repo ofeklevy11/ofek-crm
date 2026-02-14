@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createAuditLog } from "@/lib/audit";
+import { inngest } from "@/lib/inngest/client";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
@@ -14,7 +15,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get the current authenticated user from session
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
 
@@ -25,87 +25,68 @@ export async function POST(request: Request) {
       );
     }
 
+    // Rate limit bulk operations per user
+    const rateLimited = await checkRateLimit(String(currentUser.id), RATE_LIMITS.bulk);
+    if (rateLimited) return rateLimited;
+
     if (action === "delete") {
-      // Check permissions
-      if (recordIds.length > 0) {
-        const { canWriteTable } = await import("@/lib/permissions");
-
-        // SECURITY: Check permission and verify record belongs to user's company
-        const firstRecord = await prisma.record.findFirst({
-          where: { id: Number(recordIds[0]), companyId: currentUser.companyId },
-          select: { tableId: true },
-        });
-
-        if (firstRecord) {
-          if (!canWriteTable(currentUser, firstRecord.tableId)) {
-            return NextResponse.json(
-              {
-                error:
-                  "You don't have permission to delete records from this table",
-              },
-              { status: 403 },
-            );
-          }
-        } else {
-          return NextResponse.json(
-            { error: "Record not found or access denied" },
-            { status: 404 },
-          );
-        }
+      if (recordIds.length === 0) {
+        return NextResponse.json({ success: true, count: 0 });
       }
 
-      // Perform deletion in a transaction to handle constraints manually
-      try {
-        const result = await prisma.$transaction(async (tx) => {
-          const ids = recordIds.map((id: any) => Number(id));
+      const { canWriteTable } = await import("@/lib/permissions");
 
-          // 1. Delete Attachments (Legacy Links) - No CASCADE in schema
-          await tx.attachment.deleteMany({
-            where: { recordId: { in: ids } },
-          });
+      const validIds = recordIds.map((id: any) => Number(id)).filter((id: number) => Number.isInteger(id) && id > 0);
+      if (validIds.length === 0) {
+        return NextResponse.json({ success: true, count: 0 });
+      }
 
-          // 2. Unlink AuditLogs - No CASCADE in schema (Keep logging but remove relation)
-          await tx.auditLog.updateMany({
-            where: { recordId: { in: ids } },
-            data: { recordId: null },
-          });
-
-          // 3. Delete Records
-          // SECURITY: Filter by companyId to prevent cross-tenant deletion
-          const deleteResult = await tx.record.deleteMany({
-            where: {
-              id: { in: ids },
-              companyId: currentUser.companyId,
-            },
-          });
-
-          return deleteResult;
-        });
-
-        // Log bulk delete (Audit logs for the action itself)
-        // Note: The previous audit logs for the records are now unlinked but exist.
-        for (const id of recordIds) {
-          await createAuditLog(null, currentUser.id, "DELETE (BULK)", {
-            previousRecordId: id,
-          });
-        }
-
-        return NextResponse.json({ success: true, count: result });
-      } catch (dbError: any) {
-        console.error("Database error during bulk delete:", dbError);
-
-        // Provide more specific error message based on Prisma error
-        let errorMessage = "Failed to delete records due to database error";
-        if (dbError.code === "P2003") {
-          errorMessage =
-            "Cannot delete record because it is referenced by another entity (Foreign Key Violation). Please check for related data.";
-        }
-
+      if (validIds.length > 5000) {
         return NextResponse.json(
-          { error: errorMessage, details: dbError.message },
-          { status: 500 },
+          { error: "Cannot delete more than 5000 records at once" },
+          { status: 400 },
         );
       }
+
+      // Verify all records belong to the same table and check permission
+      const distinctTables = await prisma.record.groupBy({
+        by: ["tableId"],
+        where: { id: { in: validIds }, companyId: currentUser.companyId },
+      });
+
+      if (distinctTables.length === 0) {
+        return NextResponse.json({ success: true });
+      }
+
+      if (distinctTables.length > 1) {
+        return NextResponse.json(
+          { error: "All records must belong to the same table" },
+          { status: 400 },
+        );
+      }
+
+      const tableId = distinctTables[0].tableId;
+
+      if (!canWriteTable(currentUser, tableId)) {
+        return NextResponse.json(
+          { error: "You don't have permission to delete records from this table" },
+          { status: 403 },
+        );
+      }
+
+      // Offload to Inngest background job for scalable processing
+      await inngest.send({
+        id: `bulk-delete-${currentUser.companyId}-${tableId}-${Date.now()}`,
+        name: "records/bulk-delete",
+        data: {
+          recordIds: validIds,
+          companyId: currentUser.companyId,
+          tableId,
+          userId: currentUser.id,
+        },
+      });
+
+      return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

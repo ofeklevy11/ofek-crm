@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRealtime } from "@/hooks/use-realtime";
 import { Bell } from "lucide-react";
 import {
@@ -32,59 +32,140 @@ interface NotificationBellProps {
   userId: number;
 }
 
+const POLL_INTERVAL = 30000; // 30s polling fallback
+
 export default function NotificationBell({ userId }: NotificationBellProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const latestIdRef = useRef<number | null>(null);
 
-  const fetchNotifications = async () => {
+  // Keep latestIdRef in sync
+  useEffect(() => {
+    if (notifications.length > 0) {
+      latestIdRef.current = notifications[0].id;
+    }
+  }, [notifications]);
+
+  // Merge fetched notifications with existing state to avoid overwriting SSE-received ones
+  const mergeNotifications = useCallback((fetched: Notification[]) => {
+    setNotifications((prev) => {
+      if (prev.length === 0) return fetched;
+
+      const existingIds = new Set(prev.map((n) => n.id));
+      const newFromFetch = fetched.filter((n) => !existingIds.has(n.id));
+
+      if (newFromFetch.length === 0) {
+        // Update read status from server for existing notifications
+        const fetchedMap = new Map(fetched.map((n) => [n.id, n]));
+        return prev.map((n) => {
+          const serverVersion = fetchedMap.get(n.id);
+          return serverVersion ? { ...n, read: serverVersion.read } : n;
+        });
+      }
+
+      // Merge and re-sort by id descending (newest first), cap at 200
+      const merged = [...prev, ...newFromFetch];
+      merged.sort((a, b) => b.id - a.id);
+      return merged.slice(0, 200);
+    });
+  }, []);
+
+  const fetchNotifications = useCallback(async () => {
     try {
-      const response = await getNotifications(userId);
+      const response = await getNotifications();
       if (response.success && response.data) {
-        setNotifications(response.data);
+        mergeNotifications(response.data);
       }
     } catch (error) {
       console.error("Failed to fetch notifications", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [mergeNotifications]);
 
-  /* POLLING REMOVED
+  // Initial fetch with single retry on failure
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
-    return () => clearInterval(interval);
-  }, [userId]);
-  */
+    let mounted = true;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Initial Fetch
-  useEffect(() => {
-    fetchNotifications();
-  }, [userId]);
-
-  // Realtime Subscription
-  const { isConnected } = useRealtime(userId, (msg) => {
-    if (msg.channel === `user:${userId}:notifications`) {
-      // Add new notification to state
-      setNotifications((prev) => {
-        // Prevent duplicates
-        if (prev.some((n) => n.id === msg.data.id)) {
-          return prev;
+    const initialFetch = async () => {
+      try {
+        const response = await getNotifications();
+        if (!mounted) return;
+        if (response.success && response.data) {
+          mergeNotifications(response.data);
+          setLoading(false);
+        } else {
+          throw new Error("Fetch returned unsuccessful");
         }
+      } catch (error) {
+        if (!mounted) return;
+        console.error("Failed to fetch notifications, retrying in 3s", error);
+        retryTimer = setTimeout(async () => {
+          retryTimer = null;
+          if (!mounted) return;
+          await fetchNotifications();
+        }, 3000);
+      }
+    };
 
-        // Ensure proper typing and force unread status for new notifications
-        const newNotification = {
-          ...msg.data,
-          read: false,
-          createdAt: new Date(msg.data.createdAt),
-        };
+    initialFetch();
 
-        return [newNotification, ...prev];
-      });
-    }
-  });
+    return () => {
+      mounted = false;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [userId, mergeNotifications, fetchNotifications]);
+
+  // Lightweight polling fallback — only full-refetch if latest ID changed
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const response = await getNotifications(1);
+        if (response.success && response.data && response.data.length > 0) {
+          const serverLatestId = response.data[0].id;
+          if (latestIdRef.current === null || serverLatestId > latestIdRef.current) {
+            // New notifications exist — do full fetch to catch up
+            fetchNotifications();
+          }
+        }
+      } catch {
+        // Silent — polling is best-effort
+      }
+    }, POLL_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  // Realtime Subscription with reconnect recovery
+  const { isConnected } = useRealtime(
+    userId,
+    (msg) => {
+      if (msg.channel.endsWith(`:user:${userId}:notifications`)) {
+        setNotifications((prev) => {
+          if (prev.some((n) => n.id === msg.data.id)) {
+            return prev;
+          }
+
+          const newNotification = {
+            ...msg.data,
+            read: false,
+            createdAt: new Date(msg.data.createdAt),
+          };
+
+          return [newNotification, ...prev];
+        });
+      }
+    },
+    {
+      onReconnect: () => {
+        // Catch up on any notifications missed during disconnect
+        fetchNotifications();
+      },
+    },
+  );
 
   const handleNotificationClick = async (notification: Notification) => {
     if (!notification.read) {

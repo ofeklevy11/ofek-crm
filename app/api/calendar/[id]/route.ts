@@ -26,7 +26,7 @@ export async function PUT(
     }
 
     const event = await prisma.calendarEvent.update({
-      where: { id },
+      where: { id, companyId: user.companyId },
       data: {
         title,
         description,
@@ -67,8 +67,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
-    await prisma.calendarEvent.delete({
-      where: { id },
+    await prisma.calendarEvent.deleteMany({
+      where: { id, companyId: user.companyId },
     });
 
 

@@ -32,9 +32,11 @@ export default async function Navbar() {
 
           <div className="hidden md:flex items-center justify-center flex-1 px-8">
             <div className="flex items-center space-x-6 space-x-reverse overflow-x-auto scrollbar-hide py-2">
-              <Link href="/" prefetch={false} className={linkClass}>
-                לוח בקרה
-              </Link>
+              {user && hasUserFlag(user, "canViewDashboardData") && (
+                <Link href="/" prefetch={false} className={linkClass}>
+                  לוח בקרה
+                </Link>
+              )}
               {user && (
                 <>
                   {hasUserFlag(user, "canViewTables") && (
@@ -152,7 +154,7 @@ export default async function Navbar() {
                         מדריכים
                       </a>
                     )}
-                    {hasUserFlag(user, "canViewFinance") && (
+                    {hasUserFlag(user, "canViewGoals") && (
                       <a
                         href="/finance/goals"
                         className="px-4 py-1.5 rounded-full bg-[#22c55e]/10 hover:bg-[#22c55e]/20 text-[#22c55e] text-sm font-medium border border-[#22c55e]/20 transition-all whitespace-nowrap shadow-sm hover:shadow-md"

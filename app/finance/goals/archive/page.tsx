@@ -1,6 +1,7 @@
 import { getArchivedGoals, getGoalCreationData } from "@/app/actions/goals";
 import ArchivedGoalRow from "@/components/finance/ArchivedGoalRow";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { Archive, ArrowRight, LayoutList, Search } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -10,6 +11,9 @@ export default async function ArchivedGoalsPage() {
   const user = await getCurrentUser();
   if (!user) {
     redirect("/login");
+  }
+  if (!hasUserFlag(user, "canViewGoals")) {
+    redirect("/");
   }
 
   // Fetch data

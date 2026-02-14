@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 
 export async function getNotifications(
-  userId?: number, // Deprecated argument, we use session user now
   limit: number | null = 20,
 ) {
   try {
@@ -24,7 +23,7 @@ export async function getNotifications(
       orderBy: {
         createdAt: "desc",
       },
-      take: limit ? limit : undefined,
+      take: limit ? Math.min(limit, 200) : 200,
     });
     return { success: true, data: notifications };
   } catch (error) {
@@ -40,29 +39,23 @@ export async function markAsRead(notificationId: number) {
       return { success: false, error: "Unauthorized" };
     }
 
-    // Verify ownership
-    const notification = await prisma.notification.findFirst({
+    const result = await prisma.notification.updateMany({
       where: {
         id: notificationId,
         userId: user.id,
-      },
-    });
-
-    if (!notification) {
-      return {
-        success: false,
-        error: "Notification not found or unauthorized",
-      };
-    }
-
-    await prisma.notification.update({
-      where: {
-        id: notificationId,
+        companyId: user.companyId,
       },
       data: {
         read: true,
       },
     });
+
+    if (result.count === 0) {
+      return {
+        success: false,
+        error: "Notification not found or unauthorized",
+      };
+    }
 
     return { success: true };
   } catch (error) {
@@ -71,6 +64,11 @@ export async function markAsRead(notificationId: number) {
   }
 }
 
+/**
+ * Create a notification for a user within the caller's company.
+ * Requires an active user session — use `createNotificationForCompany()` for
+ * background jobs (Inngest, cron) that have no session context.
+ */
 export async function createNotification(data: {
   userId: number;
   title: string;
@@ -78,32 +76,25 @@ export async function createNotification(data: {
   link?: string;
 }) {
   try {
-    // Get current user for companyId (notifications should be within same company)
     const currentUser = await getCurrentUser();
     if (!currentUser) {
-      return { success: false, error: "Unauthorized" }; // Or internal system call?
-      // If this is called by system automation (background job), we might not have a session.
-      // But typically actions are called from user context.
+      return { success: false, error: "Unauthorized" };
     }
 
-    // Optional: Verify that target userId belongs to the same company?
-    // This adds a DB call but increases security.
-    const targetUser = await prisma.user.findFirst({
-      where: { id: data.userId, companyId: currentUser.companyId },
-    });
-
-    if (!targetUser) {
-      console.warn(
-        `[createNotification] Target user ${data.userId} not found in company ${currentUser.companyId}`,
-      );
-      // return { success: false, error: "Target user not found" }; // Or just fail silently?
-      // Let's proceed only if found to maintain isolation.
-      return { success: false, error: "User not in company" };
+    // Verify target user belongs to the same company
+    if (data.userId !== currentUser.id) {
+      const targetUser = await prisma.user.findFirst({
+        where: { id: data.userId, companyId: currentUser.companyId },
+        select: { id: true },
+      });
+      if (!targetUser) {
+        return { success: false, error: "Target user not in your company" };
+      }
     }
 
     const notification = await prisma.notification.create({
       data: {
-        companyId: currentUser.companyId, // CRITICAL: Set companyId for multi-tenancy
+        companyId: currentUser.companyId,
         userId: data.userId,
         title: data.title,
         message: data.message,
@@ -111,15 +102,16 @@ export async function createNotification(data: {
       },
     });
 
-    // --- REALTIME UPDATE ---
+    // --- REALTIME UPDATE (background via Inngest, batched) ---
     try {
-      const { redisPublisher } = await import("@/lib/redis");
-      await redisPublisher.publish(
-        `user:${data.userId}:notifications`,
-        JSON.stringify(notification),
-      );
+      const { inngest } = await import("@/lib/inngest/client");
+      await inngest.send({
+        id: `notify-broadcast-${data.userId}-${notification.id}`,
+        name: "notification/broadcast",
+        data: { userId: data.userId, companyId: currentUser.companyId, notification },
+      });
     } catch (err) {
-      console.error("Redis Publish Error", err);
+      console.error("[createNotification] Inngest broadcast failed, notification saved but SSE skipped:", err);
     }
     // -----------------------
 
@@ -130,8 +122,6 @@ export async function createNotification(data: {
   }
 }
 
-// For use in internal automation
-export const sendNotification = createNotification;
 
 /**
  * Create notification for a specific company (for use in automations/cron jobs without session)
@@ -142,18 +132,21 @@ export async function createNotificationForCompany(data: {
   title: string;
   message?: string;
   link?: string;
+  skipValidation?: boolean;
 }) {
   try {
-    // Verify that target userId belongs to the company
-    const targetUser = await prisma.user.findFirst({
-      where: { id: data.userId, companyId: data.companyId },
-    });
+    if (!data.skipValidation) {
+      // Verify that target userId belongs to the company
+      const targetUser = await prisma.user.findFirst({
+        where: { id: data.userId, companyId: data.companyId },
+      });
 
-    if (!targetUser) {
-      console.warn(
-        `[createNotificationForCompany] Target user ${data.userId} not found in company ${data.companyId}`,
-      );
-      return { success: false, error: "User not in company" };
+      if (!targetUser) {
+        console.warn(
+          `[createNotificationForCompany] Target user ${data.userId} not found in company ${data.companyId}`,
+        );
+        return { success: false, error: "User not in company" };
+      }
     }
 
     const notification = await prisma.notification.create({
@@ -166,15 +159,16 @@ export async function createNotificationForCompany(data: {
       },
     });
 
-    // --- REALTIME UPDATE ---
+    // --- REALTIME UPDATE (background via Inngest, batched) ---
     try {
-      const { redisPublisher } = await import("@/lib/redis");
-      await redisPublisher.publish(
-        `user:${data.userId}:notifications`,
-        JSON.stringify(notification),
-      );
+      const { inngest } = await import("@/lib/inngest/client");
+      await inngest.send({
+        id: `notify-broadcast-${data.userId}-${notification.id}`,
+        name: "notification/broadcast",
+        data: { userId: data.userId, companyId: data.companyId, notification },
+      });
     } catch (err) {
-      console.error("Redis Publish Error", err);
+      console.error("[createNotificationForCompany] Inngest broadcast failed, notification saved but SSE skipped:", err);
     }
     // -----------------------
 
@@ -198,6 +192,7 @@ export async function markAllAsRead() {
     await prisma.notification.updateMany({
       where: {
         userId: user.id,
+        companyId: user.companyId,
         read: false,
       },
       data: {
@@ -219,26 +214,20 @@ export async function deleteNotification(notificationId: number) {
       return { success: false, error: "Unauthorized" };
     }
 
-    // Verify ownership
-    const notification = await prisma.notification.findFirst({
+    const result = await prisma.notification.deleteMany({
       where: {
         id: notificationId,
         userId: user.id,
+        companyId: user.companyId,
       },
     });
 
-    if (!notification) {
+    if (result.count === 0) {
       return {
         success: false,
         error: "Notification not found or unauthorized",
       };
     }
-
-    await prisma.notification.delete({
-      where: {
-        id: notificationId,
-      },
-    });
 
     return { success: true };
   } catch (error) {
@@ -254,6 +243,11 @@ export async function deleteNotifications(notificationIds: number[]) {
       return { success: false, error: "Unauthorized" };
     }
 
+    // P139: Validate array size to prevent oversized IN clause
+    if (notificationIds.length > 1000) {
+      return { success: false, error: "Too many notifications to delete at once" };
+    }
+
     // Verify ownership for all notifications implicitly by including userId in the deleteMany query
     const result = await prisma.notification.deleteMany({
       where: {
@@ -261,6 +255,7 @@ export async function deleteNotifications(notificationIds: number[]) {
           in: notificationIds,
         },
         userId: user.id,
+        companyId: user.companyId,
       },
     });
 

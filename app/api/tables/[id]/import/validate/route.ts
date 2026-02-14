@@ -41,9 +41,9 @@ export async function POST(
     let job: any = null;
 
     if (importJobId) {
-      // 1. Get Job by ID
-      job = await prisma.importJob.findUnique({
-        where: { id: importJobId },
+      // 1. Get Job by ID — scoped by companyId
+      job = await prisma.importJob.findFirst({
+        where: { id: importJobId, companyId: user.companyId },
       });
     } else if (fileKey) {
       // 1a. Create Job on the fly (Robust mode)
@@ -83,8 +83,8 @@ export async function POST(
     // The client needs the ID for the commit step.
     // We will inject `importJobId` into the returned JSON summary so client can update state.
 
-    const table = await prisma.tableMeta.findUnique({
-      where: { id: tableId },
+    const table = await prisma.tableMeta.findFirst({
+      where: { id: tableId, companyId: user.companyId },
     });
 
     if (!table) {
@@ -93,7 +93,7 @@ export async function POST(
 
     // Update status
     await prisma.importJob.update({
-      where: { id: job.id },
+      where: { id: job.id, companyId: user.companyId },
       data: { status: "VALIDATING" },
     });
 
@@ -102,7 +102,9 @@ export async function POST(
     // This prevents SSRF even if old malicious URLs exist in DB
     const secureUrl = buildUploadThingUrl(job.fileKey);
     console.log("Fetching file from (secure):", secureUrl);
-    const fileRes = await fetch(secureUrl);
+    const fileRes = await fetch(secureUrl, {
+      signal: AbortSignal.timeout(30_000), // P215: 30s timeout matching import job
+    });
     if (!fileRes.ok || !fileRes.body) {
       throw new Error("Failed to download file from storage");
     }
@@ -132,7 +134,7 @@ export async function POST(
 
     if (result.summary.headers.length === 0) {
       await prisma.importJob.update({
-        where: { id: job.id },
+        where: { id: job.id, companyId: user.companyId },
         data: { status: "FAILED", summary: result.summary as any },
       });
       return NextResponse.json(
@@ -160,7 +162,7 @@ ${schemaFields.join(", ")}`,
 
     if (extra.length > 0) {
       await prisma.importJob.update({
-        where: { id: job.id },
+        where: { id: job.id, companyId: user.companyId },
         data: { status: "FAILED", summary: result.summary as any },
       });
       return NextResponse.json(
@@ -175,7 +177,7 @@ ${schemaFields.join(", ")}`,
     const missing = schemaFields.filter((f) => !fileHeaders.includes(f));
     if (missing.length > 0) {
       await prisma.importJob.update({
-        where: { id: job.id },
+        where: { id: job.id, companyId: user.companyId },
         data: { status: "FAILED", summary: result.summary as any },
       });
       return NextResponse.json(
@@ -189,7 +191,7 @@ ${schemaFields.join(", ")}`,
 
     // Success
     await prisma.importJob.update({
-      where: { id: job.id },
+      where: { id: job.id, companyId: user.companyId },
       data: { status: "VALIDATED", summary: result.summary as any },
     });
 

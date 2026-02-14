@@ -84,10 +84,37 @@ export async function PATCH(
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Only Admin can update other users (usually), but for now we rely on the caller UI to enforce role logic
-    // We just enforce company isolation here.
+    // Authorization: non-admins can only update their own name/password
+    const isSelf = user.id === targetUserId;
+    const isAdmin = user.role === "admin";
+    const sensitiveFields = [role, permissions, tablePermissions, allowedWriteTableIds, email].some(
+      (v) => v !== undefined
+    );
 
-    // Check if email is taken by another user (across system? or just company? Email should be unique globally usually)
+    if (!isAdmin) {
+      if (!isSelf) {
+        return NextResponse.json(
+          { error: "Only admins can update other users" },
+          { status: 403 }
+        );
+      }
+      if (sensitiveFields) {
+        return NextResponse.json(
+          { error: "Only admins can change role, permissions, or email" },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Only admins can assign admin role
+    if (role === "admin" && !isAdmin) {
+      return NextResponse.json(
+        { error: "Only admins can assign admin role" },
+        { status: 403 }
+      );
+    }
+
+    // Check if email is taken by another user
     if (email && email !== existingUser.email) {
       const emailTaken = await prisma.user.findUnique({
         where: { email },
@@ -113,9 +140,9 @@ export async function PATCH(
     if (permissions) updateData.permissions = permissions;
     if (tablePermissions) updateData.tablePermissions = tablePermissions;
 
-    // Update user - with company check in where clause just to be extra safe
+    // SECURITY: Atomic companyId check prevents TOCTOU race
     const updatedUser = await prisma.user.update({
-      where: { id: targetUserId }, // Prisma update by ID is standard, we verified ownership above
+      where: { id: targetUserId, companyId: user.companyId },
       data: updateData,
       select: {
         id: true,
@@ -150,6 +177,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (user.role !== "admin") {
+      return NextResponse.json({ error: "Only admins can delete users" }, { status: 403 });
+    }
+
     const { id } = await params;
     const targetUserId = parseInt(id);
 
@@ -175,7 +206,7 @@ export async function DELETE(
 
     // Delete user
     await prisma.user.delete({
-      where: { id: targetUserId },
+      where: { id: targetUserId, companyId: user.companyId },
     });
 
     return NextResponse.json({ success: true });

@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 // type Decimal = Prisma.Decimal;
 // const Decimal = Prisma.Decimal;
 import { startOfDay, endOfDay } from "date-fns";
+import { inngest } from "@/lib/inngest/client";
 
 export type MetricType =
   | "REVENUE" // Total income (Paid transactions OR Table Sum OR Finance Record)
@@ -121,6 +122,18 @@ export async function createGoal(data: GoalFormData) {
   });
 
   revalidatePath("/finance/goals");
+
+  // Trigger dashboard goals cache refresh
+  try {
+    await inngest.send({
+      id: `goals-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
+      name: "dashboard/refresh-goals",
+      data: { companyId: user.companyId },
+    });
+  } catch (e) {
+    console.error("[Goals] Failed to send dashboard refresh:", e);
+  }
+
   return { ...goal, targetValue: Number(goal.targetValue) };
 }
 
@@ -133,6 +146,17 @@ export async function toggleGoalArchive(id: number, isArchived: boolean) {
     where: { id, companyId: user.companyId },
     data: { isArchived },
   });
+
+  // Trigger dashboard goals cache refresh
+  try {
+    await inngest.send({
+      id: `goals-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
+      name: "dashboard/refresh-goals",
+      data: { companyId: user.companyId },
+    });
+  } catch (e) {
+    console.error("[Goals] Failed to send dashboard refresh:", e);
+  }
 
   revalidatePath("/finance/goals");
   revalidatePath("/finance/goals/archive");
@@ -228,9 +252,11 @@ async function calculateMetricValue(
           ...getDateFilter(startDate, endDate, "createdAt"),
         };
 
+        // P121: Add take limit to record queries used for metric calculation
         const records = await prisma.record.findMany({
           where,
           select: { data: true },
+          take: 5000, // P211: Lowered from 10000 to cap memory for metric calculations
         });
 
         if (targetType?.toUpperCase() === "SUM") {
@@ -469,9 +495,11 @@ async function calculateMetricValue(
       };
 
       if (targetType?.toUpperCase() === "SUM" && filters.columnKey) {
+        // P121: Add take limit to record queries for metric sum calculation
         const records = await prisma.record.findMany({
           where,
           select: { data: true },
+          take: 5000, // P211: Lowered from 10000 to cap memory for metric calculations
         });
 
         const sum = records.reduce((acc, r: any) => {
@@ -519,13 +547,18 @@ function generateRecommendation(
   ).toLocaleString()} ${unit} ליום כדי לעמוד ביעד.`;
 }
 
-// Internal helper to calculate progress for a list of goals
+// Internal helper to calculate progress for a list of goals.
+// Processes in chunks of 15 to avoid exhausting DB connection pool.
 async function enrichGoalsWithProgress(
   goals: any[],
   companyId: number,
 ): Promise<GoalWithProgress[]> {
-  return Promise.all(
-    goals.map(async (goal) => {
+  const CHUNK_SIZE = 15;
+  const results: GoalWithProgress[] = [];
+  for (let i = 0; i < goals.length; i += CHUNK_SIZE) {
+    const chunk = goals.slice(i, i + CHUNK_SIZE);
+    const chunkResults = await Promise.all(
+      chunk.map(async (goal) => {
       const filters = ((goal as any).filters as GoalFilters) || {};
       const targetType = (goal as any).targetType || "COUNT";
 
@@ -635,8 +668,11 @@ async function enrichGoalsWithProgress(
         projectedValue: finalProjected,
         recommendation,
       };
-    }),
-  );
+      }),
+    );
+    results.push(...chunkResults);
+  }
+  return results;
 }
 
 export async function getGoalsWithProgress(): Promise<GoalWithProgress[]> {
@@ -645,15 +681,25 @@ export async function getGoalsWithProgress(): Promise<GoalWithProgress[]> {
     throw new Error("Unauthorized");
   }
 
-  // Type cast for 'isArchived' because it might not be in generated types yet
-  const where: any = { companyId: user.companyId, isArchived: false };
+  return getGoalsForCompany(user.companyId);
+}
 
+/**
+ * Internal helper: get goals with progress for a company (no auth check).
+ * Used by Inngest background jobs for cache pre-computation.
+ */
+export async function getGoalsForCompany(companyId: number): Promise<GoalWithProgress[]> {
+  // Type cast for 'isArchived' because it might not be in generated types yet
+  const where: any = { companyId, isArchived: false };
+
+  // P120: Add take limit to bound goal queries
   const goals = await prisma.goal.findMany({
     where,
     orderBy: [{ order: "asc" }, { createdAt: "desc" }],
+    take: 200,
   });
 
-  return enrichGoalsWithProgress(goals, user.companyId);
+  return enrichGoalsWithProgress(goals, companyId);
 }
 
 export async function getArchivedGoals(): Promise<GoalWithProgress[]> {
@@ -662,12 +708,13 @@ export async function getArchivedGoals(): Promise<GoalWithProgress[]> {
     throw new Error("Unauthorized");
   }
 
-  // Type cast for 'isArchived'
   const where: any = { companyId: user.companyId, isArchived: true };
 
+  // P120: Add take limit to bound archived goal queries
   const goals = await prisma.goal.findMany({
     where,
     orderBy: [{ endDate: "desc" }],
+    take: 200,
   });
 
   return enrichGoalsWithProgress(goals, user.companyId);
@@ -698,7 +745,8 @@ export async function getGoalCreationData() {
   const [clients, tables] = await Promise.all([
     prisma.client.findMany({
       where: { companyId: user.companyId },
-      select: { id: true, name: true, company: true },
+      select: { id: true, name: true },
+      take: 5000, // P211+P216: Lowered from 10000, removed unnecessary company join
     }),
     prisma.tableMeta.findMany({
       where: { companyId: user.companyId },
@@ -707,6 +755,7 @@ export async function getGoalCreationData() {
         name: true,
         schemaJson: true,
       },
+      take: 500,
     }),
   ]);
 

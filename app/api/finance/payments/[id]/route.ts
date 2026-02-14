@@ -54,20 +54,6 @@ export async function PATCH(
     const paymentId = parseInt(id);
     const data = await request.json();
 
-    // Verify ownership via client
-    const existingPayment = await prisma.oneTimePayment.findFirst({
-      where: {
-        id: paymentId,
-        client: {
-          companyId: user.companyId,
-        },
-      },
-    });
-
-    if (!existingPayment) {
-      return NextResponse.json({ error: "Payment not found" }, { status: 404 });
-    }
-
     // Validate status if provided
     if (
       data.status &&
@@ -76,23 +62,39 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
 
-    // If marking as paid, we might want to create a transaction record automatically
-    // But for now, let's just update the payment record
-    const updatedPayment = await prisma.oneTimePayment.update({
-      where: { id: paymentId },
-      data: {
-        title: data.title,
-        amount: data.amount ? parseFloat(data.amount) : undefined,
-        dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
-        status: data.status,
-        paidDate: data.paidDate
-          ? new Date(data.paidDate)
-          : data.status === "paid"
-          ? new Date()
-          : undefined,
-        notes: data.notes,
-      },
-    });
+    // Verify ownership + update atomically to prevent TOCTOU race
+    const updatedPayment = await prisma.$transaction(async (tx) => {
+      const existingPayment = await tx.oneTimePayment.findFirst({
+        where: {
+          id: paymentId,
+          client: {
+            companyId: user.companyId,
+          },
+        },
+      });
+
+      if (!existingPayment) return null;
+
+      return tx.oneTimePayment.update({
+        where: { id: paymentId },
+        data: {
+          title: data.title,
+          amount: data.amount ? parseFloat(data.amount) : undefined,
+          dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+          status: data.status,
+          paidDate: data.paidDate
+            ? new Date(data.paidDate)
+            : data.status === "paid"
+            ? new Date()
+            : undefined,
+          notes: data.notes,
+        },
+      });
+    }, { isolationLevel: "RepeatableRead" });
+
+    if (!updatedPayment) {
+      return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+    }
 
     return NextResponse.json(updatedPayment);
   } catch (error) {
@@ -117,23 +119,28 @@ export async function DELETE(
     const { id } = await params;
     const paymentId = parseInt(id);
 
-    // Verify ownership via client
-    const existingPayment = await prisma.oneTimePayment.findFirst({
-      where: {
-        id: paymentId,
-        client: {
-          companyId: user.companyId,
+    // Verify ownership + delete atomically to prevent TOCTOU race
+    const deleted = await prisma.$transaction(async (tx) => {
+      const existingPayment = await tx.oneTimePayment.findFirst({
+        where: {
+          id: paymentId,
+          client: {
+            companyId: user.companyId,
+          },
         },
-      },
-    });
+      });
 
-    if (!existingPayment) {
+      if (!existingPayment) return false;
+
+      await tx.oneTimePayment.delete({
+        where: { id: paymentId },
+      });
+      return true;
+    }, { isolationLevel: "RepeatableRead" });
+
+    if (!deleted) {
       return NextResponse.json({ error: "Payment not found" }, { status: 404 });
     }
-
-    await prisma.oneTimePayment.delete({
-      where: { id: paymentId },
-    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

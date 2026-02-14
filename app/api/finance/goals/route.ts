@@ -15,6 +15,7 @@ export async function GET() {
     const goals = await prisma.goal.findMany({
       where: { companyId: user.companyId },
       orderBy: [{ isActive: "desc" }, { endDate: "asc" }],
+      take: 200,
     });
 
     return NextResponse.json(goals);
@@ -35,6 +36,26 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+
+    // SECURITY: Validate tableId and productId belong to user's company
+    if (body.tableId) {
+      const table = await prisma.tableMeta.findFirst({
+        where: { id: body.tableId, companyId: user.companyId },
+        select: { id: true },
+      });
+      if (!table) {
+        return NextResponse.json({ error: "Invalid tableId" }, { status: 400 });
+      }
+    }
+    if (body.productId) {
+      const product = await prisma.product.findFirst({
+        where: { id: body.productId, companyId: user.companyId },
+        select: { id: true },
+      });
+      if (!product) {
+        return NextResponse.json({ error: "Invalid productId" }, { status: 400 });
+      }
+    }
 
     const goal = await prisma.goal.create({
       data: {

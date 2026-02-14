@@ -13,6 +13,7 @@ export const processFinanceSyncJob = inngest.createFunction(
     id: "process-finance-sync-job",
     name: "Process Finance Sync Job",
     retries: 3,
+    timeouts: { finish: "180s" },
     // Only one sync per rule per company at a time
     concurrency: {
       limit: 1,
@@ -25,7 +26,7 @@ export const processFinanceSyncJob = inngest.createFunction(
 
       try {
         await prisma.financeSyncJob.update({
-          where: { id: jobId },
+          where: { id: jobId, companyId: event.data.event.data.companyId },
           data: {
             status: "FAILED",
             summary: {
@@ -47,8 +48,9 @@ export const processFinanceSyncJob = inngest.createFunction(
 
     // Step 1: Load and validate job/rule, mark RUNNING
     const { rule } = await step.run("load-rule", async () => {
-      const job = await prisma.financeSyncJob.findUnique({
-        where: { id: jobId },
+      // SECURITY: Filter by companyId to prevent cross-tenant access
+      const job = await prisma.financeSyncJob.findFirst({
+        where: { id: jobId, companyId },
       });
 
       if (!job) {
@@ -59,8 +61,9 @@ export const processFinanceSyncJob = inngest.createFunction(
         throw new Error("Job already completed");
       }
 
-      const rule = await prisma.financeSyncRule.findUnique({
-        where: { id: syncRuleId },
+      // SECURITY: Filter by companyId to prevent cross-tenant access
+      const rule = await prisma.financeSyncRule.findFirst({
+        where: { id: syncRuleId, companyId },
       });
 
       if (!rule) {
@@ -69,7 +72,7 @@ export const processFinanceSyncJob = inngest.createFunction(
 
       // Mark as RUNNING
       await prisma.financeSyncJob.update({
-        where: { id: jobId },
+        where: { id: jobId, companyId },
         data: { status: "RUNNING" },
       });
 
@@ -84,12 +87,12 @@ export const processFinanceSyncJob = inngest.createFunction(
     // Step 3: Finalize — update lastRunAt, mark COMPLETED
     await step.run("finalize", async () => {
       await prisma.financeSyncRule.update({
-        where: { id: syncRuleId },
+        where: { id: syncRuleId, companyId },
         data: { lastRunAt: new Date() },
       });
 
       await prisma.financeSyncJob.update({
-        where: { id: jobId },
+        where: { id: jobId, companyId },
         data: {
           status: "COMPLETED",
           summary: {

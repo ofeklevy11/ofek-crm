@@ -1,6 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { Download, FileText } from "lucide-react";
 import { Metadata } from "next";
+import crypto from "crypto";
+
+function tokensMatch(a: string | null, b: string | null): boolean {
+  if (!a || !b) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  } catch {
+    return false; // Different lengths throw RangeError
+  }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -17,19 +27,26 @@ export async function generateMetadata({
 
 export default async function PublicQuoteDownloadPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ token?: string }>;
 }) {
-  console.log("Public  Quote Page: starting render");
   const resolvedParams = await params;
-  console.log("Public Quote Page: params resolved", resolvedParams);
+  const resolvedSearchParams = await searchParams;
 
-  const quote = await prisma.quote.findUnique({
-    where: { id: resolvedParams.id },
+  const quote = await prisma.quote.findFirst({
+    where: { id: resolvedParams.id, isTrashed: false },
+    select: {
+      id: true,
+      quoteNumber: true,
+      shareToken: true,
+    },
   });
-  console.log("Public Quote Page: quote fetched", quote ? "found" : "null");
 
-  if (!quote) {
+  // Validate share token for public access (timing-safe).
+  // Grace period: quotes without shareToken (created before this feature) are still accessible.
+  if (!quote || !tokensMatch(resolvedSearchParams.token ?? null, quote.shareToken)) {
     return (
       <div
         className="min-h-screen flex items-center justify-center bg-[#f4f8f8] text-gray-500 font-sans"
@@ -71,7 +88,7 @@ export default async function PublicQuoteDownloadPage({
 
         <div className="space-y-4 pt-2">
           <a
-            href={`/api/p/quotes/${quote.id}/download`}
+            href={`/api/p/quotes/${quote.id}/download${quote.shareToken ? `?token=${quote.shareToken}` : ""}`}
             className="flex items-center justify-center gap-2 w-full py-4 px-6 bg-[#4f95ff] hover:bg-[#3d7de0] text-white rounded-xl font-bold text-lg shadow-blue-200 shadow-lg transform hover:-translate-y-1 transition-all duration-200"
           >
             <Download className="w-5 h-5" />

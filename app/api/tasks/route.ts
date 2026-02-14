@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { validateUserInCompany } from "@/lib/company-validation";
 
 // GET all tasks
 export async function GET(request: NextRequest) {
@@ -11,9 +12,11 @@ export async function GET(request: NextRequest) {
     }
 
     // CRITICAL: Filter by companyId for multi-tenancy
+    // P111: Add take limit matching server action bounds
     const tasks = await prisma.task.findMany({
       where: { companyId: user.companyId },
       orderBy: { createdAt: "desc" },
+      take: 5000,
     });
     return NextResponse.json(tasks);
   } catch (error) {
@@ -34,6 +37,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+
+    // SECURITY: Validate assigneeId belongs to same company
+    if (body.assigneeId) {
+      if (!(await validateUserInCompany(body.assigneeId, user.companyId))) {
+        return NextResponse.json({ error: "Invalid assignee" }, { status: 400 });
+      }
+    }
 
     // Convert dueDate string to Date object if present
     const dueDate = body.dueDate ? new Date(body.dueDate) : null;

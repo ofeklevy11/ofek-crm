@@ -3,6 +3,8 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { inngest } from "@/lib/inngest/client";
+import type { OnCompleteAction } from "@/lib/task-sheet-automations";
 
 // Types
 export interface TaskSheetItemInput {
@@ -213,8 +215,9 @@ export async function updateTaskSheet(
       return { success: false, error: "רק מנהלים יכולים לערוך דפי משימות" };
     }
 
+    // P114: Add companyId to prevent cross-tenant task sheet updates
     const sheet = await prisma.taskSheet.update({
-      where: { id },
+      where: { id, companyId: user.companyId },
       data: {
         ...(data.title && { title: data.title }),
         ...(data.description !== undefined && {
@@ -257,8 +260,9 @@ export async function deleteTaskSheet(id: number) {
       return { success: false, error: "רק מנהלים יכולים למחוק דפי משימות" };
     }
 
+    // P114: Add companyId to prevent cross-tenant task sheet deletes
     await prisma.taskSheet.delete({
-      where: { id },
+      where: { id, companyId: user.companyId },
     });
 
     revalidatePath("/tasks");
@@ -284,6 +288,26 @@ export async function addTaskSheetItem(
 
     if (user.role !== "admin") {
       return { success: false, error: "רק מנהלים יכולים להוסיף פריטים" };
+    }
+
+    // LL: Verify the sheet belongs to the current user's company
+    const sheet = await prisma.taskSheet.findFirst({
+      where: { id: sheetId, companyId: user.companyId },
+      select: { id: true },
+    });
+    if (!sheet) {
+      return { success: false, error: "Task sheet not found" };
+    }
+
+    // SECURITY: Validate linkedTaskId belongs to user's company
+    if (item.linkedTaskId) {
+      const linkedTask = await prisma.task.findFirst({
+        where: { id: item.linkedTaskId, companyId: user.companyId },
+        select: { id: true },
+      });
+      if (!linkedTask) {
+        return { success: false, error: "Invalid linked task" };
+      }
     }
 
     // Get max order
@@ -334,7 +358,7 @@ export async function updateTaskSheetItem(
       where: { id: itemId },
       include: {
         sheet: {
-          select: { assigneeId: true, companyId: true },
+          select: { assigneeId: true, companyId: true, title: true },
         },
       },
     });
@@ -375,10 +399,48 @@ export async function updateTaskSheetItem(
     }
     if (data.notes !== undefined) updateData.notes = data.notes;
 
-    const updatedItem = await prisma.taskSheetItem.update({
-      where: { id: itemId },
+    // SECURITY: Scope update via sheet companyId join to prevent TOCTOU
+    const updateResult = await prisma.taskSheetItem.updateMany({
+      where: { id: itemId, sheet: { companyId: user.companyId } },
       data: updateData,
     });
+    if (updateResult.count === 0) {
+      return { success: false, error: "Item not found" };
+    }
+    const updatedItem = await prisma.taskSheetItem.findUnique({
+      where: { id: itemId },
+    });
+
+    // Fire automations when isCompleted transitions false → true
+    const transitionedToCompleted =
+      data.isCompleted === true && !existingItem.isCompleted;
+    if (transitionedToCompleted && existingItem.onCompleteActions) {
+      try {
+        await inngest.send({
+          id: `task-sheet-item-${itemId}-${Date.now()}`,
+          name: "task-sheet/item-completed",
+          data: {
+            actions: existingItem.onCompleteActions as unknown as OnCompleteAction[],
+            item: {
+              id: existingItem.id,
+              title: existingItem.title,
+              sheet: {
+                title: existingItem.sheet.title,
+                companyId: existingItem.sheet.companyId,
+              },
+            },
+            user: {
+              id: user.id,
+              companyId: user.companyId,
+              name: user.name,
+            },
+            companyId: user.companyId,
+          },
+        });
+      } catch (sendError) {
+        console.error("[TaskSheets] Error sending automation event:", sendError);
+      }
+    }
 
     revalidatePath("/tasks");
     revalidatePath("/tasks/my-sheets");
@@ -402,8 +464,18 @@ export async function deleteTaskSheetItem(itemId: number) {
       return { success: false, error: "רק מנהלים יכולים למחוק פריטים" };
     }
 
-    await prisma.taskSheetItem.delete({
-      where: { id: itemId },
+    // W13: Verify item belongs to user's company via sheet join
+    const item = await prisma.taskSheetItem.findFirst({
+      where: { id: itemId, sheet: { companyId: user.companyId } },
+      select: { id: true },
+    });
+    if (!item) {
+      return { success: false, error: "Item not found" };
+    }
+
+    // SECURITY: Scope delete via sheet companyId join to prevent TOCTOU
+    await prisma.taskSheetItem.deleteMany({
+      where: { id: itemId, sheet: { companyId: user.companyId } },
     });
 
     revalidatePath("/tasks");
@@ -448,25 +520,54 @@ export async function toggleTaskSheetItemCompletion(itemId: number) {
     const wasCompleted = item.isCompleted;
     const isNowCompleted = !wasCompleted;
 
-    const updatedItem = await prisma.taskSheetItem.update({
-      where: { id: itemId },
+    // Use atomic updateMany with a where-guard on the current state to prevent
+    // double-click races: only the first toggle that matches the current state wins.
+    // SECURITY: Scope via sheet companyId join for defense-in-depth
+    const result = await prisma.taskSheetItem.updateMany({
+      where: { id: itemId, sheetId: item.sheetId, isCompleted: wasCompleted, sheet: { companyId: user.companyId } },
       data: {
         isCompleted: isNowCompleted,
         completedAt: isNowCompleted ? new Date() : null,
       },
     });
 
-    // Execute on-complete automations if item was just completed
+    if (result.count === 0) {
+      // Another request already toggled this item — return current state
+      return { success: true, data: item, alreadyToggled: true };
+    }
+
+    // Re-fetch the updated item for the response
+    const updatedItem = await prisma.taskSheetItem.findUnique({
+      where: { id: itemId },
+    });
+
+    // Offload automations to background job so the checkbox UX is never blocked
     if (isNowCompleted && item.onCompleteActions) {
       try {
-        await executeItemAutomations(
-          item.onCompleteActions as unknown as OnCompleteAction[],
-          item,
-          user,
-        );
-      } catch (autoError) {
-        console.error("[TaskSheets] Error executing automations:", autoError);
-        // Don't fail the whole operation if automation fails
+        await inngest.send({
+          id: `task-sheet-item-${itemId}-${Date.now()}`,
+          name: "task-sheet/item-completed",
+          data: {
+            actions: item.onCompleteActions as unknown as OnCompleteAction[],
+            item: {
+              id: item.id,
+              title: item.title,
+              sheet: {
+                title: item.sheet.title,
+                companyId: item.sheet.companyId,
+              },
+            },
+            user: {
+              id: user.id,
+              companyId: user.companyId,
+              name: user.name,
+            },
+            companyId: user.companyId,
+          },
+        });
+      } catch (sendError) {
+        console.error("[TaskSheets] Error sending automation event:", sendError);
+        // Don't fail the toggle if event dispatch fails
       }
     }
 
@@ -480,425 +581,6 @@ export async function toggleTaskSheetItemCompletion(itemId: number) {
   }
 }
 
-// Types for automation actions
-// Types for automation actions
-interface OnCompleteAction {
-  actionType:
-    | "UPDATE_RECORD"
-    | "CREATE_TASK"
-    | "CREATE_FINANCE"
-    | "SEND_NOTIFICATION"
-    | "UPDATE_TASK"
-    | "SEND_WEBHOOK"
-    | "SEND_WHATSAPP"
-    | "CREATE_CALENDAR_EVENT"
-    | "CREATE_RECORD";
-  config: Record<string, unknown>;
-}
-
-// Execute automation actions when item is completed
-async function executeItemAutomations(
-  actions: OnCompleteAction[],
-  item: {
-    id: number;
-    title: string;
-    sheet: { title: string; companyId: number };
-  },
-  user: { id: number; companyId: number; name: string },
-) {
-  if (!actions || !Array.isArray(actions) || actions.length === 0) return;
-
-  console.log(
-    `[TaskSheets] Executing ${actions.length} automations for item ${item.id}`,
-  );
-
-  for (const action of actions) {
-    try {
-      switch (action.actionType) {
-        case "UPDATE_RECORD":
-          await executeUpdateRecord(action.config, user.companyId);
-          break;
-        case "CREATE_TASK":
-          await executeCreateTask(action.config, user);
-          break;
-        case "UPDATE_TASK":
-          await executeUpdateTask(action.config);
-          break;
-        case "CREATE_FINANCE":
-          await executeCreateFinance(action.config, user.companyId);
-          break;
-        case "SEND_NOTIFICATION":
-          await executeSendNotification(action.config, item, user);
-          break;
-        case "SEND_WEBHOOK":
-          await executeSendWebhook(action.config, item, user);
-          break;
-        case "SEND_WHATSAPP":
-          await executeSendWhatsapp(action.config, item, user);
-          break;
-        case "CREATE_CALENDAR_EVENT":
-          await executeCreateCalendarEvent(action.config, user);
-          break;
-        case "CREATE_RECORD":
-          await executeCreateRecord(action.config, user.companyId);
-          break;
-        default:
-          console.warn(
-            `[TaskSheets] Unknown action type: ${action.actionType}`,
-          );
-      }
-    } catch (error) {
-      console.error(
-        `[TaskSheets] Failed to execute ${action.actionType}:`,
-        error,
-      );
-    }
-  }
-}
-
-// Create calendar event
-async function executeCreateCalendarEvent(
-  config: Record<string, unknown>,
-  user: { id: number; companyId: number },
-) {
-  const { title, description, startTime, endTime } = config as {
-    title?: string;
-    description?: string;
-    startTime?: string;
-    endTime?: string;
-  };
-
-  if (!title || !startTime || !endTime) return;
-
-  const { createCalendarEvent } = await import("./calendar");
-  await createCalendarEvent({
-    title,
-    description,
-    startTime,
-    endTime,
-    companyId: user.companyId,
-    // Add other fields as needed
-    // Assuming createCalendarEvent handles defaults
-  });
-
-  console.log(`[TaskSheets] Created calendar event: ${title}`);
-}
-
-// Update a record in a table
-async function executeUpdateRecord(
-  config: Record<string, unknown>,
-  companyId: number,
-) {
-  const { tableId, recordId, updates } = config as {
-    tableId: number;
-    recordId: number;
-    updates: Record<string, unknown>;
-  };
-
-  if (!tableId || !recordId || !updates) return;
-
-  // Verify record belongs to company
-  const record = await prisma.record.findFirst({
-    where: { id: recordId, tableId, companyId },
-  });
-
-  if (!record) {
-    console.warn(`[TaskSheets] Record ${recordId} not found or unauthorized`);
-    return;
-  }
-
-  const currentData = record.data as Record<string, unknown>;
-  const newData = { ...currentData, ...updates };
-
-  await prisma.record.update({
-    where: { id: recordId },
-    data: { data: JSON.parse(JSON.stringify(newData)) },
-  });
-
-  console.log(`[TaskSheets] Updated record ${recordId} in table ${tableId}`);
-}
-
-// Create a new record in a table
-async function executeCreateRecord(
-  config: Record<string, unknown>,
-  companyId: number,
-) {
-  const { tableId, values } = config as {
-    tableId: number;
-    values: Record<string, unknown>;
-  };
-
-  if (!tableId || !values) return;
-
-  // Verify table exists and belongs to company (optional but recommended)
-  // For now, we assume tableId is valid if picked from UI
-
-  await prisma.record.create({
-    data: {
-      companyId,
-      tableId,
-      data: JSON.parse(JSON.stringify(values)),
-    },
-  });
-
-  console.log(`[TaskSheets] Created record in table ${tableId}`);
-}
-
-// Create a new task
-async function executeCreateTask(
-  config: Record<string, unknown>,
-  user: { id: number; companyId: number },
-) {
-  const { title, description, status, priority, assigneeId, dueDate } =
-    config as {
-      title?: string;
-      description?: string;
-      status?: string;
-      priority?: string;
-      assigneeId?: number;
-      dueDate?: string;
-    };
-
-  if (!title) return;
-
-  await prisma.task.create({
-    data: {
-      companyId: user.companyId,
-      title,
-      description: description || null,
-      status: status || "todo",
-      priority: priority || null,
-      assigneeId: assigneeId || null,
-      dueDate: dueDate ? new Date(dueDate) : null,
-    },
-  });
-
-  console.log(`[TaskSheets] Created task: ${title}`);
-  revalidatePath("/tasks");
-}
-
-// Update an existing task
-async function executeUpdateTask(config: Record<string, unknown>) {
-  const { taskId, updates } = config as {
-    taskId: string;
-    updates: Record<string, unknown>;
-  };
-
-  if (!taskId || !updates) return;
-
-  const updateData: Record<string, unknown> = {};
-  if (updates.status !== undefined) updateData.status = updates.status;
-  if (updates.priority !== undefined) updateData.priority = updates.priority;
-  if (updates.assigneeId !== undefined)
-    updateData.assigneeId = updates.assigneeId;
-  if (updates.title !== undefined) updateData.title = updates.title;
-  if (updates.description !== undefined)
-    updateData.description = updates.description;
-
-  await prisma.task.update({
-    where: { id: taskId },
-    data: updateData,
-  });
-
-  console.log(`[TaskSheets] Updated task ${taskId}`);
-  revalidatePath("/tasks");
-}
-
-// Create a finance record
-async function executeCreateFinance(
-  config: Record<string, unknown>,
-  companyId: number,
-) {
-  const { title, amount, type, category, clientId, description } = config as {
-    title?: string;
-    amount?: number;
-    type?: string;
-    category?: string;
-    clientId?: number;
-    description?: string;
-  };
-
-  if (!title || !amount || !type) return;
-
-  await prisma.financeRecord.create({
-    data: {
-      companyId,
-      title,
-      amount,
-      type, // "INCOME" or "EXPENSE"
-      category: category || null,
-      clientId: clientId || null,
-      description: description || null,
-      status: "COMPLETED",
-    },
-  });
-
-  console.log(`[TaskSheets] Created finance record: ${title} - ${amount}`);
-  revalidatePath("/finance");
-}
-
-// Send a notification
-async function executeSendNotification(
-  config: Record<string, unknown>,
-  item: { id: number; title: string; sheet: { title: string } },
-  user: { id: number; name: string },
-) {
-  const { recipientId, title, message } = config as {
-    recipientId?: number;
-    title?: string;
-    message?: string;
-  };
-
-  if (!recipientId) return;
-
-  // Replace placeholders
-  const finalTitle = (title || "משימה הושלמה")
-    .replace("{itemTitle}", item.title)
-    .replace("{sheetTitle}", item.sheet.title)
-    .replace("{userName}", user.name);
-
-  const finalMessage = (message || "הפריט {itemTitle} הושלם")
-    .replace("{itemTitle}", item.title)
-    .replace("{sheetTitle}", item.sheet.title)
-    .replace("{userName}", user.name);
-
-  const { sendNotification } = await import("./notifications");
-  await sendNotification({
-    userId: recipientId,
-    title: finalTitle,
-    message: finalMessage,
-    link: "/tasks?view=my-sheets",
-  });
-
-  console.log(`[TaskSheets] Sent notification to user ${recipientId}`);
-}
-
-// Send a webhook
-async function executeSendWebhook(
-  config: Record<string, unknown>,
-  item: { id: number; title: string; sheet: { title: string } },
-  user: { id: number; name: string },
-) {
-  const { url } = config as { url?: string };
-
-  if (!url) return;
-
-  try {
-    await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        event: "TASK_ITEM_COMPLETED",
-        timestamp: new Date().toISOString(),
-        item: {
-          id: item.id,
-          title: item.title,
-        },
-        sheet: {
-          title: item.sheet.title,
-        },
-        completedBy: {
-          id: user.id,
-          name: user.name,
-        },
-      }),
-    });
-
-    console.log(`[TaskSheets] Sent webhook to ${url}`);
-  } catch (error) {
-    console.error(`[TaskSheets] Failed to send webhook to ${url}:`, error);
-  }
-}
-
-// Send WhatsApp message
-async function executeSendWhatsapp(
-  config: Record<string, unknown>,
-  item: {
-    id: number;
-    title: string;
-    sheet: { title: string; companyId: number };
-  },
-  user: { id: number; name: string },
-) {
-  let phoneNumber: string | null = null;
-
-  // Check if phone source is from table
-  if (
-    config.phoneSource === "table" &&
-    config.waTableId &&
-    config.waPhoneColumn
-  ) {
-    // Fetch phone from the specified table
-    try {
-      let record;
-      if (config.waRecordId) {
-        // Fetch specific record by ID
-        record = await prisma.record.findFirst({
-          where: {
-            id: Number(config.waRecordId),
-            tableId: Number(config.waTableId),
-            companyId: item.sheet.companyId,
-          },
-        });
-      } else {
-        // Fetch the last created record from the table
-        record = await prisma.record.findFirst({
-          where: {
-            tableId: Number(config.waTableId),
-            companyId: item.sheet.companyId,
-          },
-          orderBy: { createdAt: "desc" },
-        });
-      }
-
-      if (record && record.data) {
-        const recordData = record.data as Record<string, unknown>;
-        phoneNumber = recordData[config.waPhoneColumn as string] as string;
-        console.log(
-          `[TaskSheets] WhatsApp: Fetched phone ${phoneNumber} from table ${config.waTableId}, column ${config.waPhoneColumn}`,
-        );
-      } else {
-        console.warn(
-          `[TaskSheets] WhatsApp: Record not found in table ${config.waTableId}`,
-        );
-      }
-    } catch (fetchError) {
-      console.error(
-        "[TaskSheets] WhatsApp: Error fetching phone from table:",
-        fetchError,
-      );
-    }
-  } else {
-    // Manual phone entry
-    phoneNumber = config.phone as string;
-  }
-
-  const message = config.message as string | undefined;
-
-  if (!phoneNumber || !message) {
-    console.warn("[TaskSheets] WhatsApp: Missing phone or message");
-    return;
-  }
-
-  // Replace placeholders
-  const finalMessage = message
-    .replace("{itemTitle}", item.title)
-    .replace("{sheetTitle}", item.sheet.title)
-    .replace("{userName}", user.name);
-
-  try {
-    const { sendGreenApiMessage } = await import("./green-api");
-    await sendGreenApiMessage(item.sheet.companyId, phoneNumber, finalMessage);
-    console.log(`[TaskSheets] Sent WhatsApp to ${phoneNumber}`);
-  } catch (error) {
-    console.error(
-      `[TaskSheets] Failed to send WhatsApp to ${phoneNumber}:`,
-      error,
-    );
-  }
-}
 
 // Get my task sheets (for current user only)
 export async function getMyTaskSheets() {
@@ -978,6 +660,7 @@ export async function resetTaskSheetItems(sheetId: number) {
       where: {
         sheetId: sheetId,
         isCompleted: true,
+        sheet: { companyId: user.companyId },
       },
       data: {
         isCompleted: false,

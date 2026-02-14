@@ -11,64 +11,66 @@ export async function markRetainerAsPaid(
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  const retainer = await prisma.retainer.findUnique({
-    where: { id: retainerId },
-    include: { client: true },
-  });
+  if (count < 1 || count > 100) throw new Error("Invalid count");
 
-  if (!retainer || retainer.client.companyId !== user.companyId) {
-    throw new Error("Retainer not found");
-  }
-
-  // Determine starting date
-  let nextDate = retainer.nextDueDate
-    ? new Date(retainer.nextDueDate)
-    : new Date();
-
-  // Create payments in loop
   const createdPaymentIds: number[] = [];
 
-  for (let i = 0; i < count; i++) {
-    // Current payment due is `nextDate`
+  await prisma.$transaction(async (tx) => {
+    const retainer = await tx.retainer.findFirst({
+      where: { id: retainerId, client: { companyId: user.companyId } },
+      include: { client: true },
+    });
 
-    const dueDate = new Date(nextDate);
+    if (!retainer) {
+      throw new Error("Retainer not found");
+    }
 
-    const payment = await prisma.oneTimePayment.create({
+    // Determine starting date
+    let nextDate = retainer.nextDueDate
+      ? new Date(retainer.nextDueDate)
+      : new Date();
+
+    // Create payments in loop
+    for (let i = 0; i < count; i++) {
+      const dueDate = new Date(nextDate);
+
+      const payment = await tx.oneTimePayment.create({
+        data: {
+          title: `תשלום ריטיינר: ${retainer.title} (${i + 1}/${count})`,
+          clientId: retainer.clientId,
+          amount: retainer.amount,
+          dueDate: dueDate,
+          paidDate: dueDate,
+          status: "paid",
+          notes: `נוצר אוטומטית מריטיינר #${retainer.id} (תשלום ${
+            i + 1
+          } מתוך ${count})`,
+        },
+      });
+      createdPaymentIds.push(payment.id);
+
+      // Advance date for next iteration/update
+      switch (retainer.frequency) {
+        case "monthly":
+          nextDate.setMonth(nextDate.getMonth() + 1);
+          break;
+        case "quarterly":
+          nextDate.setMonth(nextDate.getMonth() + 3);
+          break;
+        case "annually":
+        case "yearly":
+          nextDate.setFullYear(nextDate.getFullYear() + 1);
+          break;
+      }
+    }
+
+    // Update retainer with final next date (inside same transaction)
+    await tx.retainer.updateMany({
+      where: { id: retainerId, client: { companyId: user.companyId } },
       data: {
-        title: `תשלום ריטיינר: ${retainer.title} (${i + 1}/${count})`,
-        clientId: retainer.clientId,
-        amount: retainer.amount,
-        dueDate: dueDate,
-        paidDate: dueDate, // Use dueDate as paidDate so it appears in the future logic
-        status: "paid",
-        notes: `נוצר אוטומטית מריטיינר #${retainer.id} (תשלום ${
-          i + 1
-        } מתוך ${count})`,
+        nextDueDate: nextDate,
       },
     });
-    createdPaymentIds.push(payment.id);
-
-    // Advance date for next iteration/update
-    switch (retainer.frequency) {
-      case "monthly":
-        nextDate.setMonth(nextDate.getMonth() + 1);
-        break;
-      case "quarterly":
-        nextDate.setMonth(nextDate.getMonth() + 3);
-        break;
-      case "annually":
-      case "yearly":
-        nextDate.setFullYear(nextDate.getFullYear() + 1);
-        break;
-    }
-  }
-
-  // Update retainer with final next date
-  await prisma.retainer.update({
-    where: { id: retainerId },
-    data: {
-      nextDueDate: nextDate,
-    },
   });
 
   // Trigger Sync Rules

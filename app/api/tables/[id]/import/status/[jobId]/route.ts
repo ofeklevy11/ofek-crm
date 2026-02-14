@@ -22,12 +22,12 @@ export async function GET(
 
     const tableId = parseInt(id);
 
-    // Get job with access control
-    const job = await prisma.importJob.findUnique({
-      where: { id: jobId },
+    // Get job with access control — companyId in query for defense-in-depth
+    const job = await prisma.importJob.findFirst({
+      where: { id: jobId, tableId, companyId: user.companyId },
     });
 
-    if (!job || job.tableId !== tableId || job.companyId !== user.companyId) {
+    if (!job) {
       return NextResponse.json(
         { error: "Job not found or access denied" },
         { status: 404 },

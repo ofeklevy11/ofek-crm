@@ -11,6 +11,7 @@ export async function getUsers() {
     const users = await prisma.user.findMany({
       where: { companyId },
       orderBy: { createdAt: "desc" },
+      take: 500,
     });
     return { success: true, data: users };
   } catch (error) {
@@ -77,7 +78,7 @@ export async function updateUser(
     }
 
     const user = await prisma.user.update({
-      where: { id },
+      where: { id, companyId },
       data: data as any, // Cast to any to avoid Prisma Json type mismatch
     });
 
@@ -90,7 +91,9 @@ export async function updateUser(
         {
           updatedUserId: id,
           changes: data,
-        }
+        },
+        undefined,
+        companyId,
       );
     }
 
@@ -117,7 +120,7 @@ export async function deleteUser(id: number) {
     }
 
     await prisma.user.delete({
-      where: { id },
+      where: { id, companyId },
     });
 
     const currentUser = await getCurrentUser(user.email); // This fetches user by email, might fail if user creates audit for themselves (weird flow).
@@ -129,7 +132,7 @@ export async function deleteUser(id: number) {
     // Better approach:
     await createAuditLog(null, null, `USER_DELETE: ${user.email}`, {
       deletedUserId: id,
-    });
+    }, undefined, companyId);
 
     revalidatePath("/users");
     revalidatePath("/");

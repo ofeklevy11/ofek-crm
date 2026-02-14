@@ -319,6 +319,8 @@ export default function UserModal({
                       "canViewWorkers",
                       "canViewUsers",
                       "canViewDashboard",
+                      "canViewGoals",
+                      "canViewDashboardData",
                     ].map((key) => {
                       const flag = USER_FLAGS.find((f) => f.key === key);
                       if (!flag) return null;

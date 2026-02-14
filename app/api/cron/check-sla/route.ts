@@ -15,7 +15,7 @@ import { inngest } from "@/lib/inngest/client";
 export async function GET(request: Request) {
   // Security: Verify CRON_SECRET
   const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -23,6 +23,7 @@ export async function GET(request: Request) {
 
   try {
     await inngest.send({
+      id: `sla-manual-scan-${Math.floor(Date.now() / 60000)}`,
       name: "sla/manual-scan",
       data: { triggeredAt: new Date().toISOString() },
     });

@@ -69,11 +69,11 @@ export async function enqueueSyncJob(ruleId: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  const rule = await prisma.financeSyncRule.findUnique({
-    where: { id: ruleId },
+  const rule = await prisma.financeSyncRule.findFirst({
+    where: { id: ruleId, companyId: user.companyId },
   });
 
-  if (!rule || rule.companyId !== user.companyId)
+  if (!rule)
     throw new Error("Rule not found");
 
   // Dedup: skip if there's already a QUEUED or RUNNING job for this rule
@@ -98,6 +98,7 @@ export async function enqueueSyncJob(ruleId: number) {
   });
 
   await inngest.send({
+    id: `finance-sync-${user.companyId}-${ruleId}-${job.id}`,
     name: "finance-sync/job.started",
     data: {
       jobId: job.id,
@@ -114,11 +115,11 @@ export async function enqueueSyncJob(ruleId: number) {
  * Does NOT call getCurrentUser() or revalidatePath() — safe for Inngest context.
  */
 export async function executeSyncRule(ruleId: number, companyId: number) {
-  const rule = await prisma.financeSyncRule.findUnique({
-    where: { id: ruleId },
+  const rule = await prisma.financeSyncRule.findFirst({
+    where: { id: ruleId, companyId },
   });
 
-  if (!rule || rule.companyId !== companyId)
+  if (!rule)
     throw new Error("Rule not found");
 
   let stats = {
@@ -138,6 +139,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
     const records = await prisma.record.findMany({
       where: { tableId: rule.sourceId, companyId },
       select: { id: true, data: true, createdAt: true },
+      take: 5000, // P76: Bound table records query
     });
 
     stats.scanned = records.length;
@@ -150,6 +152,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
     const existingRecords = await prisma.financeRecord.findMany({
       where: { syncRuleId: rule.id },
       select: { id: true, originId: true, amount: true, title: true, type: true, category: true, date: true, clientId: true },
+      take: 5000, // P76: Bound existing records query
     });
     const existingMap = new Map(existingRecords.map((r) => [r.originId, r]));
 
@@ -219,7 +222,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
         const chunk = toUpdate.slice(i, i + CHUNK_SIZE);
         await Promise.all(
           chunk.map((u) =>
-            prisma.financeRecord.update({ where: { id: u.id }, data: u.data }),
+            prisma.financeRecord.update({ where: { id: u.id, companyId }, data: u.data }),
           ),
         );
       }
@@ -236,6 +239,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
         status: { in: ["manual-marked-paid", "paid", "Pd", "PAID"] },
       },
       include: { client: true },
+      take: 5000, // P76: Bound transactions query
     });
 
     const payments = await prisma.oneTimePayment.findMany({
@@ -244,6 +248,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
         status: { in: ["paid", "PAID"] },
       },
       include: { client: true },
+      take: 5000, // P76: Bound payments query
     });
 
     stats.scanned = transactions.length + payments.length;
@@ -256,6 +261,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
     const existingRecords = await prisma.financeRecord.findMany({
       where: { syncRuleId: rule.id },
       select: { id: true, originId: true, amount: true, title: true, type: true, category: true, date: true, clientId: true },
+      take: 5000, // P76: Bound existing records query
     });
     const existingMap = new Map(existingRecords.map((r) => [r.originId, r]));
 
@@ -263,97 +269,109 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
     const toUpdate: { id: number; data: any }[] = [];
 
     for (const t of transactions) {
-      const date = t.paidDate || t.attemptDate || t.createdAt;
-      const title = t.notes || `System Transaction #${t.id}`;
-      const amount =
-        Math.round((Number(t.amount) + Number.EPSILON) * 100) / 100;
+      try {
+        const date = t.paidDate || t.attemptDate || t.createdAt;
+        const title = t.notes || `System Transaction #${t.id}`;
+        const amount =
+          Math.round((Number(t.amount) + Number.EPSILON) * 100) / 100;
 
-      if (amount <= 0) {
-        stats.skippedError++;
-        continue;
-      }
+        if (amount <= 0) {
+          stats.skippedError++;
+          continue;
+        }
 
-      const originId = `trans_${t.id}`;
-      const targetType = rule.targetType;
-      const existing = existingMap.get(originId);
+        const originId = `trans_${t.id}`;
+        const targetType = rule.targetType;
+        const existing = existingMap.get(originId);
 
-      if (!existing) {
-        toCreate.push({
-          companyId,
-          title,
-          amount,
-          type: targetType,
-          category: "System Transaction",
-          date,
-          status: "COMPLETED",
-          syncRuleId: rule.id,
-          originId,
-          clientId: t.clientId,
-        });
-      } else {
-        const isDifferent =
-          Number(existing.amount) !== amount ||
-          existing.title !== title ||
-          existing.type !== targetType ||
-          existing.category !== "System Transaction" ||
-          existing.date.getTime() !== date.getTime() ||
-          (t.clientId && existing.clientId !== t.clientId);
-
-        if (isDifferent) {
-          toUpdate.push({
-            id: existing.id,
-            data: { title, amount, type: targetType, category: "System Transaction", date, clientId: t.clientId },
+        if (!existing) {
+          toCreate.push({
+            companyId,
+            title,
+            amount,
+            type: targetType,
+            category: "System Transaction",
+            date,
+            status: "COMPLETED",
+            syncRuleId: rule.id,
+            originId,
+            clientId: t.clientId,
           });
         } else {
-          stats.skippedExists++;
+          const isDifferent =
+            Number(existing.amount) !== amount ||
+            existing.title !== title ||
+            existing.type !== targetType ||
+            existing.category !== "System Transaction" ||
+            existing.date.getTime() !== date.getTime() ||
+            (t.clientId && existing.clientId !== t.clientId);
+
+          if (isDifferent) {
+            toUpdate.push({
+              id: existing.id,
+              data: { title, amount, type: targetType, category: "System Transaction", date, clientId: t.clientId },
+            });
+          } else {
+            stats.skippedExists++;
+          }
         }
+      } catch (err) {
+        stats.skippedError++;
+        if (stats.errors.length < 5)
+          stats.errors.push(`Transaction #${t.id}: ${err}`);
       }
     }
 
     for (const p of payments) {
-      const date = p.paidDate || p.dueDate || p.createdAt;
-      const title = p.title || `Payment #${p.id}`;
-      const amount =
-        Math.round((Number(p.amount) + Number.EPSILON) * 100) / 100;
+      try {
+        const date = p.paidDate || p.dueDate || p.createdAt;
+        const title = p.title || `Payment #${p.id}`;
+        const amount =
+          Math.round((Number(p.amount) + Number.EPSILON) * 100) / 100;
 
-      if (amount <= 0) {
-        stats.skippedError++;
-        continue;
-      }
+        if (amount <= 0) {
+          stats.skippedError++;
+          continue;
+        }
 
-      const originId = `payment_${p.id}`;
-      const existing = existingMap.get(originId);
+        const originId = `payment_${p.id}`;
+        const existing = existingMap.get(originId);
 
-      if (!existing) {
-        toCreate.push({
-          companyId,
-          title,
-          amount,
-          type: "INCOME",
-          category: "Payment System",
-          date,
-          status: "COMPLETED",
-          syncRuleId: rule.id,
-          originId,
-          clientId: p.clientId,
-        });
-      } else {
-        const isDifferent =
-          Number(existing.amount) !== amount ||
-          existing.title !== title ||
-          existing.type !== "INCOME" ||
-          existing.category !== "Payment System" ||
-          existing.date.getTime() !== date.getTime() ||
-          (p.clientId && existing.clientId !== p.clientId);
-
-        if (isDifferent) {
-          toUpdate.push({
-            id: existing.id,
-            data: { title, amount, type: "INCOME", category: "Payment System", date, clientId: p.clientId },
+        if (!existing) {
+          toCreate.push({
+            companyId,
+            title,
+            amount,
+            type: "INCOME",
+            category: "Payment System",
+            date,
+            status: "COMPLETED",
+            syncRuleId: rule.id,
+            originId,
+            clientId: p.clientId,
           });
         } else {
-          stats.skippedExists++;
+          const isDifferent =
+            Number(existing.amount) !== amount ||
+            existing.title !== title ||
+            existing.type !== "INCOME" ||
+            existing.category !== "Payment System" ||
+            existing.date.getTime() !== date.getTime() ||
+            (p.clientId && existing.clientId !== p.clientId);
+
+          if (isDifferent) {
+            toUpdate.push({
+              id: existing.id,
+              data: { title, amount, type: "INCOME", category: "Payment System", date, clientId: p.clientId },
+            });
+          } else {
+            stats.skippedExists++;
+          }
         }
+      } catch (err) {
+        stats.skippedError++;
+        if (stats.errors.length < 5)
+          stats.errors.push(`Payment #${p.id}: ${err}`);
       }
     }
 
@@ -370,7 +388,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
         const chunk = toUpdate.slice(i, i + CHUNK_SIZE);
         await Promise.all(
           chunk.map((u) =>
-            prisma.financeRecord.update({ where: { id: u.id }, data: u.data }),
+            prisma.financeRecord.update({ where: { id: u.id, companyId }, data: u.data }),
           ),
         );
       }
@@ -387,6 +405,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
         originId: { startsWith: "fixed_" },
         syncRuleId: null,
       },
+      take: 5000, // P88: Bound unlinked records query
     });
 
     stats.scanned = unlinkedRecords.length;
@@ -415,6 +434,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
     await prisma.financeRecord.deleteMany({
       where: {
         syncRuleId: rule.id,
+        companyId,
         originId: { notIn: currentOriginIds },
       },
     });
@@ -425,7 +445,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
       rule.sourceType === "TABLE")
   ) {
     await prisma.financeRecord.deleteMany({
-      where: { syncRuleId: rule.id },
+      where: { syncRuleId: rule.id, companyId },
     });
   }
 
@@ -499,9 +519,9 @@ export async function deleteSyncRule(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  // Delete all finance records created by this rule
+  // Delete all finance records created by this rule (scoped to company)
   await prisma.financeRecord.deleteMany({
-    where: { syncRuleId: id },
+    where: { syncRuleId: id, companyId: user.companyId },
   });
 
   await prisma.financeSyncRule.delete({
@@ -521,6 +541,7 @@ export async function getSyncRules() {
   return prisma.financeSyncRule.findMany({
     where: { companyId: user.companyId },
     orderBy: { createdAt: "desc" },
+    take: 200, // P76: Bound user sync rules query
   });
 }
 
@@ -611,6 +632,7 @@ export async function triggerSyncByType(
       });
 
       await inngest.send({
+        id: `finance-sync-${companyId}-${rule.id}-${job.id}`,
         name: "finance-sync/job.started",
         data: {
           jobId: job.id,

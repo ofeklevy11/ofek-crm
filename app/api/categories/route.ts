@@ -13,6 +13,7 @@ export async function GET() {
     const categories = await prisma.tableCategory.findMany({
       where: { companyId: user.companyId },
       orderBy: { createdAt: "asc" },
+      take: 200,
       include: {
         tables: {
           select: { id: true }, // Just to count or check existence if needed

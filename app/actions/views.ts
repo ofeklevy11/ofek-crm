@@ -55,16 +55,23 @@ export async function createView(data: {
   isEnabled?: boolean;
 }) {
   try {
-    // Get the highest order value for this table to add the new view at the end
-    const maxOrderView = await prisma.view.findFirst({
-      where: { tableId: data.tableId },
-      orderBy: { order: "desc" },
-      select: { order: true },
-    });
-
     // --- SECURITY CHECK: VIEW LIMITS ---
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
+
+    // P107: Validate tableId belongs to user's company
+    if (!user) return { success: false, error: "Unauthorized" };
+    const table = await prisma.tableMeta.findFirst({
+      where: { id: data.tableId, companyId: user.companyId },
+    });
+    if (!table) return { success: false, error: "Table not found" };
+
+    // Get the highest order value for this table to add the new view at the end
+    const maxOrderView = await prisma.view.findFirst({
+      where: { tableId: data.tableId, companyId: user.companyId },
+      orderBy: { order: "desc" },
+      select: { order: true },
+    });
 
     // Limits
     const plan = user?.isPremium || "basic";
@@ -76,7 +83,7 @@ export async function createView(data: {
     }
 
     const currentCount = await prisma.view.count({
-      where: { tableId: data.tableId },
+      where: { tableId: data.tableId, companyId: user.companyId },
     });
 
     if (currentCount >= maxViews) {
@@ -91,6 +98,7 @@ export async function createView(data: {
 
     const view = await prisma.view.create({
       data: {
+        companyId: user.companyId,
         tableId: data.tableId,
         name: data.name,
         slug: data.slug,
@@ -135,8 +143,21 @@ export async function updateView(
   },
 ) {
   try {
+    // P107: Verify view belongs to user's company
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
+    const existingView = await prisma.view.findFirst({
+      where: { id: viewId, companyId: user.companyId },
+    });
+    if (!existingView) {
+      return { success: false, error: "View not found" };
+    }
+
+    // SECURITY: Defense-in-depth — include tableId + companyId in WHERE
     const view = await prisma.view.update({
-      where: { id: viewId },
+      where: { id: viewId, tableId: existingView.tableId, companyId: user.companyId },
       data: {
         ...(data.name && { name: data.name }),
         ...(data.slug && { slug: data.slug }),
@@ -181,16 +202,22 @@ export async function updateView(
 
 export async function toggleView(viewId: number) {
   try {
-    const currentView = await prisma.view.findUnique({
-      where: { id: viewId },
+    // P107: Verify view belongs to user's company
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
+    const currentView = await prisma.view.findFirst({
+      where: { id: viewId, companyId: user.companyId },
     });
 
     if (!currentView) {
       return { success: false, error: "התצוגה לא נמצאה." };
     }
 
+    // SECURITY: Defense-in-depth — include tableId + companyId in WHERE
     const view = await prisma.view.update({
-      where: { id: viewId },
+      where: { id: viewId, tableId: currentView.tableId, companyId: user.companyId },
       data: {
         isEnabled: !currentView.isEnabled,
       },
@@ -209,8 +236,13 @@ export async function toggleView(viewId: number) {
 
 export async function deleteView(viewId: number) {
   try {
-    const view = await prisma.view.findUnique({
-      where: { id: viewId },
+    // P107: Verify view belongs to user's company
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
+    const view = await prisma.view.findFirst({
+      where: { id: viewId, companyId: user.companyId },
     });
 
     if (!view) {
@@ -220,9 +252,12 @@ export async function deleteView(viewId: number) {
     // --- CLEANUP DASHBOARD WIDGETS ---
     // Remove this view from any "Table Views" widgets (Mini Dashboard)
     try {
+      // P116: Filter widgets by userId + companyId to prevent cross-tenant modification
       const widgets = await prisma.dashboardWidget.findMany({
         where: {
           widgetType: "TABLE_VIEWS_DASHBOARD",
+          userId: user.id,
+          companyId: user.companyId,
         },
       });
 
@@ -235,9 +270,9 @@ export async function deleteView(viewId: number) {
           );
 
           if (newViews.length !== originalLength) {
-            // Update widget with removed view
+            // SECURITY: Atomic companyId + userId check in update WHERE clause
             await prisma.dashboardWidget.update({
-              where: { id: widget.id },
+              where: { id: widget.id, companyId: user.companyId, userId: user.id },
               data: {
                 settings: {
                   ...settings,
@@ -257,8 +292,9 @@ export async function deleteView(viewId: number) {
     }
     // ---------------------------------
 
+    // SECURITY: Defense-in-depth — include tableId + companyId in WHERE
     await prisma.view.delete({
-      where: { id: viewId },
+      where: { id: viewId, tableId: view.tableId, companyId: user.companyId },
     });
 
     revalidatePath(`/tables/${view.tableId}`);
@@ -274,9 +310,21 @@ export async function deleteView(viewId: number) {
 
 export async function getViewsForTable(tableId: number) {
   try {
+    // P150: Verify table belongs to user's company
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized", views: [] };
+
+    const table = await prisma.tableMeta.findFirst({
+      where: { id: tableId, companyId: user.companyId },
+      select: { id: true },
+    });
+    if (!table) return { success: false, error: "Table not found", views: [] };
+
     const views = await prisma.view.findMany({
-      where: { tableId },
+      where: { tableId, companyId: user.companyId },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+      take: 200,
     });
 
     return { success: true, views };
@@ -288,12 +336,25 @@ export async function getViewsForTable(tableId: number) {
 
 export async function getEnabledViewsForTable(tableId: number) {
   try {
+    // P150: Verify table belongs to user's company
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized", views: [] };
+
+    const table = await prisma.tableMeta.findFirst({
+      where: { id: tableId, companyId: user.companyId },
+      select: { id: true },
+    });
+    if (!table) return { success: false, error: "Table not found", views: [] };
+
     const views = await prisma.view.findMany({
       where: {
         tableId,
+        companyId: user.companyId,
         isEnabled: true,
       },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+      take: 200,
     });
 
     return { success: true, views };
@@ -308,21 +369,29 @@ export async function reorderViews(
   viewOrders: Array<{ id: number; order: number }>,
 ) {
   try {
-    console.log("🔄 Reordering views for table:", tableId);
-    console.log("📊 New order:", viewOrders);
+    // P107: Verify table belongs to user's company
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
 
-    // Update all views in a transaction for consistency
+    const table = await prisma.tableMeta.findFirst({
+      where: { id: tableId, companyId: user.companyId },
+    });
+    if (!table) return { success: false, error: "Table not found" };
+
+    if (viewOrders.length > 200) {
+      return { success: false, error: "Too many views to reorder" };
+    }
+
+    // CCC: Update all views in a transaction — include tableId in where to prevent cross-table injection
     await prisma.$transaction(
       viewOrders.map(({ id, order }) => {
-        console.log(`  - Updating view ${id} to order ${order}`);
-        return prisma.view.update({
-          where: { id },
+        return prisma.view.updateMany({
+          where: { id, tableId, companyId: user.companyId },
           data: { order },
         });
       }),
     );
-
-    console.log("✅ Views reordered successfully");
     revalidatePath(`/tables/${tableId}`);
     return { success: true };
   } catch (error: any) {

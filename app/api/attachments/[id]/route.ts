@@ -22,28 +22,20 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Find the attachment and ensure it belongs to a record in the user's company
-    const attachment = await prisma.attachment.findUnique({
-      where: { id: attachmentId },
-      include: {
-        record: true,
+    // Atomic delete scoped to company — eliminates TOCTOU
+    const { count } = await prisma.attachment.deleteMany({
+      where: {
+        id: attachmentId,
+        record: { companyId: currentUser.companyId },
       },
     });
 
-    if (!attachment) {
+    if (count === 0) {
       return NextResponse.json(
         { error: "Attachment not found" },
         { status: 404 },
       );
     }
-
-    if (attachment.record.companyId !== currentUser.companyId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
-
-    await prisma.attachment.delete({
-      where: { id: attachmentId },
-    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -77,26 +69,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Find the attachment and ensure it belongs to a record in the user's company
-    const attachment = await prisma.attachment.findUnique({
-      where: { id: attachmentId },
-      include: {
-        record: true,
-      },
-    });
-
-    if (!attachment) {
-      return NextResponse.json(
-        { error: "Attachment not found" },
-        { status: 404 },
-      );
-    }
-
-    if (attachment.record.companyId !== currentUser.companyId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
-
-    // Build update data
+    // Build update data (before transaction to avoid holding locks during validation)
     const updateData: {
       url?: string;
       filename?: string;
@@ -104,6 +77,16 @@ export async function PUT(
     } = {};
 
     if (url !== undefined) {
+      // Validate URL: only allow http/https, max 2048 chars
+      if (typeof url !== "string" || url.length > 2048) {
+        return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
+      }
+      if (!/^https?:\/\//i.test(url)) {
+        return NextResponse.json(
+          { error: "URL must start with http:// or https://" },
+          { status: 400 },
+        );
+      }
       updateData.url = url;
       // Update filename from URL
       let filename = url.replace(/^https?:\/\//i, "");
@@ -119,10 +102,29 @@ export async function PUT(
       updateData.displayName = displayName?.trim() || null;
     }
 
-    const updatedAttachment = await prisma.attachment.update({
-      where: { id: attachmentId },
-      data: updateData,
-    });
+    // RepeatableRead transaction eliminates TOCTOU between ownership check and update
+    const updatedAttachment = await prisma.$transaction(
+      async (tx) => {
+        const att = await tx.attachment.findFirst({
+          where: { id: attachmentId, record: { companyId: currentUser.companyId } },
+          include: { record: true },
+        });
+        if (!att) return null;
+
+        return tx.attachment.update({
+          where: { id: attachmentId },
+          data: updateData,
+        });
+      },
+      { isolationLevel: "RepeatableRead" },
+    );
+
+    if (!updatedAttachment) {
+      return NextResponse.json(
+        { error: "Attachment not found" },
+        { status: 404 },
+      );
+    }
 
     return NextResponse.json(updatedAttachment);
   } catch (error) {

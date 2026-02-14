@@ -3,39 +3,27 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
-import {
-  createNotification,
-  createNotificationForCompany,
-} from "@/app/actions/notifications";
-import { createTicketActivityLogs } from "@/app/actions/ticket-activity-logs";
+import { inngest } from "@/lib/inngest/client";
+import { validateUserInCompany, validateClientInCompany } from "@/lib/company-validation";
 
 export async function getTickets() {
   const user = await getCurrentUser();
   if (!user) return [];
 
+  // P104: Removed comments/activityLogs from list query — load on-demand via getTicketDetails()
   return await prisma.ticket.findMany({
     where: {
       companyId: user.companyId,
-      status: { not: "CLOSED" }, // Exclude closed tickets - they appear in archive
+      status: { not: "CLOSED" },
     },
     include: {
       assignee: { select: { id: true, name: true, email: true } },
       client: { select: { id: true, name: true, email: true, company: true } },
       creator: { select: { id: true, name: true } },
-      comments: {
-        include: {
-          user: { select: { id: true, name: true } },
-        },
-        orderBy: { createdAt: "desc" },
-      },
-      activityLogs: {
-        include: {
-          user: { select: { id: true, name: true } },
-        },
-        orderBy: { createdAt: "desc" },
-      },
+      _count: { select: { comments: true, activityLogs: true } },
     },
     orderBy: { updatedAt: "desc" },
+    take: 500, // P104: Bound ticket list query
   });
 }
 
@@ -58,6 +46,7 @@ export async function getTicketDetails(ticketId: number) {
           user: { select: { id: true, name: true } },
         },
         orderBy: { createdAt: "desc" },
+        take: 100,
       },
       activityLogs: {
         include: {
@@ -122,6 +111,18 @@ export async function createTicket(data: {
     }
   }
 
+  // SECURITY: Validate cross-company references
+  if (data.assigneeId) {
+    if (!(await validateUserInCompany(data.assigneeId, user.companyId))) {
+      throw new Error("Invalid assignee");
+    }
+  }
+  if (data.clientId) {
+    if (!(await validateClientInCompany(data.clientId, user.companyId))) {
+      throw new Error("Invalid client");
+    }
+  }
+
   const ticket = await prisma.ticket.create({
     data: {
       ...data,
@@ -132,19 +133,22 @@ export async function createTicket(data: {
     },
   });
 
-  if (data.assigneeId) {
-    console.log(
-      `Creating notification for ticket assignment: Ticket #${ticket.id} to user ${data.assigneeId}`,
-    );
+  if (data.assigneeId && data.assigneeId !== user.id) {
     try {
-      await createNotification({
-        userId: data.assigneeId,
-        title: "קריאה חדשה הוקצתה לך",
-        message: `הוקצית לקריאה #${ticket.id}: ${ticket.title}`,
-        link: `/service`,
+      await inngest.send({
+        id: `ticket-notify-assignee-${user.companyId}-${ticket.id}`,
+        name: "ticket/notification" as const,
+        data: {
+          type: "assignee" as const,
+          isNew: true,
+          companyId: user.companyId,
+          assigneeId: data.assigneeId,
+          ticketId: ticket.id,
+          ticketTitle: ticket.title,
+        },
       });
     } catch (error) {
-      console.error("Failed to create notification:", error);
+      console.error("[ticket/notification] inngest.send failed:", error);
     }
   }
 
@@ -184,6 +188,18 @@ export async function updateTicket(
   });
 
   if (!currentTicket) throw new Error("Ticket not found");
+
+  // SECURITY: Validate cross-company references
+  if (data.assigneeId) {
+    if (!(await validateUserInCompany(data.assigneeId, user.companyId))) {
+      throw new Error("Invalid assignee");
+    }
+  }
+  if (data.clientId !== undefined && data.clientId !== null) {
+    if (!(await validateClientInCompany(data.clientId, user.companyId))) {
+      throw new Error("Invalid client");
+    }
+  }
 
   // Check if priority is being changed - if so, recalculate SLA dates
   let updateData = { ...data };
@@ -244,35 +260,54 @@ export async function updateTicket(
     data: updateData,
   });
 
-  // Create activity logs for tracked changes
-  try {
-    await createTicketActivityLogs(id, user.id, currentTicket, data);
-  } catch (e) {
-    console.error("Failed to create ticket activity logs", e);
-  }
+  // Fire background jobs for activity logs and status change automation
+  const events: Parameters<typeof inngest.send>[0] = [];
 
-  if (currentTicket && data.status && data.status !== currentTicket.status) {
-    processTicketStatusChange(
-      ticket.id,
-      user.companyId,
-      ticket.title,
-      currentTicket.status,
-      data.status,
-    ).catch((e) =>
-      console.error("Failed to process ticket status automation", e),
-    );
-  }
+  events.push({
+    id: `ticket-activity-${user.companyId}-${id}-${Math.floor(Date.now() / 1000)}`,
+    name: "ticket/activity-log" as const,
+    data: {
+      ticketId: id,
+      userId: user.id,
+      companyId: user.companyId,
+      previousData: currentTicket,
+      newData: data,
+    },
+  });
 
-  if (data.assigneeId) {
-    console.log(
-      `Creating notification for ticket update: Ticket #${ticket.id} to user ${data.assigneeId}`,
-    );
-    await createNotification({
-      userId: data.assigneeId,
-      title: "קריאה הוקצתה לך",
-      message: `הוקצתה לך קריאה #${ticket.id}: ${ticket.title}`,
-      link: `/service`,
+  if (data.status && data.status !== currentTicket.status) {
+    events.push({
+      id: `ticket-status-${user.companyId}-${ticket.id}-${data.status}`,
+      name: "ticket/status-change" as const,
+      data: {
+        ticketId: ticket.id,
+        companyId: user.companyId,
+        ticketTitle: ticket.title,
+        fromStatus: currentTicket.status,
+        toStatus: data.status,
+      },
     });
+  }
+
+  if (data.assigneeId && data.assigneeId !== currentTicket.assigneeId && data.assigneeId !== user.id) {
+    events.push({
+      id: `ticket-notify-reassign-${user.companyId}-${ticket.id}-${data.assigneeId}`,
+      name: "ticket/notification" as const,
+      data: {
+        type: "assignee" as const,
+        isNew: false,
+        companyId: user.companyId,
+        assigneeId: data.assigneeId,
+        ticketId: ticket.id,
+        ticketTitle: ticket.title,
+      },
+    });
+  }
+
+  try {
+    await inngest.send(events);
+  } catch (error) {
+    console.error("[updateTicket] inngest.send failed:", error);
   }
 
   revalidatePath("/service");
@@ -287,6 +322,13 @@ export async function addTicketComment(
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
+  // Verify ticket belongs to user's company before creating comment
+  const ticket = await prisma.ticket.findFirst({
+    where: { id: ticketId, companyId: user.companyId },
+    select: { id: true },
+  });
+  if (!ticket) throw new Error("Unauthorized");
+
   const comment = await prisma.ticketComment.create({
     data: {
       ticketId,
@@ -296,22 +338,21 @@ export async function addTicketComment(
     },
   });
 
-  // Notify Assignee if it's not the one commenting
-  const ticket = await prisma.ticket.findUnique({
-    where: { id: ticketId },
-    select: { assigneeId: true, title: true, id: true },
-  });
-
-  if (ticket && ticket.assigneeId) {
-    console.log(
-      `Creating notification for comment: Ticket #${ticket.id} to user ${ticket.assigneeId}`,
-    );
-    await createNotification({
-      userId: ticket.assigneeId,
-      title: "תגובה חדשה בקריאה",
-      message: `${user.name} הגיב בקריאה #${ticket.id}: ${ticket.title}`,
-      link: `/service`,
+  // Notify assignee in background
+  try {
+    await inngest.send({
+      id: `ticket-notify-comment-${user.companyId}-${ticketId}-${comment.id}`,
+      name: "ticket/notification" as const,
+      data: {
+        type: "comment" as const,
+        companyId: user.companyId,
+        ticketId,
+        userId: user.id,
+        userName: user.name,
+      },
     });
+  } catch (error) {
+    console.error("[ticket/notification] inngest.send failed:", error);
   }
 
   revalidatePath("/service");
@@ -323,14 +364,17 @@ export async function updateTicketComment(commentId: number, content: string) {
   if (!user) throw new Error("Unauthorized");
 
   // Find the comment and verify permissions
-  const comment = await prisma.ticketComment.findUnique({
-    where: { id: commentId },
+  const comment = await prisma.ticketComment.findFirst({
+    where: {
+      id: commentId,
+      ticket: { companyId: user.companyId },
+    },
     include: {
       ticket: { select: { companyId: true } },
     },
   });
 
-  if (!comment || comment.ticket.companyId !== user.companyId) {
+  if (!comment) {
     throw new Error("Unauthorized");
   }
 
@@ -339,8 +383,9 @@ export async function updateTicketComment(commentId: number, content: string) {
     throw new Error("רק מי ששלח את ההודעה או מנהל יכול לערוך");
   }
 
-  await prisma.ticketComment.update({
-    where: { id: commentId },
+  // SECURITY: Scope update via ticket companyId join to prevent TOCTOU
+  await prisma.ticketComment.updateMany({
+    where: { id: commentId, ticket: { companyId: user.companyId } },
     data: { content },
   });
 
@@ -352,14 +397,17 @@ export async function deleteTicketComment(commentId: number) {
   if (!user) throw new Error("Unauthorized");
 
   // Find the comment and verify permissions
-  const comment = await prisma.ticketComment.findUnique({
-    where: { id: commentId },
+  const comment = await prisma.ticketComment.findFirst({
+    where: {
+      id: commentId,
+      ticket: { companyId: user.companyId },
+    },
     include: {
       ticket: { select: { companyId: true } },
     },
   });
 
-  if (!comment || comment.ticket.companyId !== user.companyId) {
+  if (!comment) {
     throw new Error("Unauthorized");
   }
 
@@ -368,8 +416,9 @@ export async function deleteTicketComment(commentId: number) {
     throw new Error("רק מי ששלח את ההודעה או מנהל יכול למחוק");
   }
 
-  await prisma.ticketComment.delete({
-    where: { id: commentId },
+  // SECURITY: Scope delete via ticket companyId join to prevent TOCTOU
+  await prisma.ticketComment.deleteMany({
+    where: { id: commentId, ticket: { companyId: user.companyId } },
   });
 
   revalidatePath("/service");
@@ -381,6 +430,7 @@ export async function getSlaPolicies() {
 
   return await prisma.slaPolicy.findMany({
     where: { companyId: user.companyId },
+    take: 50,
   });
 }
 
@@ -414,8 +464,6 @@ export async function updateSlaPolicy(data: {
 
   revalidatePath("/service");
   return policy;
-  revalidatePath("/service");
-  return policy;
 }
 
 export async function deleteTicket(id: number) {
@@ -423,31 +471,19 @@ export async function deleteTicket(id: number) {
   if (!user) throw new Error("Unauthorized");
 
   // Verify the ticket belongs to the user's company before deleting
-  const ticket = await prisma.ticket.findUnique({
-    where: { id },
+  const ticket = await prisma.ticket.findFirst({
+    where: { id, companyId: user.companyId },
   });
 
-  if (!ticket || ticket.companyId !== user.companyId) {
+  if (!ticket) {
     throw new Error("Unauthorized");
   }
 
   await prisma.ticket.delete({
-    where: { id },
+    where: { id, companyId: user.companyId },
   });
 
   revalidatePath("/service");
-}
-
-// Helper to translate ticket statuses to Hebrew
-function translateStatus(status: string): string {
-  const statusMap: Record<string, string> = {
-    OPEN: "פתוח",
-    IN_PROGRESS: "בטיפול",
-    WAITING: "ממתין",
-    RESOLVED: "טופל",
-    CLOSED: "סגור",
-  };
-  return statusMap[status] || status;
 }
 
 export async function getTicketStats() {
@@ -492,104 +528,3 @@ export async function getTicketStats() {
   };
 }
 
-async function processTicketStatusChange(
-  ticketId: number,
-  companyId: number, // Added companyId
-  ticketTitle: string,
-  fromStatus: string,
-  toStatus: string,
-) {
-  console.log(
-    `[Automation] Processing status change for Ticket #${ticketId} (Company ${companyId}): ${fromStatus} -> ${toStatus}`,
-  );
-
-  try {
-    const rules = await prisma.automationRule.findMany({
-      where: {
-        companyId, // Filter by company!
-        isActive: true,
-        triggerType: "TICKET_STATUS_CHANGE",
-      },
-    });
-
-    console.log(
-      `[Automation] Found ${rules.length} active rules for company ${companyId}`,
-    );
-
-    // Translate statuses to Hebrew for display
-    const fromStatusHebrew = translateStatus(fromStatus);
-    const toStatusHebrew = translateStatus(toStatus);
-
-    for (const rule of rules) {
-      const triggerConfig = rule.triggerConfig as any;
-      console.log(
-        `[Automation] Checking Rule #${rule.id}: ${rule.name}`,
-        triggerConfig,
-      );
-
-      // Check "From Status" condition
-      if (
-        triggerConfig.fromStatus &&
-        triggerConfig.fromStatus !== "any" &&
-        triggerConfig.fromStatus !== fromStatus
-      ) {
-        console.log(
-          `[Automation] Rule #${rule.id} skipped: fromStatus mismatch (${triggerConfig.fromStatus} != ${fromStatus})`,
-        );
-        continue;
-      }
-
-      // Check "To Status" condition
-      if (
-        triggerConfig.toStatus &&
-        triggerConfig.toStatus !== "any" &&
-        triggerConfig.toStatus !== toStatus
-      ) {
-        console.log(
-          `[Automation] Rule #${rule.id} skipped: toStatus mismatch (${triggerConfig.toStatus} != ${toStatus})`,
-        );
-        continue;
-      }
-
-      console.log(`[Automation] Rule #${rule.id} MATCHED! Executing action...`);
-      console.log(
-        `[Automation] Rule #${rule.id} actionType: ${rule.actionType}, actionConfig:`,
-        JSON.stringify(rule.actionConfig),
-      );
-
-      if (rule.actionType === "SEND_NOTIFICATION") {
-        const actionConfig = rule.actionConfig as any;
-        console.log(
-          `[Automation] Rule #${rule.id} recipientId check: ${actionConfig.recipientId}, type: ${typeof actionConfig.recipientId}, isValid: ${!!actionConfig.recipientId && !isNaN(actionConfig.recipientId)}`,
-        );
-        if (actionConfig.recipientId && !isNaN(actionConfig.recipientId)) {
-          const message = (
-            actionConfig.messageTemplate ||
-            "הקריאה {ticketTitle} עברה לסטטוס {toStatus}"
-          )
-            .replace("{ticketTitle}", ticketTitle)
-            .replace("{ticketId}", String(ticketId))
-            .replace("{fromStatus}", fromStatusHebrew)
-            .replace("{toStatus}", toStatusHebrew);
-
-          await createNotificationForCompany({
-            companyId,
-            userId: actionConfig.recipientId,
-            title: actionConfig.titleTemplate || "עדכון בקריאת שירות",
-            message,
-            link: `/service`,
-          });
-          console.log(
-            `[Automation] Notification sent to valid user associated with company ${companyId}`,
-          );
-        } else {
-          console.log(
-            `[Automation] Rule #${rule.id} skipped notification: invalid or missing recipientId (${actionConfig.recipientId})`,
-          );
-        }
-      }
-    }
-  } catch (error) {
-    console.error("Error processing ticket status change automations:", error);
-  }
-}

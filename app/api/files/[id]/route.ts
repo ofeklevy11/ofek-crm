@@ -33,15 +33,16 @@ export async function PUT(
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
-    // Update the file
+    // SECURITY: Atomic companyId check in update WHERE clause
     const updatedFile = await prisma.file.update({
-      where: { id: fileId },
+      where: { id: fileId, companyId: currentUser.companyId },
       data: {
         displayName: displayName?.trim() || null,
       },
     });
 
-    return NextResponse.json(updatedFile);
+    const { url: _u, key: _k, ...safeFile } = updatedFile as any;
+    return NextResponse.json({ ...safeFile, downloadUrl: `/api/files/${fileId}/download` });
   } catch (error) {
     console.error("Error updating file:", error);
     return NextResponse.json(

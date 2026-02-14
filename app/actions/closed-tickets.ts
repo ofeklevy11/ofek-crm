@@ -8,6 +8,7 @@ export async function getClosedTickets() {
   const user = await getCurrentUser();
   if (!user) return [];
 
+  // P105: Removed comments/activityLogs from list query — load on-demand via getTicketDetails()
   return await prisma.ticket.findMany({
     where: {
       companyId: user.companyId,
@@ -17,20 +18,10 @@ export async function getClosedTickets() {
       assignee: { select: { id: true, name: true, email: true } },
       client: { select: { id: true, name: true, email: true, company: true } },
       creator: { select: { id: true, name: true } },
-      comments: {
-        include: {
-          user: { select: { id: true, name: true } },
-        },
-        orderBy: { createdAt: "desc" },
-      },
-      activityLogs: {
-        include: {
-          user: { select: { id: true, name: true } },
-        },
-        orderBy: { createdAt: "desc" },
-      },
+      _count: { select: { comments: true, activityLogs: true } },
     },
     orderBy: { updatedAt: "desc" },
+    take: 500, // P105: Bound closed ticket list query
   });
 }
 
@@ -44,19 +35,19 @@ export async function restoreTicket(id: number, newStatus: string) {
     throw new Error("Invalid status");
   }
 
-  const ticket = await prisma.ticket.findUnique({
-    where: { id },
+  const ticket = await prisma.ticket.findFirst({
+    where: { id, companyId: user.companyId },
     select: { companyId: true, status: true },
   });
 
-  if (!ticket || ticket.companyId !== user.companyId) {
+  if (!ticket) {
     throw new Error("Unauthorized");
   }
 
   const oldStatus = ticket.status;
 
   await prisma.ticket.update({
-    where: { id },
+    where: { id, companyId: user.companyId },
     data: { status: newStatus },
   });
 
@@ -90,28 +81,20 @@ export async function permanentlyDeleteTicket(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  const ticket = await prisma.ticket.findUnique({
-    where: { id },
+  const ticket = await prisma.ticket.findFirst({
+    where: { id, companyId: user.companyId },
   });
 
-  if (!ticket || ticket.companyId !== user.companyId) {
+  if (!ticket) {
     throw new Error("Unauthorized");
   }
 
-  // Delete related activity logs first
-  await prisma.ticketActivityLog.deleteMany({
-    where: { ticketId: id },
-  });
-
-  // Delete related comments
-  await prisma.ticketComment.deleteMany({
-    where: { ticketId: id },
-  });
-
-  // Then delete the ticket
-  await prisma.ticket.delete({
-    where: { id },
-  });
+  await prisma.$transaction([
+    // SECURITY: Add relation filter to ensure ticket belongs to user's company
+    prisma.ticketActivityLog.deleteMany({ where: { ticketId: id, ticket: { companyId: user.companyId } } }),
+    prisma.ticketComment.deleteMany({ where: { ticketId: id, ticket: { companyId: user.companyId } } }),
+    prisma.ticket.delete({ where: { id, companyId: user.companyId } }),
+  ]);
 
   revalidatePath("/service");
   revalidatePath("/service/archive");

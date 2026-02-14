@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { canWriteTable, canReadTable } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import { inngest } from "@/lib/inngest/client";
+import { deleteRecordWithCleanup } from "@/lib/record-cleanup";
 
 export async function getRecordsByTableId(tableId: number) {
   try {
@@ -25,6 +26,7 @@ export async function getRecordsByTableId(tableId: number) {
         companyId: user.companyId,
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 5000, // P197: Lowered from 10K to 5K to reduce OOM risk on serverless
     });
     return { success: true, data: records };
   } catch (error) {
@@ -70,23 +72,31 @@ export async function createRecord(data: {
       },
     });
 
-    await createAuditLog(record.id, actualCreatedBy, "CREATE", recordData);
+    await createAuditLog(record.id, actualCreatedBy, "CREATE", recordData, undefined, user.companyId);
 
     // Trigger automations for new record (async via Inngest)
     try {
-      const table = await prisma.tableMeta.findUnique({
-        where: { id: tableId },
+      const table = await prisma.tableMeta.findFirst({
+        where: { id: tableId, companyId: user.companyId },
         select: { name: true },
       });
-      await inngest.send({
-        name: "automation/new-record",
-        data: {
-          tableId,
-          tableName: table?.name || "Unknown Table",
-          recordId: record.id,
-          companyId: user.companyId,
+      await inngest.send([
+        {
+          id: `new-record-${user.companyId}-${record.id}`,
+          name: "automation/new-record",
+          data: {
+            tableId,
+            tableName: table?.name || "Unknown Table",
+            recordId: record.id,
+            companyId: user.companyId,
+          },
         },
-      });
+        {
+          id: `dash-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
+          name: "dashboard/refresh-widgets",
+          data: { companyId: user.companyId },
+        },
+      ]);
     } catch (autoError) {
       console.error(`[Records] Failed to send automation event:`, autoError);
     }
@@ -111,9 +121,14 @@ export async function updateRecord(
 ) {
   console.log(`[Records] updateRecord called for Record ID: ${recordId}`);
   try {
-    // Fetch existing record to check permissions AND for automation diffs
-    const existingRecord = await prisma.record.findUnique({
-      where: { id: recordId },
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // P138: Add companyId to prevent cross-tenant record access
+    const existingRecord = await prisma.record.findFirst({
+      where: { id: recordId, companyId: user.companyId },
     });
 
     if (!existingRecord) {
@@ -122,11 +137,6 @@ export async function updateRecord(
     }
 
     const { data: recordData, updatedBy, createdAt } = data;
-
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, error: "Unauthorized" };
-    }
 
     if (!canWriteTable(user, existingRecord.tableId)) {
       return {
@@ -152,7 +162,7 @@ export async function updateRecord(
     );
 
     const record = await prisma.record.update({
-      where: { id: recordId },
+      where: { id: recordId, companyId: user.companyId },
       data: {
         data: mergedData as any,
         updatedBy: actualUpdatedBy,
@@ -160,21 +170,29 @@ export async function updateRecord(
       },
     });
 
-    await createAuditLog(record.id, actualUpdatedBy, "UPDATE", recordData);
+    await createAuditLog(record.id, actualUpdatedBy, "UPDATE", recordData, undefined, user.companyId);
 
     // Trigger Automation (async via Inngest)
     console.log(`[Records] Sending automation event for Table ${record.tableId}`);
     try {
-      await inngest.send({
-        name: "automation/record-update",
-        data: {
-          tableId: record.tableId,
-          recordId: record.id,
-          oldData: existingRecord.data as Record<string, unknown>,
-          newData: recordData,
-          companyId: user.companyId,
+      await inngest.send([
+        {
+          id: `record-update-${user.companyId}-${record.id}-${Math.floor(Date.now() / 1000)}`,
+          name: "automation/record-update",
+          data: {
+            tableId: record.tableId,
+            recordId: record.id,
+            oldData: existingRecord.data as Record<string, unknown>,
+            newData: recordData,
+            companyId: user.companyId,
+          },
         },
-      });
+        {
+          id: `dash-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
+          name: "dashboard/refresh-widgets",
+          data: { companyId: user.companyId },
+        },
+      ]);
     } catch (autoError) {
       console.error(`[Records] Failed to send automation event:`, autoError);
     }
@@ -189,16 +207,16 @@ export async function updateRecord(
   }
 }
 
-export async function deleteRecord(recordId: number, deletedBy?: number) {
+export async function deleteRecord(recordId: number) {
   try {
     const user = await getCurrentUser();
     if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
-    // We need to fetch the record first to know the tableId
-    const existingRecord = await prisma.record.findUnique({
-      where: { id: recordId },
+    // P138: Add companyId to prevent cross-tenant record deletion
+    const existingRecord = await prisma.record.findFirst({
+      where: { id: recordId, companyId: user.companyId },
       select: { tableId: true },
     });
 
@@ -214,42 +232,22 @@ export async function deleteRecord(recordId: number, deletedBy?: number) {
       };
     }
 
-    // Check write permissions
-    /* Legacy check removed */
-
-    await prisma.record.delete({
-      where: { id: recordId },
+    await deleteRecordWithCleanup(recordId, {
+      companyId: user.companyId,
+      tableId: existingRecord.tableId,
+      userId: user.id,
     });
 
-    // CASCADE DELETE TO FINANCE
+    // Trigger dashboard cache refresh
     try {
-      // Find if this record was synced to finance
-      // We look for any SyncRule of type TABLE where sourceId is THIS table
-      // But simpler: just delete any finance record with originId == recordId AND syncRule.sourceType == TABLE
-      // Since originId isn't unique across all rules, we should probably check syncRule source.
-
-      // Find sync rules for this table
-      const syncRules = await prisma.financeSyncRule.findMany({
-        where: { sourceType: "TABLE", sourceId: existingRecord.tableId },
+      await inngest.send({
+        id: `dash-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
+        name: "dashboard/refresh-widgets",
+        data: { companyId: user.companyId },
       });
-
-      if (syncRules.length > 0) {
-        const ruleIds = syncRules.map((r) => r.id);
-        await prisma.financeRecord.deleteMany({
-          where: {
-            syncRuleId: { in: ruleIds },
-            originId: recordId.toString(),
-          },
-        });
-        console.log(
-          `[Records] Cascaded delete to Finance Records for origin #${recordId}`,
-        );
-      }
     } catch (e) {
-      console.error("Failed to cascade delete to finance:", e);
+      console.error("[Records] Failed to send dashboard refresh:", e);
     }
-
-    await createAuditLog(recordId, null, "DELETE");
 
     revalidatePath("/");
 
@@ -260,81 +258,60 @@ export async function deleteRecord(recordId: number, deletedBy?: number) {
   }
 }
 
-export async function bulkDeleteRecords(
-  recordIds: number[],
-  deletedBy?: number,
-) {
+export async function bulkDeleteRecords(recordIds: number[]) {
   try {
     const user = await getCurrentUser();
     if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
-    // If we have deletedBy, check permissions for the first record
-    if (recordIds.length > 0) {
-      const existingRecord = await prisma.record.findUnique({
-        where: { id: recordIds[0] },
-        select: { tableId: true },
-      });
+    const validIds = recordIds.map((id: any) => Number(id)).filter((id: number) => Number.isInteger(id) && id > 0);
 
-      if (existingRecord) {
-        if (!canWriteTable(user, existingRecord.tableId)) {
-          return {
-            success: false,
-            error: "אין לך הרשאה למחוק רשומות מטבלה זו",
-          };
-        }
-      }
+    if (validIds.length === 0) {
+      return { success: true };
     }
 
-    // CASCADE DELETE TO FINANCE
-    try {
-      if (recordIds.length > 0) {
-        // We assume all records belong to the same table for bulk ops usually,
-        // or we find the tableId from the first one as done above.
-        const firstRec = await prisma.record.findUnique({
-          where: { id: recordIds[0] },
-          select: { tableId: true },
-        });
-
-        if (firstRec) {
-          const syncRules = await prisma.financeSyncRule.findMany({
-            where: { sourceType: "TABLE", sourceId: firstRec.tableId },
-          });
-
-          if (syncRules.length > 0) {
-            const ruleIds = syncRules.map((r) => r.id);
-            await prisma.financeRecord.deleteMany({
-              where: {
-                syncRuleId: { in: ruleIds },
-                originId: { in: recordIds.map((id) => id.toString()) },
-              },
-            });
-            console.log(
-              `[Records] Bulk cascade delete to Finance Records for ${recordIds.length} items`,
-            );
-          }
-        }
-      }
-    } catch (e) {
-      console.error("Failed to cascade bulk delete to finance:", e);
+    if (validIds.length > 5000) {
+      return { success: false, error: "Cannot delete more than 5000 records at once" };
     }
 
-    await prisma.record.deleteMany({
-      where: {
-        id: {
-          in: recordIds,
-        },
+    // Verify all records belong to the same table and check permission
+    const distinctTables = await prisma.record.groupBy({
+      by: ["tableId"],
+      where: { id: { in: validIds }, companyId: user.companyId },
+    });
+
+    if (distinctTables.length === 0) {
+      return { success: true };
+    }
+
+    if (distinctTables.length > 1) {
+      return { success: false, error: "כל הרשומות חייבות להיות מאותה טבלה" };
+    }
+
+    const tableId = distinctTables[0].tableId;
+
+    if (!canWriteTable(user, tableId)) {
+      return {
+        success: false,
+        error: "אין לך הרשאה למחוק רשומות מטבלה זו",
+      };
+    }
+
+    // Offload the heavy work (finance cascade + delete + audit) to Inngest
+    await inngest.send({
+      id: `bulk-delete-${user.companyId}-${tableId}-${Math.floor(Date.now() / 1000)}`,
+      name: "records/bulk-delete",
+      data: {
+        recordIds: validIds,
+        companyId: user.companyId,
+        tableId,
+        userId: user.id,
       },
     });
 
-    for (const recordId of recordIds) {
-      await createAuditLog(recordId, null, "DELETE");
-    }
-
-    revalidatePath("/");
-    revalidatePath("/finance");
-    revalidatePath("/finance/income-expenses");
+    // No revalidatePath here — the Inngest job runs async so records aren't
+    // deleted yet. The UI already does optimistic removal on the client side.
 
     return { success: true };
   } catch (error) {

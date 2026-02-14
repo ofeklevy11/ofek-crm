@@ -29,9 +29,16 @@ export async function updateGroup(
 
   if (!membership) throw new Error("Not a member of this group");
 
-  // Update group details
+  // SECURITY: Verify group belongs to user's company
+  const group = await prisma.group.findFirst({
+    where: { id: groupId, companyId: currentUser.companyId },
+    select: { id: true },
+  });
+  if (!group) throw new Error("Group not found or access denied");
+
+  // Update group details (companyId in where prevents TOCTOU cross-tenant writes)
   await prisma.group.update({
-    where: { id: groupId },
+    where: { id: groupId, companyId: currentUser.companyId },
     data: {
       name,
       imageUrl,
@@ -71,6 +78,7 @@ export async function updateGroup(
         userId: { in: idsToKeep },
       },
       select: { userId: true },
+      take: 500, // P93: Bound groupMembers query
     });
 
     const existingIds = existingMembers.map((m) => m.userId);
@@ -109,6 +117,7 @@ export async function getUsers() {
       email: true,
       role: true,
     },
+    take: 500, // P86: Bound users query for large companies
   });
 
   // Fetch last message for each user to sort or display timestamp
@@ -192,6 +201,7 @@ export async function getGroups() {
 
   const groups = await prisma.group.findMany({
     where: {
+      companyId: currentUser.companyId,
       members: {
         some: {
           userId: currentUser.id,
@@ -211,6 +221,7 @@ export async function getGroups() {
         take: 1,
       },
     },
+    take: 500,
   });
 
   return groups;
@@ -222,17 +233,28 @@ export async function getMessages(otherUserId: number) {
     throw new Error("Not authenticated");
   }
 
+  // K13: Verify otherUserId belongs to same company
+  const otherUser = await prisma.user.findFirst({
+    where: { id: otherUserId, companyId: currentUser.companyId },
+    select: { id: true },
+  });
+  if (!otherUser) {
+    throw new Error("User not found");
+  }
+
+  // P132: Add take limit to bound DM message loading
   const messages = await prisma.message.findMany({
     where: {
       OR: [
         { senderId: currentUser.id, receiverId: otherUserId },
         { senderId: otherUserId, receiverId: currentUser.id },
       ],
-      groupId: null, // Ensure we only get DMs
+      groupId: null,
     },
     orderBy: {
       createdAt: "asc",
     },
+    take: 1000,
     include: {
       sender: {
         select: { name: true },
@@ -250,6 +272,13 @@ export async function getGroupMessages(groupId: number) {
   const currentUser = await getCurrentUser();
   if (!currentUser) throw new Error("Not authenticated");
 
+  // SECURITY: Verify group belongs to user's company AND user is a member
+  const groupExists = await prisma.group.findFirst({
+    where: { id: groupId, companyId: currentUser.companyId },
+    select: { id: true },
+  });
+  if (!groupExists) throw new Error("Group not found or access denied");
+
   // Verify membership
   const membership = await prisma.groupMember.findUnique({
     where: {
@@ -262,6 +291,7 @@ export async function getGroupMessages(groupId: number) {
 
   if (!membership) throw new Error("Not a member of this group");
 
+  // P132: Add take limit to bound group message loading
   const messages = await prisma.message.findMany({
     where: {
       groupId,
@@ -269,6 +299,7 @@ export async function getGroupMessages(groupId: number) {
     orderBy: {
       createdAt: "asc",
     },
+    take: 1000,
     include: {
       sender: {
         select: { name: true },
@@ -287,6 +318,15 @@ export async function sendMessage(receiverId: number, content: string) {
 
   if (!content.trim()) return;
 
+  // L13: Verify receiverId belongs to same company
+  const receiver = await prisma.user.findFirst({
+    where: { id: receiverId, companyId: currentUser.companyId },
+    select: { id: true },
+  });
+  if (!receiver) {
+    throw new Error("User not found");
+  }
+
   await prisma.message.create({
     data: {
       companyId: currentUser.companyId, // CRITICAL: Set companyId for multi-tenancy
@@ -300,7 +340,7 @@ export async function sendMessage(receiverId: number, content: string) {
   try {
     const { redisPublisher } = await import("@/lib/redis");
     await redisPublisher.publish(
-      `user:${receiverId}:chat`,
+      `company:${currentUser.companyId}:user:${receiverId}:chat`,
       JSON.stringify({ type: "new-message", senderId: currentUser.id }),
     );
   } catch (err) {
@@ -316,6 +356,13 @@ export async function sendGroupMessage(groupId: number, content: string) {
   if (!currentUser) throw new Error("Not authenticated");
 
   if (!content.trim()) return;
+
+  // SECURITY: Verify group belongs to user's company
+  const groupExists = await prisma.group.findFirst({
+    where: { id: groupId, companyId: currentUser.companyId },
+    select: { id: true },
+  });
+  if (!groupExists) throw new Error("Group not found or access denied");
 
   // Verify membership
   const membership = await prisma.groupMember.findUnique({
@@ -339,6 +386,28 @@ export async function sendGroupMessage(groupId: number, content: string) {
     },
   });
 
+  // --- REALTIME UPDATE: Broadcast to all group members ---
+  try {
+    const { redisPublisher } = await import("@/lib/redis");
+    const members = await prisma.groupMember.findMany({
+      where: { groupId },
+      select: { userId: true },
+      take: 500,
+    });
+    const publishPromises = members
+      .filter((m) => m.userId !== currentUser.id)
+      .map((m) =>
+        redisPublisher.publish(
+          `company:${currentUser.companyId}:user:${m.userId}:chat`,
+          JSON.stringify({ type: "new-group-message", groupId, senderId: currentUser.id }),
+        ),
+      );
+    await Promise.all(publishPromises);
+  } catch (err) {
+    console.error("Redis Publish Error (group)", err);
+  }
+  // -----------------------
+
   revalidatePath("/chat");
 }
 
@@ -347,6 +416,13 @@ export async function markAsRead(id: number, type: "user" | "group" = "user") {
   if (!currentUser) throw new Error("Not authenticated");
 
   if (type === "user") {
+    // SECURITY: Verify sender belongs to same company
+    const sender = await prisma.user.findFirst({
+      where: { id, companyId: currentUser.companyId },
+      select: { id: true },
+    });
+    if (!sender) throw new Error("User not found or access denied");
+
     // Only for DMs
     await prisma.message.updateMany({
       where: {
@@ -359,6 +435,13 @@ export async function markAsRead(id: number, type: "user" | "group" = "user") {
       },
     });
   } else if (type === "group") {
+    // SECURITY: Verify group belongs to user's company
+    const groupExists = await prisma.group.findFirst({
+      where: { id, companyId: currentUser.companyId },
+      select: { id: true },
+    });
+    if (!groupExists) throw new Error("Group not found or access denied");
+
     // For groups, we update the lastReadAt timestamp in GroupMember
     await prisma.groupMember.update({
       where: {
@@ -379,7 +462,7 @@ export async function markAsRead(id: number, type: "user" | "group" = "user") {
     // Notify the current user's clients that they have read messages
     // This allows the Navbar or other tabs to update their unread counts immediately
     await redisPublisher.publish(
-      `user:${currentUser.id}:chat`,
+      `company:${currentUser.companyId}:user:${currentUser.id}:chat`,
       JSON.stringify({
         type: "messages-read",
         entityId: id,
@@ -412,10 +495,11 @@ export async function getUnreadCounts() {
   });
 
   // 2. Unread Group Messages
-  // We need to fetch groups the user is in, and their lastReadAt
+  // SECURITY: Filter by companyId to ensure only same-company groups
   const userGroups = await prisma.groupMember.findMany({
     where: {
       userId: currentUser.id,
+      group: { companyId: currentUser.companyId },
     },
     select: {
       groupId: true,
@@ -423,26 +507,28 @@ export async function getUnreadCounts() {
     },
   });
 
-  const unreadGroupsPromises = userGroups.map(async (membership) => {
-    const count = await prisma.message.count({
-      where: {
-        groupId: membership.groupId,
-        createdAt: {
-          gt: membership.lastReadAt,
-        },
-        senderId: {
-          not: currentUser.id, // Don't count my own messages
-        },
-      },
-    });
-    return {
-      type: "group" as const,
-      id: membership.groupId,
-      count, // Flatten result later
-    };
-  });
+  // DDD: Run all group unread counts concurrently instead of sequentially
+  // Each group has a different lastReadAt so we need per-group counts,
+  // but Promise.all ensures they run in parallel rather than N sequential queries
+  const groupIds = userGroups.map((m) => m.groupId);
 
-  const unreadGroups = await Promise.all(unreadGroupsPromises);
+  let unreadGroups: { type: "group"; id: number; count: number }[] = [];
+
+  if (groupIds.length > 0) {
+    const unreadGroupCounts = await Promise.all(
+      userGroups.map(async (membership) => {
+        const count = await prisma.message.count({
+          where: {
+            groupId: membership.groupId,
+            createdAt: { gt: membership.lastReadAt },
+            senderId: { not: currentUser.id },
+          },
+        });
+        return { type: "group" as const, id: membership.groupId, count };
+      }),
+    );
+    unreadGroups = unreadGroupCounts;
+  }
 
   return [
     ...unreadDMs.map((dm) => ({
