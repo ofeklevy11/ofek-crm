@@ -60,6 +60,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
   const [creating, setCreating] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [newFullKey, setNewFullKey] = useState<string | null>(null);
 
   // Company name update states
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -94,9 +95,9 @@ export default function ProfileContent({ user }: ProfileContentProps) {
     try {
       const res = await createApiKey(newKeyName);
       if (res.success && res.data) {
+        setNewFullKey(res.data.fullKey);
         setNewKeyName("");
         await loadKeys();
-        router.refresh(); // Refresh server state just in case
       } else {
         console.error("Failed to create key:", res.error);
         alert("שגיאה ביצירת מפתח: " + (res.error || "Unknown error"));
@@ -480,6 +481,46 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                     )}
                   </Button>
                 </div>
+
+                {/* Show full key once after creation */}
+                {newFullKey && (
+                  <Alert className="bg-green-50 border-green-300">
+                    <Key className="w-4 h-4 text-green-600" />
+                    <AlertTitle className="text-green-800">
+                      המפתח נוצר בהצלחה
+                    </AlertTitle>
+                    <AlertDescription className="space-y-3">
+                      <p className="text-sm text-green-700 font-medium">
+                        העתק את המפתח עכשיו — לא תוכל לראות אותו שוב!
+                      </p>
+                      <div className="flex items-center gap-2 bg-white p-3 rounded-lg border border-green-200">
+                        <code className="text-xs font-mono text-slate-800 flex-1 break-all select-all" dir="ltr">
+                          {newFullKey}
+                        </code>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => copyToClipboard(newFullKey)}
+                        >
+                          {copiedKey === newFullKey ? (
+                            <Check className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <Copy className="w-4 h-4 text-slate-500" />
+                          )}
+                        </Button>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => setNewFullKey(null)}
+                      >
+                        הבנתי, העתקתי
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                )}
 
                 {/* Keys List */}
                 <div className="space-y-4">
