@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { inngest } from "@/lib/inngest/client";
 import {
   calculateViewStats,
+  calculateRuleStats,
   resolveTableNameFromConfig,
 } from "@/lib/analytics/calculate";
 import { getFullAnalyticsCache, invalidateFullCache, invalidateItemCache, isRefreshLockHeld } from "@/lib/services/analytics-cache";
@@ -211,6 +212,24 @@ export async function createAnalyticsView(data: {
     }
 
     await invalidateFullCache(user.companyId);
+
+    // Calculate stats inline so the view has data immediately (don't rely solely on background job)
+    try {
+      const { stats, items, tableName } = await calculateViewStats(
+        { id: result.data.id, type: result.data.type, config: result.data.config },
+        user.companyId,
+      );
+      await withRetry(() =>
+        prisma.analyticsView.update({
+          where: { id: result.data.id, companyId: user.companyId },
+          data: { cachedStats: { stats, items, tableName }, lastCachedAt: new Date() },
+        }),
+      );
+    } catch (e) {
+      console.error("[createAnalyticsView] Failed to calculate initial stats:", e);
+      // Non-fatal: view was created, background job will eventually populate stats
+    }
+
     return { success: true, data: result.data };
   } catch (error) {
     console.error("Error creating analytics view:", error);
@@ -270,6 +289,25 @@ export async function updateAnalyticsView(
     }));
     await invalidateFullCache(user.companyId);
     await invalidateItemCache(user.companyId, "view", id);
+
+    // Recalculate stats inline if config or type changed
+    if (data.config !== undefined || data.type !== undefined) {
+      try {
+        const { stats, items, tableName } = await calculateViewStats(
+          { id: view.id, type: view.type, config: view.config },
+          user.companyId,
+        );
+        await withRetry(() =>
+          prisma.analyticsView.update({
+            where: { id: view.id, companyId: user.companyId },
+            data: { cachedStats: { stats, items, tableName }, lastCachedAt: new Date() },
+          }),
+        );
+      } catch (e) {
+        console.error("[updateAnalyticsView] Failed to recalculate stats:", e);
+      }
+    }
+
     return { success: true, data: view };
   } catch (error) {
     console.error("Error updating analytics view:", error);
@@ -346,10 +384,25 @@ export async function getAnalyticsDataForCompany(companyId: number) {
       : [];
     const tableMap = new Map(tables.map((t: any) => [t.id, t.name]));
 
-    // Build views from DB cachedStats — never calculate inline
+    // Build views from DB cachedStats — with inline fallback for uncached items
     for (const rule of filteredRules) {
-      const cachedData = rule.cachedStats as any;
+      let cachedData = rule.cachedStats as any;
       const ruleTableId = parseInt((rule.triggerConfig as any).tableId || "0");
+
+      // Fallback: calculate inline if never cached
+      if (!cachedData) {
+        try {
+          const result = await calculateRuleStats(rule, companyId);
+          cachedData = { stats: result.stats, items: result.items };
+          // Persist to DB (fire-and-forget)
+          prisma.automationRule.update({
+            where: { id: rule.id, companyId },
+            data: { cachedStats: cachedData, lastCachedAt: new Date() },
+          }).catch((e) => console.error(`[getAnalyticsData] DB update failed for rule ${rule.id}:`, e));
+        } catch (e) {
+          console.error(`[getAnalyticsData] Inline calc failed for rule ${rule.id}:`, e);
+        }
+      }
       // Determine the effective duration action type for MULTI_ACTION rules
       const effectiveActionType = rule.actionType === "MULTI_ACTION"
         ? ((rule.actionConfig as any)?.actions || []).find((a: any) => a.type === "CALCULATE_MULTI_EVENT_DURATION")
@@ -378,9 +431,33 @@ export async function getAnalyticsDataForCompany(companyId: number) {
       });
     }
 
+    // Inline calculation fallback: if cachedStats is null, calculate on-the-fly (max 10 to limit latency)
+    const MAX_INLINE_CALC = 10;
+    let inlineCalcCount = 0;
+    const inlineDbUpdates: Promise<any>[] = [];
+
     for (const view of customViews) {
-      const cachedData = view.cachedStats as any;
+      let cachedData = view.cachedStats as any;
       const viewConfig = view.config as any;
+
+      // Fallback: calculate inline if never cached
+      if (!cachedData && inlineCalcCount < MAX_INLINE_CALC) {
+        inlineCalcCount++;
+        try {
+          const result = await calculateViewStats(view, companyId);
+          cachedData = { stats: result.stats, items: result.items, tableName: result.tableName };
+          // Persist to DB so next load is instant (fire-and-forget)
+          inlineDbUpdates.push(
+            prisma.analyticsView.update({
+              where: { id: view.id, companyId },
+              data: { cachedStats: cachedData, lastCachedAt: new Date() },
+            }).catch((e) => console.error(`[getAnalyticsData] DB update failed for view ${view.id}:`, e)),
+          );
+        } catch (e) {
+          console.error(`[getAnalyticsData] Inline calc failed for view ${view.id}:`, e);
+        }
+      }
+
       const viewTableId = Number(viewConfig?.tableId || 0);
       // Resolve table name: use cached name → batch-fetched map → static model name → fallback
       // Avoids N+1: tableMap already has all live tables; deleted tables get a fallback string
@@ -404,6 +481,11 @@ export async function getAnalyticsDataForCompany(companyId: number) {
         folderId: view.folderId,
         lastRefreshed: view.lastCachedAt,
       });
+    }
+
+    // Flush inline DB updates (non-blocking)
+    if (inlineDbUpdates.length > 0) {
+      Promise.all(inlineDbUpdates).catch(() => {});
     }
 
     views.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));

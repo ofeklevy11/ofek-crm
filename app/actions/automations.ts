@@ -145,6 +145,7 @@ export async function executeRuleActions(
           console.error(`[Automations] WhatsApp: No phone resolved from ${phoneColumnId}`);
         } else {
           // Dispatch to dedicated Inngest job with retry + rate limiting
+          let inngestOk = false;
           try {
             await inngest.send({
               id: `wa-${companyId}-${phone}-${ruleId}-${Math.floor(Date.now() / 5000)}`,
@@ -158,9 +159,33 @@ export async function executeRuleActions(
                 delay: config.delay,
               },
             });
+            inngestOk = true;
             console.log(`[Automations] WhatsApp job enqueued for ${phone}`);
           } catch (err) {
-            console.error(`[Automations] Failed to enqueue WhatsApp job for rule ${ruleId}:`, err);
+            console.error(`[Automations] Inngest WhatsApp enqueue failed for rule ${ruleId}, falling back to direct send:`, err);
+          }
+
+          // Direct fallback: send WhatsApp message directly if Inngest is unavailable
+          if (!inngestOk) {
+            try {
+              const { sendGreenApiMessage, sendGreenApiFile } = await import("@/lib/services/green-api");
+              const normalizedPhone = String(phone).replace(/[^0-9]/g, "");
+              if (normalizedPhone) {
+                if (config.messageType === "media" && config.mediaFileId) {
+                  const file = await prisma.file.findFirst({
+                    where: { id: Number(config.mediaFileId), companyId },
+                  });
+                  if (file?.url) {
+                    await sendGreenApiFile(companyId, normalizedPhone, file.url, file.name, waContent);
+                  }
+                } else {
+                  await sendGreenApiMessage(companyId, normalizedPhone, waContent);
+                }
+                console.log(`[Automations] WhatsApp sent directly to ${normalizedPhone} (fallback)`);
+              }
+            } catch (directErr) {
+              console.error(`[Automations] Direct WhatsApp send also failed for rule ${ruleId}:`, directErr);
+            }
           }
         }
       } else if (type === "WEBHOOK") {
@@ -176,6 +201,7 @@ export async function executeRuleActions(
           console.error(`[Automations] Webhook missing URL for Rule ${ruleId}`);
         } else {
           // Dispatch to dedicated Inngest job with retry + rate limiting
+          let inngestOk = false;
           try {
             const urlHost = (() => { try { return new URL(webhookUrl).hostname; } catch { return "invalid"; } })();
             await inngest.send({
@@ -194,9 +220,37 @@ export async function executeRuleActions(
                 },
               },
             });
+            inngestOk = true;
             console.log(`[Automations] Webhook job enqueued for rule ${ruleId} to ${webhookUrl}`);
           } catch (err) {
-            console.error(`[Automations] Failed to enqueue Webhook job for rule ${ruleId}:`, err);
+            console.error(`[Automations] Inngest Webhook enqueue failed for rule ${ruleId}, falling back to direct send:`, err);
+          }
+
+          // Direct fallback: send webhook directly if Inngest is unavailable
+          if (!inngestOk) {
+            try {
+              const enrichedPayload = {
+                ruleId: rule.id,
+                ruleName: rule.name,
+                triggerType: rule.triggerType,
+                companyId,
+                data: webhookData,
+                timestamp: new Date().toISOString(),
+              };
+              const res = await fetch(webhookUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(enrichedPayload),
+                signal: AbortSignal.timeout(15_000),
+              });
+              if (!res.ok) {
+                console.error(`[Automations] Direct webhook failed: ${res.status} ${res.statusText}`);
+              } else {
+                console.log(`[Automations] Webhook sent directly for rule ${ruleId} (fallback)`);
+              }
+            } catch (directErr) {
+              console.error(`[Automations] Direct webhook also failed for rule ${ruleId}:`, directErr);
+            }
           }
         }
       } else if (type === "CALCULATE_DURATION") {

@@ -34,6 +34,7 @@ enum AutomationTriggerType {
   TIME_SINCE_CREATION
   TICKET_STATUS_CHANGE
   SLA_BREACH
+  EVENT_TIME
 }
 
 enum AutomationActionType {

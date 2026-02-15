@@ -71,13 +71,15 @@ export const generateQuotePdf = inngest.createFunction(
 
       const uploadRes = await utapi.uploadFiles([file]);
 
-      if (!uploadRes[0]?.data?.url) {
+      const uploaded = uploadRes[0]?.data;
+      if (!uploaded?.ufsUrl && !uploaded?.url) {
         throw new Error(
           `Upload failed: ${uploadRes[0]?.error?.message || "unknown"}`,
         );
       }
 
-      const url = uploadRes[0].data.url;
+      // Use ufsUrl (new ufs.sh format) — data.url (utfs.io) is deprecated in v7
+      const url = uploaded.ufsUrl ?? uploaded.url;
 
       // Save new URL — only if quote hasn't been trashed during generation
       const result = await prisma.quote.updateMany({

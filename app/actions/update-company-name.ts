@@ -1,6 +1,6 @@
 "use server";
 
-import { getCurrentUser } from "@/lib/permissions-server";
+import { getCurrentUser, invalidateUserCache } from "@/lib/permissions-server";
 import { prisma as db } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
@@ -54,6 +54,9 @@ export async function updateCompanyName(data: {
       where: { id: userWithPassword.companyId },
       data: { name: data.newCompanyName.trim() },
     });
+
+    // Invalidate cached user so the new company name is reflected immediately
+    await invalidateUserCache(currentUser.id);
 
     return { success: true, message: "שם הארגון עודכן בהצלחה" };
   } catch (error) {

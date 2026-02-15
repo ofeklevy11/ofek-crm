@@ -155,7 +155,7 @@ export async function PUT(
 
     const { record, existingRecord } = txResult;
 
-    // Trigger Automations (async via Inngest)
+    // Trigger Automations (async via Inngest, with direct fallback)
     console.log(
       `[API Records] Sending automation event for record ${record.id}, table ${record.tableId}`,
     );
@@ -174,7 +174,19 @@ export async function PUT(
       });
       console.log(`[API Records] Successfully sent automation event`);
     } catch (autoError) {
-      console.error("Failed to send automation event:", autoError);
+      console.error("[API Records] Inngest send failed, falling back to direct automation execution:", autoError);
+      try {
+        const { processRecordUpdate } = await import("@/app/actions/automations");
+        await processRecordUpdate(
+          record.tableId,
+          record.id,
+          existingRecord.data as Record<string, unknown>,
+          data,
+          currentUser.companyId,
+        );
+      } catch (directErr) {
+        console.error("[API Records] Direct automation execution also failed:", directErr);
+      }
     }
 
     return NextResponse.json(record);

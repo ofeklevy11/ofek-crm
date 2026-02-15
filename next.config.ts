@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "utfs.io",
       },
+      {
+        protocol: "https",
+        hostname: "*.ufs.sh",
+      },
     ],
   },
   async headers() {
@@ -36,9 +40,9 @@ const nextConfig: NextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https://utfs.io",
+              "img-src 'self' data: blob: https://utfs.io https://*.ufs.sh",
               "font-src 'self' data:",
-              "connect-src 'self' https://utfs.io https://*.uploadthing.com https://*.inngest.com",
+              "connect-src 'self' https://utfs.io https://*.ufs.sh https://*.uploadthing.com https://*.inngest.com",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",

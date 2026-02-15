@@ -90,7 +90,7 @@ export const processWorkflowStageAutomations = inngest.createFunction(
           case "notification":
             if (config.recipientId && config.message) {
               await step.run(`notification-${i}-${config.recipientId}`, async () => {
-                await createNotificationForCompany({
+                const result = await createNotificationForCompany({
                   companyId,
                   userId: Number(config.recipientId),
                   title: "התראה מתהליך עבודה",
@@ -98,6 +98,9 @@ export const processWorkflowStageAutomations = inngest.createFunction(
                   link: `/workflows`,
                   skipValidation: true, // companyId verified upstream
                 });
+                if (!result.success) {
+                  throw new Error(`Notification creation failed: ${result.error}`);
+                }
                 console.log(
                   `[Automation] Notification sent to user ${config.recipientId}`,
                 );

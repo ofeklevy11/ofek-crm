@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { inngest } from "@/lib/inngest/client";
 import crypto from "crypto";
 
 function tokensMatch(a: string | null, b: string | null): boolean {
@@ -24,7 +25,7 @@ export async function GET(
 
   const quote = await prisma.quote.findFirst({
     where: { id: resolvedParams.id, isTrashed: false },
-    select: { id: true, pdfUrl: true, shareToken: true },
+    select: { id: true, pdfUrl: true, shareToken: true, companyId: true, updatedAt: true },
   });
 
   if (!quote) {
@@ -37,8 +38,17 @@ export async function GET(
     return new NextResponse("Invalid or missing share token", { status: 403 });
   }
 
-  // Public route only serves cached PDFs — never triggers generation
+  // If no cached PDF, trigger generation recovery and show waiting page
   if (!quote.pdfUrl) {
+    // Recovery: trigger PDF generation if quote was updated within 5 min (safe — debounce prevents dupes)
+    const ageMs = Date.now() - new Date(quote.updatedAt).getTime();
+    if (ageMs < 300_000) {
+      inngest.send({
+        name: "pdf/generate-quote",
+        data: { quoteId: quote.id, companyId: quote.companyId },
+      }).catch((err) => console.error("[public-download] Recovery PDF trigger:", err));
+    }
+
     return new NextResponse(
       `<!DOCTYPE html>
 <html lang="he" dir="rtl">
@@ -69,6 +79,23 @@ button:hover{background:#3d7de0}</style></head>
       signal: AbortSignal.timeout(8000),
     });
     if (cachedRes.ok) {
+      // Validate that storage actually returned a PDF, not an HTML error/redirect page
+      const ct = cachedRes.headers.get("content-type") ?? "";
+      if (!ct.includes("application/pdf")) {
+        // Stale URL — clear it and trigger regeneration
+        await prisma.quote.updateMany({
+          where: { id: quote.id, pdfUrl: quote.pdfUrl },
+          data: { pdfUrl: null },
+        });
+        inngest.send({
+          name: "pdf/generate-quote",
+          data: { quoteId: quote.id, companyId: quote.companyId },
+        }).catch((err) => console.error("[public-download] Regenerate after stale URL:", err));
+        return NextResponse.json(
+          { status: "generating", message: "PDF is being regenerated" },
+          { status: 202 },
+        );
+      }
       const blob = await cachedRes.blob();
       return new NextResponse(blob, {
         headers: {
@@ -76,6 +103,17 @@ button:hover{background:#3d7de0}</style></head>
           "Content-Disposition": `attachment; filename="${filename}"`,
         },
       });
+    }
+    // 404 — file gone from storage, trigger regeneration
+    if (cachedRes.status === 404) {
+      await prisma.quote.updateMany({
+        where: { id: quote.id, pdfUrl: quote.pdfUrl },
+        data: { pdfUrl: null },
+      });
+      inngest.send({
+        name: "pdf/generate-quote",
+        data: { quoteId: quote.id, companyId: quote.companyId },
+      }).catch((err) => console.error("[public-download] Regenerate after 404:", err));
     }
   } catch {
     // Fetch failed or timed out

@@ -146,7 +146,7 @@ export function Calendar() {
     setCurrentDate(date);
   };
 
-  const handleSaveEvent = async (eventData: Omit<CalendarEvent, "id">) => {
+  const handleSaveEvent = async (eventData: Omit<CalendarEvent, "id">): Promise<boolean> => {
     try {
       if (selectedEvent) {
         // Update existing event
@@ -159,21 +159,21 @@ export function Calendar() {
           color: eventData.color ?? undefined,
         });
 
-        if (result.success) {
-          const updatedEvent = result.data!;
-          setEvents(
-            events.map((e) =>
-              e.id === selectedEvent.id
-                ? {
-                    ...updatedEvent,
-                    startTime: new Date(updatedEvent.startTime),
-                    endTime: new Date(updatedEvent.endTime),
-                  }
-                : e,
-            ),
-          );
-          setSelectedEvent(undefined);
-        }
+        if (!result.success) return false;
+
+        const updatedEvent = result.data!;
+        setEvents((prev) =>
+          prev.map((e) =>
+            e.id === selectedEvent.id
+              ? {
+                  ...updatedEvent,
+                  startTime: new Date(updatedEvent.startTime),
+                  endTime: new Date(updatedEvent.endTime),
+                }
+              : e,
+          ),
+        );
+        setSelectedEvent(undefined);
       } else {
         // Create new event
         const { createCalendarEvent } = await import("@/app/actions");
@@ -185,24 +185,26 @@ export function Calendar() {
           color: eventData.color ?? undefined,
         });
 
-        if (result.success) {
-          const newEvent = result.data!;
-          setEvents([
-            ...events,
-            {
-              ...newEvent,
-              startTime: new Date(newEvent.startTime),
-              endTime: new Date(newEvent.endTime),
-            },
-          ]);
-        }
+        if (!result.success) return false;
+
+        const newEvent = result.data!;
+        setEvents((prev) => [
+          ...prev,
+          {
+            ...newEvent,
+            startTime: new Date(newEvent.startTime),
+            endTime: new Date(newEvent.endTime),
+          },
+        ]);
       }
       setIsModalOpen(false);
       setInitialEventDate(undefined);
       setInitialEventHour(undefined);
       setInitialEventMinutes(undefined);
+      return true;
     } catch (error) {
       console.error("Failed to save event:", error);
+      return false;
     }
   };
 

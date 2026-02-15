@@ -34,6 +34,23 @@ export async function GET(
         signal: AbortSignal.timeout(8000),
       });
       if (cachedRes.ok) {
+        // Validate that storage actually returned a PDF, not an HTML error/redirect page
+        const ct = cachedRes.headers.get("content-type") ?? "";
+        if (!ct.includes("application/pdf")) {
+          // Storage returned non-PDF content — URL is stale, clear it and regenerate
+          await prisma.quote.updateMany({
+            where: { id: quote.id, companyId: user.companyId, pdfUrl: quote.pdfUrl },
+            data: { pdfUrl: null },
+          });
+          inngest.send({
+            name: "pdf/generate-quote",
+            data: { quoteId: quote.id, companyId: quote.companyId },
+          }).catch((err) => console.error("[download] Regenerate after stale URL:", err));
+          return NextResponse.json(
+            { status: "generating", message: "PDF is being regenerated" },
+            { status: 202 },
+          );
+        }
         const blob = await cachedRes.blob();
         return new NextResponse(blob, {
           headers: {
@@ -48,6 +65,11 @@ export async function GET(
           where: { id: quote.id, companyId: user.companyId, pdfUrl: quote.pdfUrl },
           data: { pdfUrl: null },
         });
+        // Trigger regeneration immediately
+        inngest.send({
+          name: "pdf/generate-quote",
+          data: { quoteId: quote.id, companyId: quote.companyId },
+        }).catch((err) => console.error("[download] Regenerate after 404:", err));
       } else {
         return NextResponse.json(
           { status: "error", message: "PDF storage temporarily unavailable" },

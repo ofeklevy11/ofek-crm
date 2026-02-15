@@ -96,7 +96,7 @@ export async function createRecord(data: {
       return created;
     }, { maxWait: 5000, timeout: 10000 }));
 
-    // Trigger automations for new record (async via Inngest)
+    // Trigger automations for new record (async via Inngest, with direct fallback)
     try {
       await inngest.send([
         {
@@ -116,7 +116,13 @@ export async function createRecord(data: {
         },
       ]);
     } catch (autoError) {
-      console.error(`[Records] Failed to send automation event:`, autoError);
+      console.error(`[Records] Inngest send failed, falling back to direct automation execution:`, autoError);
+      try {
+        const { processNewRecordTrigger } = await import("@/app/actions/automations");
+        await processNewRecordTrigger(tableId, table.name, record.id, user.companyId);
+      } catch (directErr) {
+        console.error(`[Records] Direct automation execution also failed:`, directErr);
+      }
     }
 
     revalidatePath(`/tables/${tableId}`);
@@ -188,7 +194,7 @@ export async function updateRecord(
       return { record: updated, oldData: existingRecord.data as Record<string, unknown> };
     }, { maxWait: 5000, timeout: 10000 }));
 
-    // Trigger Automation (async via Inngest)
+    // Trigger Automation (async via Inngest, with direct fallback)
     try {
       await inngest.send([
         {
@@ -209,7 +215,13 @@ export async function updateRecord(
         },
       ]);
     } catch (autoError) {
-      console.error(`[Records] Failed to send automation event:`, autoError);
+      console.error(`[Records] Inngest send failed, falling back to direct automation execution:`, autoError);
+      try {
+        const { processRecordUpdate } = await import("@/app/actions/automations");
+        await processRecordUpdate(record.tableId, record.id, oldData, recordData, user.companyId);
+      } catch (directErr) {
+        console.error(`[Records] Direct automation execution also failed:`, directErr);
+      }
     }
 
     revalidatePath(`/tables/${record.tableId}`);

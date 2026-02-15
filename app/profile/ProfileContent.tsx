@@ -154,12 +154,12 @@ export default function ProfileContent({ user }: ProfileContentProps) {
         setUpdateSuccess(true);
         setNewCompanyName("");
         setPassword("");
-        // Refresh the page to show the new company name
+        // Refresh the page immediately to show the new company name
+        router.refresh();
         setTimeout(() => {
-          router.refresh();
           setUpdateSuccess(false);
           setIsDialogOpen(false);
-        }, 2000);
+        }, 1500);
       } else {
         setUpdateError(res.error || "שגיאה לא ידועה");
       }

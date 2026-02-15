@@ -28,7 +28,7 @@ import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
 interface EventModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (event: Omit<CalendarEvent, "id">) => void;
+  onSave: (event: Omit<CalendarEvent, "id">) => Promise<boolean>;
   onDelete?: () => void;
   event?: CalendarEvent;
   initialDate?: Date;
@@ -60,6 +60,7 @@ export function EventModal({
   const [endDate, setEndDate] = useState("");
   const [endTime, setEndTime] = useState("");
   const [color, setColor] = useState(defaultEventColors[0]);
+  const [saving, setSaving] = useState(false);
 
   // --- Automations State ---
   const [automations, setAutomations] = useState<any[]>([]);
@@ -156,8 +157,9 @@ export function EventModal({
       .padStart(2, "0")}`;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
 
     const [startYear, startMonth, startDay] = startDate.split("-").map(Number);
     const [startHours, startMinutes] = startTime.split(":").map(Number);
@@ -178,8 +180,17 @@ export function EventModal({
       color,
     };
 
-    onSave(newEvent);
-    handleClose();
+    setSaving(true);
+    try {
+      const success = await onSave(newEvent);
+      if (success) {
+        handleClose();
+      }
+    } catch {
+      alert("שגיאה ביצירת האירוע. נסה שוב.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleClose = () => {
@@ -499,8 +510,10 @@ export function EventModal({
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-blue-200 shadow-md font-medium text-sm"
+                    disabled={saving}
+                    className="px-6 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-blue-200 shadow-md font-medium text-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
                   >
+                    {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                     {event ? "שמור שינויים" : "צור אירוע"}
                   </button>
                 </div>

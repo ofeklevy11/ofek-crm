@@ -23,9 +23,9 @@ export const redis =
     },
   });
 
-if (process.env.NODE_ENV !== "production") globalForRedis.redis = redis;
+globalForRedis.redis = redis;
 
-// Singleton pattern for Publisher as well to avoid too many connections in HMR
+// Singleton pattern for Publisher as well to avoid too many connections
 const globalPublisher = globalThis as unknown as { redisPublisher: Redis };
 
 export const redisPublisher =
@@ -39,6 +39,4 @@ export const redisPublisher =
     enableOfflineQueue: false,
   });
 
-if (process.env.NODE_ENV !== "production") {
-  globalPublisher.redisPublisher = redisPublisher;
-}
+globalPublisher.redisPublisher = redisPublisher;

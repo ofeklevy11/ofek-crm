@@ -207,9 +207,10 @@ export async function POST(
 
     await createAuditLog(record.id, currentUser.id, "CREATE", data, undefined, currentUser.companyId);
 
-    // Trigger automations (async via Inngest)
+    // Trigger automations (async via Inngest, with direct fallback)
     try {
       await inngest.send({
+        id: `api-new-record-${currentUser.companyId}-${record.id}`,
         name: "automation/new-record",
         data: {
           tableId,
@@ -219,7 +220,13 @@ export async function POST(
         },
       });
     } catch (autoError) {
-      console.error("Failed to send automation event:", autoError);
+      console.error("[API Records] Inngest send failed, falling back to direct automation execution:", autoError);
+      try {
+        const { processNewRecordTrigger } = await import("@/app/actions/automations");
+        await processNewRecordTrigger(tableId, table.name, record.id, currentUser.companyId);
+      } catch (directErr) {
+        console.error("[API Records] Direct automation execution also failed:", directErr);
+      }
     }
 
     return NextResponse.json(record);

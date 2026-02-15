@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   deleteAnalyticsView,
@@ -163,6 +163,10 @@ export default function GraphsDashboard({
     initialRefreshUsage.nextResetTime,
   );
   const [toast, setToast] = useState<{ message: string; type: "error" | "success" } | null>(null);
+
+  useEffect(() => {
+    setViews(initialViews);
+  }, [initialViews]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {

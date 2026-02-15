@@ -60,7 +60,7 @@ export async function POST(
       },
     });
 
-    // Trigger DIRECT_DIAL automations asynchronously via Inngest
+    // Trigger DIRECT_DIAL automations asynchronously via Inngest, with direct fallback
     try {
       const { inngest } = await import("@/lib/inngest/client");
       await inngest.send({
@@ -74,7 +74,18 @@ export async function POST(
         },
       });
     } catch (autoError) {
-      console.error("Failed to send direct dial automation event:", autoError);
+      console.error("[Dial] Inngest send failed, falling back to direct automation execution:", autoError);
+      try {
+        const { processDirectDialTrigger } = await import("@/app/actions/automations");
+        await processDirectDialTrigger(
+          existingRecord.tableId,
+          recordId,
+          currentUser.companyId,
+          existingRecord.dialedAt?.toISOString() || null,
+        );
+      } catch (directErr) {
+        console.error("[Dial] Direct automation execution also failed:", directErr);
+      }
     }
 
     return NextResponse.json({

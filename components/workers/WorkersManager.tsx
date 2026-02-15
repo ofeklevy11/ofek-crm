@@ -152,19 +152,19 @@ export default function WorkersManager({
       id: "workers" as const,
       label: "עובדים",
       icon: Users,
-      count: stats.totalWorkers,
+      count: workers.length,
     },
     {
       id: "departments" as const,
       label: "מחלקות",
       icon: Building2,
-      count: stats.departments,
+      count: departments.length,
     },
     {
       id: "onboarding" as const,
       label: "מסלולי קליטה",
       icon: GraduationCap,
-      count: stats.onboardingPaths,
+      count: onboardingPaths.length,
     },
   ];
 
@@ -221,11 +221,11 @@ export default function WorkersManager({
   const handlePathSaved = (path: any) => {
     const typedPath = path as OnboardingPath;
     if (editingPath) {
-      setOnboardingPaths(
-        onboardingPaths.map((p) => (p.id === typedPath.id ? typedPath : p)),
+      setOnboardingPaths((prev) =>
+        prev.map((p) => (p.id === typedPath.id ? typedPath : p)),
       );
     } else {
-      setOnboardingPaths([...onboardingPaths, typedPath]);
+      setOnboardingPaths((prev) => [...prev, typedPath]);
     }
     setIsPathModalOpen(false);
     setEditingPath(null);

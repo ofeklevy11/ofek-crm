@@ -103,20 +103,26 @@ export async function createNotification(data: {
       },
     });
 
+    // Serialize BigInt id to Number for JSON compatibility (Inngest, SSE, etc.)
+    const safeNotification = {
+      ...notification,
+      id: Number(notification.id),
+    };
+
     // --- REALTIME UPDATE (background via Inngest, batched) ---
     try {
       const { inngest } = await import("@/lib/inngest/client");
       await inngest.send({
-        id: `notify-broadcast-${data.userId}-${notification.id}`,
+        id: `notify-broadcast-${data.userId}-${safeNotification.id}`,
         name: "notification/broadcast",
-        data: { userId: data.userId, companyId: currentUser.companyId, notification },
+        data: { userId: data.userId, companyId: currentUser.companyId, notification: safeNotification },
       });
     } catch (err) {
       console.error("[createNotification] Inngest broadcast failed, notification saved but SSE skipped:", err);
     }
     // -----------------------
 
-    return { success: true, data: notification };
+    return { success: true, data: safeNotification };
   } catch (error) {
     console.error("Error creating notification:", error);
     return { success: false, error: "Failed to create notification" };
@@ -161,13 +167,19 @@ export async function createNotificationForCompany(data: {
       },
     });
 
+    // Serialize BigInt id to Number for JSON compatibility (Inngest, SSE, etc.)
+    const safeNotification = {
+      ...notification,
+      id: Number(notification.id),
+    };
+
     // --- REALTIME UPDATE (background via Inngest, batched) ---
     try {
       const { inngest } = await import("@/lib/inngest/client");
       await inngest.send({
-        id: `notify-broadcast-${data.userId}-${notification.id}`,
+        id: `notify-broadcast-${data.userId}-${safeNotification.id}`,
         name: "notification/broadcast",
-        data: { userId: data.userId, companyId: data.companyId, notification },
+        data: { userId: data.userId, companyId: data.companyId, notification: safeNotification },
       });
     } catch (err) {
       console.error("[createNotificationForCompany] Inngest broadcast failed, notification saved but SSE skipped:", err);
@@ -177,7 +189,7 @@ export async function createNotificationForCompany(data: {
     console.log(
       `[Notification] Created notification #${notification.id} for user ${data.userId} (Company ${data.companyId})`,
     );
-    return { success: true, data: notification };
+    return { success: true, data: safeNotification };
   } catch (error) {
     console.error("Error creating notification:", error);
     return { success: false, error: "Failed to create notification" };

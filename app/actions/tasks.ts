@@ -276,7 +276,7 @@ export async function updateTask(
       return updated;
     }, { maxWait: 5000, timeout: 10000 }));
 
-    // Send automation event outside transaction (idempotent, has own retry)
+    // Send automation event outside transaction (idempotent, has own retry, with direct fallback)
     if (isStatusChange) {
       try {
         await inngest.send({
@@ -291,7 +291,13 @@ export async function updateTask(
           },
         });
       } catch (autoError) {
-        console.error(`[Tasks] Failed to send automation event:`, autoError);
+        console.error(`[Tasks] Inngest send failed, falling back to direct automation execution:`, autoError);
+        try {
+          const { processTaskStatusChange } = await import("@/app/actions/automations");
+          await processTaskStatusChange(task.id, task.title, existingTask.status, data.status!, user.companyId);
+        } catch (directErr) {
+          console.error(`[Tasks] Direct automation execution also failed:`, directErr);
+        }
       }
     }
 

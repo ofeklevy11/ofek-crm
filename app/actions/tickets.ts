@@ -358,7 +358,49 @@ export async function updateTicket(
   try {
     await inngest.send(events);
   } catch (error) {
-    console.error("[updateTicket] inngest.send failed:", error);
+    console.error("[updateTicket] Inngest send failed, falling back to direct execution:", error);
+    // Direct fallback: process ticket status change automations inline
+    try {
+      if (data.status && data.status !== currentTicket.status) {
+        const statusMap: Record<string, string> = {
+          OPEN: "פתוח", IN_PROGRESS: "בטיפול", WAITING: "ממתין", RESOLVED: "טופל", CLOSED: "סגור",
+        };
+        const fromStatusHebrew = statusMap[currentTicket.status] || currentTicket.status;
+        const toStatusHebrew = statusMap[data.status] || data.status;
+
+        const rules = await prisma.automationRule.findMany({
+          where: { companyId: user.companyId, isActive: true, triggerType: "TICKET_STATUS_CHANGE" },
+          take: 200,
+        });
+
+        for (const rule of rules) {
+          const tc = rule.triggerConfig as any;
+          if (tc.fromStatus && tc.fromStatus !== "any" && tc.fromStatus !== currentTicket.status) continue;
+          if (tc.toStatus && tc.toStatus !== "any" && tc.toStatus !== data.status) continue;
+
+          if (rule.actionType === "SEND_NOTIFICATION") {
+            const ac = rule.actionConfig as any;
+            if (ac.recipientId && !isNaN(ac.recipientId)) {
+              const message = (ac.messageTemplate || "הקריאה {ticketTitle} עברה לסטטוס {toStatus}")
+                .replace("{ticketTitle}", ticket.title)
+                .replace("{ticketId}", String(ticket.id))
+                .replace("{fromStatus}", fromStatusHebrew)
+                .replace("{toStatus}", toStatusHebrew);
+              const { createNotificationForCompany } = await import("@/app/actions/notifications");
+              await createNotificationForCompany({
+                companyId: user.companyId,
+                userId: ac.recipientId,
+                title: ac.titleTemplate || "עדכון בקריאת שירות",
+                message,
+                link: "/service",
+              });
+            }
+          }
+        }
+      }
+    } catch (directErr) {
+      console.error("[updateTicket] Direct automation execution also failed:", directErr);
+    }
   }
 
   await invalidateServiceCache(user.companyId);
