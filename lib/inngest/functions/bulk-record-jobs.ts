@@ -1,5 +1,5 @@
 import { inngest } from "../client";
-import { prisma } from "@/lib/prisma";
+import { prismaBg as prisma } from "@/lib/prisma-background";
 import { createAuditLogsBatch } from "@/lib/audit";
 import { cleanupBeforeRecordDelete } from "@/lib/record-cleanup";
 
@@ -98,6 +98,7 @@ export const processBulkDeleteRecords = inngest.createFunction(
               diffJson: { previousRecordId: id },
               companyId,
             })),
+            tx,
           );
 
           return result.count;

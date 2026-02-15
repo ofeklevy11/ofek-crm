@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+function parseId(raw: string): number | null {
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 /**
  * POST /api/records/[id]/dial
  * Records when a user makes a direct dial call to a customer.
@@ -12,9 +17,9 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const recordId = parseInt(id);
+    const recordId = parseId(id);
 
-    if (isNaN(recordId)) {
+    if (!recordId) {
       return NextResponse.json({ error: "Invalid record ID" }, { status: 400 });
     }
 
@@ -79,10 +84,7 @@ export async function POST(
       recordData: record.data,
     });
   } catch (error) {
-    console.error("Error recording dial:", error);
-    return NextResponse.json(
-      { error: "Failed to record dial" },
-      { status: 500 },
-    );
+    const { handlePrismaError } = await import("@/lib/prisma-error");
+    return handlePrismaError(error, "dial record");
   }
 }

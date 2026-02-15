@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
+import { withRetry } from "@/lib/db-retry";
+import { handlePrismaError } from "@/lib/prisma-error";
+
+function parseId(raw: string): number | null {
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 export async function GET(
   request: Request,
@@ -8,13 +15,14 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const recordId = parseInt(id);
+    const recordId = parseId(id);
 
-    if (isNaN(recordId)) {
+    if (!recordId) {
       return NextResponse.json({ error: "Invalid record ID" }, { status: 400 });
     }
 
     const { getCurrentUser } = await import("@/lib/permissions-server");
+    const { canReadTable } = await import("@/lib/permissions");
     const currentUser = await getCurrentUser();
 
     if (!currentUser) {
@@ -25,7 +33,7 @@ export async function GET(
     }
 
     // CRITICAL: Filter by companyId
-    const record = await prisma.record.findFirst({
+    const record = await withRetry(() => prisma.record.findFirst({
       where: {
         id: recordId,
         companyId: currentUser.companyId,
@@ -43,10 +51,14 @@ export async function GET(
         files: true,
         attachments: true,
       },
-    });
+    }));
 
     if (!record) {
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
+    }
+
+    if (!canReadTable(currentUser, record.tableId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Strip raw storage URLs from files — clients must use proxied download endpoints
@@ -79,11 +91,9 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const recordId = parseInt(id);
-    const body = await request.json();
-    const { data, createdAt } = body;
+    const recordId = parseId(id);
 
-    if (isNaN(recordId)) {
+    if (!recordId) {
       return NextResponse.json({ error: "Invalid record ID" }, { status: 400 });
     }
 
@@ -99,37 +109,51 @@ export async function PUT(
       );
     }
 
-    // Check write permissions and fetch existing record for automations
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    const { data, createdAt } = body;
+
+    // Atomic verify + update in a transaction to prevent TOCTOU race
     // CRITICAL: Filter by companyId
-    const existingRecord = await prisma.record.findFirst({
-      where: {
-        id: recordId,
-        companyId: currentUser.companyId,
-      },
-    });
+    const txResult = await withRetry(() => prisma.$transaction(async (tx) => {
+      const existingRecord = await tx.record.findFirst({
+        where: {
+          id: recordId,
+          companyId: currentUser.companyId,
+        },
+      });
 
-    if (!existingRecord) {
-      return NextResponse.json({ error: "Record not found" }, { status: 404 });
+      if (!existingRecord) {
+        return { error: "Record not found", status: 404 } as const;
+      }
+
+      if (!canWriteTable(currentUser, existingRecord.tableId)) {
+        return { error: "You don't have permission to write to this table", status: 403 } as const;
+      }
+
+      const record = await tx.record.update({
+        where: { id: recordId, companyId: currentUser.companyId },
+        data: {
+          data,
+          updatedBy: currentUser.id,
+          ...(createdAt && { createdAt: new Date(createdAt) }),
+        },
+      });
+
+      await createAuditLog(record.id, currentUser.id, "UPDATE", data, tx, currentUser.companyId);
+
+      return { record, existingRecord } as const;
+    }));
+
+    if ("error" in txResult) {
+      return NextResponse.json({ error: txResult.error }, { status: txResult.status });
     }
 
-    if (!canWriteTable(currentUser, existingRecord.tableId)) {
-      return NextResponse.json(
-        { error: "You don't have permission to write to this table" },
-        { status: 403 },
-      );
-    }
-
-    // SECURITY: Atomic companyId check in update WHERE clause
-    const record = await prisma.record.update({
-      where: { id: recordId, companyId: currentUser.companyId },
-      data: {
-        data,
-        updatedBy: currentUser.id,
-        ...(createdAt && { createdAt: new Date(createdAt) }),
-      },
-    });
-
-    await createAuditLog(record.id, currentUser.id, "UPDATE", data, undefined, currentUser.companyId);
+    const { record, existingRecord } = txResult;
 
     // Trigger Automations (async via Inngest)
     console.log(
@@ -155,11 +179,7 @@ export async function PUT(
 
     return NextResponse.json(record);
   } catch (error) {
-    console.error("Error updating record:", error);
-    return NextResponse.json(
-      { error: "Failed to update record" },
-      { status: 500 },
-    );
+    return handlePrismaError(error, "record");
   }
 }
 
@@ -169,9 +189,9 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const recordId = parseInt(id);
+    const recordId = parseId(id);
 
-    if (isNaN(recordId)) {
+    if (!recordId) {
       return NextResponse.json({ error: "Invalid record ID" }, { status: 400 });
     }
 
@@ -189,13 +209,13 @@ export async function DELETE(
 
     // Check write permissions
     // CRITICAL: Filter by companyId
-    const existingRecord = await prisma.record.findFirst({
+    const existingRecord = await withRetry(() => prisma.record.findFirst({
       where: {
         id: recordId,
         companyId: currentUser.companyId,
       },
       select: { tableId: true },
-    });
+    }));
 
     if (!existingRecord) {
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
@@ -229,10 +249,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting record:", error);
-    return NextResponse.json(
-      { error: "Failed to delete record" },
-      { status: 500 },
-    );
+    return handlePrismaError(error, "record");
   }
 }

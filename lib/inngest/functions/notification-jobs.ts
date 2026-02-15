@@ -1,5 +1,5 @@
 import { inngest } from "../client";
-import { prisma } from "@/lib/prisma";
+import { prismaBg as prisma } from "@/lib/prisma-background";
 
 /**
  * Background job for broadcasting notifications via Redis Pub/Sub.

@@ -19,7 +19,7 @@ export default function CreateClientForm() {
       name: formData.get("name"),
       email: formData.get("email") || null,
       phone: formData.get("phone") || null,
-      company: formData.get("company") || null,
+      businessName: formData.get("company") || null,
       notes: formData.get("notes") || null,
     };
 

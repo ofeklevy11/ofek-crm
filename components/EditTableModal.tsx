@@ -73,7 +73,7 @@ export default function EditTableModal({
   useEffect(() => {
     fetch("/api/tables")
       .then((res) => res.json())
-      .then((data) => setAvailableTables(data))
+      .then((json) => setAvailableTables(json.data ?? json))
       .catch((err) => console.error("Failed to load tables", err));
 
     fetch("/api/categories")

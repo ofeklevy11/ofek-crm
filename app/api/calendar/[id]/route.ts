@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { updateCalendarEvent, deleteCalendarEvent } from "@/app/actions/calendar";
 
 export async function PUT(
   request: Request,
@@ -16,27 +16,20 @@ export async function PUT(
     const body = await request.json();
     const { title, description, startTime, endTime, color } = body;
 
-    // CRITICAL: Verify event belongs to user's company
-    const existingEvent = await prisma.calendarEvent.findFirst({
-      where: { id, companyId: user.companyId },
+    const result = await updateCalendarEvent(id, {
+      title,
+      description,
+      startTime,
+      endTime,
+      color,
     });
 
-    if (!existingEvent) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    if (!result.success) {
+      const status = result.error === "Event not found" ? 404 : 400;
+      return NextResponse.json({ error: result.error }, { status });
     }
 
-    const event = await prisma.calendarEvent.update({
-      where: { id, companyId: user.companyId },
-      data: {
-        title,
-        description,
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
-        color,
-      },
-    });
-
-    return NextResponse.json(event);
+    return NextResponse.json(result.data);
   } catch (error) {
     console.error("Error updating calendar event:", error);
     return NextResponse.json(
@@ -58,20 +51,12 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // CRITICAL: Verify event belongs to user's company
-    const existingEvent = await prisma.calendarEvent.findFirst({
-      where: { id, companyId: user.companyId },
-    });
+    const result = await deleteCalendarEvent(id);
 
-    if (!existingEvent) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    if (!result.success) {
+      const status = result.error === "Event not found" ? 404 : 400;
+      return NextResponse.json({ error: result.error }, { status });
     }
-
-    await prisma.calendarEvent.deleteMany({
-      where: { id, companyId: user.companyId },
-    });
-
-
 
     return NextResponse.json({ success: true });
   } catch (error) {

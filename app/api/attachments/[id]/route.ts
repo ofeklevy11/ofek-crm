@@ -2,15 +2,20 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 
+function parseId(raw: string): number | null {
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
-    const attachmentId = parseInt(id);
+    const attachmentId = parseId(id);
 
-    if (isNaN(attachmentId)) {
+    if (!attachmentId) {
       return NextResponse.json(
         { error: "Invalid attachment ID" },
         { status: 400 },
@@ -53,11 +58,9 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const attachmentId = parseInt(id);
-    const body = await request.json();
-    const { url, displayName } = body;
+    const attachmentId = parseId(id);
 
-    if (isNaN(attachmentId)) {
+    if (!attachmentId) {
       return NextResponse.json(
         { error: "Invalid attachment ID" },
         { status: 400 },
@@ -68,6 +71,14 @@ export async function PUT(
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    const { url, displayName } = body;
 
     // Build update data (before transaction to avoid holding locks during validation)
     const updateData: {
@@ -107,7 +118,6 @@ export async function PUT(
       async (tx) => {
         const att = await tx.attachment.findFirst({
           where: { id: attachmentId, record: { companyId: currentUser.companyId } },
-          include: { record: true },
         });
         if (!att) return null;
 

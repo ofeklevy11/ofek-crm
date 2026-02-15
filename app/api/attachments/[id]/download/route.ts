@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 
+function parseId(raw: string): number | null {
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -13,9 +18,9 @@ export async function GET(
     }
 
     const { id } = await params;
-    const attachmentId = parseInt(id, 10);
+    const attachmentId = parseId(id);
 
-    if (isNaN(attachmentId)) {
+    if (!attachmentId) {
       return NextResponse.json(
         { error: "Invalid attachment ID" },
         { status: 400 },

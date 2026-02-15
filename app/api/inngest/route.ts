@@ -17,6 +17,7 @@ import { processFinanceSyncJob } from "@/lib/inngest/functions/finance-sync-job"
 import {
   refreshCompanyAnalytics,
   refreshAnalyticsItemJob,
+  cleanupOldDurationRecords,
 } from "@/lib/inngest/functions/analytics-jobs";
 import { processMultiEventDuration } from "@/lib/inngest/functions/multi-event-jobs";
 import { processTaskSheetItemCompletion } from "@/lib/inngest/functions/task-sheet-jobs";
@@ -38,6 +39,9 @@ import {
 } from "@/lib/inngest/functions/dashboard-jobs";
 import { processAIGeneration } from "@/lib/inngest/functions/ai-generation-jobs";
 import { processFixedExpensesCron } from "@/lib/inngest/functions/fixed-expense-jobs";
+import { processWorkflowStageAutomations } from "@/lib/inngest/functions/workflow-automation-jobs";
+import { cleanupOldAutomationData } from "@/lib/inngest/functions/automation-cleanup-jobs";
+import { cleanupOldLogData } from "@/lib/inngest/functions/db-cleanup-jobs";
 
 const functions = [
   processImportJob,
@@ -52,6 +56,7 @@ const functions = [
   processFinanceSyncJob,
   refreshCompanyAnalytics,
   refreshAnalyticsItemJob,
+  cleanupOldDurationRecords,
   processMultiEventDuration,
   processTaskSheetItemCompletion,
   processBulkDeleteRecords,
@@ -67,6 +72,9 @@ const functions = [
   generateQuotePdf,
   processAIGeneration,
   processFixedExpensesCron,
+  processWorkflowStageAutomations,
+  cleanupOldAutomationData,
+  cleanupOldLogData,
 ];
 
 console.log(

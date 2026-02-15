@@ -31,7 +31,6 @@ export const generateQuotePdf = inngest.createFunction(
       const q = await prisma.quote.findFirst({
         where: { id: quoteId, companyId, isTrashed: false },
         include: {
-          client: true,
           items: { include: { product: true } },
           company: true,
         },

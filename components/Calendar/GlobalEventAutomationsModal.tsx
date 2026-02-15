@@ -6,7 +6,7 @@ import {
   getGlobalEventAutomations,
   deleteGlobalEventAutomation,
   updateGlobalEventAutomation,
-  getMaxEventAutomationCount,
+  getGlobalAutomationsModalData,
 } from "@/app/actions/event-automations";
 import {
   Loader2,
@@ -25,7 +25,6 @@ import {
 } from "lucide-react";
 import { EventAutomationBuilder } from "./EventAutomationBuilder";
 import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
-import { getCurrentAuthUser } from "@/app/actions/auth";
 
 interface GlobalEventAutomationsModalProps {
   isOpen: boolean;
@@ -49,17 +48,21 @@ export function GlobalEventAutomationsModal({
 
   useEffect(() => {
     if (isOpen) {
-      loadAutomations();
-      getCurrentAuthUser().then((res) => {
-        if (res.success && res.data) {
-          setUserPlan((res.data as any).isPremium || "basic");
-        }
-      });
-      getMaxEventAutomationCount().then((res) => {
-        if (res.success) {
-          setMaxSpecificCount(res.count || 0);
-        }
-      });
+      setLoading(true);
+      getGlobalAutomationsModalData()
+        .then((res) => {
+          if (res.success && res.data) {
+            setAutomations(res.data.automations);
+            setUserPlan(res.data.userPlan as string);
+            setMaxSpecificCount(res.data.maxSpecificCount);
+          }
+        })
+        .catch((e) => {
+          console.error("Failed to load global automations data", e);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
     }
   }, [isOpen]);
 

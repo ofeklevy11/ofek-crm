@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
 import { inngest } from "@/lib/inngest/client";
+import { PAID_STATUS_VARIANTS } from "@/lib/finance-constants";
+import { withRetry } from "@/lib/db-retry";
 
 export interface SyncMapping {
   amountField: string;
@@ -28,6 +30,10 @@ export async function createSyncRule(data: {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
+  if (data.sourceType === "TABLE" && !data.sourceId) {
+    throw new Error("sourceId is required for TABLE source type");
+  }
+
   const rule = await prisma.financeSyncRule.create({
     data: {
       companyId: user.companyId,
@@ -39,6 +45,7 @@ export async function createSyncRule(data: {
     },
   });
 
+  _defaultRulesCache.delete(user.companyId);
   return rule;
 }
 
@@ -49,13 +56,23 @@ export async function updateSyncRule(
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  await prisma.financeSyncRule.update({
-    where: { id, companyId: user.companyId },
-    data: {
-      name: data.name,
-      targetType: data.targetType,
-    },
+  const updated = await prisma.$transaction(async (tx) => {
+    const existing = await tx.financeSyncRule.findFirst({
+      where: { id, companyId: user.companyId },
+      select: { id: true },
+    });
+    if (!existing) return null;
+
+    return tx.financeSyncRule.update({
+      where: { id },
+      data: {
+        name: data.name,
+        targetType: data.targetType,
+      },
+    });
   });
+
+  if (!updated) throw new Error("Sync rule not found");
 
   revalidatePath("/finance/collect");
   revalidatePath("/finance/income-expenses");
@@ -69,45 +86,52 @@ export async function enqueueSyncJob(ruleId: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  const rule = await prisma.financeSyncRule.findFirst({
+  const rule = await withRetry(() => prisma.financeSyncRule.findFirst({
     where: { id: ruleId, companyId: user.companyId },
-  });
+    select: { id: true },
+  }));
 
   if (!rule)
     throw new Error("Rule not found");
 
-  // Dedup: skip if there's already a QUEUED or RUNNING job for this rule
-  const existingJob = await prisma.financeSyncJob.findFirst({
-    where: {
-      syncRuleId: ruleId,
-      companyId: user.companyId,
-      status: { in: ["QUEUED", "RUNNING"] },
-    },
-  });
+  // Serializable transaction to prevent duplicate job creation race condition
+  const result = await withRetry(() => prisma.$transaction(async (tx) => {
+    const existingJob = await tx.financeSyncJob.findFirst({
+      where: {
+        syncRuleId: ruleId,
+        companyId: user.companyId,
+        status: { in: ["QUEUED", "RUNNING"] },
+      },
+    });
 
-  if (existingJob) {
-    return { jobId: existingJob.id };
+    if (existingJob) {
+      return { jobId: existingJob.id, isNew: false };
+    }
+
+    const job = await tx.financeSyncJob.create({
+      data: {
+        companyId: user.companyId,
+        syncRuleId: ruleId,
+        status: "QUEUED",
+      },
+    });
+
+    return { jobId: job.id, isNew: true };
+  }, { isolationLevel: "Serializable", maxWait: 5000, timeout: 10000 }));
+
+  if (result.isNew) {
+    await inngest.send({
+      id: `finance-sync-${user.companyId}-${ruleId}-${result.jobId}`,
+      name: "finance-sync/job.started",
+      data: {
+        jobId: result.jobId,
+        syncRuleId: ruleId,
+        companyId: user.companyId,
+      },
+    });
   }
 
-  const job = await prisma.financeSyncJob.create({
-    data: {
-      companyId: user.companyId,
-      syncRuleId: ruleId,
-      status: "QUEUED",
-    },
-  });
-
-  await inngest.send({
-    id: `finance-sync-${user.companyId}-${ruleId}-${job.id}`,
-    name: "finance-sync/job.started",
-    data: {
-      jobId: job.id,
-      syncRuleId: ruleId,
-      companyId: user.companyId,
-    },
-  });
-
-  return { jobId: job.id };
+  return { jobId: result.jobId };
 }
 
 /**
@@ -115,9 +139,9 @@ export async function enqueueSyncJob(ruleId: number) {
  * Does NOT call getCurrentUser() or revalidatePath() — safe for Inngest context.
  */
 export async function executeSyncRule(ruleId: number, companyId: number) {
-  const rule = await prisma.financeSyncRule.findFirst({
+  const rule = await withRetry(() => prisma.financeSyncRule.findFirst({
     where: { id: ruleId, companyId },
-  });
+  }));
 
   if (!rule)
     throw new Error("Rule not found");
@@ -133,27 +157,29 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
 
   // Track all valid origin IDs during sync — reused for garbage collection
   const currentOriginIds: string[] = [];
+  let hitSourceLimit = false;
 
   if (rule.sourceType === "TABLE" && rule.sourceId) {
     // --- TABLE SOURCE ---
-    const records = await prisma.record.findMany({
+    const records = await withRetry(() => prisma.record.findMany({
       where: { tableId: rule.sourceId, companyId },
       select: { id: true, data: true, createdAt: true },
       take: 5000, // P76: Bound table records query
-    });
+    }));
 
     stats.scanned = records.length;
+    if (records.length >= 5000) hitSourceLimit = true;
     const mapping = rule.fieldMapping as any as SyncMapping;
 
     // Collect origin IDs for GC reuse
     records.forEach((r) => currentOriginIds.push(r.id.toString()));
 
     // Batch: fetch all existing finance records for this rule in one query
-    const existingRecords = await prisma.financeRecord.findMany({
-      where: { syncRuleId: rule.id },
+    const existingRecords = await withRetry(() => prisma.financeRecord.findMany({
+      where: { syncRuleId: rule.id, companyId, deletedAt: null },
       select: { id: true, originId: true, amount: true, title: true, type: true, category: true, date: true, clientId: true },
       take: 5000, // P76: Bound existing records query
-    });
+    }));
     const existingMap = new Map(existingRecords.map((r) => [r.originId, r]));
 
     // Prepare batch arrays
@@ -209,23 +235,20 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
       }
     }
 
-    // Batch create
+    // Batch create (skipDuplicates guards against unique constraint violations if existingMap was truncated)
     if (toCreate.length > 0) {
-      await prisma.financeRecord.createMany({ data: toCreate });
-      stats.created = toCreate.length;
+      const result = await prisma.financeRecord.createMany({ data: toCreate, skipDuplicates: true });
+      stats.created = result.count;
     }
 
-    // Batch update (Prisma doesn't have updateMany with different data, so we use Promise.all in chunks)
+    // Batch update in a single transaction (one round-trip instead of N concurrent connections)
     if (toUpdate.length > 0) {
-      const CHUNK_SIZE = 100;
-      for (let i = 0; i < toUpdate.length; i += CHUNK_SIZE) {
-        const chunk = toUpdate.slice(i, i + CHUNK_SIZE);
-        await Promise.all(
-          chunk.map((u) =>
-            prisma.financeRecord.update({ where: { id: u.id, companyId }, data: u.data }),
-          ),
-        );
-      }
+      await withRetry(() => prisma.$transaction(
+        toUpdate.map((u) =>
+          prisma.financeRecord.update({ where: { id: u.id, companyId }, data: u.data }),
+        ),
+        { maxWait: 5000, timeout: 10000 },
+      ));
       stats.updated = toUpdate.length;
     }
   } else if (
@@ -233,36 +256,39 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
     rule.sourceType === "PAYMENTS_RETAINERS"
   ) {
     // --- SYSTEM PAYMENTS SOURCE ---
-    const transactions = await prisma.transaction.findMany({
+    const transactions = await withRetry(() => prisma.transaction.findMany({
       where: {
-        client: { companyId },
-        status: { in: ["manual-marked-paid", "paid", "Pd", "PAID"] },
+        companyId,         // P6: Use denormalized column
+        deletedAt: null,   // P3: Exclude soft-deleted
+        status: { in: PAID_STATUS_VARIANTS as unknown as string[] },
       },
-      include: { client: true },
+      select: { id: true, clientId: true, amount: true, paidDate: true, attemptDate: true, createdAt: true, notes: true },
       take: 5000, // P76: Bound transactions query
-    });
+    }));
 
-    const payments = await prisma.oneTimePayment.findMany({
+    const payments = await withRetry(() => prisma.oneTimePayment.findMany({
       where: {
-        client: { companyId },
-        status: { in: ["paid", "PAID"] },
+        companyId,         // P6: Use denormalized column
+        deletedAt: null,   // P3: Exclude soft-deleted
+        status: { in: PAID_STATUS_VARIANTS as unknown as string[] },
       },
-      include: { client: true },
+      select: { id: true, clientId: true, amount: true, paidDate: true, dueDate: true, createdAt: true, title: true },
       take: 5000, // P76: Bound payments query
-    });
+    }));
 
     stats.scanned = transactions.length + payments.length;
+    if (transactions.length >= 5000 || payments.length >= 5000) hitSourceLimit = true;
 
     // Collect origin IDs for GC reuse
     transactions.forEach((t) => currentOriginIds.push(`trans_${t.id}`));
     payments.forEach((p) => currentOriginIds.push(`payment_${p.id}`));
 
     // Batch: fetch all existing finance records for this rule in one query
-    const existingRecords = await prisma.financeRecord.findMany({
-      where: { syncRuleId: rule.id },
+    const existingRecords = await withRetry(() => prisma.financeRecord.findMany({
+      where: { syncRuleId: rule.id, companyId, deletedAt: null },
       select: { id: true, originId: true, amount: true, title: true, type: true, category: true, date: true, clientId: true },
       take: 5000, // P76: Bound existing records query
-    });
+    }));
     const existingMap = new Map(existingRecords.map((r) => [r.originId, r]));
 
     const toCreate: any[] = [];
@@ -375,38 +401,36 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
       }
     }
 
-    // Batch create
+    // Batch create (skipDuplicates guards against unique constraint violations if existingMap was truncated)
     if (toCreate.length > 0) {
-      await prisma.financeRecord.createMany({ data: toCreate });
-      stats.created = toCreate.length;
+      const result = await prisma.financeRecord.createMany({ data: toCreate, skipDuplicates: true });
+      stats.created = result.count;
     }
 
-    // Batch update in chunks
+    // Batch update in a single transaction
     if (toUpdate.length > 0) {
-      const CHUNK_SIZE = 100;
-      for (let i = 0; i < toUpdate.length; i += CHUNK_SIZE) {
-        const chunk = toUpdate.slice(i, i + CHUNK_SIZE);
-        await Promise.all(
-          chunk.map((u) =>
-            prisma.financeRecord.update({ where: { id: u.id, companyId }, data: u.data }),
-          ),
-        );
-      }
+      await withRetry(() => prisma.$transaction(
+        toUpdate.map((u) =>
+          prisma.financeRecord.update({ where: { id: u.id, companyId }, data: u.data }),
+        ),
+        { maxWait: 5000, timeout: 10000 },
+      ));
       stats.updated = toUpdate.length;
     }
   } else if (rule.sourceType === "FIXED_EXPENSES") {
     // --- FIXED EXPENSES SOURCE ---
     const { processFixedExpenses } = await import("./fixed-expenses");
-    const generatedCount = (await processFixedExpenses()) || 0;
+    const generatedCount = (await processFixedExpenses(companyId)) || 0;
 
-    const unlinkedRecords = await prisma.financeRecord.findMany({
+    const unlinkedRecords = await withRetry(() => prisma.financeRecord.findMany({
       where: {
         companyId,
+        deletedAt: null,
         originId: { startsWith: "fixed_" },
         syncRuleId: null,
       },
       take: 5000, // P88: Bound unlinked records query
-    });
+    }));
 
     stats.scanned = unlinkedRecords.length;
 
@@ -414,6 +438,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
       await prisma.financeRecord.updateMany({
         where: {
           id: { in: unlinkedRecords.map((r) => r.id) },
+          companyId, // defense-in-depth
         },
         data: {
           syncRuleId: rule.id,
@@ -427,25 +452,31 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
   }
 
   // --- GARBAGE COLLECTION (reuses currentOriginIds from sync phase) ---
+  // Skip GC if any source query was truncated — origin set is not exhaustive
   if (
     currentOriginIds.length > 0 &&
+    !hitSourceLimit &&
     rule.sourceType !== "FIXED_EXPENSES"
   ) {
-    await prisma.financeRecord.deleteMany({
-      where: {
-        syncRuleId: rule.id,
-        companyId,
-        originId: { notIn: currentOriginIds },
-      },
-    });
+    // Use unnest instead of NOT IN (...thousands) to avoid massive SQL clause
+    // GC only non-deleted sync'd records (they can be regenerated)
+    await prisma.$executeRaw`
+      DELETE FROM "FinanceRecord"
+      WHERE "syncRuleId" = ${rule.id}
+        AND "companyId" = ${companyId}
+        AND "deletedAt" IS NULL
+        AND "originId" IS NOT NULL
+        AND "originId" NOT IN (SELECT unnest(${currentOriginIds}::text[]))
+    `;
   } else if (
     currentOriginIds.length === 0 &&
     (rule.sourceType === "TRANSACTIONS" ||
       rule.sourceType === "PAYMENTS_RETAINERS" ||
       rule.sourceType === "TABLE")
   ) {
+    // GC: Hard-delete sync'd records (they can be regenerated, no audit needed)
     await prisma.financeRecord.deleteMany({
-      where: { syncRuleId: rule.id, companyId },
+      where: { syncRuleId: rule.id, companyId, deletedAt: null },
     });
   }
 
@@ -519,15 +550,17 @@ export async function deleteSyncRule(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  // Delete all finance records created by this rule (scoped to company)
-  await prisma.financeRecord.deleteMany({
-    where: { syncRuleId: id, companyId: user.companyId },
-  });
+  // Delete records + rule atomically to prevent partial cleanup
+  await withRetry(() => prisma.$transaction([
+    prisma.financeRecord.deleteMany({
+      where: { syncRuleId: id, companyId: user.companyId },
+    }),
+    prisma.financeSyncRule.delete({
+      where: { id, companyId: user.companyId },
+    }),
+  ], { maxWait: 5000, timeout: 10000 }));
 
-  await prisma.financeSyncRule.delete({
-    where: { id, companyId: user.companyId },
-  });
-
+  _defaultRulesCache.delete(user.companyId);
   revalidatePath("/finance/collect");
   revalidatePath("/finance/income-expenses");
 }
@@ -536,63 +569,74 @@ export async function getSyncRules() {
   const user = await getCurrentUser();
   if (!user) return [];
 
-  await ensureDefaultRules(user.companyId);
+  await ensureDefaultSyncRules(user.companyId);
 
-  return prisma.financeSyncRule.findMany({
+  return withRetry(() => prisma.financeSyncRule.findMany({
     where: { companyId: user.companyId },
     orderBy: { createdAt: "desc" },
     take: 200, // P76: Bound user sync rules query
-  });
+  }));
 }
 
-async function ensureDefaultRules(companyId: number) {
-  // 1. Fixed Expenses Rule
-  const fixedRule = await prisma.financeSyncRule.findFirst({
-    where: { companyId, sourceType: "FIXED_EXPENSES" },
-  });
+// P10: In-memory cache — NOT shared across serverless instances.
+// Worst case: one extra DB query per cold-start per company (acceptable tradeoff).
+// The idempotent ensureDefaultSyncRules + transaction dedup makes this safe.
+const _defaultRulesCache = new Map<number, number>(); // companyId -> timestamp
+const DEFAULT_RULES_TTL = 60 * 60 * 1000; // 1 hour
 
-  if (!fixedRule) {
-    await prisma.financeSyncRule.create({
-      data: {
-        companyId,
-        name: "הוצאות קבועות",
-        sourceType: "FIXED_EXPENSES",
-        targetType: "EXPENSE",
-        fieldMapping: {},
-      },
-    });
-  }
+export async function ensureDefaultSyncRules(companyId: number) {
+  const cached = _defaultRulesCache.get(companyId);
+  if (cached && Date.now() - cached < DEFAULT_RULES_TTL) return;
 
-  // 2. Payments & Retainers Rule
-  const paymentsRule = await prisma.financeSyncRule.findFirst({
-    where: { companyId, sourceType: "PAYMENTS_RETAINERS" },
-  });
-
-  if (!paymentsRule) {
-    const legacyRule = await prisma.financeSyncRule.findFirst({
-      where: { companyId, sourceType: "TRANSACTIONS" },
+  // Use interactive transaction to prevent duplicate default rules from concurrent cold starts
+  await withRetry(() => prisma.$transaction(async (tx) => {
+    const existingRules = await tx.financeSyncRule.findMany({
+      where: { companyId, sourceType: { in: ["FIXED_EXPENSES", "PAYMENTS_RETAINERS", "TRANSACTIONS"] } },
+      select: { id: true, sourceType: true },
     });
 
-    if (legacyRule) {
-      await prisma.financeSyncRule.update({
-        where: { id: legacyRule.id },
-        data: {
-          sourceType: "PAYMENTS_RETAINERS",
-          name: "תשלומים וריטיינרים",
-        },
-      });
-    } else {
-      await prisma.financeSyncRule.create({
+    const sourceTypes = new Set(existingRules.map((r) => r.sourceType));
+
+    // 1. Fixed Expenses Rule
+    if (!sourceTypes.has("FIXED_EXPENSES")) {
+      await tx.financeSyncRule.create({
         data: {
           companyId,
-          name: "תשלומים וריטיינרים",
-          sourceType: "PAYMENTS_RETAINERS",
-          targetType: "INCOME",
+          name: "הוצאות קבועות",
+          sourceType: "FIXED_EXPENSES",
+          targetType: "EXPENSE",
           fieldMapping: {},
         },
       });
     }
-  }
+
+    // 2. Payments & Retainers Rule
+    if (!sourceTypes.has("PAYMENTS_RETAINERS")) {
+      const legacyRule = existingRules.find((r) => r.sourceType === "TRANSACTIONS");
+
+      if (legacyRule) {
+        await tx.financeSyncRule.update({
+          where: { id: legacyRule.id },
+          data: {
+            sourceType: "PAYMENTS_RETAINERS",
+            name: "תשלומים וריטיינרים",
+          },
+        });
+      } else {
+        await tx.financeSyncRule.create({
+          data: {
+            companyId,
+            name: "תשלומים וריטיינרים",
+            sourceType: "PAYMENTS_RETAINERS",
+            targetType: "INCOME",
+            fieldMapping: {},
+          },
+        });
+      }
+    }
+  }, { maxWait: 5000, timeout: 10000 }));
+
+  _defaultRulesCache.set(companyId, Date.now());
 }
 
 export async function triggerSyncByType(
@@ -600,42 +644,51 @@ export async function triggerSyncByType(
   sourceType: "FIXED_EXPENSES" | "PAYMENTS_RETAINERS",
 ) {
   try {
-    const rule = await prisma.financeSyncRule.findFirst({
+    const rule = await withRetry(() => prisma.financeSyncRule.findFirst({
       where: {
         companyId,
         sourceType,
         isActive: true,
       },
-    });
+      select: { id: true },
+    }));
 
     if (rule) {
-      // Dedup: skip if there's already a QUEUED/RUNNING job for this rule
-      const existingJob = await prisma.financeSyncJob.findFirst({
-        where: {
-          syncRuleId: rule.id,
-          companyId,
-          status: { in: ["QUEUED", "RUNNING"] },
-        },
-      });
+      // Serializable transaction to prevent duplicate job creation race condition
+      const result = await withRetry(() => prisma.$transaction(async (tx) => {
+        const existingJob = await tx.financeSyncJob.findFirst({
+          where: {
+            syncRuleId: rule.id,
+            companyId,
+            status: { in: ["QUEUED", "RUNNING"] },
+          },
+        });
 
-      if (existingJob) {
+        if (existingJob) {
+          return { jobId: existingJob.id, isNew: false };
+        }
+
+        const job = await tx.financeSyncJob.create({
+          data: {
+            companyId,
+            syncRuleId: rule.id,
+            status: "QUEUED",
+          },
+        });
+
+        return { jobId: job.id, isNew: true };
+      }, { isolationLevel: "Serializable", maxWait: 5000, timeout: 10000 }));
+
+      if (!result.isNew) {
         console.log(`[AutoSync] Skipping ${sourceType} — job already queued/running`);
         return;
       }
 
-      const job = await prisma.financeSyncJob.create({
-        data: {
-          companyId,
-          syncRuleId: rule.id,
-          status: "QUEUED",
-        },
-      });
-
       await inngest.send({
-        id: `finance-sync-${companyId}-${rule.id}-${job.id}`,
+        id: `finance-sync-${companyId}-${rule.id}-${result.jobId}`,
         name: "finance-sync/job.started",
         data: {
-          jobId: job.id,
+          jobId: result.jobId,
           syncRuleId: rule.id,
           companyId,
         },

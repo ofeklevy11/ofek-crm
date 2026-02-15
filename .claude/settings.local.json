@@ -16,7 +16,12 @@
       "Bash(node --version:*)",
       "Bash(cat:*)",
       "Bash(wc:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(ls:*)",
+      "Bash(git diff:*)",
+      "Bash(done)",
+      "Bash(node -e:*)",
+      "Bash(node -c:*)"
     ]
   }
 }

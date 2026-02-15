@@ -3,26 +3,14 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
-// import { Prisma } from "@prisma/client";
-// Use number for Decimal fields
-// type Decimal = Prisma.Decimal;
-// const Decimal = Prisma.Decimal;
+import { GoalMetricType, GoalTargetType, GoalPeriodType } from "@prisma/client";
 import { startOfDay, endOfDay } from "date-fns";
 import { inngest } from "@/lib/inngest/client";
+import { withRetry } from "@/lib/db-retry";
 
-export type MetricType =
-  | "REVENUE" // Total income (Paid transactions OR Table Sum OR Finance Record)
-  | "SALES" // Number of sales
-  | "CUSTOMERS" // Customers from finance page (Client model)
-  | "TASKS" // Tasks completion
-  | "RETAINERS" // Retainers analysis
-  | "QUOTES" // Quotes analysis
-  | "CALENDAR" // Calendar events
-  | "RECORDS"; // Generic table records
-
-export type TargetType = "COUNT" | "SUM";
-
-export type PeriodType = "MONTHLY" | "QUARTERLY" | "YEARLY" | "CUSTOM";
+export type MetricType = GoalMetricType;
+export type TargetType = GoalTargetType;
+export type PeriodType = GoalPeriodType;
 
 export interface GoalFilters {
   clientId?: number;
@@ -73,6 +61,13 @@ export interface GoalWithProgress {
   recommendation: string | null;
 }
 
+// Validates field names used in raw SQL JSON accessors — prevents data probing via arbitrary keys
+const SAFE_FIELD_NAME = /^[a-zA-Z0-9_\u0590-\u05FF]+$/;
+
+const VALID_METRIC_TYPES = new Set<string>(["REVENUE", "SALES", "CUSTOMERS", "TASKS", "RETAINERS", "QUOTES", "CALENDAR", "RECORDS"]);
+const VALID_TARGET_TYPES = new Set<string>(["COUNT", "SUM"]);
+const VALID_PERIOD_TYPES = new Set<string>(["MONTHLY", "QUARTERLY", "YEARLY", "CUSTOM"]);
+
 // Helper for live preview in the UI - exposed to client
 export async function previewGoalValue(
   metricType: MetricType,
@@ -82,6 +77,12 @@ export async function previewGoalValue(
   endDate: Date,
   filters: GoalFilters,
 ) {
+  if (!VALID_METRIC_TYPES.has(metricType)) throw new Error("Invalid metricType");
+  if (!VALID_TARGET_TYPES.has(targetType)) throw new Error("Invalid targetType");
+  if (!VALID_PERIOD_TYPES.has(periodType)) throw new Error("Invalid periodType");
+  if (!(startDate instanceof Date) || isNaN(startDate.getTime())) throw new Error("Invalid startDate");
+  if (!(endDate instanceof Date) || isNaN(endDate.getTime())) throw new Error("Invalid endDate");
+
   const user = await getCurrentUser();
   if (!user) return 0;
 
@@ -102,7 +103,12 @@ export async function createGoal(data: GoalFormData) {
     throw new Error("Unauthorized");
   }
 
-  const goal = await prisma.goal.create({
+  // Cross-field validation (defense-in-depth — server action may be called outside the API route)
+  if (data.endDate < data.startDate) throw new Error("endDate must be >= startDate");
+  if ((data.warningThreshold ?? 70) < (data.criticalThreshold ?? 50))
+    throw new Error("warningThreshold must be >= criticalThreshold");
+
+  const goal = await withRetry(() => prisma.goal.create({
     data: {
       companyId: user.companyId,
       name: data.name,
@@ -119,44 +125,73 @@ export async function createGoal(data: GoalFormData) {
       filters: data.filters as any,
       targetType: data.targetType as any,
     },
-  });
+  }));
 
   revalidatePath("/finance/goals");
 
-  // Trigger dashboard goals cache refresh
-  try {
-    await inngest.send({
-      id: `goals-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
-      name: "dashboard/refresh-goals",
-      data: { companyId: user.companyId },
-    });
-  } catch (e) {
-    console.error("[Goals] Failed to send dashboard refresh:", e);
-  }
+  // Trigger dashboard goals cache refresh (fire-and-forget — non-critical)
+  inngest.send({
+    id: `goals-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
+    name: "dashboard/refresh-goals",
+    data: { companyId: user.companyId },
+  }).catch((e) => console.error("[Goals] Failed to send dashboard refresh:", e));
 
   return { ...goal, targetValue: Number(goal.targetValue) };
 }
 
 // Archive/Restore Goal
 export async function toggleGoalArchive(id: number, isArchived: boolean) {
+  if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid goal id");
+  if (typeof isArchived !== "boolean") throw new Error("Invalid isArchived");
+
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  await prisma.goal.update({
-    where: { id, companyId: user.companyId },
-    data: { isArchived },
-  });
-
-  // Trigger dashboard goals cache refresh
-  try {
-    await inngest.send({
-      id: `goals-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
-      name: "dashboard/refresh-goals",
-      data: { companyId: user.companyId },
-    });
-  } catch (e) {
-    console.error("[Goals] Failed to send dashboard refresh:", e);
+  if (isArchived) {
+    // Compute final progress snapshot before archiving (avoids re-computing for archived goals)
+    // Wrapped in transaction to prevent TOCTOU race — re-read filters at write time
+    const goalRow = await withRetry(() => prisma.goal.findUnique({ where: { id, companyId: user.companyId } }));
+    if (goalRow) {
+      const enriched = await enrichGoalsWithProgress([goalRow], user.companyId);
+      const snapshot = enriched[0];
+      await prisma.$transaction(async (tx) => {
+        // Re-read inside transaction to get fresh filters (may have changed during enrichment)
+        const freshGoal = await tx.goal.findUnique({ where: { id, companyId: user.companyId } });
+        if (!freshGoal) return;
+        const freshFilters = (freshGoal.filters as any) || {};
+        await tx.goal.update({
+          where: { id, companyId: user.companyId },
+          data: {
+            isArchived: true,
+            filters: {
+              ...freshFilters,
+              _archivedSnapshot: {
+                currentValue: snapshot?.currentValue ?? 0,
+                progressPercent: snapshot?.progressPercent ?? 0,
+                status: snapshot?.status ?? "CRITICAL",
+                projectedValue: snapshot?.projectedValue ?? 0,
+                daysRemaining: snapshot?.daysRemaining ?? 0,
+                recommendation: snapshot?.recommendation ?? null,
+                archivedAt: new Date().toISOString(),
+              },
+            },
+          },
+        });
+      }, { maxWait: 5000, timeout: 10000 });
+    }
+  } else {
+    await withRetry(() => prisma.goal.update({
+      where: { id, companyId: user.companyId },
+      data: { isArchived: false },
+    }));
   }
+
+  // Trigger dashboard goals cache refresh (fire-and-forget — non-critical)
+  inngest.send({
+    id: `goals-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
+    name: "dashboard/refresh-goals",
+    data: { companyId: user.companyId },
+  }).catch((e) => console.error("[Goals] Failed to send dashboard refresh:", e));
 
   revalidatePath("/finance/goals");
   revalidatePath("/finance/goals/archive");
@@ -194,7 +229,7 @@ async function calculateMetricValue(
   switch (metricType) {
     case "RETAINERS": {
       const where: any = {
-        client: { companyId },
+        companyId, // Denormalized — no JOIN to Client needed
         status: { in: ["active", "Active", "ACTIVE"] },
         ...clientFilter,
       };
@@ -204,13 +239,13 @@ async function calculateMetricValue(
       }
 
       if (targetType?.toUpperCase() === "SUM") {
-        const result = await prisma.retainer.aggregate({
+        const result = await withRetry(() => prisma.retainer.aggregate({
           where,
           _sum: { amount: true },
-        });
+        }));
         return Number(result._sum.amount ?? 0);
       } else {
-        return await prisma.retainer.count({ where });
+        return await withRetry(() => prisma.retainer.count({ where }));
       }
     }
 
@@ -234,43 +269,36 @@ async function calculateMetricValue(
         }
 
         if (targetType?.toUpperCase() === "SUM" || metricType === "REVENUE") {
-          const result = await prisma.financeRecord.aggregate({
+          const result = await withRetry(() => prisma.financeRecord.aggregate({
             where,
             _sum: { amount: true },
-          });
+          }));
           return Number(result._sum.amount ?? 0);
         } else {
-          return await prisma.financeRecord.count({ where });
+          return await withRetry(() => prisma.financeRecord.count({ where }));
         }
       }
 
       // Option B: Revenue from Specific Table (e.g. "Deals")
       if (filters.source === "TABLE" && filters.tableId && filters.columnKey) {
-        const where: any = {
-          companyId,
-          tableId: filters.tableId,
-          ...getDateFilter(startDate, endDate, "createdAt"),
-        };
-
-        // P121: Add take limit to record queries used for metric calculation
-        const records = await prisma.record.findMany({
-          where,
-          select: { data: true },
-          take: 5000, // P211: Lowered from 10000 to cap memory for metric calculations
-        });
+        // SECURITY: Validate columnKey before using in raw SQL JSON accessor
+        if (!SAFE_FIELD_NAME.test(filters.columnKey)) return 0;
 
         if (targetType?.toUpperCase() === "SUM") {
-          const sum = records.reduce((acc, r: any) => {
-            const val = r.data?.[filters.columnKey!] || 0;
-            const num =
-              typeof val === "string"
-                ? parseFloat(val.replace(/[^0-9.-]+/g, ""))
-                : Number(val);
-            return acc + (isNaN(num) ? 0 : num);
-          }, 0);
-          return sum;
+          // DB-level SUM: avoids loading 5000 full data blobs into memory
+          const result = await withRetry(() => prisma.$queryRaw<[{ total: string | null }]>`
+            SELECT COALESCE(SUM(
+              NULLIF(regexp_replace("data"->>${filters.columnKey!}, '[^0-9.\\-]', '', 'g'), '')::numeric
+            ), 0)::text as total
+            FROM "Record"
+            WHERE "companyId" = ${companyId} AND "tableId" = ${filters.tableId}
+              AND "createdAt" >= ${startDate} AND "createdAt" <= ${endDate}
+          `);
+          return Number(result[0].total ?? 0);
         } else {
-          return records.length;
+          return await withRetry(() => prisma.record.count({
+            where: { companyId, tableId: filters.tableId, createdAt: { gte: startDate, lte: endDate } },
+          }));
         }
       }
 
@@ -279,7 +307,7 @@ async function calculateMetricValue(
 
       // 1. Transactions (Legacy)
       const transactionWhere: any = {
-        client: { companyId },
+        companyId, // Denormalized — no JOIN to Client needed
         status: {
           in: ["manual-marked-paid", "paid", "PAID", "completed", "COMPLETED"],
         },
@@ -295,7 +323,7 @@ async function calculateMetricValue(
 
       // 2. OneTimePayments (Modern)
       const paymentWhere: any = {
-        client: { companyId },
+        companyId, // Denormalized — no JOIN to Client needed
         status: {
           in: ["paid", "PAID", "Pd", "manual-marked-paid", "completed"],
         },
@@ -357,16 +385,16 @@ async function calculateMetricValue(
       let totalCount = 0;
 
       const [transSum, transCount, paySum, payCount] = await Promise.all([
-        prisma.transaction.aggregate({
+        withRetry(() => prisma.transaction.aggregate({
           where: transactionWhere,
           _sum: { amount: true },
-        }),
-        prisma.transaction.count({ where: transactionWhere }),
-        prisma.oneTimePayment.aggregate({
+        })),
+        withRetry(() => prisma.transaction.count({ where: transactionWhere })),
+        withRetry(() => prisma.oneTimePayment.aggregate({
           where: paymentWhere,
           _sum: { amount: true },
-        }),
-        prisma.oneTimePayment.count({ where: paymentWhere }),
+        })),
+        withRetry(() => prisma.oneTimePayment.count({ where: paymentWhere })),
       ]);
 
       totalAmount =
@@ -387,14 +415,14 @@ async function calculateMetricValue(
           tableId: filters.tableId,
           ...getDateFilter(startDate, endDate, "createdAt"),
         };
-        return await prisma.record.count({ where });
+        return await withRetry(() => prisma.record.count({ where }));
       }
 
       const where: any = {
         companyId,
         ...getDateFilter(startDate, endDate, "createdAt"),
       };
-      return await prisma.client.count({ where });
+      return await withRetry(() => prisma.client.count({ where }));
     }
 
     case "TASKS": {
@@ -424,7 +452,7 @@ async function calculateMetricValue(
           status: { in: statusValues },
         };
 
-        return await prisma.task.count({ where });
+        return await withRetry(() => prisma.task.count({ where }));
       }
 
       // COUNT mode (default): Count tasks that reached the status in the date range
@@ -438,7 +466,7 @@ async function calculateMetricValue(
         ...getDateFilter(startDate, endDate, "updatedAt"),
       };
 
-      return await prisma.task.count({ where });
+      return await withRetry(() => prisma.task.count({ where }));
     }
 
     case "QUOTES": {
@@ -454,13 +482,13 @@ async function calculateMetricValue(
       }
 
       if (targetType?.toUpperCase() === "SUM") {
-        const result = await prisma.quote.aggregate({
+        const result = await withRetry(() => prisma.quote.aggregate({
           where,
           _sum: { total: true },
-        });
+        }));
         return Number(result._sum.total ?? 0);
       } else {
-        return await prisma.quote.count({ where });
+        return await withRetry(() => prisma.quote.count({ where }));
       }
     }
 
@@ -482,7 +510,7 @@ async function calculateMetricValue(
         ];
       }
 
-      return await prisma.calendarEvent.count({ where });
+      return await withRetry(() => prisma.calendarEvent.count({ where }));
     }
 
     case "RECORDS": {
@@ -495,25 +523,22 @@ async function calculateMetricValue(
       };
 
       if (targetType?.toUpperCase() === "SUM" && filters.columnKey) {
-        // P121: Add take limit to record queries for metric sum calculation
-        const records = await prisma.record.findMany({
-          where,
-          select: { data: true },
-          take: 5000, // P211: Lowered from 10000 to cap memory for metric calculations
-        });
+        // SECURITY: Validate columnKey before using in raw SQL JSON accessor
+        if (!SAFE_FIELD_NAME.test(filters.columnKey)) return 0;
 
-        const sum = records.reduce((acc, r: any) => {
-          const val = r.data?.[filters.columnKey!] || 0;
-          const num =
-            typeof val === "string"
-              ? parseFloat(val.replace(/[^0-9.-]+/g, ""))
-              : Number(val);
-          return acc + (isNaN(num) ? 0 : num);
-        }, 0);
-        return sum;
+        // DB-level SUM: avoids loading full data blobs into memory
+        const result = await withRetry(() => prisma.$queryRaw<[{ total: string | null }]>`
+          SELECT COALESCE(SUM(
+            NULLIF(regexp_replace("data"->>${filters.columnKey!}, '[^0-9.\\-]', '', 'g'), '')::numeric
+          ), 0)::text as total
+          FROM "Record"
+          WHERE "companyId" = ${companyId} AND "tableId" = ${filters.tableId}
+            AND "createdAt" >= ${startDate} AND "createdAt" <= ${endDate}
+        `);
+        return Number(result[0].total ?? 0);
       }
 
-      return await prisma.record.count({ where });
+      return await withRetry(() => prisma.record.count({ where }));
     }
 
     default:
@@ -547,132 +572,187 @@ function generateRecommendation(
   ).toLocaleString()} ${unit} ליום כדי לעמוד ביעד.`;
 }
 
-// Internal helper to calculate progress for a list of goals.
-// Processes in chunks of 15 to avoid exhausting DB connection pool.
+/**
+ * Build a batch key for grouping goals that can share pre-fetched data.
+ * Goals with the same key have identical query structures (only date ranges differ).
+ */
+function goalBatchKey(goal: any): string {
+  const f = ((goal as any).filters as GoalFilters) || {};
+  switch (goal.metricType) {
+    case "TASKS": {
+      const mode = f.taskGoalMode || "COUNT";
+      const status = f.status || (mode === "REDUCE" ? "TODO" : "COMPLETED");
+      return `TASKS|${mode}|${status}`;
+    }
+    case "REVENUE":
+    case "SALES": {
+      if (f.source === "FINANCE_RECORD") return `FIN_REC|${f.columnKey || "all"}`;
+      if (f.source === "TABLE") return `TBL_REV|${f.tableId}|${f.columnKey}`;
+      return `TRANS|${f.source || "default"}|${f.clientId || 0}`;
+    }
+    case "RETAINERS": return `RET|${f.clientId || 0}|${f.frequency || "all"}`;
+    case "CUSTOMERS": return f.tableId ? `CUST_TBL|${f.tableId}` : "CUST";
+    case "QUOTES": return `QUOTES|${f.status || "all"}|${f.clientId || 0}`;
+    case "CALENDAR": return `CAL|${f.searchQuery || ""}`;
+    case "RECORDS": return `REC|${f.tableId || 0}|${f.columnKey || ""}`;
+    default: return `FALLBACK|${goal.id}`;
+  }
+}
+
+/**
+ * Batch-calculate metric values for all goals, then build GoalWithProgress objects.
+ * Groups goals by query signature and pre-fetches shared data to minimize DB queries.
+ * Uses a single global concurrency limit (5) across ALL goals to prevent connection pool saturation.
+ */
 async function enrichGoalsWithProgress(
   goals: any[],
   companyId: number,
 ): Promise<GoalWithProgress[]> {
-  const CHUNK_SIZE = 15;
-  const results: GoalWithProgress[] = [];
-  for (let i = 0; i < goals.length; i += CHUNK_SIZE) {
-    const chunk = goals.slice(i, i + CHUNK_SIZE);
-    const chunkResults = await Promise.all(
-      chunk.map(async (goal) => {
-      const filters = ((goal as any).filters as GoalFilters) || {};
-      const targetType = (goal as any).targetType || "COUNT";
+  if (goals.length === 0) return [];
 
-      const currentValue = await calculateMetricValue(
-        goal.metricType,
-        targetType,
-        companyId,
-        goal.startDate,
-        goal.endDate,
-        filters,
-      );
-
-      const targetValue = Number(goal.targetValue);
-
-      // For REDUCE mode (tasks), progress is inverted:
-      // If target is 2 and current is 10, we're far from goal (low progress)
-      // If target is 2 and current is 3, we're close to goal (high progress)
-      const isReduceMode =
-        goal.metricType === "TASKS" && filters.taskGoalMode === "REDUCE";
-
-      let progressPercent: number;
-      if (isReduceMode) {
-        // In reduce mode, lower currentValue = better progress
-        // If current <= target, we've achieved the goal (100%+)
-        if (currentValue <= targetValue) {
-          progressPercent = 100;
-        } else if (targetValue === 0) {
-          // Special case: target is 0, we want to eliminate all tasks
-          // Use a reference scale: assume starting from max(currentValue, 10) tasks
-          // This way, fewer tasks = higher progress
-          // Example: 4 tasks with target 0, using base 10: progress = (10-4)/10 = 60%
-          // Example: 2 tasks with target 0: progress = (10-2)/10 = 80%
-          // Example: 0 tasks with target 0: progress = 100%
-          const referenceBase = Math.max(currentValue, 10);
-          progressPercent = Math.round(
-            ((referenceBase - currentValue) / referenceBase) * 100,
-          );
-        } else {
-          // Progress based on how close current is to target
-          // The closer currentValue is to targetValue, the higher the progress
-          progressPercent = Math.max(
-            0,
-            Math.round((targetValue / currentValue) * 100),
-          );
-        }
-      } else {
-        progressPercent =
-          targetValue > 0 ? Math.round((currentValue / targetValue) * 100) : 0;
-      }
-
-      const now = new Date();
-      const endDate = new Date(goal.endDate);
-      const startDate = new Date(goal.startDate);
-      const daysRemaining = Math.max(
-        0,
-        Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
-      );
-      const totalDays = Math.ceil(
-        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
-      );
-      const daysElapsed = Math.max(
-        1,
-        Math.ceil(
-          (now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
-        ),
-      );
-
-      const dailyRate = currentValue / daysElapsed;
-      const projectedValue = Math.round(dailyRate * totalDays);
-
-      let status: "ON_TRACK" | "WARNING" | "CRITICAL" | "EXCEEDED";
-      if (progressPercent >= 100) status = "EXCEEDED";
-      else if (progressPercent >= goal.warningThreshold) status = "ON_TRACK";
-      else if (progressPercent >= goal.criticalThreshold) status = "WARNING";
-      else status = "CRITICAL";
-
-      const isMaintenanceGoal = goal.metricType === "RETAINERS";
-      const finalProjected = isMaintenanceGoal ? currentValue : projectedValue;
-
-      const recommendation = generateRecommendation(
-        goal.metricType,
-        progressPercent,
-        targetType,
-        daysRemaining,
-        targetValue - currentValue,
-      );
-
-      return {
-        id: goal.id,
-        name: goal.name,
-        metricType: goal.metricType,
-        targetType: targetType,
-        targetValue,
-        currentValue,
-        progressPercent,
-        periodType: goal.periodType,
-        startDate: goal.startDate,
-        endDate: goal.endDate,
-        filters,
-        warningThreshold: goal.warningThreshold,
-        criticalThreshold: goal.criticalThreshold,
-        status,
-        isActive: goal.isActive,
-        isArchived: (goal as any).isArchived ?? false,
-        notes: goal.notes,
-        daysRemaining,
-        projectedValue: finalProjected,
-        recommendation,
-      };
-      }),
-    );
-    results.push(...chunkResults);
+  // Step 1: Group goals by batch key
+  const groups = new Map<string, any[]>();
+  for (const goal of goals) {
+    const key = goalBatchKey(goal);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(goal);
   }
-  return results;
+
+  const valueMap = new Map<number, number>();
+
+  // Pre-pass: RETAINERS and TASKS-REDUCE groups share a single value (no date dependency).
+  // Compute once per group and assign to all goals — avoids wasting concurrency slots.
+  const individualGoals: any[] = [];
+  const sharedGroupQueries: Array<{ groupGoals: any[]; first: any; filters: GoalFilters }> = [];
+
+  for (const groupGoals of groups.values()) {
+    const first = groupGoals[0];
+    const filters = ((first as any).filters as GoalFilters) || {};
+    const isShared =
+      first.metricType === "RETAINERS" ||
+      (first.metricType === "TASKS" && (filters.taskGoalMode || "COUNT") === "REDUCE");
+
+    if (isShared) {
+      sharedGroupQueries.push({ groupGoals, first, filters });
+    } else {
+      individualGoals.push(...groupGoals);
+    }
+  }
+
+  // Process shared-value groups (one query each, very cheap)
+  const CONCURRENCY_LIMIT = 5;
+  for (let i = 0; i < sharedGroupQueries.length; i += CONCURRENCY_LIMIT) {
+    await Promise.all(sharedGroupQueries.slice(i, i + CONCURRENCY_LIMIT).map(async ({ groupGoals, first, filters }) => {
+      const tt = (first as any).targetType || "COUNT";
+      const val = await calculateMetricValue(
+        first.metricType, tt, companyId, first.startDate, first.endDate, filters,
+      );
+      for (const goal of groupGoals) valueMap.set(goal.id, val);
+    }));
+  }
+
+  // Process all remaining goals with a single global concurrency limiter
+  for (let i = 0; i < individualGoals.length; i += CONCURRENCY_LIMIT) {
+    await Promise.all(individualGoals.slice(i, i + CONCURRENCY_LIMIT).map(async (goal) => {
+      const f = ((goal as any).filters as GoalFilters) || {};
+      const tt = (goal as any).targetType || "COUNT";
+      const val = await calculateMetricValue(
+        goal.metricType, tt, companyId, goal.startDate, goal.endDate, f,
+      );
+      valueMap.set(goal.id, val);
+    }));
+  }
+
+  // Step 2: Build GoalWithProgress from pre-computed values
+  return goals.map((goal) => {
+    const filters = ((goal as any).filters as GoalFilters) || {};
+    const targetType = (goal as any).targetType || "COUNT";
+    const currentValue = valueMap.get(goal.id) ?? 0;
+    const targetValue = Number(goal.targetValue);
+
+    const isReduceMode =
+      goal.metricType === "TASKS" && filters.taskGoalMode === "REDUCE";
+
+    let progressPercent: number;
+    if (isReduceMode) {
+      if (currentValue <= targetValue) {
+        progressPercent = 100;
+      } else if (targetValue === 0) {
+        const referenceBase = Math.max(currentValue, 10);
+        progressPercent = Math.round(
+          ((referenceBase - currentValue) / referenceBase) * 100,
+        );
+      } else {
+        progressPercent = Math.max(
+          0,
+          Math.round((targetValue / currentValue) * 100),
+        );
+      }
+    } else {
+      progressPercent =
+        targetValue > 0 ? Math.round((currentValue / targetValue) * 100) : 0;
+    }
+
+    const now = new Date();
+    const endDate = new Date(goal.endDate);
+    const startDate = new Date(goal.startDate);
+    const daysRemaining = Math.max(
+      0,
+      Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+    );
+    const totalDays = Math.max(1, Math.ceil(
+      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+    ));
+    const daysElapsed = Math.max(
+      1,
+      Math.ceil(
+        (now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+      ),
+    );
+
+    const dailyRate = currentValue / daysElapsed;
+    const projectedValue = Math.round(dailyRate * totalDays);
+
+    let status: "ON_TRACK" | "WARNING" | "CRITICAL" | "EXCEEDED";
+    if (progressPercent >= 100) status = "EXCEEDED";
+    else if (progressPercent >= goal.warningThreshold) status = "ON_TRACK";
+    else if (progressPercent >= goal.criticalThreshold) status = "WARNING";
+    else status = "CRITICAL";
+
+    const isMaintenanceGoal = goal.metricType === "RETAINERS";
+    const finalProjected = isMaintenanceGoal ? currentValue : projectedValue;
+
+    const recommendation = generateRecommendation(
+      goal.metricType,
+      progressPercent,
+      targetType,
+      daysRemaining,
+      targetValue - currentValue,
+    );
+
+    return {
+      id: goal.id,
+      name: goal.name,
+      metricType: goal.metricType,
+      targetType: targetType,
+      targetValue,
+      currentValue,
+      progressPercent,
+      periodType: goal.periodType,
+      startDate: goal.startDate,
+      endDate: goal.endDate,
+      filters,
+      warningThreshold: goal.warningThreshold,
+      criticalThreshold: goal.criticalThreshold,
+      status,
+      isActive: goal.isActive,
+      isArchived: (goal as any).isArchived ?? false,
+      notes: goal.notes,
+      daysRemaining,
+      projectedValue: finalProjected,
+      recommendation,
+    };
+  });
 }
 
 export async function getGoalsWithProgress(): Promise<GoalWithProgress[]> {
@@ -687,19 +767,48 @@ export async function getGoalsWithProgress(): Promise<GoalWithProgress[]> {
 /**
  * Internal helper: get goals with progress for a company (no auth check).
  * Used by Inngest background jobs for cache pre-computation.
+ * Reads from Redis cache first (30-min TTL, refreshed by Inngest on goal CRUD).
  */
-export async function getGoalsForCompany(companyId: number): Promise<GoalWithProgress[]> {
-  // Type cast for 'isArchived' because it might not be in generated types yet
+export async function getGoalsForCompany(
+  companyId: number,
+  { skipCache = false }: { skipCache?: boolean } = {},
+): Promise<GoalWithProgress[]> {
+  // Try Redis cache first (populated by Inngest background job)
+  // Returns stale data immediately and fires background refresh if stale
+  if (!skipCache) {
+    try {
+      const { getCachedGoals } = await import("@/lib/services/dashboard-cache");
+      const cached = await getCachedGoals(companyId);
+      if (cached) {
+        if (cached.stale) {
+          // Fire non-blocking background refresh (Inngest deduplicates via 10s debounce + 1/company concurrency)
+          inngest.send({
+            id: `goals-refresh-${companyId}-${Math.floor(Date.now() / 10000)}`,
+            name: "dashboard/refresh-goals",
+            data: { companyId },
+          }).catch((e) => console.error("[Goals] Stale refresh trigger failed:", e));
+        }
+        return cached.data as GoalWithProgress[];
+      }
+    } catch {
+      // Redis down — fall through to live computation
+    }
+  }
+
   const where: any = { companyId, isArchived: false };
 
-  // P120: Add take limit to bound goal queries
-  const goals = await prisma.goal.findMany({
+  const goals = await withRetry(() => prisma.goal.findMany({
     where,
     orderBy: [{ order: "asc" }, { createdAt: "desc" }],
     take: 200,
-  });
+  }));
 
-  return enrichGoalsWithProgress(goals, companyId);
+  const result = await enrichGoalsWithProgress(goals, companyId);
+
+  // Cache is populated exclusively by the Inngest background job (dashboard/refresh-goals).
+  // Writing here would race with Inngest and overwrite fresh data with stale results.
+
+  return result;
 }
 
 export async function getArchivedGoals(): Promise<GoalWithProgress[]> {
@@ -708,33 +817,136 @@ export async function getArchivedGoals(): Promise<GoalWithProgress[]> {
     throw new Error("Unauthorized");
   }
 
-  const where: any = { companyId: user.companyId, isArchived: true };
-
-  // P120: Add take limit to bound archived goal queries
-  const goals = await prisma.goal.findMany({
-    where,
+  const goals = await withRetry(() => prisma.goal.findMany({
+    where: { companyId: user.companyId, isArchived: true },
     orderBy: [{ endDate: "desc" }],
     take: 200,
-  });
+  }));
 
-  return enrichGoalsWithProgress(goals, user.companyId);
+  // Serve from stored snapshot — ZERO metric queries for archived goals
+  // Legacy goals without snapshots fall back to live computation (temporary path)
+  const goalsWithSnapshot: GoalWithProgress[] = [];
+  const goalsWithoutSnapshot: any[] = [];
+
+  for (const goal of goals) {
+    const filters = ((goal as any).filters as GoalFilters) || {};
+    const snapshot = (filters as any)._archivedSnapshot;
+
+    if (snapshot) {
+      const targetType = (goal as any).targetType || "COUNT";
+      const targetValue = Number(goal.targetValue);
+      const currentValue = snapshot.currentValue ?? 0;
+      const progressPercent = snapshot.progressPercent ?? (targetValue > 0 ? Math.round((currentValue / targetValue) * 100) : 0);
+
+      const endDate = new Date(goal.endDate);
+      const startDate = new Date(goal.startDate);
+      const now = new Date();
+      const daysRemaining = Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+      const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const daysElapsed = Math.max(1, Math.ceil((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+      goalsWithSnapshot.push({
+        id: goal.id,
+        name: goal.name,
+        metricType: goal.metricType,
+        targetType,
+        targetValue,
+        currentValue,
+        progressPercent,
+        periodType: goal.periodType,
+        startDate: goal.startDate,
+        endDate: goal.endDate,
+        filters,
+        warningThreshold: goal.warningThreshold,
+        criticalThreshold: goal.criticalThreshold,
+        status: snapshot.status ?? (progressPercent >= 100 ? "EXCEEDED" : progressPercent >= goal.warningThreshold ? "ON_TRACK" : progressPercent >= goal.criticalThreshold ? "WARNING" : "CRITICAL"),
+        isActive: goal.isActive,
+        isArchived: true,
+        notes: goal.notes,
+        daysRemaining,
+        projectedValue: snapshot.projectedValue ?? Math.round((currentValue / daysElapsed) * totalDays),
+        recommendation: snapshot.recommendation ?? null,
+      });
+    } else {
+      goalsWithoutSnapshot.push(goal);
+    }
+  }
+
+  // Live-compute legacy archived goals that were archived before snapshots existed.
+  // Persist snapshots back so subsequent loads are free (one-time write-back).
+  if (goalsWithoutSnapshot.length > 0) {
+    const liveResults = await enrichGoalsWithProgress(goalsWithoutSnapshot, user.companyId);
+    const snapshotPromises: Promise<void>[] = [];
+
+    for (let i = 0; i < liveResults.length; i++) {
+      const r = liveResults[i];
+      r.isArchived = true;
+      goalsWithSnapshot.push(r);
+
+      // Persist snapshot with retry (2 attempts) so this goal never triggers live computation again
+      const legacyGoal = goalsWithoutSnapshot[i];
+      const existingFilters = ((legacyGoal as any).filters as any) || {};
+      const snapshotData = {
+        currentValue: r.currentValue,
+        progressPercent: r.progressPercent,
+        status: r.status,
+        projectedValue: r.projectedValue,
+        daysRemaining: r.daysRemaining,
+        recommendation: r.recommendation,
+        archivedAt: new Date().toISOString(),
+      };
+      const persistSnapshot = async () => {
+        try {
+          await withRetry(() => prisma.goal.update({
+            where: { id: legacyGoal.id, companyId: user.companyId },
+            data: {
+              filters: { ...existingFilters, _archivedSnapshot: snapshotData },
+            },
+          }));
+        } catch (e) {
+          console.error(
+            `[Goals] Failed to persist snapshot for goal ${legacyGoal.id}:`,
+            e,
+          );
+        }
+      };
+      snapshotPromises.push(persistSnapshot());
+    }
+
+    await Promise.allSettled(snapshotPromises);
+  }
+
+  return goalsWithSnapshot;
 }
 
 export async function updateGoalOrder(goalIds: number[]) {
+  if (!Array.isArray(goalIds) || goalIds.length === 0) return;
+  if (goalIds.length > 200) throw new Error("Too many goals");
+  if (!goalIds.every((id) => Number.isInteger(id) && id > 0)) throw new Error("Invalid goal ids");
+
   const user = await getCurrentUser();
   if (!user) {
     throw new Error("Unauthorized");
   }
 
-  // Use a transaction to update all goals
-  const updates = goalIds.map((id, index) =>
-    prisma.goal.update({
-      where: { id, companyId: user.companyId },
-      data: { order: index },
-    }),
-  );
+  // Single SQL statement instead of N individual updates
+  await withRetry(() => prisma.$executeRaw`
+    UPDATE "Goal" AS g
+    SET "order" = v.new_order, "updatedAt" = NOW()
+    FROM (
+      SELECT unnest(${goalIds}::int[]) AS id,
+             generate_series(0, ${goalIds.length - 1}) AS new_order
+    ) AS v
+    WHERE g.id = v.id AND g."companyId" = ${user.companyId}
+  `);
 
-  await prisma.$transaction(updates);
+  // Invalidate goals cache so dashboard reflects the new order (fire-and-forget)
+  inngest.send({
+    id: `goals-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
+    name: "dashboard/refresh-goals",
+    data: { companyId: user.companyId },
+  }).catch((e) => console.error("[Goals] Failed to send dashboard refresh:", e));
+
   revalidatePath("/finance/goals");
 }
 
@@ -743,20 +955,21 @@ export async function getGoalCreationData() {
   if (!user) throw new Error("Unauthorized");
 
   const [clients, tables] = await Promise.all([
-    prisma.client.findMany({
+    withRetry(() => prisma.client.findMany({
       where: { companyId: user.companyId },
       select: { id: true, name: true },
-      take: 5000, // P211+P216: Lowered from 10000, removed unnecessary company join
-    }),
-    prisma.tableMeta.findMany({
+      orderBy: { name: "asc" },
+      take: 500,
+    })),
+    withRetry(() => prisma.tableMeta.findMany({
       where: { companyId: user.companyId },
       select: {
         id: true,
         name: true,
         schemaJson: true,
       },
-      take: 500,
-    }),
+      take: 100,
+    })),
   ]);
 
   const formattedTables = tables.map((table) => {

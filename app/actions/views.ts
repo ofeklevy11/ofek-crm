@@ -250,39 +250,28 @@ export async function deleteView(viewId: number) {
     }
 
     // --- CLEANUP DASHBOARD WIDGETS ---
-    // Remove this view from any "Table Views" widgets (Mini Dashboard)
+    // Remove this view from any "Table Views" widgets in a single SQL query
     try {
-      // P116: Filter widgets by userId + companyId to prevent cross-tenant modification
-      const widgets = await prisma.dashboardWidget.findMany({
-        where: {
-          widgetType: "TABLE_VIEWS_DASHBOARD",
-          userId: user.id,
-          companyId: user.companyId,
-        },
-      });
-
-      for (const widget of widgets) {
-        const settings = widget.settings as any;
-        if (settings?.views && Array.isArray(settings.views)) {
-          const originalLength = settings.views.length;
-          const newViews = settings.views.filter(
-            (v: any) => v.viewId !== viewId,
-          );
-
-          if (newViews.length !== originalLength) {
-            // SECURITY: Atomic companyId + userId check in update WHERE clause
-            await prisma.dashboardWidget.update({
-              where: { id: widget.id, companyId: user.companyId, userId: user.id },
-              data: {
-                settings: {
-                  ...settings,
-                  views: newViews,
-                },
-              },
-            });
-          }
-        }
-      }
+      // Single UPDATE: filter out the deleted viewId from the settings->'views' array
+      // Only touches widgets that actually reference this viewId
+      await prisma.$executeRaw`
+        UPDATE "DashboardWidget"
+        SET "settings" = jsonb_set(
+          "settings",
+          '{views}',
+          COALESCE(
+            (SELECT jsonb_agg(v)
+             FROM jsonb_array_elements("settings"->'views') AS v
+             WHERE (v->>'viewId')::int != ${viewId}),
+            '[]'::jsonb
+          )
+        ),
+        "updatedAt" = NOW()
+        WHERE "widgetType" = 'TABLE_VIEWS_DASHBOARD'
+          AND "userId" = ${user.id}
+          AND "companyId" = ${user.companyId}
+          AND "settings"->'views' @> ${JSON.stringify([{ viewId }])}::jsonb
+      `;
     } catch (cleanupError) {
       console.error(
         "Error cleaning up dashboard widgets for deleted view:",
@@ -383,14 +372,23 @@ export async function reorderViews(
       return { success: false, error: "Too many views to reorder" };
     }
 
-    // CCC: Update all views in a transaction — include tableId in where to prevent cross-table injection
-    await prisma.$transaction(
-      viewOrders.map(({ id, order }) => {
-        return prisma.view.updateMany({
-          where: { id, tableId, companyId: user.companyId },
-          data: { order },
-        });
-      }),
+    if (viewOrders.length === 0) {
+      revalidatePath(`/tables/${tableId}`);
+      return { success: true };
+    }
+
+    // Single SQL UPDATE with VALUES list instead of N individual updates
+    const values = viewOrders
+      .map((v) => `(${Number(v.id)}, ${Number(v.order)})`)
+      .join(", ");
+
+    await prisma.$executeRawUnsafe(
+      `UPDATE "View" AS v
+       SET "order" = vals.new_order
+       FROM (VALUES ${values}) AS vals(id, new_order)
+       WHERE v.id = vals.id AND v."tableId" = $1 AND v."companyId" = $2`,
+      tableId,
+      user.companyId,
     );
     revalidatePath(`/tables/${tableId}`);
     return { success: true };

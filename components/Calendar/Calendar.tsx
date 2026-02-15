@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { CalendarHeader } from "./CalendarHeader";
 import { WeekView } from "./WeekView";
@@ -8,13 +8,14 @@ import { DayView } from "./DayView";
 import { EventModal } from "./EventModal";
 import { AllEventsModal } from "./AllEventsModal";
 import { GlobalEventAutomationsModal } from "./GlobalEventAutomationsModal";
-import { addDays, addWeeks, addMonths } from "@/lib/dateUtils";
+import { addDays, addWeeks, addMonths, getStartOfWeek } from "@/lib/dateUtils";
 import { CalendarEvent } from "@/lib/types";
 
 export function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<"day" | "week">("week");
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [allEventsForModal, setAllEventsForModal] = useState<CalendarEvent[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAllEventsModalOpen, setIsAllEventsModalOpen] = useState(false);
   const [isGlobalAutomationsModalOpen, setIsGlobalAutomationsModalOpen] =
@@ -36,10 +37,47 @@ export function Calendar() {
 
   const searchParams = useSearchParams();
 
-  // Load events from API on mount
+  // Load events for visible date range (debounced to prevent rapid-fire on navigation)
+  const fetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    fetchEvents();
-  }, []);
+    if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
+
+    fetchTimerRef.current = setTimeout(async () => {
+      try {
+        const { getCalendarEvents } = await import("@/app/actions");
+        let rangeStart: Date;
+        let rangeEnd: Date;
+        if (view === "week") {
+          const weekStart = getStartOfWeek(currentDate);
+          rangeStart = addDays(weekStart, -7);
+          rangeEnd = addDays(weekStart, 21);
+        } else {
+          rangeStart = addDays(currentDate, -1);
+          rangeEnd = addDays(currentDate, 2);
+        }
+
+        const result = await getCalendarEvents(
+          rangeStart.toISOString(),
+          rangeEnd.toISOString(),
+        );
+        if (result.success) {
+          setEvents(
+            result.data!.map((event: any) => ({
+              ...event,
+              startTime: new Date(event.startTime),
+              endTime: new Date(event.endTime),
+            })),
+          );
+        }
+      } catch (error) {
+        console.error("Failed to fetch events:", error);
+      }
+    }, 300);
+
+    return () => {
+      if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
+    };
+  }, [currentDate, view]);
 
   // Handle URL params for opening modals
   useEffect(() => {
@@ -71,23 +109,6 @@ export function Calendar() {
       }
     }
   }, [searchParams, events]);
-
-  const fetchEvents = async () => {
-    try {
-      const { getCalendarEvents } = await import("@/app/actions");
-      const result = await getCalendarEvents();
-      if (result.success) {
-        const parsedEvents = result.data!.map((event: any) => ({
-          ...event,
-          startTime: new Date(event.startTime),
-          endTime: new Date(event.endTime),
-        }));
-        setEvents(parsedEvents);
-      }
-    } catch (error) {
-      console.error("Failed to fetch events:", error);
-    }
-  };
 
   const handlePrev = () => {
     if (view === "day") {
@@ -236,6 +257,7 @@ export function Calendar() {
 
         if (result.success) {
           setEvents(events.filter((e) => e.id !== event.id));
+          setAllEventsForModal((prev) => prev.filter((e) => e.id !== event.id));
           if (selectedEvent?.id === event.id) {
             setSelectedEvent(undefined);
             setIsModalOpen(false);
@@ -244,6 +266,35 @@ export function Calendar() {
       } catch (error) {
         console.error("Failed to delete event:", error);
       }
+    }
+  };
+
+  const handleShowAllEvents = async () => {
+    setIsAllEventsModalOpen(true);
+    try {
+      const { getCalendarEvents } = await import("@/app/actions");
+      // Default to 6 months back / 6 months forward to avoid unbounded fetch
+      const now = new Date();
+      const rangeStart = new Date(now);
+      rangeStart.setMonth(rangeStart.getMonth() - 6);
+      const rangeEnd = new Date(now);
+      rangeEnd.setMonth(rangeEnd.getMonth() + 6);
+
+      const result = await getCalendarEvents(
+        rangeStart.toISOString(),
+        rangeEnd.toISOString(),
+      );
+      if (result.success) {
+        setAllEventsForModal(
+          result.data!.map((event: any) => ({
+            ...event,
+            startTime: new Date(event.startTime),
+            endTime: new Date(event.endTime),
+          })),
+        );
+      }
+    } catch (error) {
+      console.error("Failed to fetch all events:", error);
     }
   };
 
@@ -374,7 +425,7 @@ export function Calendar() {
         onPrevMonth={handlePrevMonth}
         onNextMonth={handleNextMonth}
         onSelectDate={handleSelectDate}
-        onShowAllEvents={() => setIsAllEventsModalOpen(true)}
+        onShowAllEvents={handleShowAllEvents}
         onGlobalAutomations={() => setIsGlobalAutomationsModalOpen(true)}
       />
       <div className="sticky top-16 h-[calc(100dvh-4rem)] overflow-hidden bg-white z-0">
@@ -433,7 +484,7 @@ export function Calendar() {
       <AllEventsModal
         isOpen={isAllEventsModalOpen}
         onClose={() => setIsAllEventsModalOpen(false)}
-        events={events}
+        events={allEventsForModal}
         onEdit={(event) => {
           handleEventClick(event);
           // We can optionally close the list here, but keeping it open allows for quick edits of multiple items if supported.

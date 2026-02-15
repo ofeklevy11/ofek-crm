@@ -138,7 +138,7 @@ export default async function Home() {
   // Fetch Dashboard Data only if user has permission
   const canView = hasUserFlag(user, "canViewDashboardData");
   const { analyticsViews, tables, goals } = canView
-    ? await getDashboardInitialData()
+    ? await getDashboardInitialData(user)
     : { analyticsViews: [], tables: [], goals: [] };
 
   return (

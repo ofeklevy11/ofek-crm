@@ -15,7 +15,7 @@ interface FinanceClient {
   name: string;
   email: string | null;
   phone: string | null;
-  company: string | null;
+  businessName: string | null;
 }
 
 interface Table {
@@ -57,7 +57,8 @@ export default function ClientSelector({
         ]);
 
         if (tablesRes.ok) {
-          setTables(await tablesRes.json());
+          const json = await tablesRes.json();
+          setTables(json.data ?? json);
         } else {
           console.error("Failed to fetch tables");
         }
@@ -151,7 +152,7 @@ export default function ClientSelector({
       data: {
         email: financeClient.email,
         phone: financeClient.phone,
-        company: financeClient.company,
+        businessName: financeClient.businessName,
       },
       tableSlug: "finance-clients",
     };
@@ -172,7 +173,7 @@ export default function ClientSelector({
     return (
       client.name.toLowerCase().includes(query) ||
       (client.email && client.email.toLowerCase().includes(query)) ||
-      (client.company && client.company.toLowerCase().includes(query)) ||
+      (client.businessName && client.businessName.toLowerCase().includes(query)) ||
       (client.phone && client.phone.includes(query))
     );
   });
@@ -421,9 +422,9 @@ export default function ClientSelector({
                           <div className="font-medium text-sm text-gray-900 group-hover:text-[#a24ec1] transition-colors">
                             {client.name}
                           </div>
-                          {client.company && (
+                          {client.businessName && (
                             <div className="text-xs text-gray-500 mt-1">
-                              חברה: {client.company}
+                              חברה: {client.businessName}
                             </div>
                           )}
                           {client.email && (

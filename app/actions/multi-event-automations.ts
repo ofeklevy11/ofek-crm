@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { withRetry } from "@/lib/db-retry";
 import { createNotificationForCompany } from "./notifications";
 
 const MAX_VISITED_RECORDS = 500;
@@ -37,9 +38,11 @@ function extractIdsFromValue(val: any): number[] {
 }
 
 // Fix D: BFS batch fetch — O(depth) queries instead of O(N) individual queries
+// Perf: Cache table schemas across BFS levels to avoid repeated JOINs on TableMeta
 async function getRelatedRecordIdsBFS(rootId: number, companyId: number): Promise<Set<number>> {
   const visited = new Set<number>();
   let currentLevel = [rootId];
+  const schemaCache = new Map<number, any[]>(); // tableId → schemaJson
 
   for (let depth = 0; depth < 4 && currentLevel.length > 0; depth++) {
     if (visited.size >= MAX_VISITED_RECORDS) break;
@@ -53,23 +56,35 @@ async function getRelatedRecordIdsBFS(rootId: number, companyId: number): Promis
     idsToFetch.forEach((id) => visited.add(id));
 
     try {
-      // Fix D improved: Select only needed fields, avoid loading full table objects
-      const records = await prisma.record.findMany({
+      // Fetch records without JOIN — get tableId instead of nested table object
+      const records = await withRetry(() => prisma.record.findMany({
         where: { id: { in: idsToFetch }, companyId },
         select: {
           id: true,
           data: true,
-          table: { select: { schemaJson: true } },
+          tableId: true,
         },
-      });
+      }));
 
-      // Fix D improved: Use Set to deduplicate nextLevel IDs
+      // Batch-fetch any unknown table schemas (avoids repeated JOINs)
+      const unknownTableIds = [...new Set(records.map(r => r.tableId))]
+        .filter(id => !schemaCache.has(id));
+      if (unknownTableIds.length > 0) {
+        const tables = await withRetry(() => prisma.tableMeta.findMany({
+          where: { id: { in: unknownTableIds }, companyId },
+          select: { id: true, schemaJson: true },
+        }));
+        for (const t of tables) {
+          schemaCache.set(t.id, t.schemaJson as any[]);
+        }
+      }
+
+      // Use Set to deduplicate nextLevel IDs
       const nextLevelSet = new Set<number>();
       for (const record of records) {
-        if (!record.table?.schemaJson) continue;
-        const schema = record.table.schemaJson as any[];
+        const schema = schemaCache.get(record.tableId);
+        if (!schema || !Array.isArray(schema)) continue;
         const recordData = record.data as any;
-        if (!Array.isArray(schema)) continue;
 
         for (const field of schema) {
           if (field.type === "relation" && recordData[field.name]) {
@@ -130,23 +145,18 @@ export async function calculateMultiEventDuration(
     tableId?: string;
   }>,
   automationRuleId: number,
-  oldData?: any,
-  companyId?: number,
+  oldData: any,
+  companyId: number,
   shared?: SharedQueryData,
   ruleSnapshot?: RuleSnapshot,
 ) {
   console.log(`[Multi-Event] Starting calculation for Record ${recordId}`);
 
   try {
-    if (!companyId) {
-      console.error(`[Multi-Event] No companyId provided for rule ${automationRuleId}, skipping`);
-      return { result: null, pendingActions: [] };
-    }
-
     // Issue R: Use pre-fetched rule snapshot if available, otherwise fetch from DB
-    const rule = ruleSnapshot ?? await prisma.automationRule.findFirst({
+    const rule = ruleSnapshot ?? await withRetry(() => prisma.automationRule.findFirst({
       where: { id: automationRuleId, companyId },
-    });
+    }));
 
     // Issue H: Use shared data if provided, otherwise compute (backwards compatible)
     const resolvedCompanyId = companyId || rule?.companyId;
@@ -159,10 +169,10 @@ export async function calculateMultiEventDuration(
 
     const mainRecord = shared?.mainRecord !== undefined
       ? shared.mainRecord
-      : await prisma.record.findFirst({
+      : await withRetry(() => prisma.record.findFirst({
           where: { id: recordId, companyId },
           select: { createdAt: true, data: true },
-        });
+        }));
 
     // Issue F: Log only the count, not the full ID list
     console.log(
@@ -175,7 +185,7 @@ export async function calculateMultiEventDuration(
     if (shared?.allLogs) {
       allLogs = shared.allLogs;
     } else {
-      const rawLogs = await prisma.auditLog.findMany({
+      const rawLogs = await withRetry(() => prisma.auditLog.findMany({
         where: {
           recordId: { in: Array.from(targetRecordIds) },
           action: { in: ["UPDATE", "CREATE"] },
@@ -183,7 +193,8 @@ export async function calculateMultiEventDuration(
         },
         orderBy: { timestamp: "desc" },
         take: MAX_AUDIT_LOGS,
-      });
+        select: { id: true, recordId: true, action: true, diffJson: true, timestamp: true },
+      }));
       rawLogs.reverse();
       allLogs = rawLogs;
     }
@@ -196,10 +207,10 @@ export async function calculateMultiEventDuration(
       ...eventChain.map((e) => (e.tableId ? Number(e.tableId) : tableId)).filter(Boolean),
     ];
     const uniqueTableIds = [...new Set(tableIds)];
-    const tables = await prisma.tableMeta.findMany({
-      where: { id: { in: uniqueTableIds } },
+    const tables = await withRetry(() => prisma.tableMeta.findMany({
+      where: { id: { in: uniqueTableIds }, companyId },
       select: { id: true, name: true },
-    });
+    }));
     const tableNameMap = new Map<number, string>();
     tables.forEach((t) => tableNameMap.set(t.id, t.name));
     const getTableName = (id: number) => tableNameMap.get(id) || "Unknown Table";
@@ -354,15 +365,15 @@ export async function calculateMultiEventDuration(
     // Issue S + X: Dedup guard — prevent duplicate rows on Inngest step retry.
     // Check if a duration record was already created for this rule+record in the last 300s.
     // Uses composite index @@index([automationRuleId, recordId, createdAt(sort: Desc)]).
-    const existingDuration = await prisma.multiEventDuration.findFirst({
+    const existingDuration = await withRetry(() => prisma.multiEventDuration.findFirst({
       where: {
         automationRuleId,
         recordId,
-        ...(companyId ? { companyId } : {}),
+        companyId,
         createdAt: { gte: new Date(Date.now() - 300_000) },
       },
       select: { id: true },
-    });
+    }));
 
     if (existingDuration) {
       // Issue T: Warn that actions from the original attempt may have been lost
@@ -372,25 +383,37 @@ export async function calculateMultiEventDuration(
       return { result: existingDuration, pendingActions: [] };
     }
 
-    // Resolve companyId from record if not passed
-    const durationCompanyId = companyId ?? (recordId ? (await prisma.record.findFirst({ where: { id: recordId }, select: { companyId: true } }))?.companyId : undefined);
-    if (!durationCompanyId) {
-      console.error(`[Multi-Event] Cannot determine companyId for rule ${automationRuleId}, skipping.`);
-      return { result: null, pendingActions: [] };
+    let result;
+    try {
+      result = await prisma.multiEventDuration.create({
+        data: {
+          companyId,
+          automationRuleId,
+          recordId,
+          eventChain: eventTimestamps,
+          eventDeltas: deltas,
+          totalDurationSeconds,
+          totalDurationString,
+          weightedScore,
+        },
+      });
+    } catch (createErr) {
+      if (createErr instanceof Prisma.PrismaClientKnownRequestError && createErr.code === "P2002") {
+        console.warn(`[Multi-Event] P2002 race: duplicate for rule ${automationRuleId} + record ${recordId}, updating instead.`);
+        result = await prisma.multiEventDuration.updateMany({
+          where: { automationRuleId, recordId },
+          data: {
+            eventChain: eventTimestamps,
+            eventDeltas: deltas,
+            totalDurationSeconds,
+            totalDurationString,
+            weightedScore,
+          },
+        });
+        return { result, pendingActions: [] };
+      }
+      throw createErr;
     }
-
-    const result = await prisma.multiEventDuration.create({
-      data: {
-        companyId: durationCompanyId,
-        automationRuleId,
-        recordId,
-        eventChain: eventTimestamps,
-        eventDeltas: deltas,
-        totalDurationSeconds,
-        totalDurationString,
-        weightedScore,
-      },
-    });
 
     console.log(
       `[Multi-Event] Successfully saved result #${result.id}. Duration: ${totalDurationString}`,
@@ -541,7 +564,7 @@ export async function calculateMultiEventDuration(
               const MAX_SERIALIZATION_RETRIES = 2;
               for (let attempt = 0; attempt <= MAX_SERIALIZATION_RETRIES; attempt++) {
                 try {
-                  await prisma.$transaction(async (tx) => {
+                  await withRetry(() => prisma.$transaction(async (tx) => {
                     const currentRecord = await tx.record.findFirst({
                       where: { id: recordId, companyId: companyId || rule?.companyId },
                       select: { data: true },
@@ -564,7 +587,7 @@ export async function calculateMultiEventDuration(
                         `[Multi-Event] Updated field ${config.columnId} to "${config.value}" for record ${recordId}`,
                       );
                     }
-                  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+                  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 10000 }));
                   break; // Success — exit retry loop
                 } catch (txErr: any) {
                   if (txErr?.code === "P2034" && attempt < MAX_SERIALIZATION_RETRIES) {
@@ -659,21 +682,21 @@ export async function findMatchingRulesAndSharedData(
   resolvedCompanyId: number;
 }> {
   // Issue N: Always filter by companyId for defense-in-depth
-  const record = await prisma.record.findFirst({
+  const record = await withRetry(() => prisma.record.findFirst({
     where: { id: recordId, companyId },
     select: { companyId: true },
-  });
+  }));
 
   if (!record) return { matchingRules: [], shared: null, resolvedCompanyId: companyId };
 
-  const rules = await prisma.automationRule.findMany({
+  const rules = await withRetry(() => prisma.automationRule.findMany({
     where: {
       isActive: true,
       triggerType: "MULTI_EVENT_DURATION",
       companyId: record.companyId,
     },
     take: 200,
-  });
+  }));
 
   // Issue H: Pre-filter matching rules before expensive queries
   // Issue R: Include lightweight rule snapshot to avoid per-rule DB re-fetch
@@ -737,10 +760,10 @@ export async function findMatchingRulesAndSharedData(
   if (matchingRules.length > 0) {
     const targetRecordIds = await getRelatedRecordIdsBFS(recordId, record.companyId);
 
-    const mainRecord = await prisma.record.findFirst({
+    const mainRecord = await withRetry(() => prisma.record.findFirst({
       where: { id: recordId, companyId: record.companyId },
       select: { createdAt: true, data: true },
-    });
+    }));
 
     // Issue O: Collect all columns referenced by matching rules for per-rule log filtering
     const relevantColumns = new Set<string>();
@@ -773,7 +796,7 @@ export async function findMatchingRulesAndSharedData(
 export async function fetchSharedAuditLogs(
   sharedData: StepSharedData,
 ): Promise<any[]> {
-  const rawLogs = await prisma.auditLog.findMany({
+  const rawLogs = await withRetry(() => prisma.auditLog.findMany({
     where: {
       recordId: { in: sharedData.targetRecordIds },
       action: { in: ["UPDATE", "CREATE"] },
@@ -781,7 +804,8 @@ export async function fetchSharedAuditLogs(
     },
     orderBy: { timestamp: "desc" },
     take: MAX_AUDIT_LOGS,
-  });
+    select: { id: true, recordId: true, action: true, diffJson: true, timestamp: true },
+  }));
   rawLogs.reverse();
 
   const relevantColumns = new Set(sharedData.relevantColumns);
@@ -840,12 +864,11 @@ export async function processMultiEventDurationTrigger(
   recordId: number,
   oldData: any,
   newData: any,
-  companyId?: number,
+  companyId: number,
 ): Promise<{ pendingActions: Array<{ type: string; config: any; contextData: any; ruleSnapshot: any; companyId: number; delay: number }> }> {
   const allPendingActions: Array<{ type: string; config: any; contextData: any; ruleSnapshot: any; companyId: number; delay: number }> = [];
 
   try {
-    if (!companyId) return { pendingActions: [] };
 
     const { matchingRules, shared, resolvedCompanyId } = await findMatchingRulesAndSharedData(
       tableId, recordId, oldData, newData, companyId,
@@ -854,16 +877,17 @@ export async function processMultiEventDurationTrigger(
     if (!shared) return { pendingActions: [] };
 
     // Legacy path: fetch logs once for all rules (no step boundary concern)
-    const rawLogs = await prisma.auditLog.findMany({
+    const rawLogs = await withRetry(() => prisma.auditLog.findMany({
       where: {
         recordId: { in: shared.targetRecordIds },
         action: { in: ["UPDATE", "CREATE"] },
-        ...(resolvedCompanyId && { companyId: resolvedCompanyId }),
+        companyId: resolvedCompanyId,
       },
       // Issue O-2: Sort DESC to get most recent logs, then reverse for chronological
       orderBy: { timestamp: "desc" },
       take: MAX_AUDIT_LOGS,
-    });
+      select: { id: true, recordId: true, action: true, diffJson: true, timestamp: true },
+    }));
     rawLogs.reverse();
 
     const relevantColumns = new Set(shared.relevantColumns);

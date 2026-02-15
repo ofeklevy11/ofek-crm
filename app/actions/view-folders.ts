@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { validateViewFolderInCompany } from "@/lib/company-validation";
+import { invalidateFullCache } from "@/lib/services/analytics-cache";
+import { withRetry } from "@/lib/db-retry";
 
 export async function createViewFolder(name: string) {
   try {
@@ -16,6 +18,7 @@ export async function createViewFolder(name: string) {
         companyId: user.companyId,
       },
     });
+    await invalidateFullCache(user.companyId);
     revalidatePath("/analytics");
     return { success: true, data: folder };
   } catch (error) {
@@ -29,11 +32,13 @@ export async function getViewFolders() {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
 
-    const folders = await prisma.viewFolder.findMany({
-      where: { companyId: user.companyId },
-      orderBy: { order: "asc" },
-      take: 200,
-    });
+    const folders = await withRetry(() =>
+      prisma.viewFolder.findMany({
+        where: { companyId: user.companyId },
+        orderBy: { order: "asc" },
+        take: 200,
+      })
+    );
     return { success: true, data: folders };
   } catch (error) {
     console.error("Failed to fetch folders:", error);
@@ -47,28 +52,33 @@ export async function deleteViewFolder(id: number) {
     if (!user) return { success: false, error: "Unauthorized" };
 
     // Verify folder belongs to valid company first or use matching where clause in transaction
-    const folder = await prisma.viewFolder.findFirst({
-      where: { id, companyId: user.companyId },
-    });
+    const folder = await withRetry(() =>
+      prisma.viewFolder.findFirst({
+        where: { id, companyId: user.companyId },
+      })
+    );
 
     if (!folder) return { success: false, error: "Unauthorized or not found" };
 
     // Manually unset folderId for items inside the folder before deleting
     // We filter updateMany/delete by companyId for safety although findFirst verified ownership essentially
-    await prisma.$transaction([
-      prisma.analyticsView.updateMany({
-        where: { folderId: id, companyId: user.companyId },
-        data: { folderId: null },
-      }),
-      prisma.automationRule.updateMany({
-        where: { folderId: id, companyId: user.companyId },
-        data: { folderId: null },
-      }),
-      prisma.viewFolder.delete({
-        where: { id, companyId: user.companyId },
-      }),
-    ]);
+    await withRetry(() =>
+      prisma.$transaction([
+        prisma.analyticsView.updateMany({
+          where: { folderId: id, companyId: user.companyId },
+          data: { folderId: null },
+        }),
+        prisma.automationRule.updateMany({
+          where: { folderId: id, companyId: user.companyId },
+          data: { folderId: null },
+        }),
+        prisma.viewFolder.delete({
+          where: { id, companyId: user.companyId },
+        }),
+      ])
+    );
 
+    await invalidateFullCache(user.companyId);
     revalidatePath("/analytics");
     return { success: true };
   } catch (error) {
@@ -104,6 +114,7 @@ export async function moveViewToFolder(
         data: { folderId },
       });
     }
+    await invalidateFullCache(user.companyId);
     revalidatePath("/analytics");
     return { success: true };
   } catch (error) {

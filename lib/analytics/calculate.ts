@@ -131,19 +131,24 @@ export function getDateFilter(config: any) {
 }
 
 const TABLE_NAME_CACHE_MAX = 500;
-const tableNameCache = new Map<string, string>();
+const TABLE_NAME_CACHE_TTL = 5 * 60 * 1000; // 5 minutes — prevents stale names in long-lived processes
+const tableNameCache = new Map<string, { name: string; ts: number }>();
 export const getTableName = async (id: number, companyId: number) => {
   if (!id) return "Unknown Table";
   const cacheKey = `${companyId}:${id}`;
-  if (tableNameCache.has(cacheKey)) return tableNameCache.get(cacheKey)!;
+  const entry = tableNameCache.get(cacheKey);
+  if (entry && Date.now() - entry.ts < TABLE_NAME_CACHE_TTL) return entry.name;
   // Evict oldest entry if cache exceeds max size (Map preserves insertion order)
   if (tableNameCache.size >= TABLE_NAME_CACHE_MAX) {
     const firstKey = tableNameCache.keys().next().value;
     if (firstKey !== undefined) tableNameCache.delete(firstKey);
   }
-  const t = await prisma.tableMeta.findFirst({ where: { id, companyId } });
+  const t = await prisma.tableMeta.findFirst({
+    where: { id, companyId },
+    select: { name: true },
+  });
   const name = t ? t.name : "טבלה לא ידועה";
-  tableNameCache.set(cacheKey, name);
+  tableNameCache.set(cacheKey, { name, ts: Date.now() });
   return name;
 };
 
@@ -161,56 +166,66 @@ export async function resolveTableNameFromConfig(config: any, companyId: number)
 }
 
 /**
- * Calculates stats and items for a SINGLE custom view.
+ * Build a unique cache key for a view's data source (model/tableId + date range).
+ * Used by batch prefetch in the background refresh job.
  */
-export async function calculateViewStats(view: any, companyId: number) {
-  const config = view.config as any;
+export function buildSourceKey(config: any): string {
+  const model = config.model || "";
+  const tableId = config.tableId || "";
+  const dateType = config.dateRangeType || "all";
+  const customStart = config.customStartDate || "";
+  const customEnd = config.customEndDate || "";
+  return `${model}:${tableId}:${dateType}:${customStart}:${customEnd}`;
+}
+
+/**
+ * Fetch raw data for a given view config. Extracted so it can be called once per
+ * unique source during batch refresh and shared across multiple views.
+ */
+export async function fetchViewSourceData(
+  config: any,
+  companyId: number,
+): Promise<{ tableName: string; rawData: any[] }> {
   let tableName = "System";
   let rawData: any[] = [];
 
   const dateRange = getDateFilter(config);
-
   const dateField =
     config.model === "CalendarEvent" ? "startTime" : "createdAt";
   const dateFilter = dateRange ? { [dateField]: dateRange } : {};
-
-  // Company filter for models with direct companyId
   const companyFilter = companyId ? { companyId } : {};
-  // Company filter for models linked through client (Retainer, OneTimePayment, Transaction)
-  const clientCompanyFilter = companyId ? { client: { companyId } } : {};
 
-  // 1. Fetch Data Source
   if (config.model === "Task") {
     tableName = "משימות מערכת";
     rawData = await prisma.task.findMany({
       where: { ...dateFilter, ...companyFilter },
       take: 1000,
       orderBy: { createdAt: "desc" },
-      include: { assignee: true },
+      include: { assignee: { select: { name: true } } },
     });
   } else if (config.model === "Retainer") {
     tableName = "פיננסים: ריטיינרים";
     rawData = await prisma.retainer.findMany({
-      where: { ...dateFilter, ...clientCompanyFilter },
+      where: { ...dateFilter, ...companyFilter },
       take: 1000,
       orderBy: { createdAt: "desc" },
-      include: { client: true },
+      include: { client: { select: { name: true } } },
     });
   } else if (config.model === "OneTimePayment") {
     tableName = "פיננסים: תשלומים";
     rawData = await prisma.oneTimePayment.findMany({
-      where: { ...dateFilter, ...clientCompanyFilter },
+      where: { ...dateFilter, ...companyFilter },
       take: 1000,
       orderBy: { createdAt: "desc" },
-      include: { client: true },
+      include: { client: { select: { name: true } } },
     });
   } else if (config.model === "Transaction") {
     tableName = "פיננסים: תנועות";
     rawData = await prisma.transaction.findMany({
-      where: { ...dateFilter, ...clientCompanyFilter },
+      where: { ...dateFilter, ...companyFilter },
       take: 1000,
       orderBy: { createdAt: "desc" },
-      include: { client: true },
+      include: { client: { select: { name: true } } },
     });
   } else if (config.model === "CalendarEvent") {
     tableName = "יומן: אירועים";
@@ -225,7 +240,62 @@ export async function calculateViewStats(view: any, companyId: number) {
       where: { tableId: Number(config.tableId), ...dateFilter, ...companyFilter },
       orderBy: { createdAt: "desc" },
       take: 1000,
+      select: { id: true, data: true, createdAt: true, updatedAt: true },
     });
+  }
+
+  return { tableName, rawData };
+}
+
+/**
+ * Calculates stats and items for a SINGLE custom view.
+ * Accepts optional prefetched data to avoid redundant DB queries during batch refresh.
+ */
+export async function calculateViewStats(
+  view: any,
+  companyId: number,
+  prefetched?: { tableName: string; rawData: any[] },
+) {
+  const config = view.config as any;
+  let tableName: string;
+  let rawData: any[];
+
+  // Fast path: table-based COUNT/GRAPH without filter or groupBy → use DB count instead of loading 1000 records
+  const hasFilter = config.filter && Object.keys(config.filter).length > 0;
+  if (
+    !prefetched &&
+    config.tableId &&
+    view.type === "COUNT" &&
+    !config.groupByField &&
+    !hasFilter
+  ) {
+    const dateRange = getDateFilter(config);
+    const dateFilter = dateRange ? { createdAt: dateRange } : {};
+    const [count, tblName] = await Promise.all([
+      prisma.record.count({
+        where: { tableId: Number(config.tableId), companyId, ...dateFilter },
+      }),
+      getTableName(Number(config.tableId), companyId),
+    ]);
+    return {
+      stats: {
+        mainMetric: String(count),
+        subMetric: "רשומות",
+        label: "כמות",
+        rawMetric: count,
+      },
+      items: [],
+      tableName: tblName,
+    };
+  }
+
+  if (prefetched) {
+    tableName = prefetched.tableName;
+    rawData = prefetched.rawData;
+  } else {
+    const fetched = await fetchViewSourceData(config, companyId);
+    tableName = fetched.tableName;
+    rawData = fetched.rawData;
   }
 
   let stats: any = null;
@@ -457,7 +527,10 @@ export async function calculateRuleStats(
         automationRule: { companyId: resolvedCompanyId },
         createdAt: { gte: rule.createdAt },
       },
-      include: { record: true, task: true },
+      include: {
+        record: { select: { id: true, data: true } },
+        task: { select: { id: true, title: true } },
+      },
       orderBy: { createdAt: "desc" },
       take: 1000,
     });
@@ -522,7 +595,10 @@ export async function calculateRuleStats(
         automationRule: { companyId: resolvedCompanyId },
         createdAt: { gte: rule.createdAt },
       },
-      include: { record: true, task: true },
+      include: {
+        record: { select: { id: true, data: true } },
+        task: { select: { id: true, title: true } },
+      },
       orderBy: { createdAt: "desc" },
       take: 1000,
     });

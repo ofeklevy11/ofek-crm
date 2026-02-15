@@ -11,11 +11,11 @@ export async function validateUserInCompany(
   companyId: number,
 ): Promise<boolean> {
   if (!userId) return true; // null/undefined means "no assignment" — not a violation
-  const row = await prisma.user.findFirst({
-    where: { id: userId, companyId },
-    select: { id: true },
+  const row = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { companyId: true },
   });
-  return !!row;
+  return row?.companyId === companyId;
 }
 
 export async function validateWorkerInCompany(
@@ -24,7 +24,7 @@ export async function validateWorkerInCompany(
 ): Promise<boolean> {
   if (!workerId) return true;
   const row = await prisma.worker.findFirst({
-    where: { id: workerId, companyId },
+    where: { id: workerId, companyId, deletedAt: null },
     select: { id: true },
   });
   return !!row;

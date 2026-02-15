@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { withRetry } from "@/lib/db-retry";
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,9 +22,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the table metadata - FILTERED BY COMPANY
-    const table = await prisma.tableMeta.findFirst({
+    const table = await withRetry(() => prisma.tableMeta.findFirst({
       where: { slug: tableSlug, companyId: user.companyId },
-    });
+    }));
 
     if (!table) {
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
@@ -36,16 +37,16 @@ export async function GET(request: NextRequest) {
     if (searchQuery) {
       const escapedQuery = searchQuery.replace(/[%_\\]/g, '\\$&');
       const searchPattern = `%${escapedQuery}%`;
-      records = await prisma.$queryRaw<{ id: number; data: any }[]>`
+      records = await withRetry(() => prisma.$queryRaw<{ id: number; data: any }[]>`
         SELECT id, data FROM "Record"
         WHERE "tableId" = ${table.id}
         AND "companyId" = ${user.companyId}
         AND "data"::text ILIKE ${searchPattern}
         ORDER BY "createdAt" DESC
         LIMIT 100
-      `;
+      `);
     } else {
-      records = await prisma.record.findMany({
+      records = await withRetry(() => prisma.record.findMany({
         where: { tableId: table.id, companyId: user.companyId },
         select: {
           id: true,
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { createdAt: "desc" },
         take: 100,
-      });
+      }));
     }
 
     // Format records for response

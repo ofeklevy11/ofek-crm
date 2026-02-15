@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import {
   Plus,
   Search,
@@ -15,8 +15,9 @@ import {
   Archive,
   Settings,
   X,
+  Loader2,
 } from "lucide-react";
-import { trashQuote, restoreQuote } from "@/app/actions/quotes";
+import { trashQuote, restoreQuote, getQuotes } from "@/app/actions/quotes";
 import { BusinessSettings } from "@/app/actions/business-settings";
 import { useRouter } from "next/navigation";
 import BusinessSettingsRequired from "./business-settings-required";
@@ -28,24 +29,40 @@ const formatMoney = (amount: number) => {
   }).format(amount);
 };
 
+interface QuoteSummary {
+  id: string;
+  quoteNumber: number | null;
+  clientName: string;
+  clientEmail: string | null;
+  total: number;
+  status: string;
+  createdAt: Date;
+  validUntil: Date | null;
+  _count: { items: number };
+}
+
 interface Props {
-  quotes: any[];
+  initialQuotes: QuoteSummary[];
+  initialNextCursor: string | null;
   showTrashed: boolean;
   businessSettings: BusinessSettings | null;
 }
 
-export default function QuotesPageClient({ quotes, showTrashed, businessSettings }: Props) {
+export default function QuotesPageClient({ initialQuotes, initialNextCursor, showTrashed, businessSettings }: Props) {
   const router = useRouter();
+  const [quotes, setQuotes] = useState<QuoteSummary[]>(initialQuotes);
+  const [nextCursor, setNextCursor] = useState<string | null>(initialNextCursor);
   const [search, setSearch] = useState("");
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [isLoadingMore, startLoadMore] = useTransition();
 
   const handleTrash = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm("האם להעביר הצעת מחיר זו לפח?")) {
       setLoadingId(id);
       await trashQuote(id);
-      router.refresh();
+      setQuotes((prev) => prev.filter((q) => q.id !== id));
       setLoadingId(null);
     }
   };
@@ -54,8 +71,17 @@ export default function QuotesPageClient({ quotes, showTrashed, businessSettings
     e.stopPropagation();
     setLoadingId(id);
     await restoreQuote(id);
-    router.refresh();
+    setQuotes((prev) => prev.filter((q) => q.id !== id));
     setLoadingId(null);
+  };
+
+  const handleLoadMore = () => {
+    if (!nextCursor || isLoadingMore) return;
+    startLoadMore(async () => {
+      const { quotes: moreQuotes, nextCursor: newCursor } = await getQuotes(showTrashed, nextCursor);
+      setQuotes((prev) => [...prev, ...moreQuotes as QuoteSummary[]]);
+      setNextCursor(newCursor);
+    });
   };
 
   const filteredQuotes = quotes.filter(
@@ -100,7 +126,7 @@ export default function QuotesPageClient({ quotes, showTrashed, businessSettings
     }
   };
 
-  const formatQuoteNumber = (quote: any) => {
+  const formatQuoteNumber = (quote: QuoteSummary) => {
     if (quote.quoteNumber) {
       return `#${String(quote.quoteNumber).padStart(5, "0")}`;
     }
@@ -224,7 +250,7 @@ export default function QuotesPageClient({ quotes, showTrashed, businessSettings
                     {formatMoney(Number(quote.total))}
                   </span>
                   <p className="text-xs text-gray-500">
-                    {quote.items?.length || 0} פריטים
+                    {quote._count?.items || 0} פריטים
                   </p>
                 </td>
                 <td className="px-6 py-4">{getStatusBadge(quote.status)}</td>
@@ -283,6 +309,25 @@ export default function QuotesPageClient({ quotes, showTrashed, businessSettings
             ))}
           </tbody>
         </table>
+
+        {/* Load More */}
+        {nextCursor && (
+          <div className="flex justify-center py-4 border-t border-gray-100">
+            <button
+              onClick={handleLoadMore}
+              disabled={isLoadingMore}
+              className="flex items-center gap-2 px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              {isLoadingMore ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> טוען...
+                </>
+              ) : (
+                "טען עוד הצעות"
+              )}
+            </button>
+          </div>
+        )}
 
         {/* Empty State */}
         {filteredQuotes.length === 0 && (

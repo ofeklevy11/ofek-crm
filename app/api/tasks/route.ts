@@ -12,9 +12,20 @@ export async function GET(request: NextRequest) {
     }
 
     // CRITICAL: Filter by companyId for multi-tenancy
-    // P111: Add take limit matching server action bounds
     const tasks = await prisma.task.findMany({
       where: { companyId: user.companyId },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        assigneeId: true,
+        priority: true,
+        dueDate: true,
+        tags: true,
+        creatorId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
       orderBy: { createdAt: "desc" },
       take: 5000,
     });
@@ -51,6 +62,7 @@ export async function POST(request: NextRequest) {
     const newTask = await prisma.task.create({
       data: {
         companyId: user.companyId, // CRITICAL: Set companyId for multi-tenancy
+        creatorId: user.id,
         title: body.title,
         description: body.description,
         status: body.status ?? "todo",
@@ -58,6 +70,18 @@ export async function POST(request: NextRequest) {
         priority: body.priority,
         tags: body.tags || [],
         dueDate: dueDate,
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        assigneeId: true,
+        priority: true,
+        dueDate: true,
+        tags: true,
+        creatorId: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { normalizePaymentStatus } from "@/lib/finance-constants";
 
 export async function GET(
   request: NextRequest,
@@ -15,13 +16,12 @@ export async function GET(
     const { id } = await params;
     const paymentId = parseInt(id);
 
-    // CRITICAL: Filter by client.companyId
+    // CRITICAL: Filter by companyId + soft delete
     const payment = await prisma.oneTimePayment.findFirst({
       where: {
         id: paymentId,
-        client: {
-          companyId: user.companyId,
-        },
+        companyId: user.companyId,
+        deletedAt: null,
       },
       include: { client: true },
     });
@@ -54,12 +54,22 @@ export async function PATCH(
     const paymentId = parseInt(id);
     const data = await request.json();
 
-    // Validate status if provided
-    if (
-      data.status &&
-      !["pending", "paid", "overdue", "cancelled"].includes(data.status)
-    ) {
-      return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    // P2: Normalize status to canonical value
+    if (data.status) {
+      const normalized = normalizePaymentStatus(data.status);
+      if (!normalized) {
+        return NextResponse.json({ error: `Invalid status: ${data.status}` }, { status: 400 });
+      }
+      data.status = normalized;
+    }
+
+    // I1: Validate amount before transaction to return 400 instead of DB error
+    if (data.amount !== undefined && data.amount !== null) {
+      const parsedAmount = parseFloat(data.amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
+      }
+      data.amount = parsedAmount;
     }
 
     // Verify ownership + update atomically to prevent TOCTOU race
@@ -67,9 +77,8 @@ export async function PATCH(
       const existingPayment = await tx.oneTimePayment.findFirst({
         where: {
           id: paymentId,
-          client: {
-            companyId: user.companyId,
-          },
+          companyId: user.companyId,
+          deletedAt: null,
         },
       });
 
@@ -79,7 +88,7 @@ export async function PATCH(
         where: { id: paymentId },
         data: {
           title: data.title,
-          amount: data.amount ? parseFloat(data.amount) : undefined,
+          amount: data.amount ?? undefined,
           dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
           status: data.status,
           paidDate: data.paidDate
@@ -119,21 +128,21 @@ export async function DELETE(
     const { id } = await params;
     const paymentId = parseInt(id);
 
-    // Verify ownership + delete atomically to prevent TOCTOU race
+    // P3: Soft delete for audit trail
     const deleted = await prisma.$transaction(async (tx) => {
       const existingPayment = await tx.oneTimePayment.findFirst({
         where: {
           id: paymentId,
-          client: {
-            companyId: user.companyId,
-          },
+          companyId: user.companyId,
+          deletedAt: null,
         },
       });
 
       if (!existingPayment) return false;
 
-      await tx.oneTimePayment.delete({
+      await tx.oneTimePayment.update({
         where: { id: paymentId },
+        data: { deletedAt: new Date() },
       });
       return true;
     }, { isolationLevel: "RepeatableRead" });

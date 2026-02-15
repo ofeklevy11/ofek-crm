@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { getCurrentUser } from "@/lib/permissions-server";
+import { getCurrentUser, invalidateUserCache } from "@/lib/permissions-server";
 
 export async function GET(
   request: Request,
@@ -156,6 +156,9 @@ export async function PATCH(
         tablePermissions: true,
       },
     });
+
+    // Invalidate cached session so permission changes take effect immediately
+    await invalidateUserCache(targetUserId);
 
     return NextResponse.json(updatedUser);
   } catch (error) {

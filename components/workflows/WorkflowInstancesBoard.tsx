@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Workflow, WorkflowStage, User } from "@prisma/client";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Workflow, WorkflowStage } from "@prisma/client";
 import {
   Plus,
   CheckCircle2,
@@ -30,24 +30,53 @@ import {
 import {
   deleteWorkflowInstance,
   updateWorkflowInstance,
+  getWorkflowStagesDetails,
 } from "@/app/actions/workflows";
 
 // @ts-ignore
 type WorkflowInstance = any; // Temporary unti migration run
 
+type LeanUser = { id: number; name: string };
+
 interface Props {
   instances: (WorkflowInstance & {
     workflow: Workflow & { stages: WorkflowStage[] };
-    assignee: User | null;
+    assignee: LeanUser | null;
   })[];
   workflows: (Workflow & { stages: WorkflowStage[] })[]; // For creating new instances
-  users: User[]; // For assignment
+  users: LeanUser[]; // For assignment
 }
 
 export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
   const [selectedInstance, setSelectedInstance] = useState<any>(null); // Detail view
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingInstance, setEditingInstance] = useState<any | null>(null);
+
+  // Lazily-loaded stage details (automation configs) keyed by stageId
+  const [stageDetailsMap, setStageDetailsMap] = useState<Record<number, any>>({});
+  const stageDetailsRef = useRef<Record<number, any>>({});
+  stageDetailsRef.current = stageDetailsMap;
+
+  // Fetch stage details when an instance is selected
+  useEffect(() => {
+    if (!selectedInstance) return;
+    const wfId = selectedInstance.workflowId;
+    // Skip if we already have details for this workflow's stages (use ref for fresh read)
+    const stageIds = selectedInstance.workflow?.stages?.map((s: any) => s.id) || [];
+    if (stageIds.length > 0 && stageIds.every((id: number) => id in stageDetailsRef.current)) return;
+
+    getWorkflowStagesDetails(wfId)
+      .then((details) => {
+        setStageDetailsMap((prev) => {
+          const map: Record<number, any> = { ...prev };
+          for (const d of details) {
+            map[d.id] = d.details;
+          }
+          return map;
+        });
+      })
+      .catch(() => {});
+  }, [selectedInstance?.id]);
 
   // New Instance Form State
   const [newForm, setNewForm] = useState({
@@ -86,11 +115,16 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
     }
   };
 
+  const [toggling, setToggling] = useState(false);
+
   const handleStageToggle = async (
     instanceId: number,
     stageId: number,
     isCompleted: boolean,
   ) => {
+    if (toggling) return;
+    setToggling(true);
+    try {
     // Optimistic update could happen here, but for now relying on server revalidate
     await updateWorkflowInstanceStage(instanceId, stageId, isCompleted);
 
@@ -106,6 +140,9 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
         ...selectedInstance,
         completedStages: newCompleted,
       });
+    }
+    } finally {
+      setToggling(false);
     }
   };
 
@@ -349,12 +386,10 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                           </p>
                         )}
 
-                        {/* Automation Badges */}
-                        {/* @ts-ignore */}
-                        {stage.details?.systemActions?.length > 0 && (
+                        {/* Automation Badges — loaded lazily */}
+                        {stageDetailsMap[stage.id]?.systemActions?.length > 0 && (
                           <div className="flex flex-wrap gap-2 mt-3 mr-11">
-                            {/* @ts-ignore */}
-                            {stage.details.systemActions.map(
+                            {stageDetailsMap[stage.id].systemActions.map(
                               (action: any, i: number) => {
                                 const isLegacy = typeof action === "string";
                                 const type = isLegacy ? "legacy" : action.type;

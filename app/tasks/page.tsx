@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { ClipboardList, LayoutGrid, Calendar, Users } from "lucide-react";
+import { getTasks } from "@/app/actions/tasks";
 
 async function getUsers(companyId: number) {
   const users = await prisma.user.findMany({
@@ -44,9 +45,6 @@ async function getTaskSheets(
       },
       items: {
         orderBy: [{ order: "asc" }],
-      },
-      _count: {
-        select: { items: true },
       },
     },
     orderBy: { createdAt: "desc" },
@@ -90,6 +88,19 @@ async function getMyTaskSheets(companyId: number, userId: number) {
   return sheets;
 }
 
+async function getMySheetCount(companyId: number, userId: number) {
+  const now = new Date();
+  return prisma.taskSheet.count({
+    where: {
+      companyId,
+      assigneeId: userId,
+      isActive: true,
+      validFrom: { lte: now },
+      OR: [{ validUntil: null }, { validUntil: { gte: now } }],
+    },
+  });
+}
+
 export default async function TasksPage({
   searchParams,
 }: {
@@ -100,13 +111,33 @@ export default async function TasksPage({
   const currentView = resolvedParams.view || "kanban";
   const isAdmin = user?.role === "admin";
 
-  // Fetch data based on view
-  // Fetch data based on view
+  // Conditionally fetch only the data needed for the current tab
   const users = user ? await getUsers(user.companyId) : [];
-  const taskSheets = user
-    ? await getTaskSheets(user.companyId, isAdmin, user.id)
-    : [];
-  const mySheets = user ? await getMyTaskSheets(user.companyId, user.id) : [];
+
+  // Fetch tab-specific data only
+  const tasksResult =
+    currentView === "kanban" && user
+      ? await getTasks()
+      : null;
+  const initialTasks = tasksResult?.data ?? [];
+
+  const taskSheets =
+    currentView === "manage-sheets" && isAdmin && user
+      ? await getTaskSheets(user.companyId, isAdmin, user.id)
+      : [];
+
+  const mySheets =
+    currentView === "my-sheets" && user
+      ? await getMyTaskSheets(user.companyId, user.id)
+      : [];
+
+  // Lightweight count for the tab badge (only when not already on my-sheets tab)
+  const mySheetsCount =
+    currentView === "my-sheets"
+      ? mySheets.length
+      : user
+        ? await getMySheetCount(user.companyId, user.id)
+        : 0;
 
   const tabs = [
     { id: "kanban", label: "לוח קנבן", icon: LayoutGrid },
@@ -144,9 +175,9 @@ export default async function TasksPage({
                 >
                   <Icon className="w-4 h-4" />
                   {tab.label}
-                  {tab.id === "my-sheets" && mySheets.length > 0 && (
+                  {tab.id === "my-sheets" && mySheetsCount > 0 && (
                     <span className="bg-blue-500/30 text-blue-300 text-xs px-2 py-0.5 rounded-full">
-                      {mySheets.length}
+                      {mySheetsCount}
                     </span>
                   )}
                 </Link>
@@ -164,7 +195,7 @@ export default async function TasksPage({
           }
         >
           {currentView === "kanban" && (
-            <TaskKanbanBoard currentUser={user} users={users} />
+            <TaskKanbanBoard currentUser={user} users={users} initialTasks={initialTasks} />
           )}
 
           {currentView === "my-sheets" && (

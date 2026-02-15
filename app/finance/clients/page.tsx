@@ -20,28 +20,28 @@ export default async function ClientsPage({
   const currentPage = Number(page) || 1;
   const pageSize = 30;
 
-  // CRITICAL: Filter by companyId
-  const totalClients = await prisma.client.count({
-    where: { companyId: user.companyId },
-  });
+  const [totalClients, clients] = await Promise.all([
+    prisma.client.count({
+      where: { companyId: user.companyId, deletedAt: null },
+    }),
+    prisma.client.findMany({
+      where: { companyId: user.companyId, deletedAt: null },
+      include: {
+        retainers: {
+          where: { status: "active", deletedAt: null },
+          select: { id: true, amount: true, nextDueDate: true },
+        },
+        oneTimePayments: {
+          where: { status: { in: ["pending", "overdue"] }, deletedAt: null },
+          select: { id: true, amount: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (currentPage - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
   const totalPages = Math.ceil(totalClients / pageSize);
-
-  // CRITICAL: Filter by companyId
-  const clients = await prisma.client.findMany({
-    where: { companyId: user.companyId },
-    include: {
-      retainers: {
-        where: { status: "active" },
-      },
-      oneTimePayments: {
-        where: { status: { in: ["pending", "overdue"] } },
-      },
-      transactions: true,
-    },
-    orderBy: { createdAt: "desc" },
-    skip: (currentPage - 1) * pageSize,
-    take: pageSize,
-  });
 
   return (
     <div className="p-8 space-y-8 bg-[#f4f8f8] min-h-screen" dir="rtl">

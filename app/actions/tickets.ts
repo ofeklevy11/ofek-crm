@@ -5,26 +5,68 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
 import { inngest } from "@/lib/inngest/client";
 import { validateUserInCompany, validateClientInCompany } from "@/lib/company-validation";
+import { getCachedMetric } from "@/lib/services/cache-service";
+import { redis } from "@/lib/redis";
+import { TicketStatus, TicketPriority, TicketType } from "@prisma/client";
+import { withRetry } from "@/lib/db-retry";
 
-export async function getTickets() {
+function serviceStatsKey(companyId: number) {
+  return `service:stats:${companyId}`;
+}
+function slaPoliciesKey(companyId: number) {
+  return `service:sla-policies:${companyId}`;
+}
+async function invalidateServiceCache(companyId: number) {
+  try {
+    await redis.del(
+      `cache:metric:${serviceStatsKey(companyId)}`,
+      `cache:metric:${slaPoliciesKey(companyId)}`,
+    );
+  } catch {}
+}
+
+// P3: Derive validation sets from Prisma enums (single source of truth)
+const VALID_STATUSES = new Set<string>(Object.values(TicketStatus));
+const VALID_PRIORITIES = new Set<string>(Object.values(TicketPriority));
+const VALID_TYPES = new Set<string>(Object.values(TicketType));
+
+const PAGE_SIZE = 100;
+
+// P2: Cursor-based pagination
+export async function getTickets(cursor?: number) {
   const user = await getCurrentUser();
-  if (!user) return [];
+  if (!user) return { items: [] as any[], nextCursor: null as number | null };
 
-  // P104: Removed comments/activityLogs from list query — load on-demand via getTicketDetails()
-  return await prisma.ticket.findMany({
+  const items = await withRetry(() => prisma.ticket.findMany({
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     where: {
       companyId: user.companyId,
-      status: { not: "CLOSED" },
+      status: { in: ["OPEN", "IN_PROGRESS", "WAITING", "RESOLVED"] },
     },
-    include: {
-      assignee: { select: { id: true, name: true, email: true } },
-      client: { select: { id: true, name: true, email: true, company: true } },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      priority: true,
+      type: true,
+      createdAt: true,
+      updatedAt: true,
+      assignee: { select: { id: true, name: true } },
+      client: { select: { id: true, name: true } },
       creator: { select: { id: true, name: true } },
-      _count: { select: { comments: true, activityLogs: true } },
+      _count: { select: { comments: true } },
     },
-    orderBy: { updatedAt: "desc" },
-    take: 500, // P104: Bound ticket list query
-  });
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    take: PAGE_SIZE + 1,
+  }));
+
+  let nextCursor: number | null = null;
+  if (items.length > PAGE_SIZE) {
+    items.pop();
+    nextCursor = items[items.length - 1].id;
+  }
+
+  return { items, nextCursor };
 }
 
 // On-demand loading of ticket details with comments and activity logs
@@ -32,14 +74,14 @@ export async function getTicketDetails(ticketId: number) {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  return await prisma.ticket.findFirst({
+  return await withRetry(() => prisma.ticket.findFirst({
     where: {
       id: ticketId,
       companyId: user.companyId,
     },
     include: {
       assignee: { select: { id: true, name: true, email: true } },
-      client: { select: { id: true, name: true, email: true, company: true } },
+      client: { select: { id: true, name: true, email: true, businessName: true } },
       creator: { select: { id: true, name: true } },
       comments: {
         include: {
@@ -53,10 +95,10 @@ export async function getTicketDetails(ticketId: number) {
           user: { select: { id: true, name: true } },
         },
         orderBy: { createdAt: "desc" },
-        take: 50, // Limit activity logs for performance
+        take: 50,
       },
     },
-  });
+  }));
 }
 
 export async function createTicket(data: {
@@ -74,64 +116,69 @@ export async function createTicket(data: {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
+  // Validate enum values before any DB operations
+  if (!VALID_STATUSES.has(data.status)) throw new Error("Invalid status");
+  if (!VALID_PRIORITIES.has(data.priority)) throw new Error("Invalid priority");
+  if (!VALID_TYPES.has(data.type)) throw new Error("Invalid type");
+
+  // Run SLA policy lookup + cross-company validations in parallel
+  const [slaPolicy, assigneeValid, clientValid] = await Promise.all([
+    data.priority
+      ? withRetry(() => prisma.slaPolicy.findUnique({
+          where: {
+            companyId_priority: {
+              companyId: user.companyId,
+              priority: data.priority as TicketPriority,
+            },
+          },
+        }))
+      : null,
+    data.assigneeId
+      ? validateUserInCompany(data.assigneeId, user.companyId)
+      : true,
+    data.clientId
+      ? validateClientInCompany(data.clientId, user.companyId)
+      : true,
+  ]);
+
+  // SECURITY: Validate cross-company references
+  if (!assigneeValid) throw new Error("Invalid assignee");
+  if (!clientValid) throw new Error("Invalid client");
+
   // Auto-calculate SLA dates if not provided
   let calculatedSlaDueDate = data.slaDueDate;
   let calculatedSlaResponseDueDate = data.slaResponseDueDate;
 
-  if (data.priority) {
-    const slaPolicy = await prisma.slaPolicy.findUnique({
-      where: {
-        companyId_priority: {
-          companyId: user.companyId,
-          priority: data.priority,
-        },
-      },
-    });
-
-    if (slaPolicy) {
-      // Calculate resolve time (slaDueDate)
-      if (!calculatedSlaDueDate && slaPolicy.resolveTimeMinutes) {
-        calculatedSlaDueDate = new Date(
-          Date.now() + slaPolicy.resolveTimeMinutes * 60 * 1000,
-        );
-        console.log(
-          `[SLA] Auto-calculated slaDueDate for priority ${data.priority}: ${calculatedSlaDueDate}`,
-        );
-      }
-
-      // Calculate response time (slaResponseDueDate)
-      if (!calculatedSlaResponseDueDate && slaPolicy.responseTimeMinutes) {
-        calculatedSlaResponseDueDate = new Date(
-          Date.now() + slaPolicy.responseTimeMinutes * 60 * 1000,
-        );
-        console.log(
-          `[SLA] Auto-calculated slaResponseDueDate for priority ${data.priority}: ${calculatedSlaResponseDueDate}`,
-        );
-      }
+  if (slaPolicy) {
+    if (!calculatedSlaDueDate && slaPolicy.resolveTimeMinutes) {
+      calculatedSlaDueDate = new Date(
+        Date.now() + slaPolicy.resolveTimeMinutes * 60 * 1000,
+      );
+    }
+    if (!calculatedSlaResponseDueDate && slaPolicy.responseTimeMinutes) {
+      calculatedSlaResponseDueDate = new Date(
+        Date.now() + slaPolicy.responseTimeMinutes * 60 * 1000,
+      );
     }
   }
 
-  // SECURITY: Validate cross-company references
-  if (data.assigneeId) {
-    if (!(await validateUserInCompany(data.assigneeId, user.companyId))) {
-      throw new Error("Invalid assignee");
-    }
-  }
-  if (data.clientId) {
-    if (!(await validateClientInCompany(data.clientId, user.companyId))) {
-      throw new Error("Invalid client");
-    }
-  }
-
-  const ticket = await prisma.ticket.create({
+  // P3: Construct data with proper enum types instead of spreading raw input
+  const ticket = await withRetry(() => prisma.ticket.create({
     data: {
-      ...data,
+      title: data.title,
+      description: data.description,
+      status: data.status as TicketStatus,
+      priority: data.priority as TicketPriority,
+      type: data.type as TicketType,
+      clientId: data.clientId,
+      assigneeId: data.assigneeId,
+      tags: data.tags,
       slaDueDate: calculatedSlaDueDate,
       slaResponseDueDate: calculatedSlaResponseDueDate,
       companyId: user.companyId,
       creatorId: user.id,
     },
-  });
+  }));
 
   if (data.assigneeId && data.assigneeId !== user.id) {
     try {
@@ -152,6 +199,7 @@ export async function createTicket(data: {
     }
   }
 
+  await invalidateServiceCache(user.companyId);
   revalidatePath("/service");
   return ticket;
 }
@@ -173,92 +221,95 @@ export async function updateTicket(
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  const currentTicket = await prisma.ticket.findUnique({
-    where: { id, companyId: user.companyId },
-    select: {
-      status: true,
-      title: true,
-      priority: true,
-      type: true,
-      assigneeId: true,
-      clientId: true,
-      description: true,
-      createdAt: true,
-    },
-  });
+  // Validate enum values if provided
+  if (data.status && !VALID_STATUSES.has(data.status)) throw new Error("Invalid status");
+  if (data.priority && !VALID_PRIORITIES.has(data.priority)) throw new Error("Invalid priority");
+  if (data.type && !VALID_TYPES.has(data.type)) throw new Error("Invalid type");
 
-  if (!currentTicket) throw new Error("Ticket not found");
+  // Validate cross-company references outside the transaction (read-only checks)
+  const [assigneeValid, clientValid] = await Promise.all([
+    data.assigneeId
+      ? validateUserInCompany(data.assigneeId, user.companyId)
+      : true,
+    data.clientId !== undefined && data.clientId !== null
+      ? validateClientInCompany(data.clientId, user.companyId)
+      : true,
+  ]);
 
-  // SECURITY: Validate cross-company references
-  if (data.assigneeId) {
-    if (!(await validateUserInCompany(data.assigneeId, user.companyId))) {
-      throw new Error("Invalid assignee");
-    }
-  }
-  if (data.clientId !== undefined && data.clientId !== null) {
-    if (!(await validateClientInCompany(data.clientId, user.companyId))) {
-      throw new Error("Invalid client");
-    }
-  }
+  if (!assigneeValid) throw new Error("Invalid assignee");
+  if (!clientValid) throw new Error("Invalid client");
 
-  // Check if priority is being changed - if so, recalculate SLA dates
-  let updateData = { ...data };
-
-  if (data.priority && data.priority !== currentTicket.priority) {
-    console.log(
-      `[SLA] Priority change detected for ticket ${id}: ${currentTicket.priority} -> ${data.priority}`,
+  // Interactive transaction: read + validate + write atomically to prevent TOCTOU
+  const { ticket, currentTicket } = await withRetry(() => prisma.$transaction(async (tx) => {
+    // P1: Acquire row-level lock to prevent concurrent modifications (lost updates)
+    const locked: { id: number }[] = await tx.$queryRawUnsafe(
+      `SELECT id FROM "Ticket" WHERE id = $1 AND "companyId" = $2 FOR UPDATE`,
+      id,
+      user.companyId,
     );
+    if (locked.length === 0) throw new Error("Ticket not found");
 
-    // Get the SLA policy for the new priority
-    const slaPolicy = await prisma.slaPolicy.findUnique({
-      where: {
-        companyId_priority: {
-          companyId: user.companyId,
-          priority: data.priority,
-        },
+    const current = await tx.ticket.findUnique({
+      where: { id, companyId: user.companyId },
+      select: {
+        status: true,
+        title: true,
+        priority: true,
+        type: true,
+        assigneeId: true,
+        clientId: true,
+        description: true,
+        createdAt: true,
       },
     });
 
-    if (slaPolicy) {
-      // Calculate new SLA dates based on NOW (current time)
-      // This ensures the SLA timing starts fresh from the priority change
-      const now = Date.now();
+    if (!current) throw new Error("Ticket not found");
 
-      if (slaPolicy.resolveTimeMinutes) {
-        updateData.slaDueDate = new Date(
-          now + slaPolicy.resolveTimeMinutes * 60 * 1000,
-        );
-        console.log(
-          `[SLA] Recalculated slaDueDate for new priority ${data.priority}: ${updateData.slaDueDate}`,
-        );
-      }
+    // P3: Build update data with proper enum casts
+    const updateData: Record<string, any> = { ...data };
+    if (data.status) updateData.status = data.status as TicketStatus;
+    if (data.priority) updateData.priority = data.priority as TicketPriority;
+    if (data.type) updateData.type = data.type as TicketType;
 
-      // Also update response due date if the ticket is still OPEN
-      const newStatus = data.status || currentTicket.status;
-      if (newStatus === "OPEN" && slaPolicy.responseTimeMinutes) {
-        (updateData as any).slaResponseDueDate = new Date(
-          now + slaPolicy.responseTimeMinutes * 60 * 1000,
-        );
-        console.log(
-          `[SLA] Recalculated slaResponseDueDate for new priority ${
-            data.priority
-          }: ${(updateData as any).slaResponseDueDate}`,
-        );
+    // Check if priority is being changed - if so, recalculate SLA dates
+    if (data.priority && data.priority !== current.priority) {
+      const slaPolicy = await tx.slaPolicy.findUnique({
+        where: {
+          companyId_priority: {
+            companyId: user.companyId,
+            priority: data.priority as TicketPriority,
+          },
+        },
+      });
+
+      if (slaPolicy) {
+        const now = Date.now();
+
+        if (slaPolicy.resolveTimeMinutes) {
+          updateData.slaDueDate = new Date(
+            now + slaPolicy.resolveTimeMinutes * 60 * 1000,
+          );
+        }
+
+        const newStatus = data.status || current.status;
+        if (newStatus === "OPEN" && slaPolicy.responseTimeMinutes) {
+          updateData.slaResponseDueDate = new Date(
+            now + slaPolicy.responseTimeMinutes * 60 * 1000,
+          );
+        }
+      } else {
+        updateData.slaDueDate = undefined;
+        updateData.slaResponseDueDate = undefined;
       }
-    } else {
-      console.log(
-        `[SLA] No SLA policy found for priority ${data.priority}, clearing SLA dates`,
-      );
-      // If there's no SLA policy for the new priority, clear the SLA dates
-      updateData.slaDueDate = undefined;
-      (updateData as any).slaResponseDueDate = undefined;
     }
-  }
 
-  const ticket = await prisma.ticket.update({
-    where: { id, companyId: user.companyId },
-    data: updateData,
-  });
+    const updated = await tx.ticket.update({
+      where: { id, companyId: user.companyId },
+      data: updateData,
+    });
+
+    return { ticket: updated, currentTicket: current };
+  }, { maxWait: 5000, timeout: 10000 }));
 
   // Fire background jobs for activity logs and status change automation
   const events: Parameters<typeof inngest.send>[0] = [];
@@ -310,6 +361,7 @@ export async function updateTicket(
     console.error("[updateTicket] inngest.send failed:", error);
   }
 
+  await invalidateServiceCache(user.companyId);
   revalidatePath("/service");
   return ticket;
 }
@@ -323,20 +375,20 @@ export async function addTicketComment(
   if (!user) throw new Error("Unauthorized");
 
   // Verify ticket belongs to user's company before creating comment
-  const ticket = await prisma.ticket.findFirst({
+  const ticket = await withRetry(() => prisma.ticket.findFirst({
     where: { id: ticketId, companyId: user.companyId },
     select: { id: true },
-  });
+  }));
   if (!ticket) throw new Error("Unauthorized");
 
-  const comment = await prisma.ticketComment.create({
+  const comment = await withRetry(() => prisma.ticketComment.create({
     data: {
       ticketId,
       userId: user.id,
       content,
       isInternal,
     },
-  });
+  }));
 
   // Notify assignee in background
   try {
@@ -364,15 +416,13 @@ export async function updateTicketComment(commentId: number, content: string) {
   if (!user) throw new Error("Unauthorized");
 
   // Find the comment and verify permissions
-  const comment = await prisma.ticketComment.findFirst({
+  const comment = await withRetry(() => prisma.ticketComment.findFirst({
     where: {
       id: commentId,
       ticket: { companyId: user.companyId },
     },
-    include: {
-      ticket: { select: { companyId: true } },
-    },
-  });
+    select: { id: true, userId: true },
+  }));
 
   if (!comment) {
     throw new Error("Unauthorized");
@@ -397,15 +447,13 @@ export async function deleteTicketComment(commentId: number) {
   if (!user) throw new Error("Unauthorized");
 
   // Find the comment and verify permissions
-  const comment = await prisma.ticketComment.findFirst({
+  const comment = await withRetry(() => prisma.ticketComment.findFirst({
     where: {
       id: commentId,
       ticket: { companyId: user.companyId },
     },
-    include: {
-      ticket: { select: { companyId: true } },
-    },
-  });
+    select: { id: true, userId: true },
+  }));
 
   if (!comment) {
     throw new Error("Unauthorized");
@@ -428,10 +476,16 @@ export async function getSlaPolicies() {
   const user = await getCurrentUser();
   if (!user) return [];
 
-  return await prisma.slaPolicy.findMany({
-    where: { companyId: user.companyId },
-    take: 50,
-  });
+  return getCachedMetric(
+    slaPoliciesKey(user.companyId),
+    async () => {
+      return withRetry(() => prisma.slaPolicy.findMany({
+        where: { companyId: user.companyId },
+        take: 50,
+      }));
+    },
+    300, // 5-minute TTL
+  );
 }
 
 export async function updateSlaPolicy(data: {
@@ -442,11 +496,14 @@ export async function updateSlaPolicy(data: {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
+  // P3: Validate priority against enum
+  if (!VALID_PRIORITIES.has(data.priority)) throw new Error("Invalid priority");
+
   const policy = await prisma.slaPolicy.upsert({
     where: {
       companyId_priority: {
         companyId: user.companyId,
-        priority: data.priority,
+        priority: data.priority as TicketPriority,
       },
     },
     update: {
@@ -455,34 +512,30 @@ export async function updateSlaPolicy(data: {
     },
     create: {
       companyId: user.companyId,
-      priority: data.priority,
+      priority: data.priority as TicketPriority,
       name: `${data.priority} Policy`,
       responseTimeMinutes: data.responseTimeMinutes,
       resolveTimeMinutes: data.resolveTimeMinutes,
     },
   });
 
+  await invalidateServiceCache(user.companyId);
   revalidatePath("/service");
   return policy;
 }
 
+// P6: Atomic delete — no TOCTOU gap, cascade handled by DB foreign key constraints
 export async function deleteTicket(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  // Verify the ticket belongs to the user's company before deleting
-  const ticket = await prisma.ticket.findFirst({
+  const { count } = await prisma.ticket.deleteMany({
     where: { id, companyId: user.companyId },
   });
 
-  if (!ticket) {
-    throw new Error("Unauthorized");
-  }
+  if (count === 0) throw new Error("Ticket not found");
 
-  await prisma.ticket.delete({
-    where: { id, companyId: user.companyId },
-  });
-
+  await invalidateServiceCache(user.companyId);
   revalidatePath("/service");
 }
 
@@ -497,34 +550,75 @@ export async function getTicketStats() {
       breached: 0,
     };
 
-  // OPTIMIZED: Use groupBy to get all status counts in a single query
-  // instead of 5 separate count queries
-  const [statusCounts, breachCount] = await Promise.all([
-    prisma.ticket.groupBy({
-      by: ["status"],
-      where: { companyId: user.companyId },
-      _count: { status: true },
-    }),
-    prisma.slaBreach.count({
-      where: {
-        companyId: user.companyId,
-        status: "PENDING", // Only uncleared breaches
-      },
-    }),
-  ]);
+  return getCachedMetric(
+    serviceStatsKey(user.companyId),
+    async () => {
+      const [statusCounts, breachCount] = await Promise.all([
+        withRetry(() => prisma.ticket.groupBy({
+          by: ["status"],
+          where: { companyId: user.companyId },
+          _count: { status: true },
+        })),
+        withRetry(() => prisma.slaBreach.count({
+          where: {
+            companyId: user.companyId,
+            status: "PENDING",
+          },
+        })),
+      ]);
 
-  // Convert groupBy results to a map for easy lookup
-  const countMap: Record<string, number> = {};
-  statusCounts.forEach((item) => {
-    countMap[item.status] = item._count.status;
-  });
+      const countMap: Record<string, number> = {};
+      statusCounts.forEach((item) => {
+        countMap[item.status] = item._count.status;
+      });
 
-  return {
-    open: countMap["OPEN"] || 0,
-    inProgress: countMap["IN_PROGRESS"] || 0,
-    waiting: countMap["WAITING"] || 0,
-    closed: countMap["CLOSED"] || 0,
-    breached: breachCount,
-  };
+      return {
+        open: countMap["OPEN"] || 0,
+        inProgress: countMap["IN_PROGRESS"] || 0,
+        waiting: countMap["WAITING"] || 0,
+        closed: countMap["CLOSED"] || 0,
+        breached: breachCount,
+      };
+    },
+    30, // 30-second TTL
+  );
 }
 
+// P7: Extracted from page.tsx — bounded and reusable server action
+export async function getServiceAutomationRules() {
+  const user = await getCurrentUser();
+  if (!user) return [];
+
+  return withRetry(() => prisma.automationRule.findMany({
+    where: {
+      companyId: user.companyId,
+      triggerType: { in: ["TICKET_STATUS_CHANGE", "SLA_BREACH"] },
+    },
+    select: {
+      id: true,
+      name: true,
+      triggerType: true,
+      triggerConfig: true,
+      actionType: true,
+      actionConfig: true,
+      isActive: true,
+      folderId: true,
+      calendarEventId: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: "desc" },
+    take: 500,
+  }));
+}
+
+export async function getServiceUsers() {
+  const user = await getCurrentUser();
+  if (!user) return [];
+
+  return withRetry(() => prisma.user.findMany({
+    where: { companyId: user.companyId },
+    select: { id: true, name: true, email: true },
+    orderBy: { name: "asc" },
+    take: 200,
+  }));
+}

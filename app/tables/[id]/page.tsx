@@ -30,11 +30,12 @@ export default async function TableDetailsPage({
   const user = await getCurrentUser();
   if (!user) return redirect("/login");
 
-  // CRITICAL: Filter by companyId
+  // CRITICAL: Filter by companyId + exclude soft-deleted
   const table = await prisma.tableMeta.findFirst({
     where: {
       id: tableId,
       companyId: user.companyId,
+      deletedAt: null,
     },
   });
 

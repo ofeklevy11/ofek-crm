@@ -6,137 +6,397 @@ datasource db {
   provider = "postgresql"
 }
 
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  basic
+  admin
+  manager
+}
+
+enum UserTier {
+  basic
+  premium
+  super
+}
+
+enum AutomationTriggerType {
+  MANUAL
+  TASK_STATUS_CHANGE
+  RECORD_CREATE
+  NEW_RECORD
+  RECORD_FIELD_CHANGE
+  MULTI_EVENT_DURATION
+  DIRECT_DIAL
+  VIEW_METRIC_THRESHOLD
+  TIME_SINCE_CREATION
+  TICKET_STATUS_CHANGE
+  SLA_BREACH
+}
+
+enum AutomationActionType {
+  SEND_NOTIFICATION
+  CALCULATE_DURATION
+  CALCULATE_MULTI_EVENT_DURATION
+  UPDATE_RECORD_FIELD
+  SEND_WHATSAPP
+  WEBHOOK
+  ADD_TO_NURTURE_LIST
+  CREATE_TASK
+  CREATE_RECORD
+  CREATE_CALENDAR_EVENT
+  MULTI_ACTION
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  waiting_client
+  completed_month
+  done
+}
+
+enum TaskPriority {
+  low
+  medium
+  high
+}
+
+enum RetainerStatus {
+  active
+  paused
+  cancelled
+}
+
+enum RetainerFrequency {
+  monthly
+  quarterly
+  annually
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  overdue
+  cancelled
+}
+
+enum WorkflowInstanceStatus {
+  active
+  completed
+}
+
+enum ProductType {
+  SERVICE
+  PRODUCT
+  PACKAGE
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+}
+
+enum GoalMetricType {
+  REVENUE
+  SALES
+  CUSTOMERS
+  TASKS
+  RETAINERS
+  QUOTES
+  CALENDAR
+  RECORDS
+}
+
+enum GoalTargetType {
+  COUNT
+  SUM
+}
+
+enum GoalPeriodType {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  CUSTOM
+}
+
+enum TransactionRelatedType {
+  retainer
+  one_time
+}
+
+enum Currency {
+  ILS
+  USD
+  EUR
+  GBP
+}
+
+enum FinanceRecordType {
+  INCOME
+  EXPENSE
+}
+
+enum FinanceRecordStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+enum FinanceSyncSourceType {
+  TABLE
+  TRANSACTIONS
+  RETAINERS
+  FIXED_EXPENSES
+  PAYMENTS_RETAINERS
+}
+
+enum FinanceSyncJobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum FixedExpenseFrequency {
+  MONTHLY
+  YEARLY
+  WEEKLY
+  QUARTERLY
+  ONE_TIME
+}
+
+enum FixedExpenseStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum TaskSheetType {
+  DAILY
+  WEEKLY
+}
+
+enum TaskSheetItemPriority {
+  URGENT
+  HIGH
+  NORMAL
+  LOW
+  OPPORTUNITY
+}
+
+enum WorkerStatus {
+  ONBOARDING
+  ACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+enum OnboardingStepType {
+  TASK
+  TRAINING
+  DOCUMENT
+  MEETING
+  CHECKLIST
+}
+
+enum WorkerOnboardingStatus {
+  IN_PROGRESS
+  COMPLETED
+  PAUSED
+}
+
+enum WorkerOnboardingStepStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+enum WorkerTaskPriority {
+  URGENT
+  HIGH
+  NORMAL
+  LOW
+}
+
+enum WorkerTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum DashboardWidgetType {
+  ANALYTICS
+  TABLE
+  GOAL
+  TABLE_VIEWS_DASHBOARD
+}
+
+enum ImportJobStatus {
+  UPLOADED
+  VALIDATING
+  VALIDATED
+  IMPORTING
+  IMPORTED
+  FAILED
+}
+
+enum AnalyticsViewType {
+  COUNT
+  AVERAGE
+  SUM
+  CONVERSION
+  DISTRIBUTION
+  GRAPH
+}
+
+enum ViewFolderType {
+  ANALYTICS
+  AUTOMATION
+}
+
 model Company {
   id        Int      @id @default(autoincrement())
   name      String
   slug      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   // Business settings for quotes
-  businessType    String?   // "exempt" (עוסק פטור), "licensed" (עוסק מורשה), "ltd" (חברה בע"מ)
-  taxId           String?   // ח.פ / מספר עוסק
-  businessAddress String?   // כתובת העסק
-  businessWebsite String?   // קישור לאתר (אופציונלי)
-  businessEmail   String?   // אימייל עסקי (אופציונלי)
-  logoUrl         String?   // לוגו העסק (URL)
-  
-  users               User[]
-  tables              TableMeta[]
-  records             Record[]
-  tasks               Task[]
-  clients             Client[]
-  automationRules     AutomationRule[]
-  calendarEvents      CalendarEvent[]
-  notifications       Notification[]
-  messages            Message[]
-  groups              Group[]
-  analyticsViews      AnalyticsView[]
-  viewFolders         ViewFolder[]
-  tableCategories     TableCategory[]
-  
-  workflows           Workflow[]
-  workflowInstances   WorkflowInstance[]
-  products            Product[]
-  quotes              Quote[]
-  tickets             Ticket[]
-  slaPolicies         SlaPolicy[]
-  slaBreaches         SlaBreach[]
-  
-  folders             Folder[]
-  files               File[]
-  goals               Goal[]
-  financeRecords      FinanceRecord[]
-  fixedExpenses       FixedExpense[]
-  financeSyncRules    FinanceSyncRule[]
-  taskSheets          TaskSheet[]
-  
+  businessType    String? // "exempt" (עוסק פטור), "licensed" (עוסק מורשה), "ltd" (חברה בע"מ)
+  taxId           String? // ח.פ / מספר עוסק
+  businessAddress String? // כתובת העסק
+  businessWebsite String? // קישור לאתר (אופציונלי)
+  businessEmail   String? // אימייל עסקי (אופציונלי)
+  logoUrl         String? // לוגו העסק (URL)
+
+  users           User[]
+  tables          TableMeta[]
+  records         Record[]
+  tasks           Task[]
+  clients         Client[]
+  automationRules AutomationRule[]
+  calendarEvents  CalendarEvent[]
+  notifications   Notification[]
+  messages        Message[]
+  groups          Group[]
+  analyticsViews  AnalyticsView[]
+  viewFolders     ViewFolder[]
+  tableCategories TableCategory[]
+
+  workflows         Workflow[]
+  workflowInstances WorkflowInstance[]
+  products          Product[]
+  quotes            Quote[]
+  tickets           Ticket[]
+  slaPolicies       SlaPolicy[]
+  slaBreaches       SlaBreach[]
+
+  folders          Folder[]
+  files            File[]
+  goals            Goal[]
+  financeRecords   FinanceRecord[]
+  fixedExpenses    FixedExpense[]
+  financeSyncRules FinanceSyncRule[]
+  taskSheets       TaskSheet[]
+
   // Workers Module
-  departments         Department[]
-  workers             Worker[]
-  onboardingPaths     OnboardingPath[]
-  workerTasks         WorkerTask[]
-  onboardingSteps     OnboardingStep[]
-  workerOnboardings   WorkerOnboarding[]
+  departments           Department[]
+  workers               Worker[]
+  onboardingPaths       OnboardingPath[]
+  workerTasks           WorkerTask[]
+  onboardingSteps       OnboardingStep[]
+  workerOnboardings     WorkerOnboarding[]
   workerOnboardingSteps WorkerOnboardingStep[]
 
   // Nurture Hub
-  nurtureLists        NurtureList[]
-  auditLogs           AuditLog[]
+  nurtureLists   NurtureList[]
+  auditLogs      AuditLog[]
+  automationLogs AutomationLog[]
 
-  greenApiInstanceId String?  // Green API Instance ID
-  greenApiToken      String?  // Green API Token
+  greenApiInstanceId String? // Green API Instance ID
+  greenApiToken      String? // Green API Token
 
   apiKeys             ApiKey[]
   importJobs          ImportJob[]
   financeSyncJobs     FinanceSyncJob[]
   dashboardWidgets    DashboardWidget[]
   views               View[]
-  statusDurations     StatusDuration[]
-  multiEventDurations MultiEventDuration[]
+  statusDurations      StatusDuration[]
+  multiEventDurations  MultiEventDuration[]
+  groupMembers         GroupMember[]
+  attachments          Attachment[]
+  viewRefreshLogs      ViewRefreshLog[]
+  analyticsRefreshLogs AnalyticsRefreshLog[]
 }
 
 model User {
   companyId            Int
-  id                   Int           @id @default(autoincrement())
+  id                   Int                @id @default(autoincrement())
   name                 String
-  email                String        @unique
+  email                String             @unique
   passwordHash         String
-  role                 String        @default("basic")
-  isPremium            String        @default("basic") // "basic", "premium", "super"
-  permissions          Json?         @default("{}")
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
-  allowedWriteTableIds Int[]         @default([])
-  tablePermissions     Json?         @default("{}") // { [tableId]: "read" | "write" }
+  role                 UserRole           @default(basic)
+  isPremium            UserTier           @default(basic)
+  permissions          Json?              @default("{}")
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  allowedWriteTableIds Int[]              @default([])
+  tablePermissions     Json?              @default("{}") // { [tableId]: "read" | "write" }
   auditLogs            AuditLog[]
-  records              Record[]      @relation("CreatedBy")
-  updatedRecords       Record[]      @relation("UpdatedBy")
-  dialedRecords        Record[]      @relation("DialedBy")
-  tables               TableMeta[]   @relation("CreatedBy")
+  records              Record[]           @relation("CreatedBy")
+  updatedRecords       Record[]           @relation("UpdatedBy")
+  dialedRecords        Record[]           @relation("DialedBy")
+  tables               TableMeta[]        @relation("CreatedBy")
   transactions         Transaction[]
   notifications        Notification[]
   automationRules      AutomationRule[]
-  sentMessages         Message[]     @relation("SentMessages")
-  receivedMessages     Message[]     @relation("ReceivedMessages")
-  createdGroups        Group[]       @relation("CreatedGroups")
+  sentMessages         Message[]          @relation("SentMessages")
+  receivedMessages     Message[]          @relation("ReceivedMessages")
+  createdGroups        Group[]            @relation("CreatedGroups")
   groupMemberships     GroupMember[]
-  assignedTasks        Task[]        @relation("TaskAssignee")
+  assignedTasks        Task[]             @relation("TaskAssignee")
   createdInstances     WorkflowInstance[] @relation("InstanceCreator")
   assignedInstances    WorkflowInstance[] @relation("InstanceAssignee")
   createdTickets       Ticket[]           @relation("TicketCreator")
   assignedTickets      Ticket[]           @relation("TicketAssignee")
-  
-  assignedTaskSheets   TaskSheet[]   @relation("TaskSheetAssignee")
-  createdTaskSheets    TaskSheet[]   @relation("TaskSheetCreator")
-  createdTasks         Task[]        @relation("TaskCreator")
-  createdApiKeys       ApiKey[]      @relation("KeyCreator")
-  
-  company              Company       @relation(fields: [companyId], references: [id])
+
+  assignedTaskSheets TaskSheet[] @relation("TaskSheetAssignee")
+  createdTaskSheets  TaskSheet[] @relation("TaskSheetCreator")
+  createdTasks       Task[]      @relation("TaskCreator")
+  createdApiKeys     ApiKey[]      @relation("KeyCreator")
+  managedDepartments Department[]  @relation("DepartmentManager")
+
+  company              Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
   ticketComments       TicketComment[]
   ticketActivityLogs   TicketActivityLog[]
   viewRefreshLogs      ViewRefreshLog[]
   analyticsRefreshLogs AnalyticsRefreshLog[]
   importJobs           ImportJob[]
-  
+
   @@index([companyId])
 }
 
 model ApiKey {
-  id        Int      @id @default(autoincrement())
+  id        Int     @id @default(autoincrement())
   companyId Int
-  key       String   // Masked preview only (e.g. "sk_live_...abc123"), NOT the actual key
-  keyHash   String   @unique // SHA-256 hash of the full key for secure lookups
-  name      String   // Description/Name for the key (e.g. "Zapier Main")
-  isActive  Boolean  @default(true)
+  key       String // Masked preview only (e.g. "sk_live_...abc123"), NOT the actual key
+  keyHash   String  @unique // SHA-256 hash of the full key for secure lookups
+  name      String // Description/Name for the key (e.g. "Zapier Main")
+  isActive  Boolean @default(true)
 
   createdBy Int
-  creator   User     @relation("KeyCreator", fields: [createdBy], references: [id])
+  creator   User @relation("KeyCreator", fields: [createdBy], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  company   Company  @relation(fields: [companyId], references: [id])
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([keyHash])
@@ -152,15 +412,15 @@ model Message {
   read       Boolean  @default(false)
   createdAt  DateTime @default(now())
 
-  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
-  receiver   User?    @relation("ReceivedMessages", fields: [receiverId], references: [id])
-  group      Group?   @relation(fields: [groupId], references: [id])
-  company    Company  @relation(fields: [companyId], references: [id])
-  
+  sender   User    @relation("SentMessages", fields: [senderId], references: [id])
+  receiver User?   @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  group    Group?  @relation(fields: [groupId], references: [id])
+  company  Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   @@index([companyId])
   @@index([senderId, receiverId, createdAt(sort: Desc)]) // For DM queries
-  @@index([groupId, createdAt(sort: Desc)])              // For group message queries
-  @@index([receiverId, read])                            // For unread counts
+  @@index([groupId, createdAt(sort: Desc)]) // For group message queries
+  @@index([receiverId, read]) // For unread counts
 }
 
 model Group {
@@ -174,43 +434,46 @@ model Group {
   creator   User          @relation("CreatedGroups", fields: [creatorId], references: [id])
   members   GroupMember[]
   messages  Message[]
-  company   Company       @relation(fields: [companyId], references: [id])
-  
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   @@index([companyId])
 }
 
 model GroupMember {
-  id        Int      @id @default(autoincrement())
-  groupId   Int
-  userId    Int
-  joinedAt  DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  companyId  Int
+  groupId    Int
+  userId     Int
+  joinedAt   DateTime @default(now())
   lastReadAt DateTime @default(now())
-  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([groupId, userId])
+  @@index([companyId])
 }
 
 model AutomationRule {
-  id            Int      @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   companyId     Int
   name          String
   description   String?
-  triggerType   String   // 'MANUAL', 'TASK_STATUS_CHANGE', 'RECORD_CREATE', 'MULTI_EVENT_DURATION', 'DIRECT_DIAL'
-  triggerConfig Json?    // Configuration for the trigger (e.g., fromStatus, toStatus, tableId for DIRECT_DIAL)
-  actionType    String   // 'SEND_NOTIFICATION', 'CALCULATE_DURATION', 'CALCULATE_MULTI_EVENT_DURATION', 'UPDATE_RECORD_FIELD'
-  actionConfig  Json?    // Configuration for the action (e.g., recipientId, message, columnId, value for UPDATE_RECORD_FIELD)
-  isActive      Boolean  @default(true)
+  triggerType   AutomationTriggerType
+  triggerConfig Json? // Configuration for the trigger (e.g., fromStatus, toStatus, tableId for DIRECT_DIAL)
+  actionType    AutomationActionType
+  actionConfig  Json? // Configuration for the action (e.g., recipientId, message, columnId, value for UPDATE_RECORD_FIELD)
+  isActive      Boolean   @default(true)
   createdBy     Int?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   lastRunAt     DateTime?
-  creator       User?    @relation(fields: [createdBy], references: [id])
+  creator       User?     @relation(fields: [createdBy], references: [id], onDelete: SetNull)
 
   // Relation to the new time tracking tables
-  statusDurations StatusDuration[]
+  statusDurations     StatusDuration[]
   multiEventDurations MultiEventDuration[]
-  executedLogs    AutomationLog[]
+  executedLogs        AutomationLog[]
 
   // Analytics Extensions
   analyticsOrder Int?
@@ -218,20 +481,21 @@ model AutomationRule {
   cachedStats    Json?
   lastCachedAt   DateTime?
 
-  folderId      Int?
-  folder        ViewFolder? @relation(fields: [folderId], references: [id])
-  company       Company     @relation(fields: [companyId], references: [id])
+  folderId Int?
+  folder   ViewFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  company  Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   calendarEventId String?
   calendarEvent   CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
 
-  @@index([companyId])
-  @@index([companyId, isActive, triggerType]) // For filtering active rules by trigger type
+  @@index([companyId, isActive, triggerType]) // Covers companyId-only prefix queries + active rules by trigger type
+  @@index([companyId, isActive, actionType]) // Covers analytics data fetch (filter by actionType)
   @@index([calendarEventId])
+  @@index([companyId, triggerType, calendarEventId])
 }
 
 model Notification {
-  id        Int      @id @default(autoincrement())
+  id        BigInt   @id @default(autoincrement())
   companyId Int
   userId    Int
   title     String
@@ -240,8 +504,8 @@ model Notification {
   link      String?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  company   Company  @relation(fields: [companyId], references: [id])
-  
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   @@index([companyId])
   @@index([userId, read, createdAt(sort: Desc)]) // For user's unread notifications
   @@index([userId, companyId, createdAt(sort: Desc)]) // For getNotifications query
@@ -249,25 +513,26 @@ model Notification {
 }
 
 model TableMeta {
-  id         Int      @id @default(autoincrement())
+  id         Int            @id @default(autoincrement())
   companyId  Int
   name       String
   slug       String
   createdBy  Int
   schemaJson Json
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  records    Record[] @relation("TableRecords")
-  creator    User     @relation("CreatedBy", fields: [createdBy], references: [id])
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  deletedAt  DateTime?
+  records    Record[]       @relation("TableRecords")
+  creator    User           @relation("CreatedBy", fields: [createdBy], references: [id])
   categoryId Int?
   category   TableCategory? @relation(fields: [categoryId], references: [id])
   order      Int            @default(0)
-  views      View[]   @relation("TableViews")
-  company    Company  @relation(fields: [companyId], references: [id])
+  views      View[]         @relation("TableViews")
+  company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   importJobs ImportJob[]
-  
-  @@index([companyId])
+
   @@unique([companyId, slug])
+  @@index([companyId, deletedAt])
 }
 
 model TableCategory {
@@ -277,32 +542,32 @@ model TableCategory {
   tables    TableMeta[]
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
-  company   Company     @relation(fields: [companyId], references: [id])
-  
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   @@index([companyId])
 }
 
 model View {
-  id         Int       @id @default(autoincrement())
-  companyId  Int
-  tableId    Int
-  name       String
-  slug       String
-  config     Json
-  isEnabled  Boolean   @default(true)
-  order      Int       @default(0)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  company    Company   @relation(fields: [companyId], references: [id])
-  table      TableMeta @relation("TableViews", fields: [tableId], references: [id], onDelete: Cascade)
+  id          Int              @id @default(autoincrement())
+  companyId   Int
+  tableId     Int
+  name        String
+  slug        String
+  config      Json
+  isEnabled   Boolean          @default(true)
+  order       Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  table       TableMeta        @relation("TableViews", fields: [tableId], references: [id], onDelete: Cascade)
   refreshLogs ViewRefreshLog[]
 
   @@unique([tableId, slug])
   @@index([companyId])
-  @@index([tableId])
   @@index([tableId, order])
+  @@index([tableId, companyId, isEnabled]) // For getEnabledViewsForTable filtered query
+  @@index([companyId, isEnabled, order, createdAt]) // Dashboard views query (filter + sort)
 }
-
 
 model Record {
   id          Int          @id @default(autoincrement())
@@ -311,8 +576,8 @@ model Record {
   data        Json
   createdBy   Int?
   updatedBy   Int?
-  dialedById  Int?         // User who made the last direct dial call
-  dialedAt    DateTime?    // When the direct dial was made
+  dialedById  Int? // User who made the last direct dial call
+  dialedAt    DateTime? // When the direct dial was made
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   attachments Attachment[]
@@ -321,32 +586,39 @@ model Record {
   updater     User?        @relation("UpdatedBy", fields: [updatedBy], references: [id])
   dialedBy    User?        @relation("DialedBy", fields: [dialedById], references: [id])
   table       TableMeta    @relation("TableRecords", fields: [tableId], references: [id])
-  company     Company      @relation(fields: [companyId], references: [id])
-  
-  files       File[]
-  statusDurations StatusDuration[]
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  files               File[]
+  statusDurations     StatusDuration[]
   multiEventDurations MultiEventDuration[]
-  automationLogs  AutomationLog[]
-  
+  automationLogs      AutomationLog[]
+
   @@index([companyId])
   @@index([tableId, companyId, createdAt(sort: Desc)]) // Composite index for table pagination
-  @@index([tableId, companyId])                        // For record filtering
+  @@index([tableId, companyId]) // For record filtering
+  @@index([tableId, id(sort: Desc)]) // Cursor-based pagination by ID within a table
 }
 
 model Attachment {
   id          Int      @id @default(autoincrement())
+  companyId   Int
   recordId    Int
   filename    String
   url         String
   size        Int
-  displayName String?  // Optional custom display name for links
+  displayName String? // Optional custom display name for links
   uploadedBy  Int
   uploadedAt  DateTime @default(now())
   record      Record   @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([recordId])
+  @@index([uploadedBy])
+  @@index([companyId])
 }
 
 model AuditLog {
-  id        Int      @id @default(autoincrement())
+  id        BigInt   @id @default(autoincrement())
   companyId Int
   recordId  Int?
   userId    Int?
@@ -354,39 +626,42 @@ model AuditLog {
   action    String
   diffJson  Json?
   timestamp DateTime @default(now())
-  company   Company  @relation(fields: [companyId], references: [id])
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   record    Record?  @relation(fields: [recordId], references: [id], onDelete: SetNull)
   user      User?    @relation(fields: [userId], references: [id])
 
   @@index([companyId])
+  @@index([companyId, timestamp]) // For data retention cleanup queries
   @@index([recordId, action, timestamp])
-  @@index([taskId, action, timestamp])
+  @@index([taskId, companyId, action, timestamp(sort: Desc)])
 }
 
 model Task {
-  id          String    @id @default(cuid())
-  companyId   Int
-  title       String
-  description String?
-  status      String
-  assigneeId  Int?
-  assignee    User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
-  priority    String?
-  dueDate     DateTime?
-  tags        String[]
+  id                     String    @id @default(cuid())
+  companyId              Int
+  title                  String
+  description            String?
+  status                 TaskStatus
+  assigneeId             Int?
+  assignee               User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  priority               TaskPriority?
+  dueDate                DateTime?
+  tags                   String[]
   duration_status_change String? // Legacy field, kept for safety or can be removed if fully migrated
-  creatorId   Int?
-  creator     User?     @relation("TaskCreator", fields: [creatorId], references: [id])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  
-  statusDurations StatusDuration[]
-  multiEventDurations MultiEventDuration[]
-  taskSheetItems  TaskSheetItem[]
-  company     Company   @relation(fields: [companyId], references: [id])
+  creatorId              Int?
+  creator                User?     @relation("TaskCreator", fields: [creatorId], references: [id])
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
-  @@index([companyId])
-  @@index([companyId, assigneeId, createdAt(sort: Desc)]) // Issue 34: For getTasks query
+  statusDurations     StatusDuration[]
+  multiEventDurations MultiEventDuration[]
+  taskSheetItems      TaskSheetItem[]
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, assigneeId, createdAt(sort: Desc)])
+  @@index([companyId, status])
+  @@index([companyId, status, updatedAt]) // For goal date-range queries on tasks
+  @@index([companyId, createdAt(sort: Desc)])
 }
 
 model CalendarEvent {
@@ -399,12 +674,12 @@ model CalendarEvent {
   color       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  company     Company  @relation(fields: [companyId], references: [id])
-  
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   automationRules AutomationRule[]
   automationLogs  AutomationLog[]
 
-  @@index([companyId])
+  @@index([companyId, startTime, endTime])
 }
 
 model Client {
@@ -413,73 +688,88 @@ model Client {
   name            String
   email           String?
   phone           String?
-  company         String?
+  businessName    String?
   notes           String?
+  deletedAt       DateTime? // P3: Soft delete for audit trail
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
   oneTimePayments OneTimePayment[]
   paymentMethods  PaymentMethodInternal[]
   retainers       Retainer[]
   transactions    Transaction[]
-  companyRelation Company                 @relation(fields: [companyId], references: [id])
+  companyRelation Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
   quotes          Quote[]
   tickets         Ticket[]
   financeRecords  FinanceRecord[]
-  
+
   @@index([companyId])
+  @@index([companyId, createdAt]) // For CUSTOMERS goal date-range queries
 }
 
 model Retainer {
   id          Int       @id @default(autoincrement())
   clientId    Int
+  companyId   Int // Denormalized from Client.companyId — eliminates JOIN for goal queries
   title       String
   amount      Decimal   @db.Decimal(10, 2)
-  frequency   String
+  frequency   RetainerFrequency
   startDate   DateTime
   nextDueDate DateTime?
-  status      String
+  status      RetainerStatus
   notes       String?
+  deletedAt   DateTime? // P3: Soft delete for audit trail
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   client      Client    @relation(fields: [clientId], references: [id])
-  
-  @@index([clientId]) // Foreign key index for client lookups
+
+  @@index([clientId, status]) // For retainer goal calculations (also covers plain clientId lookups)
+  @@index([companyId, createdAt(sort: Desc)]) // For analytics date-range queries via fetchViewSourceData
+  @@index([companyId, status]) // For goal queries without JOIN
 }
 
 model OneTimePayment {
   id        Int       @id @default(autoincrement())
   clientId  Int
+  companyId Int // Denormalized from Client.companyId — eliminates JOIN for goal queries
   title     String
   amount    Decimal   @db.Decimal(10, 2)
   dueDate   DateTime
   paidDate  DateTime?
-  status    String
+  status    PaymentStatus
   notes     String?
+  deletedAt DateTime? // P3: Soft delete for audit trail
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   client    Client    @relation(fields: [clientId], references: [id])
-  
-  @@index([clientId]) // Foreign key index for client lookups
+
+  @@index([clientId, status, paidDate]) // For revenue goal calculations (also covers plain clientId lookups)
+  @@index([companyId, createdAt(sort: Desc)]) // For analytics date-range queries via fetchViewSourceData
+  @@index([companyId, status, paidDate]) // For goal queries without JOIN
 }
 
 model Transaction {
   id          Int       @id @default(autoincrement())
   clientId    Int
-  relatedType String
+  companyId   Int // Denormalized from Client.companyId — eliminates JOIN for goal queries
+  relatedType TransactionRelatedType
   relatedId   Int
   amount      Decimal   @db.Decimal(10, 2)
   attemptedBy Int?
   attemptDate DateTime  @default(now())
   paidDate    DateTime?
-  status      String
+  status      PaymentStatus
   receiptFile String?
   notes       String?
+  deletedAt   DateTime? // P3: Soft delete for audit trail
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   user        User?     @relation(fields: [attemptedBy], references: [id])
   client      Client    @relation(fields: [clientId], references: [id])
-  
-  @@index([clientId]) // Foreign key index for client lookups
+
+  @@index([clientId, status, paidDate]) // For revenue goal calculations (also covers plain clientId lookups)
+  @@index([companyId, createdAt(sort: Desc)]) // For analytics date-range queries via fetchViewSourceData
+  @@index([companyId, status, paidDate]) // For goal queries without JOIN
+  @@index([attemptedBy])
 }
 
 model PaymentMethodInternal {
@@ -490,182 +780,189 @@ model PaymentMethodInternal {
   note       String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  client     Client   @relation(fields: [clientId], references: [id])
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade) // P8: Cascade on client delete
+
+  @@index([clientId]) // P9: Missing FK index for join performance
 }
 
 // NEW TABLE FOR DURATION TRACKING
 model StatusDuration {
-  id               Int            @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-  companyId        Int
-  company          Company        @relation(fields: [companyId], references: [id])
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   automationRuleId Int
   automationRule   AutomationRule @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
 
-  recordId         Int?
-  record           Record?        @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  recordId Int?
+  record   Record? @relation(fields: [recordId], references: [id], onDelete: Cascade)
 
-  taskId           String?
-  task             Task?          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
-  durationSeconds  Int
-  durationString   String // For display: "Xd Yh Zm Qs"
+  durationSeconds Int
+  durationString  String // For display: "Xd Yh Zm Qs"
 
-  fromValue        String?
-  toValue          String?
+  fromValue String?
+  toValue   String?
 
-  createdAt        DateTime       @default(now())
+  createdAt DateTime @default(now())
 
   @@index([companyId])
-  @@index([automationRuleId])
+  // @@index([automationRuleId]) — removed: redundant, covered by @@index([automationRuleId, createdAt(sort: Desc)]) leftmost prefix
+  @@index([automationRuleId, createdAt(sort: Desc)]) // Covers analytics calculateRuleStats with sort
   @@index([recordId])
+  @@index([taskId])
 }
 
 // TABLE FOR MULTI-EVENT DURATION TRACKING
 model MultiEventDuration {
-  id               Int            @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-  companyId        Int
-  company          Company        @relation(fields: [companyId], references: [id])
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   automationRuleId Int
   automationRule   AutomationRule @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
 
-  recordId         Int?
-  record           Record?        @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  recordId Int?
+  record   Record? @relation(fields: [recordId], references: [id], onDelete: Cascade)
 
-  taskId           String?
-  task             Task?          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   // Stores the event chain as JSON:
   // [{ eventName: "ליד נוצר", timestamp: "...", value: "..." }, ...]
-  eventChain       Json
+  eventChain Json
 
   // Stores the calculated deltas between events as JSON:
   // [{ from: "ליד נוצר", to: "בטיפול", durationSeconds: 3600, durationString: "1h" }, ...]
-  eventDeltas      Json
+  eventDeltas Json
 
   // Overall metrics
   totalDurationSeconds Int
   totalDurationString  String
 
   // Weighted metric (if applicable)
-  weightedScore    Float?
+  weightedScore Float?
 
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([automationRuleId, recordId]) // P99: Prevent duplicate durations per rule+record
   @@index([companyId])
-  @@index([automationRuleId])
+  // @@index([automationRuleId]) — removed: redundant, covered by @@unique([automationRuleId, recordId]) and @@index([automationRuleId, createdAt(sort: Desc)]) leftmost prefix
+  @@index([automationRuleId, createdAt(sort: Desc)]) // Covers analytics calculateRuleStats with sort
   @@index([recordId])
   @@index([taskId])
   @@index([automationRuleId, recordId, createdAt(sort: Desc)])
 }
 
 model AnalyticsView {
-  id          Int      @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   companyId   Int
   title       String
-  type        String   // 'COUNT', 'AVERAGE', 'SUM', 'CONVERSION', 'DISTRIBUTION'
+  type        AnalyticsViewType
   description String?
-  config      Json     // Stores: tableId, field, filter, groupBy, etc.
-  order       Int      @default(0)
-  color       String?  @default("bg-white")
-  
+  config      Json // Stores: tableId, field, filter, groupBy, etc.
+  order       Int     @default(0)
+  color       String? @default("bg-white")
+
   cachedStats  Json?
   lastCachedAt DateTime?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  folderId    Int?
-  folder      ViewFolder? @relation(fields: [folderId], references: [id])
-  company     Company     @relation(fields: [companyId], references: [id])
-  
+  folderId Int?
+  folder   ViewFolder? @relation(fields: [folderId], references: [id])
+  company  Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   @@index([companyId])
+  @@index([companyId, type]) // Covers count groupBy and type-filtered queries
 }
 
 model ViewFolder {
   id        Int      @id @default(autoincrement())
   companyId Int
   name      String
-  type      String   @default("ANALYTICS") // "ANALYTICS" | "AUTOMATION"
+  type      ViewFolderType @default(ANALYTICS)
   order     Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  analyticsViews AnalyticsView[]
+  analyticsViews  AnalyticsView[]
   automationRules AutomationRule[]
 
-  company        Company        @relation(fields: [companyId], references: [id])
-  
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   @@index([companyId])
 }
 
 model Workflow {
-  id          Int             @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   companyId   Int
   name        String
   description String?
-  color       String?         @default("blue")
-  icon        String?         @default("GitBranch")
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  
-  stages      WorkflowStage[]
-  instances   WorkflowInstance[]
-  company     Company         @relation(fields: [companyId], references: [id])
+  color       String?  @default("blue")
+  icon        String?  @default("GitBranch")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stages    WorkflowStage[]
+  instances WorkflowInstance[]
+  company   Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
 }
 
 model WorkflowStage {
-  id          Int      @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   workflowId  Int
   name        String
   description String?
   color       String?
   icon        String?
-  order       Int      @default(0)
-  
-  details     Json?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  instances   WorkflowInstance[] // Relation to instances currently at this stage
+  order       Int     @default(0)
 
-  @@index([workflowId])
+  details Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workflow  Workflow           @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  instances WorkflowInstance[] // Relation to instances currently at this stage
+
+  @@unique([workflowId, order])
 }
 
 model WorkflowInstance {
-  id              Int      @id @default(autoincrement())
-  companyId       Int
-  workflowId      Int
-  name            String   // Specific name for this execution (e.g. "Onboarding Client X")
-  status          String   @default("active") // active, completed
-  
-  currentStageId  Int?
-  currentStage    WorkflowStage? @relation(fields: [currentStageId], references: [id])
-  
-  creatorId       Int
-  creator         User     @relation("InstanceCreator", fields: [creatorId], references: [id])
-  
-  assigneeId      Int?
-  assignee        User?    @relation("InstanceAssignee", fields: [assigneeId], references: [id])
-  
-  completedStages Json     @default("[]") // Array of stage IDs that are done
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  workflow        Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  company         Company  @relation(fields: [companyId], references: [id])
+  id         Int    @id @default(autoincrement())
+  companyId  Int
+  workflowId Int
+  name       String // Specific name for this execution (e.g. "Onboarding Client X")
+  status     WorkflowInstanceStatus @default(active)
 
-  @@index([companyId])
+  currentStageId Int?
+  currentStage   WorkflowStage? @relation(fields: [currentStageId], references: [id])
+
+  creatorId Int
+  creator   User @relation("InstanceCreator", fields: [creatorId], references: [id])
+
+  assigneeId Int?
+  assignee   User? @relation("InstanceAssignee", fields: [assigneeId], references: [id])
+
+  completedStages Json @default("[]") // Array of stage IDs that are done
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, updatedAt(sort: Desc)])
+  @@index([companyId, status])
   @@index([workflowId])
 }
 
@@ -675,190 +972,226 @@ model Product {
   name        String
   description String?
   sku         String?
-  type        String   @default("SERVICE") // SERVICE, PRODUCT, PACKAGE
+  type        ProductType @default(SERVICE)
   price       Decimal  @db.Decimal(10, 2)
   cost        Decimal? @db.Decimal(10, 2)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
-  company     Company  @relation(fields: [companyId], references: [id])
-  quoteItems  QuoteItem[]
 
-  @@index([companyId])
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  quoteItems QuoteItem[]
+
+  @@index([companyId, name])
 }
 
 model Quote {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   companyId   Int
-  quoteNumber Int?     // Incremental number per company (e.g., 00001, 00002)
-  
-  clientId        Int?
-  clientName      String
-  clientEmail     String?
-  clientPhone     String?
-  clientTaxId     String? // H.P.
-  clientAddress   String?
-  
-  total           Decimal  @db.Decimal(10, 2)
-  status          String   @default("DRAFT") // DRAFT, SENT, ACCEPTED, REJECTED
-  pdfUrl          String?  // Cached PDF URL
-  shareToken      String?  @unique // Random token for public share links (validated on public download)
-  isTrashed       Boolean  @default(false)   // Soft delete - move to trash
-  
-  validUntil      DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  quoteNumber Int? // Incremental number per company (e.g., 00001, 00002)
 
-  isPriceWithVat  Boolean  @default(false) // Whether unit prices include VAT
-  title           String?  // Optional title for the quotation
-  currency        String   @default("ILS")  // ILS, USD, EUR, GBP
-  exchangeRate    Decimal? @db.Decimal(10, 4) // Exchange rate at time of creation
-  discountType    String?  // "percent" or "fixed"
-  discountValue   Decimal? @db.Decimal(10, 2) // Discount amount (% or fixed in display currency)
+  clientId      Int?
+  clientName    String
+  clientEmail   String?
+  clientPhone   String?
+  clientTaxId   String? // H.P.
+  clientAddress String?
 
-  company         Company  @relation(fields: [companyId], references: [id])
-  client          Client?  @relation(fields: [clientId], references: [id])
-  items           QuoteItem[]
+  total      Decimal @db.Decimal(10, 2)
+  status     QuoteStatus @default(DRAFT)
+  pdfUrl     String? // Cached PDF URL
+  shareToken String? @unique // Random token for public share links (validated on public download)
+  isTrashed  Boolean @default(false) // Soft delete - move to trash
+
+  validUntil DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  isPriceWithVat Boolean  @default(false) // Whether unit prices include VAT
+  title          String? // Optional title for the quotation
+  currency       Currency @default(ILS)
+  exchangeRate   Decimal? @db.Decimal(10, 4) // Exchange rate at time of creation
+  discountType   String? // "percent" or "fixed"
+  discountValue  Decimal? @db.Decimal(10, 2) // Discount amount (% or fixed in display currency)
+
+  company Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client  Client?     @relation(fields: [clientId], references: [id])
+  items   QuoteItem[]
 
   @@unique([companyId, quoteNumber]) // Ensure unique quote number per company
-  @@index([companyId])
   @@index([companyId, isTrashed])
   @@index([companyId, isTrashed, createdAt(sort: Desc)]) // For listing non-trashed quotes
 }
 
 model QuoteItem {
-  id        Int      @id @default(autoincrement())
+  id        Int    @id @default(autoincrement())
   quoteId   String
   productId Int?
-  
+
   description String
   quantity    Int      @default(1)
   unitPrice   Decimal  @db.Decimal(10, 2)
   unitCost    Decimal? @db.Decimal(10, 2)
 
-  quote     Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  product   Product? @relation(fields: [productId], references: [id])
+  quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([quoteId])
+  @@index([productId])
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketType {
+  SERVICE
+  COMPLAINT
+  RETENTION
+  OTHER
+}
+
+enum SlaBreachType {
+  RESPONSE
+  RESOLVE
+}
+
+enum SlaBreachStatus {
+  PENDING
+  REVIEWED
+  ACKNOWLEDGED
 }
 
 model Ticket {
-  id          Int      @id @default(autoincrement())
+  id          Int            @id @default(autoincrement())
   companyId   Int
   title       String
   description String?
-  status      String   @default("OPEN") // OPEN, IN_PROGRESS, WAITING, RESOLVED, CLOSED
-  priority    String   @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
-  type        String   @default("SERVICE") // SERVICE, COMPLAINT, RETENTION, OTHER
-  
-  clientId    Int?
-  client      Client?  @relation(fields: [clientId], references: [id])
-  
-  assigneeId  Int?
-  assignee    User?    @relation("TicketAssignee", fields: [assigneeId], references: [id])
-  
-  creatorId   Int
-  creator     User     @relation("TicketCreator", fields: [creatorId], references: [id])
-  
-  tags        String[]
-  
-  slaDueDate          DateTime?  // Deadline for resolving the ticket
-  slaResponseDueDate  DateTime?  // Deadline for first response (move to IN_PROGRESS)
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  type        TicketType     @default(SERVICE)
 
-  comments    TicketComment[]
-  breaches    SlaBreach[]
+  clientId Int?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  assigneeId Int?
+  assignee   User? @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  creatorId Int
+  creator   User @relation("TicketCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+
+  tags String[]
+
+  slaDueDate         DateTime? // Deadline for resolving the ticket
+  slaResponseDueDate DateTime? // Deadline for first response (move to IN_PROGRESS)
+
+  comments     TicketComment[]
+  breaches     SlaBreach[]
   activityLogs TicketActivityLog[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  company     Company  @relation(fields: [companyId], references: [id])
-  
-  @@index([companyId])
-  @@index([companyId, status])       // For filtering tickets by status
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, status, updatedAt(sort: Desc)])
   @@index([clientId])
   @@index([assigneeId])
-  @@index([status, slaResponseDueDate]) // Issue 28: SLA scan queries
-  @@index([status, slaDueDate])         // Issue 28: SLA scan queries
+  @@index([status, slaResponseDueDate])
+  @@index([status, slaDueDate])
+  @@index([companyId, status, slaResponseDueDate]) // P4: Optimal index for per-company SLA scan
+  @@index([companyId, status, slaDueDate]) // P4: Optimal index for per-company SLA scan
 }
 
 model TicketComment {
-  id        Int      @id @default(autoincrement())
-  ticketId  Int
-  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
-  
-  content   String
+  id       Int    @id @default(autoincrement())
+  ticketId Int
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  content    String
   isInternal Boolean @default(false)
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
-  @@index([ticketId, createdAt(sort: Desc)]) // For loading comments in order
+
+  @@index([ticketId, createdAt(sort: Desc)])
+  @@index([userId])
 }
 
 // Tracks all changes made to tickets for audit trail
 model TicketActivityLog {
-  id        Int      @id @default(autoincrement())
-  ticketId  Int
-  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
-  
-  fieldName   String   // e.g., "status", "priority", "type", "assignee", "client"
-  fieldLabel  String   // Hebrew label for display, e.g., "סטטוס", "עדיפות"
-  oldValue    String?  // Previous value (as string)
-  newValue    String?  // New value (as string)
-  oldLabel    String?  // Hebrew label for old value
-  newLabel    String?  // Hebrew label for new value
-  
+  id       Int    @id @default(autoincrement())
+  ticketId Int
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  fieldName  String
+  fieldLabel String
+  oldValue   String?
+  newValue   String?
+  oldLabel   String?
+  newLabel   String?
+
   createdAt DateTime @default(now())
-  
-  @@index([ticketId])
+
+  @@index([ticketId, createdAt(sort: Desc)])
   @@index([userId])
-  @@index([createdAt])
 }
 
 model SlaPolicy {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
-  name        String
-  description String?
-  priority    String   // Defines which priority this SLA applies to
-  responseTimeMinutes Int // Target response time
-  resolveTimeMinutes  Int // Target resolution time
-  
-  company     Company  @relation(fields: [companyId], references: [id])
-  
+  id                  Int            @id @default(autoincrement())
+  companyId           Int
+  name                String
+  description         String?
+  priority            TicketPriority
+  responseTimeMinutes Int
+  resolveTimeMinutes  Int
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   @@unique([companyId, priority])
 }
 
 model SlaBreach {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
-  ticketId    Int
-  
-  priority    String   // Priority at the time of breach
-  slaDueDate  DateTime // Expected time that was missed
-  breachType  String   @default("RESOLVE") // RESPONSE or RESOLVE
-  breachedAt  DateTime @default(now())
-  
-  status      String   @default("PENDING") // PENDING, REVIEWED, ACKNOWLEDGED
-  notes       String?
-  
-  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  company     Company  @relation(fields: [companyId], references: [id])
-  
-  @@unique([ticketId, breachType, slaDueDate]) // P100: Prevent duplicate SLA breach entries
-  @@index([companyId])
+  id        Int @id @default(autoincrement())
+  companyId Int
+  ticketId  Int
+
+  priority   String // Priority at the time of breach (snapshot)
+  slaDueDate DateTime // Expected time that was missed
+  breachType SlaBreachType @default(RESOLVE)
+  breachedAt DateTime      @default(now())
+
+  status SlaBreachStatus @default(PENDING)
+  notes  String?
+
+  ticket  Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, breachType, slaDueDate])
+  @@index([companyId, status])
+  @@index([companyId, breachedAt(sort: Desc)])
   @@index([ticketId])
-  @@index([breachedAt])
 }
 
 model Folder {
-  id        Int      @id @default(autoincrement())
+  id        Int    @id @default(autoincrement())
   companyId Int
   parentId  Int?
   name      String
@@ -866,36 +1199,36 @@ model Folder {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  parent    Folder?  @relation("FolderHierarchy", fields: [parentId], references: [id])
-  children  Folder[] @relation("FolderHierarchy")
-  files     File[]
-  company   Company  @relation(fields: [companyId], references: [id])
+  parent   Folder?  @relation("FolderHierarchy", fields: [parentId], references: [id])
+  children Folder[] @relation("FolderHierarchy")
+  files    File[]
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([parentId])
 }
 
 model File {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
-  folderId    Int?
+  id        Int  @id @default(autoincrement())
+  companyId Int
+  folderId  Int?
 
   name        String
-  displayName String?  // Optional custom display name
-  source      String?  // Origin label (e.g. "לוגו של הגדרות עסק (הצעות מחיר)")
+  displayName String? // Optional custom display name
+  source      String? // Origin label (e.g. "לוגו של הגדרות עסק (הצעות מחיר)")
   url         String
-  key         String   
-  size        Int      
-  type        String   
+  key         String
+  size        Int
+  type        String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  folder    Folder?  @relation(fields: [folderId], references: [id])
-  company   Company  @relation(fields: [companyId], references: [id])
+  folder  Folder? @relation(fields: [folderId], references: [id])
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  recordId  Int?
-  record    Record?  @relation(fields: [recordId], references: [id], onDelete: SetNull)
+  recordId Int?
+  record   Record? @relation(fields: [recordId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
   @@index([folderId])
@@ -904,210 +1237,207 @@ model File {
 
 // Goal Planning Module
 model Goal {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
-  
-  name        String                    // Goal name (e.g., "Monthly Sales Target")
-  metricType  String                    // SALES, REVENUE, CUSTOMERS, TASKS, CLOSING_RATIO, RETAINERS, QUOTES
-  targetType  String   @default("sum")  // 'count' (quantity) or 'sum' (monetary/value)
-  targetValue Decimal  @db.Decimal(15, 2)
-  
+  id        Int @id @default(autoincrement())
+  companyId Int
+
+  name        String // Goal name (e.g., "Monthly Sales Target")
+  metricType  GoalMetricType
+  targetType  GoalTargetType @default(SUM)
+  targetValue Decimal @db.Decimal(15, 2)
+
   // Flexible filters stored as JSON
   // Examples: { clientId: 5 }, { frequency: "MONTHLY" }, { status: "DONE" }
-  filters     Json?    @default("{}")
+  filters Json? @default("{}")
 
-  // Legacy fields (kept for safety until migration, but filters json replaces them)
-  tableId     Int?
-  productId   Int?
-  
   // Time period
-  periodType  String   @default("MONTHLY")  // MONTHLY, QUARTERLY, YEARLY, CUSTOM
-  startDate   DateTime
-  endDate     DateTime
-  
+  periodType GoalPeriodType @default(MONTHLY)
+  startDate  DateTime
+  endDate    DateTime
+
   // Thresholds for alerts
-  warningThreshold   Int @default(70)   // % - Alert when below this
-  criticalThreshold  Int @default(50)   // % - Critical alert when below this
-  
-  isActive    Boolean  @default(true)
-  isArchived  Boolean  @default(false)
-  order       Int      @default(0)
-  notes       String?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  company     Company  @relation(fields: [companyId], references: [id])
-  
-  @@index([companyId])
+  warningThreshold  Int @default(70) // % - Alert when below this
+  criticalThreshold Int @default(50) // % - Critical alert when below this
+
+  isActive   Boolean @default(true)
+  isArchived Boolean @default(false)
+  order      Int     @default(0)
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, isArchived, order]) // Active goals listing (ORDER BY order)
+  @@index([companyId, isArchived, endDate]) // Archived goals listing (ORDER BY endDate)
   @@index([companyId, isActive, endDate]) // For listing active goals sorted by end date
-  @@index([metricType])
-  @@index([startDate, endDate])
-  @@index([companyId, order]) // For sorting by custom order
 }
 
 // DEDICATED FINANCE MODULE
 model FinanceRecord {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
-  
-  title       String   // e.g. "Google Ads", "Consulting Fee"
-  amount      Decimal  @db.Decimal(15, 2)
-  type        String   // 'INCOME' | 'EXPENSE'
-  category    String?  // 'Marketing', 'Office', 'Sales', 'Payroll'
-  
-  date        DateTime @default(now())
-  status      String   @default("COMPLETED") // PENDING, COMPLETED, CANCELLED
-  
+  id        Int @id @default(autoincrement())
+  companyId Int
+
+  title    String // e.g. "Google Ads", "Consulting Fee"
+  amount   Decimal @db.Decimal(15, 2)
+  type     FinanceRecordType
+  category String? // 'Marketing', 'Office', 'Sales', 'Payroll'
+
+  date   DateTime            @default(now())
+  status FinanceRecordStatus @default(COMPLETED)
+
   // Optional relations for context
-  clientId    Int?
-  
+  clientId Int?
+
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime? // P3: Soft delete for audit trail
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  company     Company  @relation(fields: [companyId], references: [id])
-  client      Client?  @relation(fields: [clientId], references: [id])
-  
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client  Client? @relation(fields: [clientId], references: [id])
+
   // Sync fields
-  syncRuleId  Int?
-  originId    String?  // ID of the original record to prevent duplicates
-  syncRule    FinanceSyncRule? @relation(fields: [syncRuleId], references: [id])
+  syncRuleId Int?
+  originId   String? // ID of the original record to prevent duplicates
+  syncRule   FinanceSyncRule? @relation(fields: [syncRuleId], references: [id])
 
-  @@index([companyId])
-  @@index([date])
-  @@index([type])
   @@unique([syncRuleId, originId]) // Prevent duplicate imports from same rule
+  @@index([companyId])
+  @@index([companyId, type, date]) // Composite for finance goal queries (replaces separate date/type indexes)
+  @@index([companyId, originId]) // For sync GC deleteMany + fixed expense startsWith prefix lookups
+  @@index([clientId])
 }
 
 model FinanceSyncRule {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
-  name        String
-  targetType  String   // 'INCOME' | 'EXPENSE'
-  
-  sourceType  String   // 'TABLE', 'TRANSACTIONS', 'RETAINERS'
-  sourceId    Int?     // If TABLE, the tableId
-  
-  // Mapping config: { amountField: "key1", dateField: "key2", titleField: "key3", categoryValue: "Sales" }
-  fieldMapping Json    
-  
-  lastRunAt   DateTime?
-  isActive    Boolean  @default(true)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  company     Company  @relation(fields: [companyId], references: [id])
-  records     FinanceRecord[]
-  syncJobs    FinanceSyncJob[]
+  id         Int    @id @default(autoincrement())
+  companyId  Int
+  name       String
+  targetType FinanceRecordType // INCOME | EXPENSE
 
+  sourceType FinanceSyncSourceType
+  sourceId   Int? // If TABLE, the tableId
+
+  // Mapping config: { amountField: "key1", dateField: "key2", titleField: "key3", categoryValue: "Sales" }
+  fieldMapping Json
+
+  lastRunAt DateTime?
+  isActive  Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  records  FinanceRecord[]
+  syncJobs FinanceSyncJob[]
+
+  @@unique([companyId, sourceType, sourceId]) // Prevent duplicate sync rules
   @@index([companyId])
 }
 
 model FinanceSyncJob {
-  id          String   @id @default(cuid())
-  companyId   Int
-  syncRuleId  Int
-  status      String   @default("QUEUED") // QUEUED, RUNNING, COMPLETED, FAILED
-  summary     Json?    // { scanned, created, updated, skippedExists, skippedError, errors[] }
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  companyId  Int
+  syncRuleId Int
+  status     FinanceSyncJobStatus @default(QUEUED)
+  summary    Json? // { scanned, created, updated, skippedExists, skippedError, errors[] }
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  company     Company          @relation(fields: [companyId], references: [id])
-  syncRule    FinanceSyncRule   @relation(fields: [syncRuleId], references: [id])
+  company  Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  syncRule FinanceSyncRule @relation(fields: [syncRuleId], references: [id])
 
-  @@index([companyId, syncRuleId])
-  @@index([status])
+  @@index([syncRuleId, companyId, status]) // Covers dedup check (syncRuleId + companyId + status IN) and replaces separate indexes
 }
 
 model FixedExpense {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
-  
-  title       String
-  amount      Decimal  @db.Decimal(10, 2)
-  frequency   String   // MONTHLY, YEARLY, WEEKLY, ONE_TIME
-  payDay      Int?     // Day of month (1-31)
-  
+  id        Int @id @default(autoincrement())
+  companyId Int
+
+  title     String
+  amount    Decimal @db.Decimal(10, 2)
+  frequency FixedExpenseFrequency
+  payDay    Int? // Day of month (1-31)
+
   category    String?
   description String?
-  status      String   @default("ACTIVE") // ACTIVE, PAUSED
+  status      FixedExpenseStatus @default(ACTIVE)
   startDate   DateTime @default(now())
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  company     Company  @relation(fields: [companyId], references: [id])
-  
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   @@index([companyId])
 }
 
 // TASK SHEETS - Daily/Weekly Task Pages for Employees
 model TaskSheet {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
-  
-  title       String               // e.g., "Daily Tasks - Sales Team"
+  id        Int @id @default(autoincrement())
+  companyId Int
+
+  title       String // e.g., "Daily Tasks - Sales Team"
   description String?
-  type        String   @default("DAILY") // DAILY, WEEKLY
-  
-  assigneeId  Int                  // The employee this sheet is assigned to
-  assignee    User     @relation("TaskSheetAssignee", fields: [assigneeId], references: [id])
-  
-  createdById Int                  // Admin who created the sheet
-  createdBy   User     @relation("TaskSheetCreator", fields: [createdById], references: [id])
-  
-  validFrom   DateTime @default(now())   // When this sheet becomes active
-  validUntil  DateTime?                   // Optional expiration
-  
-  isActive    Boolean  @default(true)
-  
-  items       TaskSheetItem[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  company     Company  @relation(fields: [companyId], references: [id])
-  
-  @@index([companyId])
-  @@index([assigneeId])
+  type        TaskSheetType @default(DAILY)
+
+  assigneeId Int // The employee this sheet is assigned to
+  assignee   User @relation("TaskSheetAssignee", fields: [assigneeId], references: [id])
+
+  createdById Int // Admin who created the sheet
+  createdBy   User @relation("TaskSheetCreator", fields: [createdById], references: [id])
+
+  validFrom  DateTime  @default(now()) // When this sheet becomes active
+  validUntil DateTime? // Optional expiration
+
+  isActive Boolean @default(true)
+
+  items TaskSheetItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, isActive, createdAt(sort: Desc)])
+  @@index([companyId, assigneeId, isActive, validFrom])
   @@index([createdById])
 }
 
 model TaskSheetItem {
-  id          Int      @id @default(autoincrement())
-  sheetId     Int
-  
-  title       String               // Task item title
+  id      Int @id @default(autoincrement())
+  sheetId Int
+
+  title       String // Task item title
   description String?
-  
-  priority    String   @default("NORMAL") // URGENT, HIGH, NORMAL, LOW, OPPORTUNITY
-  category    String?              // Custom category like "דחוף", "הזדמנות", "ממתין"
-  
-  order       Int      @default(0) // Display order within the sheet
-  
-  isCompleted Boolean  @default(false)
+
+  priority TaskSheetItemPriority @default(NORMAL)
+  category String? // Custom category like "דחוף", "הזדמנות", "ממתין"
+
+  order Int @default(0) // Display order within the sheet
+
+  isCompleted Boolean   @default(false)
   completedAt DateTime?
-  
-  dueTime     String?              // Optional time like "09:00" for daily tasks
-  
-  notes       String?              // Optional notes when completing
-  
+
+  dueTime String? // Optional time like "09:00" for daily tasks
+
+  notes String? // Optional notes when completing
+
   // Link to existing task (optional)
   linkedTaskId String?
-  linkedTask   Task?    @relation(fields: [linkedTaskId], references: [id], onDelete: SetNull)
-  
+  linkedTask   Task?   @relation(fields: [linkedTaskId], references: [id], onDelete: SetNull)
+
   // Automation actions to run when item is completed
   // JSON format: [{ actionType: "UPDATE_RECORD" | "CREATE_TASK" | "CREATE_FINANCE" | "SEND_NOTIFICATION", config: {...} }]
-  onCompleteActions Json?  @default("[]")
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  sheet       TaskSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
-  
+  onCompleteActions Json? @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sheet TaskSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+
   @@index([sheetId])
+  @@index([sheetId, isCompleted])
   @@index([linkedTaskId])
 }
 
@@ -1117,269 +1447,270 @@ model TaskSheetItem {
 
 // Department - Organizational unit for grouping workers
 model Department {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
-  
-  name        String               // e.g., "Sales", "Marketing", "Development"
+  id        Int @id @default(autoincrement())
+  companyId Int
+
+  name        String // e.g., "Sales", "Marketing", "Development"
   description String?
-  color       String?  @default("#3B82F6") // For visual identification
-  icon        String?  @default("Building2")
-  
-  managerId   Int?                 // Optional department manager
-  
-  isActive    Boolean  @default(true)
-  
-  workers     Worker[]
+  color       String? @default("#3B82F6") // For visual identification
+  icon        String? @default("Building2")
+
+  managerId Int? // Optional department manager
+  manager   User? @relation("DepartmentManager", fields: [managerId], references: [id], onDelete: SetNull)
+
+  isActive Boolean @default(true)
+
+  workers         Worker[]
   onboardingPaths OnboardingPath[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  company     Company  @relation(fields: [companyId], references: [id])
-  
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   @@index([companyId])
+  @@index([managerId])
 }
 
 // Worker - Employee in the organization
 model Worker {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
-  
+  id        Int @id @default(autoincrement())
+  companyId Int
+
   // Personal Info
-  firstName   String
-  lastName    String
-  email       String?
-  phone       String?
-  avatar      String?              // Profile image URL
-  
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+  avatar    String? // Profile image URL
+
   // Employment Info
   departmentId Int
   department   Department @relation(fields: [departmentId], references: [id])
-  
-  position    String?              // Job title
-  employeeId  String?              // Internal employee number
-  
-  startDate   DateTime  @default(now())
-  endDate     DateTime?            // If employment ended
-  
-  status      String   @default("ONBOARDING") // ONBOARDING, ACTIVE, ON_LEAVE, TERMINATED
-  
+
+  position   String? // Job title
+  employeeId String? // Internal employee number
+
+  startDate DateTime  @default(now())
+  endDate   DateTime? // If employment ended
+
+  status WorkerStatus @default(ONBOARDING)
+
   // Optional link to system user
-  linkedUserId Int?     @unique
-  
+  linkedUserId Int? @unique
+
   // Custom fields as JSON
-  customFields Json?    @default("{}")
-  
-  notes       String?
-  
+  customFields Json? @default("{}")
+
+  notes String?
+
   onboardingProgress WorkerOnboarding[]
   assignedTasks      WorkerTask[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  company     Company  @relation(fields: [companyId], references: [id])
-  
-  @@index([companyId])
-  @@index([departmentId])
-  @@index([status])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, employeeId])
+  @@index([companyId, status, firstName])
+  @@index([companyId, departmentId])
 }
 
 // OnboardingPath - Template for department-specific onboarding
 model OnboardingPath {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
-  
-  name        String               // e.g., "Sales Team Onboarding"
+  id        Int @id @default(autoincrement())
+  companyId Int
+
+  name        String // e.g., "Sales Team Onboarding"
   description String?
-  
-  departmentId Int?                // Optional - specific to department
-  department   Department? @relation(fields: [departmentId], references: [id])
-  
-  isDefault   Boolean  @default(false) // Default path for the department
-  isActive    Boolean  @default(true)
-  
-  estimatedDays Int?               // Expected time to complete
-  
-  steps       OnboardingStep[]
+
+  departmentId Int? // Optional - specific to department
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  isDefault Boolean @default(false) // Default path for the department
+  isActive  Boolean @default(true)
+
+  estimatedDays Int? // Expected time to complete
+
+  steps          OnboardingStep[]
   workerProgress WorkerOnboarding[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  company     Company  @relation(fields: [companyId], references: [id])
-  
-  @@index([companyId])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   @@index([departmentId])
+  @@index([companyId, departmentId, isDefault, isActive])
 }
 
 // OnboardingStep - Individual step in an onboarding path
 model OnboardingStep {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
-  pathId      Int
+  id        Int @id @default(autoincrement())
+  companyId Int
+  pathId    Int
 
-  title       String               // Step name
-  description String?              // Detailed instructions
+  title       String // Step name
+  description String? // Detailed instructions
 
-  type        String   @default("TASK") // TASK, TRAINING, DOCUMENT, MEETING, CHECKLIST
+  type OnboardingStepType @default(TASK)
 
-  order       Int      @default(0) // Display order
+  order Int @default(0) // Display order
 
-  estimatedMinutes Int?            // Expected time to complete
+  estimatedMinutes Int? // Expected time to complete
 
   // For TRAINING type - link to materials
-  resourceUrl String?
-  resourceType String?             // VIDEO, PDF, LINK, INTERNAL
+  resourceUrl  String?
+  resourceType String? // VIDEO, PDF, LINK, INTERNAL
 
   // Required dependencies (step IDs that must be completed first)
-  requiresSteps Int[]  @default([])
+  requiresSteps Int[] @default([])
 
   // Automation when completed
   onCompleteActions Json? @default("[]") // Similar to TaskSheet items
 
-  isRequired  Boolean  @default(true)
+  isRequired Boolean @default(true)
 
   workerProgress WorkerOnboardingStep[]
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  company     Company  @relation(fields: [companyId], references: [id])
-  path        OnboardingPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
+  company Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  path    OnboardingPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
 
-  @@index([companyId])
-  @@index([pathId])
+  @@index([pathId, order])
 }
 
 // WorkerOnboarding - Tracks a worker's progress through an onboarding path
 model WorkerOnboarding {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
+  id        Int @id @default(autoincrement())
+  companyId Int
 
-  workerId    Int
-  worker      Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  workerId Int
+  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
-  pathId      Int
-  path        OnboardingPath @relation(fields: [pathId], references: [id])
+  pathId Int
+  path   OnboardingPath @relation(fields: [pathId], references: [id])
 
-  status      String   @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED, PAUSED
+  status WorkerOnboardingStatus @default(IN_PROGRESS)
 
-  startedAt   DateTime @default(now())
+  startedAt   DateTime  @default(now())
   completedAt DateTime?
 
   stepProgress WorkerOnboardingStep[]
 
-  notes       String?
+  notes String?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  company     Company  @relation(fields: [companyId], references: [id])
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([workerId, pathId])
-  @@index([companyId])
   @@index([workerId])
   @@index([pathId])
 }
 
 // WorkerOnboardingStep - Tracks completion of individual steps
 model WorkerOnboardingStep {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
+  id        Int @id @default(autoincrement())
+  companyId Int
 
   onboardingId Int
   onboarding   WorkerOnboarding @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
 
-  stepId      Int
-  step        OnboardingStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  stepId Int
+  step   OnboardingStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
 
-  status      String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, SKIPPED
+  status WorkerOnboardingStepStatus @default(PENDING)
 
   completedAt DateTime?
   notes       String?
 
   // Score/feedback if it's a training step
-  score       Int?
-  feedback    String?
+  score    Int?
+  feedback String?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  company     Company  @relation(fields: [companyId], references: [id])
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([onboardingId, stepId])
-  @@index([companyId])
   @@index([onboardingId])
   @@index([stepId])
 }
 
 // WorkerTask - Tasks assigned to workers (separate from system Tasks)
 model WorkerTask {
-  id          Int      @id @default(autoincrement())
-  companyId   Int
-  
-  workerId    Int
-  worker      Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  
+  id        Int @id @default(autoincrement())
+  companyId Int
+
+  workerId Int
+  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
   title       String
   description String?
-  
-  priority    String   @default("NORMAL") // URGENT, HIGH, NORMAL, LOW
-  status      String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
-  
+
+  priority WorkerTaskPriority @default(NORMAL)
+  status   WorkerTaskStatus   @default(PENDING)
+
   dueDate     DateTime?
   completedAt DateTime?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  company     Company  @relation(fields: [companyId], references: [id])
-  
-  @@index([companyId])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   @@index([workerId])
+  @@index([companyId, workerId, status])
 }
 
 // NURTURE HUB MODULE
 model NurtureList {
-  id          Int      @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   companyId   Int
-  name        String   // e.g. "Birthday Club", "VIP Clients"
-  slug        String   // e.g. "birthday-club"
+  name        String // e.g. "Birthday Club", "VIP Clients"
+  slug        String // e.g. "birthday-club"
   description String?
 
   subscribers NurtureSubscriber[]
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  company     Company  @relation(fields: [companyId], references: [id])
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, slug])
   @@index([companyId])
 }
 
 model NurtureSubscriber {
-  id            Int      @id @default(autoincrement())
+  id            Int @id @default(autoincrement())
   nurtureListId Int
 
-  name          String
-  email         String?
-  phone         String?
-  
+  name  String
+  email String?
+  phone String?
+
   // Channel preferences - whether to send via each channel
-  emailActive   Boolean  @default(true)
-  phoneActive   Boolean  @default(true)
+  emailActive Boolean @default(true)
+  phoneActive Boolean @default(true)
 
   // Metadata about where this came from
-  sourceType    String?  // 'TABLE', 'MANUAL', 'IMPORT'
-  sourceId      String?  // Record ID or similar
-  sourceTableId Int?     // Table ID when sourceType is 'TABLE'
+  sourceType    String? // 'TABLE', 'MANUAL', 'IMPORT'
+  sourceId      String? // Record ID or similar
+  sourceTableId Int? // Table ID when sourceType is 'TABLE'
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  nurtureList   NurtureList @relation(fields: [nurtureListId], references: [id], onDelete: Cascade)
+  nurtureList NurtureList @relation(fields: [nurtureListId], references: [id], onDelete: Cascade)
 
   @@index([nurtureListId])
   @@index([email])
@@ -1388,103 +1719,100 @@ model NurtureSubscriber {
 
 // Dashboard Widget Configuration - stores user's dashboard layout
 model DashboardWidget {
-  id          String   @id @default(cuid())
-  companyId   Int
-  userId      Int
+  id        String @id @default(cuid())
+  companyId Int
+  userId    Int
 
-  widgetType  String   // 'ANALYTICS' | 'TABLE'
-  referenceId String?  // ID of the analytics view or table view
-  tableId     Int?     // Only for TABLE type widgets
+  widgetType  DashboardWidgetType
+  referenceId String? // ID of the analytics view or table view
+  tableId     Int? // Only for TABLE type widgets
 
-  settings    Json?    // Custom configuration (columns, sort, limit, etc.)
+  settings Json? // Custom configuration (columns, sort, limit, etc.)
 
-  order       Int      @default(0)
+  order Int @default(0)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  company     Company  @relation(fields: [companyId], references: [id])
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  @@index([companyId])
-  @@index([userId])
-  @@index([userId, order])
-}
-
-
-
-model CachedMetric {
-  key       String   @id
-  value     Json
-  updatedAt DateTime @map("updated_at")
-
-  @@map("cached_metrics")
+  @@index([userId, companyId, order]) // Covers getDashboardWidgets + addDashboardWidget
+  @@index([companyId, widgetType]) // Covers background job query
 }
 
 model ViewRefreshLog {
   id        Int      @id @default(autoincrement())
+  companyId Int
   userId    Int
   viewId    Int?
   timestamp DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  view      View?    @relation(fields: [viewId], references: [id], onDelete: SetNull)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  view    View?   @relation(fields: [viewId], references: [id], onDelete: SetNull)
 
   @@index([userId, viewId, timestamp])
+  @@index([companyId, timestamp]) // For data retention cleanup
 }
 
 model AnalyticsRefreshLog {
   id        Int      @id @default(autoincrement())
+  companyId Int
   userId    Int
   timestamp DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@index([timestamp])
+  @@index([userId, timestamp]) // Composite covers all refresh log queries (count, findFirst, deleteMany)
+  @@index([companyId, timestamp]) // For data retention cleanup
 }
 
 model AutomationLog {
-  id               Int            @id @default(autoincrement())
+  id               BigInt  @id @default(autoincrement())
   automationRuleId Int
   recordId         Int?
   calendarEventId  String?
+  companyId        Int
 
-  executedAt       DateTime       @default(now())
-  
-  automationRule   AutomationRule @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
-  record           Record?        @relation(fields: [recordId], references: [id], onDelete: Cascade)
-  calendarEvent    CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
+  executedAt DateTime @default(now())
 
-  @@unique([automationRuleId, recordId]) 
+  automationRule AutomationRule @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
+  record         Record?        @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  calendarEvent  CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([automationRuleId, recordId])
   @@unique([automationRuleId, calendarEventId])
-
-  @@index([automationRuleId])
+  // @@index([automationRuleId]) — removed: redundant, covered by @@unique([automationRuleId, recordId]) leftmost prefix
   @@index([recordId])
   @@index([calendarEventId])
+  @@index([companyId])
+  @@index([companyId, executedAt]) // For data retention cleanup
 }
 
 model ImportJob {
-  id        String   @id @default(cuid())
+  id        String @id @default(cuid())
   companyId Int
   tableId   Int
   userId    Int
-  
-  fileKey   String
-  fileUrl   String
+
+  fileKey      String
+  fileUrl      String
   originalName String?
-  fileHash  String?
-  
-  status    String   @default("UPLOADED") // UPLOADED, VALIDATING, VALIDATED, IMPORTING, IMPORTED, FAILED
-  
-  summary   Json?    // Validation summary
-  
+  fileHash     String?
+
+  status ImportJobStatus @default(UPLOADED)
+
+  summary Json? // Validation summary
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user      User      @relation(fields: [userId], references: [id])
-  table     TableMeta @relation(fields: [tableId], references: [id])
-  company   Company   @relation(fields: [companyId], references: [id])
-  
+  user    User      @relation(fields: [userId], references: [id])
+  table   TableMeta @relation(fields: [tableId], references: [id])
+  company Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   @@index([companyId])
   @@index([tableId])
 }

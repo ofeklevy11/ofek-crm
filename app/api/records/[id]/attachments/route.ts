@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { canReadTable } from "@/lib/permissions";
+
+function parseId(raw: string): number | null {
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 export async function POST(
   request: Request,
@@ -8,22 +14,12 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const recordId = parseInt(id);
-    const body = await request.json();
-    const { filename, url, size, displayName } = body;
+    const recordId = parseId(id);
 
-    if (isNaN(recordId)) {
+    if (!recordId) {
       return NextResponse.json({ error: "Invalid record ID" }, { status: 400 });
     }
 
-    // Validate URL scheme (must be http or https)
-    if (url != null && url !== "") {
-      if (typeof url !== "string" || url.length > 2048 || !/^https?:\/\//i.test(url)) {
-        return NextResponse.json({ error: "Invalid URL: must be http or https" }, { status: 400 });
-      }
-    }
-
-    // Get the current authenticated user from session
     const currentUser = await getCurrentUser();
 
     if (!currentUser) {
@@ -31,6 +27,21 @@ export async function POST(
         { error: "Authentication required" },
         { status: 401 },
       );
+    }
+
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    const { filename, url, size, displayName } = body;
+
+    // Validate URL scheme (must be http or https)
+    if (url != null && url !== "") {
+      if (typeof url !== "string" || url.length > 2048 || !/^https?:\/\//i.test(url)) {
+        return NextResponse.json({ error: "Invalid URL: must be http or https" }, { status: 400 });
+      }
     }
 
     // Verify record exists and belongs to company
@@ -61,11 +72,8 @@ export async function POST(
       downloadUrl: `/api/attachments/${attachment.id}/download`,
     });
   } catch (error) {
-    console.error("Error adding attachment:", error);
-    return NextResponse.json(
-      { error: "Failed to add attachment" },
-      { status: 500 },
-    );
+    const { handlePrismaError } = await import("@/lib/prisma-error");
+    return handlePrismaError(error, "attachment");
   }
 }
 
@@ -75,13 +83,12 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const recordId = parseInt(id);
+    const recordId = parseId(id);
 
-    if (isNaN(recordId)) {
+    if (!recordId) {
       return NextResponse.json({ error: "Invalid record ID" }, { status: 400 });
     }
 
-    // Get current user to verify access
     const currentUser = await getCurrentUser();
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -97,6 +104,10 @@ export async function GET(
 
     if (!existingRecord) {
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
+    }
+
+    if (!canReadTable(currentUser, existingRecord.tableId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const attachments = await prisma.attachment.findMany({

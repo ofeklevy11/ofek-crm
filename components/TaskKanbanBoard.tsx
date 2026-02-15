@@ -67,15 +67,17 @@ import TasksFilterSidebar, {
 interface TaskKanbanBoardProps {
   currentUser: User | null;
   users?: { id: number; name: string }[];
+  initialTasks?: Task[];
 }
 
 export default function TaskKanbanBoard({
   currentUser,
   users = [],
+  initialTasks,
 }: TaskKanbanBoardProps) {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<Task[]>(initialTasks || []);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!initialTasks);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalStatus, setModalStatus] = useState<TaskStatus>("todo");
   const [filters, setFilters] = useState<TaskFilters>({
@@ -94,7 +96,9 @@ export default function TaskKanbanBoard({
       hasUserFlag(currentUser, "canCreateTasks"));
 
   useEffect(() => {
-    fetchTasks();
+    if (!initialTasks) {
+      fetchTasks();
+    }
   }, []);
 
   const fetchTasks = async () => {

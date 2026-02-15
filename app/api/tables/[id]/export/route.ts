@@ -3,6 +3,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 
+/** Format a single record as a CSV or TSV row. */
+function formatRow(
+  record: any,
+  fields: { name: string }[],
+  sep: string,
+): string {
+  const data = record.data || {};
+  const quote = sep === ",";
+
+  const fieldValues = fields.map((f) => {
+    const val = String(data[f.name] ?? "");
+    return quote ? `"${val.replace(/"/g, '""')}"` : val;
+  });
+
+  const wrap = (s: string) => (quote ? `"${s.replace(/"/g, '""')}"` : s);
+
+  return [
+    record.id,
+    ...fieldValues,
+    wrap(new Date(record.createdAt).toLocaleString()),
+    wrap(record.creator?.name || record.creator?.email || ""),
+    wrap(new Date(record.updatedAt).toLocaleString()),
+    wrap(record.updater?.name || record.updater?.email || ""),
+  ].join(sep);
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -22,6 +48,7 @@ export async function GET(
 
     const url = new URL(req.url);
     const format = (url.searchParams.get("format") || "csv").toLowerCase();
+    const sep = format === "csv" ? "," : "\t";
 
     const table = await prisma.tableMeta.findFirst({
       where: {
@@ -37,24 +64,7 @@ export async function GET(
       );
     }
 
-    // P110: Add take limit to prevent OOM on large table exports
-    const records = await prisma.record.findMany({
-      where: {
-        tableId: tableIdNum,
-        companyId: user.companyId,
-      },
-      orderBy: { createdAt: "desc" },
-      take: 10000, // P222: Lowered from 50K — 50K records + joins causes OOM on serverless
-      include: {
-        creator: {
-          select: { name: true, email: true },
-        },
-        updater: {
-          select: { name: true, email: true },
-        },
-      },
-    });
-
+    // Parse schema for field definitions
     let fields: { name: string; label: string; type: string }[] = [];
     try {
       let schemaArr: any[] = [];
@@ -69,28 +79,26 @@ export async function GET(
           label: f.label ?? f.name ?? "Field",
           type: f.type,
         }));
-      } else if (records.length > 0) {
-        fields = Object.keys(records[0].data || {}).map((k) => ({
-          name: k,
-          label: k,
-          type: "text",
-        }));
       }
     } catch {
       fields = [];
     }
 
-    // Static headers
-    const staticHeaders = [
-      "ID",
-      "Created At",
-      "Created By",
-      "Updated At",
-      "Updated By",
-    ];
+    // If schema is empty, peek at the first record to infer fields
+    if (fields.length === 0) {
+      const firstRecord = await prisma.record.findFirst({
+        where: { tableId: tableIdNum, companyId: user.companyId },
+        select: { data: true },
+      });
+      if (firstRecord?.data && typeof firstRecord.data === "object") {
+        fields = Object.keys(firstRecord.data as Record<string, unknown>).map((k) => ({
+          name: k,
+          label: k,
+          type: "text",
+        }));
+      }
+    }
 
-    // Combine schema headers with static info
-    // Combine schema headers with static info
     const allHeaders = [
       "ID",
       ...fields.map((f) => f.name),
@@ -101,77 +109,65 @@ export async function GET(
     ];
 
     const BOM = "\uFEFF";
-    let content = "";
-
-    if (format === "csv") {
-      const rows = records.map((record: any) => {
-        const data = record.data || {};
-
-        // ID
-        const idVal = record.id;
-
-        // Schema Fields
-        const fieldValues = fields.map((f) => {
-          const val = data[f.name];
-          const stringVal = String(val ?? "");
-          return `"${stringVal.replace(/"/g, '""')}"`;
-        });
-
-        // Metadata
-        const createdAt = `"${new Date(record.createdAt).toLocaleString()}"`;
-        const createdBy = `"${(record.creator?.name || record.creator?.email || "").replace(/"/g, '""')}"`;
-        const updatedAt = `"${new Date(record.updatedAt).toLocaleString()}"`;
-        const updatedBy = `"${(record.updater?.name || record.updater?.email || "").replace(/"/g, '""')}"`;
-
-        return [
-          idVal,
-          ...fieldValues,
-          createdAt,
-          createdBy,
-          updatedAt,
-          updatedBy,
-        ].join(",");
-      });
-
-      content = BOM + [allHeaders.join(","), ...rows].join("\n");
-    } else {
-      const rows = records.map((record: any) => {
-        const data = record.data || {};
-
-        const idVal = record.id;
-
-        const fieldValues = fields.map((f) => {
-          const val = data[f.name];
-          return String(val ?? "");
-        });
-
-        const createdAt = new Date(record.createdAt).toLocaleString();
-        const createdBy = record.creator?.name || record.creator?.email || "";
-        const updatedAt = new Date(record.updatedAt).toLocaleString();
-        const updatedBy = record.updater?.name || record.updater?.email || "";
-
-        return [
-          idVal,
-          ...fieldValues,
-          createdAt,
-          createdBy,
-          updatedAt,
-          updatedBy,
-        ].join("\t");
-      });
-
-      content = BOM + [allHeaders.join("\t"), ...rows].join("\n");
-    }
+    const BATCH_SIZE = 500;
+    const MAX_EXPORT_RECORDS = 50000;
 
     const safeName = (table.name || `table_${tableIdNum}`)
       .replace(/[^a-z0-9]/gi, "_")
       .toLowerCase();
+    const filename = `${safeName}_export_${new Date().toISOString().slice(0, 10)}.${format}`;
 
-    const filename = `${safeName}_export_${new Date()
-      .toISOString()
-      .slice(0, 10)}.${format}`;
+    // Stream the response: fetch records in cursor-batched chunks of 500
+    const encoder = new TextEncoder();
+    const companyId = user.companyId;
 
-    return new NextResponse(content, {
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          // BOM + header row
+          controller.enqueue(encoder.encode(BOM + allHeaders.join(sep) + "\n"));
+
+          let lastId: number | undefined;
+          let totalExported = 0;
+
+          while (totalExported < MAX_EXPORT_RECORDS) {
+            const batch = await prisma.record.findMany({
+              where: {
+                tableId: tableIdNum,
+                companyId,
+                ...(lastId != null ? { id: { lt: lastId } } : {}),
+              },
+              orderBy: { id: "desc" },
+              take: BATCH_SIZE,
+              select: {
+                id: true,
+                data: true,
+                createdAt: true,
+                updatedAt: true,
+                creator: { select: { name: true, email: true } },
+                updater: { select: { name: true, email: true } },
+              },
+            });
+
+            if (batch.length === 0) break;
+
+            const lines = batch.map((record) => formatRow(record, fields, sep));
+            controller.enqueue(encoder.encode(lines.join("\n") + "\n"));
+
+            totalExported += batch.length;
+            lastId = batch[batch.length - 1].id;
+
+            if (batch.length < BATCH_SIZE) break;
+          }
+
+          controller.close();
+        } catch (err) {
+          controller.error(err);
+        }
+      },
+    });
+
+    return new NextResponse(stream, {
       headers: {
         "Content-Type":
           format === "csv"

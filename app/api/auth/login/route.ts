@@ -3,35 +3,23 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { signUserId } from "@/lib/auth";
 import { cookies } from "next/headers";
-
-const RATE_LIMIT_MAP = new Map<
-  string,
-  { count: number; lastAttempt: number }
->();
-const MAX_ATTEMPTS = 5;
-const BLOCK_DURATION = 15 * 60 * 1000; // 15 דקות
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
   try {
+    const ip = req.headers.get("x-forwarded-for") || "unknown";
+
+    // Redis-based rate limiting — survives serverless cold starts
+    const rateLimitResponse = await checkRateLimit(ip, RATE_LIMITS.login);
+    if (rateLimitResponse) {
+      return NextResponse.json(
+        { error: "יותר מדי ניסיונות כושלים. נסה שוב בעוד 15 דקות." },
+        { status: 429, headers: { "Retry-After": "900" } }
+      );
+    }
+
     const body = await req.json();
     const { email, password } = body;
-
-    // Rate Limiting Logic (IP-based workaround)
-    const ip = req.headers.get("x-forwarded-for") || "unknown";
-    const now = Date.now();
-    const record = RATE_LIMIT_MAP.get(ip);
-
-    if (record) {
-      if (now - record.lastAttempt > BLOCK_DURATION) {
-        // Reset if block expired
-        RATE_LIMIT_MAP.delete(ip);
-      } else if (record.count >= MAX_ATTEMPTS) {
-        return NextResponse.json(
-          { error: "יותר מדי ניסיונות כושלים. נסה שוב בעוד 15 דקות." },
-          { status: 429 }
-        );
-      }
-    }
 
     if (!email || !password) {
       return NextResponse.json(
@@ -59,10 +47,6 @@ export async function POST(req: Request) {
     const isValid = await bcrypt.compare(password, user.passwordHash);
 
     if (!isValid) {
-      // Record failed attempt
-      const current = RATE_LIMIT_MAP.get(ip) || { count: 0, lastAttempt: now };
-      RATE_LIMIT_MAP.set(ip, { count: current.count + 1, lastAttempt: now });
-
       // Artificial Delay
       await new Promise((resolve) =>
         setTimeout(resolve, 1000 + Math.random() * 500)
@@ -73,9 +57,6 @@ export async function POST(req: Request) {
         { status: 401 }
       );
     }
-
-    // Success - Reset Rate Limit
-    RATE_LIMIT_MAP.delete(ip);
 
     // Create session cookie
     const token = signUserId(user.id);

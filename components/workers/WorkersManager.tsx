@@ -38,7 +38,7 @@ interface Worker {
   notes: string | null;
   departmentId: number;
   department: Department;
-  onboardingProgress: OnboardingProgress[];
+  onboardingProgress: WorkerOnboardingProgress[];
   _count: { assignedTasks: number };
 }
 
@@ -58,7 +58,7 @@ interface OnboardingPath {
   name: string;
   description: string | null;
   departmentId: number | null;
-  department: Department | null;
+  department: { id: number; name: string; color: string | null } | null;
   isDefault: boolean;
   isActive: boolean;
   estimatedDays: number | null;
@@ -79,11 +79,14 @@ interface OnboardingStep {
   isRequired: boolean;
 }
 
-interface OnboardingProgress {
+interface WorkerOnboardingProgress {
   id: number;
   pathId: number;
   status: string;
-  path: OnboardingPath;
+  path: {
+    name: string;
+    _count?: { steps: number };
+  };
   stepProgress: { stepId: number; status: string }[];
 }
 

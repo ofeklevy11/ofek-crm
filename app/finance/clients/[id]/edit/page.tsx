@@ -20,7 +20,7 @@ export default function EditClientPage({
     name: "",
     email: "",
     phone: "",
-    company: "",
+    businessName: "",
     notes: "",
   });
 
@@ -41,7 +41,7 @@ export default function EditClientPage({
         name: client.name || "",
         email: client.email || "",
         phone: client.phone || "",
-        company: client.company || "",
+        businessName: client.businessName || "",
         notes: client.notes || "",
       });
     } catch (err) {
@@ -165,9 +165,9 @@ export default function EditClientPage({
             </label>
             <input
               type="text"
-              value={formData.company}
+              value={formData.businessName}
               onChange={(e) =>
-                setFormData({ ...formData, company: e.target.value })
+                setFormData({ ...formData, businessName: e.target.value })
               }
               className="w-full rounded-lg border border-gray-300 p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
             />

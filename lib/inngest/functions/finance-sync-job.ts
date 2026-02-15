@@ -1,5 +1,5 @@
 import { inngest } from "../client";
-import { prisma } from "@/lib/prisma";
+import { prismaBg as prisma } from "@/lib/prisma-background";
 import { executeSyncRule } from "@/app/actions/finance-sync";
 
 /**
@@ -25,16 +25,24 @@ export const processFinanceSyncJob = inngest.createFunction(
       console.error(`Finance sync job ${jobId} failed:`, error);
 
       try {
-        await prisma.financeSyncJob.update({
+        // Only mark as FAILED if the job hasn't already been marked COMPLETED
+        const job = await prisma.financeSyncJob.findFirst({
           where: { id: jobId, companyId: event.data.event.data.companyId },
-          data: {
-            status: "FAILED",
-            summary: {
-              error: error.message || "הסנכרון נכשל",
-              failedAt: new Date().toISOString(),
-            },
-          },
+          select: { status: true },
         });
+
+        if (job && job.status !== "COMPLETED") {
+          await prisma.financeSyncJob.update({
+            where: { id: jobId, companyId: event.data.event.data.companyId },
+            data: {
+              status: "FAILED",
+              summary: {
+                error: error.message || "הסנכרון נכשל",
+                failedAt: new Date().toISOString(),
+              },
+            },
+          });
+        }
       } catch (updateError) {
         console.error("Failed to update sync job status:", updateError);
       }

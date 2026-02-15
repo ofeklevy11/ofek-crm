@@ -5,16 +5,6 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { action, recordIds } = body;
-
-    if (!recordIds || !Array.isArray(recordIds)) {
-      return NextResponse.json(
-        { error: "Invalid record IDs" },
-        { status: 400 },
-      );
-    }
-
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
 
@@ -28,6 +18,21 @@ export async function POST(request: Request) {
     // Rate limit bulk operations per user
     const rateLimited = await checkRateLimit(String(currentUser.id), RATE_LIMITS.bulk);
     if (rateLimited) return rateLimited;
+
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    const { action, recordIds } = body;
+
+    if (!recordIds || !Array.isArray(recordIds)) {
+      return NextResponse.json(
+        { error: "Invalid record IDs" },
+        { status: 400 },
+      );
+    }
 
     if (action === "delete") {
       if (recordIds.length === 0) {
@@ -90,11 +95,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
-    console.error("Error performing bulk action:", error);
-    return NextResponse.json(
-      { error: "Failed to perform bulk action", details: error.message },
-      { status: 500 },
-    );
+  } catch (error) {
+    const { handlePrismaError } = await import("@/lib/prisma-error");
+    return handlePrismaError(error, "bulk action");
   }
 }

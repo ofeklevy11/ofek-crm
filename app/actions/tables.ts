@@ -1,10 +1,12 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/permissions-server";
-import { canReadTable, canManageTables, hasUserFlag } from "@/lib/permissions";
+import { canReadTable, canManageTables, hasUserFlag, User } from "@/lib/permissions";
 import { validateCategoryInCompany } from "@/lib/company-validation";
+import { withRetry } from "@/lib/db-retry";
 
 export async function getTables() {
   try {
@@ -13,23 +15,93 @@ export async function getTables() {
       return { success: false, error: "Unauthorized" };
     }
 
-    // CRITICAL: Filter by companyId for multi-tenancy
-    const tables = await prisma.tableMeta.findMany({
-      where: { companyId: user.companyId },
-      orderBy: { createdAt: "desc" },
-      take: 500,
-    });
-
-    // Filter tables based on user permissions
-    const allowedTables = tables.filter((table) =>
-      canReadTable(user, table.id),
-    );
-
-    return { success: true, data: allowedTables };
+    return getTablesForUser(user);
   } catch (error) {
     console.error("Error fetching tables:", error);
     return { success: false, error: "Failed to fetch tables" };
   }
+}
+
+/**
+ * Internal: fetch tables for a user without auth check.
+ * Used by getDashboardInitialData to avoid redundant getCurrentUser() calls.
+ */
+export async function getTablesForUser(user: User) {
+  // Build WHERE clause: admin/manager see all; basic users only see permitted tables
+  const isFullAccess = user.role === "admin" || user.role === "manager";
+  const allowedIds = !isFullAccess && user.tablePermissions
+    ? Object.entries(user.tablePermissions as Record<string, string>)
+        .filter(([, perm]) => perm === "read" || perm === "write")
+        .map(([id]) => Number(id))
+    : [];
+
+  // If basic user has no permissions, return empty immediately
+  if (!isFullAccess && allowedIds.length === 0) {
+    return { success: true, data: [] };
+  }
+
+  const tables = await withRetry(() => prisma.tableMeta.findMany({
+    where: {
+      companyId: user.companyId,
+      ...(!isFullAccess ? { id: { in: allowedIds } } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: 500,
+    // Note: schemaJson included because consumers (analytics, forms) rely on it
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      schemaJson: true,
+      companyId: true,
+      createdBy: true,
+      categoryId: true,
+      order: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  }));
+
+  return { success: true, data: tables };
+}
+
+/**
+ * Lightweight table fetch for the dashboard — excludes schemaJson to save IO.
+ * schemaJson can be 50-200KB per table; the dashboard only needs id/name/slug.
+ */
+export async function getTablesForDashboard(user: User) {
+  const isFullAccess = user.role === "admin" || user.role === "manager";
+  const allowedIds = !isFullAccess && user.tablePermissions
+    ? Object.entries(user.tablePermissions as Record<string, string>)
+        .filter(([, perm]) => perm === "read" || perm === "write")
+        .map(([id]) => Number(id))
+    : [];
+
+  if (!isFullAccess && allowedIds.length === 0) {
+    return { success: true, data: [] };
+  }
+
+  const tables = await withRetry(() => prisma.tableMeta.findMany({
+    where: {
+      companyId: user.companyId,
+      ...(!isFullAccess ? { id: { in: allowedIds } } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: 500,
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      companyId: true,
+      createdBy: true,
+      categoryId: true,
+      order: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  }));
+
+  return { success: true, data: tables };
 }
 
 export async function getTableById(id: number) {
@@ -40,12 +112,12 @@ export async function getTableById(id: number) {
     }
 
     // CRITICAL: Filter by companyId for multi-tenancy
-    const table = await prisma.tableMeta.findFirst({
+    const table = await withRetry(() => prisma.tableMeta.findFirst({
       where: {
         id,
         companyId: user.companyId,
       },
-    });
+    }));
 
     if (!table) {
       return { success: false, error: "Table not found" };
@@ -97,9 +169,9 @@ export async function createTable(data: {
     let finalSlug = slug;
     let counter = 0;
     while (true) {
-      const existing = await prisma.tableMeta.findFirst({
+      const existing = await withRetry(() => prisma.tableMeta.findFirst({
         where: { slug: finalSlug, companyId: user.companyId },
-      });
+      }));
       if (!existing) break;
       finalSlug = `${slug}-${Math.random().toString(36).substring(2, 7)}`;
       counter++;
@@ -110,7 +182,7 @@ export async function createTable(data: {
     let table;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        table = await prisma.tableMeta.create({
+        table = await withRetry(() => prisma.tableMeta.create({
           data: {
             name,
             slug: finalSlug,
@@ -119,7 +191,7 @@ export async function createTable(data: {
             createdBy: user.id,
             categoryId: categoryId ? Number(categoryId) : undefined,
           },
-        });
+        }));
         break; // success
       } catch (createErr: any) {
         if (createErr.code === "P2002" && attempt < 2) {
@@ -181,10 +253,10 @@ export async function updateTable(
     }
 
     // P112: Add companyId to prevent cross-tenant table updates
-    const table = await prisma.tableMeta.update({
+    const table = await withRetry(() => prisma.tableMeta.update({
       where: { id, companyId: user.companyId },
       data: updateData,
-    });
+    }));
 
     revalidatePath("/");
     revalidatePath("/tables");
@@ -205,9 +277,9 @@ export async function deleteTable(id: number) {
     }
 
     // P113: Add companyId to prevent cross-tenant table deletes
-    await prisma.tableMeta.delete({
+    await withRetry(() => prisma.tableMeta.delete({
       where: { id, companyId: user.companyId },
-    });
+    }));
 
     revalidatePath("/");
     revalidatePath("/tables");
@@ -232,18 +304,37 @@ export async function exportTableData(tableId: number) {
     }
 
     // AAA: Use findFirst with companyId filter instead of findUnique
-    const table = await prisma.tableMeta.findFirst({
+    const table = await withRetry(() => prisma.tableMeta.findFirst({
       where: { id: tableId, companyId: user.companyId },
-      include: {
-        records: { take: 5000 }, // P220: Lowered from 50K — prevents OOM on serverless
-      },
-    });
+      select: { id: true, name: true, slug: true, schemaJson: true, companyId: true, createdAt: true, updatedAt: true },
+    }));
 
     if (!table) {
       return { success: false, error: "Table not found" };
     }
 
-    return { success: true, data: table };
+    // Paginated export: fetch records in batches of 500 to avoid OOM
+    const BATCH_SIZE = 500;
+    const MAX_RECORDS = 5000;
+    const allRecords: any[] = [];
+    let cursor: number | undefined;
+
+    while (allRecords.length < MAX_RECORDS) {
+      const batch = await withRetry(() => prisma.record.findMany({
+        where: { tableId, companyId: user.companyId },
+        orderBy: { createdAt: "desc" },
+        take: BATCH_SIZE,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      }));
+
+      if (batch.length === 0) break;
+      allRecords.push(...batch);
+      cursor = batch[batch.length - 1].id;
+
+      if (batch.length < BATCH_SIZE) break;
+    }
+
+    return { success: true, data: { ...table, records: allRecords.slice(0, MAX_RECORDS) } };
   } catch (error) {
     console.error("Error exporting table:", error);
     return { success: false, error: "Failed to export table" };
@@ -258,9 +349,10 @@ export async function searchInTable(tableId: number, searchTerm: string) {
     }
 
     // P109: Add companyId filter to table lookup
-    const table = await prisma.tableMeta.findFirst({
+    const table = await withRetry(() => prisma.tableMeta.findFirst({
       where: { id: tableId, companyId: user.companyId },
-    });
+      select: { id: true },
+    }));
 
     if (!table) {
       return { success: false, error: "Table not found" };
@@ -270,22 +362,19 @@ export async function searchInTable(tableId: number, searchTerm: string) {
       return { success: false, error: "אין לך הרשאה לחפש בטבלאות" };
     }
 
-    // P106: Add companyId filter and take limit to prevent OOM
-    const records = await prisma.record.findMany({
-      where: {
-        tableId,
-        companyId: user.companyId, // P109: Cross-tenant filter
-      },
-      orderBy: { createdAt: "desc" },
-      take: 5000, // P106: Bound search query
-    });
+    // DB-side ILIKE search instead of loading all records into memory
+    const escaped = searchTerm.replace(/[%_\\]/g, "\\$&");
+    const records = await withRetry(() => prisma.$queryRaw<any[]>`
+      SELECT id, data, "createdAt", "updatedAt", "createdBy", "updatedBy", "tableId", "companyId"
+      FROM "Record"
+      WHERE "tableId" = ${tableId}
+        AND "companyId" = ${user.companyId}
+        AND "data"::text ILIKE ${`%${escaped}%`}
+      ORDER BY "createdAt" DESC
+      LIMIT 200
+    `);
 
-    const filteredRecords = records.filter((record) => {
-      const dataStr = JSON.stringify(record.data).toLowerCase();
-      return dataStr.includes(searchTerm.toLowerCase());
-    });
-
-    return { success: true, data: filteredRecords };
+    return { success: true, data: records };
   } catch (error) {
     console.error("Error searching in table:", error);
     return { success: false, error: "Failed to search in table" };
@@ -307,14 +396,25 @@ export async function updateTablesOrder(
       return { success: false, error: "Too many tables to reorder" };
     }
 
-    const transaction = updates.map((update) =>
-      prisma.tableMeta.update({
-        where: { id: update.id, companyId: user.companyId },
-        data: { order: update.order },
-      }),
-    );
+    if (updates.length === 0) {
+      return { success: true };
+    }
 
-    await prisma.$transaction(transaction);
+    // Validate all IDs and orders are finite numbers before building raw SQL
+    if (!updates.every((u) => Number.isFinite(Number(u.id)) && Number.isFinite(Number(u.order)))) {
+      return { success: false, error: "Invalid table order data" };
+    }
+
+    // Single SQL UPDATE using unnest with fully parameterized arrays
+    const ids = updates.map((u) => Number(u.id));
+    const orders = updates.map((u) => Number(u.order));
+
+    await withRetry(() => prisma.$executeRaw`
+      UPDATE "TableMeta" AS t
+      SET "order" = v.new_order
+      FROM unnest(${ids}::int[], ${orders}::int[]) AS v(id, new_order)
+      WHERE t.id = v.id AND t."companyId" = ${user.companyId}
+    `);
     revalidatePath("/tables");
     return { success: true };
   } catch (error) {
@@ -334,17 +434,13 @@ export async function duplicateTable(id: number) {
       return { success: false, error: "אין לך הרשאה לשכפל טבלאות" };
     }
 
-    // CRITICAL: Filter by companyId for multi-tenancy
-    const originalTable = await prisma.tableMeta.findFirst({
+    // CRITICAL: Filter by companyId for multi-tenancy — fetch metadata only (no records/views)
+    const originalTable = await withRetry(() => prisma.tableMeta.findFirst({
       where: {
         id,
         companyId: user.companyId,
       },
-      include: {
-        records: { take: 5000 }, // P220: Lowered from 50K — prevents OOM on serverless
-        views: true,
-      },
-    });
+    }));
 
     if (!originalTable) {
       return { success: false, error: "Table not found" };
@@ -356,9 +452,9 @@ export async function duplicateTable(id: number) {
     let counter = 0;
 
     while (true) {
-      const existing = await prisma.tableMeta.findFirst({
+      const existing = await withRetry(() => prisma.tableMeta.findFirst({
         where: { slug: finalSlug, companyId: user.companyId },
-      });
+      }));
       if (!existing) break;
       counter++;
       finalSlug = `${baseSlug}-${counter}`;
@@ -368,45 +464,39 @@ export async function duplicateTable(id: number) {
     // Generate new name with " copy" suffix
     const newName = `${originalTable.name} copy${counter > 0 ? ` ${counter}` : ""}`;
 
-    // Create the new table
-    const newTable = await prisma.tableMeta.create({
-      data: {
-        name: newName,
-        slug: finalSlug,
-        schemaJson: originalTable.schemaJson as any,
-        companyId: user.companyId,
-        createdBy: user.id,
-        categoryId: originalTable.categoryId,
-        order: originalTable.order,
-      },
-    });
-
-    // Duplicate all records
-    if (originalTable.records.length > 0) {
-      await prisma.record.createMany({
-        data: originalTable.records.map((record) => ({
-          tableId: newTable.id,
+    // Wrap all three operations in a single transaction to ensure atomicity
+    const newTable = await prisma.$transaction(async (tx) => {
+      // Create the new table
+      const created = await tx.tableMeta.create({
+        data: {
+          name: newName,
+          slug: finalSlug,
+          schemaJson: originalTable.schemaJson as any,
           companyId: user.companyId,
-          data: record.data as any,
           createdBy: user.id,
-        })),
+          categoryId: originalTable.categoryId,
+          order: originalTable.order,
+        },
       });
-    }
 
-    // Duplicate all views
-    if (originalTable.views.length > 0) {
-      await prisma.view.createMany({
-        data: originalTable.views.map((view) => ({
-          companyId: user.companyId,
-          tableId: newTable.id,
-          name: view.name,
-          slug: view.slug,
-          config: view.config as any,
-          isEnabled: view.isEnabled,
-          order: view.order,
-        })),
-      });
-    }
+      // Copy records directly inside PostgreSQL — no data transfer to Node.js
+      await tx.$executeRaw`
+        INSERT INTO "Record" ("tableId", "companyId", "data", "createdBy", "createdAt", "updatedAt")
+        SELECT ${created.id}, "companyId", "data", ${user.id}, NOW(), NOW()
+        FROM "Record"
+        WHERE "tableId" = ${id} AND "companyId" = ${user.companyId}
+      `;
+
+      // Copy views directly inside PostgreSQL
+      await tx.$executeRaw`
+        INSERT INTO "View" ("companyId", "tableId", "name", "slug", "config", "isEnabled", "order", "createdAt", "updatedAt")
+        SELECT "companyId", ${created.id}, "name", "slug", "config", "isEnabled", "order", NOW(), NOW()
+        FROM "View"
+        WHERE "tableId" = ${id} AND "companyId" = ${user.companyId}
+      `;
+
+      return created;
+    }, { maxWait: 5000, timeout: 30000 });
 
     revalidatePath("/");
     revalidatePath("/tables");

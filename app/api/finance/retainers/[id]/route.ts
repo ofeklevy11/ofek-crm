@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { withRetry } from "@/lib/db-retry";
+import { z } from "zod";
+
+const updateRetainerSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  amount: z.number().positive().optional(),
+  frequency: z.enum(["monthly", "quarterly", "annually"]).optional(),
+  status: z.enum(["active", "paused", "cancelled"]).optional(),
+  nextDueDate: z.coerce.date().optional(),
+  notes: z.string().max(5000).nullable().optional(),
+});
+
+function parseRetainerId(id: string): number | null {
+  const parsed = parseInt(id, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+}
 
 export async function GET(
   request: NextRequest,
@@ -13,18 +29,20 @@ export async function GET(
     }
 
     const { id } = await params;
-    const retainerId = parseInt(id);
+    const retainerId = parseRetainerId(id);
+    if (retainerId === null) {
+      return NextResponse.json({ error: "Invalid retainer ID" }, { status: 400 });
+    }
 
-    // CRITICAL: Filter by client.companyId
-    const retainer = await prisma.retainer.findFirst({
+    // CRITICAL: Filter by companyId + soft delete
+    const retainer = await withRetry(() => prisma.retainer.findFirst({
       where: {
         id: retainerId,
-        client: {
-          companyId: user.companyId,
-        },
+        companyId: user.companyId,
+        deletedAt: null,
       },
       include: { client: true },
-    });
+    }));
 
     if (!retainer) {
       return NextResponse.json(
@@ -54,24 +72,26 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const retainerId = parseInt(id);
-    const data = await request.json();
-
-    // Validate status if provided (before transaction to avoid holding locks)
-    if (
-      data.status &&
-      !["active", "paused", "cancelled"].includes(data.status)
-    ) {
-      return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    const retainerId = parseRetainerId(id);
+    if (retainerId === null) {
+      return NextResponse.json({ error: "Invalid retainer ID" }, { status: 400 });
     }
 
+    const raw = await request.json();
+    const parsed = updateRetainerSchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, { status: 400 });
+    }
+    const data = parsed.data;
+
     // RepeatableRead transaction eliminates TOCTOU between ownership check and update
-    const updatedRetainer = await prisma.$transaction(
+    const updatedRetainer = await withRetry(() => prisma.$transaction(
       async (tx) => {
         const existing = await tx.retainer.findFirst({
           where: {
             id: retainerId,
-            client: { companyId: user.companyId },
+            companyId: user.companyId,
+            deletedAt: null,
           },
         });
         if (!existing) return null;
@@ -79,19 +99,17 @@ export async function PATCH(
         return tx.retainer.update({
           where: { id: retainerId },
           data: {
-            title: data.title,
-            amount: data.amount ? parseFloat(data.amount) : undefined,
-            frequency: data.frequency,
-            status: data.status,
-            nextDueDate: data.nextDueDate
-              ? new Date(data.nextDueDate)
-              : undefined,
-            notes: data.notes,
+            ...(data.title !== undefined && { title: data.title }),
+            ...(data.amount !== undefined && { amount: data.amount }),
+            ...(data.frequency !== undefined && { frequency: data.frequency }),
+            ...(data.status !== undefined && { status: data.status }),
+            ...(data.nextDueDate !== undefined && { nextDueDate: data.nextDueDate }),
+            ...(data.notes !== undefined && { notes: data.notes }),
           },
         });
       },
       { isolationLevel: "RepeatableRead" },
-    );
+    ));
 
     if (!updatedRetainer) {
       return NextResponse.json(
@@ -121,15 +139,20 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const retainerId = parseInt(id);
+    const retainerId = parseRetainerId(id);
+    if (retainerId === null) {
+      return NextResponse.json({ error: "Invalid retainer ID" }, { status: 400 });
+    }
 
-    // Atomic delete scoped to company — eliminates TOCTOU
-    const { count } = await prisma.retainer.deleteMany({
+    // P3: Soft delete for audit trail — scoped to company
+    const { count } = await withRetry(() => prisma.retainer.updateMany({
       where: {
         id: retainerId,
-        client: { companyId: user.companyId },
+        companyId: user.companyId,
+        deletedAt: null,
       },
-    });
+      data: { deletedAt: new Date() },
+    }));
 
     if (count === 0) {
       return NextResponse.json(

@@ -21,32 +21,48 @@ export default async function WorkersPage() {
     redirect("/login");
   }
 
-  // Fetch data with error handling
-  const [workers, departments, onboardingPaths, stats, users, tables] =
+  // Fetch data with error handling + logging (P3)
+  const [workersResult, departments, onboardingPaths, stats, users, tables] =
     await Promise.all([
-      getWorkers().catch(() => []),
-      getDepartments().catch(() => []),
-      getOnboardingPaths().catch(() => []),
-      getWorkersStats().catch(() => ({
-        totalWorkers: 0,
-        onboardingWorkers: 0,
-        activeWorkers: 0,
-        departments: 0,
-        onboardingPaths: 0,
-      })),
+      getWorkers().catch((err) => {
+        console.error("[Workers] Failed to load workers:", err);
+        return { data: [], total: 0, hasMore: false };
+      }),
+      getDepartments().catch((err) => {
+        console.error("[Workers] Failed to load departments:", err);
+        return [];
+      }),
+      getOnboardingPaths().catch((err) => {
+        console.error("[Workers] Failed to load onboarding paths:", err);
+        return [];
+      }),
+      getWorkersStats().catch((err) => {
+        console.error("[Workers] Failed to load stats:", err);
+        return { totalWorkers: 0, onboardingWorkers: 0, activeWorkers: 0, departments: 0, onboardingPaths: 0 };
+      }),
       prisma.user
         .findMany({
           where: { companyId: user.companyId },
           select: { id: true, name: true, email: true },
+          take: 1000,
         })
-        .catch(() => []),
+        .catch((err) => {
+          console.error("[Workers] Failed to load users:", err);
+          return [];
+        }),
       prisma.tableMeta
         .findMany({
           where: { companyId: user.companyId },
           select: { id: true, name: true },
+          take: 1000,
         })
-        .catch(() => []),
+        .catch((err) => {
+          console.error("[Workers] Failed to load tables:", err);
+          return [];
+        }),
     ]);
+
+  const workers = workersResult.data;
 
   return (
     <div

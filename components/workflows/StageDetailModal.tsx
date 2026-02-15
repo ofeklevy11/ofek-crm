@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { WorkflowStage } from "@prisma/client";
 import {
   X,
@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import { getAllFiles } from "@/app/actions/storage";
 import { getTableById } from "@/app/actions/tables";
-import { deleteStage, updateStage } from "@/app/actions/workflows";
+import { deleteStage, updateStage, getWorkflowStagesDetails } from "@/app/actions/workflows";
 import { useRouter } from "next/navigation";
 import * as LucideIcons from "lucide-react";
 
@@ -53,6 +53,8 @@ interface StageDetailModalProps {
   onDelete?: (stageId: number) => void;
   currentUser?: any;
   allStages?: WorkflowStage[];
+  workflowId?: number;
+  preloadedStageDetails?: Record<number, any>;
 }
 
 // ----------------------------------------------------------------------
@@ -1692,9 +1694,17 @@ export function StageDetailModal({
   onDelete,
   currentUser,
   allStages = [],
+  workflowId,
+  preloadedStageDetails,
 }: StageDetailModalProps) {
   const router = useRouter();
   const [formData, setFormData] = useState<any>(null);
+
+  // Track whether formData has been initialized for the current stage to avoid overwriting user edits
+  const formInitializedForRef = useRef<number | null>(null);
+
+  // Lazily-loaded stage details for automation counting
+  const [loadedStageDetails, setLoadedStageDetails] = useState<Record<number, any>>({});
 
   // Automation Limits Logic
   const planInfo = (() => {
@@ -1713,7 +1723,9 @@ export function StageDetailModal({
   const otherStagesAutomationsCount = allStages
     .filter((s) => s.id !== stage?.id)
     .reduce((acc, s) => {
-      const details = typeof s.details === "object" ? (s.details as any) : {};
+      // Use lazily loaded details if available, fall back to stage.details
+      const rawDetails = loadedStageDetails[s.id] ?? s.details;
+      const details = typeof rawDetails === "object" ? (rawDetails as any) : {};
       const actions = Array.isArray(details.systemActions)
         ? details.systemActions
         : [];
@@ -1737,13 +1749,18 @@ export function StageDetailModal({
   // View/Edit Mode
   const [isEditing, setIsEditing] = useState(false);
 
-  // Dynamic Data
+  // Dynamic Data — cached across modal open/close, only cleared on workflowId change
   const [users, setUsers] = useState<any[]>([]);
   const [tables, setTables] = useState<any[]>([]);
+  const loadedForWorkflowRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (isOpen) {
-      // Load data when modal opens
+    if (!isOpen) return;
+
+    // Only fetch users/tables if not already cached for this workflow
+    if (loadedForWorkflowRef.current !== workflowId) {
+      loadedForWorkflowRef.current = workflowId ?? null;
+
       fetch("/api/users")
         .then((res) => res.json())
         .then((data) => {
@@ -1753,17 +1770,37 @@ export function StageDetailModal({
 
       fetch("/api/tables")
         .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data)) setTables(data);
+        .then((json) => {
+          const list = json.data ?? json;
+          if (Array.isArray(list)) setTables(list);
         })
         .catch((err) => console.error("Error loading tables", err));
     }
-  }, [isOpen]);
+
+    // Use preloaded details if available; otherwise fetch lazily
+    if (preloadedStageDetails) {
+      setLoadedStageDetails(preloadedStageDetails);
+    } else if (workflowId) {
+      getWorkflowStagesDetails(workflowId)
+        .then((details) => {
+          const map: Record<number, any> = {};
+          for (const d of details) {
+            map[d.id] = d.details;
+          }
+          setLoadedStageDetails(map);
+        })
+        .catch(() => {});
+    }
+  }, [isOpen, workflowId, preloadedStageDetails]);
 
   useEffect(() => {
     if (stage) {
+      // Skip re-initialization if user is already editing this stage and details just loaded
+      if (formInitializedForRef.current === stage.id && isEditing) return;
+
+      const rawDetails = loadedStageDetails[stage.id] ?? stage.details;
       const details =
-        typeof stage.details === "object" ? (stage.details as any) : {};
+        typeof rawDetails === "object" ? (rawDetails as any) : {};
       setFormData({
         name: stage.name,
         color: stage.color || "blue",
@@ -1774,6 +1811,7 @@ export function StageDetailModal({
           : [],
         goals: details.goals || "",
       });
+      formInitializedForRef.current = stage.id;
       setIsEditing(false);
     } else if (isCreating) {
       setFormData({
@@ -1784,9 +1822,10 @@ export function StageDetailModal({
         systemActions: [],
         goals: "",
       });
+      formInitializedForRef.current = null;
       setIsEditing(true);
     }
-  }, [stage, isCreating, isOpen]);
+  }, [stage, isCreating, isOpen, loadedStageDetails]);
 
   if (!isOpen) return null;
   if (!stage && !isCreating) return null;

@@ -60,10 +60,11 @@ export async function POST(req: Request) {
     // Optionally resolve assignee by email (must belong to same company)
     let assigneeId: number | undefined;
     if (email) {
-      const user = await prisma.user.findFirst({
-        where: { email, companyId },
+      const user = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true, companyId: true },
       });
-      if (!user) {
+      if (!user || user.companyId !== companyId) {
         return NextResponse.json(
           { error: "Invalid request: user not found in this company" },
           { status: 400 }

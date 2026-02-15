@@ -149,9 +149,10 @@ export default function TaskSheetsManager({
         clearTimeout(timeoutId);
 
         if (res.ok) {
-          const data = await res.json();
+          const json = await res.json();
+          const list = json.data ?? json;
           setTables(
-            (data || []).map((t: { id: number; name: string }) => ({
+            (list || []).map((t: { id: number; name: string }) => ({
               id: t.id,
               name: t.name,
             })),

@@ -2,44 +2,73 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
-import { getGoalsWithProgress } from "@/app/actions/goals";
-import { getAnalyticsData } from "@/app/actions/analytics";
-import { getTables } from "@/app/actions/tables";
+import { User } from "@/lib/permissions";
+import { getGoalsForCompany } from "@/app/actions/goals";
+import { getAnalyticsDataForCompany } from "@/app/actions/analytics";
+import { getTablesForDashboard } from "@/app/actions/tables";
 import {
   getCachedGoals,
   getCachedTableWidget,
   setCachedTableWidget,
   buildWidgetHash,
 } from "@/lib/services/dashboard-cache";
+import { withRetry } from "@/lib/db-retry";
+import { getTableViewDataInternal, getCustomTableDataInternal } from "@/lib/dashboard-internal";
 
-export async function getDashboardInitialData() {
-  const user = await getCurrentUser();
+function settled<T>(result: PromiseSettledResult<T>, label: string, fallback: T): T {
+  if (result.status === "fulfilled") return result.value;
+  console.error(`[Dashboard] ${label} failed:`, result.reason);
+  return fallback;
+}
+
+export async function getDashboardInitialData(existingUser?: User) {
+  const user = existingUser ?? await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  // Try to load goals from cache first
+  // Try to load goals from cache first (stale-while-revalidate)
   const cachedGoals = await getCachedGoals(user.companyId);
 
-  const [analyticsRes, tablesRes, goals] = await Promise.all([
-    getAnalyticsData(),
-    getTables(),
-    cachedGoals ? Promise.resolve(cachedGoals) : getGoalsWithProgress(),
+  // If cache is stale, trigger async background refresh while serving stale data
+  // Fire-and-forget: don't await — the whole point of SWR is to serve stale data immediately
+  if (cachedGoals?.stale) {
+    import("@/lib/inngest/client")
+      .then(({ inngest }) =>
+        inngest.send({
+          id: `goals-refresh-${user.companyId}-${Math.floor(Date.now() / 60000)}`,
+          name: "dashboard/refresh-goals",
+          data: { companyId: user.companyId },
+        }),
+      )
+      .catch(() => {});
+  }
+
+  // Fetch analytics, tables, goals, AND views all in parallel (eliminates views waterfall)
+  const results = await Promise.allSettled([
+    getAnalyticsDataForCompany(user.companyId),
+    getTablesForDashboard(user),
+    cachedGoals ? Promise.resolve(cachedGoals.data) : getGoalsForCompany(user.companyId),
+    withRetry(() => prisma.view.findMany({
+      where: { companyId: user.companyId, isEnabled: true },
+      select: { id: true, tableId: true, name: true, config: true },
+      orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+      take: 500,
+    })),
   ]);
+
+  const analyticsRes = settled(results[0], "analytics", { success: false as const, data: [] as any[] });
+  const tablesRes = settled(results[1], "tables", { success: false as const, data: [] as any[] });
+  const goals = settled(results[2], "goals", [] as any[]);
+  const allViews = settled(results[3], "views", [] as any[]);
 
   const analyticsViews =
     analyticsRes.success && analyticsRes.data ? analyticsRes.data : [];
   const tables = tablesRes.success && tablesRes.data ? tablesRes.data : [];
 
-  // P140: Batch fetch all views in a single query instead of N+1
-  const tableIds = tables.map((t) => t.id);
-  const allViews = tableIds.length > 0
-    ? await prisma.view.findMany({
-        where: { tableId: { in: tableIds }, companyId: user.companyId },
-        orderBy: [{ order: "asc" }, { createdAt: "asc" }],
-      })
-    : [];
-
+  // Filter views to only those belonging to accessible tables (permission filtering in-memory)
+  const tableIdSet = new Set(tables.map((t) => t.id));
   const viewsByTable = new Map<number, typeof allViews>();
   for (const view of allViews) {
+    if (!tableIdSet.has(view.tableId)) continue;
     const existing = viewsByTable.get(view.tableId) || [];
     existing.push(view);
     viewsByTable.set(view.tableId, existing);
@@ -96,34 +125,6 @@ export async function getTableViewData(
   }
 }
 
-/**
- * Internal: fetch table view data without auth check.
- * Used by Inngest background jobs for cache pre-computation.
- */
-export async function getTableViewDataInternal(
-  tableId: number,
-  companyId: number,
-  viewId: number,
-): Promise<any | null> {
-  const table = await prisma.tableMeta.findFirst({
-    where: { id: tableId, companyId },
-  });
-  if (!table) return null;
-
-  const view = await prisma.view.findFirst({
-    where: { id: viewId, tableId, companyId },
-  });
-  if (!view) return null;
-
-  const { processViewServer } = await import("@/lib/viewProcessorServer");
-
-  return processViewServer({
-    tableId,
-    companyId,
-    config: view.config as any,
-  });
-}
-
 export async function getCustomTableData(
   tableId: number,
   settings: {
@@ -159,141 +160,6 @@ export async function getCustomTableData(
     console.error("Error fetching custom table data", error);
     return { success: false, error: "Failed to fetch data" };
   }
-}
-
-/**
- * Internal: fetch custom table data without auth check.
- * Used by Inngest background jobs for cache pre-computation.
- */
-export async function getCustomTableDataInternal(
-  tableId: number,
-  companyId: number,
-  settings: {
-    columns?: string[];
-    limit?: number;
-    sort?: "asc" | "desc";
-    sortBy?: string;
-  },
-): Promise<any | null> {
-  const limit = Math.min(settings.limit || 10, 500);
-  const sort = settings.sort || "desc";
-  const sortBy = settings.sortBy || "createdAt";
-
-  let orderBy: any = {};
-
-  const isDbSort = sortBy === "createdAt" || sortBy === "updatedAt";
-
-  if (isDbSort) {
-    orderBy = { [sortBy]: sort };
-  } else {
-    orderBy = { createdAt: "desc" };
-  }
-
-  const table = await prisma.tableMeta.findFirst({
-    where: { id: tableId, companyId },
-    include: {
-      records: {
-        where: { companyId },
-        orderBy: orderBy,
-        take: isDbSort ? limit + 1 : 1000,
-        include: {
-          creator: { select: { name: true } },
-          updater: { select: { name: true } },
-        },
-      },
-    },
-  });
-
-  if (!table) return null;
-
-  const schema = table.schemaJson as any[];
-
-  const columns = settings.columns
-    ? [
-        ...schema
-          .filter((f: any) => settings.columns?.includes(f.name))
-          .map((f: any) => ({
-            name: f.name,
-            label: f.label,
-            type: f.type,
-            options: f.options,
-            optionColors: f.optionColors,
-          })),
-        ...(settings.columns?.includes("createdAt")
-          ? [{ name: "createdAt", label: "נוצר בתאריך", type: "datetime" }]
-          : []),
-        ...(settings.columns?.includes("updatedAt")
-          ? [{ name: "updatedAt", label: "עודכן בתאריך", type: "datetime" }]
-          : []),
-        ...(settings.columns?.includes("createdBy")
-          ? [{ name: "createdBy", label: "נוצר על ידי", type: "string" }]
-          : []),
-        ...(settings.columns?.includes("updatedBy")
-          ? [{ name: "updatedBy", label: "עודכן על ידי", type: "string" }]
-          : []),
-      ]
-    : schema.slice(0, 7).map((f: any) => ({
-        name: f.name,
-        label: f.label,
-        type: f.type,
-        options: f.options,
-        optionColors: f.optionColors,
-      }));
-
-  let records = table.records.map((r) => ({
-    ...r,
-    createdAt: r.createdAt,
-    updatedAt: r.updatedAt,
-    createdBy: r.creator?.name || "מערכת",
-    updatedBy: r.updater?.name || "מערכת",
-  }));
-
-  // In-memory sort for JSON fields if needed
-  if (sortBy !== "createdAt" && sortBy !== "updatedAt") {
-    const fieldSchema = schema.find((f) => f.name === sortBy);
-    const isNumeric = [
-      "number",
-      "rating",
-      "score",
-      "Rating",
-      "Score",
-    ].includes(fieldSchema?.type);
-
-    records.sort((a: any, b: any) => {
-      const valA = a.data?.[sortBy];
-      const valB = b.data?.[sortBy];
-
-      if (valA === undefined && valB === undefined) return 0;
-      if (valA === undefined) return 1;
-      if (valB === undefined) return -1;
-
-      if (isNumeric) {
-        return sort === "asc"
-          ? Number(valA) - Number(valB)
-          : Number(valB) - Number(valA);
-      }
-      return sort === "asc"
-        ? String(valA).localeCompare(String(valB))
-        : String(valB).localeCompare(String(valA));
-    });
-  }
-
-  const hasMore = records.length > limit;
-  records = records.slice(0, limit);
-
-  return {
-    type: "custom-table",
-    title: table.name,
-    data: {
-      columns,
-      records,
-      hasMore,
-      tableSlug: table.slug,
-      schema: schema,
-      currentSort: { field: sortBy, direction: sort },
-      tableId: table.id,
-    },
-  };
 }
 
 /**

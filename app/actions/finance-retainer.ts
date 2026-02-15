@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
+import { withRetry } from "@/lib/db-retry";
 
 export async function markRetainerAsPaid(
   retainerId: number,
@@ -13,43 +14,38 @@ export async function markRetainerAsPaid(
 
   if (count < 1 || count > 100) throw new Error("Invalid count");
 
-  const createdPaymentIds: number[] = [];
-
-  await prisma.$transaction(async (tx) => {
+  await withRetry(() => prisma.$transaction(async (tx) => {
     const retainer = await tx.retainer.findFirst({
-      where: { id: retainerId, client: { companyId: user.companyId } },
-      include: { client: true },
+      where: { id: retainerId, companyId: user.companyId, deletedAt: null },
+      select: { id: true, title: true, clientId: true, amount: true, frequency: true, nextDueDate: true },
     });
 
     if (!retainer) {
       throw new Error("Retainer not found");
     }
 
-    // Determine starting date
+    // Build all payment records, advancing the date for each
     let nextDate = retainer.nextDueDate
       ? new Date(retainer.nextDueDate)
       : new Date();
 
-    // Create payments in loop
+    const paymentsData: {
+      title: string; clientId: number; companyId: number; amount: typeof retainer.amount;
+      dueDate: Date; paidDate: Date; status: string; notes: string;
+    }[] = [];
     for (let i = 0; i < count; i++) {
       const dueDate = new Date(nextDate);
-
-      const payment = await tx.oneTimePayment.create({
-        data: {
-          title: `תשלום ריטיינר: ${retainer.title} (${i + 1}/${count})`,
-          clientId: retainer.clientId,
-          amount: retainer.amount,
-          dueDate: dueDate,
-          paidDate: dueDate,
-          status: "paid",
-          notes: `נוצר אוטומטית מריטיינר #${retainer.id} (תשלום ${
-            i + 1
-          } מתוך ${count})`,
-        },
+      paymentsData.push({
+        title: `תשלום ריטיינר: ${retainer.title} (${i + 1}/${count})`,
+        clientId: retainer.clientId,
+        companyId: user.companyId,
+        amount: retainer.amount,
+        dueDate,
+        paidDate: dueDate,
+        status: "paid",
+        notes: `נוצר אוטומטית מריטיינר #${retainer.id} (תשלום ${i + 1} מתוך ${count})`,
       });
-      createdPaymentIds.push(payment.id);
 
-      // Advance date for next iteration/update
       switch (retainer.frequency) {
         case "monthly":
           nextDate.setMonth(nextDate.getMonth() + 1);
@@ -64,14 +60,15 @@ export async function markRetainerAsPaid(
       }
     }
 
-    // Update retainer with final next date (inside same transaction)
+    // Batch create all payments in one statement
+    await tx.oneTimePayment.createMany({ data: paymentsData });
+
+    // Update retainer with final next date
     await tx.retainer.updateMany({
-      where: { id: retainerId, client: { companyId: user.companyId } },
-      data: {
-        nextDueDate: nextDate,
-      },
+      where: { id: retainerId, companyId: user.companyId, deletedAt: null },
+      data: { nextDueDate: nextDate },
     });
-  });
+  }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 10000 }));
 
   // Trigger Sync Rules
   try {
@@ -85,5 +82,5 @@ export async function markRetainerAsPaid(
   revalidatePath("/finance/payments");
   revalidatePath("/finance/income-expenses");
 
-  return { success: true, count, paymentIds: createdPaymentIds };
+  return { success: true, count };
 }

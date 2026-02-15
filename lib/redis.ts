@@ -13,6 +13,9 @@ export const redis =
     // Add prefix for environment isolation
     keyPrefix:
       (process.env.NODE_ENV === "production" ? "prod:" : "dev:") + "app:",
+    connectTimeout: 3000,          // 3s instead of default 10s
+    maxRetriesPerRequest: 1,       // 1 retry instead of 20
+    enableOfflineQueue: false,     // fail immediately when disconnected
     // Do not panic if connection fails, just log
     retryStrategy: (times) => {
       // Reconnect with exponential backoff
@@ -31,6 +34,9 @@ export const redisPublisher =
     tls: process.env.REDIS_URL?.includes("rediss://") ? {} : undefined,
     keyPrefix:
       (process.env.NODE_ENV === "production" ? "prod:" : "dev:") + "app:",
+    connectTimeout: 3000,
+    maxRetriesPerRequest: 1,
+    enableOfflineQueue: false,
   });
 
 if (process.env.NODE_ENV !== "production") {

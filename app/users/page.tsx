@@ -80,8 +80,8 @@ export default function UsersPage() {
     try {
       const response = await fetch("/api/tables");
       if (response.ok) {
-        const data = await response.json();
-        setTables(data);
+        const json = await response.json();
+        setTables(json.data ?? json);
       }
     } catch (error) {
       console.error("Error fetching tables:", error);

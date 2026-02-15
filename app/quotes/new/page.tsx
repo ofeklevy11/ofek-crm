@@ -1,9 +1,6 @@
-import { getProducts } from "@/app/actions/products";
+import { getProductsForDropdown } from "@/app/actions/products";
 import { getClientsForDropdown } from "@/app/actions/quotes";
-import {
-  getBusinessSettings,
-  checkBusinessSettingsComplete,
-} from "@/app/actions/business-settings";
+import { getBusinessSettings } from "@/app/actions/business-settings";
 import QuoteEditor from "../editor";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
@@ -13,13 +10,19 @@ export default async function NewQuotePage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [products, clients, isSettingsComplete, businessSettings] =
+  const [products, clients, businessSettings] =
     await Promise.all([
-      getProducts(),
+      getProductsForDropdown(),
       getClientsForDropdown(),
-      checkBusinessSettingsComplete(),
       getBusinessSettings(),
     ]);
+
+  // Derive completeness from businessSettings instead of a separate DB query
+  const isSettingsComplete = Boolean(
+    businessSettings?.businessType &&
+    businessSettings?.taxId &&
+    businessSettings?.businessAddress
+  );
 
   // If business settings are not complete, show setup form
   if (!isSettingsComplete) {
@@ -36,7 +39,7 @@ export default async function NewQuotePage() {
     <QuoteEditor
       products={plainProducts}
       clients={clients}
-      isVatExempt={businessSettings.businessType === "exempt"}
+      isVatExempt={businessSettings?.businessType === "exempt"}
     />
   );
 }

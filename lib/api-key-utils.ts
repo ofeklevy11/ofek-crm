@@ -17,5 +17,6 @@ export async function findApiKeyByValue(apiKey: string) {
   const keyHash = hashApiKey(apiKey);
   return prisma.apiKey.findUnique({
     where: { keyHash },
+    select: { companyId: true, isActive: true },
   });
 }

@@ -19,21 +19,19 @@ export async function GET(request: Request) {
 
     console.log("Starting Main Automation Job...");
 
-    // BB8: Cursor-based pagination to handle >1000 companies
-    const companies: { id: number }[] = [];
-    let cursor: number | undefined;
-    const PAGE_SIZE = 1000;
-
-    do {
-      const page = await prisma.company.findMany({
-        select: { id: true },
-        take: PAGE_SIZE,
-        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-        orderBy: { id: "asc" },
-      });
-      companies.push(...page);
-      cursor = page.length === PAGE_SIZE ? page[page.length - 1].id : undefined;
-    } while (cursor);
+    // Only fetch companies that have active time-based or event-based automation rules.
+    // This avoids dispatching Inngest events for companies with no automations at all.
+    const companies = await prisma.$queryRaw<{ id: number }[]>`
+      SELECT DISTINCT c.id
+      FROM "Company" c
+      WHERE EXISTS (
+        SELECT 1 FROM "AutomationRule" ar
+        WHERE ar."companyId" = c.id
+          AND ar."isActive" = true
+          AND ar."triggerType" IN ('TIME_SINCE_CREATION', 'EVENT_TIME')
+      )
+      ORDER BY c.id
+    `;
 
     if (companies.length > 0) {
       // BB9: Add dedup IDs to prevent duplicates on cron retry
@@ -51,7 +49,11 @@ export async function GET(request: Request) {
       });
 
       try {
-        await inngest.send(events);
+        // Chunk events to stay within Inngest's per-call batch limit
+        const INNGEST_BATCH_SIZE = 500;
+        for (let i = 0; i < events.length; i += INNGEST_BATCH_SIZE) {
+          await inngest.send(events.slice(i, i + INNGEST_BATCH_SIZE));
+        }
       } catch (sendErr) {
         // Fallback: parallel processing with timeout (max 50s to stay under Vercel 60s limit)
         console.error("[Cron] Failed to send Inngest events, falling back to parallel:", sendErr);

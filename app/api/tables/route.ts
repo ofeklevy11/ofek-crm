@@ -3,20 +3,51 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { canManageTables } from "@/lib/permissions";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // CRITICAL: Filter by companyId for multi-tenancy
+    const { searchParams } = new URL(request.url);
+    const cursor = searchParams.get("cursor");
+    const cursorId = cursor ? parseInt(cursor, 10) : null;
+    if (cursor && (!Number.isFinite(cursorId) || cursorId! <= 0)) {
+      return NextResponse.json({ error: "Invalid cursor" }, { status: 400 });
+    }
+    const limit = Math.min(Number(searchParams.get("limit")) || 100, 500);
+    if (!Number.isInteger(limit) || limit <= 0) {
+      return NextResponse.json({ error: "Invalid limit" }, { status: 400 });
+    }
+
+    // P2: Permission-aware WHERE — basic users only see tables they have access to
+    const where: any = { companyId: user.companyId, deletedAt: null };
+    if (user.role !== "admin" && user.role !== "manager") {
+      const allowedIds = user.tablePermissions
+        ? Object.entries(user.tablePermissions)
+            .filter(([, p]) => p === "read" || p === "write")
+            .map(([id]) => parseInt(id))
+        : [];
+      where.id = { in: allowedIds };
+    }
+
+    // P3: Cursor-based pagination
     const tables = await prisma.tableMeta.findMany({
-      where: { companyId: user.companyId },
+      where,
       orderBy: { createdAt: "desc" },
-      take: 500,
+      take: limit + 1,
+      ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
     });
-    return NextResponse.json(tables);
+
+    const hasMore = tables.length > limit;
+    const data = hasMore ? tables.slice(0, limit) : tables;
+
+    return NextResponse.json({
+      data,
+      hasMore,
+      nextCursor: hasMore ? data[data.length - 1]?.id : undefined,
+    });
   } catch (error) {
     console.error("Error fetching tables:", error);
     return NextResponse.json(
@@ -40,7 +71,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
     const { name, slug, schemaJson } = body;
 
     // Basic validation
@@ -79,7 +115,14 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(table);
-  } catch (error) {
+  } catch (error: any) {
+    // P6: Handle duplicate slug with a clear 409 instead of generic 500
+    if (error.code === "P2002") {
+      return NextResponse.json(
+        { error: "slug כבר קיים בחברה זו" },
+        { status: 409 }
+      );
+    }
     console.error("Error creating table:", error);
     return NextResponse.json(
       { error: "Failed to create table" },

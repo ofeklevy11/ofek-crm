@@ -2,17 +2,20 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 
+function parseId(raw: string): number | null {
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
-    const fileId = parseInt(id);
-    const body = await request.json();
-    const { displayName } = body;
+    const fileId = parseId(id);
 
-    if (isNaN(fileId)) {
+    if (!fileId) {
       return NextResponse.json({ error: "Invalid file ID" }, { status: 400 });
     }
 
@@ -20,6 +23,14 @@ export async function PUT(
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    const { displayName } = body;
 
     // Verify the file exists and belongs to user's company
     const file = await prisma.file.findFirst({

@@ -20,34 +20,34 @@ export default async function PaymentsPage({
   const currentPage = Number(page) || 1;
   const pageSize = 30;
 
-  // CRITICAL: Filter by client.companyId
-  const totalPayments = await prisma.oneTimePayment.count({
-    where: {
-      client: { companyId: user.companyId },
-    },
-  });
+  const companyFilter = { companyId: user.companyId, deletedAt: null };
+
+  const [totalPayments, payments, statusCounts, outstandingAgg] = await Promise.all([
+    prisma.oneTimePayment.count({ where: companyFilter }),
+    prisma.oneTimePayment.findMany({
+      where: companyFilter,
+      include: { client: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "desc" },
+      skip: (currentPage - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.oneTimePayment.groupBy({
+      by: ["status"],
+      where: companyFilter,
+      _count: { id: true },
+    }),
+    prisma.oneTimePayment.aggregate({
+      where: { ...companyFilter, status: { in: ["pending", "overdue"] } },
+      _sum: { amount: true },
+    }),
+  ]);
   const totalPages = Math.ceil(totalPayments / pageSize);
 
-  // CRITICAL: Filter by client.companyId
-  const payments = await prisma.oneTimePayment.findMany({
-    where: {
-      client: { companyId: user.companyId },
-    },
-    include: {
-      client: true,
-    },
-    orderBy: { createdAt: "desc" },
-    skip: (currentPage - 1) * pageSize,
-    take: pageSize,
-  });
-
-  const pendingPayments = payments.filter((p) => p.status === "pending");
-  const paidPayments = payments.filter((p) => p.status === "paid");
-  const overduePayments = payments.filter((p) => p.status === "overdue");
-
-  const totalOutstanding = payments
-    .filter((p) => p.status === "pending" || p.status === "overdue")
-    .reduce((sum, p) => sum + Number(p.amount), 0);
+  const statusMap = new Map(statusCounts.map((s) => [s.status, s._count.id]));
+  const pendingCount = statusMap.get("pending") ?? 0;
+  const paidCount = statusMap.get("paid") ?? 0;
+  const overdueCount = statusMap.get("overdue") ?? 0;
+  const totalOutstanding = Number(outstandingAgg._sum.amount ?? 0);
 
   return (
     <div className="p-4 md:p-8 space-y-8 bg-[#f4f8f8] min-h-screen" dir="rtl">
@@ -83,19 +83,19 @@ export default async function PaymentsPage({
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="text-sm text-gray-500">ממתין</div>
           <div className="text-3xl font-bold text-gray-700 mt-2">
-            {pendingPayments.length}
+            {pendingCount}
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="text-sm text-gray-500">באיחור</div>
           <div className="text-3xl font-bold text-[#a24ec1] mt-2">
-            {overduePayments.length}
+            {overdueCount}
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="text-sm text-gray-500">שולם</div>
           <div className="text-3xl font-bold text-[#4f95ff] mt-2">
-            {paidPayments.length}
+            {paidCount}
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

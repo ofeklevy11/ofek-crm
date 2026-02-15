@@ -15,6 +15,10 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Seed cannot run in production");
+  }
+
   console.log("🌱 Starting seed...");
 
   // בדיקה אם כבר קיימת חברה

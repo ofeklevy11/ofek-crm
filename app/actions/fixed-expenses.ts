@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
+import { VALID_FIXED_EXPENSE_STATUSES } from "@/lib/finance-constants";
 
 // Helper to get clamped date
 const getValidDate = (y: number, m: number, d: number) => {
@@ -14,11 +15,11 @@ const getValidDate = (y: number, m: number, d: number) => {
   return date;
 };
 
-export async function getFixedExpenses() {
+export async function getFixedExpenses(opts?: { cursor?: number; take?: number }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  // P134: Add take limits to bound queries
+  const take = Math.min(opts?.take ?? 500, 500);
   const expenses = await prisma.fixedExpense.findMany({
     where: {
       companyId: user.companyId,
@@ -26,13 +27,18 @@ export async function getFixedExpenses() {
     orderBy: {
       createdAt: "desc",
     },
-    take: 500,
+    take: take + 1,
+    ...(opts?.cursor && { cursor: { id: opts.cursor }, skip: 1 }),
   });
+
+  const hasMore = expenses.length > take;
+  const pageExpenses = expenses.slice(0, take);
 
   // Fetch all finance records related to fixed expenses to calculate status
   const financeRecords = await prisma.financeRecord.findMany({
     where: {
       companyId: user.companyId,
+      deletedAt: null,
       originId: {
         startsWith: "fixed_",
       },
@@ -47,8 +53,10 @@ export async function getFixedExpenses() {
   const recordMap = new Set(financeRecords.map((r) => r.originId));
   const today = new Date();
 
+  const nextCursor = hasMore ? pageExpenses[pageExpenses.length - 1]?.id : undefined;
+
   // Enhance expenses with status
-  return expenses.map((expense: any) => {
+  const data = pageExpenses.map((expense: any) => {
     const startDate = expense.startDate || expense.createdAt;
     const frequency = expense.frequency;
     const payDay = expense.payDay || startDate.getDate();
@@ -139,6 +147,8 @@ export async function getFixedExpenses() {
       lastPaidDate,
     };
   });
+
+  return { data, nextCursor, hasMore };
 }
 
 export async function markFixedExpensePaid(expenseId: number, count: number) {
@@ -150,6 +160,14 @@ export async function markFixedExpensePaid(expenseId: number, count: number) {
   });
 
   if (!expense) throw new Error("Expense not found");
+
+  // P1: Resolve FIXED_EXPENSES sync rule so @@unique([syncRuleId, originId]) prevents duplicates
+  const { ensureDefaultSyncRules } = await import("./finance-sync");
+  await ensureDefaultSyncRules(user.companyId);
+  const fixedExpenseRule = await prisma.financeSyncRule.findFirst({
+    where: { companyId: user.companyId, sourceType: "FIXED_EXPENSES", isActive: true },
+    select: { id: true },
+  });
 
   const today = new Date();
   const startDate = (expense as any).startDate || expense.createdAt;
@@ -172,6 +190,7 @@ export async function markFixedExpensePaid(expenseId: number, count: number) {
   const existingRecords = await prisma.financeRecord.findMany({
     where: {
       companyId: user.companyId,
+      deletedAt: null,
       originId: { startsWith: baseOriginId },
     },
     select: { originId: true },
@@ -233,11 +252,12 @@ export async function markFixedExpensePaid(expenseId: number, count: number) {
         (expense.description || `Fixed Expense: ${frequency}`) +
         (date > now ? " (תשלום עתידי)" : ""),
       originId: originId,
+      syncRuleId: fixedExpenseRule?.id ?? null,
     };
   });
 
   if (recordsData.length > 0) {
-    await prisma.financeRecord.createMany({ data: recordsData });
+    await prisma.financeRecord.createMany({ data: recordsData, skipDuplicates: true });
   }
 
   // Trigger Auto-Sync
@@ -260,6 +280,16 @@ export async function createFixedExpense(data: {
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+
+  if (typeof data.amount !== "number" || data.amount <= 0) {
+    throw new Error("Amount must be a positive number");
+  }
+  if (!["MONTHLY", "QUARTERLY", "YEARLY", "ONE_TIME"].includes(data.frequency)) {
+    throw new Error("Invalid frequency");
+  }
+  if (data.payDay !== undefined && (data.payDay < 1 || data.payDay > 31)) {
+    throw new Error("payDay must be between 1 and 31");
+  }
 
   await prisma.fixedExpense.create({
     data: {
@@ -300,6 +330,10 @@ export async function updateFixedExpense(
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
+  if (data.status && !VALID_FIXED_EXPENSE_STATUSES.includes(data.status as any)) {
+    throw new Error(`Invalid status: ${data.status}`);
+  }
+
   await prisma.fixedExpense.update({
     where: {
       id,
@@ -335,13 +369,19 @@ export async function deleteFixedExpense(id: number) {
   revalidatePath("/finance/fixed-expenses");
 }
 
-export async function processFixedExpenses() {
-  const user = await getCurrentUser();
-  if (!user) return;
+export async function processFixedExpenses(companyIdParam?: number) {
+  const companyId = companyIdParam ?? (await getCurrentUser())?.companyId;
+  if (!companyId) return;
+
+  // P1: Resolve FIXED_EXPENSES sync rule so @@unique([syncRuleId, originId]) prevents duplicates
+  const fixedExpenseRule = await prisma.financeSyncRule.findFirst({
+    where: { companyId, sourceType: "FIXED_EXPENSES", isActive: true },
+    select: { id: true },
+  });
 
   const expenses = await prisma.fixedExpense.findMany({
     where: {
-      companyId: user.companyId,
+      companyId,
       status: "ACTIVE",
     },
     take: 500,
@@ -350,7 +390,8 @@ export async function processFixedExpenses() {
   // P123: Pre-fetch all existing originIds to avoid N+1 queries
   const existingRecords = await prisma.financeRecord.findMany({
     where: {
-      companyId: user.companyId,
+      companyId,
+      deletedAt: null,
       originId: { startsWith: "fixed_" },
     },
     select: { originId: true },
@@ -370,10 +411,11 @@ export async function processFixedExpenses() {
     status: string;
     description: string;
     originId: string;
+    syncRuleId: number | null;
   }[] = [];
 
   for (const expense of expenses) {
-    const startDate = expense.createdAt;
+    const startDate = expense.startDate || expense.createdAt;
     const frequency = expense.frequency;
     const payDay = expense.payDay || startDate.getDate();
     const baseOriginId = `fixed_${expense.id}`;
@@ -418,7 +460,7 @@ export async function processFixedExpenses() {
 
       if (!exists) {
         toCreate.push({
-          companyId: user.companyId,
+          companyId,
           title: expense.title,
           amount: expense.amount,
           type: "EXPENSE",
@@ -427,6 +469,7 @@ export async function processFixedExpenses() {
           status: "COMPLETED",
           description: expense.description || `Fixed Expense: ${frequency}`,
           originId: originId,
+          syncRuleId: fixedExpenseRule?.id ?? null,
         });
       }
 
@@ -440,9 +483,12 @@ export async function processFixedExpenses() {
   }
 
   if (toCreate.length > 0) {
-    await prisma.financeRecord.createMany({ data: toCreate });
-    revalidatePath("/finance/income-expenses");
-    revalidatePath("/finance");
+    await prisma.financeRecord.createMany({ data: toCreate, skipDuplicates: true });
+    // Only revalidate in request context (not Inngest background)
+    if (!companyIdParam) {
+      revalidatePath("/finance/income-expenses");
+      revalidatePath("/finance");
+    }
   }
 
   return toCreate.length;

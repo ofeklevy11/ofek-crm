@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { inngest } from "@/lib/inngest/client";
 import type { OnCompleteAction } from "@/lib/task-sheet-automations";
+import { withRetry } from "@/lib/db-retry";
 
 // Types
 export interface TaskSheetItemInput {
@@ -50,7 +51,7 @@ export async function getTaskSheets() {
 
     const isAdmin = user.role === "admin";
 
-    const sheets = await prisma.taskSheet.findMany({
+    const sheets = await withRetry(() => prisma.taskSheet.findMany({
       where: {
         companyId: user.companyId,
         ...(isAdmin ? {} : { assigneeId: user.id }),
@@ -73,12 +74,9 @@ export async function getTaskSheets() {
         items: {
           orderBy: { order: "asc" },
         },
-        _count: {
-          select: { items: true },
-        },
       },
       orderBy: { createdAt: "desc" },
-    });
+    }));
 
     return { success: true, data: sheets };
   } catch (error) {
@@ -95,7 +93,7 @@ export async function getTaskSheetById(id: number) {
       return { success: false, error: "Unauthorized" };
     }
 
-    const sheet = await prisma.taskSheet.findFirst({
+    const sheet = await withRetry(() => prisma.taskSheet.findFirst({
       where: {
         id,
         companyId: user.companyId,
@@ -130,7 +128,7 @@ export async function getTaskSheetById(id: number) {
           },
         },
       },
-    });
+    }));
 
     if (!sheet) {
       return { success: false, error: "Task sheet not found" };
@@ -291,46 +289,48 @@ export async function addTaskSheetItem(
     }
 
     // LL: Verify the sheet belongs to the current user's company
-    const sheet = await prisma.taskSheet.findFirst({
+    const sheet = await withRetry(() => prisma.taskSheet.findFirst({
       where: { id: sheetId, companyId: user.companyId },
       select: { id: true },
-    });
+    }));
     if (!sheet) {
       return { success: false, error: "Task sheet not found" };
     }
 
     // SECURITY: Validate linkedTaskId belongs to user's company
     if (item.linkedTaskId) {
-      const linkedTask = await prisma.task.findFirst({
+      const linkedTask = await withRetry(() => prisma.task.findFirst({
         where: { id: item.linkedTaskId, companyId: user.companyId },
         select: { id: true },
-      });
+      }));
       if (!linkedTask) {
         return { success: false, error: "Invalid linked task" };
       }
     }
 
-    // Get max order
-    const maxOrder = await prisma.taskSheetItem.aggregate({
-      where: { sheetId },
-      _max: { order: true },
-    });
+    // Wrap aggregate + create in serializable transaction to prevent duplicate order values
+    const newItem = await withRetry(() => prisma.$transaction(async (tx) => {
+      const maxOrder = await tx.taskSheetItem.aggregate({
+        where: { sheetId },
+        _max: { order: true },
+      });
 
-    const newItem = await prisma.taskSheetItem.create({
-      data: {
-        sheetId,
-        title: item.title,
-        description: item.description,
-        priority: item.priority || "NORMAL",
-        category: item.category,
-        order: item.order ?? (maxOrder._max.order ?? 0) + 1,
-        dueTime: item.dueTime,
-        linkedTaskId: item.linkedTaskId,
-        onCompleteActions: JSON.parse(
-          JSON.stringify(item.onCompleteActions || []),
-        ),
-      },
-    });
+      return tx.taskSheetItem.create({
+        data: {
+          sheetId,
+          title: item.title,
+          description: item.description,
+          priority: item.priority || "NORMAL",
+          category: item.category,
+          order: item.order ?? (maxOrder._max.order ?? 0) + 1,
+          dueTime: item.dueTime,
+          linkedTaskId: item.linkedTaskId,
+          onCompleteActions: JSON.parse(
+            JSON.stringify(item.onCompleteActions || []),
+          ),
+        },
+      });
+    }, { isolationLevel: "Serializable", maxWait: 5000, timeout: 10000 }));
 
     revalidatePath("/tasks");
     revalidatePath("/tasks/my-sheets");
@@ -354,14 +354,14 @@ export async function updateTaskSheetItem(
     }
 
     // Get the item and check access
-    const existingItem = await prisma.taskSheetItem.findUnique({
+    const existingItem = await withRetry(() => prisma.taskSheetItem.findUnique({
       where: { id: itemId },
       include: {
         sheet: {
           select: { assigneeId: true, companyId: true, title: true },
         },
       },
-    });
+    }));
 
     if (!existingItem || existingItem.sheet.companyId !== user.companyId) {
       return { success: false, error: "Item not found" };
@@ -393,9 +393,15 @@ export async function updateTaskSheetItem(
     }
 
     // Both admin and assignee can update completion status
+    const now = new Date();
+    const nowCompleted = data.isCompleted !== undefined ? data.isCompleted : existingItem.isCompleted;
+    const nowCompletedAt = data.isCompleted !== undefined
+      ? (data.isCompleted ? now : null)
+      : existingItem.completedAt;
+
     if (data.isCompleted !== undefined) {
       updateData.isCompleted = data.isCompleted;
-      updateData.completedAt = data.isCompleted ? new Date() : null;
+      updateData.completedAt = data.isCompleted ? now : null;
     }
     if (data.notes !== undefined) updateData.notes = data.notes;
 
@@ -407,9 +413,16 @@ export async function updateTaskSheetItem(
     if (updateResult.count === 0) {
       return { success: false, error: "Item not found" };
     }
-    const updatedItem = await prisma.taskSheetItem.findUnique({
-      where: { id: itemId },
-    });
+
+    // Construct response from known data instead of re-fetching
+    const updatedItem = {
+      ...existingItem,
+      ...updateData,
+      isCompleted: nowCompleted,
+      completedAt: nowCompletedAt,
+      updatedAt: now,
+      sheet: undefined, // Remove nested sheet from response
+    };
 
     // Fire automations when isCompleted transitions false → true
     const transitionedToCompleted =
@@ -464,19 +477,14 @@ export async function deleteTaskSheetItem(itemId: number) {
       return { success: false, error: "רק מנהלים יכולים למחוק פריטים" };
     }
 
-    // W13: Verify item belongs to user's company via sheet join
-    const item = await prisma.taskSheetItem.findFirst({
+    // Single query: deleteMany with company scope, check count
+    const result = await prisma.taskSheetItem.deleteMany({
       where: { id: itemId, sheet: { companyId: user.companyId } },
-      select: { id: true },
     });
-    if (!item) {
+
+    if (result.count === 0) {
       return { success: false, error: "Item not found" };
     }
-
-    // SECURITY: Scope delete via sheet companyId join to prevent TOCTOU
-    await prisma.taskSheetItem.deleteMany({
-      where: { id: itemId, sheet: { companyId: user.companyId } },
-    });
 
     revalidatePath("/tasks");
     revalidatePath("/tasks/my-sheets");
@@ -496,14 +504,14 @@ export async function toggleTaskSheetItemCompletion(itemId: number) {
       return { success: false, error: "Unauthorized" };
     }
 
-    const item = await prisma.taskSheetItem.findUnique({
+    const item = await withRetry(() => prisma.taskSheetItem.findUnique({
       where: { id: itemId },
       include: {
         sheet: {
           select: { assigneeId: true, companyId: true, title: true },
         },
       },
-    });
+    }));
 
     if (!item || item.sheet.companyId !== user.companyId) {
       return { success: false, error: "Item not found" };
@@ -517,8 +525,10 @@ export async function toggleTaskSheetItemCompletion(itemId: number) {
       return { success: false, error: "אין לך הרשאה לעדכן פריט זה" };
     }
 
+    const now = new Date();
     const wasCompleted = item.isCompleted;
     const isNowCompleted = !wasCompleted;
+    const completedAt = isNowCompleted ? now : null;
 
     // Use atomic updateMany with a where-guard on the current state to prevent
     // double-click races: only the first toggle that matches the current state wins.
@@ -527,7 +537,7 @@ export async function toggleTaskSheetItemCompletion(itemId: number) {
       where: { id: itemId, sheetId: item.sheetId, isCompleted: wasCompleted, sheet: { companyId: user.companyId } },
       data: {
         isCompleted: isNowCompleted,
-        completedAt: isNowCompleted ? new Date() : null,
+        completedAt,
       },
     });
 
@@ -536,10 +546,14 @@ export async function toggleTaskSheetItemCompletion(itemId: number) {
       return { success: true, data: item, alreadyToggled: true };
     }
 
-    // Re-fetch the updated item for the response
-    const updatedItem = await prisma.taskSheetItem.findUnique({
-      where: { id: itemId },
-    });
+    // Construct response from known data instead of re-fetching
+    const updatedItem = {
+      ...item,
+      isCompleted: isNowCompleted,
+      completedAt,
+      updatedAt: now,
+      sheet: undefined,
+    };
 
     // Offload automations to background job so the checkbox UX is never blocked
     if (isNowCompleted && item.onCompleteActions) {
@@ -592,7 +606,7 @@ export async function getMyTaskSheets() {
 
     const now = new Date();
 
-    const sheets = await prisma.taskSheet.findMany({
+    const sheets = await withRetry(() => prisma.taskSheet.findMany({
       where: {
         companyId: user.companyId,
         assigneeId: user.id,
@@ -626,7 +640,7 @@ export async function getMyTaskSheets() {
         },
       },
       orderBy: [{ type: "asc" }, { createdAt: "desc" }],
-    });
+    }));
 
     return { success: true, data: sheets };
   } catch (error) {
@@ -644,13 +658,14 @@ export async function resetTaskSheetItems(sheetId: number) {
     }
 
     // Verify sheet ownership/access
-    const sheet = await prisma.taskSheet.findFirst({
+    const sheet = await withRetry(() => prisma.taskSheet.findFirst({
       where: {
         id: sheetId,
         companyId: user.companyId,
         assigneeId: user.id, // Only assignee can reset their own sheet
       },
-    });
+      select: { id: true },
+    }));
 
     if (!sheet) {
       return { success: false, error: "Task sheet not found or unauthorized" };

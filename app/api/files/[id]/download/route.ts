@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 
+function parseId(raw: string): number | null {
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+// Only proxy requests to known safe storage hosts to prevent SSRF
+const SAFE_HOSTS = ["utfs.io", "uploadthing.com", "ufs.sh"];
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -13,9 +21,9 @@ export async function GET(
     }
 
     const { id } = await params;
-    const fileId = parseInt(id, 10);
+    const fileId = parseId(id);
 
-    if (isNaN(fileId)) {
+    if (!fileId) {
       return NextResponse.json({ error: "Invalid file ID" }, { status: 400 });
     }
 
@@ -23,7 +31,7 @@ export async function GET(
     const file = await prisma.file.findFirst({
       where: {
         id: fileId,
-        companyId: user.companyId, // Security: Only allow download if same company
+        companyId: user.companyId,
       },
     });
 
@@ -34,9 +42,28 @@ export async function GET(
       );
     }
 
+    // SECURITY: Validate URL host before server-side fetch to prevent SSRF
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(file.url);
+    } catch {
+      return NextResponse.json({ error: "File storage error" }, { status: 500 });
+    }
+
+    const isSafeHost = SAFE_HOSTS.some(
+      (h) => parsedUrl.hostname === h || parsedUrl.hostname.endsWith(`.${h}`),
+    );
+
+    if (!isSafeHost) {
+      return NextResponse.json(
+        { error: "File storage error" },
+        { status: 500 },
+      );
+    }
+
     // Fetch the file content from the external URL
     const response = await fetch(file.url, {
-      signal: AbortSignal.timeout(15_000), // P214: 15s timeout to prevent hanging on slow storage
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {

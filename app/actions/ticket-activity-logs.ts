@@ -82,8 +82,6 @@ export async function createTicketActivityLogs(
   });
   if (!ticket) throw new Error("Ticket not found or access denied");
 
-  const changes: ChangeLogEntry[] = [];
-
   // Fields to track
   const trackableFields = [
     "status",
@@ -95,8 +93,45 @@ export async function createTicketActivityLogs(
     "description",
   ];
 
+  // Collect all user/client IDs needed for label resolution in a single pass
+  const userIds = new Set<number>();
+  const clientIds = new Set<number>();
+
   for (const field of trackableFields) {
-    // Check if field exists in newData (including null values) and is different from old
+    if (!(field in newData) || newData[field] === oldTicket[field]) continue;
+    if (field === "assigneeId") {
+      if (oldTicket[field]) userIds.add(oldTicket[field]);
+      if (newData[field]) userIds.add(newData[field]);
+    } else if (field === "clientId") {
+      if (oldTicket[field]) clientIds.add(oldTicket[field]);
+      if (newData[field]) clientIds.add(newData[field]);
+    }
+  }
+
+  // Remove IDs already in the provided lookup maps
+  if (userLookup) userIds.forEach((id) => { if (userLookup.has(id)) userIds.delete(id); });
+  if (clientLookup) clientIds.forEach((id) => { if (clientLookup.has(id)) clientIds.delete(id); });
+
+  // Batch-fetch missing names in parallel (max 2 queries instead of up to 4 sequential)
+  const [userRows, clientRows] = await Promise.all([
+    userIds.size > 0
+      ? prisma.user.findMany({ where: { id: { in: [...userIds] } }, select: { id: true, name: true } })
+      : [],
+    clientIds.size > 0
+      ? prisma.client.findMany({ where: { id: { in: [...clientIds] } }, select: { id: true, name: true } })
+      : [],
+  ]);
+
+  // Merge fetched names into lookup maps
+  const mergedUserLookup = new Map<number, string>(userLookup || []);
+  for (const row of userRows) mergedUserLookup.set(row.id, row.name);
+
+  const mergedClientLookup = new Map<number, string>(clientLookup || []);
+  for (const row of clientRows) mergedClientLookup.set(row.id, row.name);
+
+  const changes: ChangeLogEntry[] = [];
+
+  for (const field of trackableFields) {
     const hasField = field in newData;
     const isDifferent = newData[field] !== oldTicket[field];
 
@@ -107,53 +142,12 @@ export async function createTicketActivityLogs(
       let oldLabel: string | null = null;
       let newLabel: string | null = null;
 
-      // Special handling for relation fields (assignee and client)
       if (field === "assigneeId") {
-        if (oldValue && userLookup?.has(oldValue)) {
-          oldLabel = userLookup.get(oldValue) || null;
-        } else if (oldValue) {
-          const user = await prisma.user.findUnique({
-            where: { id: oldValue },
-            select: { name: true },
-          });
-          oldLabel = user?.name || "לא ידוע";
-        }
-
-        if (newValue && userLookup?.has(newValue)) {
-          newLabel = userLookup.get(newValue) || null;
-        } else if (newValue) {
-          const user = await prisma.user.findUnique({
-            where: { id: newValue },
-            select: { name: true },
-          });
-          newLabel = user?.name || "לא ידוע";
-        }
-
-        if (!oldValue) oldLabel = "לא משויך";
-        if (!newValue) newLabel = "לא משויך";
+        oldLabel = oldValue ? (mergedUserLookup.get(oldValue) || "לא ידוע") : "לא משויך";
+        newLabel = newValue ? (mergedUserLookup.get(newValue) || "לא ידוע") : "לא משויך";
       } else if (field === "clientId") {
-        if (oldValue && clientLookup?.has(oldValue)) {
-          oldLabel = clientLookup.get(oldValue) || null;
-        } else if (oldValue) {
-          const client = await prisma.client.findUnique({
-            where: { id: oldValue },
-            select: { name: true },
-          });
-          oldLabel = client?.name || "לא ידוע";
-        }
-
-        if (newValue && clientLookup?.has(newValue)) {
-          newLabel = clientLookup.get(newValue) || null;
-        } else if (newValue) {
-          const client = await prisma.client.findUnique({
-            where: { id: newValue },
-            select: { name: true },
-          });
-          newLabel = client?.name || "לא ידוע";
-        }
-
-        if (!oldValue) oldLabel = "אין לקוח";
-        if (!newValue) newLabel = "אין לקוח";
+        oldLabel = oldValue ? (mergedClientLookup.get(oldValue) || "לא ידוע") : "אין לקוח";
+        newLabel = newValue ? (mergedClientLookup.get(newValue) || "לא ידוע") : "אין לקוח";
       } else {
         oldLabel = getValueLabel(field, oldValue);
         newLabel = getValueLabel(field, newValue);
@@ -224,6 +218,7 @@ export async function deleteTicketActivityLog(logId: number) {
   // Find the log to verify it belongs to the user's company
   const log = await prisma.ticketActivityLog.findFirst({
     where: { id: logId, ticket: { companyId: user.companyId } },
+    select: { id: true },
   });
 
   if (!log) {

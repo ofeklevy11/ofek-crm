@@ -20,42 +20,53 @@ export default async function RetainersPage({
   const currentPage = Number(page) || 1;
   const pageSize = 30;
 
-  // Fetch ALL retainers to sort correctly by status (since Prisma can't easy-sort enums in custom order)
-  const allRetainers = await prisma.retainer.findMany({
-    where: {
-      client: { companyId: user.companyId },
-    },
-    include: {
-      client: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  // DB-level: status counts + sorted paginated IDs in parallel
+  const [statusCounts, sortedIds] = await Promise.all([
+    prisma.retainer.groupBy({
+      by: ["status"],
+      where: { companyId: user.companyId, deletedAt: null },
+      _count: { id: true },
+    }),
+    prisma.$queryRaw<{ id: number }[]>`
+      SELECT r.id
+      FROM "Retainer" r
+      JOIN "Client" c ON r."clientId" = c.id
+      WHERE c."companyId" = ${user.companyId}
+        AND r."deletedAt" IS NULL
+        AND c."deletedAt" IS NULL
+      ORDER BY
+        CASE r.status
+          WHEN 'active' THEN 0
+          WHEN 'paused' THEN 1
+          WHEN 'cancelled' THEN 2
+          ELSE 99
+        END,
+        r."createdAt" DESC
+      LIMIT ${pageSize} OFFSET ${(currentPage - 1) * pageSize}
+    `,
+  ]);
 
-  // Sort: Active -> Paused -> Cancelled
-  const statusOrder: Record<string, number> = {
-    active: 0,
-    paused: 1,
-    cancelled: 2,
-  };
+  // Fetch full retainer objects for the current page only
+  const retainersById = sortedIds.length > 0
+    ? await prisma.retainer.findMany({
+        where: { id: { in: sortedIds.map((r) => r.id) }, deletedAt: null },
+        include: { client: true },
+      })
+    : [];
 
-  const sortedRetainers = allRetainers.sort((a, b) => {
-    const orderA = statusOrder[a.status] ?? 99;
-    const orderB = statusOrder[b.status] ?? 99;
-    if (orderA !== orderB) return orderA - orderB;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  });
-
-  const totalPages = Math.ceil(sortedRetainers.length / pageSize);
-  const currentRetainers = sortedRetainers.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
+  // Restore DB sort order
+  const idOrder = new Map(sortedIds.map((r, i) => [r.id, i]));
+  const currentRetainers = retainersById.sort(
+    (a, b) => (idOrder.get(a.id) ?? 0) - (idOrder.get(b.id) ?? 0),
   );
 
-  const activeRetainers = sortedRetainers.filter((r) => r.status === "active");
-  const pausedRetainers = sortedRetainers.filter((r) => r.status === "paused");
-  const cancelledRetainers = sortedRetainers.filter(
-    (r) => r.status === "cancelled",
-  );
+  // Extract counts from groupBy
+  const countMap = new Map(statusCounts.map((s) => [s.status, s._count.id]));
+  const activeCount = countMap.get("active") ?? 0;
+  const pausedCount = countMap.get("paused") ?? 0;
+  const cancelledCount = countMap.get("cancelled") ?? 0;
+  const totalRetainers = activeCount + pausedCount + cancelledCount;
+  const totalPages = Math.ceil(totalRetainers / pageSize);
 
   return (
     <div className="p-4 md:p-8 space-y-8 bg-[#f4f8f8] min-h-screen" dir="rtl">
@@ -89,19 +100,19 @@ export default async function RetainersPage({
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="text-sm text-gray-500">ריטיינרים פעילים</div>
           <div className="text-3xl font-bold text-[#4f95ff] mt-2">
-            {activeRetainers.length}
+            {activeCount}
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="text-sm text-gray-500">ריטיינרים מושהים</div>
           <div className="text-3xl font-bold text-gray-700 mt-2">
-            {pausedRetainers.length}
+            {pausedCount}
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="text-sm text-gray-500">ריטיינרים לא פעילים</div>
           <div className="text-3xl font-bold text-[#a24ec1] mt-2">
-            {cancelledRetainers.length}
+            {cancelledCount}
           </div>
         </div>
       </div>

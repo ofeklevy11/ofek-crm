@@ -1,7 +1,8 @@
 import { redis } from "@/lib/redis";
 import { randomUUID } from "crypto";
 
-const GOALS_CACHE_TTL = 30 * 60; // 30 minutes
+const GOALS_CACHE_FRESH_TTL = 30 * 60; // 30 minutes — considered "fresh"
+const GOALS_CACHE_STALE_TTL = 60 * 60; // 60 minutes — max lifetime (stale served while revalidating)
 const TABLE_WIDGET_CACHE_TTL = 15 * 60; // 15 minutes
 const LOCK_TTL = 120; // 2 minutes — Inngest timeout (90s) + 30s buffer
 
@@ -39,15 +40,29 @@ export function buildWidgetHash(
   return parts.join("|");
 }
 
-// --- Goals cache ---
+// --- Goals cache (stale-while-revalidate) ---
 // NOTE: Date objects (startDate, endDate, createdAt, updatedAt) are serialized to ISO strings
 // by JSON.stringify. Frontend already handles this since Next.js server→client transfer does the same.
+//
+// Cache envelope: { data: any[], setAt: number }
+// - If age < GOALS_CACHE_FRESH_TTL → return data (fresh)
+// - If age >= FRESH but key still exists (< STALE_TTL) → return data + signal stale
+// - If key expired → return null (cache miss)
 
-export async function getCachedGoals(companyId: number): Promise<any[] | null> {
+function goalsTimestampKey(companyId: number) {
+  return `dashboard:${companyId}:goals:ts`;
+}
+
+export async function getCachedGoals(
+  companyId: number,
+): Promise<{ data: any[]; stale: boolean } | null> {
   try {
-    const raw = await redis.get(goalsKey(companyId));
+    const [raw, tsRaw] = await redis.mget(goalsKey(companyId), goalsTimestampKey(companyId));
     if (!raw) return null;
-    return JSON.parse(raw);
+    const data = JSON.parse(raw);
+    const setAt = tsRaw ? Number(tsRaw) : 0;
+    const age = (Date.now() - setAt) / 1000;
+    return { data, stale: age >= GOALS_CACHE_FRESH_TTL };
   } catch (err) {
     console.error("[dashboard-cache] Failed to read goals cache:", err);
     return null;
@@ -56,7 +71,10 @@ export async function getCachedGoals(companyId: number): Promise<any[] | null> {
 
 export async function setCachedGoals(companyId: number, goals: any[]): Promise<void> {
   try {
-    await redis.set(goalsKey(companyId), JSON.stringify(goals), "EX", GOALS_CACHE_TTL);
+    const pipeline = redis.pipeline();
+    pipeline.set(goalsKey(companyId), JSON.stringify(goals), "EX", GOALS_CACHE_STALE_TTL);
+    pipeline.set(goalsTimestampKey(companyId), String(Date.now()), "EX", GOALS_CACHE_STALE_TTL);
+    await pipeline.exec();
   } catch (err) {
     console.error("[dashboard-cache] Failed to set goals cache:", err);
   }
@@ -64,7 +82,7 @@ export async function setCachedGoals(companyId: number, goals: any[]): Promise<v
 
 export async function invalidateGoalsCache(companyId: number): Promise<void> {
   try {
-    await redis.del(goalsKey(companyId));
+    await redis.del(goalsKey(companyId), goalsTimestampKey(companyId));
   } catch (err) {
     console.error("[dashboard-cache] Failed to invalidate goals cache:", err);
   }

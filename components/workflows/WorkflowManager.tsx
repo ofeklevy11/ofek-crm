@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Workflow, WorkflowStage, User } from "@prisma/client";
+import { Workflow, WorkflowStage } from "@prisma/client";
 import {
   Plus,
   Layout,
@@ -23,7 +23,7 @@ interface WorkflowWithStages extends Workflow {
 interface WorkflowManagerProps {
   initialWorkflows: WorkflowWithStages[];
   initialInstances: any[]; // Typed as any to avoid build errors until Prisma generates
-  users: User[];
+  users: { id: number; name: string }[];
   currentUser: any; // We use 'any' or import the User type from permissions
 }
 

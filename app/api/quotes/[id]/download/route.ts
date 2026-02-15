@@ -44,8 +44,8 @@ export async function GET(
       }
       // Only clear pdfUrl if file is genuinely gone (404). On 5xx, don't nuke a valid URL.
       if (cachedRes.status === 404) {
-        await prisma.quote.update({
-          where: { id: quote.id, companyId: user.companyId },
+        await prisma.quote.updateMany({
+          where: { id: quote.id, companyId: user.companyId, pdfUrl: quote.pdfUrl },
           data: { pdfUrl: null },
         });
       } else {

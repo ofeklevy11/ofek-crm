@@ -1,5 +1,5 @@
 import { inngest } from "../client";
-import { prisma } from "@/lib/prisma";
+import { prismaBg as prisma } from "@/lib/prisma-background";
 
 /**
  * Scheduled cron job to process fixed expenses (Issue 27).
@@ -38,6 +38,12 @@ export const processFixedExpensesCron = inngest.createFunction(
       const created = await step.run(
         `process-company-${companyId}`,
         async () => {
+          // P1: Resolve FIXED_EXPENSES sync rule so @@unique([syncRuleId, originId]) prevents duplicates
+          const fixedExpenseRule = await prisma.financeSyncRule.findFirst({
+            where: { companyId, sourceType: "FIXED_EXPENSES", isActive: true },
+            select: { id: true },
+          });
+
           const expenses = await prisma.fixedExpense.findMany({
             where: { companyId, status: "ACTIVE" },
             take: 500,
@@ -47,6 +53,7 @@ export const processFixedExpensesCron = inngest.createFunction(
           const existingRecords = await prisma.financeRecord.findMany({
             where: {
               companyId,
+              deletedAt: null,
               originId: { startsWith: "fixed_" },
             },
             select: { originId: true },
@@ -103,6 +110,7 @@ export const processFixedExpensesCron = inngest.createFunction(
                   description:
                     expense.description || `Fixed Expense: ${frequency}`,
                   originId,
+                  syncRuleId: fixedExpenseRule?.id ?? null,
                 });
               }
 
@@ -117,7 +125,7 @@ export const processFixedExpensesCron = inngest.createFunction(
           }
 
           if (recordsToCreate.length > 0) {
-            await prisma.financeRecord.createMany({ data: recordsToCreate });
+            await prisma.financeRecord.createMany({ data: recordsToCreate, skipDuplicates: true });
           }
 
           return recordsToCreate.length;

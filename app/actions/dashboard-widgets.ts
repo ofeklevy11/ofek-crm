@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { Prisma } from "@prisma/client";
 import { inngest } from "@/lib/inngest/client";
+import { withRetry } from "@/lib/db-retry";
 
 interface DashboardWidgetInput {
   widgetType: "ANALYTICS" | "TABLE" | "GOAL" | "TABLE_VIEWS_DASHBOARD";
@@ -22,11 +23,11 @@ export async function getDashboardWidgets() {
       return { success: false, error: "Unauthorized" };
     }
 
-    const widgets = await prisma.dashboardWidget.findMany({
+    const widgets = await withRetry(() => prisma.dashboardWidget.findMany({
       where: { userId: user.id, companyId: user.companyId },
       orderBy: { order: "asc" },
       take: 200,
-    });
+    }));
 
     return { success: true, data: widgets };
   } catch (error) {
@@ -45,35 +46,34 @@ export async function addDashboardWidget(data: DashboardWidgetInput) {
       return { success: false, error: "Unauthorized" };
     }
 
-    // Get max order to place new widget at end
-    const maxOrderWidget = await prisma.dashboardWidget.findFirst({
-      where: { userId: user.id, companyId: user.companyId },
-      orderBy: { order: "desc" },
-    });
-    const nextOrder = (maxOrderWidget?.order ?? -1) + 1;
+    // Atomic max+1 order assignment — prevents duplicate order from concurrent adds
+    const widget = await prisma.$transaction(async (tx) => {
+      const [{ nextOrder }] = await tx.$queryRaw<[{ nextOrder: number }]>`
+        SELECT COALESCE(MAX("order"), -1) + 1 AS "nextOrder"
+        FROM "DashboardWidget"
+        WHERE "userId" = ${user.id} AND "companyId" = ${user.companyId}
+        FOR UPDATE
+      `;
 
-    const widget = await prisma.dashboardWidget.create({
-      data: {
-        companyId: user.companyId,
-        userId: user.id,
-        widgetType: data.widgetType,
-        referenceId: data.referenceId || "custom",
-        tableId: data.tableId,
-        settings: data.settings ?? undefined,
-        order: nextOrder,
-      },
-    });
-
-    // Pre-compute cache for the new widget
-    try {
-      await inngest.send({
-        id: `dash-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
-        name: "dashboard/refresh-widgets",
-        data: { companyId: user.companyId },
+      return tx.dashboardWidget.create({
+        data: {
+          companyId: user.companyId,
+          userId: user.id,
+          widgetType: data.widgetType,
+          referenceId: data.referenceId || "custom",
+          tableId: data.tableId,
+          settings: data.settings ?? undefined,
+          order: nextOrder,
+        },
       });
-    } catch (e) {
-      console.error("[DashboardWidgets] Failed to send refresh:", e);
-    }
+    }, { maxWait: 5000, timeout: 10000 });
+
+    // Pre-compute cache for the new widget (fire-and-forget — non-critical)
+    inngest.send({
+      id: `dash-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
+      name: "dashboard/refresh-widgets",
+      data: { companyId: user.companyId },
+    }).catch((e) => console.error("[DashboardWidgets] Failed to send refresh:", e));
 
     return { success: true, data: widget };
   } catch (error) {
@@ -93,29 +93,25 @@ export async function removeDashboardWidget(widgetId: string) {
     }
 
     // Verify ownership (defense-in-depth: companyId in query)
-    const widget = await prisma.dashboardWidget.findFirst({
+    const widget = await withRetry(() => prisma.dashboardWidget.findFirst({
       where: { id: widgetId, userId: user.id, companyId: user.companyId },
-    });
+    }));
 
     if (!widget) {
       return { success: false, error: "Widget not found or unauthorized" };
     }
 
     // SECURITY: Atomic companyId + userId check in delete WHERE clause
-    await prisma.dashboardWidget.delete({
+    await withRetry(() => prisma.dashboardWidget.delete({
       where: { id: widgetId, companyId: user.companyId, userId: user.id },
-    });
+    }));
 
-    // Trigger cache cleanup for orphaned widget entries
-    try {
-      await inngest.send({
-        id: `dash-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
-        name: "dashboard/refresh-widgets",
-        data: { companyId: user.companyId },
-      });
-    } catch (e) {
-      console.error("[DashboardWidgets] Failed to send refresh:", e);
-    }
+    // Trigger cache cleanup for orphaned widget entries (fire-and-forget — non-critical)
+    inngest.send({
+      id: `dash-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
+      name: "dashboard/refresh-widgets",
+      data: { companyId: user.companyId },
+    }).catch((e) => console.error("[DashboardWidgets] Failed to send refresh:", e));
 
     return { success: true };
   } catch (error) {
@@ -138,15 +134,16 @@ export async function updateDashboardWidgetOrder(widgetIds: string[]) {
       return { success: false, error: "Too many widgets to reorder" };
     }
 
-    // Update each widget's order in a transaction
-    const updates = widgetIds.map((id, index) =>
-      prisma.dashboardWidget.updateMany({
-        where: { id, userId: user.id, companyId: user.companyId },
-        data: { order: index },
-      }),
-    );
-
-    await prisma.$transaction(updates);
+    // Single SQL statement instead of N individual updates
+    await withRetry(() => prisma.$executeRaw`
+      UPDATE "DashboardWidget" AS w
+      SET "order" = v.new_order, "updatedAt" = NOW()
+      FROM (
+        SELECT unnest(${widgetIds}::text[]) AS id,
+               generate_series(0, ${widgetIds.length - 1}) AS new_order
+      ) AS v
+      WHERE w.id = v.id AND w."userId" = ${user.id} AND w."companyId" = ${user.companyId}
+    `);
 
     return { success: true };
   } catch (error) {
@@ -168,31 +165,37 @@ export async function migrateDashboardWidgets(
       return { success: false, error: "Unauthorized" };
     }
 
-    // Check if user already has widgets in DB
-    const existingCount = await prisma.dashboardWidget.count({
-      where: { userId: user.id, companyId: user.companyId },
-    });
-
-    if (existingCount > 0) {
-      // Already migrated, skip
-      return { success: true, migrated: false };
+    if (localStorageWidgets.length > 200) {
+      return { success: false, error: "Too many widgets to migrate" };
     }
 
-    // Create all widgets
-    const data = localStorageWidgets.map((w, index) => ({
-      companyId: user.companyId,
-      userId: user.id,
-      widgetType: w.widgetType,
-      referenceId: w.referenceId,
-      tableId: w.tableId,
-      order: index,
-    }));
+    // Atomic check+insert inside transaction to prevent duplicate migration from concurrent first-loads
+    const migrated = await prisma.$transaction(async (tx) => {
+      const existingCount = await tx.dashboardWidget.count({
+        where: { userId: user.id, companyId: user.companyId },
+      });
 
-    if (data.length > 0) {
-      await prisma.dashboardWidget.createMany({ data });
-    }
+      if (existingCount > 0) {
+        return false; // Already migrated
+      }
 
-    return { success: true, migrated: true };
+      const rows = localStorageWidgets.map((w, index) => ({
+        companyId: user.companyId,
+        userId: user.id,
+        widgetType: w.widgetType,
+        referenceId: w.referenceId,
+        tableId: w.tableId,
+        order: index,
+      }));
+
+      if (rows.length > 0) {
+        await tx.dashboardWidget.createMany({ data: rows });
+      }
+
+      return true;
+    }, { maxWait: 5000, timeout: 10000 });
+
+    return { success: true, migrated };
   } catch (error) {
     console.error("Error migrating dashboard widgets:", error);
     return { success: false, error: "Failed to migrate widgets" };
@@ -216,9 +219,9 @@ export async function updateDashboardWidget(
     }
 
     // Verify ownership (defense-in-depth: companyId in query)
-    const widget = await prisma.dashboardWidget.findFirst({
+    const widget = await withRetry(() => prisma.dashboardWidget.findFirst({
       where: { id: widgetId, userId: user.id, companyId: user.companyId },
-    });
+    }));
 
     if (!widget) {
       return { success: false, error: "Widget not found" };
@@ -234,21 +237,17 @@ export async function updateDashboardWidget(
     // We don't typically update widgetType, but could if needed
 
     // SECURITY: Atomic companyId + userId check in update WHERE clause
-    await prisma.dashboardWidget.update({
+    await withRetry(() => prisma.dashboardWidget.update({
       where: { id: widgetId, companyId: user.companyId, userId: user.id },
       data: updateData,
-    });
+    }));
 
-    // Refresh cache with updated widget settings
-    try {
-      await inngest.send({
-        id: `dash-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
-        name: "dashboard/refresh-widgets",
-        data: { companyId: user.companyId },
-      });
-    } catch (e) {
-      console.error("[DashboardWidgets] Failed to send refresh:", e);
-    }
+    // Refresh cache with updated widget settings (fire-and-forget — non-critical)
+    inngest.send({
+      id: `dash-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
+      name: "dashboard/refresh-widgets",
+      data: { companyId: user.companyId },
+    }).catch((e) => console.error("[DashboardWidgets] Failed to send refresh:", e));
 
     return { success: true };
   } catch (error) {

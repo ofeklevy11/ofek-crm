@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { inngest } from "../client";
-import { prisma } from "@/lib/prisma";
+import { prismaBg as prisma } from "@/lib/prisma-background";
 import {
   setCachedGoals,
   setCachedTableWidget,
@@ -51,7 +51,7 @@ export const refreshDashboardWidgets = inngest.createFunction(
       // Step 1: Refresh goals cache
       const goalCount = await step.run("refresh-goals", async () => {
         const { getGoalsForCompany } = await import("@/app/actions/goals");
-        const goals = await getGoalsForCompany(companyId);
+        const goals = await getGoalsForCompany(companyId, { skipCache: true });
         await setCachedGoals(companyId, goals);
         return goals.length;
       });
@@ -124,7 +124,7 @@ export const refreshDashboardWidgets = inngest.createFunction(
                   let data: any;
                   if (req.viewId === "custom") {
                     const { getCustomTableDataInternal } = await import(
-                      "@/app/actions/dashboard"
+                      "@/lib/dashboard-internal"
                     );
                     data = await getCustomTableDataInternal(
                       req.tableId,
@@ -133,7 +133,7 @@ export const refreshDashboardWidgets = inngest.createFunction(
                     );
                   } else {
                     const { getTableViewDataInternal } = await import(
-                      "@/app/actions/dashboard"
+                      "@/lib/dashboard-internal"
                     );
                     data = await getTableViewDataInternal(
                       req.tableId,
@@ -211,7 +211,7 @@ export const refreshDashboardGoals = inngest.createFunction(
 
     const goalCount = await step.run("refresh-goals", async () => {
       const { getGoalsForCompany } = await import("@/app/actions/goals");
-      const goals = await getGoalsForCompany(companyId);
+      const goals = await getGoalsForCompany(companyId, { skipCache: true });
       await setCachedGoals(companyId, goals);
       return goals.length;
     });

@@ -4,11 +4,11 @@ import React, { useState, useEffect } from "react";
 import { CalendarEvent, defaultEventColors } from "@/lib/types";
 import {
   createEventAutomation,
+  updateEventAutomation,
   getEventAutomations,
   deleteEventAutomation,
-  getGlobalEventAutomations,
+  getEventModalInitData,
 } from "@/app/actions/event-automations";
-import { getCurrentAuthUser } from "@/app/actions/auth";
 import {
   Loader2,
   Trash2,
@@ -79,9 +79,6 @@ export function EventModal({
       setEndDate(formatDateForInput(event.endTime));
       setEndTime(formatTimeForInput(event.endTime));
       setColor(event.color || defaultEventColors[0]);
-
-      // Load Automations
-      loadAutomations(event.id);
     } else if (initialDate) {
       const date = formatDateForInput(initialDate);
       setStartDate(date);
@@ -109,22 +106,25 @@ export function EventModal({
     }
   }, [event, initialDate, initialHour, initialMinutes]);
 
-  // Reset tab when opening/closing
+  // Reset tab when opening/closing — combined init (1 DB round-trip instead of 3)
   useEffect(() => {
     if (isOpen) {
       setActiveTab("details");
       setShowBuilder(false);
-      // Load user plan and global automations config
-      getCurrentAuthUser().then((res) => {
-        if (res.success && res.data) {
-          setUserPlan((res.data as any).isPremium || "basic");
-        }
-      });
-      getGlobalEventAutomations().then((res) => {
-        if (res.success && res.data) {
-          setGlobalAutomationCount(res.data.length);
-        }
-      });
+      if (event) setLoadingAutomations(true);
+      getEventModalInitData(event?.id)
+        .then((res) => {
+          if (res.success && res.data) {
+            setUserPlan(res.data.userPlan as string);
+            setGlobalAutomationCount(res.data.globalAutomationCount);
+            if (event) {
+              setAutomations(res.data.eventAutomations);
+            }
+          }
+        })
+        .finally(() => {
+          setLoadingAutomations(false);
+        });
     }
   }, [isOpen]);
 
@@ -191,8 +191,6 @@ export function EventModal({
     setEndTime("");
     setColor(defaultEventColors[0]);
     setShowBuilder(false);
-    onClose();
-    setShowBuilder(false);
     setEditingAutoId(null);
     setEditingAutoData(null);
     onClose();
@@ -205,48 +203,29 @@ export function EventModal({
   }) => {
     if (!event) return;
 
+    let res;
     if (editingAutoId) {
-      // Edit Mode - We will delete and recreate for now or implement update on backend
-      // Ideally we should have an update function. For now, let's try to delete then create
-      // BUT better to just call a new update action.
-      // Let's assume we will add updateEventAutomation to the imports later.
-      // For this step, I will stick to create.
-      // Actually, I can just call create, and if it succeeds, delete the old one.
-      // Or better: Implement updateEventAutomation in the next step.
-      // I will optimistically assume `updateEventAutomation` exists or I will add it.
-      // Let's use `updateEventAutomation` and I will add it to the file in the next step.
-      const res = await createEventAutomation({
-        // Use create for now, logic below handles switch
-        eventId: event.id,
+      res = await updateEventAutomation({
+        id: editingAutoId,
         minutesBefore: data.minutesBefore,
         actionType: data.actionType,
         actionConfig: data.actionConfig,
-        id: editingAutoId, // Pass ID to existing action? No, the action doesn't take ID.
       });
-
-      // Wait, I cannot pass ID if the signature doesn't match.
-      // Use a temporary workaround: Delete old then create new.
-      await deleteEventAutomation(editingAutoId);
-      // Then create new -> already called above.
-      // Wait, parallel execution is bad.
     } else {
-      const res = await createEventAutomation({
+      res = await createEventAutomation({
         eventId: event.id,
         minutesBefore: data.minutesBefore,
         actionType: data.actionType,
         actionConfig: data.actionConfig,
       });
-
-      if (res.success) {
-        setShowBuilder(false);
-        loadAutomations(event.id);
-      } else {
-        alert("שגיאה ביצירת אוטומציה: " + res.error);
-      }
     }
 
-    // Refresh to be sure
-    if (event) loadAutomations(event.id);
+    if (res.success) {
+      loadAutomations(event.id);
+    } else {
+      alert("שגיאה בשמירת אוטומציה: " + res.error);
+    }
+
     setShowBuilder(false);
     setEditingAutoId(null);
     setEditingAutoData(null);

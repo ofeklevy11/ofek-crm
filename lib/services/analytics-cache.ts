@@ -70,6 +70,14 @@ export async function invalidateFullCache(companyId: number): Promise<void> {
   }
 }
 
+export async function invalidateItemCache(companyId: number, type: "rule" | "view", id: number): Promise<void> {
+  try {
+    await redis.del(itemKey(companyId, type, id));
+  } catch (err) {
+    console.error("[analytics-cache] Failed to invalidate item cache:", err);
+  }
+}
+
 export async function isRefreshLockHeld(companyId: number): Promise<boolean> {
   try {
     const result = await redis.exists(lockKey(companyId));

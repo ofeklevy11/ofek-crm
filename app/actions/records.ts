@@ -7,8 +7,12 @@ import { canWriteTable, canReadTable } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import { inngest } from "@/lib/inngest/client";
 import { deleteRecordWithCleanup } from "@/lib/record-cleanup";
+import { withRetry } from "@/lib/db-retry";
 
-export async function getRecordsByTableId(tableId: number) {
+export async function getRecordsByTableId(
+  tableId: number,
+  opts?: { cursor?: number; limit?: number },
+) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -19,16 +23,25 @@ export async function getRecordsByTableId(tableId: number) {
       return { success: false, error: "אין לך הרשאה לצפות בטבלה זו" };
     }
 
+    const pageSize = Math.min(opts?.limit ?? 100, 500);
+    const cursor = opts?.cursor;
+
     // CRITICAL: Filter records by companyId for multi-tenancy
-    const records = await prisma.record.findMany({
+    const records = await withRetry(() => prisma.record.findMany({
       where: {
         tableId,
         companyId: user.companyId,
+        ...(cursor ? { id: { lt: cursor } } : {}),
       },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: 5000, // P197: Lowered from 10K to 5K to reduce OOM risk on serverless
-    });
-    return { success: true, data: records };
+      orderBy: [{ id: "desc" }],
+      take: pageSize + 1, // +1 to detect next page
+    }));
+
+    const hasMore = records.length > pageSize;
+    const page = hasMore ? records.slice(0, pageSize) : records;
+    const nextCursor = hasMore ? page[page.length - 1].id : null;
+
+    return { success: true, data: page, nextCursor, hasMore };
   } catch (error) {
     console.error("Error fetching records:", error);
     return { success: false, error: "Failed to fetch records" };
@@ -56,37 +69,42 @@ export async function createRecord(data: {
       };
     }
 
-    // Use the authenticated user's ID as createdBy if not explicitly provided (or force it?)
-    // For now, defaulting to authenticated user if createdBy is not passed, or verifying if it matches?
-    // Let's rely on authenticated user for `createdBy` field to prevent spoofing,
-    // unless it's a system action (but this is a server action called by client usually).
+    // Verify table belongs to company and fetch name for automation event (single query)
+    const table = await withRetry(() => prisma.tableMeta.findFirst({
+      where: { id: tableId, companyId: user.companyId },
+      select: { id: true, name: true },
+    }));
+    if (!table) {
+      return { success: false, error: "Table not found" };
+    }
+
     const actualCreatedBy = user.id;
 
-    const record = await prisma.record.create({
-      data: {
-        companyId: user.companyId,
-        tableId,
-        data: recordData as any,
-        createdBy: actualCreatedBy,
-        ...(createdAt && { createdAt: new Date(createdAt) }),
-      },
-    });
+    const record = await withRetry(() => prisma.$transaction(async (tx) => {
+      const created = await tx.record.create({
+        data: {
+          companyId: user.companyId,
+          tableId,
+          data: recordData as any,
+          createdBy: actualCreatedBy,
+          ...(createdAt && { createdAt: new Date(createdAt) }),
+        },
+      });
 
-    await createAuditLog(record.id, actualCreatedBy, "CREATE", recordData, undefined, user.companyId);
+      await createAuditLog(created.id, actualCreatedBy, "CREATE", recordData, tx, user.companyId);
+
+      return created;
+    }, { maxWait: 5000, timeout: 10000 }));
 
     // Trigger automations for new record (async via Inngest)
     try {
-      const table = await prisma.tableMeta.findFirst({
-        where: { id: tableId, companyId: user.companyId },
-        select: { name: true },
-      });
       await inngest.send([
         {
           id: `new-record-${user.companyId}-${record.id}`,
           name: "automation/new-record",
           data: {
             tableId,
-            tableName: table?.name || "Unknown Table",
+            tableName: table.name,
             recordId: record.id,
             companyId: user.companyId,
           },
@@ -119,61 +137,58 @@ export async function updateRecord(
     createdAt?: string;
   },
 ) {
-  console.log(`[Records] updateRecord called for Record ID: ${recordId}`);
   try {
     const user = await getCurrentUser();
     if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
-    // P138: Add companyId to prevent cross-tenant record access
-    const existingRecord = await prisma.record.findFirst({
-      where: { id: recordId, companyId: user.companyId },
-    });
-
-    if (!existingRecord) {
-      console.log(`[Records] Record ${recordId} not found`);
-      return { success: false, error: "Record not found" };
-    }
-
     const { data: recordData, updatedBy, createdAt } = data;
-
-    if (!canWriteTable(user, existingRecord.tableId)) {
-      return {
-        success: false,
-        error: "אין לך הרשאה לערוך רשומות בטבלה זו",
-      };
-    }
-
     const actualUpdatedBy = user.id;
 
-    // Merge new data with existing data to ensure we don't lose fields if recordData is partial
-    // This is CRITICAL for automations that add data (like duration_status_change)
-    const existingData = (existingRecord.data as Record<string, unknown>) || {};
-    const mergedData = {
-      ...existingData,
-      ...recordData,
-    };
+    // Interactive transaction with FOR UPDATE lock to prevent lost-update race condition.
+    // Replicates the proven pattern from tickets.ts.
+    const { record, oldData } = await withRetry(() => prisma.$transaction(async (tx) => {
+      // Acquire row-level lock to prevent concurrent modifications
+      const locked: { id: number; tableId: number }[] = await tx.$queryRawUnsafe(
+        `SELECT id, "tableId" FROM "Record" WHERE id = $1 AND "companyId" = $2 FOR UPDATE`,
+        recordId,
+        user.companyId,
+      );
+      if (locked.length === 0) throw new Error("Record not found");
 
-    console.log(
-      `[Records] Updating record ${recordId}. Keys in payload: ${Object.keys(
-        recordData,
-      ).join(", ")}`,
-    );
+      const existingRecord = await tx.record.findUnique({
+        where: { id: recordId, companyId: user.companyId },
+      });
+      if (!existingRecord) throw new Error("Record not found");
 
-    const record = await prisma.record.update({
-      where: { id: recordId, companyId: user.companyId },
-      data: {
-        data: mergedData as any,
-        updatedBy: actualUpdatedBy,
-        ...(createdAt && { createdAt: new Date(createdAt) }),
-      },
-    });
+      if (!canWriteTable(user, existingRecord.tableId)) {
+        throw new Error("אין לך הרשאה לערוך רשומות בטבלה זו");
+      }
 
-    await createAuditLog(record.id, actualUpdatedBy, "UPDATE", recordData, undefined, user.companyId);
+      // Merge new data with existing data inside the lock to prevent lost updates.
+      // This is CRITICAL for automations that add data (like duration_status_change)
+      const existingData = (existingRecord.data as Record<string, unknown>) || {};
+      const mergedData = {
+        ...existingData,
+        ...recordData,
+      };
+
+      const updated = await tx.record.update({
+        where: { id: recordId, companyId: user.companyId },
+        data: {
+          data: mergedData as any,
+          updatedBy: actualUpdatedBy,
+          ...(createdAt && { createdAt: new Date(createdAt) }),
+        },
+      });
+
+      await createAuditLog(updated.id, actualUpdatedBy, "UPDATE", recordData, tx, user.companyId);
+
+      return { record: updated, oldData: existingRecord.data as Record<string, unknown> };
+    }, { maxWait: 5000, timeout: 10000 }));
 
     // Trigger Automation (async via Inngest)
-    console.log(`[Records] Sending automation event for Table ${record.tableId}`);
     try {
       await inngest.send([
         {
@@ -182,7 +197,7 @@ export async function updateRecord(
           data: {
             tableId: record.tableId,
             recordId: record.id,
-            oldData: existingRecord.data as Record<string, unknown>,
+            oldData,
             newData: recordData,
             companyId: user.companyId,
           },
@@ -201,7 +216,10 @@ export async function updateRecord(
     revalidatePath("/");
 
     return { success: true, data: record };
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message === "אין לך הרשאה לערוך רשומות בטבלה זו") {
+      return { success: false, error: error.message };
+    }
     console.error("Error updating record:", error);
     return { success: false, error: "Failed to update record" };
   }
@@ -215,10 +233,10 @@ export async function deleteRecord(recordId: number) {
     }
 
     // P138: Add companyId to prevent cross-tenant record deletion
-    const existingRecord = await prisma.record.findFirst({
+    const existingRecord = await withRetry(() => prisma.record.findFirst({
       where: { id: recordId, companyId: user.companyId },
       select: { tableId: true },
-    });
+    }));
 
     if (!existingRecord) {
       // Record already deleted or doesn't exist
@@ -276,10 +294,10 @@ export async function bulkDeleteRecords(recordIds: number[]) {
     }
 
     // Verify all records belong to the same table and check permission
-    const distinctTables = await prisma.record.groupBy({
+    const distinctTables = await withRetry(() => prisma.record.groupBy({
       by: ["tableId"],
       where: { id: { in: validIds }, companyId: user.companyId },
-    });
+    }));
 
     if (distinctTables.length === 0) {
       return { success: true };

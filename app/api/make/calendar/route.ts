@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { findApiKeyByValue } from "@/lib/api-key-utils";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createCalendarEventForCompany } from "@/lib/calendar-helpers";
 
 const parseIsraelDate = (dateStr: string): Date => {
   // Check if string has timezone info (Z or +/-HH:mm)
@@ -115,17 +115,18 @@ export async function POST(req: Request) {
       );
     }
 
-    // 5. Create Calendar Event scoped to the API key's company
-    const event = await prisma.calendarEvent.create({
-      data: {
-        companyId,
+    // 5. Create Calendar Event scoped to the API key's company (with global automation rules)
+    const event = await createCalendarEventForCompany(
+      companyId,
+      keyRecord.createdBy,
+      {
         title,
         description: description || null,
         startTime: startDate,
         endTime: endDate,
         color: color || "blue",
       },
-    });
+    );
 
     return NextResponse.json({ success: true, event });
   } catch (error) {

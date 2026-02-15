@@ -71,7 +71,7 @@ export default function CustomTableWidget({
   // Extract table info
   const tableSlug = data?.data?.tableSlug;
   const tableId = propTableId || data?.data?.tableId;
-  const tableSchema = data?.data?.schema || [];
+  const tableSchema = data?.data?.schema || data?.data?.columns || [];
   const currentSort =
     data?.data?.currentSort ||
     (settings?.sortBy

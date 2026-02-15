@@ -1,22 +1,43 @@
 import { inngest } from "../client";
-import { prisma } from "@/lib/prisma";
+import { prismaBg as prisma } from "@/lib/prisma-background";
 import { buildUploadThingUrl } from "@/lib/uploadthing-utils";
 import { processImportFile } from "@/lib/import-service";
 import { createAuditLogsBatch } from "@/lib/audit";
 
-// Batch size for processing records - small enough to avoid transaction timeouts
-const BATCH_SIZE = 300;
+// Batch size for CSV parse callbacks
+const PARSE_BATCH_SIZE = 300;
 // Max records per database transaction
 const TRANSACTION_BATCH_SIZE = 100;
 
 /**
+ * Coerce raw CSV string values to their schema-defined types.
+ */
+function coerceRecordData(recordData: any, schema: any[]): any {
+  const typedData: any = { ...recordData };
+  for (const field of schema) {
+    if (typedData[field.name] == null) continue;
+    if (field.type === "number") {
+      const num = Number(typedData[field.name]);
+      if (!isNaN(num)) typedData[field.name] = num;
+    } else if (field.type === "boolean") {
+      const val = String(typedData[field.name]).toLowerCase();
+      typedData[field.name] = val === "true" || val === "1" || val === "yes";
+    }
+  }
+  return typedData;
+}
+
+/**
  * Background job for processing CSV/TXT imports.
  *
- * This function runs outside of the HTTP request lifecycle, allowing for:
- * - No HTTP timeout constraints
- * - Automatic retries on failure
- * - Progress tracking via ImportJob status
- * - Smaller, more reliable database transactions
+ * Architecture (optimized):
+ *  Step 1 — Load metadata (job + table + schema).
+ *  Step 2 — Stream-parse the CSV and insert records directly into the DB in
+ *           batched transactions as they are parsed. This avoids storing
+ *           all parsed records in the ImportJob.summary JSONB column and
+ *           eliminates the O(N²) re-read that occurred when each batch step
+ *           re-loaded the entire summary.
+ *  Step 3 — Finalize (mark job as IMPORTED).
  */
 export const processImportJob = inngest.createFunction(
   {
@@ -100,9 +121,9 @@ export const processImportJob = inngest.createFunction(
       return { job, table, schema };
     });
 
-    // Step 2: Fetch, parse, and store record count
-    // Records are stored in the ImportJob summary to avoid Inngest step output size limits (Issue 29)
-    const { totalValid, summary: parseSummary } = await step.run("fetch-and-parse-file", async () => {
+    // Step 2: Stream-parse CSV and insert directly into DB in batched transactions.
+    // Records are inserted as they are parsed — never stored in the summary JSONB.
+    const { insertedCount, parseSummary } = await step.run("parse-and-insert", async () => {
       const secureUrl = buildUploadThingUrl(job.fileKey);
       logger.info("Fetching file from storage", { url: secureUrl });
 
@@ -114,12 +135,89 @@ export const processImportJob = inngest.createFunction(
       }
 
       const MAX_IMPORT_RECORDS = 50000;
-      const validRecords: any[] = [];
+      let totalParsed = 0;
+      let totalInserted = 0;
+      // Buffer for accumulating records before flushing to DB
+      let pendingRecords: any[] = [];
 
-      const onBatch = async (batch: any[]) => {
-        validRecords.push(...batch);
-        if (validRecords.length > MAX_IMPORT_RECORDS) {
+      /** Flush the pending buffer into the DB via a batched transaction. */
+      const flushBatch = async (batch: any[]) => {
+        if (batch.length === 0) return;
+
+        const inserted = await prisma.$transaction(
+          async (tx) => {
+            const recordsData = batch.map((recordData) => ({
+              tableId: table.id,
+              companyId,
+              data: coerceRecordData(recordData, schema),
+              createdBy: userId,
+            }));
+
+            // Track max ID before insert to accurately identify new records
+            const maxIdResult = await tx.$queryRaw<[{ max: number | null }]>`
+              SELECT MAX("id") as max FROM "Record" WHERE "tableId" = ${table.id} AND "companyId" = ${companyId}
+            `;
+            const maxIdBefore = maxIdResult[0].max ?? 0;
+
+            const result = await tx.record.createMany({ data: recordsData });
+
+            // Query back created record IDs using the tracked max ID boundary
+            const createdRecords = await tx.record.findMany({
+              where: {
+                tableId: table.id,
+                companyId,
+                id: { gt: maxIdBefore },
+              },
+              orderBy: { id: "asc" },
+              take: result.count,
+              select: { id: true },
+            });
+
+            if (createdRecords.length > 0) {
+              await createAuditLogsBatch(
+                createdRecords.map((record) => ({
+                  recordId: record.id,
+                  userId,
+                  action: "CREATE",
+                  companyId,
+                })),
+                tx,
+              );
+            }
+
+            return result.count;
+          },
+          { maxWait: 5000, timeout: 30000 },
+        );
+
+        totalInserted += inserted;
+
+        // Update progress periodically (every flush)
+        const progress = Math.min(99, Math.round((totalInserted / Math.max(totalParsed, 1)) * 100));
+        await prisma.importJob.update({
+          where: { id: importJobId, companyId },
+          data: {
+            summary: {
+              progress,
+              insertedCount: totalInserted,
+            } as any,
+          },
+        });
+      };
+
+      // Stream-parse callback: accumulate records, flush when buffer is full
+      const onBatch = async (parsedBatch: any[]) => {
+        totalParsed += parsedBatch.length;
+        if (totalParsed > MAX_IMPORT_RECORDS) {
           throw new Error(`Import exceeds maximum of ${MAX_IMPORT_RECORDS} records`);
+        }
+
+        pendingRecords.push(...parsedBatch);
+
+        // Flush in TRANSACTION_BATCH_SIZE chunks
+        while (pendingRecords.length >= TRANSACTION_BATCH_SIZE) {
+          const chunk = pendingRecords.splice(0, TRANSACTION_BATCH_SIZE);
+          await flushBatch(chunk);
         }
       };
 
@@ -128,7 +226,7 @@ export const processImportJob = inngest.createFunction(
         schema,
         false,
         onBatch,
-        BATCH_SIZE,
+        PARSE_BATCH_SIZE,
       );
 
       if (result.summary.errors.length > 0) {
@@ -138,157 +236,34 @@ export const processImportJob = inngest.createFunction(
         }
       }
 
-      if (validRecords.length === 0 && result.summary.totalRows > 0) {
+      // Flush any remaining records in the buffer
+      if (pendingRecords.length > 0) {
+        await flushBatch(pendingRecords);
+        pendingRecords = [];
+      }
+
+      if (totalInserted === 0 && result.summary.totalRows > 0) {
         throw new Error("לא נמצאו רשומות תקינות לייבוא");
       }
 
-      // Store parsed records in ImportJob summary to avoid passing large data between steps
-      await prisma.importJob.update({
-        where: { id: importJobId, companyId },
-        data: {
-          summary: {
-            ...result.summary,
-            parsedRecords: validRecords,
-          } as any,
-        },
-      });
-
-      logger.info("File parsed successfully", {
+      logger.info("File parsed and inserted successfully", {
         totalRows: result.summary.totalRows,
-        validRows: validRecords.length,
+        validRows: totalParsed,
         invalidRows: result.summary.invalidRows,
+        insertedCount: totalInserted,
       });
 
-      return { totalValid: validRecords.length, summary: result.summary };
+      return { insertedCount: totalInserted, parseSummary: result.summary };
     });
 
-    // Step 3: Process records in per-batch steps for Inngest durability (Issue 24)
-    // Each batch is its own step — if batch N fails and retries, batches 0..N-1 are already checkpointed
-    const totalBatches = Math.ceil(totalValid / TRANSACTION_BATCH_SIZE);
-    let totalInserted = 0;
-
-    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
-      const batchInserted = await step.run(`insert-batch-${batchIndex}`, async () => {
-        // Re-read parsed records from DB for this batch slice
-        // SECURITY: Filter by companyId to prevent cross-tenant access
-        const currentJob = await prisma.importJob.findFirst({
-          where: { id: importJobId, companyId },
-        });
-        const allRecords = (currentJob?.summary as any)?.parsedRecords || [];
-        const start = batchIndex * TRANSACTION_BATCH_SIZE;
-        const batch = allRecords.slice(start, start + TRANSACTION_BATCH_SIZE);
-        if (batch.length === 0) return 0;
-
-        let inserted: number;
-        try {
-          inserted = await prisma.$transaction(
-            async (tx) => {
-              // Prepare data with proper types (Issue 32: use createMany)
-              const recordsData = batch.map((recordData: any) => {
-                const typedData: any = { ...recordData };
-                schema.forEach((field: any) => {
-                  if (typedData[field.name]) {
-                    if (field.type === "number") {
-                      const num = Number(typedData[field.name]);
-                      if (!isNaN(num)) typedData[field.name] = num;
-                    } else if (field.type === "boolean") {
-                      const val = String(typedData[field.name]).toLowerCase();
-                      typedData[field.name] =
-                        val === "true" || val === "1" || val === "yes";
-                    }
-                  }
-                });
-                return {
-                  tableId: table.id,
-                  companyId: companyId,
-                  data: typedData,
-                  createdBy: userId,
-                };
-              });
-
-              // Bulk insert with createMany
-              const result = await tx.record.createMany({ data: recordsData });
-
-              // Query back created record IDs for audit logs
-              const createdRecords = await tx.record.findMany({
-                where: {
-                  tableId: table.id,
-                  companyId: companyId,
-                  createdBy: userId,
-                },
-                orderBy: { id: "desc" },
-                take: result.count,
-                select: { id: true, data: true },
-              });
-
-              if (createdRecords.length > 0) {
-                await createAuditLogsBatch(
-                  createdRecords.map((record) => ({
-                    recordId: record.id,
-                    userId: userId,
-                    action: "CREATE",
-                    diffJson: record.data,
-                    companyId,
-                  })),
-                  tx,
-                );
-              }
-
-              return result.count;
-            },
-            {
-              maxWait: 5000,
-              timeout: 30000,
-            },
-          );
-        } catch (err: any) {
-          // BB15: Update progress on failure so UI doesn't show frozen progress bar
-          await prisma.importJob.update({
-            where: { id: importJobId, companyId },
-            data: {
-              summary: {
-                ...(parseSummary as any),
-                progress: Math.round((start / totalValid) * 100),
-                insertedCount: totalInserted || 0,
-                lastError: `Batch ${batchIndex} failed: ${err.message}`,
-              },
-            },
-          });
-          throw err;
-        }
-
-        // Update progress
-        const progress = Math.round(((start + batch.length) / totalValid) * 100);
-        await prisma.importJob.update({
-          where: { id: importJobId, companyId },
-          data: {
-            summary: {
-              ...(parseSummary as any),
-              progress,
-              insertedCount: (totalInserted || 0) + inserted,
-            },
-          },
-        });
-
-        return inserted;
-      });
-
-      totalInserted += batchInserted;
-      logger.info(`Batch ${batchIndex + 1}/${totalBatches} completed`, {
-        inserted: totalInserted,
-      });
-    }
-
-    const insertedCount = totalInserted;
-
-    // Step 4: Mark job as complete
+    // Step 3: Mark job as complete
     await step.run("finalize-job", async () => {
       await prisma.importJob.update({
         where: { id: importJobId, companyId },
         data: {
           status: "IMPORTED",
           summary: {
-            ...(job.summary as any),
+            ...(parseSummary as any),
             progress: 100,
             insertedCount,
             completedAt: new Date().toISOString(),

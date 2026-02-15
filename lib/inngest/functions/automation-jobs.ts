@@ -53,9 +53,9 @@ export const processRecordUpdateAutomation = inngest.createFunction(
   },
   { event: "automation/record-update" },
   async ({ event }) => {
-    const { tableId, recordId, oldData, newData, companyId } = event.data;
+    const { tableId, recordId, oldData, newData, companyId, tableName } = event.data;
     const { processRecordUpdate } = await import("@/app/actions/automations");
-    await processRecordUpdate(tableId, recordId, oldData, newData, companyId);
+    await processRecordUpdate(tableId, recordId, oldData, newData, companyId, tableName);
 
     // Trigger background analytics refresh (debounced per company)
     if (companyId) {

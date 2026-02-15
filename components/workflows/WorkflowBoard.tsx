@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Workflow, WorkflowStage } from "@prisma/client";
 import { Plus, ArrowRight, Settings2 } from "lucide-react";
 import { StageCard } from "./StageCard";
 import { StageDetailModal } from "./StageDetailModal";
-import { createStage } from "@/app/actions/workflows";
+import { createStage, getWorkflowStagesDetails } from "@/app/actions/workflows";
 import { useRouter } from "next/navigation";
 
 interface WorkflowBoardProps {
@@ -27,7 +27,25 @@ export function WorkflowBoard({
     null,
   );
   const [isCreatingStage, setIsCreatingStage] = useState(false);
+  const [stageDetailsMap, setStageDetailsMap] = useState<Record<number, any> | null>(null);
   const router = useRouter();
+
+  // Fetch stage details once for the workflow, reuse across modal opens
+  const loadStageDetails = useCallback(() => {
+    getWorkflowStagesDetails(workflow.id)
+      .then((details) => {
+        const map: Record<number, any> = {};
+        for (const d of details) {
+          map[d.id] = d.details;
+        }
+        setStageDetailsMap(map);
+      })
+      .catch(() => {});
+  }, [workflow.id]);
+
+  useEffect(() => {
+    loadStageDetails();
+  }, [loadStageDetails]);
 
   const handleCreateStage = () => {
     setIsCreatingStage(true);
@@ -44,6 +62,7 @@ export function WorkflowBoard({
         details: stageData.details,
       });
 
+      setStageDetailsMap(prev => ({ ...(prev || {}), [newStage.id]: (newStage as any).details }));
       if (onStageCreated) {
         onStageCreated(newStage);
       } else {
@@ -126,10 +145,15 @@ export function WorkflowBoard({
         stage={selectedStage}
         isOpen={!!selectedStage}
         onClose={() => setSelectedStage(null)}
-        onUpdate={onStageUpdated}
+        onUpdate={(s) => {
+          setStageDetailsMap(prev => prev ? { ...prev, [s.id]: (s as any).details } : prev);
+          onStageUpdated?.(s);
+        }}
         onDelete={onStageDeleted}
         currentUser={currentUser}
         allStages={workflow.stages}
+        workflowId={workflow.id}
+        preloadedStageDetails={stageDetailsMap ?? undefined}
       />
 
       <StageDetailModal
@@ -140,6 +164,8 @@ export function WorkflowBoard({
         onSave={handleSaveNewStage}
         currentUser={currentUser}
         allStages={workflow.stages}
+        workflowId={workflow.id}
+        preloadedStageDetails={stageDetailsMap ?? undefined}
       />
     </div>
   );

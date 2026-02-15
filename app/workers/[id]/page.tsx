@@ -1,15 +1,29 @@
+import { cache } from "react";
 import { redirect, notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/permissions-server";
-import { getWorker, getOnboardingPaths } from "@/app/actions/workers";
+import { getWorker, getOnboardingPathSummaries } from "@/app/actions/workers";
+import { prisma } from "@/lib/prisma";
 import WorkerDetails from "@/components/workers/WorkerDetails";
 
 interface Props {
   params: Promise<{ id: string }>;
 }
 
+const getWorkerName = cache(async (id: number, companyId: number) => {
+  return prisma.worker
+    .findFirst({
+      where: { id, companyId, deletedAt: null },
+      select: { firstName: true, lastName: true },
+    })
+    .catch(() => null);
+});
+
 export async function generateMetadata({ params }: Props) {
   const { id } = await params;
-  const worker = await getWorker(Number(id)).catch(() => null);
+  const user = await getCurrentUser();
+  const worker = user
+    ? await getWorkerName(Number(id), user.companyId)
+    : null;
   return {
     title: worker
       ? `${worker.firstName} ${worker.lastName} | Workers`
@@ -27,7 +41,7 @@ export default async function WorkerPage({ params }: Props) {
 
   const [worker, onboardingPaths] = await Promise.all([
     getWorker(Number(id)),
-    getOnboardingPaths(),
+    getOnboardingPathSummaries(),  // P11: lightweight — no step details
   ]);
 
   if (!worker) {

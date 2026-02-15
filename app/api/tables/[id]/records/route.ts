@@ -3,29 +3,38 @@ import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { inngest } from "@/lib/inngest/client";
 
+function parseId(raw: string): number | null {
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
-    const tableId = parseInt(id);
+    const tableId = parseId(id);
 
-    if (isNaN(tableId)) {
+    if (!tableId) {
       return NextResponse.json({ error: "Invalid table ID" }, { status: 400 });
     }
 
-    // CRITICAL: Verify table belongs to user's company for multi-tenancy
     const { getCurrentUser } = await import("@/lib/permissions-server");
+    const { canReadTable } = await import("@/lib/permissions");
     const currentUser = await getCurrentUser();
 
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // First, verify the table belongs to this company
+    if (!canReadTable(currentUser, tableId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Verify table belongs to this company and is not soft-deleted
     const table = await prisma.tableMeta.findFirst({
-      where: { id: tableId, companyId: currentUser.companyId },
+      where: { id: tableId, companyId: currentUser.companyId, deletedAt: null },
     });
 
     if (!table) {
@@ -36,8 +45,14 @@ export async function GET(
     const url = new URL(request.url);
     const forPicker = url.searchParams.get("for") === "picker";
     const searchQuery = url.searchParams.get("q") || "";
-    const rawLimit = parseInt(url.searchParams.get("limit") || "0") || 0;
+    const rawLimit = parseInt(url.searchParams.get("limit") || "0", 10) || 0;
     const limit = Math.min(Math.max(rawLimit, 0), forPicker ? 200 : 1000);
+    // Cursor-based pagination: client passes the last record ID from the previous page
+    const cursorParam = url.searchParams.get("cursor");
+    const cursor = cursorParam ? parseInt(cursorParam, 10) : undefined;
+    if (cursorParam && (!Number.isFinite(cursor) || cursor! <= 0)) {
+      return NextResponse.json({ error: "Invalid cursor" }, { status: 400 });
+    }
 
     if (forPicker) {
       // Lightweight mode for RelationPicker: only id + data, with optional search
@@ -64,12 +79,16 @@ export async function GET(
     }
 
     // Full mode: includes relations and attachments (used by table page)
-    // P198: Default to 5000 when limit is 0 or invalid, cap at 5000
-    const effectiveLimit = limit > 0 ? Math.min(limit, 5000) : 5000;
+    // Supports cursor-based pagination via ?cursor=<lastRecordId>&limit=<pageSize>
+    const pageSize = limit > 0 ? Math.min(limit, 500) : 100;
     const records = await prisma.record.findMany({
-      where: { tableId, companyId: currentUser.companyId },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: effectiveLimit,
+      where: {
+        tableId,
+        companyId: currentUser.companyId,
+        ...(cursor ? { id: { lt: cursor } } : {}),
+      },
+      orderBy: [{ id: "desc" }],
+      take: pageSize + 1, // fetch one extra to detect next page
       include: {
         creator: {
           select: { id: true, name: true, email: true },
@@ -84,9 +103,13 @@ export async function GET(
       },
     });
 
+    const hasMore = records.length > pageSize;
+    const page = hasMore ? records.slice(0, pageSize) : records;
+    const nextCursor = hasMore ? page[page.length - 1].id : null;
+
     // Add proxied download URLs to attachments
     // Attachments keep their url because they are user-entered links, not storage secrets
-    const sanitized = records.map((record) => ({
+    const sanitized = page.map((record) => ({
       ...record,
       attachments: record.attachments.map((att) => ({
         ...att,
@@ -94,7 +117,7 @@ export async function GET(
       })),
     }));
 
-    return NextResponse.json(sanitized);
+    return NextResponse.json({ records: sanitized, nextCursor, hasMore });
   } catch (error) {
     console.error("Error fetching records:", error);
     return NextResponse.json(
@@ -110,11 +133,9 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const tableId = parseInt(id);
-    const body = await request.json();
-    const { data } = body;
+    const tableId = parseId(id);
 
-    if (isNaN(tableId)) {
+    if (!tableId) {
       return NextResponse.json({ error: "Invalid table ID" }, { status: 400 });
     }
 
@@ -138,12 +159,20 @@ export async function POST(
       );
     }
 
-    // SECURITY: Verify table belongs to user's company (Issue A)
-    const tableCheck = await prisma.tableMeta.findFirst({
-      where: { id: tableId, companyId: currentUser.companyId },
-      select: { id: true },
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    const { data } = body;
+
+    // SECURITY: Verify table belongs to user's company and is not soft-deleted
+    const table = await prisma.tableMeta.findFirst({
+      where: { id: tableId, companyId: currentUser.companyId, deletedAt: null },
+      select: { id: true, name: true },
     });
-    if (!tableCheck) {
+    if (!table) {
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
 
@@ -180,15 +209,11 @@ export async function POST(
 
     // Trigger automations (async via Inngest)
     try {
-      const table = await prisma.tableMeta.findFirst({
-        where: { id: tableId, companyId: currentUser.companyId },
-        select: { name: true },
-      });
       await inngest.send({
         name: "automation/new-record",
         data: {
           tableId,
-          tableName: table?.name || "Unknown Table",
+          tableName: table.name,
           recordId: record.id,
           companyId: currentUser.companyId,
         },

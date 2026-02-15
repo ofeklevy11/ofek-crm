@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import { inngest } from "@/lib/inngest/client";
 import { validateUserInCompany } from "@/lib/company-validation";
+import { withRetry } from "@/lib/db-retry";
 
 export async function getTasks() {
   try {
@@ -21,9 +22,20 @@ export async function getTasks() {
       ? { companyId: user.companyId }
       : { companyId: user.companyId, assigneeId: user.id };
 
-    const tasks = await prisma.task.findMany({
+    const tasks = await withRetry(() => prisma.task.findMany({
       where: whereClause,
-      include: {
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        assigneeId: true,
+        priority: true,
+        dueDate: true,
+        tags: true,
+        creatorId: true,
+        createdAt: true,
+        updatedAt: true,
         assignee: {
           select: {
             id: true,
@@ -39,8 +51,8 @@ export async function getTasks() {
         },
       },
       orderBy: { createdAt: "desc" },
-      take: 5000, // P117: Bound task list query
-    });
+      take: 5000,
+    }));
     return { success: true, data: tasks };
   } catch (error) {
     console.error("Error fetching tasks:", error);
@@ -56,24 +68,28 @@ export async function getTaskById(id: string) {
     }
 
     // SECURITY: Filter by companyId to prevent cross-tenant access
-    const task = await prisma.task.findFirst({
+    const task = await withRetry(() => prisma.task.findFirst({
       where: { id, companyId: user.companyId },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        assigneeId: true,
+        priority: true,
+        dueDate: true,
+        tags: true,
+        creatorId: true,
+        createdAt: true,
+        updatedAt: true,
         assignee: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
+          select: { id: true, name: true, email: true },
         },
         creator: {
-          select: {
-            id: true,
-            name: true,
-          },
+          select: { id: true, name: true },
         },
       },
-    });
+    }));
 
     if (!task) {
       return { success: false, error: "Task not found" };
@@ -119,7 +135,7 @@ export async function createTask(data: {
 
     const newTask = await prisma.task.create({
       data: {
-        companyId: user.companyId, // CRITICAL: Set companyId for multi-tenancy
+        companyId: user.companyId,
         title: data.title,
         description: data.description,
         status: data.status ?? "todo",
@@ -129,19 +145,23 @@ export async function createTask(data: {
         dueDate: dueDate,
         creatorId: user.id,
       },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        assigneeId: true,
+        priority: true,
+        dueDate: true,
+        tags: true,
+        creatorId: true,
+        createdAt: true,
+        updatedAt: true,
         assignee: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
+          select: { id: true, name: true, email: true },
         },
         creator: {
-          select: {
-            id: true,
-            name: true,
-          },
+          select: { id: true, name: true },
         },
       },
     });
@@ -169,10 +189,13 @@ export async function updateTask(
   },
 ) {
   try {
-    const updateData: Record<string, unknown> = { ...data };
-
-    if (data.dueDate !== undefined) {
-      updateData.dueDate = data.dueDate ? new Date(data.dueDate) : null;
+    // Whitelist allowed update fields to prevent mass assignment
+    const allowedFields = ["title", "description", "status", "assigneeId", "priority", "dueDate", "tags"] as const;
+    const updateData: Record<string, unknown> = {};
+    for (const field of allowedFields) {
+      if (data[field] !== undefined) {
+        updateData[field] = field === "dueDate" && data[field] ? new Date(data[field] as string) : data[field];
+      }
     }
 
     const user = await getCurrentUser();
@@ -180,25 +203,15 @@ export async function updateTask(
       return { success: false, error: "Unauthorized" };
     }
 
-    // SECURITY: Fetch task with companyId filter to prevent cross-tenant access
-    const existingTask = await prisma.task.findFirst({
+    // Fetch only the fields needed for permission check and status-change detection
+    const existingTask = await withRetry(() => prisma.task.findFirst({
       where: { id, companyId: user.companyId },
-      include: {
-        assignee: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
+      select: { id: true, assigneeId: true, status: true },
+    }));
 
     if (!existingTask) {
       return { success: false, error: "Task not found" };
     }
-
-    // User already fetched above for security check
 
     const canViewAll =
       user.role === "admin" || hasUserFlag(user, "canViewAllTasks");
@@ -215,44 +228,56 @@ export async function updateTask(
       }
     }
 
-    const task = await prisma.task.update({
-      where: { id, companyId: user.companyId },
-      data: updateData,
-      include: {
-        assignee: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        creator: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+    const isStatusChange = data.status && existingTask.status !== data.status;
 
-    if (existingTask && data.status && existingTask.status !== data.status) {
-      // Create Audit Log
-      await prisma.auditLog.create({
-        data: {
-          taskId: id,
-          action: "UPDATE",
-          companyId: user.companyId, // SECURITY: Tag audit log with companyId (Issue E)
-          userId: user.id,
-          diffJson: {
-            status: {
-              from: existingTask.status,
-              to: data.status,
-            },
+    // Wrap update + audit log in a transaction to prevent audit trail loss
+    const task = await withRetry(() => prisma.$transaction(async (tx) => {
+      const updated = await tx.task.update({
+        where: { id, companyId: user.companyId },
+        data: updateData,
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          status: true,
+          assigneeId: true,
+          priority: true,
+          dueDate: true,
+          tags: true,
+          creatorId: true,
+          createdAt: true,
+          updatedAt: true,
+          assignee: {
+            select: { id: true, name: true, email: true },
+          },
+          creator: {
+            select: { id: true, name: true },
           },
         },
       });
 
-      // Send automation event (async via Inngest)
+      if (isStatusChange) {
+        await tx.auditLog.create({
+          data: {
+            taskId: id,
+            action: "UPDATE",
+            companyId: user.companyId,
+            userId: user.id,
+            diffJson: {
+              status: {
+                from: existingTask.status,
+                to: data.status,
+              },
+            },
+          },
+        });
+      }
+
+      return updated;
+    }, { maxWait: 5000, timeout: 10000 }));
+
+    // Send automation event outside transaction (idempotent, has own retry)
+    if (isStatusChange) {
       try {
         await inngest.send({
           id: `task-status-${user.companyId}-${task.id}-${data.status}`,
@@ -295,18 +320,14 @@ export async function deleteTask(id: string) {
       return { success: false, error: "אין לך הרשאה למחוק משימות" };
     }
 
-    // SECURITY: Verify task belongs to user's company before deletion
-    const existingTask = await prisma.task.findFirst({
+    // Single query: deleteMany returns count, no need for find-first
+    const result = await prisma.task.deleteMany({
       where: { id, companyId: user.companyId },
     });
 
-    if (!existingTask) {
+    if (result.count === 0) {
       return { success: false, error: "Task not found" };
     }
-
-    await prisma.task.delete({
-      where: { id, companyId: user.companyId },
-    });
 
     revalidatePath("/tasks");
     revalidatePath("/");

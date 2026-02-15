@@ -2,32 +2,45 @@ import TransactionsTable from "@/components/finance/TransactionsTable";
 import { ArrowLeft, ArrowRight, Mail, Phone, Building } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/permissions-server";
 
 export default async function ClientOverviewPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
   const { id } = await params;
   const clientId = parseInt(id);
+  if (isNaN(clientId)) notFound();
 
-  // Fetch client data from database
-  const client = await prisma.client.findUnique({
-    where: { id: clientId },
+  const client = await prisma.client.findFirst({
+    where: { id: clientId, companyId: user.companyId, deletedAt: null },
     include: {
       retainers: {
-        where: { status: "active" },
+        where: { status: "active", deletedAt: null },
+        select: { id: true, title: true, amount: true, frequency: true, status: true, nextDueDate: true },
+        take: 50,
       },
-      oneTimePayments: true,
+      oneTimePayments: {
+        where: { status: { in: ["pending", "overdue"] }, deletedAt: null },
+        select: { id: true, title: true, amount: true, status: true, dueDate: true },
+        take: 50,
+      },
       transactions: {
+        where: { deletedAt: null },
         orderBy: { createdAt: "desc" },
         take: 20,
+        select: { id: true, relatedType: true, amount: true, status: true, notes: true, attemptDate: true, paidDate: true, createdAt: true },
       },
       financeRecords: {
-        where: { type: "INCOME" },
+        where: { type: "INCOME", deletedAt: null },
         orderBy: { date: "desc" },
         take: 20,
+        select: { id: true, title: true, amount: true, type: true, status: true, date: true },
       },
     },
   });
@@ -123,9 +136,9 @@ export default async function ClientOverviewPage({
               {client.name}
             </h1>
             <div className="flex gap-4 mt-2 text-sm text-gray-500">
-              {client.company && (
+              {client.businessName && (
                 <div className="flex items-center gap-1">
-                  <Building className="w-4 h-4" /> {client.company}
+                  <Building className="w-4 h-4" /> {client.businessName}
                 </div>
               )}
               {client.email && (

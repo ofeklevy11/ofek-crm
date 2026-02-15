@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { withRetry } from "@/lib/db-retry";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { createNotificationForCompany } from "./notifications";
@@ -295,35 +296,44 @@ export async function executeRuleActions(
         }
       } else if (type === "UPDATE_RECORD_FIELD") {
         // P96: Wrap in serializable transaction to prevent lost-update race condition
+        // Retry up to 2 times on P2034 serialization conflicts
         if (context.recordId && config.columnId) {
-          try {
-            await prisma.$transaction(async (tx) => {
-              const record = await tx.record.findFirst({
-                where: { id: context.recordId, companyId },
-              });
-
-              if (record) {
-                const currentData = record.data as Record<string, unknown>;
-                const newData = {
-                  ...currentData,
-                  [config.columnId]: config.value,
-                };
-
-                await tx.record.update({
+          const MAX_SERIALIZATION_RETRIES = 2;
+          for (let attempt = 0; attempt <= MAX_SERIALIZATION_RETRIES; attempt++) {
+            try {
+              await withRetry(() => prisma.$transaction(async (tx) => {
+                const record = await tx.record.findFirst({
                   where: { id: context.recordId, companyId },
-                  data: { data: JSON.parse(JSON.stringify(newData)) },
+                  select: { id: true, data: true },
                 });
 
-                console.log(
-                  `[Automations] Updated field ${config.columnId} to "${config.value}" for record ${context.recordId}`,
+                if (record) {
+                  const currentData = record.data as Record<string, unknown>;
+                  const newData = {
+                    ...currentData,
+                    [config.columnId]: config.value,
+                  };
+
+                  await tx.record.update({
+                    where: { id: context.recordId, companyId },
+                    data: { data: JSON.parse(JSON.stringify(newData)) },
+                  });
+
+                  console.log(
+                    `[Automations] Updated field ${config.columnId} to "${config.value}" for record ${context.recordId}`,
+                  );
+                }
+              }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 10000 }));
+              break; // Success — exit retry loop
+            } catch (txErr: any) {
+              if (txErr?.code === "P2034" && attempt < MAX_SERIALIZATION_RETRIES) {
+                console.warn(
+                  `[Automations] Serialization conflict on UPDATE_RECORD_FIELD for record ${context.recordId}, retrying (attempt ${attempt + 1}/${MAX_SERIALIZATION_RETRIES})`,
                 );
+                continue;
               }
-            }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-          } catch (updateError) {
-            console.error(
-              `[Automations] Error updating record field:`,
-              updateError,
-            );
+              throw txErr; // Non-serialization error or retries exhausted — propagate
+            }
           }
         }
       } else if (type === "CREATE_TASK") {
@@ -392,10 +402,10 @@ export async function executeRuleActions(
           // SECURITY: Validate assigneeId belongs to same company
           let validAssigneeId: number | null = null;
           if (assigneeId) {
-            const assigneeOk = await prisma.user.findFirst({
+            const assigneeOk = await withRetry(() => prisma.user.findFirst({
               where: { id: Number(assigneeId), companyId },
               select: { id: true },
-            });
+            }));
             if (assigneeOk) validAssigneeId = Number(assigneeId);
           }
 
@@ -426,10 +436,10 @@ export async function executeRuleActions(
         }
 
         // SECURITY: Validate tableId belongs to same company
-        const targetTable = await prisma.tableMeta.findFirst({
+        const targetTable = await withRetry(() => prisma.tableMeta.findFirst({
           where: { id: Number(tableId), companyId },
           select: { id: true },
-        });
+        }));
         if (!targetTable) {
           console.error(`[Automations] CREATE_RECORD: Table ${tableId} not found in company ${companyId}`);
           return;
@@ -624,12 +634,13 @@ async function calculateTaskDuration(taskId: string, fromStatus: string, company
     console.error("[Automations] calculateTaskDuration called without companyId, skipping");
     return;
   }
-  const recentLogs = await prisma.auditLog.findMany({
+  const recentLogs = await withRetry(() => prisma.auditLog.findMany({
     where: { taskId: taskId, action: "UPDATE", companyId },
     orderBy: { timestamp: "desc" },
     take: 20,
-  });
-  let previousChange = null;
+    select: { diffJson: true, timestamp: true },
+  }));
+  let previousChange: (typeof recentLogs)[number] | null = null;
   for (const log of recentLogs) {
     const diff = log.diffJson as any;
     if (diff && diff.status && diff.status.to === fromStatus) {
@@ -667,11 +678,12 @@ async function calculateRecordDuration(
     console.error("[Automations] calculateRecordDuration called without companyId, skipping");
     return;
   }
-  const recentLogs = await prisma.auditLog.findMany({
+  const recentLogs = await withRetry(() => prisma.auditLog.findMany({
     where: { recordId: recordId, action: { in: ["UPDATE", "CREATE"] }, companyId },
     orderBy: { timestamp: "desc" },
     take: 100,
-  });
+    select: { diffJson: true, timestamp: true, action: true },
+  }));
 
   let startTime: Date | null = null;
   for (const log of recentLogs) {
@@ -709,9 +721,38 @@ async function calculateRecordDuration(
   }
 }
 
+// --- Helpers ---
+
+/** Get or create an automation folder by name. Handles concurrent creation race via P2002 catch. */
+async function getOrCreateAutomationFolder(companyId: number, name: string): Promise<number> {
+  const existing = await withRetry(() => prisma.viewFolder.findFirst({
+    where: { companyId, name, type: "AUTOMATION" },
+    select: { id: true },
+  }));
+  if (existing) return existing.id;
+
+  try {
+    const created = await prisma.viewFolder.create({
+      data: { companyId, name, type: "AUTOMATION" },
+      select: { id: true },
+    });
+    return created.id;
+  } catch (err: any) {
+    // Race condition: another request created it first
+    if (err?.code === "P2002") {
+      const found = await withRetry(() => prisma.viewFolder.findFirst({
+        where: { companyId, name, type: "AUTOMATION" },
+        select: { id: true },
+      }));
+      if (found) return found.id;
+    }
+    throw err;
+  }
+}
+
 // --- CRUD Actions ---
 
-export async function getAutomationRules() {
+export async function getAutomationRules(opts?: { cursor?: number; limit?: number }) {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
@@ -720,21 +761,35 @@ export async function getAutomationRules() {
       return { success: false, error: "Authentication required" };
     }
 
+    const limit = opts?.limit ?? 500;
+    const take = limit + 1; // Fetch one extra to determine hasMore
+
     // CRITICAL: Filter by companyId for multi-tenancy
-    const rules = await prisma.automationRule.findMany({
+    // Only select fields used by the AutomationsList component — no JOINs needed
+    const rules = await withRetry(() => prisma.automationRule.findMany({
       where: { companyId: currentUser.companyId },
       orderBy: { createdAt: "desc" },
-      include: {
-        creator: {
-          select: { name: true },
-        },
-        calendarEvent: {
-          select: { title: true },
-        },
+      select: {
+        id: true,
+        name: true,
+        triggerType: true,
+        triggerConfig: true,
+        actionType: true,
+        actionConfig: true,
+        isActive: true,
+        folderId: true,
+        calendarEventId: true,
+        createdAt: true,
       },
-      take: 500,
-    });
-    return { success: true, data: rules };
+      take,
+      ...(opts?.cursor ? { skip: 1, cursor: { id: opts.cursor } } : {}),
+    }));
+
+    const hasMore = rules.length > limit;
+    const data = hasMore ? rules.slice(0, limit) : rules;
+    const nextCursor = hasMore ? data[data.length - 1].id : undefined;
+
+    return { success: true, data, hasMore, nextCursor };
   } catch (error) {
     console.error("Error fetching automation rules:", error);
     return { success: false, error: "Failed to fetch automation rules" };
@@ -772,75 +827,15 @@ export async function createAutomationRule(data: {
 
     // Auto-assign folder for specific triggers if no folder provided
     if (!folderId) {
-      if (
-        data.triggerType === "TICKET_STATUS_CHANGE" ||
-        data.triggerType === "SLA_BREACH"
-      ) {
-        const folderName = "אוטומציות שירות"; // Service Automations
-        const folder = await prisma.viewFolder.findFirst({
-          where: {
-            companyId: currentUser.companyId,
-            name: folderName,
-            type: "AUTOMATION",
-          },
-        });
-
-        if (folder) {
-          folderId = folder.id;
-        } else {
-          const newFolder = await prisma.viewFolder.create({
-            data: {
-              companyId: currentUser.companyId,
-              name: folderName,
-              type: "AUTOMATION",
-            },
-          });
-          folderId = newFolder.id;
-        }
-      } else if (data.triggerType === "TASK_STATUS_CHANGE") {
-        const folderName = "אוטומציות משימות"; // Task Automations
-        const folder = await prisma.viewFolder.findFirst({
-          where: {
-            companyId: currentUser.companyId,
-            name: folderName,
-            type: "AUTOMATION",
-          },
-        });
-
-        if (folder) {
-          folderId = folder.id;
-        } else {
-          const newFolder = await prisma.viewFolder.create({
-            data: {
-              companyId: currentUser.companyId,
-              name: folderName,
-              type: "AUTOMATION",
-            },
-          });
-          folderId = newFolder.id;
-        }
-      } else if (data.triggerType === "MULTI_EVENT_DURATION") {
-        const folderName = "אוטומציות אירועים מרובים";
-        const folder = await prisma.viewFolder.findFirst({
-          where: {
-            companyId: currentUser.companyId,
-            name: folderName,
-            type: "AUTOMATION",
-          },
-        });
-
-        if (folder) {
-          folderId = folder.id;
-        } else {
-          const newFolder = await prisma.viewFolder.create({
-            data: {
-              companyId: currentUser.companyId,
-              name: folderName,
-              type: "AUTOMATION",
-            },
-          });
-          folderId = newFolder.id;
-        }
+      const folderNameMap: Record<string, string> = {
+        TICKET_STATUS_CHANGE: "אוטומציות שירות",
+        SLA_BREACH: "אוטומציות שירות",
+        TASK_STATUS_CHANGE: "אוטומציות משימות",
+        MULTI_EVENT_DURATION: "אוטומציות אירועים מרובים",
+      };
+      const folderName = folderNameMap[data.triggerType];
+      if (folderName) {
+        folderId = await getOrCreateAutomationFolder(currentUser.companyId, folderName);
       }
     }
 
@@ -890,21 +885,23 @@ async function applyRetroactiveAutomation(rule: any) {
     const toStatus = triggerConfig.toStatus;
     const fromStatus = triggerConfig.fromStatus;
 
-    const tasks = await prisma.task.findMany({
+    const tasks = await withRetry(() => prisma.task.findMany({
       where: {
         ...(toStatus ? { status: toStatus } : {}),
         companyId: rule.companyId,
       },
+      select: { id: true },
       take: 500,
-    });
+    }));
 
     // Batch-fetch all audit logs for tasks in a single query (avoids N+1)
     const taskIds = tasks.map(t => t.id);
-    const allTaskLogs = taskIds.length > 0 ? await prisma.auditLog.findMany({
+    const allTaskLogs = taskIds.length > 0 ? await withRetry(() => prisma.auditLog.findMany({
       where: { taskId: { in: taskIds }, action: "UPDATE", companyId: rule.companyId },
       orderBy: { timestamp: "desc" },
       take: 5000,
-    }) : [];
+      select: { diffJson: true, timestamp: true, taskId: true, action: true },
+    })) : [];
     const logsByTask = new Map<string, typeof allTaskLogs>();
     for (const log of allTaskLogs) {
       if (!log.taskId) continue;
@@ -916,11 +913,13 @@ async function applyRetroactiveAutomation(rule: any) {
     // P224: Collect updates, then batch in chunks of 100 (avoids N+1 sequential updates)
     const taskUpdates: { id: string; duration_status_change: string }[] = [];
 
+    type TaskLog = (typeof allTaskLogs)[number];
+
     for (const task of tasks) {
       const logs = logsByTask.get(task.id) || [];
 
-      let endLog = null;
-      let startLog = null;
+      let endLog: TaskLog | null = null;
+      let startLog: TaskLog | null = null;
 
       for (let i = 0; i < logs.length; i++) {
         const log = logs[i];
@@ -945,8 +944,8 @@ async function applyRetroactiveAutomation(rule: any) {
       }
 
       if (endLog && startLog) {
-        const startTime = new Date((startLog as any).timestamp).getTime();
-        const endTime = new Date((endLog as any).timestamp).getTime();
+        const startTime = new Date(startLog.timestamp).getTime();
+        const endTime = new Date(endLog.timestamp).getTime();
         const diffMs = endTime - startTime;
 
         const diffMinutes = Math.floor(diffMs / (1000 * 60));
@@ -987,18 +986,20 @@ async function applyRetroactiveAutomation(rule: any) {
 
     if (!tableId || !columnId) return;
 
-    const records = await prisma.record.findMany({
+    const records = await withRetry(() => prisma.record.findMany({
       where: { tableId, companyId: rule.companyId },
+      select: { id: true },
       take: 500,
-    });
+    }));
 
     // Batch-fetch all audit logs for records in a single query (avoids N+1)
     const recordIds = records.map(r => r.id);
-    const allRecordLogs = recordIds.length > 0 ? await prisma.auditLog.findMany({
+    const allRecordLogs = recordIds.length > 0 ? await withRetry(() => prisma.auditLog.findMany({
       where: { recordId: { in: recordIds }, action: { in: ["UPDATE", "CREATE"] }, companyId: rule.companyId },
       orderBy: { timestamp: "desc" },
       take: 5000,
-    }) : [];
+      select: { diffJson: true, timestamp: true, recordId: true, action: true },
+    })) : [];
     const logsByRecord = new Map<number, typeof allRecordLogs>();
     for (const log of allRecordLogs) {
       if (!log.recordId) continue;
@@ -1009,6 +1010,7 @@ async function applyRetroactiveAutomation(rule: any) {
 
     // P225: Collect creates, then batch with createMany (avoids N+1 sequential creates)
     const durationCreates: {
+      companyId: number;
       automationRuleId: number;
       recordId: number;
       durationSeconds: number;
@@ -1017,11 +1019,13 @@ async function applyRetroactiveAutomation(rule: any) {
       toValue: string;
     }[] = [];
 
+    type RecordLog = (typeof allRecordLogs)[number];
+
     for (const record of records) {
       const logs = logsByRecord.get(record.id) || [];
 
-      let endLog = null;
-      let startLog = null;
+      let endLog: RecordLog | null = null;
+      let startLog: RecordLog | null = null;
       let foundToVal = "";
       let foundFromVal = "";
 
@@ -1196,20 +1200,21 @@ function checkBusinessHours(config: any): boolean {
   if (!config.businessHours) return true; // No restriction
 
   const { days, start, end } = config.businessHours;
+  const tz = "Asia/Jerusalem";
   const now = new Date();
 
-  // FIX: Shift to Israel Time (UTC+2 or UTC+3).
-  // For simplicity, we will just use the server time if hosted in Israel region,
-  // OR we can manually adjust if we know server is UTC.
-  // Assuming Vercel is UTC. Israel is GMT+2 (Winter) or GMT+3 (Summer).
-  // Let's assume GMT+3 for now to be safe or use proper library if available.
-  // Actually, let's stick to local server time for now but Log it clearly.
-  // Ideally, we store "timezone" in config, but for this specific user request,
-  // we will just check the day.
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "short",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  }).formatToParts(now);
 
-  const currentDay = now.getDay(); // 0-6
-  const currentHour = now.getHours();
-  const currentMinute = now.getMinutes();
+  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const currentDay = dayMap[parts.find((p) => p.type === "weekday")!.value];
+  const currentHour = Number(parts.find((p) => p.type === "hour")!.value);
+  const currentMinute = Number(parts.find((p) => p.type === "minute")!.value);
 
   // 1. Day Check
   if (Array.isArray(days) && days.length > 0) {
@@ -1257,14 +1262,14 @@ export async function processViewAutomations(
     `\n🔍🔍🔍 [Automations] CHECKING VIEW AUTOMATIONS - Table=${tableId}, Task=${taskId}, Company=${companyId}\n`,
   );
   try {
-    const rules = await prisma.automationRule.findMany({
+    const rules = await withRetry(() => prisma.automationRule.findMany({
       where: {
         isActive: true, // Only active rules
         triggerType: "VIEW_METRIC_THRESHOLD",
         companyId: companyId,
       },
       take: 200,
-    });
+    }));
 
     console.log(
       `[Automations DEBUG] Found ${rules.length} active view automation rules.`,
@@ -1277,9 +1282,9 @@ export async function processViewAutomations(
       if (tc?.viewId) viewIds.add(Number(tc.viewId));
     }
     const views = viewIds.size > 0
-      ? await prisma.analyticsView.findMany({
+      ? await withRetry(() => prisma.analyticsView.findMany({
           where: { id: { in: Array.from(viewIds) }, companyId },
-        })
+        }))
       : [];
     const viewMap = new Map(views.map((v) => [v.id, v]));
 
@@ -1369,7 +1374,7 @@ export async function processViewAutomations(
 
           // --- Frequency Check ---
           const frequency = triggerConfig.frequency || "always";
-          const lastRunAt = triggerConfig.lastRunAt ? new Date(triggerConfig.lastRunAt) : null;
+          const lastRunAt = rule.lastRunAt ?? (triggerConfig.lastRunAt ? new Date(triggerConfig.lastRunAt) : null);
           let shouldRunFrequency = true;
           const now = new Date();
 
@@ -1413,35 +1418,28 @@ export async function processViewAutomations(
             console.error(`[Automations] Failed to execute actions for rule ${rule.id}:`, execErr);
           }
 
-          // Atomic conditional update to prevent race condition
+          // Atomic conditional update using top-level lastRunAt column
           try {
-            const nowIso = new Date().toISOString();
-            const previousLastRunAt = triggerConfig.lastRunAt || null;
-
-            if (previousLastRunAt) {
-              await prisma.$executeRaw`
-                UPDATE "AutomationRule"
-                SET "triggerConfig" = jsonb_set(
-                  jsonb_set("triggerConfig", '{lastRunAt}', ${JSON.stringify(nowIso)}::jsonb),
-                  '{lastDataSnapshot}', ${JSON.stringify(currentSnapshot)}::jsonb
-                )
-                WHERE id = ${rule.id}
-                AND "companyId" = ${rule.companyId}
-                AND "triggerConfig"->>'lastRunAt' = ${previousLastRunAt}
-              `;
-            } else {
-              await prisma.automationRule.update({
-                where: { id: rule.id, companyId: rule.companyId },
-                data: {
-                  triggerConfig: {
-                    ...triggerConfig,
-                    lastRunAt: nowIso,
-                    lastDataSnapshot: currentSnapshot,
-                  },
+            const nowDate = new Date();
+            const updated = await prisma.automationRule.updateMany({
+              where: {
+                id: rule.id,
+                companyId: rule.companyId,
+                lastRunAt: lastRunAt ?? null, // CAS guard: only update if unchanged
+              },
+              data: {
+                lastRunAt: nowDate,
+                triggerConfig: {
+                  ...triggerConfig,
+                  lastDataSnapshot: currentSnapshot,
                 },
-              });
+              },
+            });
+            if (updated.count === 0) {
+              console.warn(`[Automations] CAS conflict for rule ${rule.id} — another worker already updated lastRunAt`);
+            } else {
+              console.log(`[Automations] ✅ Updated lastRunAt for rule ${rule.id} (actionSuccess: ${actionSuccess})`);
             }
-            console.log(`[Automations] ✅ Updated lastRunAt for rule ${rule.id} (actionSuccess: ${actionSuccess})`);
           } catch (updateErr) {
             console.error(`[Automations] Failed to update lastRunAt for rule ${rule.id}:`, updateErr);
           }
@@ -1474,24 +1472,17 @@ export async function processTaskStatusChange(
   companyId: number, // SECURITY: Required for tenant scoping (Issue D)
 ) {
   try {
-    // Fetch task scoped by companyId
-    const task = await prisma.task.findFirst({ where: { id: taskId, companyId }, select: { companyId: true } });
-
-    if (!task) {
-      console.log(
-        `[Automations] Task ${taskId} not found for status change processing.`,
-      );
-      return;
-    }
-
-    const rules = await prisma.automationRule.findMany({
+    // companyId is already passed and validated by the Inngest caller — no need
+    // to re-fetch the task just to confirm it exists. If it was deleted between
+    // the event send and job execution, the rules simply won't match anything.
+    const rules = await withRetry(() => prisma.automationRule.findMany({
       where: {
         isActive: true,
         triggerType: "TASK_STATUS_CHANGE",
-        companyId: task.companyId, // Filter by company
+        companyId,
       },
       take: 200,
-    });
+    }));
 
     // Issue V fix: Track failures and signal to Inngest if majority fail
     let totalFailures = 0;
@@ -1514,7 +1505,7 @@ export async function processTaskStatusChange(
           taskTitle,
           fromStatus,
           toStatus,
-          companyId: task.companyId,
+          companyId,
         };
         await executeRuleActions(rule, context);
       } catch (ruleError) {
@@ -1532,6 +1523,49 @@ export async function processTaskStatusChange(
   }
 }
 
+/** Shared helper: check finance sync rules for a table and enqueue Inngest jobs for new/changed rules. */
+async function checkAndEnqueueFinanceSyncJobs(tableId: number, companyId: number, context: string) {
+  const syncRules = await withRetry(() => prisma.financeSyncRule.findMany({
+    where: { sourceType: "TABLE", sourceId: tableId, isActive: true, companyId },
+    take: 200,
+  }));
+
+  if (syncRules.length === 0) return;
+
+  console.log(`[Automations] ${context}: Found ${syncRules.length} sync rules for Table ${tableId}. Enqueuing sync jobs...`);
+
+  // Batch-fetch existing jobs upfront to avoid N+1
+  const ruleIds = syncRules.map((r) => r.id);
+  const existingJobs = await withRetry(() => prisma.financeSyncJob.findMany({
+    where: { syncRuleId: { in: ruleIds }, status: { in: ["QUEUED", "RUNNING"] }, companyId },
+    select: { syncRuleId: true },
+  }));
+  const existingRuleIds = new Set(existingJobs.map((j) => j.syncRuleId));
+
+  const newRules = syncRules.filter((r) => !existingRuleIds.has(r.id));
+  if (newRules.length === 0) return;
+
+  const jobs = await Promise.all(
+    newRules.map((rule) =>
+      prisma.financeSyncJob.create({
+        data: { companyId: rule.companyId, syncRuleId: rule.id, status: "QUEUED" },
+      }).then((job) => ({ job, rule }))
+    ),
+  );
+
+  try {
+    await inngest.send(
+      jobs.map(({ job, rule }) => ({
+        id: `finance-sync-${rule.companyId}-${rule.id}-${job.id}`,
+        name: "finance-sync/job.started" as const,
+        data: { jobId: job.id, syncRuleId: rule.id, companyId: rule.companyId },
+      })),
+    );
+  } catch (e) {
+    console.error(`[Auto-Sync] Failed to batch-enqueue ${jobs.length} sync jobs (${context})`, e);
+  }
+}
+
 export async function processNewRecordTrigger(
   tableId: number,
   tableName: string,
@@ -1540,7 +1574,7 @@ export async function processNewRecordTrigger(
 ) {
   try {
     // Fetch record scoped by companyId
-    const record = await prisma.record.findFirst({ where: { id: recordId, companyId } });
+    const record = await withRetry(() => prisma.record.findFirst({ where: { id: recordId, companyId }, select: { data: true, companyId: true } }));
 
     if (!record) {
       console.log(
@@ -1549,14 +1583,14 @@ export async function processNewRecordTrigger(
       return;
     }
 
-    const rules = await prisma.automationRule.findMany({
+    const rules = await withRetry(() => prisma.automationRule.findMany({
       where: {
         isActive: true,
         triggerType: "NEW_RECORD",
         companyId: record.companyId, // Filter by company
       },
       take: 200,
-    });
+    }));
 
     const recordData = record.data as any;
 
@@ -1643,52 +1677,9 @@ export async function processNewRecordTrigger(
       throw new Error(`[Automations] ${totalFailures}/${totalProcessed} new record rules failed — triggering Inngest retry`);
     }
 
-    // --- REAL TEME FINANCE SYNC ---
-    // Check if this table is source for any sync rule
+    // --- FINANCE SYNC ---
     try {
-      const syncRules = await prisma.financeSyncRule.findMany({
-        where: { sourceType: "TABLE", sourceId: tableId, isActive: true, companyId: record.companyId },
-        take: 200,
-      });
-
-      if (syncRules.length > 0) {
-        console.log(
-          `[Automations] Found ${syncRules.length} sync rules for Table ${tableId}. Enqueuing sync jobs...`,
-        );
-        const { inngest } = await import("@/lib/inngest/client");
-
-        // P89: Batch-fetch existing jobs upfront to avoid N+1
-        const ruleIds = syncRules.map((r) => r.id);
-        const existingJobs = await prisma.financeSyncJob.findMany({
-          where: { syncRuleId: { in: ruleIds }, status: { in: ["QUEUED", "RUNNING"] } },
-          select: { syncRuleId: true },
-        });
-        const existingRuleIds = new Set(existingJobs.map((j) => j.syncRuleId));
-
-        const newRules = syncRules.filter((r) => !existingRuleIds.has(r.id));
-        if (newRules.length > 0) {
-          // Create all jobs in parallel, then batch-send Inngest events
-          const jobs = await Promise.all(
-            newRules.map((rule) =>
-              prisma.financeSyncJob.create({
-                data: { companyId: rule.companyId, syncRuleId: rule.id, status: "QUEUED" },
-              }).then((job) => ({ job, rule }))
-            ),
-          );
-
-          try {
-            await inngest.send(
-              jobs.map(({ job, rule }) => ({
-                id: `finance-sync-${rule.companyId}-${rule.id}-${job.id}`,
-                name: "finance-sync/job.started" as const,
-                data: { jobId: job.id, syncRuleId: rule.id, companyId: rule.companyId },
-              })),
-            );
-          } catch (e) {
-            console.error(`[Auto-Sync] Failed to batch-enqueue ${jobs.length} sync jobs`, e);
-          }
-        }
-      }
+      await checkAndEnqueueFinanceSyncJobs(tableId, record.companyId, "New record");
     } catch (err) {
       console.error("[Automations] Error checking finance sync rules:", err);
     }
@@ -1704,30 +1695,29 @@ export async function processRecordUpdate(
   oldData: any,
   newData: any,
   companyId: number, // SECURITY: Required for tenant scoping (Issue D)
+  passedTableName?: string, // Optional: avoids extra DB query if caller already knows the name
 ) {
   console.log(
     `[Automations] Processing update for Table ${tableId}, Record ${recordId}`,
   );
   try {
-    // Fetch record scoped by companyId
-    const record = await prisma.record.findFirst({ where: { id: recordId, companyId }, select: { companyId: true } });
-
-    if (!record) return;
-
-    const rules = await prisma.automationRule.findMany({
+    // companyId is already passed and validated by the Inngest caller — no need
+    // to re-fetch the record just to confirm it exists. oldData/newData are
+    // already provided by the caller, so record.data is not needed either.
+    const rules = await withRetry(() => prisma.automationRule.findMany({
       where: {
         isActive: true,
         triggerType: "RECORD_FIELD_CHANGE",
-        companyId: record.companyId, // Filter by company
+        companyId,
       },
       take: 200,
-    });
+    }));
 
-    const table = await prisma.tableMeta.findFirst({
-      where: { id: tableId, companyId: record.companyId },
+    // Use passed table name to avoid an extra DB query when caller already has it
+    const tableName = passedTableName ?? (await withRetry(() => prisma.tableMeta.findFirst({
+      where: { id: tableId, companyId },
       select: { name: true },
-    });
-    const tableName = table?.name || "Unknown Table";
+    })))?.name ?? "Unknown Table";
 
     // Issue Z1 fix: Track failures and signal to Inngest if majority fail
     let totalFailures = 0;
@@ -1817,58 +1807,17 @@ export async function processRecordUpdate(
     // These involve recursive relation lookups and CPU-intensive event chain matching
     try {
       await inngest.send({
-        id: `multi-event-${record.companyId}-${recordId}-${Math.floor(Date.now() / 60000)}`,
+        id: `multi-event-${companyId}-${recordId}-${Math.floor(Date.now() / 60000)}`,
         name: "automation/multi-event-duration",
-        data: { tableId, recordId, companyId: record.companyId },
+        data: { tableId, recordId, companyId },
       });
     } catch (err) {
       console.error("[Automations] Failed to enqueue multi-event job:", err);
     }
 
-    // --- REAL TEME FINANCE SYNC (ON UPDATE) ---
+    // --- FINANCE SYNC (ON UPDATE) ---
     try {
-      const syncRules = await prisma.financeSyncRule.findMany({
-        where: { sourceType: "TABLE", sourceId: tableId, isActive: true, companyId: record.companyId },
-        take: 200,
-      });
-
-      if (syncRules.length > 0) {
-        console.log(
-          `[Automations] Record update in Table ${tableId}. Enqueuing ${syncRules.length} sync jobs...`,
-        );
-        const { inngest } = await import("@/lib/inngest/client");
-
-        // P89: Batch-fetch existing jobs upfront to avoid N+1
-        const ruleIds = syncRules.map((r) => r.id);
-        const existingJobs = await prisma.financeSyncJob.findMany({
-          where: { syncRuleId: { in: ruleIds }, status: { in: ["QUEUED", "RUNNING"] } },
-          select: { syncRuleId: true },
-        });
-        const existingRuleIds = new Set(existingJobs.map((j) => j.syncRuleId));
-
-        const newRules = syncRules.filter((r) => !existingRuleIds.has(r.id));
-        if (newRules.length > 0) {
-          const jobs = await Promise.all(
-            newRules.map((rule) =>
-              prisma.financeSyncJob.create({
-                data: { companyId: rule.companyId, syncRuleId: rule.id, status: "QUEUED" },
-              }).then((job) => ({ job, rule }))
-            ),
-          );
-
-          try {
-            await inngest.send(
-              jobs.map(({ job, rule }) => ({
-                id: `finance-sync-${rule.companyId}-${rule.id}-${job.id}`,
-                name: "finance-sync/job.started" as const,
-                data: { jobId: job.id, syncRuleId: rule.id, companyId: rule.companyId },
-              })),
-            );
-          } catch (e) {
-            console.error(`[Auto-Sync] Failed to batch-enqueue ${jobs.length} sync jobs on update`, e);
-          }
-        }
-      }
+      await checkAndEnqueueFinanceSyncJobs(tableId, companyId, "Record update");
     } catch (err) {
       console.error("[Automations] Error triggering sync on update:", err);
     }
@@ -1884,21 +1833,22 @@ export async function getViewAutomations(viewId: number) {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
 
-    const rules = await prisma.automationRule.findMany({
+    // Filter by viewId in DB. triggerConfig.viewId may be stored as number or string,
+    // so match both representations to avoid type mismatch.
+    const rules = await withRetry(() => prisma.automationRule.findMany({
       where: {
         triggerType: "VIEW_METRIC_THRESHOLD",
         companyId: user.companyId,
+        OR: [
+          { triggerConfig: { path: ["viewId"], equals: Number(viewId) } },
+          { triggerConfig: { path: ["viewId"], equals: String(viewId) } },
+        ],
       },
       orderBy: { createdAt: "desc" },
       take: 100,
-    });
+    }));
 
-    const filtered = rules.filter((r) => {
-      const config = r.triggerConfig as TriggerConfig;
-      return config && Number(config.viewId) === Number(viewId);
-    });
-
-    return { success: true, data: filtered };
+    return { success: true, data: rules };
   } catch (error) {
     console.error("Error fetching view automations:", error);
     return { success: false, error: "Failed to fetch view automations" };
@@ -1925,7 +1875,7 @@ export async function getAnalyticsAutomationsActionCount() {
     const companyId = currentUser.companyId;
 
     // Get all VIEW_METRIC_THRESHOLD rules for this company
-    const rules = await prisma.automationRule.findMany({
+    const rules = await withRetry(() => prisma.automationRule.findMany({
       where: {
         companyId: companyId,
         triggerType: "VIEW_METRIC_THRESHOLD",
@@ -1935,7 +1885,7 @@ export async function getAnalyticsAutomationsActionCount() {
         actionConfig: true,
       },
       take: 500,
-    });
+    }));
 
     // Count total actions
     let totalActions = 0;
@@ -1980,26 +1930,43 @@ async function addToNurtureList(params: {
   if (!email && !phone) return false;
 
   try {
-    // 1. Find or create the list
-    let list = await prisma.nurtureList.findUnique({
+    // 1. Find or create the list (P2002-safe: concurrent automations may race on the same slug)
+    let list = await withRetry(() => prisma.nurtureList.findUnique({
       where: {
         companyId_slug: {
           companyId,
           slug: listSlug,
         },
       },
-    });
+    }));
 
     if (!list) {
-      list = await prisma.nurtureList.create({
-        data: {
-          companyId,
-          slug: listSlug,
-          name:
-            listSlug.charAt(0).toUpperCase() +
-            listSlug.slice(1).replace("-", " "),
-        },
-      });
+      try {
+        list = await prisma.nurtureList.create({
+          data: {
+            companyId,
+            slug: listSlug,
+            name:
+              listSlug.charAt(0).toUpperCase() +
+              listSlug.slice(1).replace("-", " "),
+          },
+        });
+      } catch (createErr: any) {
+        if (createErr?.code === "P2002") {
+          // Race condition: another automation created the list first — re-fetch
+          list = await withRetry(() => prisma.nurtureList.findUnique({
+            where: {
+              companyId_slug: {
+                companyId,
+                slug: listSlug,
+              },
+            },
+          }));
+          if (!list) throw createErr; // Should not happen, but fail loudly
+        } else {
+          throw createErr;
+        }
+      }
     }
 
     // 2. Check if subscriber exists (by email or phone)
@@ -2008,12 +1975,12 @@ async function addToNurtureList(params: {
     if (email) conditions.push({ email });
     if (phone) conditions.push({ phone });
 
-    const existing = await prisma.nurtureSubscriber.findFirst({
+    const existing = await withRetry(() => prisma.nurtureSubscriber.findFirst({
       where: {
         nurtureListId: list.id,
         OR: conditions,
       },
-    });
+    }));
 
     if (!existing) {
       try {
@@ -2053,14 +2020,14 @@ export async function processTimeBasedAutomations(companyId: number) {
   }
   console.log(`⏰ Checking time-based automations for company ${companyId}...`);
   try {
-    const rules = await prisma.automationRule.findMany({
+    const rules = await withRetry(() => prisma.automationRule.findMany({
       where: {
         isActive: true,
         triggerType: "TIME_SINCE_CREATION",
         companyId,
       },
       take: 200,
-    });
+    }));
 
     console.log(`Found ${rules.length} active time-based rules for company ${companyId}.`);
 
@@ -2076,10 +2043,10 @@ export async function processTimeBasedAutomations(companyId: number) {
 
     // Batch-fetch all table names upfront to avoid N+1
     const tableIds = [...new Set(validRules.map((r) => Number((r.triggerConfig as any).tableId)))];
-    const tables = await prisma.tableMeta.findMany({
+    const tables = await withRetry(() => prisma.tableMeta.findMany({
       where: { id: { in: tableIds }, companyId },
       select: { id: true, name: true },
-    });
+    }));
     const tableMap = new Map(tables.map((t) => [t.id, t.name]));
 
     // Process rules in parallel with concurrency limit of 5
@@ -2132,24 +2099,22 @@ async function processTimeBasedRule(
     cutoffTime.setDate(now.getDate() - timeValue);
   }
 
-  // Find records created before cutoffTime AND not yet processed by this rule
-  const records = await prisma.record.findMany({
-    where: {
-      tableId,
-      companyId: rule.companyId,
-      createdAt: {
-        lte: cutoffTime,
-        gte: rule.createdAt, // Only records created AFTER this rule
-      },
-      automationLogs: {
-        none: {
-          automationRuleId: rule.id,
-        },
-      },
-    },
-    take: 200,
-    orderBy: { createdAt: "asc" },
-  });
+  // Find records created before cutoffTime AND not yet processed by this rule.
+  // Uses raw SQL NOT EXISTS for a more efficient hash anti-join plan vs Prisma's generated subquery.
+  const records = await withRetry(() => prisma.$queryRaw<Array<{ id: number; data: any }>>`
+    SELECT r.id, r.data
+    FROM "Record" r
+    WHERE r."tableId" = ${tableId}
+      AND r."companyId" = ${rule.companyId}
+      AND r."createdAt" <= ${cutoffTime}
+      AND r."createdAt" >= ${rule.createdAt}
+      AND NOT EXISTS (
+        SELECT 1 FROM "AutomationLog" al
+        WHERE al."recordId" = r.id AND al."automationRuleId" = ${rule.id}
+      )
+    ORDER BY r."createdAt" ASC
+    LIMIT 200
+  `);
 
   console.log(
     `Rule ${rule.name}: Found ${records.length} potential records.`,
@@ -2171,7 +2136,7 @@ async function processTimeBasedRule(
 
   // Process records in parallel with concurrency limit of 10
   const RECORD_CONCURRENCY = 10;
-  const logsToCreate: { automationRuleId: number; recordId: number }[] = [];
+  const logsToCreate: { automationRuleId: number; recordId: number; companyId: number }[] = [];
 
   for (let i = 0; i < matchingRecords.length; i += RECORD_CONCURRENCY) {
     const batch = matchingRecords.slice(i, i + RECORD_CONCURRENCY);
@@ -2190,7 +2155,7 @@ async function processTimeBasedRule(
 
     for (const result of results) {
       if (result.status === "fulfilled") {
-        logsToCreate.push({ automationRuleId: rule.id, recordId: result.value });
+        logsToCreate.push({ automationRuleId: rule.id, recordId: result.value, companyId: rule.companyId });
       } else {
         console.error(`[Automations] Error executing actions for rule ${rule.id}:`, result.reason);
       }
@@ -2201,7 +2166,7 @@ async function processTimeBasedRule(
   // Issue S fix: Re-throw so Inngest retries — without logs, records would be re-executed
   if (logsToCreate.length > 0) {
     try {
-      await prisma.automationLog.createMany({ data: logsToCreate });
+      await prisma.automationLog.createMany({ data: logsToCreate, skipDuplicates: true });
     } catch (logError) {
       console.error(`[Automations] Error batch-creating automation logs for rule ${rule.id}:`, logError);
       throw logError;
@@ -2224,22 +2189,20 @@ export async function processDirectDialTrigger(
   );
 
   try {
-    // Find all active DIRECT_DIAL automation rules for this table
-    const rules = await prisma.automationRule.findMany({
+    // Find all active DIRECT_DIAL automation rules for this specific table.
+    // triggerConfig.tableId may be stored as number or string, so match both.
+    const matchingRules = await withRetry(() => prisma.automationRule.findMany({
       where: {
         companyId,
         triggerType: "DIRECT_DIAL",
         isActive: true,
+        OR: [
+          { triggerConfig: { path: ["tableId"], equals: tableId } },
+          { triggerConfig: { path: ["tableId"], equals: String(tableId) } },
+        ],
       },
       take: 200,
-    });
-
-    // Filter rules that are configured for this specific table
-    const matchingRules = rules.filter((rule) => {
-      const config = rule.triggerConfig as any;
-      if (!config?.tableId) return false;
-      return Number(config.tableId) === tableId;
-    });
+    }));
 
     if (matchingRules.length === 0) {
       console.log(
@@ -2249,9 +2212,10 @@ export async function processDirectDialTrigger(
     }
 
     // Get the record data
-    const record = await prisma.record.findFirst({
+    const record = await withRetry(() => prisma.record.findFirst({
       where: { id: recordId, companyId },
-    });
+      select: { data: true, createdAt: true },
+    }));
 
     if (!record) {
       console.log(`[Automations] Record ${recordId} not found`);
@@ -2259,10 +2223,10 @@ export async function processDirectDialTrigger(
     }
 
     // Get table name for notifications — scoped by companyId (Issue K)
-    const table = await prisma.tableMeta.findFirst({
+    const table = await withRetry(() => prisma.tableMeta.findFirst({
       where: { id: tableId, companyId },
       select: { name: true },
-    });
+    }));
 
     const recordData = record.data as Record<string, unknown>;
 

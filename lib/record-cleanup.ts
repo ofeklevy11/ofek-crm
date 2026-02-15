@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
+import { withRetry } from "@/lib/db-retry";
 
 type TxClient = Prisma.TransactionClient;
 
@@ -75,14 +76,14 @@ export async function deleteRecordWithCleanup(
   },
 ) {
   // Fetch finance sync rules for cascade
-  const syncRules = await prisma.financeSyncRule.findMany({
+  const syncRules = await withRetry(() => prisma.financeSyncRule.findMany({
     where: {
       sourceType: "TABLE",
       sourceId: opts.tableId,
       companyId: opts.companyId,
     },
     select: { id: true },
-  });
+  }));
 
   const ruleIds = syncRules.map((r) => r.id);
 
@@ -98,9 +99,9 @@ export async function deleteRecordWithCleanup(
     await tx.record.delete({
       where: { id: recordId, companyId: opts.companyId },
     });
-  }, { timeout: 10000 });
 
-  await createAuditLog(null, opts.userId, "DELETE", {
-    previousRecordId: recordId,
-  }, undefined, opts.companyId);
+    await createAuditLog(null, opts.userId, "DELETE", {
+      previousRecordId: recordId,
+    }, tx, opts.companyId);
+  }, { timeout: 10000 });
 }

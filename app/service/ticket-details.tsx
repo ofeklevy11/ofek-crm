@@ -391,7 +391,7 @@ export default function TicketDetails({
     (c) =>
       c.name?.toLowerCase().includes(clientSearch.toLowerCase()) ||
       c.email?.toLowerCase().includes(clientSearch.toLowerCase()) ||
-      c.company?.toLowerCase().includes(clientSearch.toLowerCase())
+      c.businessName?.toLowerCase().includes(clientSearch.toLowerCase())
   );
 
   // Comment handlers
@@ -959,9 +959,9 @@ export default function TicketDetails({
                       <div className="text-sm font-medium text-[#000000] truncate">
                         {client.name}
                       </div>
-                      {(client.email || client.company) && (
+                      {(client.email || client.businessName) && (
                         <div className="text-xs text-slate-400 truncate">
-                          {client.company || client.email}
+                          {client.businessName || client.email}
                         </div>
                       )}
                     </div>

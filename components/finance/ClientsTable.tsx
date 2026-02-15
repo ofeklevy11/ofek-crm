@@ -94,10 +94,10 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
                   <div className="text-sm font-medium text-gray-900">
                     {client.name}
                   </div>
-                  {client.company && (
+                  {client.businessName && (
                     <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
                       <Building className="w-3 h-3" />
-                      {client.company}
+                      {client.businessName}
                     </div>
                   )}
                 </td>

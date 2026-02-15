@@ -267,14 +267,8 @@ async function processAggregationServer(
   // This ensures that if the user changes ANY filter, they get a fresh result.
   const cacheKey = `view_agg:${companyId}:${tableId}:${JSON.stringify(config)}`;
 
-  // Determine TTL: if forceRefresh is true, we want to bypass the cache check.
-  // We can pass 0 or a very small number as TTL to force specific behavior
-  // in getCachedMetric. However, getCachedMetric logic is: if (updatedAt > now - ttl) return cached;
-  // If we pass ttl=0, cutoff = now. updatedAt (past) > now (future) is FALSE. So it will be treated as stale.
-  // But wait, if we calculate a NEW value, we don't want it to expire immediately!
-  // The cache service stores 'updatedAt' as NOW.
-  // Next read with ttl=4h: updatedAt(Now) > (Now - 4h) -> VALID.
-  // So passing ttl=0 for THIS call is correct to FORCE RECALCULATION.
+  // Redis TTL controls cache lifetime. ttl=0 bypasses cache (forces recalculation).
+  // Normal ttl=4h means Redis will auto-expire the key after 4 hours.
   const ttl = forceRefresh ? 0 : 4 * 60 * 60; // 0 seconds vs 4 hours
 
   // Wrap the heavy database work in our cache service
@@ -429,6 +423,7 @@ async function processLegendServer(
         WHERE ${whereClause}
         GROUP BY ${col}
         ORDER BY count DESC
+        LIMIT 500
     `;
 
   const groups = await prisma.$queryRaw<any[]>(query);

@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { withRetry } from "@/lib/db-retry";
+import { z } from "zod";
+
+const createRetainerSchema = z.object({
+  title: z.string().min(1).max(200),
+  clientId: z.coerce.number().int().positive(),
+  amount: z.number().positive(),
+  frequency: z.enum(["monthly", "quarterly", "annually"]),
+  startDate: z.coerce.date(),
+  notes: z.string().max(5000).nullable().optional(),
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,23 +20,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { title, clientId, amount, frequency, startDate, notes } = body;
-
-    // Verify client belongs to user's company
-    const client = await prisma.client.findFirst({
-      where: { id: parseInt(clientId), companyId: user.companyId },
-    });
-
-    if (!client) {
-      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    const raw = await request.json();
+    const parsed = createRetainerSchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, { status: 400 });
     }
+    const body = parsed.data;
 
     // Calculate next due date based on frequency
-    const start = new Date(startDate);
+    const start = body.startDate;
     const nextDueDate = new Date(start);
 
-    switch (frequency) {
+    switch (body.frequency) {
       case "monthly":
         nextDueDate.setMonth(nextDueDate.getMonth() + 1);
         break;
@@ -37,18 +43,33 @@ export async function POST(request: NextRequest) {
         break;
     }
 
-    const retainer = await prisma.retainer.create({
-      data: {
-        title,
-        clientId: parseInt(clientId),
-        amount,
-        frequency,
-        startDate: start,
-        nextDueDate,
-        status: "active",
-        notes,
-      },
-    });
+    // H4: Wrap client verify + create in transaction to prevent TOCTOU race
+    const retainer = await withRetry(() => prisma.$transaction(async (tx) => {
+      const client = await tx.client.findFirst({
+        where: { id: body.clientId, companyId: user.companyId, deletedAt: null },
+      });
+      if (!client) {
+        return null;
+      }
+
+      return tx.retainer.create({
+        data: {
+          title: body.title,
+          clientId: body.clientId,
+          companyId: user.companyId,
+          amount: body.amount,
+          frequency: body.frequency,
+          startDate: start,
+          nextDueDate,
+          status: "active",
+          notes: body.notes ?? null,
+        },
+      });
+    }));
+
+    if (!retainer) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
 
     return NextResponse.json(retainer, { status: 201 });
   } catch (error) {

@@ -1,6 +1,3 @@
-import { Suspense } from "react";
-import { PrismaClient } from "@prisma/client";
-
 export const dynamic = "force-dynamic";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
@@ -19,25 +16,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getSyncRules } from "@/app/actions/finance-sync";
 import SyncRulesDialog from "@/components/finance/SyncRulesDialog";
-import { processFixedExpenses } from "@/app/actions/fixed-expenses";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info } from "lucide-react";
-
-async function getFinanceStats(companyId: number) {
-  const records = await prisma.financeRecord.findMany({
-    where: { companyId },
-  });
-
-  const income = records
-    .filter((r) => r.type === "INCOME")
-    .reduce((sum, r) => sum + Number(r.amount), 0);
-
-  const expense = records
-    .filter((r) => r.type === "EXPENSE")
-    .reduce((sum, r) => sum + Number(r.amount), 0);
-
-  return { income, expense, profit: income - expense };
-}
 
 export default async function IncomeExpensesPage() {
   const user = await getCurrentUser();
@@ -46,7 +26,6 @@ export default async function IncomeExpensesPage() {
   // Ensure data is synced and up to date
   try {
     const { triggerSyncByType } = await import("@/app/actions/finance-sync");
-    // We run them in parallel for speed
     await Promise.all([
       triggerSyncByType(user.companyId, "FIXED_EXPENSES"),
       triggerSyncByType(user.companyId, "PAYMENTS_RETAINERS"),
@@ -55,20 +34,28 @@ export default async function IncomeExpensesPage() {
     console.error("Auto-sync on page load failed", e);
   }
 
-  // Fetch stats and existing rules
-  const [stats, rules] = await Promise.all([
-    getFinanceStats(user.companyId),
+  // Single parallel fetch: DB-level aggregation for stats + paginated records + rules
+  const [totals, rawRecords, rules] = await Promise.all([
+    prisma.financeRecord.groupBy({
+      by: ["type"],
+      where: { companyId: user.companyId, deletedAt: null },
+      _sum: { amount: true },
+    }),
+    prisma.financeRecord.findMany({
+      where: { companyId: user.companyId, deletedAt: null },
+      orderBy: { date: "desc" },
+      take: 500,
+      include: {
+        syncRule: { select: { sourceType: true, name: true } },
+        client: { select: { name: true } },
+      },
+    }),
     getSyncRules(),
   ]);
 
-  const rawRecords = await prisma.financeRecord.findMany({
-    where: { companyId: user.companyId },
-    orderBy: { date: "desc" },
-    include: {
-      syncRule: { select: { sourceType: true, name: true } },
-      client: { select: { name: true } }, // Also useful to have client name if not already there
-    },
-  });
+  const income = Number(totals.find((t) => t.type === "INCOME")?._sum.amount || 0);
+  const expense = Number(totals.find((t) => t.type === "EXPENSE")?._sum.amount || 0);
+  const stats = { income, expense, profit: income - expense };
 
   // Serialize Decimal records for client component
   const localizedRecords = rawRecords.map((r) => ({

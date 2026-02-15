@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { withRetry } from "@/lib/db-retry";
 
 export async function getNotifications(
   limit: number | null = 20,
@@ -15,7 +16,7 @@ export async function getNotifications(
     // Force usage of current user ID for security
     const targetUserId = user.id;
 
-    const notifications = await prisma.notification.findMany({
+    const notifications = await withRetry(() => prisma.notification.findMany({
       where: {
         userId: targetUserId,
         companyId: user.companyId, // Extra safety
@@ -24,7 +25,7 @@ export async function getNotifications(
         createdAt: "desc",
       },
       take: limit ? Math.min(limit, 200) : 200,
-    });
+    }));
     return { success: true, data: notifications };
   } catch (error) {
     console.error("Error fetching notifications:", error);
@@ -139,6 +140,7 @@ export async function createNotificationForCompany(data: {
       // Verify that target userId belongs to the company
       const targetUser = await prisma.user.findFirst({
         where: { id: data.userId, companyId: data.companyId },
+        select: { id: true },
       });
 
       if (!targetUser) {

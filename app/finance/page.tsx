@@ -3,6 +3,7 @@ import FinancialStats from "@/components/finance/FinancialStats";
 import ActiveRetainersTable from "@/components/finance/ActiveRetainersTable";
 import PendingPaymentsTable from "@/components/finance/PendingPaymentsTable";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { PAID_STATUS_VARIANTS } from "@/lib/finance-constants";
 import {
   Plus,
   ArrowRight,
@@ -23,96 +24,94 @@ export default async function FinancePage() {
     redirect("/login");
   }
 
-  // Fetch real data from database - CRITICAL: Filter by client.companyId
-  const [
-    transactions,
-    activeRetainers,
-    pendingPayments,
-    clientCount,
-    transactionStats,
-    cancelledRetainersCount,
-  ] = await Promise.all([
+  const now = new Date();
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  // P5: Use Promise.allSettled so one failed query doesn't crash the whole dashboard
+  const results = await Promise.allSettled([
+    // Recent transactions for display (already bounded)
     prisma.transaction.findMany({
-      where: {
-        client: { companyId: user.companyId },
-      },
-      include: { client: true },
+      where: { companyId: user.companyId, deletedAt: null }, // P6+P3
+      include: { client: { select: { id: true, name: true } } },
       orderBy: { createdAt: "desc" },
       take: 5,
     }),
+    // Top 5 active retainers for display (with client name)
     prisma.retainer.findMany({
-      where: {
-        status: "active",
-        client: { companyId: user.companyId },
-      },
-      include: { client: true },
+      where: { status: "active", companyId: user.companyId, deletedAt: null }, // P6+P3
+      include: { client: { select: { id: true, name: true } } },
       orderBy: { nextDueDate: "asc" },
+      take: 5,
     }),
+    // All active retainers — minimal fields for MRR/growth stats (no client join)
+    prisma.retainer.findMany({
+      where: { status: "active", companyId: user.companyId, deletedAt: null }, // P6+P3
+      select: { amount: true, frequency: true, createdAt: true },
+      take: 500,
+    }),
+    // Top 5 pending payments for display (with client name)
     prisma.oneTimePayment.findMany({
-      where: {
-        status: { in: ["pending", "overdue"] },
-        client: { companyId: user.companyId },
-      },
-      include: { client: true },
+      where: { status: { in: ["pending", "overdue"] }, companyId: user.companyId, deletedAt: null }, // P6+P3
+      include: { client: { select: { id: true, name: true } } },
       orderBy: { dueDate: "asc" },
+      take: 5,
     }),
-    // Other stats if needed
-    prisma.client.count({
-      where: { companyId: user.companyId },
-    }),
-    // Calculate Total Paid Revenue (from OneTimePayment) for correct Collection Rate
+    // DB-level aggregate for outstanding debt + count
     prisma.oneTimePayment.aggregate({
+      where: { status: { in: ["pending", "overdue"] }, companyId: user.companyId, deletedAt: null }, // P6+P3
       _sum: { amount: true },
-      _count: { id: true }, // Get count as well
+      _count: { id: true },
+    }),
+    // Overdue count at DB level
+    prisma.oneTimePayment.count({
       where: {
-        client: { companyId: user.companyId },
+        companyId: user.companyId, deletedAt: null, // P6+P3
         OR: [
-          {
-            status: {
-              in: [
-                "paid",
-                "completed",
-                "PAID",
-                "COMPLETED",
-                "manual-marked-paid",
-              ],
-            },
-          },
-          { paidDate: { not: null } },
+          { status: "overdue" },
+          { status: "pending", dueDate: { lt: now } },
         ],
       },
     }),
-    // Cancelled retainers count for churn rate (was sequential, now parallel)
-    prisma.retainer.count({
+    // Paid revenue stats for collection rate
+    prisma.oneTimePayment.aggregate({
+      _sum: { amount: true },
+      _count: { id: true },
       where: {
-        status: "cancelled",
-        client: { companyId: user.companyId },
+        companyId: user.companyId, deletedAt: null, // P6+P3
+        status: { in: PAID_STATUS_VARIANTS as unknown as string[] },
       },
     }),
+    prisma.retainer.count({
+      where: { status: "cancelled", companyId: user.companyId, deletedAt: null }, // P6+P3
+    }),
   ]);
+
+  // P5: Extract values with safe defaults for failed queries
+  const settled = <T>(r: PromiseSettledResult<T>, fallback: T): T =>
+    r.status === "fulfilled" ? r.value : fallback;
+
+  const transactions = settled(results[0], [] as any);
+  const displayRetainers = settled(results[1], [] as any);
+  const retainerStatsData = settled(results[2], [] as any);
+  const displayPayments = settled(results[3], [] as any);
+  const outstandingStats = settled(results[4], { _sum: { amount: null }, _count: { id: 0 } } as any);
+  const overdueCount = settled(results[5], 0);
+  const transactionStats = settled(results[6], { _sum: { amount: null }, _count: { id: 0 } } as any);
+  const cancelledRetainersCount = settled(results[7], 0);
 
   // Calculate totals
   const totalPaidAmount = Number(transactionStats?._sum?.amount || 0);
   const paidCount = Number(transactionStats?._count?.id || 0);
 
-  // Growth Stats Calculation (Dynamic)
-  const now = new Date();
-  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  // 1. New Retainers this month
-  const newRetainersThisMonth = activeRetainers.filter(
+  // New retainers this month
+  const newRetainersThisMonth = retainerStatsData.filter(
     (r) => new Date(r.createdAt) >= firstDayOfMonth,
   ).length;
 
-  // 2. Overdue Payments Count
-  const overdueCount = pendingPayments.filter(
-    (p) =>
-      p.status === "overdue" ||
-      (p.status === "pending" && p.dueDate && new Date(p.dueDate) < now),
-  ).length;
-
-  // 3. New MRR Added this month
-  const newMrrThisMonth = activeRetainers
+  // New MRR added this month
+  const newMrrThisMonth = retainerStatsData
     .filter((r) => new Date(r.createdAt) >= firstDayOfMonth)
     .reduce((sum, r) => {
       const amount = Number(r.amount);
@@ -122,52 +121,41 @@ export default async function FinancePage() {
     }, 0);
 
   // MRR Calculation
-  const mrr = activeRetainers.reduce((sum, r) => {
+  const mrr = retainerStatsData.reduce((sum, r) => {
     const amount = Number(r.amount);
     const freq = r.frequency ? r.frequency.toLowerCase() : "monthly";
     if (freq === "yearly") return sum + amount / 12;
     if (freq === "weekly") return sum + amount * 4.33;
-    return sum + amount; // Default to monthly
+    return sum + amount;
   }, 0);
 
-  const outstandingDebt = pendingPayments.reduce(
-    (sum, p) => sum + Number(p.amount),
-    0,
-  );
+  const outstandingDebt = Number(outstandingStats?._sum?.amount || 0);
+  const outstandingCount = Number(outstandingStats?._count?.id || 0);
 
-  // Rate = Paid Count / (Paid Count + Outstanding Count)
-  // User expects 50% for 1 paid and 1 unpaid.
-  const outstandingCount = pendingPayments.length;
+  // Collection Rate
   const totalCount = paidCount + outstandingCount;
-
   const collectionRate =
     totalCount > 0 ? Math.round((paidCount / totalCount) * 100) : 0;
 
-  // Churn Rate Calculation
-  // All retainers moved to "cancelled" are considered churn.
-  // Formula: Cancelled / (Active + Cancelled) * 100
+  // Churn Rate
   const totalRetainersForChurn =
-    activeRetainers.length + cancelledRetainersCount;
+    retainerStatsData.length + cancelledRetainersCount;
   const churnRate =
     totalRetainersForChurn > 0
       ? Math.round((cancelledRetainersCount / totalRetainersForChurn) * 100)
       : 0;
 
-  // Calculate new retainers in the last 30 days
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-  const newRetainersLast30Days = activeRetainers.filter(
+  const newRetainersLast30Days = retainerStatsData.filter(
     (r) => new Date(r.createdAt) >= thirtyDaysAgo,
   ).length;
 
-  // Serialize data (convert Decimal to number) for Client Components
-  const serializedActiveRetainers = activeRetainers.map((r) => ({
+  // Serialize for Client Components
+  const serializedActiveRetainers = displayRetainers.map((r) => ({
     ...r,
     amount: Number(r.amount),
   }));
 
-  const serializedPendingPayments = pendingPayments.map((p) => ({
+  const serializedPendingPayments = displayPayments.map((p) => ({
     ...p,
     amount: Number(p.amount),
   }));
@@ -260,7 +248,7 @@ export default async function FinancePage() {
           </div>
           <h3 className="text-lg font-semibold text-gray-900">ריטיינרים</h3>
           <p className="text-gray-500 text-sm mt-1">
-            {activeRetainers.length} תשלומים חוזרים פעילים
+            {retainerStatsData.length} תשלומים חוזרים פעילים
           </p>
         </Link>
         <Link
@@ -276,7 +264,7 @@ export default async function FinancePage() {
           </div>
           <h3 className="text-lg font-semibold text-gray-900">תשלומים</h3>
           <p className="text-gray-500 text-sm mt-1">
-            {pendingPayments.length} תשלומים חד-פעמיים בהמתנה
+            {outstandingCount} תשלומים חד-פעמיים בהמתנה
           </p>
         </Link>
         <Link
@@ -301,7 +289,7 @@ export default async function FinancePage() {
       <FinancialStats
         totalRevenue={mrr}
         outstandingDebt={outstandingDebt}
-        activeRetainers={activeRetainers.length}
+        activeRetainers={retainerStatsData.length}
         collectionRate={collectionRate}
         newMrr={newMrrThisMonth}
         overdueCount={overdueCount} // Keeping for now, likely replacing in component

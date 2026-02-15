@@ -1,21 +1,28 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { getCalendarEvents, createCalendarEvent } from "@/app/actions/calendar";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // CRITICAL: Filter by companyId for multi-tenancy
-    // P111: Add take limit matching server action bounds
-    const events = await prisma.calendarEvent.findMany({
-      where: { companyId: user.companyId },
-      take: 5000,
-    });
-    return NextResponse.json(events);
+    const { searchParams } = new URL(request.url);
+    const rangeStart = searchParams.get("rangeStart");
+    const rangeEnd = searchParams.get("rangeEnd");
+
+    const result = await getCalendarEvents(
+      rangeStart ?? undefined,
+      rangeEnd ?? undefined,
+    );
+
+    if (!result.success) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+
+    return NextResponse.json(result.data);
   } catch (error) {
     console.error("Error fetching calendar events:", error);
     return NextResponse.json(
@@ -35,18 +42,19 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { title, description, startTime, endTime, color } = body;
 
-    const event = await prisma.calendarEvent.create({
-      data: {
-        companyId: user.companyId, // CRITICAL: Set companyId for multi-tenancy
-        title,
-        description,
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
-        color,
-      },
+    const result = await createCalendarEvent({
+      title,
+      description,
+      startTime,
+      endTime,
+      color,
     });
 
-    return NextResponse.json(event);
+    if (!result.success) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+
+    return NextResponse.json(result.data);
   } catch (error) {
     console.error("Error creating calendar event:", error);
     return NextResponse.json(

@@ -1,25 +1,41 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { canManageTables, canReadTable } from "@/lib/permissions";
+
+// P7: Validate and parse route param early — reject NaN before hitting DB
+function parseId(raw: string): number | null {
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
-
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { id } = await params;
+    const tableId = parseId(id);
+    if (!tableId) {
+      return NextResponse.json({ error: "Invalid table ID" }, { status: 400 });
+    }
 
-    // CRITICAL: Filter by companyId
+    // P2: Check read permission before querying
+    if (!canReadTable(user, tableId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // P8: Exclude soft-deleted tables
     const table = await prisma.tableMeta.findFirst({
       where: {
-        id: parseInt(id),
+        id: tableId,
         companyId: user.companyId,
+        deletedAt: null,
       },
       include: {
         _count: {
@@ -47,10 +63,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { getCurrentUser } = await import("@/lib/permissions-server");
-    const { canManageTables } = await import("@/lib/permissions");
     const user = await getCurrentUser();
-
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -63,44 +76,82 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const body = await request.json();
-    const { name, slug, schemaJson } = body;
-
-    // CRITICAL: Check if table exists AND belongs to company
-    const existingTable = await prisma.tableMeta.findFirst({
-      where: {
-        id: parseInt(id),
-        companyId: user.companyId,
-      },
-    });
-
-    if (!existingTable) {
-      return NextResponse.json({ error: "Table not found" }, { status: 404 });
+    const tableId = parseId(id);
+    if (!tableId) {
+      return NextResponse.json({ error: "Invalid table ID" }, { status: 400 });
     }
 
-    // SECURITY: Validate categoryId belongs to user's company before assignment
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    const { name, slug, schemaJson, updatedAt: expectedUpdatedAt } = body;
+
+    // P9: Only select id — full row not needed for existence check
     if (body.categoryId !== undefined && body.categoryId !== null) {
       const category = await prisma.tableCategory.findFirst({
         where: { id: body.categoryId, companyId: user.companyId },
+        select: { id: true },
       });
       if (!category) {
         return NextResponse.json({ error: "Category not found" }, { status: 400 });
       }
     }
 
-    // SECURITY: Atomic companyId check in update WHERE clause
-    const updatedTable = await prisma.tableMeta.update({
-      where: { id: parseInt(id), companyId: user.companyId },
+    // P4 + P5: Use updateMany with optimistic concurrency check in a single query
+    //   — eliminates the redundant findFirst while supporting updatedAt guard
+    const where: any = {
+      id: tableId,
+      companyId: user.companyId,
+      deletedAt: null,
+    };
+    if (expectedUpdatedAt) {
+      where.updatedAt = new Date(expectedUpdatedAt);
+    }
+
+    const { count } = await prisma.tableMeta.updateMany({
+      where,
       data: {
         ...(name && { name }),
         ...(slug && { slug }),
         ...(schemaJson && { schemaJson }),
         ...(body.categoryId !== undefined && { categoryId: body.categoryId }),
+        updatedAt: new Date(),  // updateMany doesn't auto-set @updatedAt
       },
     });
 
+    if (count === 0) {
+      // Distinguish between not-found and optimistic-concurrency conflict
+      if (expectedUpdatedAt) {
+        const exists = await prisma.tableMeta.findFirst({
+          where: { id: tableId, companyId: user.companyId, deletedAt: null },
+          select: { id: true },
+        });
+        if (exists) {
+          return NextResponse.json(
+            { error: "Conflict: the table was modified by another user. Please refresh and try again." },
+            { status: 409 }
+          );
+        }
+      }
+      return NextResponse.json({ error: "Table not found" }, { status: 404 });
+    }
+
+    // Return the updated record
+    const updatedTable = await prisma.tableMeta.findFirst({
+      where: { id: tableId, companyId: user.companyId, deletedAt: null },
+    });
+
     return NextResponse.json(updatedTable);
-  } catch (error) {
+  } catch (error: any) {
+    if (error.code === "P2002") {
+      return NextResponse.json(
+        { error: "slug כבר קיים בחברה זו" },
+        { status: 409 }
+      );
+    }
     console.error("Error updating table:", error);
     return NextResponse.json(
       { error: "Failed to update table" },
@@ -114,10 +165,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { getCurrentUser } = await import("@/lib/permissions-server");
-    const { canManageTables } = await import("@/lib/permissions");
     const user = await getCurrentUser();
-
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -130,30 +178,52 @@ export async function DELETE(
     }
 
     const { id } = await params;
-
-    // CRITICAL: Check if table exists AND belongs to company
-    const existingTable = await prisma.tableMeta.findFirst({
-      where: {
-        id: parseInt(id),
-        companyId: user.companyId,
-      },
-    });
-
-    if (!existingTable) {
-      return NextResponse.json({ error: "Table not found" }, { status: 404 });
+    const tableId = parseId(id);
+    if (!tableId) {
+      return NextResponse.json({ error: "Invalid table ID" }, { status: 400 });
     }
 
-    // Check for associated files
-    const fileCount = await prisma.file.count({
-      where: {
-        record: {
-          tableId: parseInt(id),
-          companyId: existingTable.companyId,
-        },
-      },
-    });
+    // P1 + P8: All checks and soft-delete inside a single transaction
+    await prisma.$transaction(async (tx) => {
+      const existingTable = await tx.tableMeta.findFirst({
+        where: { id: tableId, companyId: user.companyId, deletedAt: null },
+        select: { id: true, companyId: true, slug: true },
+      });
 
-    if (fileCount > 0) {
+      if (!existingTable) {
+        throw new Error("TABLE_NOT_FOUND");
+      }
+
+      // P1: File check INSIDE the transaction — no race window
+      const fileCount = await tx.file.count({
+        where: {
+          record: {
+            tableId,
+            companyId: existingTable.companyId,
+          },
+        },
+      });
+
+      if (fileCount > 0) {
+        throw new Error("HAS_FILES");
+      }
+
+      // P8: Soft delete — mangle slug to free the unique constraint
+      await tx.tableMeta.update({
+        where: { id: tableId, companyId: user.companyId },
+        data: {
+          deletedAt: new Date(),
+          slug: `${existingTable.slug}_deleted_${Date.now()}`,
+        },
+      });
+    }, { maxWait: 5000, timeout: 60000 });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    if (error.message === "TABLE_NOT_FOUND") {
+      return NextResponse.json({ error: "Table not found" }, { status: 404 });
+    }
+    if (error.message === "HAS_FILES") {
       return NextResponse.json(
         {
           error:
@@ -162,43 +232,6 @@ export async function DELETE(
         { status: 400 }
       );
     }
-
-    // Clean up orphaned FinanceRecords linked to records in this table
-    const tableIdNum = parseInt(id);
-    const syncRules = await prisma.financeSyncRule.findMany({
-      where: { sourceType: "TABLE", sourceId: tableIdNum, companyId: existingTable.companyId },
-      select: { id: true },
-    });
-    if (syncRules.length > 0) {
-      const recordIds = await prisma.record.findMany({
-        where: { tableId: tableIdNum, companyId: existingTable.companyId },
-        select: { id: true },
-        take: 50000, // P221: Safety cap — prevents unbounded ID array in memory
-      });
-      if (recordIds.length > 0) {
-        await prisma.financeRecord.deleteMany({
-          where: {
-            companyId: existingTable.companyId,
-            syncRuleId: { in: syncRules.map((r) => r.id) },
-            originId: { in: recordIds.map((r) => r.id.toString()) },
-          },
-        });
-      }
-    }
-
-    // Delete all records
-    await prisma.record.deleteMany({
-      where: { tableId: tableIdNum, companyId: existingTable.companyId },
-    });
-
-    // SECURITY: Atomic companyId check in delete WHERE clause
-    await prisma.tableMeta.delete({
-      where: { id: parseInt(id), companyId: user.companyId },
-    });
-
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error("Error deleting table:", error);
     if (error.code === "P2003") {
       return NextResponse.json(
         {
@@ -209,6 +242,7 @@ export async function DELETE(
       );
     }
 
+    console.error("Error deleting table:", error);
     return NextResponse.json(
       { error: "Failed to delete table" },
       { status: 500 }

@@ -5,44 +5,54 @@ import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
 import { inngest } from "@/lib/inngest/client";
+import { withRetry } from "@/lib/db-retry";
 
-export async function getQuotes(showTrashed: boolean = false) {
+export async function getQuotes(showTrashed: boolean = false, cursor?: string) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  // P118: Add take limit to prevent OOM with large quote lists
-  const quotes = await db.quote.findMany({
+  const pageSize = 50;
+
+  const quotes = await withRetry(() => db.quote.findMany({
     where: {
       companyId: user.companyId,
       isTrashed: showTrashed,
     },
-    include: {
-      client: true,
-      items: true,
+    select: {
+      id: true,
+      quoteNumber: true,
+      clientName: true,
+      clientEmail: true,
+      total: true,
+      status: true,
+      createdAt: true,
+      validUntil: true,
+      _count: { select: { items: true } },
     },
     orderBy: { createdAt: "desc" },
-    take: 1000,
-  });
-
-  return quotes.map((quote) => ({
-    ...quote,
-    total: quote.total.toNumber(),
-    items: quote.items.map((item) => ({
-      ...item,
-      unitPrice: item.unitPrice.toNumber(),
-      unitCost: item.unitCost ? item.unitCost.toNumber() : null,
-    })),
+    take: pageSize + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   }));
+
+  const hasMore = quotes.length > pageSize;
+  if (hasMore) quotes.pop();
+
+  return {
+    quotes: quotes.map((quote) => ({
+      ...quote,
+      total: quote.total.toNumber(),
+    })),
+    nextCursor: hasMore ? quotes[quotes.length - 1]?.id ?? null : null,
+  };
 }
 
 export async function getQuoteById(id: string) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  const quote = await db.quote.findUnique({
+  const quote = await withRetry(() => db.quote.findUnique({
     where: { id, companyId: user.companyId },
     include: {
-      client: true,
       items: {
         include: {
           product: true,
@@ -50,7 +60,7 @@ export async function getQuoteById(id: string) {
       },
       company: true,
     },
-  });
+  }));
 
   if (!quote) return null;
 
@@ -101,10 +111,10 @@ export async function createQuote(data: {
 
   // SECURITY: Validate clientId belongs to user's company
   if (data.clientId) {
-    const client = await db.client.findFirst({
+    const client = await withRetry(() => db.client.findFirst({
       where: { id: data.clientId, companyId: user.companyId },
       select: { id: true },
-    });
+    }));
     if (!client) throw new Error("Invalid client");
   }
 
@@ -114,54 +124,65 @@ export async function createQuote(data: {
     0,
   );
 
-  // P124: Use serializable transaction to prevent race condition on quote number
-  const quote = await db.$transaction(async (tx) => {
-    const lastQuote = await tx.quote.findFirst({
-      where: {
-        companyId: user.companyId,
-        quoteNumber: { not: null },
-      },
-      orderBy: { quoteNumber: "desc" },
-      select: { quoteNumber: true },
-    });
+  // P124: Use serializable transaction to prevent race condition on quote number.
+  // Retry up to 2 times on serialization conflict (P2034) from concurrent creates.
+  const MAX_RETRIES = 2;
+  let quote;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      quote = await withRetry(() => db.$transaction(async (tx) => {
+        const lastQuote = await tx.quote.findFirst({
+          where: {
+            companyId: user.companyId,
+            quoteNumber: { not: null },
+          },
+          orderBy: { quoteNumber: "desc" },
+          select: { quoteNumber: true },
+        });
 
-    const nextQuoteNumber = (lastQuote?.quoteNumber ?? 0) + 1;
+        const nextQuoteNumber = (lastQuote?.quoteNumber ?? 0) + 1;
 
-    return tx.quote.create({
-      data: {
-        companyId: user.companyId,
-        quoteNumber: nextQuoteNumber,
-        clientId: data.clientId,
-        clientName: data.clientName,
-        clientEmail: data.clientEmail,
-        clientPhone: data.clientPhone,
-        clientTaxId: data.clientTaxId,
-        clientAddress: data.clientAddress,
-        validUntil: data.validUntil,
-        title: data.title,
-        total,
-        status: "DRAFT",
-        shareToken: crypto.randomUUID(),
-        items: {
-          create: data.items.map((item) => ({
-            productId: item.productId,
-            description: item.description,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            unitCost: item.unitCost,
-          })),
-        },
-        isPriceWithVat: data.isPriceWithVat ?? false,
-        currency: data.currency || "ILS",
-        exchangeRate: data.exchangeRate,
-        discountType: data.discountType || null,
-        discountValue: data.discountValue || null,
-      },
-      include: {
-        items: true,
-      },
-    });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+        return tx.quote.create({
+          data: {
+            companyId: user.companyId,
+            quoteNumber: nextQuoteNumber,
+            clientId: data.clientId,
+            clientName: data.clientName,
+            clientEmail: data.clientEmail,
+            clientPhone: data.clientPhone,
+            clientTaxId: data.clientTaxId,
+            clientAddress: data.clientAddress,
+            validUntil: data.validUntil,
+            title: data.title,
+            total,
+            status: "DRAFT",
+            shareToken: crypto.randomUUID(),
+            items: {
+              create: data.items.map((item) => ({
+                productId: item.productId,
+                description: item.description,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                unitCost: item.unitCost,
+              })),
+            },
+            isPriceWithVat: data.isPriceWithVat ?? false,
+            currency: data.currency || "ILS",
+            exchangeRate: data.exchangeRate,
+            discountType: data.discountType || null,
+            discountValue: data.discountValue || null,
+          },
+          select: { id: true },
+        });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 10000 }));
+      break; // Success — exit retry loop
+    } catch (err: any) {
+      if (err?.code === "P2034" && attempt < MAX_RETRIES) {
+        continue; // Serialization conflict — retry
+      }
+      throw err;
+    }
+  }
 
   // Pre-generate PDF in background so it's ready when user downloads
   inngest.send({
@@ -172,15 +193,7 @@ export async function createQuote(data: {
 
   revalidatePath("/quotes");
 
-  return {
-    ...quote,
-    total: quote.total.toNumber(),
-    items: quote.items.map((item) => ({
-      ...item,
-      unitPrice: item.unitPrice.toNumber(),
-      unitCost: item.unitCost ? item.unitCost.toNumber() : null,
-    })),
-  };
+  return { id: quote.id };
 }
 
 export async function updateQuote(
@@ -217,10 +230,10 @@ export async function updateQuote(
 
   // SECURITY: Validate clientId belongs to user's company
   if (data.clientId) {
-    const client = await db.client.findFirst({
+    const client = await withRetry(() => db.client.findFirst({
       where: { id: data.clientId, companyId: user.companyId },
       select: { id: true },
-    });
+    }));
     if (!client) throw new Error("Invalid client");
   }
 
@@ -235,7 +248,7 @@ export async function updateQuote(
 
   let oldPdfUrl: string | null = null;
 
-  const quote = await db.$transaction(async (tx) => {
+  await withRetry(() => db.$transaction(async (tx) => {
     // Read current pdfUrl before nulling so Inngest job can delete the old file
     const current = await tx.quote.findUnique({
       where: { id, companyId: user.companyId },
@@ -245,7 +258,7 @@ export async function updateQuote(
 
     // 1. Update basic info
     // NOTE: shareToken is intentionally preserved — do not reset on update
-    const updated = await tx.quote.update({
+    await tx.quote.update({
       where: { id, companyId: user.companyId },
       data: {
         clientId: data.clientId,
@@ -268,7 +281,6 @@ export async function updateQuote(
     });
 
     // 2. Handle items: simple strategy -> delete all, recreate all
-    // Use deleteMany with quoteId
     await tx.quoteItem.deleteMany({
       where: { quoteId: id },
     });
@@ -286,15 +298,7 @@ export async function updateQuote(
         })),
       });
     }
-
-    // 4. Fetch the full, fresh quote to return
-    const fullQuote = await tx.quote.findUnique({
-      where: { id: updated.id },
-      include: { items: true },
-    });
-
-    return fullQuote;
-  });
+  }, { maxWait: 5000, timeout: 30000 }));
 
   // Re-generate PDF in background after update
   inngest.send({
@@ -305,41 +309,32 @@ export async function updateQuote(
 
   revalidatePath("/quotes");
   revalidatePath(`/quotes/${id}`);
-
-  if (!quote) throw new Error("Failed to update quote");
-
-  return {
-    ...quote,
-    total: quote.total.toNumber(),
-    items: quote.items.map((item) => ({
-      ...item,
-      unitPrice: item.unitPrice.toNumber(),
-      unitCost: item.unitCost ? item.unitCost.toNumber() : null,
-    })),
-  };
 }
 
 export async function trashQuote(id: string) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  // Read current pdfUrl so we can delete the UploadThing file
-  const quote = await db.quote.findUnique({
-    where: { id, companyId: user.companyId },
-    select: { pdfUrl: true },
-  });
-
-  await db.quote.update({
-    where: { id, companyId: user.companyId },
-    data: { isTrashed: true, pdfUrl: null },
-  });
+  // Atomically read old pdfUrl and trash to prevent race with PDF job
+  let oldPdfUrl: string | null = null;
+  await withRetry(() => db.$transaction(async (tx) => {
+    const current = await tx.quote.findUnique({
+      where: { id, companyId: user.companyId },
+      select: { pdfUrl: true },
+    });
+    oldPdfUrl = current?.pdfUrl || null;
+    await tx.quote.update({
+      where: { id, companyId: user.companyId },
+      data: { isTrashed: true, pdfUrl: null },
+    });
+  }, { maxWait: 5000, timeout: 10000 }));
 
   // Delete UploadThing file in background (non-blocking)
-  if (quote?.pdfUrl) {
+  if (oldPdfUrl) {
     import("uploadthing/server").then(({ UTApi }) => {
       const utapi = new UTApi();
       try {
-        const url = new URL(quote.pdfUrl!);
+        const url = new URL(oldPdfUrl!);
         const fileKey = url.pathname.split("/").pop();
         if (fileKey) utapi.deleteFiles([fileKey]);
       } catch (err) {
@@ -375,10 +370,10 @@ export async function getClientsForDropdown() {
   if (!user) throw new Error("Unauthorized");
 
   // EEE: Add take limit to prevent massive payloads for companies with thousands of clients
-  return db.client.findMany({
+  return withRetry(() => db.client.findMany({
     where: { companyId: user.companyId },
-    select: { id: true, name: true, email: true, phone: true, company: true },
+    select: { id: true, name: true, email: true, phone: true, businessName: true },
     orderBy: { name: "asc" },
     take: 500,
-  });
+  }));
 }

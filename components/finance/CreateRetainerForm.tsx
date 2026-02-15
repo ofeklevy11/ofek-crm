@@ -35,7 +35,7 @@ export default function CreateRetainerForm() {
               data: {
                 email: clientData.email,
                 phone: clientData.phone,
-                company: clientData.company,
+                businessName: clientData.businessName,
               },
               tableSlug: "finance-clients",
             });
@@ -77,7 +77,7 @@ export default function CreateRetainerForm() {
             name: formData.get("newClientName") as string,
             email: (formData.get("newClientEmail") as string) || null,
             phone: (formData.get("newClientPhone") as string) || null,
-            company: (formData.get("newClientCompany") as string) || null,
+            businessName: (formData.get("newClientCompany") as string) || null,
             notes: "Created manually during retainer creation",
           };
         } else {
@@ -89,7 +89,7 @@ export default function CreateRetainerForm() {
               selectedClient!.data["phone-number"] ||
               selectedClient!.data["phone"] ||
               null,
-            company: selectedClient!.data["company"] || null,
+            businessName: selectedClient!.data["company"] || null,
             notes: `Imported from ${selectedClient!.tableSlug} (Record ID: ${
               selectedClient!.id
             })`,

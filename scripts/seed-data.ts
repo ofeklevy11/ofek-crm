@@ -210,7 +210,7 @@ async function seedClientsAndFinance(companyId: number) {
       data: {
         companyId,
         name: fullName,
-        company: company,
+        businessName: company,
         email: email,
         phone: generatePhoneNumber(),
         notes: "Automated seed client",
@@ -229,6 +229,7 @@ async function seedClientsAndFinance(companyId: number) {
     await prisma.oneTimePayment.create({
       data: {
         clientId: client.id,
+        companyId,
         title: `Project Payment - ${company}`,
         amount: paymentAmount,
         dueDate: paymentDate,
@@ -246,6 +247,7 @@ async function seedClientsAndFinance(companyId: number) {
     await prisma.retainer.create({
       data: {
         clientId: client.id,
+        companyId,
         title: `Monthly Retainer - ${company}`,
         amount: retainerAmount,
         frequency: "monthly",

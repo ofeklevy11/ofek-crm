@@ -17,14 +17,25 @@ export default async function WorkflowsPage() {
     redirect("/login");
   }
 
-  // @ts-ignore - DB model might not exist yet if migration pending
-  const workflows = await getWorkflows().catch(() => []);
-  // @ts-ignore
-  const instances = await getWorkflowInstances().catch(() => []);
-  // @ts-ignore
-  const users = await prisma.user
-    .findMany({ where: { companyId: user.companyId } })
-    .catch(() => []);
+  const [workflows, rawInstances, users] = await Promise.all([
+    getWorkflows(),
+    getWorkflowInstances(),
+    prisma.user.findMany({
+      where: { companyId: user.companyId },
+      select: { id: true, name: true },
+    }),
+  ]);
+
+  // Hydrate instances with workflow data from already-loaded workflows
+  // to avoid fetching duplicated workflow+stages per instance from DB
+  const workflowMap: Record<number, any> = {};
+  for (const w of workflows as any[]) {
+    workflowMap[w.id] = w;
+  }
+  const instances = (rawInstances as any[]).map((inst) => ({
+    ...inst,
+    workflow: workflowMap[inst.workflowId] || { name: "Unknown", stages: [] },
+  }));
 
   return (
     <div className="min-h-screen bg-gray-50/50 p-6 md:p-12" dir="rtl">

@@ -1,5 +1,14 @@
 import { inngest } from "../client";
-import { prisma } from "@/lib/prisma";
+import { prismaBg as prisma } from "@/lib/prisma-background";
+
+// Serialized automation rule embedded in breach events to avoid N+1 queries
+type EmbeddedRule = {
+  id: number;
+  name: string;
+  triggerConfig: any;
+  actionType: string;
+  actionConfig: any;
+};
 
 // Shared breach type used across scan steps and events
 type BreachEvent = {
@@ -12,6 +21,7 @@ type BreachEvent = {
   ticketStatus: string;
   assigneeName: string | null;
   assigneeId: number | null;
+  automationRules: EmbeddedRule[];
 };
 
 /**
@@ -79,133 +89,135 @@ export const slaScan = inngest.createFunction(
       const companyBreaches = await step.run(
         `scan-company-${companyId}`,
         async () => {
-          // --- RESPONSE breaches ---
-          const openTickets = await prisma.ticket.findMany({
-            where: {
-              companyId,
-              status: "OPEN",
-              slaResponseDueDate: { lt: now },
-            },
-            select: {
-              id: true,
-              companyId: true,
-              title: true,
-              priority: true,
-              status: true,
-              slaResponseDueDate: true,
-              assignee: { select: { id: true, name: true } },
-              breaches: {
-                where: { breachType: "RESPONSE" },
-                select: { slaDueDate: true },
+          // Fetch overdue tickets without breaches subquery —
+          // skipDuplicates on createMany + @@unique([ticketId, breachType, slaDueDate]) handles dedup
+          const [openTickets, unresolvedTickets] = await Promise.all([
+            // --- RESPONSE breach candidates ---
+            prisma.ticket.findMany({
+              where: {
+                companyId,
+                status: "OPEN",
+                slaResponseDueDate: { lt: now },
               },
-            },
-            take: 500,
-          });
-
-          // Filter to tickets that don't already have a breach for this due date
-          const responseTickets = openTickets.filter(
-            (ticket) =>
-              !ticket.breaches.some(
-                (b) =>
-                  b.slaDueDate.getTime() ===
-                  ticket.slaResponseDueDate?.getTime(),
-              ),
-          );
-
-          // --- RESOLVE breaches ---
-          const unresolvedTickets = await prisma.ticket.findMany({
-            where: {
-              companyId,
-              status: { in: ["OPEN", "IN_PROGRESS", "WAITING"] },
-              slaDueDate: { lt: now },
-            },
-            select: {
-              id: true,
-              companyId: true,
-              title: true,
-              priority: true,
-              status: true,
-              slaDueDate: true,
-              assignee: { select: { id: true, name: true } },
-              breaches: {
-                where: { breachType: "RESOLVE" },
-                select: { slaDueDate: true },
+              select: {
+                id: true,
+                companyId: true,
+                title: true,
+                priority: true,
+                status: true,
+                slaResponseDueDate: true,
+                assignee: { select: { id: true, name: true } },
               },
-            },
-            take: 500,
-          });
+              take: 500,
+            }),
+            // --- RESOLVE breach candidates ---
+            prisma.ticket.findMany({
+              where: {
+                companyId,
+                status: { in: ["OPEN", "IN_PROGRESS", "WAITING"] },
+                slaDueDate: { lt: now },
+              },
+              select: {
+                id: true,
+                companyId: true,
+                title: true,
+                priority: true,
+                status: true,
+                slaDueDate: true,
+                assignee: { select: { id: true, name: true } },
+              },
+              take: 500,
+            }),
+          ]);
 
-          const resolveTickets = unresolvedTickets.filter(
-            (ticket) =>
-              !ticket.breaches.some(
-                (b) =>
-                  b.slaDueDate.getTime() === ticket.slaDueDate?.getTime(),
-              ),
-          );
-
-          // Issue 31: Batch all breach inserts with createMany + skipDuplicates
+          // Build breach data — duplicates are safely handled by skipDuplicates
           const breachData = [
-            ...responseTickets.map((ticket) => ({
-              companyId: ticket.companyId,
-              ticketId: ticket.id,
-              priority: ticket.priority,
-              slaDueDate: ticket.slaResponseDueDate!,
-              breachType: "RESPONSE" as const,
-              breachedAt: now,
-              status: "PENDING",
-            })),
-            ...resolveTickets.map((ticket) => ({
-              companyId: ticket.companyId,
-              ticketId: ticket.id,
-              priority: ticket.priority,
-              slaDueDate: ticket.slaDueDate!,
-              breachType: "RESOLVE" as const,
-              breachedAt: now,
-              status: "PENDING",
-            })),
+            ...openTickets
+              .filter((t) => t.slaResponseDueDate)
+              .map((ticket) => ({
+                companyId: ticket.companyId,
+                ticketId: ticket.id,
+                priority: ticket.priority,
+                slaDueDate: ticket.slaResponseDueDate!,
+                breachType: "RESPONSE" as const,
+                breachedAt: now,
+                status: "PENDING",
+              })),
+            ...unresolvedTickets
+              .filter((t) => t.slaDueDate)
+              .map((ticket) => ({
+                companyId: ticket.companyId,
+                ticketId: ticket.id,
+                priority: ticket.priority,
+                slaDueDate: ticket.slaDueDate!,
+                breachType: "RESOLVE" as const,
+                breachedAt: now,
+                status: "PENDING",
+              })),
           ];
 
-          if (breachData.length > 0) {
-            await prisma.slaBreach.createMany({
-              data: breachData,
-              skipDuplicates: true,
-            });
-          }
+          if (breachData.length === 0) return [];
 
-          // Query back created breaches to get IDs for fan-out events
-          const createdBreaches = breachData.length > 0
-            ? await prisma.slaBreach.findMany({
-                where: {
-                  companyId,
-                  breachedAt: now,
-                  status: "PENDING",
-                },
-                select: { id: true, ticketId: true, breachType: true },
-              })
-            : [];
+          // Store batch timestamp before createMany to identify newly-created breaches
+          const batchTimestamp = now;
 
-          const breachMap = new Map(
-            createdBreaches.map((b) => [`${b.ticketId}-${b.breachType}`, b.id]),
-          );
+          await prisma.slaBreach.createMany({
+            data: breachData,
+            skipDuplicates: true,
+          });
 
-          const allTickets = [
-            ...responseTickets.map((t) => ({ ...t, _breachType: "RESPONSE" as const })),
-            ...resolveTickets.map((t) => ({ ...t, _breachType: "RESOLVE" as const })),
-          ];
+          // Re-fetch using the exact breachedAt timestamp — single indexed seek
+          // instead of building a large OR query over all ticket IDs
+          const createdBreaches = await prisma.slaBreach.findMany({
+            where: {
+              companyId,
+              status: "PENDING",
+              breachedAt: batchTimestamp,
+            },
+            select: { id: true, ticketId: true, breachType: true },
+          });
 
-          const breaches: BreachEvent[] = allTickets
-            .filter((t) => breachMap.has(`${t.id}-${t._breachType}`))
-            .map((ticket) => ({
-              ticketId: ticket.id,
-              companyId: ticket.companyId,
-              breachId: breachMap.get(`${ticket.id}-${ticket._breachType}`)!,
-              breachType: ticket._breachType,
-              ticketTitle: ticket.title,
-              ticketPriority: ticket.priority,
-              ticketStatus: ticket.status,
-              assigneeName: ticket.assignee?.name || null,
-              assigneeId: ticket.assignee?.id || null,
-            }));
+          // Prefetch SLA_BREACH automation rules once per company (eliminates N identical queries in handler)
+          const companyRules = await prisma.automationRule.findMany({
+            where: {
+              companyId,
+              isActive: true,
+              triggerType: "SLA_BREACH",
+            },
+            select: {
+              id: true,
+              name: true,
+              triggerConfig: true,
+              actionType: true,
+              actionConfig: true,
+            },
+            take: 500,
+          });
+
+          // Build lookup from ticket data for fan-out events
+          type TicketInfo = { id: number; companyId: number; title: string; priority: string; status: string; assignee: { id: number; name: string } | null };
+          const ticketMap = new Map<string, TicketInfo>();
+          for (const t of openTickets) ticketMap.set(`${t.id}-RESPONSE`, t);
+          for (const t of unresolvedTickets) ticketMap.set(`${t.id}-RESOLVE`, t);
+
+          const breaches: BreachEvent[] = createdBreaches
+            .map((b) => {
+              const ticket = ticketMap.get(`${b.ticketId}-${b.breachType}`);
+              if (!ticket) return null;
+              return {
+                ticketId: ticket.id,
+                companyId: ticket.companyId,
+                breachId: b.id,
+                breachType: b.breachType as "RESPONSE" | "RESOLVE",
+                ticketTitle: ticket.title,
+                ticketPriority: ticket.priority,
+                ticketStatus: ticket.status,
+                assigneeName: ticket.assignee?.name || null,
+                assigneeId: ticket.assignee?.id || null,
+                automationRules: companyRules as EmbeddedRule[],
+              };
+            })
+            .filter((b): b is BreachEvent => b !== null);
 
           return breaches;
         },
@@ -261,6 +273,7 @@ export const slaBreachHandler = inngest.createFunction(
       ticketStatus,
       assigneeName,
       assigneeId,
+      automationRules,
     } = event.data;
 
     // SECURITY: Re-validate ticketId belongs to companyId (defense-in-depth)
@@ -276,17 +289,9 @@ export const slaBreachHandler = inngest.createFunction(
       return { breachId, ticketId, breachType, error: "Ticket not found for company" };
     }
 
-    // Step 1: Fetch matching automation rules
-    const rules = await step.run("fetch-rules", async () => {
-      return prisma.automationRule.findMany({
-        where: {
-          companyId,
-          isActive: true,
-          triggerType: "SLA_BREACH",
-        },
-        take: 500, // P75: Bound automation rules query
-      });
-    });
+    // Rules are prefetched per-company in the scan step and embedded in the event payload
+    // This eliminates N identical findMany queries (one per breach) for the same company
+    const rules = automationRules || [];
 
     const priorityLabels: Record<string, string> = {
       CRITICAL: "קריטי",
@@ -521,7 +526,7 @@ async function executeSlaAction(
       const finalTitle = replaceTemplateVars(title || "משימה מחריגת SLA");
       const finalDesc = replaceTemplateVars(description || "");
 
-      let dueDate = null;
+      let dueDate: Date | null = null;
       if (dueDays !== undefined && dueDays !== null && dueDays !== "") {
         const date = new Date();
         date.setDate(date.getDate() + Number(dueDays));

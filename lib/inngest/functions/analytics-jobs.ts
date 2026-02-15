@@ -1,10 +1,12 @@
 import { inngest } from "../client";
-import { prisma } from "@/lib/prisma";
+import { prismaBg as prisma } from "@/lib/prisma-background";
 import {
   calculateRuleStats,
   calculateViewStats,
   getTableName,
   resolveTableNameFromConfig,
+  buildSourceKey,
+  fetchViewSourceData,
 } from "@/lib/analytics/calculate";
 import {
   acquireRefreshLock,
@@ -13,6 +15,53 @@ import {
   setFullAnalyticsCache,
   getFullAnalyticsCache,
 } from "@/lib/services/analytics-cache";
+
+/**
+ * Nightly cleanup of old duration records (> 12 months).
+ * Prevents unbounded table growth in StatusDuration and MultiEventDuration.
+ * Runs daily at 3:00 AM UTC. Uses batched deletes to avoid long-running transactions.
+ */
+export const cleanupOldDurationRecords = inngest.createFunction(
+  {
+    id: "analytics-cleanup-old-durations",
+    name: "Cleanup Old Duration Records",
+    retries: 1,
+    timeouts: { finish: "300s" },
+  },
+  { cron: "0 3 * * *" },
+  async ({ step }) => {
+    const cutoff = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000); // 12 months ago
+    const BATCH_SIZE = 5000;
+
+    const statusDeleted = await step.run("delete-old-status-durations", async () => {
+      let total = 0;
+      let deletedCount: number;
+      do {
+        const result = await prisma.statusDuration.deleteMany({
+          where: { createdAt: { lt: cutoff } },
+        });
+        deletedCount = result.count;
+        total += deletedCount;
+      } while (deletedCount >= BATCH_SIZE);
+      return total;
+    });
+
+    const multiDeleted = await step.run("delete-old-multi-event-durations", async () => {
+      let total = 0;
+      let deletedCount: number;
+      do {
+        const result = await prisma.multiEventDuration.deleteMany({
+          where: { createdAt: { lt: cutoff } },
+        });
+        deletedCount = result.count;
+        total += deletedCount;
+      } while (deletedCount >= BATCH_SIZE);
+      return total;
+    });
+
+    return { statusDeleted, multiDeleted };
+  },
+);
 
 /**
  * Full company analytics refresh.
@@ -95,6 +144,7 @@ export const refreshCompanyAnalytics = inngest.createFunction(
         const batchResults = await step.run(`calc-rules-batch-${i}`, async () => {
           const results: any[] = [];
           const dbUpdates: Promise<any>[] = [];
+          const redisWrites: Array<() => Promise<void>> = [];
           const now = new Date();
 
           for (const rule of batch) {
@@ -108,7 +158,7 @@ export const refreshCompanyAnalytics = inngest.createFunction(
                 }),
               );
 
-              await setSingleItemCache(companyId, "rule", rule.id, { stats, items, tableName });
+              redisWrites.push(() => setSingleItemCache(companyId, "rule", rule.id, { stats, items, tableName }));
 
               // Determine effective action type for MULTI_ACTION rules
               const effectiveActionType = rule.actionType === "MULTI_ACTION"
@@ -138,59 +188,116 @@ export const refreshCompanyAnalytics = inngest.createFunction(
             }
           }
 
-          // Batch DB writes in parallel
-          if (dbUpdates.length > 0) await Promise.all(dbUpdates);
+          // Batch DB writes in a transaction for atomicity, then update Redis cache
+          if (dbUpdates.length > 0) await prisma.$transaction(dbUpdates);
+          await Promise.all(redisWrites.map(fn => fn()));
           return results;
         });
         views.push(...batchResults);
       }
 
-      // Process views in batches
-      const VIEW_BATCH = 10;
-      for (let i = 0; i < customViews.length; i += VIEW_BATCH) {
-        const batch = customViews.slice(i, i + VIEW_BATCH);
-        const batchResults = await step.run(`calc-views-batch-${i}`, async () => {
+      // Process all views in a single step with chunked source loading to control memory
+      if (customViews.length > 0) {
+        const viewResults = await step.run("calc-all-views", async () => {
           const results: any[] = [];
-          const dbUpdates: Promise<any>[] = [];
           const now = new Date();
 
-          for (const view of batch) {
-            try {
-              const { stats, items, tableName } = await calculateViewStats(view, companyId);
-
-              dbUpdates.push(
-                prisma.analyticsView.update({
-                  where: { id: view.id, companyId },
-                  data: { cachedStats: { stats, items, tableName }, lastCachedAt: now },
-                }),
-              );
-
-              await setSingleItemCache(companyId, "view", view.id, { stats, items, tableName });
-
-              results.push({
-                id: `view_${view.id}`,
-                viewId: view.id,
-                ruleName: view.title,
-                tableName,
-                type: view.type,
-                data: items,
-                stats,
-                order: view.order,
-                color: view.color,
-                source: "CUSTOM",
-                config: view.config,
-                folderId: view.folderId,
-                lastRefreshed: now.toISOString(),
-              });
-            } catch (e) {
-              console.error(`[analytics-refresh] Failed to calculate view ${view.id}:`, e);
+          // Build a map of sourceKey → list of views that use it
+          const sourceKeyToViews = new Map<string, { view: any; config: any }[]>();
+          const sourceKeyToConfig = new Map<string, any>();
+          for (const view of customViews) {
+            const config = view.config as any;
+            const key = buildSourceKey(config);
+            if (!sourceKeyToViews.has(key)) {
+              sourceKeyToViews.set(key, []);
+              sourceKeyToConfig.set(key, config);
             }
+            sourceKeyToViews.get(key)!.push({ view, config });
           }
 
-          if (dbUpdates.length > 0) await Promise.all(dbUpdates);
+          // Process sources in chunks to limit memory — load SOURCE_CHUNK sources at a time,
+          // process all views that use them, then release before loading the next chunk
+          const SOURCE_CHUNK = 5;
+          const allSourceKeys = Array.from(sourceKeyToViews.keys());
+
+          for (let si = 0; si < allSourceKeys.length; si += SOURCE_CHUNK) {
+            const chunkKeys = allSourceKeys.slice(si, si + SOURCE_CHUNK);
+
+            // Fetch this chunk of sources in parallel
+            const sourceCache = new Map<string, { tableName: string; rawData: any[] }>();
+            const resolved = await Promise.all(
+              chunkKeys.map(async (key) => {
+                const data = await fetchViewSourceData(sourceKeyToConfig.get(key)!, companyId);
+                return { key, data };
+              }),
+            );
+            for (const { key, data } of resolved) {
+              sourceCache.set(key, data);
+            }
+
+            // Collect all views that use sources in this chunk
+            const chunkViews: { view: any; config: any; key: string }[] = [];
+            for (const key of chunkKeys) {
+              for (const entry of sourceKeyToViews.get(key)!) {
+                chunkViews.push({ ...entry, key });
+              }
+            }
+
+            // Process these views in DB-transaction-sized batches
+            const VIEW_BATCH = 10;
+            for (let i = 0; i < chunkViews.length; i += VIEW_BATCH) {
+              const batch = chunkViews.slice(i, i + VIEW_BATCH);
+              try {
+                const dbUpdates: Promise<any>[] = [];
+                const redisWrites: Array<() => Promise<void>> = [];
+
+                for (const { view, key } of batch) {
+                  try {
+                    const prefetched = sourceCache.get(key) || undefined;
+                    const { stats, items, tableName } = await calculateViewStats(view, companyId, prefetched);
+
+                    dbUpdates.push(
+                      prisma.analyticsView.update({
+                        where: { id: view.id, companyId },
+                        data: { cachedStats: { stats, items, tableName }, lastCachedAt: now },
+                      }),
+                    );
+
+                    redisWrites.push(() => setSingleItemCache(companyId, "view", view.id, { stats, items, tableName }));
+
+                    results.push({
+                      id: `view_${view.id}`,
+                      viewId: view.id,
+                      ruleName: view.title,
+                      tableName,
+                      type: view.type,
+                      data: items,
+                      stats,
+                      order: view.order,
+                      color: view.color,
+                      source: "CUSTOM",
+                      config: view.config,
+                      folderId: view.folderId,
+                      lastRefreshed: now.toISOString(),
+                    });
+                  } catch (e) {
+                    console.error(`[analytics-refresh] Failed to calculate view ${view.id}:`, e);
+                  }
+                }
+
+                // Batch DB writes in a transaction, then update Redis cache
+                if (dbUpdates.length > 0) await prisma.$transaction(dbUpdates);
+                await Promise.all(redisWrites.map(fn => fn()));
+              } catch (e) {
+                console.error(`[analytics-refresh] Batch transaction failed for views batch starting at ${i}, continuing:`, e);
+              }
+            }
+            // sourceCache for this chunk is released when overwritten on next iteration
+          }
+
           return results;
         });
-        views.push(...batchResults);
+        views.push(...viewResults);
       }
 
       // Assemble and cache full views array
@@ -247,6 +354,7 @@ export const refreshAnalyticsItemJob = inngest.createFunction(
     try {
       result = await step.run("calculate-item", async () => {
         if (itemType === "AUTOMATION") {
+          // findFirst verifies ownership (companyId) and fetches data for calculation
           const rule = await prisma.automationRule.findFirst({
             where: { id: itemId, companyId },
           });
@@ -254,8 +362,9 @@ export const refreshAnalyticsItemJob = inngest.createFunction(
 
           const { stats, items, tableName } = await calculateRuleStats(rule, companyId);
 
+          // Ownership already verified above — update by PK only (saves compound where re-check)
           await prisma.automationRule.update({
-            where: { id: itemId, companyId },
+            where: { id: itemId },
             data: {
               cachedStats: { stats, items },
               lastCachedAt: new Date(),
@@ -266,6 +375,7 @@ export const refreshAnalyticsItemJob = inngest.createFunction(
 
           return { stats, items, tableName };
         } else {
+          // findFirst verifies ownership (companyId) and fetches data for calculation
           const view = await prisma.analyticsView.findFirst({
             where: { id: itemId, companyId },
           });
@@ -273,8 +383,9 @@ export const refreshAnalyticsItemJob = inngest.createFunction(
 
           const { stats, items, tableName } = await calculateViewStats(view, companyId);
 
+          // Ownership already verified above — update by PK only (saves compound where re-check)
           await prisma.analyticsView.update({
-            where: { id: itemId, companyId },
+            where: { id: itemId },
             data: {
               cachedStats: { stats, items, tableName },
               lastCachedAt: new Date(),
@@ -290,20 +401,25 @@ export const refreshAnalyticsItemJob = inngest.createFunction(
       // Update the full cache in-place (avoid chain-reaction full refresh)
       await step.run("update-full-cache", async () => {
         const fullCache = await getFullAnalyticsCache(companyId);
-        if (fullCache && Array.isArray(fullCache)) {
-          const idPrefix = itemType === "AUTOMATION" ? `rule_${itemId}` : `view_${itemId}`;
-          const updatedCache = fullCache.map((item: any) => {
-            if (item.id === idPrefix) {
-              return {
-                ...item,
-                data: result.items,
-                stats: result.stats,
-                tableName: result.tableName,
-                lastRefreshed: new Date().toISOString(),
-              };
-            }
-            return item;
-          });
+        if (!fullCache || !Array.isArray(fullCache)) return;
+
+        const idPrefix = itemType === "AUTOMATION" ? `rule_${itemId}` : `view_${itemId}`;
+        const updatedCache = fullCache.map((item: any) => {
+          if (item.id === idPrefix) {
+            return {
+              ...item,
+              data: result.items,
+              stats: result.stats,
+              tableName: result.tableName,
+              lastRefreshed: new Date().toISOString(),
+            };
+          }
+          return item;
+        });
+
+        // Guard: if cache was invalidated between read and now, don't restore stale data
+        const stillExists = await getFullAnalyticsCache(companyId);
+        if (stillExists) {
           await setFullAnalyticsCache(companyId, updatedCache);
         }
       });

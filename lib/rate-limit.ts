@@ -50,4 +50,6 @@ export const RATE_LIMITS = {
   bulk: { prefix: "bulk", max: 5, windowSeconds: 60 } satisfies RateLimitConfig,
   /** General API: 120 requests per user per minute */
   api: { prefix: "api", max: 120, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** Login: 5 attempts per IP per 15 minutes */
+  login: { prefix: "login", max: 5, windowSeconds: 900 } satisfies RateLimitConfig,
 } as const;

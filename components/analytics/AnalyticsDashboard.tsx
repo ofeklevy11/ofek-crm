@@ -7,13 +7,8 @@ import {
   updateAnalyticsViewOrder,
   updateAnalyticsViewColor,
   deleteAnalyticsView,
-  refreshAnalyticsItem,
+  refreshAnalyticsItemWithChecks,
 } from "@/app/actions/analytics";
-import {
-  checkAnalyticsRefreshEligibility,
-  logAnalyticsRefresh,
-  getAnalyticsRefreshUsage,
-} from "@/app/actions/analytics-refresh";
 import {
   createViewFolder,
   // getViewFolders, // We receive this as prop now
@@ -725,40 +720,30 @@ export default function AnalyticsDashboard({
     const viewId = view.id;
     setRefreshingViewId(viewId);
     try {
-      // 1. Check Eligibility
-      const eligibility = await checkAnalyticsRefreshEligibility();
-      if (!eligibility.success) {
-        setToast({
-          message: eligibility.error || "הגעת למגבלת הרענונים",
-          type: "error",
-        });
-        setTimeout(() => setToast(null), 4000);
-        setRefreshingViewId(null);
-        return;
-      }
-
-      // 2. Log Refresh
-      await logAnalyticsRefresh();
-
-      // 3. Trigger background refresh (returns immediately)
       const itemId = view.source === "AUTOMATION" ? view.ruleId : view.viewId;
       const itemType = view.source === "AUTOMATION" ? "AUTOMATION" : "CUSTOM";
-      const result = await refreshAnalyticsItem(
+
+      // Single combined server action: check eligibility + log + trigger + get usage
+      const result = await refreshAnalyticsItemWithChecks(
         itemId,
         itemType as "AUTOMATION" | "CUSTOM",
       );
 
       if (result.success) {
-        // 4. Poll for updated data instead of fixed delay
         setToast({ message: "מרענן נתונים ברקע...", type: "success" });
         setTimeout(() => setToast(null), 5000);
 
+        // Update usage from the combined response
+        if (result.usage !== undefined) setRefreshUsage(result.usage);
+        if (result.nextResetTime !== undefined) setNextResetTime(result.nextResetTime);
+
+        // Poll for updated data
         let attempts = 0;
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = setInterval(() => {
           attempts++;
           router.refresh();
-          if (attempts >= 5) { // 5 × 2s = 10s max
+          if (attempts >= 5) {
             clearInterval(pollIntervalRef.current!);
             pollIntervalRef.current = null;
             setRefreshingViewId(null);
@@ -771,13 +756,6 @@ export default function AnalyticsDashboard({
         });
         setTimeout(() => setToast(null), 4000);
         setRefreshingViewId(null);
-      }
-
-      // 5. Update Usage Stats
-      const usageRes = await getAnalyticsRefreshUsage();
-      if (usageRes.success) {
-        setRefreshUsage(usageRes.usage);
-        setNextResetTime(usageRes.nextResetTime ?? null);
       }
     } catch (error) {
       setToast({ message: "שגיאה ברענון הנתון", type: "error" });

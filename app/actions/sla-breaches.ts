@@ -2,14 +2,21 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { SlaBreachStatus } from "@prisma/client";
 
-export async function getSlaBreaches() {
+// P5: Derive validation from Prisma enum (single source of truth)
+const VALID_BREACH_STATUSES = new Set<string>(Object.values(SlaBreachStatus));
+
+const PAGE_SIZE = 100;
+
+// P2: Cursor-based pagination
+export async function getSlaBreaches(cursor?: number) {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
 
   try {
-    // P141: Add take limit to bound SLA breaches query
-    const breaches = await prisma.slaBreach.findMany({
+    const items = await prisma.slaBreach.findMany({
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       where: { companyId: user.companyId },
       include: {
         ticket: {
@@ -23,11 +30,17 @@ export async function getSlaBreaches() {
           },
         },
       },
-      orderBy: { breachedAt: "desc" },
-      take: 1000,
+      orderBy: [{ breachedAt: "desc" }, { id: "desc" }],
+      take: PAGE_SIZE + 1,
     });
 
-    return { success: true, data: breaches };
+    let nextCursor: number | null = null;
+    if (items.length > PAGE_SIZE) {
+      items.pop();
+      nextCursor = items[items.length - 1].id;
+    }
+
+    return { success: true, data: { items, nextCursor } };
   } catch (error) {
     console.error("Error fetching SLA breaches:", error);
     return { success: false, error: "Failed to fetch SLA breaches" };
@@ -42,11 +55,16 @@ export async function updateSlaBreachStatus(
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
 
+  // P5: Validate breach status against enum
+  if (!VALID_BREACH_STATUSES.has(status)) {
+    return { success: false, error: "Invalid status" };
+  }
+
   try {
     const breach = await prisma.slaBreach.update({
       where: { id, companyId: user.companyId },
       data: {
-        status,
+        status: status as SlaBreachStatus,
         notes,
       },
     });
