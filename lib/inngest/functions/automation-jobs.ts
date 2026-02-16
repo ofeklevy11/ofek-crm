@@ -11,7 +11,7 @@ export const processNewRecordAutomation = inngest.createFunction(
     retries: 3,
     timeouts: { finish: "60s" },
     concurrency: {
-      limit: 5,
+      limit: 3,
       key: "event.data.companyId",
     },
   },
@@ -47,7 +47,7 @@ export const processRecordUpdateAutomation = inngest.createFunction(
     retries: 3,
     timeouts: { finish: "60s" },
     concurrency: {
-      limit: 5,
+      limit: 3,
       key: "event.data.companyId",
     },
   },
@@ -81,7 +81,7 @@ export const processTaskStatusAutomation = inngest.createFunction(
     retries: 3,
     timeouts: { finish: "60s" },
     concurrency: {
-      limit: 5,
+      limit: 3,
       key: "event.data.companyId",
     },
   },
@@ -117,7 +117,7 @@ export const processDirectDialAutomation = inngest.createFunction(
     retries: 3,
     timeouts: { finish: "60s" },
     concurrency: {
-      limit: 5,
+      limit: 3,
       key: "event.data.companyId",
     },
   },

@@ -53,7 +53,7 @@ export const sendWhatsAppJob = inngest.createFunction(
     timeouts: { finish: "60s" },
     concurrency: [
       { limit: 2, key: "event.data.companyId" },
-      { limit: 10 }, // global cap to protect Green API rate limits
+      { limit: 5 }, // global cap to protect Green API rate limits
     ],
   },
   { event: "automation/send-whatsapp" },
@@ -112,8 +112,8 @@ export const sendWebhookJob = inngest.createFunction(
     retries: 4,
     timeouts: { finish: "60s" },
     concurrency: [
-      { limit: 5, key: "event.data.companyId" },
-      { limit: 20 }, // global cap
+      { limit: 3, key: "event.data.companyId" },
+      { limit: 5 }, // global cap
     ],
   },
   { event: "automation/send-webhook" },

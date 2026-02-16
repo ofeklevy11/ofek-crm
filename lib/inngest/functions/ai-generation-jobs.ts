@@ -333,8 +333,8 @@ export const processAIGeneration = inngest.createFunction(
   {
     id: "process-ai-generation",
     concurrency: [
-      { limit: 20 },
-      { limit: 3, key: "event.data.companyId" },
+      { limit: 5 },
+      { limit: 2, key: "event.data.companyId" },
     ],
     retries: 2,
     timeouts: { finish: "30s" },

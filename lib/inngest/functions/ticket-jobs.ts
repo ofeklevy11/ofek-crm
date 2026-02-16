@@ -11,7 +11,7 @@ export const processTicketNotificationJob = inngest.createFunction(
     retries: 3,
     timeouts: { finish: "30s" },
     concurrency: {
-      limit: 10,
+      limit: 3,
       key: "event.data.companyId",
     },
   },
@@ -70,7 +70,7 @@ export const processTicketStatusChangeJob = inngest.createFunction(
     retries: 3,
     timeouts: { finish: "30s" },
     concurrency: {
-      limit: 5,
+      limit: 3,
       key: "event.data.companyId",
     },
   },
@@ -164,7 +164,7 @@ export const processTicketActivityLogJob = inngest.createFunction(
     retries: 3,
     timeouts: { finish: "30s" },
     concurrency: {
-      limit: 10,
+      limit: 3,
       key: "event.data.companyId",
     },
   },

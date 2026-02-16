@@ -257,7 +257,7 @@ export const slaBreachHandler = inngest.createFunction(
     retries: 3,
     timeouts: { finish: "120s" },
     concurrency: {
-      limit: 10,
+      limit: 2,
       key: "event.data.companyId",
     },
   },

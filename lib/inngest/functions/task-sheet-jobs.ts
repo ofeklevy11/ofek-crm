@@ -21,7 +21,7 @@ export const processTaskSheetItemCompletion = inngest.createFunction(
     retries: 3,
     timeouts: { finish: "30s" },
     concurrency: {
-      limit: 5,
+      limit: 3,
       key: "event.data.companyId",
     },
   },

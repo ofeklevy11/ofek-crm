@@ -17,8 +17,8 @@ export const broadcastNotifications = inngest.createFunction(
       timeout: "1s",
     },
     concurrency: [
-      { limit: 10, key: "event.data.userId" },
-      { limit: 50 }, // global cap
+      { limit: 3, key: "event.data.userId" },
+      { limit: 5 }, // global cap
     ],
   },
   { event: "notification/broadcast" },

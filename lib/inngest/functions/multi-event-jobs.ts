@@ -20,7 +20,7 @@ export const processMultiEventDuration = inngest.createFunction(
         key: "event.data.companyId",
       },
       {
-        limit: 15,
+        limit: 5,
       },
     ],
   },

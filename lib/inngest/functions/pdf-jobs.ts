@@ -12,8 +12,8 @@ export const generateQuotePdf = inngest.createFunction(
     retries: 2,
     timeouts: { finish: "45s" },
     concurrency: [
-      { limit: 3, key: "event.data.companyId" },
-      { limit: 10 }, // global cap to prevent OOM with many concurrent companies
+      { limit: 2, key: "event.data.companyId" },
+      { limit: 5 }, // global cap to prevent OOM with many concurrent companies
     ],
     // BB14: 30s debounce — PDF render takes 10-30s, 5s was too short
     debounce: {
