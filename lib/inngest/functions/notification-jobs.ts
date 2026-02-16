@@ -13,7 +13,7 @@ export const broadcastNotifications = inngest.createFunction(
     retries: 2,
     timeouts: { finish: "30s" },
     batchEvents: {
-      maxSize: 50,
+      maxSize: 5,
       timeout: "1s",
     },
     concurrency: [
