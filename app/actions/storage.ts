@@ -155,8 +155,8 @@ export async function getStorageData(folderId: number | null) {
         folderId: folderId,
       },
       select: {
-        id: true, name: true, displayName: true, size: true, mimeType: true,
-        folderId: true, recordId: true, fieldName: true,
+        id: true, name: true, displayName: true, size: true, type: true,
+        folderId: true, recordId: true,
         createdAt: true, updatedAt: true,
         record: {
           select: {
