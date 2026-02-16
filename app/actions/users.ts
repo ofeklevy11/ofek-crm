@@ -90,7 +90,7 @@ export async function updateUser(
 
     const parsed = patchUserSchema.safeParse(data);
     if (!parsed.success) {
-      return { success: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+      return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
     }
 
     if (!Number.isFinite(id) || id <= 0 || !Number.isInteger(id)) {

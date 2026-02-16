@@ -89,7 +89,7 @@ export default async function FinancePage() {
   ]);
 
   // P5: Extract values with safe defaults for failed queries
-  const settled = <T>(r: PromiseSettledResult<T>, fallback: T): T =>
+  const settled = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
     r.status === "fulfilled" ? r.value : fallback;
 
   const transactions = settled(results[0], [] as any);
