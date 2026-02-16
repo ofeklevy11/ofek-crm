@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { USER_FLAGS } from "@/lib/permissions";
 
-const validFlagKeys = new Set(USER_FLAGS.map((f) => f.key));
+const validFlagKeys = new Set<string>(USER_FLAGS.map((f) => f.key));
 
 export const registerSchema = z.object({
   name: z.string().min(1, "Name is required").max(200).trim(),

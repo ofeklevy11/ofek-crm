@@ -59,7 +59,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
   if (rule.sourceType === "TABLE" && rule.sourceId) {
     // --- TABLE SOURCE ---
     const records = await withRetry(() => prisma.record.findMany({
-      where: { tableId: rule.sourceId, companyId },
+      where: { tableId: rule.sourceId!, companyId },
       select: { id: true, data: true, createdAt: true },
       take: 5000,
     }));
@@ -138,7 +138,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
       await withRetry(() => prisma.$transaction(
         toUpdate.map((u) =>
           prisma.financeRecord.update({ where: { id: u.id, companyId }, data: u.data }),
-        ),
+        ) as any,
         { maxWait: 5000, timeout: 10000 },
       ));
       stats.updated = toUpdate.length;
@@ -152,7 +152,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
       where: {
         companyId,
         deletedAt: null,
-        status: { in: PAID_STATUS_VARIANTS as unknown as string[] },
+        status: { in: PAID_STATUS_VARIANTS as any },
       },
       select: { id: true, clientId: true, amount: true, paidDate: true, attemptDate: true, createdAt: true, notes: true },
       take: 5000,
@@ -162,7 +162,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
       where: {
         companyId,
         deletedAt: null,
-        status: { in: PAID_STATUS_VARIANTS as unknown as string[] },
+        status: { in: PAID_STATUS_VARIANTS as any },
       },
       select: { id: true, clientId: true, amount: true, paidDate: true, dueDate: true, createdAt: true, title: true },
       take: 5000,
@@ -300,7 +300,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
       await withRetry(() => prisma.$transaction(
         toUpdate.map((u) =>
           prisma.financeRecord.update({ where: { id: u.id, companyId }, data: u.data }),
-        ),
+        ) as any,
         { maxWait: 5000, timeout: 10000 },
       ));
       stats.updated = toUpdate.length;
@@ -583,7 +583,7 @@ export async function processFixedExpensesInternal(companyId: number) {
   }
 
   if (toCreate.length > 0) {
-    await prisma.financeRecord.createMany({ data: toCreate, skipDuplicates: true });
+    await prisma.financeRecord.createMany({ data: toCreate as any, skipDuplicates: true });
   }
 
   return toCreate.length;

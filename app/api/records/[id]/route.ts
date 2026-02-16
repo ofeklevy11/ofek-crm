@@ -58,7 +58,7 @@ export async function GET(
         files: {
           select: {
             id: true,
-            filename: true,
+            name: true,
             displayName: true,
             size: true,
             type: true,
@@ -74,7 +74,7 @@ export async function GET(
             displayName: true,
             url: true,
             size: true,
-            createdAt: true,
+            uploadedAt: true,
           },
         },
       },

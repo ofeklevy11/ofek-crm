@@ -245,14 +245,14 @@ export async function updateWorkflowInstanceStage(
     if (
       completed &&
       completedStage &&
-      (completedStage.details as any)?.systemActions?.length
+      ('details' in completedStage) && (completedStage.details as any)?.systemActions?.length
     ) {
       try {
         const { inngest } = await import("@/lib/inngest/client");
         await inngest.send({
           name: "workflow/execute-stage-automations",
           data: {
-            stageDetails: completedStage.details,
+            stageDetails: ('details' in completedStage) ? completedStage.details : null,
             stageName: completedStage.name,
             stageId: completedStage.id,
             instanceId: instance.id,

@@ -76,7 +76,7 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
     try {
       const response = await getNotifications();
       if (response.success && response.data) {
-        mergeNotifications(response.data);
+        mergeNotifications(response.data.map((n: any) => ({ ...n, id: Number(n.id) })));
       }
     } catch (error) {
       console.error("Failed to fetch notifications", error);
@@ -95,7 +95,7 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
         const response = await getNotifications();
         if (!mounted) return;
         if (response.success && response.data) {
-          mergeNotifications(response.data);
+          mergeNotifications(response.data.map((n: any) => ({ ...n, id: Number(n.id) })));
           setLoading(false);
         } else {
           throw new Error("Fetch returned unsuccessful");

@@ -62,7 +62,7 @@ export default async function ClientOverviewPage({
 
   // Calculate total paid
   const totalPaidTransactions = client.transactions
-    .filter((t) => t.status === "manual-marked-paid")
+    .filter((t) => (t.status as string) === "manual-marked-paid")
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
   const totalPaidFinanceRecords = client.financeRecords

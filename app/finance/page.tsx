@@ -80,7 +80,7 @@ export default async function FinancePage() {
       _count: { id: true },
       where: {
         companyId: user.companyId, deletedAt: null, // P6+P3
-        status: { in: PAID_STATUS_VARIANTS as unknown as string[] },
+        status: { in: PAID_STATUS_VARIANTS as any },
       },
     }),
     prisma.retainer.count({

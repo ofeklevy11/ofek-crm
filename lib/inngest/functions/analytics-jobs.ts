@@ -192,7 +192,7 @@ export const refreshCompanyAnalytics = inngest.createFunction(
           }
 
           // Batch DB writes in a transaction for atomicity, then update Redis cache
-          if (dbUpdates.length > 0) await prisma.$transaction(dbUpdates);
+          if (dbUpdates.length > 0) await prisma.$transaction(dbUpdates as any);
           await Promise.all(redisWrites.map(fn => fn()));
           return results;
         });
@@ -289,7 +289,7 @@ export const refreshCompanyAnalytics = inngest.createFunction(
                 }
 
                 // Batch DB writes in a transaction, then update Redis cache
-                if (dbUpdates.length > 0) await prisma.$transaction(dbUpdates);
+                if (dbUpdates.length > 0) await prisma.$transaction(dbUpdates as any);
                 await Promise.all(redisWrites.map(fn => fn()));
               } catch (e) {
                 log.error("Batch transaction failed for views batch, continuing", { batchStart: i, error: String(e) });

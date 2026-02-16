@@ -62,7 +62,7 @@ const RTLText: FC<RTLTextProps> = ({ children, style, ...props }) => {
             style={[
               style || {},
               isSpace ? { marginLeft: 4 } : {}, // רווח ויזואלי יציב
-            ]}
+            ] as any}
             {...props}
           >
             {isSpace ? "" : displayToken}

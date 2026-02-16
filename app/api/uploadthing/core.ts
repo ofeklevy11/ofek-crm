@@ -93,7 +93,7 @@ export const ourFileRouter = {
     { awaitServerData: false },
   ) // Client doesn't wait for server callback
     .input(
-      z.object({ tableId: z.preprocess((val) => Number(val), z.number()) }),
+      z.object({ tableId: z.preprocess((val) => Number(val), z.number()) }) as any,
     )
     .middleware(async ({ req, input }) => {
       const user = await getCurrentUser();
@@ -105,19 +105,21 @@ export const ourFileRouter = {
       ).catch(() => true);
       if (limited) throw new UploadThingError("Rate limit exceeded");
 
+      const typedInput = input as { tableId: number };
+
       // Verify table exists in user's company and user has write access
       const table = await prisma.tableMeta.findFirst({
-        where: { id: input.tableId, companyId: user.companyId },
+        where: { id: typedInput.tableId, companyId: user.companyId },
         select: { id: true },
       });
       if (!table) throw new UploadThingError("Table not found");
-      if (!canWriteTable(user, input.tableId))
+      if (!canWriteTable(user, typedInput.tableId))
         throw new UploadThingError("Forbidden");
 
       return {
         userId: user.id,
         companyId: user.companyId,
-        tableId: input.tableId,
+        tableId: typedInput.tableId,
       };
     })
     .onUploadComplete(async ({ metadata, file }) => {
@@ -131,7 +133,7 @@ export const ourFileRouter = {
             fileUrl: file.url,
             originalName: file.name,
             status: "UPLOADED",
-            summary: null,
+            summary: undefined,
           },
         });
         return { importJobId: job.id };

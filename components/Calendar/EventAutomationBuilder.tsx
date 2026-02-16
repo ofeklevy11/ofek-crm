@@ -156,7 +156,7 @@ export function EventAutomationBuilder({
 
   // Initialize from initialData if provided
   useEffect(() => {
-    if (onSave && initialData) {
+    if (typeof onSave === "function" && initialData) {
       // We need to parse mins back to value/unit
       const mins = initialData.triggerConfig?.minutesBefore || 30;
       let val = mins;
@@ -239,7 +239,7 @@ export function EventAutomationBuilder({
 
   const handleSave = () => {
     setError(null);
-    let validationError = null;
+    let validationError: string | null = null;
 
     // Validation
     if (actionType === "SEND_WHATSAPP") {

@@ -157,7 +157,7 @@ async function seedLeads(companyId: number, userId: number) {
   }
 
   // Generate Records
-  const recordsData = [];
+  const recordsData: any[] = [];
   for (let i = 0; i < LEADS_COUNT; i++) {
     const firstName = getRandomElement(FIRST_NAMES);
     const lastName = getRandomElement(LAST_NAMES);

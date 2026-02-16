@@ -18,10 +18,10 @@ export default async function AnalyticsPage() {
     getAnalyticsRefreshUsage(),
   ]);
 
-  const updatedViews = analyticsData.success ? analyticsData.data : [];
-  const updatedFolders = foldersData.success ? foldersData.data : [];
-  const refreshUsage = refreshUsageData.success
-    ? refreshUsageData
+  const updatedViews = (analyticsData.success && 'data' in analyticsData) ? analyticsData.data : [];
+  const updatedFolders = (foldersData.success && 'data' in foldersData) ? foldersData.data ?? [] : [];
+  const refreshUsage: { usage: number; nextResetTime: string | null } = refreshUsageData.success
+    ? { usage: refreshUsageData.usage, nextResetTime: ('nextResetTime' in refreshUsageData ? refreshUsageData.nextResetTime : null) ?? null }
     : { usage: 0, nextResetTime: null };
 
   return (

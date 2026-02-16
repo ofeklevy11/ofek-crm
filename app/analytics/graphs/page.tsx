@@ -16,13 +16,13 @@ export default async function GraphsPage() {
     getAnalyticsRefreshUsage(),
   ]);
 
-  const graphViews = analyticsData.success
+  const graphViews = (analyticsData.success && "data" in analyticsData)
     ? (analyticsData.data || []).filter((v: any) => v.type === "GRAPH")
     : [];
 
   const refreshUsage = refreshUsageData.success
-    ? refreshUsageData
-    : { usage: 0, nextResetTime: null };
+    ? { usage: refreshUsageData.usage, nextResetTime: refreshUsageData.nextResetTime ?? null }
+    : { usage: 0, nextResetTime: null as string | null };
 
   return (
     <GraphsDashboard

@@ -52,7 +52,7 @@ export function isSameDay(d1: Date, d2: Date): boolean {
 }
 
 export function getTimeSlots(): string[] {
-  const slots = [];
+  const slots: string[] = [];
   for (let i = 0; i < 24; i++) {
     slots.push(`${i.toString().padStart(2, "0")}:00`);
   }

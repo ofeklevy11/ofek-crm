@@ -362,7 +362,7 @@ export async function reorderStages(workflowId: number, orderedIds: number[]) {
 
       await tx.$executeRaw`
         UPDATE "WorkflowStage"
-        SET "order" = CASE "id" ${Prisma.join(cases, Prisma.sql` `)} END,
+        SET "order" = CASE "id" ${Prisma.join(cases, ` `)} END,
             "updatedAt" = NOW()
         WHERE "workflowId" = ${parsed.workflowId}
           AND "id" IN (${Prisma.join(sanitizedIds)})`;

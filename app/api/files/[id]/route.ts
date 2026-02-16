@@ -72,8 +72,8 @@ export async function PUT(
         displayName: displayName?.trim() || null,
       },
       select: {
-        id: true, name: true, displayName: true, size: true, mimeType: true,
-        folderId: true, recordId: true, fieldName: true,
+        id: true, name: true, displayName: true, size: true, type: true,
+        folderId: true, recordId: true,
         createdAt: true, updatedAt: true,
       },
     });

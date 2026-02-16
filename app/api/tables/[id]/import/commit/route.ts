@@ -100,7 +100,7 @@ export async function POST(
     await prisma.importJob.update({
       where: { id: job.id, companyId: user.companyId },
       data: {
-        status: "QUEUED",
+        status: "IMPORTING",
         summary: {
           ...(job.summary as any),
           queuedAt: new Date().toISOString(),

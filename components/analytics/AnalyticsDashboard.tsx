@@ -898,7 +898,7 @@ export default function AnalyticsDashboard({
     }
   };
 
-  const handleAIResults = (newViews: any[]) => {
+  const handleAIResults = () => {
     router.refresh();
   };
 
@@ -1094,6 +1094,7 @@ export default function AnalyticsDashboard({
         {isAIMode && (
           <div className="mt-8 mb-8 animate-in slide-in-from-top-4 duration-300">
             <AIAnalyticsCreator
+              isOpen={isAIMode}
               onClose={() => setIsAIMode(false)}
               onSuccess={handleAIResults}
             />

@@ -148,7 +148,7 @@ async function main() {
   }
 
   // 4. Generate Records
-  const recordsData = [];
+  const recordsData: any[] = [];
   for (let i = 0; i < RECORD_COUNT; i++) {
     const firstName = getRandomElement(FIRST_NAMES);
     const lastName = getRandomElement(LAST_NAMES);

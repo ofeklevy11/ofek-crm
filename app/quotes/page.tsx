@@ -23,7 +23,7 @@ export default async function QuotesPage({ searchParams }: Props) {
 
   return (
     <QuotesPageClient
-      initialQuotes={quotes}
+      initialQuotes={quotes as any}
       initialNextCursor={nextCursor}
       showTrashed={showTrashed}
       businessSettings={businessSettings}

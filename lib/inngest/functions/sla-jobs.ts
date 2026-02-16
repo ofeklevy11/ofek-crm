@@ -145,7 +145,7 @@ export const slaScan = inngest.createFunction(
                 slaDueDate: ticket.slaResponseDueDate!,
                 breachType: "RESPONSE" as const,
                 breachedAt: now,
-                status: "PENDING",
+                status: "PENDING" as const,
               })),
             ...unresolvedTickets
               .filter((t) => t.slaDueDate)
@@ -156,7 +156,7 @@ export const slaScan = inngest.createFunction(
                 slaDueDate: ticket.slaDueDate!,
                 breachType: "RESOLVE" as const,
                 breachedAt: now,
-                status: "PENDING",
+                status: "PENDING" as const,
               })),
           ];
 

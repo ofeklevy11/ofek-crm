@@ -60,7 +60,7 @@ export async function GET() {
       select: {
         id: true, name: true, metricType: true, targetType: true, targetValue: true,
         periodType: true, startDate: true, endDate: true, filters: true,
-        tableId: true, productId: true, warningThreshold: true, criticalThreshold: true,
+        warningThreshold: true, criticalThreshold: true,
         isActive: true, isArchived: true, order: true, notes: true,
         createdAt: true, updatedAt: true,
       },
@@ -154,8 +154,6 @@ export async function POST(request: NextRequest) {
           startDate: new Date(body.startDate),
           endDate: new Date(body.endDate),
           filters: body.filters,
-          tableId: body.tableId ?? null,
-          productId: body.productId ?? null,
           warningThreshold: body.warningThreshold,
           criticalThreshold: body.criticalThreshold,
           notes: body.notes ?? null,
@@ -163,7 +161,7 @@ export async function POST(request: NextRequest) {
         select: {
           id: true, name: true, metricType: true, targetType: true, targetValue: true,
           periodType: true, startDate: true, endDate: true, filters: true,
-          tableId: true, productId: true, warningThreshold: true, criticalThreshold: true,
+          warningThreshold: true, criticalThreshold: true,
           isActive: true, isArchived: true, order: true, notes: true,
           createdAt: true, updatedAt: true,
         },

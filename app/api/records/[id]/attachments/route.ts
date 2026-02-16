@@ -92,6 +92,7 @@ export async function POST(
 
     const attachment = await prisma.attachment.create({
       data: {
+        companyId: currentUser.companyId,
         recordId,
         filename,
         url,

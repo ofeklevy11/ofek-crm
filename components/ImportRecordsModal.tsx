@@ -110,7 +110,7 @@ export default function ImportRecordsModal({
       // 1. Upload to UploadThing
       const uploadRes = await startUpload([file], {
         tableId: tableId, // Pass tableId as input
-      });
+      } as any);
 
       console.log("Upload result:", uploadRes);
 
@@ -118,7 +118,7 @@ export default function ImportRecordsModal({
         throw new Error("העלאת הקובץ נכשלה - לא התקבלה תשובה מהשרת.");
       }
 
-      let jobId = uploadRes[0].serverData?.importJobId;
+      let jobId = (uploadRes[0].serverData as any)?.importJobId;
       const fileData = uploadRes[0];
 
       // Prepare payload for validation

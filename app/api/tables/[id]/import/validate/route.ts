@@ -69,7 +69,7 @@ export async function POST(
           fileUrl: secureFileUrl, // Server-constructed URL only
           originalName: fileName || "unknown.csv",
           status: "UPLOADED",
-          summary: null,
+          summary: undefined,
         },
       });
       // We set importJobId so response can send it back if needed (or we stick to just returning summary)

@@ -432,7 +432,7 @@ export default function EditViewModal({
                             <select
                               value={filterOperator}
                               onChange={(e) =>
-                                setFilterOperator(e.target.value)
+                                setFilterOperator(e.target.value as any)
                               }
                               className="w-1/3 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
                             >

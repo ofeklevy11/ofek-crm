@@ -1,5 +1,6 @@
 "use server";
 
+import type { WorkerStatus, OnboardingStepType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { withRetry } from "@/lib/db-retry";
 import { revalidatePath } from "next/cache";
@@ -292,7 +293,7 @@ export async function getWorkers(filters?: {
     companyId: user.companyId,
     deletedAt: null as null,
     ...(filters?.departmentId && { departmentId: filters.departmentId }),
-    ...(filters?.status && { status: filters.status }),
+    ...(filters?.status && { status: filters.status as WorkerStatus }),
   };
 
   const [data, total] = await Promise.all([
@@ -762,7 +763,7 @@ export async function createOnboardingPath(data: {
   const validatedSteps = stepsData?.map((s, i) => ({
     title: validateStringLength(s.title, MAX_LENGTHS.title, `Step ${i} title`) || "",
     description: validateStringLength(s.description, MAX_LENGTHS.description, `Step ${i} description`),
-    type: s.type,
+    type: s.type as OnboardingStepType | undefined,
     order: validateNonNegativeInt(s.order, `Step ${i} order`) ?? i,
     estimatedMinutes: validateNonNegativeInt(s.estimatedMinutes, `Step ${i} estimatedMinutes`),
     resourceUrl: validateUrl(s.resourceUrl, `Step ${i} resourceUrl`),
@@ -973,7 +974,7 @@ export async function createOnboardingStep(data: {
       data: {
         title,
         description,
-        type: data.type,
+        type: data.type as OnboardingStepType | undefined,
         order,
         estimatedMinutes,
         resourceUrl,
@@ -1996,8 +1997,8 @@ async function executeCreateTaskAction(
       companyId: user.companyId,
       title,
       description: description || null,
-      status: status || "todo",
-      priority: priority || null,
+      status: (status || "todo") as "todo" | "in_progress" | "waiting_client" | "completed_month" | "done",
+      priority: (priority || null) as "low" | "medium" | "high" | null,
       assigneeId: validatedAssigneeId,
       dueDate: dueDate ? new Date(dueDate) : null,
     },
@@ -2064,7 +2065,7 @@ async function executeCreateFinanceAction(
       companyId,
       title,
       amount,
-      type,
+      type: type as "INCOME" | "EXPENSE",
       category: category || null,
       clientId: validatedClientId,
       description: description || null,

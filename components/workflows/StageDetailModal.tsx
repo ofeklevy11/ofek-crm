@@ -431,7 +431,7 @@ function AutomationConfigModal({
 
   const handleSave = () => {
     // --- Validation Logic ---
-    let validationError = null;
+    let validationError: string | null = null;
 
     if (
       (type.id === "update_record" || type.id === "delete_record") &&

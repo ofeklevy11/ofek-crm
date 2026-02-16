@@ -163,7 +163,7 @@ export const refreshDashboardWidgets = inngest.createFunction(
               }
             }),
           );
-          return results.reduce((sum, n) => sum + n, 0);
+          return results.reduce<number>((sum, n) => sum + n, 0);
         });
         cachedWidgets += chunkResult;
       }

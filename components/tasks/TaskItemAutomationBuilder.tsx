@@ -202,6 +202,14 @@ export default function TaskItemAutomationBuilder({
     setConfig((prev) => ({ ...prev, [key]: value }));
   };
 
+  const getSafeUpdates = (): Record<string, unknown> => {
+    const updates = config.updates;
+    if (typeof updates === "object" && updates !== null) {
+      return updates as Record<string, unknown>;
+    }
+    return {};
+  };
+
   const handleSave = () => {
     // Validate
     if (!validateConfig()) return;

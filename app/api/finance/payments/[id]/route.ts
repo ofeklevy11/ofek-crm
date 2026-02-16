@@ -133,7 +133,7 @@ export async function PATCH(
           ...(data.title !== undefined && { title: data.title }),
           ...(data.amount !== undefined && { amount: data.amount }),
           ...(data.dueDate !== undefined && { dueDate: data.dueDate }),
-          ...(normalizedStatus !== undefined && { status: normalizedStatus }),
+          ...(normalizedStatus !== undefined && { status: normalizedStatus as any }),
           ...(data.paidDate !== undefined
             ? { paidDate: data.paidDate }
             : normalizedStatus === "paid"

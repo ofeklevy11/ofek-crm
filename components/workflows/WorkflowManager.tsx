@@ -57,7 +57,7 @@ export function WorkflowManager({
         color: "blue",
         icon: "GitBranch",
       });
-      setWorkflows([...workflows, { ...newWorkflow, stages: [] }]);
+      setWorkflows([...workflows, { ...newWorkflow, stages: [] } as any]);
       setActiveWorkflowId(newWorkflow.id);
     } catch (error) {
       console.error(error);

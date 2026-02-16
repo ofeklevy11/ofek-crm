@@ -11,7 +11,8 @@ export default async function FixedExpensesPage() {
     redirect("/login");
   }
 
-  const expenses = await getFixedExpenses();
+  const expensesResult = await getFixedExpenses();
+  const expenses = expensesResult.data;
 
   return (
     <div className="min-h-screen bg-[#f4f8f8] p-8" dir="rtl">

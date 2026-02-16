@@ -75,7 +75,7 @@ export async function GET(
       select: {
         id: true, name: true, metricType: true, targetType: true, targetValue: true,
         periodType: true, startDate: true, endDate: true, filters: true,
-        tableId: true, productId: true, warningThreshold: true, criticalThreshold: true,
+        warningThreshold: true, criticalThreshold: true,
         isActive: true, isArchived: true, order: true, notes: true,
         createdAt: true, updatedAt: true,
       },
@@ -169,26 +169,6 @@ export async function PATCH(
       );
     }
 
-    // SECURITY: Validate tableId and productId belong to user's company
-    if (body.tableId !== undefined && body.tableId !== null) {
-      const table = await withRetry(() => prisma.tableMeta.findFirst({
-        where: { id: body.tableId, companyId: user.companyId },
-        select: { id: true },
-      }));
-      if (!table) {
-        return NextResponse.json({ error: "Invalid tableId" }, { status: 400 });
-      }
-    }
-    if (body.productId !== undefined && body.productId !== null) {
-      const product = await withRetry(() => prisma.product.findFirst({
-        where: { id: body.productId, companyId: user.companyId },
-        select: { id: true },
-      }));
-      if (!product) {
-        return NextResponse.json({ error: "Invalid productId" }, { status: 400 });
-      }
-    }
-
     const goal = await withRetry(() => prisma.goal.update({
       where: { id: goalId, companyId: user.companyId },
       data: {
@@ -202,8 +182,6 @@ export async function PATCH(
         ...(body.periodType !== undefined && { periodType: body.periodType }),
         ...(body.startDate !== undefined && { startDate: new Date(body.startDate) }),
         ...(body.endDate !== undefined && { endDate: new Date(body.endDate) }),
-        ...(body.tableId !== undefined && { tableId: body.tableId }),
-        ...(body.productId !== undefined && { productId: body.productId }),
         ...(body.warningThreshold !== undefined && {
           warningThreshold: body.warningThreshold,
         }),
@@ -216,7 +194,7 @@ export async function PATCH(
       select: {
         id: true, name: true, metricType: true, targetType: true, targetValue: true,
         periodType: true, startDate: true, endDate: true, filters: true,
-        tableId: true, productId: true, warningThreshold: true, criticalThreshold: true,
+        warningThreshold: true, criticalThreshold: true,
         isActive: true, isArchived: true, order: true, notes: true,
         createdAt: true, updatedAt: true,
       },

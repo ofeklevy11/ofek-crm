@@ -113,7 +113,7 @@ export async function GET(
             displayName: true,
             url: true,
             size: true,
-            createdAt: true,
+            uploadedAt: true,
           },
         },
       },

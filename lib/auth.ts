@@ -17,7 +17,7 @@ const LEGACY_TOKEN_CUTOFF = new Date("2026-03-18T00:00:00Z").getTime();
 export function signUserId(userId: number): string {
   const issuedAt = Math.floor(Date.now() / 1000);
   const data = `${userId}.${issuedAt}`;
-  const signature = createHmac("sha256", SECRET).update(data).digest("hex");
+  const signature = createHmac("sha256", SECRET!).update(data).digest("hex");
   return `${data}.${signature}`;
 }
 
@@ -41,7 +41,7 @@ export function verifyUserIdWithMeta(token: string): TokenMeta | null {
     if (signature.length !== 64 || !/^[0-9a-f]{64}$/.test(signature)) return null;
 
     const data = `${userIdStr}.${issuedAtStr}`;
-    const expectedSignature = createHmac("sha256", SECRET)
+    const expectedSignature = createHmac("sha256", SECRET!)
       .update(data)
       .digest("hex");
 
@@ -69,7 +69,7 @@ export function verifyUserIdWithMeta(token: string): TokenMeta | null {
     if (!data || !signature) return null;
     if (signature.length !== 64 || !/^[0-9a-f]{64}$/.test(signature)) return null;
 
-    const expectedSignature = createHmac("sha256", SECRET)
+    const expectedSignature = createHmac("sha256", SECRET!)
       .update(data)
       .digest("hex");
 

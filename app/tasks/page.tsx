@@ -195,7 +195,7 @@ export default async function TasksPage({
           }
         >
           {currentView === "kanban" && (
-            <TaskKanbanBoard currentUser={user} users={users} initialTasks={initialTasks} />
+            <TaskKanbanBoard currentUser={user} users={users} initialTasks={initialTasks as any} />
           )}
 
           {currentView === "my-sheets" && (

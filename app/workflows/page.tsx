@@ -42,7 +42,7 @@ export default async function WorkflowsPage() {
       <div className="max-w-7xl mx-auto">
         <Suspense fallback={<WorkflowsSkeleton />}>
           <WorkflowManager
-            initialWorkflows={workflows}
+            initialWorkflows={workflows as any}
             initialInstances={instances}
             users={users}
             currentUser={user}

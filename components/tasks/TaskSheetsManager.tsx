@@ -360,10 +360,10 @@ export default function TaskSheetsManager({
       const result = await updateTaskSheetItem(editingItemId, {
         title: editingItemData.title,
         description: editingItemData.description || undefined,
-        priority: editingItemData.priority,
+        priority: editingItemData.priority as any,
         category: editingItemData.category || undefined,
         dueTime: editingItemData.dueTime || undefined,
-        onCompleteActions: editingItemData.onCompleteActions,
+        onCompleteActions: editingItemData.onCompleteActions as any,
       });
 
       if (result.success) {
@@ -446,10 +446,10 @@ export default function TaskSheetsManager({
             const itemResult = await addTaskSheetItem(editingSheet.id, {
               title: item.title,
               description: item.description || undefined,
-              priority: item.priority,
+              priority: item.priority as any,
               category: item.category || undefined,
               dueTime: item.dueTime || undefined,
-              onCompleteActions: item.onCompleteActions,
+              onCompleteActions: item.onCompleteActions as any,
             });
             if (itemResult.success && itemResult.data) {
               const newItem = itemResult.data as unknown as TaskSheetItem;
@@ -481,11 +481,11 @@ export default function TaskSheetsManager({
             .map((item, index) => ({
               title: item.title,
               description: item.description || undefined,
-              priority: item.priority,
+              priority: item.priority as any,
               category: item.category || undefined,
               dueTime: item.dueTime || undefined,
               order: index,
-              onCompleteActions: item.onCompleteActions,
+              onCompleteActions: item.onCompleteActions as any,
             })),
         });
 
@@ -515,8 +515,8 @@ export default function TaskSheetsManager({
               : null,
             isActive: result.data.isActive,
             items: (
-              (result.data as { items?: TaskSheetItem[] }).items || []
-            ).map((item: TaskSheetItem) => ({
+              (result.data as { items?: any[] }).items || []
+            ).map((item: any) => ({
               id: item.id,
               title: item.title,
               description: item.description,
@@ -526,7 +526,7 @@ export default function TaskSheetsManager({
               isCompleted: item.isCompleted,
               completedAt: item.completedAt,
               dueTime: item.dueTime,
-            })),
+            })) as TaskSheetItem[],
           };
           setSheets((prev) => [newSheet, ...prev]);
           closeModal();
@@ -1115,7 +1115,7 @@ export default function TaskSheetsManager({
                                     onChange={(actions) =>
                                       setEditingItemData({
                                         ...editingItemData,
-                                        onCompleteActions: actions,
+                                        onCompleteActions: actions as any,
                                       })
                                     }
                                     users={users.map((u) => ({

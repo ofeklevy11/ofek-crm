@@ -146,7 +146,7 @@ export function validateCalendarEventInput(
   return {
     valid: true,
     data: {
-      title: typeof input.title === "string" ? input.title.trim() : (input.title as string),
+      title: typeof input.title === "string" ? input.title.trim() : (input.title as unknown as string),
       description: typeof input.description === "string" ? input.description.trim() : undefined,
       startTime: startDate!,
       endTime: endDate!,

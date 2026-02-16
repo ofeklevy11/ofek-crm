@@ -93,7 +93,7 @@ export async function deleteRecordWithCleanup(
       tableId: opts.tableId,
       financeSyncRuleIds: ruleIds,
       skipFinanceCascade: opts.skipFinanceCascade,
-      tx,
+      tx: tx as any,
     });
 
     await tx.record.delete({
