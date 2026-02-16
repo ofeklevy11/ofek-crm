@@ -300,31 +300,30 @@ export default function OnboardingPathModal({
       if (path) {
         result = await updateOnboardingPath(path.id, data);
       } else {
-        result = await createOnboardingPath(data);
-      }
-
-      // If new path, need to add steps
-      if (!path && steps.length > 0) {
-        for (const step of steps) {
-          await createOnboardingStep({
-            pathId: result.id,
-            title: step.title,
-            description: step.description || undefined,
-            type: step.type,
-            order: step.order,
-            estimatedMinutes: step.estimatedMinutes || undefined,
-            resourceUrl: step.resourceUrl || undefined,
-            resourceType: step.resourceType || undefined,
-            isRequired: step.isRequired,
-          });
-        }
+        // Create path + steps atomically in a single transaction
+        result = await createOnboardingPath({
+          ...data,
+          steps: steps.length > 0
+            ? steps.map((step) => ({
+                title: step.title,
+                description: step.description || undefined,
+                type: step.type,
+                order: step.order,
+                estimatedMinutes: step.estimatedMinutes || undefined,
+                resourceUrl: step.resourceUrl || undefined,
+                resourceType: step.resourceType || undefined,
+                isRequired: step.isRequired,
+                onCompleteActions: step.onCompleteActions?.length ? step.onCompleteActions : undefined,
+              }))
+            : undefined,
+        });
       }
 
       const savedPath = { ...result, steps } as OnboardingPath;
       onSave(savedPath);
     } catch (error) {
       console.error("Error saving onboarding path:", error);
-      alert("שגיאה בשמירת מסלול הקליטה");
+      alert(error instanceof Error ? error.message : "שגיאה בשמירת מסלול הקליטה");
     } finally {
       setIsSubmitting(false);
     }
@@ -348,24 +347,30 @@ export default function OnboardingPathModal({
     }
 
     if (path) {
-      const savedStep = await createOnboardingStep({
-        pathId: path.id,
-        title: newStep.title.trim(),
-        description: newStep.description || undefined,
-        type: newStep.type ?? "TASK",
-        order: steps.length,
-        estimatedMinutes: newStep.estimatedMinutes || undefined,
-        isRequired: newStep.isRequired ?? true,
-      });
-      setSteps([
-        ...steps,
-        {
-          ...savedStep,
-          onCompleteActions: savedStep.onCompleteActions as unknown as
-            | OnCompleteAction[]
-            | undefined,
-        },
-      ]);
+      try {
+        const savedStep = await createOnboardingStep({
+          pathId: path.id,
+          title: newStep.title.trim(),
+          description: newStep.description || undefined,
+          type: newStep.type ?? "TASK",
+          order: steps.length,
+          estimatedMinutes: newStep.estimatedMinutes || undefined,
+          isRequired: newStep.isRequired ?? true,
+        });
+        setSteps([
+          ...steps,
+          {
+            ...savedStep,
+            onCompleteActions: savedStep.onCompleteActions as unknown as
+              | OnCompleteAction[]
+              | undefined,
+          },
+        ]);
+      } catch (error) {
+        console.error("Error creating onboarding step:", error);
+        alert(error instanceof Error ? error.message : "שגיאה בהוספת שלב");
+        return;
+      }
     } else {
       const tempStep: OnboardingStep = {
         id: -Date.now(),
@@ -378,6 +383,7 @@ export default function OnboardingPathModal({
         resourceUrl: null,
         resourceType: null,
         isRequired: newStep.isRequired ?? true,
+        onCompleteActions: newStep.onCompleteActions as OnCompleteAction[] | undefined,
       };
       setSteps([...steps, tempStep]);
     }

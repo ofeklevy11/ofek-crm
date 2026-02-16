@@ -39,7 +39,7 @@ export default function PrintButton({
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const response = await fetch(`/api/quotes/${quoteId}/download`);
 
-        if (response.ok) {
+        if (response.status === 200) {
           // PDF is ready — download it
           const blob = await response.blob();
           const url = window.URL.createObjectURL(blob);

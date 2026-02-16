@@ -545,31 +545,66 @@ export async function createOnboardingPath(data: {
   description?: string;
   departmentId?: number;
   isDefault?: boolean;
+  isActive?: boolean;
   estimatedDays?: number;
+  steps?: Array<{
+    title: string;
+    description?: string;
+    type?: string;
+    order?: number;
+    estimatedMinutes?: number;
+    resourceUrl?: string;
+    resourceType?: string;
+    isRequired?: boolean;
+    onCompleteActions?: unknown;
+  }>;
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
+  const { steps: stepsData, ...pathData } = data;
+
+  // Validate step types upfront
+  if (stepsData?.length) {
+    for (const s of stepsData) {
+      validateEnum(s.type, VALID_STEP_TYPES, "step type");
+    }
+  }
+
   // Transaction prevents race: two concurrent creates both unsetting the old default
+  // Also creates steps atomically with the path
   const path = await withRetry(() => prisma.$transaction(async (tx) => {
     // If setting as default, unset other defaults for this department
-    if (data.isDefault && data.departmentId) {
+    if (pathData.isDefault && pathData.departmentId) {
       await tx.onboardingPath.updateMany({
         where: {
           companyId: user.companyId,
-          departmentId: data.departmentId,
+          departmentId: pathData.departmentId,
           isDefault: true,
         },
         data: { isDefault: false },
       });
     }
 
-    return tx.onboardingPath.create({
+    const created = await tx.onboardingPath.create({
       data: {
-        ...data,
+        ...pathData,
         companyId: user.companyId,
       },
     });
+
+    if (stepsData?.length) {
+      await tx.onboardingStep.createMany({
+        data: stepsData.map((s, i) => ({
+          ...s,
+          pathId: created.id,
+          companyId: user.companyId,
+          order: s.order ?? i,
+        })),
+      });
+    }
+
+    return created;
   }, { maxWait: 5000, timeout: 10000 }));
 
   revalidatePath("/workers");
@@ -592,6 +627,7 @@ export async function updateOnboardingPath(
   if (!user) throw new Error("Not authenticated");
 
   // Transaction prevents race: concurrent updates both unsetting the old default
+  console.error("[updateOnboardingPath] id:", id, "companyId:", user.companyId, "data:", JSON.stringify(data));
   try {
     const path = await withRetry(() => prisma.$transaction(async (tx) => {
       if (data.isDefault) {
@@ -678,6 +714,7 @@ export async function createOnboardingStep(data: {
   validateEnum(data.type, VALID_STEP_TYPES, "step type");
 
   // SECURITY: Verify pathId belongs to user's company
+  console.error("[createOnboardingStep] pathId:", data.pathId, "companyId:", user.companyId);
   const path = await withRetry(() => prisma.onboardingPath.findFirst({
     where: { id: data.pathId, companyId: user.companyId },
     select: { id: true },
