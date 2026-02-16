@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import type { TaskSheetItemPriority } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { inngest } from "@/lib/inngest/client";
@@ -15,7 +16,7 @@ const log = createLogger("TaskSheets");
 export interface TaskSheetItemInput {
   title: string;
   description?: string;
-  priority?: string;
+  priority?: TaskSheetItemPriority;
   category?: string;
   order?: number;
   dueTime?: string;
