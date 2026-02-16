@@ -15,10 +15,9 @@ export const generateQuotePdf = inngest.createFunction(
       { limit: 2, key: "event.data.companyId" },
       { limit: 5 }, // global cap to prevent OOM with many concurrent companies
     ],
-    // BB14: 30s debounce — PDF render takes 10-30s, 5s was too short
     debounce: {
       key: "event.data.quoteId",
-      period: "30s",
+      period: "5s",
     },
   },
   { event: "pdf/generate-quote" },

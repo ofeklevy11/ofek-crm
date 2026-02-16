@@ -33,8 +33,8 @@ export default function PrintButton({
   const handleDownloadPdf = async () => {
     setDownloading(true);
     try {
-      const maxAttempts = 15;
-      const pollInterval = 2000; // 2 seconds
+      const maxAttempts = 20;
+      const pollInterval = 3000; // 3 seconds
 
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const response = await fetch(`/api/quotes/${quoteId}/download`);
