@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiFetch } from "@/lib/api-fetch";
 
 import { USER_FLAGS } from "@/lib/permissions";
 
@@ -90,7 +91,7 @@ export default function UserModal({
         body.password = formData.password;
       }
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

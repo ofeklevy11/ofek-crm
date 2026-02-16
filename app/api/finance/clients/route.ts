@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { withRetry } from "@/lib/db-retry";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("FinanceClientsAPI");
 
 const createClientSchema = z.object({
   name: z.string().min(1).max(200),
@@ -18,16 +23,32 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     // P4: Cursor-based pagination
     const searchParams = request.nextUrl.searchParams;
     const cursorParam = searchParams.get("cursor");
     const takeParam = searchParams.get("take");
-    const take = Math.min(parseInt(takeParam || "500") || 500, 5000);
-    const cursor = cursorParam ? parseInt(cursorParam) : undefined;
+    const limited = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+    if (limited) return limited;
+
+    const take = Math.min(parseInt(takeParam || "500", 10) || 500, 500);
+    const cursor = cursorParam ? parseInt(cursorParam, 10) : undefined;
 
     const clients = await withRetry(() => prisma.client.findMany({
       where: { companyId: user.companyId, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        businessName: true,
+        notes: true,
+        createdAt: true,
+        updatedAt: true,
+      },
       orderBy: { name: "asc" },
       take: take + 1,
       ...(cursor && { cursor: { id: cursor }, skip: 1 }),
@@ -39,7 +60,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data, nextCursor, hasMore });
   } catch (error) {
-    console.error("Error fetching clients:", error);
+    log.error("Failed to fetch clients", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to fetch clients" },
       { status: 500 }
@@ -53,6 +74,12 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const limited = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+    if (limited) return limited;
 
     const raw = await request.json();
     const parsed = createClientSchema.safeParse(raw);
@@ -69,11 +96,20 @@ export async function POST(request: NextRequest) {
         businessName: parsed.data.businessName ?? null,
         notes: parsed.data.notes ?? null,
       },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        businessName: true,
+        notes: true,
+        createdAt: true,
+      },
     }));
 
     return NextResponse.json(client, { status: 201 });
   } catch (error) {
-    console.error("Error creating client:", error);
+    log.error("Failed to create client", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to create client" },
       { status: 500 }

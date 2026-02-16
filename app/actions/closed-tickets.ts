@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 import { redis } from "@/lib/redis";
 import { TicketStatus } from "@prisma/client";
 import { withRetry } from "@/lib/db-retry";
+import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { hasUserFlag } from "@/lib/permissions";
 
 async function invalidateServiceStatsCache(companyId: number) {
   try {
@@ -19,6 +21,12 @@ const PAGE_SIZE = 100;
 export async function getClosedTickets(cursor?: number) {
   const user = await getCurrentUser();
   if (!user) return { items: [] as any[], nextCursor: null as number | null };
+  if (!hasUserFlag(user as any, "canViewServiceCalls")) {
+    throw new Error("Unauthorized");
+  }
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceRead)) {
+    throw new Error("Rate limit exceeded");
+  }
 
   const items = await withRetry(() =>
     prisma.ticket.findMany({
@@ -53,6 +61,12 @@ export async function getClosedTickets(cursor?: number) {
 export async function restoreTicket(id: number, newStatus: string) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  if (!hasUserFlag(user as any, "canViewServiceCalls")) {
+    throw new Error("Unauthorized");
+  }
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
 
   // Valid statuses to restore to (subset of TicketStatus)
   const validRestoreStatuses = new Set(["OPEN", "IN_PROGRESS", "WAITING", "RESOLVED"]);
@@ -162,6 +176,12 @@ export async function restoreTicket(id: number, newStatus: string) {
 export async function permanentlyDeleteTicket(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  if (!hasUserFlag(user as any, "canViewServiceCalls")) {
+    throw new Error("Unauthorized");
+  }
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
 
   const { count } = await withRetry(() =>
     prisma.ticket.deleteMany({

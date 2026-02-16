@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { withRetry } from "@/lib/db-retry";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("FinanceSearch");
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,14 +14,27 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const limited = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+    if (limited) return limited;
 
     const searchParams = request.nextUrl.searchParams;
     const tableSlug = searchParams.get("table"); // 'work-dm' or 'work-web-design'
     const searchQuery = searchParams.get("search") || "";
 
-    if (!tableSlug) {
+    if (!tableSlug || tableSlug.length > 100) {
       return NextResponse.json(
-        { error: "Table parameter is required" },
+        { error: "Table parameter is required and must be under 100 characters" },
+        { status: 400 }
+      );
+    }
+
+    if (searchQuery.length > 200) {
+      return NextResponse.json(
+        { error: "Search query too long" },
         { status: 400 }
       );
     }
@@ -66,7 +84,7 @@ export async function GET(request: NextRequest) {
         try {
           data = JSON.parse(data);
         } catch (e) {
-          console.error("Failed to parse record data:", e);
+          log.error("Failed to parse record data", { error: String(e) });
           data = {};
         }
       }
@@ -131,7 +149,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(formattedRecords);
   } catch (error) {
-    console.error("Error searching clients:", error);
+    log.error("Failed to search clients", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to search clients" },
       { status: 500 }

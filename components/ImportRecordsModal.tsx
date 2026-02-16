@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useUploadThing } from "@/lib/uploadthing";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface ImportRecordsModalProps {
   tableId: number;
@@ -144,7 +145,7 @@ export default function ImportRecordsModal({
         setProgress((prev) => (prev >= 95 ? 95 : prev + 5));
       }, 500);
 
-      const res = await fetch(`/api/tables/${tableId}/import/validate`, {
+      const res = await apiFetch(`/api/tables/${tableId}/import/validate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -186,7 +187,7 @@ export default function ImportRecordsModal({
 
     try {
       // 1. Start the import (queues a background job)
-      const res = await fetch(`/api/tables/${tableId}/import/commit`, {
+      const res = await apiFetch(`/api/tables/${tableId}/import/commit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ importJobId }),

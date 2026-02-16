@@ -2,8 +2,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import { withRetry } from "@/lib/db-retry";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("FinanceRecords");
 
 export type FinanceRecordType = "INCOME" | "EXPENSE";
 
@@ -29,6 +33,7 @@ export async function getFinanceRecords(filters?: {
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  if (!hasUserFlag(user, "canViewFinance")) throw new Error("Forbidden");
 
   // Issue 27: Removed processFixedExpenses() from read path — use scheduled cron instead
 
@@ -46,13 +51,16 @@ export async function getFinanceRecords(filters?: {
     ...(filters?.categoryId && { category: filters.categoryId }),
   };
 
-  const take = Math.min(filters?.take ?? 5000, 5000);
+  const take = Math.min(filters?.take ?? 500, 500);
   const records = await withRetry(() => prisma.financeRecord.findMany({
     where,
     orderBy: { date: "desc" },
     take: take + 1,
     ...(filters?.cursor && { cursor: { id: filters.cursor }, skip: 1 }),
-    include: {
+    select: {
+      id: true, title: true, amount: true, type: true, category: true,
+      date: true, status: true, clientId: true, description: true,
+      originId: true, syncRuleId: true, createdAt: true, updatedAt: true,
       client: { select: { id: true, name: true } },
       syncRule: { select: { sourceType: true, name: true } },
     },
@@ -88,10 +96,39 @@ export async function getFinanceRecords(filters?: {
 export async function addFinanceRecord(data: CreateFinanceRecordInput) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  if (!hasUserFlag(user, "canViewFinance")) throw new Error("Forbidden");
+
+  const { checkActionRateLimit, RATE_LIMITS } = await import("@/lib/rate-limit");
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.financeMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
 
   // H3: Validate positive amount
-  if (typeof data.amount !== "number" || data.amount <= 0) {
+  if (typeof data.amount !== "number" || !Number.isFinite(data.amount) || data.amount <= 0) {
     throw new Error("Amount must be positive");
+  }
+
+  // Input validation — server actions receive untrusted input
+  if (!data.title || typeof data.title !== "string" || data.title.length > 200) {
+    throw new Error("Title is required and must be under 200 characters");
+  }
+  if (!["INCOME", "EXPENSE"].includes(data.type)) {
+    throw new Error("Type must be INCOME or EXPENSE");
+  }
+  if (data.category && (typeof data.category !== "string" || data.category.length > 200)) {
+    throw new Error("Category must be under 200 characters");
+  }
+  if (data.description && (typeof data.description !== "string" || data.description.length > 5000)) {
+    throw new Error("Description must be under 5000 characters");
+  }
+  if (data.status && !["PENDING", "COMPLETED", "CANCELLED"].includes(data.status)) {
+    throw new Error("Invalid status");
+  }
+  if (!(data.date instanceof Date) || isNaN(data.date.getTime())) {
+    throw new Error("Invalid date");
+  }
+  if (data.clientId !== undefined && (!Number.isInteger(data.clientId) || data.clientId <= 0)) {
+    throw new Error("Invalid client ID");
   }
 
   // H5: Wrap client verify + create in transaction to prevent TOCTOU race
@@ -109,12 +146,17 @@ export async function addFinanceRecord(data: CreateFinanceRecordInput) {
         companyId: user.companyId,
         title: data.title,
         amount: data.amount,
-        type: data.type,
+        type: data.type as any,
         category: data.category,
         date: data.date,
-        status: data.status || "COMPLETED",
+        status: (data.status || "COMPLETED") as any,
         description: data.description,
         clientId: data.clientId,
+      },
+      select: {
+        id: true, title: true, amount: true, type: true, category: true,
+        date: true, status: true, clientId: true, description: true,
+        createdAt: true, updatedAt: true,
       },
     });
   }, { maxWait: 5000, timeout: 10000 }));
@@ -128,12 +170,23 @@ export async function addFinanceRecord(data: CreateFinanceRecordInput) {
 export async function deleteFinanceRecord(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  if (!hasUserFlag(user, "canViewFinance")) throw new Error("Forbidden");
+
+  const { checkActionRateLimit, RATE_LIMITS } = await import("@/lib/rate-limit");
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.financeMutation)) {
+    return { success: false, error: "Rate limit exceeded" };
+  }
+
+  if (!Number.isInteger(id) || id <= 0) return { success: false, error: "Invalid record ID" };
 
   // H6: Wrap findFirst + soft-delete in transaction to prevent TOCTOU race
   const financeRecord = await withRetry(() => prisma.$transaction(async (tx) => {
     const record = await tx.financeRecord.findFirst({
       where: { id, companyId: user.companyId, deletedAt: null },
-      include: { syncRule: true },
+      select: {
+        id: true, originId: true,
+        syncRule: { select: { id: true, sourceType: true } },
+      },
     });
 
     if (!record) return null;
@@ -156,7 +209,7 @@ export async function deleteFinanceRecord(id: number) {
     financeRecord.originId
   ) {
     try {
-      const sourceRecordId = parseInt(financeRecord.originId);
+      const sourceRecordId = parseInt(financeRecord.originId, 10);
       // Verify the record still exists and belongs to user's company (via table permissions usually, but here we trust the link)
       // Check if record exists specifically
       const sourceRecord = await withRetry(() => prisma.record.findFirst({
@@ -174,7 +227,7 @@ export async function deleteFinanceRecord(id: number) {
         });
       }
     } catch (e) {
-      console.error(`[Finance] Failed to cascade delete to source record:`, e);
+      log.error("Failed to cascade delete to source record", { error: String(e) });
     }
   }
 

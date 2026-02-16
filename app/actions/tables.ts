@@ -4,29 +4,36 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/permissions-server";
-import { canReadTable, canManageTables, hasUserFlag, User } from "@/lib/permissions";
+import { canReadTable, canManageTables, hasUserFlag } from "@/lib/permissions";
 import { validateCategoryInCompany } from "@/lib/company-validation";
 import { withRetry } from "@/lib/db-retry";
+import { checkActionRateLimit, TABLE_RATE_LIMITS } from "@/lib/rate-limit-action";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("Tables");
 
 export async function getTables() {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    return getTablesForUser(user);
+    return await getTablesForUser();
   } catch (error) {
-    console.error("Error fetching tables:", error);
+    log.error("Error fetching tables", { error: String(error) });
     return { success: false, error: "Failed to fetch tables" };
   }
 }
 
 /**
- * Internal: fetch tables for a user without auth check.
- * Used by getDashboardInitialData to avoid redundant getCurrentUser() calls.
+ * Fetch tables for the authenticated user.
+ * Always calls getCurrentUser() internally — never trust caller-provided User objects.
  */
-export async function getTablesForUser(user: User) {
+export async function getTablesForUser() {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  const rl = await checkActionRateLimit(String(user.id), TABLE_RATE_LIMITS.read);
+  if (rl) return { success: false, error: rl.error };
+
   // Build WHERE clause: admin/manager see all; basic users only see permitted tables
   const isFullAccess = user.role === "admin" || user.role === "manager";
   const allowedIds = !isFullAccess && user.tablePermissions
@@ -68,8 +75,17 @@ export async function getTablesForUser(user: User) {
 /**
  * Lightweight table fetch for the dashboard — excludes schemaJson to save IO.
  * schemaJson can be 50-200KB per table; the dashboard only needs id/name/slug.
+ * Always calls getCurrentUser() internally — never trust caller-provided User objects.
  */
-export async function getTablesForDashboard(user: User) {
+export async function getTablesForDashboard() {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { success: true, data: [] };
+  }
+
+  const rl = await checkActionRateLimit(String(user.id), TABLE_RATE_LIMITS.read);
+  if (rl) return { success: true, data: [] };
+
   const isFullAccess = user.role === "admin" || user.role === "manager";
   const allowedIds = !isFullAccess && user.tablePermissions
     ? Object.entries(user.tablePermissions as Record<string, string>)
@@ -117,6 +133,11 @@ export async function getTableById(id: number) {
         id,
         companyId: user.companyId,
       },
+      select: {
+        id: true, name: true, slug: true, schemaJson: true,
+        companyId: true, createdBy: true, categoryId: true,
+        order: true, createdAt: true, updatedAt: true,
+      },
     }));
 
     if (!table) {
@@ -129,7 +150,7 @@ export async function getTableById(id: number) {
 
     return { success: true, data: table };
   } catch (error) {
-    console.error("Error fetching table:", error);
+    log.error("Error fetching table", { error: String(error) });
     return { success: false, error: "Failed to fetch table" };
   }
 }
@@ -191,6 +212,11 @@ export async function createTable(data: {
             createdBy: user.id,
             categoryId: categoryId ? Number(categoryId) : undefined,
           },
+          select: {
+            id: true, name: true, slug: true, schemaJson: true,
+            companyId: true, createdBy: true, categoryId: true,
+            order: true, createdAt: true, updatedAt: true,
+          },
         }));
         break; // success
       } catch (createErr: any) {
@@ -214,10 +240,10 @@ export async function createTable(data: {
         error: "שגיאה: שם המזהה (slug) כבר קיים במערכת. אנא נסה שם אחר.",
       };
     }
-    console.error("Error creating table:", error);
+    log.error("Error creating table", { error: String(error) });
     return {
       success: false,
-      error: "Failed to create table: " + (error.message || "Unknown error"),
+      error: "Failed to create table",
     };
   }
 }
@@ -256,6 +282,11 @@ export async function updateTable(
     const table = await withRetry(() => prisma.tableMeta.update({
       where: { id, companyId: user.companyId },
       data: updateData,
+      select: {
+        id: true, name: true, slug: true, schemaJson: true,
+        companyId: true, createdBy: true, categoryId: true,
+        order: true, createdAt: true, updatedAt: true,
+      },
     }));
 
     revalidatePath("/");
@@ -264,7 +295,7 @@ export async function updateTable(
 
     return { success: true, data: table };
   } catch (error) {
-    console.error("Error updating table:", error);
+    log.error("Error updating table", { error: String(error) });
     return { success: false, error: "Failed to update table" };
   }
 }
@@ -286,7 +317,7 @@ export async function deleteTable(id: number) {
 
     return { success: true };
   } catch (error) {
-    console.error("Error deleting table:", error);
+    log.error("Error deleting table", { error: String(error) });
     return { success: false, error: "Failed to delete table" };
   }
 }
@@ -325,6 +356,10 @@ export async function exportTableData(tableId: number) {
         orderBy: { createdAt: "desc" },
         take: BATCH_SIZE,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        select: {
+          id: true, tableId: true, data: true, createdBy: true, updatedBy: true,
+          createdAt: true, updatedAt: true,
+        },
       }));
 
       if (batch.length === 0) break;
@@ -336,7 +371,7 @@ export async function exportTableData(tableId: number) {
 
     return { success: true, data: { ...table, records: allRecords.slice(0, MAX_RECORDS) } };
   } catch (error) {
-    console.error("Error exporting table:", error);
+    log.error("Error exporting table", { error: String(error) });
     return { success: false, error: "Failed to export table" };
   }
 }
@@ -365,7 +400,7 @@ export async function searchInTable(tableId: number, searchTerm: string) {
     // DB-side ILIKE search instead of loading all records into memory
     const escaped = searchTerm.replace(/[%_\\]/g, "\\$&");
     const records = await withRetry(() => prisma.$queryRaw<any[]>`
-      SELECT id, data, "createdAt", "updatedAt", "createdBy", "updatedBy", "tableId", "companyId"
+      SELECT id, data, "createdAt", "updatedAt", "createdBy", "updatedBy", "tableId"
       FROM "Record"
       WHERE "tableId" = ${tableId}
         AND "companyId" = ${user.companyId}
@@ -376,7 +411,7 @@ export async function searchInTable(tableId: number, searchTerm: string) {
 
     return { success: true, data: records };
   } catch (error) {
-    console.error("Error searching in table:", error);
+    log.error("Error searching in table", { error: String(error) });
     return { success: false, error: "Failed to search in table" };
   }
 }
@@ -418,7 +453,7 @@ export async function updateTablesOrder(
     revalidatePath("/tables");
     return { success: true };
   } catch (error) {
-    console.error("Error updating table order:", error);
+    log.error("Error updating table order", { error: String(error) });
     return { success: false, error: "Failed to update table order" };
   }
 }
@@ -439,6 +474,10 @@ export async function duplicateTable(id: number) {
       where: {
         id,
         companyId: user.companyId,
+      },
+      select: {
+        id: true, name: true, slug: true, schemaJson: true,
+        categoryId: true, order: true,
       },
     }));
 
@@ -477,6 +516,11 @@ export async function duplicateTable(id: number) {
           categoryId: originalTable.categoryId,
           order: originalTable.order,
         },
+        select: {
+          id: true, name: true, slug: true, schemaJson: true,
+          companyId: true, createdBy: true, categoryId: true,
+          order: true, createdAt: true, updatedAt: true,
+        },
       });
 
       // Copy records directly inside PostgreSQL — no data transfer to Node.js
@@ -503,10 +547,10 @@ export async function duplicateTable(id: number) {
 
     return { success: true, data: newTable };
   } catch (error: any) {
-    console.error("Error duplicating table:", error);
+    log.error("Error duplicating table", { error: String(error) });
     return {
       success: false,
-      error: "Failed to duplicate table: " + (error.message || "Unknown error"),
+      error: "Failed to duplicate table",
     };
   }
 }

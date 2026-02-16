@@ -2,6 +2,22 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { getCurrentUser, invalidateUserCache } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createAuditLog } from "@/lib/audit";
+import { patchUserSchema } from "@/lib/validations/user";
+import { isPrismaError } from "@/lib/prisma-error";
+import { withRetry } from "@/lib/db-retry";
+import { revokeUserSessions } from "@/lib/session";
+import { createLogger } from "@/lib/logger";
+import { logSecurityEvent, SEC_PASSWORD_CHANGED, SEC_ROLE_CHANGED, SEC_PERMISSIONS_CHANGED } from "@/lib/security/audit-security";
+
+const log = createLogger("UsersAPI");
+
+function parseId(raw: string): number | null {
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 export async function GET(
   request: Request,
@@ -13,11 +29,23 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const rl = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+    if (rl) return rl;
+
     const { id } = await params;
-    const targetUserId = parseInt(id);
+    const targetUserId = parseId(id);
+    if (!targetUserId) {
+      return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
+    }
+
+    // Allow self-access; otherwise require canViewUsers
+    const isSelf = user.id === targetUserId;
+    if (!isSelf && !hasUserFlag(user, "canViewUsers")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     // CRITICAL: Filter by companyId - can only see users in same company
-    const targetUser = await prisma.user.findFirst({
+    const targetUser = await withRetry(() => prisma.user.findFirst({
       where: {
         id: targetUserId,
         companyId: user.companyId,
@@ -33,7 +61,7 @@ export async function GET(
         permissions: true,
         tablePermissions: true,
       },
-    });
+    }));
 
     if (!targetUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -41,7 +69,7 @@ export async function GET(
 
     return NextResponse.json(targetUser);
   } catch (error) {
-    console.error("Error fetching user:", error);
+    log.error("Error fetching user", { error: (error as Error).message });
     return NextResponse.json(
       { error: "Failed to fetch user" },
       { status: 500 }
@@ -59,26 +87,38 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const rl = await checkRateLimit(String(user.id), RATE_LIMITS.userManagement);
+    if (rl) return rl;
+
     const { id } = await params;
-    const targetUserId = parseInt(id);
-    const body = await request.json();
-    const {
-      name,
-      email,
-      password,
-      role,
-      allowedWriteTableIds,
-      permissions,
-      tablePermissions,
-    } = body;
+    const targetUserId = parseId(id);
+    if (!targetUserId) {
+      return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
+    }
+
+    let raw;
+    try {
+      raw = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    const parsed = patchUserSchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+
+    const { name, email, password, role, allowedWriteTableIds, permissions, tablePermissions } = parsed.data;
 
     // Check if user exists and belongs to company
-    const existingUser = await prisma.user.findFirst({
+    const existingUser = await withRetry(() => prisma.user.findFirst({
       where: {
         id: targetUserId,
         companyId: user.companyId,
       },
-    });
+    }));
 
     if (!existingUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -114,14 +154,14 @@ export async function PATCH(
       );
     }
 
-    // Check if email is taken by another user
+    // Check if email is taken by another user — generic error to prevent enumeration
     if (email && email !== existingUser.email) {
-      const emailTaken = await prisma.user.findUnique({
+      const emailTaken = await withRetry(() => prisma.user.findUnique({
         where: { email },
-      });
+      }));
       if (emailTaken) {
         return NextResponse.json(
-          { error: "Email already exists" },
+          { error: "Unable to update user with the provided details" },
           { status: 400 }
         );
       }
@@ -135,13 +175,13 @@ export async function PATCH(
     if (allowedWriteTableIds !== undefined)
       updateData.allowedWriteTableIds = allowedWriteTableIds;
     if (password) {
-      updateData.passwordHash = await bcrypt.hash(password, 10);
+      updateData.passwordHash = await bcrypt.hash(password, 12);
     }
     if (permissions) updateData.permissions = permissions;
     if (tablePermissions) updateData.tablePermissions = tablePermissions;
 
     // SECURITY: Atomic companyId check prevents TOCTOU race
-    const updatedUser = await prisma.user.update({
+    const updatedUser = await withRetry(() => prisma.user.update({
       where: { id: targetUserId, companyId: user.companyId },
       data: updateData,
       select: {
@@ -155,14 +195,48 @@ export async function PATCH(
         permissions: true,
         tablePermissions: true,
       },
-    });
+    }));
+
+    await createAuditLog(
+      null,
+      user.id,
+      "USER_UPDATED",
+      { targetUserId, changes: Object.keys(updateData) },
+      prisma,
+      user.companyId,
+    );
+
+    // Security events for sensitive changes
+    if (password) {
+      logSecurityEvent({ action: SEC_PASSWORD_CHANGED, companyId: user.companyId, userId: user.id, details: { targetUserId, changedBy: user.id } });
+    }
+    if (role && role !== existingUser.role) {
+      logSecurityEvent({ action: SEC_ROLE_CHANGED, companyId: user.companyId, userId: user.id, details: { targetUserId, oldRole: existingUser.role, newRole: role } });
+    }
+    if (permissions || tablePermissions) {
+      logSecurityEvent({ action: SEC_PERMISSIONS_CHANGED, companyId: user.companyId, userId: user.id, details: { targetUserId } });
+    }
 
     // Invalidate cached session so permission changes take effect immediately
     await invalidateUserCache(targetUserId);
 
+    // If password was changed, revoke all existing sessions for that user
+    if (password) {
+      await revokeUserSessions(targetUserId);
+    }
+
     return NextResponse.json(updatedUser);
   } catch (error) {
-    console.error("Error updating user:", error);
+    if (isPrismaError(error, "P2002")) {
+      return NextResponse.json(
+        { error: "Unable to update user with the provided details" },
+        { status: 400 }
+      );
+    }
+    if (isPrismaError(error, "P2025")) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+    log.error("Error updating user", { error: (error as Error).message });
     return NextResponse.json(
       { error: "Failed to update user" },
       { status: 500 }
@@ -184,22 +258,28 @@ export async function DELETE(
       return NextResponse.json({ error: "Only admins can delete users" }, { status: 403 });
     }
 
+    const rl = await checkRateLimit(String(user.id), RATE_LIMITS.userManagement);
+    if (rl) return rl;
+
     const { id } = await params;
-    const targetUserId = parseInt(id);
+    const targetUserId = parseId(id);
+    if (!targetUserId) {
+      return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
+    }
 
     // Check if user exists and belongs to company
-    const existingUser = await prisma.user.findFirst({
+    const existingUser = await withRetry(() => prisma.user.findFirst({
       where: {
         id: targetUserId,
         companyId: user.companyId,
       },
-    });
+    }));
 
     if (!existingUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Prevent deleting yourself? (Optional safety)
+    // Prevent deleting yourself
     if (existingUser.id === user.id) {
       return NextResponse.json(
         { error: "Cannot delete yourself" },
@@ -208,13 +288,28 @@ export async function DELETE(
     }
 
     // Delete user
-    await prisma.user.delete({
+    await withRetry(() => prisma.user.delete({
       where: { id: targetUserId, companyId: user.companyId },
-    });
+    }));
+
+    // Invalidate cached session so deleted user loses access immediately
+    await invalidateUserCache(targetUserId);
+
+    await createAuditLog(
+      null,
+      user.id,
+      "USER_DELETED",
+      { targetUserId, email: existingUser.email },
+      prisma,
+      user.companyId,
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting user:", error);
+    if (isPrismaError(error, "P2025")) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+    log.error("Error deleting user", { error: (error as Error).message });
     return NextResponse.json(
       { error: "Failed to delete user" },
       { status: 500 }

@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/permissions-server";
-import { canManageAnalytics } from "@/lib/permissions";
+import { canManageAnalytics, hasUserFlag } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import { inngest } from "@/lib/inngest/client";
 import {
@@ -12,25 +12,41 @@ import {
   resolveTableNameFromConfig,
 } from "@/lib/analytics/calculate";
 import { getFullAnalyticsCache, invalidateFullCache, invalidateItemCache, isRefreshLockHeld } from "@/lib/services/analytics-cache";
-import { redis } from "@/lib/redis";
 import { z } from "zod";
 import { withRetry } from "@/lib/db-retry";
+import { checkActionRateLimit, ANALYTICS_RATE_LIMITS } from "@/lib/rate-limit-action";
+import { logSecurityEvent, SEC_ANALYTICS_VIEW_DELETED } from "@/lib/security/audit-security";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("Analytics");
+
+// Valid analytics view types (from Prisma enum AnalyticsViewType)
+const VALID_TYPES = new Set(["COUNT", "AVERAGE", "SUM", "CONVERSION", "DISTRIBUTION", "GRAPH"]);
+
+// Valid background colors (from AnalyticsDashboard color picker)
+const VALID_COLORS = new Set([
+  "bg-white", "bg-red-50", "bg-yellow-50", "bg-green-50",
+  "bg-blue-50", "bg-purple-50", "bg-pink-50",
+]);
+
+// Max config JSON size (16KB)
+const MAX_CONFIG_SIZE = 16384;
 
 // Runtime validation schema for analytics view config
 const analyticsConfigSchema = z.object({
   model: z.enum(["Task", "Retainer", "OneTimePayment", "Transaction", "CalendarEvent"]).optional(),
   tableId: z.union([z.string(), z.number()]).optional(),
-  filter: z.record(z.string(), z.string()).optional(),
-  totalFilter: z.record(z.string(), z.string()).optional(),
-  successFilter: z.record(z.string(), z.string()).optional(),
-  groupByField: z.string().optional(),
+  filter: z.record(z.string().max(200), z.string().max(1000)).refine(obj => Object.keys(obj).length <= 30, "Too many filter keys").optional(),
+  totalFilter: z.record(z.string().max(200), z.string().max(1000)).refine(obj => Object.keys(obj).length <= 30, "Too many filter keys").optional(),
+  successFilter: z.record(z.string().max(200), z.string().max(1000)).refine(obj => Object.keys(obj).length <= 30, "Too many filter keys").optional(),
+  groupByField: z.string().max(200).optional(),
   dateRangeType: z.enum(["all", "this_week", "last_30_days", "last_year", "custom"]).optional(),
-  customStartDate: z.string().optional(),
-  customEndDate: z.string().optional(),
-  chartType: z.string().optional(),
-  yAxisMeasure: z.string().optional(),
-  yAxisField: z.string().optional(),
-}).passthrough(); // Allow extra fields for forward compatibility
+  customStartDate: z.string().max(50).optional(),
+  customEndDate: z.string().max(50).optional(),
+  chartType: z.string().max(200).optional(),
+  yAxisMeasure: z.string().max(200).optional(),
+  yAxisField: z.string().max(200).optional(),
+}).strip();
 
 // Plan limits for analytics views
 const ANALYTICS_LIMITS = {
@@ -38,6 +54,14 @@ const ANALYTICS_LIMITS = {
   premium: { regular: 15, graph: 10 },
   super: { regular: Infinity, graph: Infinity },
 };
+
+function validateConfigSize(config: unknown): boolean {
+  try {
+    return JSON.stringify(config).length <= MAX_CONFIG_SIZE;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Count analytics views by type for a company.
@@ -72,7 +96,7 @@ async function getAnalyticsViewCounts(companyIdOverride?: number) {
 
     return { success: true, regularCount, graphCount };
   } catch (error) {
-    console.error("Error counting analytics views:", error);
+    log.error("Error counting analytics views", { error: String(error) });
     return {
       success: false,
       error: "Failed to count views",
@@ -83,51 +107,54 @@ async function getAnalyticsViewCounts(companyIdOverride?: number) {
 }
 
 /**
- * Get analytics limits based on user plan.
- * Accepts optional companyId and planOverride to avoid redundant getCurrentUser() calls.
+ * Internal: get analytics limits for a known companyId + plan.
+ * NOT exported — callers must use getAnalyticsLimits() which authenticates first.
  */
-export async function getAnalyticsLimits(companyIdOverride?: number, planOverride?: string) {
+async function getAnalyticsLimitsInternal(companyId: number, plan: string) {
+  const limits = ANALYTICS_LIMITS[plan as keyof typeof ANALYTICS_LIMITS] || ANALYTICS_LIMITS.basic;
+
+  const countsResult = await getAnalyticsViewCounts(companyId);
+  if (!countsResult.success) {
+    return { success: false, error: countsResult.error };
+  }
+
+  return {
+    success: true,
+    plan,
+    limits,
+    currentCounts: {
+      regular: countsResult.regularCount,
+      graph: countsResult.graphCount,
+    },
+    remaining: {
+      regular: Math.max(0, limits.regular - countsResult.regularCount),
+      graph: Math.max(0, limits.graph - countsResult.graphCount),
+    },
+  };
+}
+
+/**
+ * Get analytics limits based on authenticated user's plan.
+ * Always authenticates — no parameter overrides accepted from clients.
+ */
+export async function getAnalyticsLimits() {
   try {
-    let companyId = companyIdOverride;
-    let plan: string;
-
-    if (companyId && planOverride) {
-      plan = planOverride;
-    } else {
-      const user = await getCurrentUser();
-      if (!user) {
-        return { success: false, error: "Unauthorized" };
-      }
-      if (!user.companyId) {
-        console.error("User missing companyId:", user.id);
-        return { success: false, error: "User has no company" };
-      }
-      companyId = user.companyId;
-      plan = ((user.isPremium || "basic") as string).toLowerCase();
+    const user = await getCurrentUser();
+    if (!user || !hasUserFlag(user, "canViewAnalytics")) {
+      return { success: false, error: "Unauthorized" };
+    }
+    if (!user.companyId) {
+      log.error("User missing companyId", { userId: user.id });
+      return { success: false, error: "User has no company" };
     }
 
-    const limits = ANALYTICS_LIMITS[plan as keyof typeof ANALYTICS_LIMITS] || ANALYTICS_LIMITS.basic;
+    const rl = await checkActionRateLimit(String(user.id), ANALYTICS_RATE_LIMITS.read);
+    if (rl) return { success: false, error: rl.error };
 
-    const countsResult = await getAnalyticsViewCounts(companyId);
-    if (!countsResult.success) {
-      return { success: false, error: countsResult.error };
-    }
-
-    return {
-      success: true,
-      plan,
-      limits,
-      currentCounts: {
-        regular: countsResult.regularCount,
-        graph: countsResult.graphCount,
-      },
-      remaining: {
-        regular: Math.max(0, limits.regular - countsResult.regularCount),
-        graph: Math.max(0, limits.graph - countsResult.graphCount),
-      },
-    };
+    const plan = ((user.isPremium || "basic") as string).toLowerCase();
+    return getAnalyticsLimitsInternal(user.companyId, plan);
   } catch (error) {
-    console.error("Error getting analytics limits:", error);
+    log.error("Error getting analytics limits", { error: String(error) });
     return {
       success: false,
       error: "Failed to get limits (Internal Error)",
@@ -148,10 +175,40 @@ export async function createAnalyticsView(data: {
       return { success: false, error: "Unauthorized" };
     }
 
+    // Rate limit
+    const rl = await checkActionRateLimit(String(user.id), ANALYTICS_RATE_LIMITS.mutation);
+    if (rl) return { success: false, error: rl.error };
+
+    // Validate title length
+    if (!data.title || data.title.length > 200) {
+      return { success: false, error: "Title is required and must be under 200 characters" };
+    }
+
+    // Validate description length
+    if (data.description && data.description.length > 2000) {
+      return { success: false, error: "Description must be under 2000 characters" };
+    }
+
+    // Validate type enum
+    if (!VALID_TYPES.has(data.type)) {
+      return { success: false, error: "Invalid analytics view type" };
+    }
+
+    // Validate color
+    if (data.color && !VALID_COLORS.has(data.color)) {
+      return { success: false, error: "Invalid color" };
+    }
+
     // Validate config structure before persisting
     const configResult = analyticsConfigSchema.safeParse(data.config);
     if (!configResult.success) {
       return { success: false, error: "Invalid analytics config" };
+    }
+    const strippedConfig = configResult.data;
+
+    // Validate config size
+    if (!validateConfigSize(strippedConfig)) {
+      return { success: false, error: "Config is too large" };
     }
 
     // Check plan limits + create atomically in a Serializable transaction
@@ -192,9 +249,9 @@ export async function createAnalyticsView(data: {
         data: {
           companyId: user.companyId,
           title: data.title,
-          type: data.type,
+          type: data.type as "COUNT" | "AVERAGE" | "SUM" | "CONVERSION" | "DISTRIBUTION" | "GRAPH",
           description: data.description,
-          config: data.config,
+          config: strippedConfig,
           color: data.color || "bg-white",
           order: 999,
         },
@@ -226,13 +283,13 @@ export async function createAnalyticsView(data: {
         }),
       );
     } catch (e) {
-      console.error("[createAnalyticsView] Failed to calculate initial stats:", e);
+      log.error("Failed to calculate initial stats", { error: String(e) });
       // Non-fatal: view was created, background job will eventually populate stats
     }
 
     return { success: true, data: result.data };
   } catch (error) {
-    console.error("Error creating analytics view:", error);
+    log.error("Error creating analytics view", { error: String(error) });
     return { success: false, error: "Failed to create view" };
   }
 }
@@ -243,12 +300,18 @@ export async function deleteAnalyticsView(id: number) {
     if (!user || !canManageAnalytics(user)) {
       return { success: false, error: "Unauthorized" };
     }
+
+    // Rate limit
+    const rl = await checkActionRateLimit(String(user.id), ANALYTICS_RATE_LIMITS.mutation);
+    if (rl) return { success: false, error: rl.error };
+
     await withRetry(() => prisma.analyticsView.delete({ where: { id, companyId: user.companyId } }));
+    logSecurityEvent({ action: SEC_ANALYTICS_VIEW_DELETED, companyId: user.companyId, userId: user.id, details: { viewId: id } });
     await invalidateFullCache(user.companyId);
     await invalidateItemCache(user.companyId, "view", id);
     return { success: true };
   } catch (error) {
-    console.error("Error deleting analytics view:", error);
+    log.error("Error deleting analytics view", { error: String(error) });
     return { success: false, error: "Failed to delete view" };
   }
 }
@@ -269,11 +332,42 @@ export async function updateAnalyticsView(
       return { success: false, error: "Unauthorized" };
     }
 
+    // Rate limit
+    const rl = await checkActionRateLimit(String(user.id), ANALYTICS_RATE_LIMITS.mutation);
+    if (rl) return { success: false, error: rl.error };
+
+    // Validate title length
+    if (data.title !== undefined) {
+      if (!data.title || data.title.length > 200) {
+        return { success: false, error: "Title is required and must be under 200 characters" };
+      }
+    }
+
+    // Validate description length
+    if (data.description !== undefined && data.description.length > 2000) {
+      return { success: false, error: "Description must be under 2000 characters" };
+    }
+
+    // Validate type enum
+    if (data.type !== undefined && !VALID_TYPES.has(data.type)) {
+      return { success: false, error: "Invalid analytics view type" };
+    }
+
+    // Validate color
+    if (data.color !== undefined && !VALID_COLORS.has(data.color)) {
+      return { success: false, error: "Invalid color" };
+    }
+
     // Validate config structure if provided
+    let strippedConfig: any | undefined;
     if (data.config !== undefined) {
       const configResult = analyticsConfigSchema.safeParse(data.config);
       if (!configResult.success) {
         return { success: false, error: "Invalid analytics config" };
+      }
+      strippedConfig = configResult.data;
+      if (!validateConfigSize(strippedConfig)) {
+        return { success: false, error: "Config is too large" };
       }
     }
 
@@ -281,9 +375,9 @@ export async function updateAnalyticsView(
       where: { id, companyId: user.companyId },
       data: {
         title: data.title,
-        type: data.type,
+        type: data.type as "COUNT" | "AVERAGE" | "SUM" | "CONVERSION" | "DISTRIBUTION" | "GRAPH" | undefined,
         description: data.description,
-        config: data.config,
+        config: strippedConfig,
         color: data.color,
       },
     }));
@@ -304,13 +398,13 @@ export async function updateAnalyticsView(
           }),
         );
       } catch (e) {
-        console.error("[updateAnalyticsView] Failed to recalculate stats:", e);
+        log.error("Failed to recalculate stats on update", { error: String(e) });
       }
     }
 
     return { success: true, data: view };
   } catch (error) {
-    console.error("Error updating analytics view:", error);
+    log.error("Error updating analytics view", { error: String(error) });
     return { success: false, error: "Failed to update view" };
   }
 }
@@ -318,22 +412,27 @@ export async function updateAnalyticsView(
 export async function getAnalyticsData() {
   try {
     const user = await getCurrentUser();
-    if (!user) {
+    if (!user || !hasUserFlag(user, "canViewAnalytics")) {
       return { success: false, error: "Unauthorized" };
     }
 
+    // Rate limit
+    const rl = await checkActionRateLimit(String(user.id), ANALYTICS_RATE_LIMITS.read);
+    if (rl) return { success: false, error: rl.error };
+
     return getAnalyticsDataForCompany(user.companyId);
   } catch (error) {
-    console.error("Error fetching analytics data:", error);
+    log.error("Error fetching analytics data", { error: String(error) });
     return { success: false, error: "Failed to fetch analytics data" };
   }
 }
 
 /**
  * Internal: fetch analytics data for a company without auth check.
- * Used by getDashboardInitialData to avoid redundant getCurrentUser() calls.
+ * Used by getDashboardInitialData via getAnalyticsDataAuthed to avoid redundant getCurrentUser() calls.
+ * NOT exported — callers must use getAnalyticsData() or getAnalyticsDataAuthed().
  */
-export async function getAnalyticsDataForCompany(companyId: number) {
+async function getAnalyticsDataForCompany(companyId: number) {
   try {
     // 1. Try Redis full cache first — instant return
     const cachedViews = await getFullAnalyticsCache(companyId);
@@ -385,12 +484,17 @@ export async function getAnalyticsDataForCompany(companyId: number) {
     const tableMap = new Map(tables.map((t: any) => [t.id, t.name]));
 
     // Build views from DB cachedStats — with inline fallback for uncached items
+    // Bound inline rule calculations to prevent resource exhaustion
+    const MAX_INLINE_RULE_CALC = 10;
+    let inlineRuleCalcCount = 0;
+
     for (const rule of filteredRules) {
       let cachedData = rule.cachedStats as any;
       const ruleTableId = parseInt((rule.triggerConfig as any).tableId || "0");
 
-      // Fallback: calculate inline if never cached
-      if (!cachedData) {
+      // Fallback: calculate inline if never cached (bounded)
+      if (!cachedData && inlineRuleCalcCount < MAX_INLINE_RULE_CALC) {
+        inlineRuleCalcCount++;
         try {
           const result = await calculateRuleStats(rule, companyId);
           cachedData = { stats: result.stats, items: result.items };
@@ -398,9 +502,9 @@ export async function getAnalyticsDataForCompany(companyId: number) {
           prisma.automationRule.update({
             where: { id: rule.id, companyId },
             data: { cachedStats: cachedData, lastCachedAt: new Date() },
-          }).catch((e) => console.error(`[getAnalyticsData] DB update failed for rule ${rule.id}:`, e));
+          }).catch((e) => log.error("DB update failed for rule", { ruleId: rule.id, error: String(e) }));
         } catch (e) {
-          console.error(`[getAnalyticsData] Inline calc failed for rule ${rule.id}:`, e);
+          log.error("Inline calc failed for rule", { ruleId: rule.id, error: String(e) });
         }
       }
       // Determine the effective duration action type for MULTI_ACTION rules
@@ -451,10 +555,10 @@ export async function getAnalyticsDataForCompany(companyId: number) {
             prisma.analyticsView.update({
               where: { id: view.id, companyId },
               data: { cachedStats: cachedData, lastCachedAt: new Date() },
-            }).catch((e) => console.error(`[getAnalyticsData] DB update failed for view ${view.id}:`, e)),
+            }).catch((e) => log.error("DB update failed for view", { viewId: view.id, error: String(e) })),
           );
         } catch (e) {
-          console.error(`[getAnalyticsData] Inline calc failed for view ${view.id}:`, e);
+          log.error("Inline calc failed for view", { viewId: view.id, error: String(e) });
         }
       }
 
@@ -498,16 +602,31 @@ export async function getAnalyticsDataForCompany(companyId: number) {
             id: `analytics-refresh-${companyId}-${Math.floor(Date.now() / 60000)}`,
             name: "analytics/refresh-company",
             data: { companyId },
-          }).catch((err) => console.error("[getAnalyticsData] Failed to trigger background refresh:", err));
+          }).catch((err) => log.error("Failed to trigger background refresh", { error: String(err) }));
         }
       })
-      .catch((err) => console.error("[getAnalyticsData] Failed to check refresh lock:", err));
+      .catch((err) => log.error("Failed to check refresh lock", { error: String(err) }));
 
     return { success: true, data: views };
   } catch (error) {
-    console.error("Error fetching analytics data:", error);
+    log.error("Error fetching analytics data for company", { error: String(error) });
     return { success: false, error: "Failed to fetch analytics data" };
   }
+}
+
+/**
+ * Authed wrapper for getAnalyticsDataForCompany.
+ * Used by getDashboardInitialData to avoid redundant getCurrentUser() calls
+ * while keeping getAnalyticsDataForCompany module-private.
+ */
+export async function getAnalyticsDataAuthed(companyId: number) {
+  const user = await getCurrentUser();
+  if (!user || user.companyId !== companyId || !hasUserFlag(user, "canViewAnalytics")) {
+    return { success: false, error: "Unauthorized" };
+  }
+  const rl = await checkActionRateLimit(String(user.id), ANALYTICS_RATE_LIMITS.read);
+  if (rl) return { success: false, error: rl.error };
+  return getAnalyticsDataForCompany(companyId);
 }
 
 export async function updateAnalyticsViewOrder(
@@ -519,11 +638,18 @@ export async function updateAnalyticsViewOrder(
       return { success: false, error: "Unauthorized" };
     }
 
+    // Rate limit
+    const rl = await checkActionRateLimit(String(user.id), ANALYTICS_RATE_LIMITS.uiUpdate);
+    if (rl) return { success: false, error: rl.error };
+
     // Cap to prevent oversized transactions
     const bounded = items.slice(0, 200);
 
     // Validate all IDs and orders are finite integers before building raw SQL
-    const allValid = bounded.every((i) => Number.isFinite(i.id) && Number.isFinite(i.order));
+    const allValid = bounded.every(
+      (i) => Number.isFinite(i.id) && Number.isFinite(i.order)
+        && (i.type === "AUTOMATION" || i.type === "CUSTOM"),
+    );
     if (!allValid) {
       return { success: false, error: "Invalid item data" };
     }
@@ -558,7 +684,7 @@ export async function updateAnalyticsViewOrder(
     await invalidateFullCache(user.companyId);
     return { success: true };
   } catch (error) {
-    console.error("Error updating analytics view order:", error);
+    log.error("Error updating analytics view order", { error: String(error) });
     return { success: false, error: "Failed to update order" };
   }
 }
@@ -572,6 +698,20 @@ export async function updateAnalyticsViewColor(
     const user = await getCurrentUser();
     if (!user || !canManageAnalytics(user)) {
       return { success: false, error: "Unauthorized" };
+    }
+
+    // Rate limit
+    const rl = await checkActionRateLimit(String(user.id), ANALYTICS_RATE_LIMITS.uiUpdate);
+    if (rl) return { success: false, error: rl.error };
+
+    // Validate color
+    if (!VALID_COLORS.has(color)) {
+      return { success: false, error: "Invalid color" };
+    }
+
+    // Validate type
+    if (type !== "AUTOMATION" && type !== "CUSTOM") {
+      return { success: false, error: "Invalid type" };
     }
 
     if (type === "AUTOMATION") {
@@ -588,7 +728,7 @@ export async function updateAnalyticsViewColor(
     await invalidateFullCache(user.companyId);
     return { success: true };
   } catch (error) {
-    console.error("Error updating analytics view color:", error);
+    log.error("Error updating analytics view color", { error: String(error) });
     return { success: false, error: "Failed to update color" };
   }
 }
@@ -609,6 +749,10 @@ export async function refreshAnalyticsItemWithChecks(
       return { success: false, error: "Unauthorized" };
     }
 
+    // Rate limit
+    const rl = await checkActionRateLimit(String(user.id), ANALYTICS_RATE_LIMITS.mutation);
+    if (rl) return { success: false, error: rl.error };
+
     // 1. Check eligibility + log atomically to prevent race conditions
     const plan = (user.isPremium || "basic") as string;
     const maxRefreshes = plan === "super" ? 9999 : plan === "premium" ? 10 : 3;
@@ -623,7 +767,7 @@ export async function refreshAnalyticsItemWithChecks(
         return null; // Over limit
       }
 
-      await tx.analyticsRefreshLog.create({ data: { userId: user.id } });
+      await tx.analyticsRefreshLog.create({ data: { userId: user.id, companyId: user.companyId } });
       return usageCount + 1;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 3000, timeout: 5000 });
 
@@ -634,7 +778,16 @@ export async function refreshAnalyticsItemWithChecks(
       };
     }
 
-    // 2. Trigger background job
+    // 2. Validate itemId belongs to user's company
+    if (itemType === "CUSTOM") {
+      const exists = await prisma.analyticsView.count({ where: { id: itemId, companyId: user.companyId } });
+      if (!exists) return { success: false, error: "Item not found" };
+    } else {
+      const exists = await prisma.automationRule.count({ where: { id: itemId, companyId: user.companyId } });
+      if (!exists) return { success: false, error: "Item not found" };
+    }
+
+    // 3. Trigger background job
     await inngest.send({
       name: "analytics/refresh-item",
       data: { companyId: user.companyId, itemId, itemType },
@@ -667,7 +820,7 @@ export async function refreshAnalyticsItemWithChecks(
       nextResetTime,
     };
   } catch (error) {
-    console.error("Error refreshing analytics item:", error);
+    log.error("Error refreshing analytics item", { error: String(error) });
     return { success: false, error: "Failed to refresh item" };
   }
 }
@@ -682,20 +835,17 @@ export async function previewAnalyticsView(data: {
 }) {
   try {
     const user = await getCurrentUser();
-    if (!user) {
+    if (!user || !canManageAnalytics(user)) {
       return { success: false, error: "Unauthorized" };
     }
 
-    // Rate limit: 5 previews per 30 seconds per user
-    try {
-      const previewKey = `analytics-preview:${user.id}`;
-      const count = await redis.incr(previewKey);
-      if (count === 1) await redis.expire(previewKey, 30);
-      if (count > 5) {
-        return { success: false, error: "יותר מדי בקשות תצוגה מקדימה. נסה שוב בעוד מספר שניות." };
-      }
-    } catch {
-      // Redis down — allow the request through
+    // Rate limit: 5 previews per 30 seconds per user (atomic pipeline with in-memory fallback)
+    const rlPreview = await checkActionRateLimit(String(user.id), ANALYTICS_RATE_LIMITS.preview);
+    if (rlPreview) return { success: false, error: "יותר מדי בקשות תצוגה מקדימה. נסה שוב בעוד מספר שניות." };
+
+    // Validate type enum
+    if (!VALID_TYPES.has(data.type)) {
+      return { success: false, error: "Invalid analytics view type" };
     }
 
     // Validate config structure
@@ -703,12 +853,18 @@ export async function previewAnalyticsView(data: {
     if (!configResult.success) {
       return { success: false, error: "Invalid analytics config" };
     }
+    const strippedConfig = configResult.data;
+
+    // Validate config size
+    if (!validateConfigSize(strippedConfig)) {
+      return { success: false, error: "Config is too large" };
+    }
 
     // Build a temporary view object for calculateViewStats
     const tempView = {
       id: 0,
       type: data.type,
-      config: data.config,
+      config: strippedConfig,
     };
 
     const { stats, items, tableName } = await calculateViewStats(tempView, user.companyId);
@@ -723,7 +879,7 @@ export async function previewAnalyticsView(data: {
       },
     };
   } catch (error) {
-    console.error("Error previewing analytics view:", error);
+    log.error("Error previewing analytics view", { error: String(error) });
     return { success: false, error: "Failed to preview view" };
   }
 }

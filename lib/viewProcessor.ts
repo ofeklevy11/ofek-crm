@@ -1,4 +1,7 @@
 import { ViewConfig } from "@/app/actions/views";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("ViewProcessor");
 
 interface SchemaField {
   name: string;
@@ -103,12 +106,10 @@ function processAggregationView(
   records: TableRecord[],
   schema: SchemaField[]
 ): ProcessedViewData {
-  // Debug: see what config we receive
-  console.log("🔍 processAggregationView config:", {
+  log.debug("processAggregationView config", {
     type: config.type,
     aggregationType: config.aggregationType,
     targetField: config.targetField,
-    dateFilter: config.dateFilter,
     hasDateFilter: !!config.dateFilter,
   });
 
@@ -459,13 +460,8 @@ export function applyFilters(
 
       const recordDate = new Date(dateValue);
 
-      // Debug log (remove in production)
-      console.log("Date filter:", {
+      log.debug("Date filter check", {
         field: dateFilter.field,
-        recordValue: dateValue,
-        recordDate: recordDate.toISOString(),
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
         passes: recordDate >= startDate && recordDate <= endDate,
       });
 

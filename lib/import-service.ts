@@ -1,5 +1,8 @@
 import { parse } from "csv-parse";
 import { Readable } from "stream";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("ImportService");
 
 export interface ImportResult {
   summary: {
@@ -175,7 +178,7 @@ export async function processImportFile(
       validRecords: isDryRun || onBatch ? [] : validRecords,
     };
   } catch (err: any) {
-    console.error("CSV Parse Error:", err);
+    log.error("CSV parse error", { error: String(err) });
     return {
       summary: {
         totalRows: 0,

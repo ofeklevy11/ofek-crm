@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("PrismaError");
 
 /**
  * Maps common Prisma error codes to HTTP status codes and user-friendly messages.
@@ -17,9 +20,8 @@ export function handlePrismaError(
           { status: 404 },
         );
       case "P2002": {
-        const target = (error.meta?.target as string[])?.join(", ") ?? "field";
         return NextResponse.json(
-          { error: `A ${context} with this ${target} already exists` },
+          { error: `A ${context} with these details already exists` },
           { status: 409 },
         );
       }
@@ -31,7 +33,7 @@ export function handlePrismaError(
     }
   }
 
-  console.error(`Error in ${context}:`, error);
+  log.error("Unhandled Prisma error", { context, error: (error as Error).message ?? "Unknown error" });
   return NextResponse.json(
     { error: `Failed to process ${context}` },
     { status: 500 },

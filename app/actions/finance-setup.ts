@@ -3,6 +3,9 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("FinanceSetup");
 
 /**
  * Creates a standard "Unified Finance Ledger" table in the user's system
@@ -11,6 +14,7 @@ import { revalidatePath } from "next/cache";
 export async function createUnifiedFinanceTable() {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
+  if (user.role !== "admin") return { success: false, error: "Only admins can set up finance tables" };
 
   const tableName = "הכנסות והוצאות (מאוחד)";
 
@@ -94,7 +98,7 @@ export async function createUnifiedFinanceTable() {
 
     return { success: true, id: newTable.id };
   } catch (error) {
-    console.error("Failed to create finance table", error);
+    log.error("Failed to create finance table", { error: String(error) });
     return { success: false, error: "Database error" };
   }
 }

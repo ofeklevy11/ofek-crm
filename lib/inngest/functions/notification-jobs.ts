@@ -1,5 +1,8 @@
 import { inngest } from "../client";
 import { prismaBg as prisma } from "@/lib/prisma-background";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("NotificationJobs");
 
 /**
  * Background job for broadcasting notifications via Redis Pub/Sub.
@@ -40,13 +43,13 @@ export const broadcastNotifications = inngest.createFunction(
 
     for (const { data } of events) {
       if (!data.companyId) {
-        console.error(`[broadcast-notifications] Missing companyId for userId=${data.userId}, skipping`);
+        log.error("Missing companyId for notification, skipping", { userId: data.userId });
         continue;
       }
       // SECURITY: Verify userId actually belongs to the claimed companyId
       const actualCompanyId = userCompanyMap.get(data.userId);
       if (actualCompanyId !== data.companyId) {
-        console.error(`[broadcast-notifications] userId=${data.userId} does not belong to companyId=${data.companyId}, skipping`);
+        log.error("userId does not belong to companyId, skipping", { userId: data.userId, companyId: data.companyId });
         continue;
       }
       const channel = `company:${data.companyId}:user:${data.userId}:notifications`;
@@ -62,10 +65,7 @@ export const broadcastNotifications = inngest.createFunction(
         ?.map(([err], idx) => err ? `userId=${events[idx]?.data?.userId}: ${err}` : null)
         .filter(Boolean)
         .slice(0, 10); // cap to avoid log explosion
-      console.error(
-        `[broadcast-notifications] ${failed}/${events.length} publishes failed:`,
-        failedDetails,
-      );
+      log.error("Some notification publishes failed", { failed, total: events.length, failedDetails });
     }
 
     return { broadcasted: events.length, failed };
@@ -163,9 +163,7 @@ export const cleanupOldNotifications = inngest.createFunction(
       totalDeletedUnread += result.deletedUnread;
     }
 
-    console.log(
-      `[cleanup-notifications] Deleted ${totalDeletedRead} read (>90d) + ${totalDeletedUnread} unread (>180d) across ${companies.length} companies`,
-    );
+    log.info("Notification cleanup completed", { deletedRead: totalDeletedRead, deletedUnread: totalDeletedUnread, companiesProcessed: companies.length });
 
     return { deletedRead: totalDeletedRead, deletedUnread: totalDeletedUnread, companiesProcessed: companies.length };
   },

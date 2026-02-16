@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { isSafeStorageUrl } from "@/lib/security/safe-hosts";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("AttachmentDownload");
 
 function parseId(raw: string): number | null {
   const n = parseInt(raw, 10);
@@ -16,6 +22,13 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    if (!hasUserFlag(user, "canViewFiles")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const rateLimited = await checkRateLimit(String(user.id), RATE_LIMITS.fileRead);
+    if (rateLimited) return rateLimited;
 
     const { id } = await params;
     const attachmentId = parseId(id);
@@ -42,27 +55,18 @@ export async function GET(
       );
     }
 
-    // Only proxy requests to known safe storage hosts.
-    // For user-entered URLs, redirect the client directly to avoid SSRF.
-    const SAFE_HOSTS = ["utfs.io", "uploadthing.com", "ufs.sh"];
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(attachment.url);
-    } catch {
-      return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
-    }
-
-    const isSafeHost = SAFE_HOSTS.some(
-      (h) => parsedUrl.hostname === h || parsedUrl.hostname.endsWith(`.${h}`),
-    );
-
-    if (!isSafeHost) {
-      // Redirect client directly — don't proxy user-entered URLs through the server
-      return NextResponse.redirect(attachment.url);
+    // SECURITY: Only proxy requests to known safe storage hosts to prevent SSRF.
+    // Reject non-whitelisted URLs instead of redirecting (prevents open redirect).
+    if (!isSafeStorageUrl(attachment.url)) {
+      return NextResponse.json(
+        { error: "Unsupported file storage URL" },
+        { status: 400 },
+      );
     }
 
     const response = await fetch(attachment.url, {
       signal: AbortSignal.timeout(15_000),
+      redirect: "error",
     });
 
     if (!response.ok) {
@@ -72,7 +76,12 @@ export async function GET(
       );
     }
 
-    const fileBuffer = await response.arrayBuffer();
+    // Reject responses exceeding 50MB to prevent bandwidth/memory exhaustion
+    const contentLength = response.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > 50_000_000) {
+      return NextResponse.json({ error: "File too large" }, { status: 413 });
+    }
+
     const downloadFilename =
       attachment.displayName || attachment.filename || "download";
     const encodedFilename = encodeURIComponent(downloadFilename);
@@ -86,7 +95,6 @@ export async function GET(
       jpeg: "image/jpeg",
       gif: "image/gif",
       webp: "image/webp",
-      svg: "image/svg+xml",
       doc: "application/msword",
       docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       xls: "application/vnd.ms-excel",
@@ -95,18 +103,27 @@ export async function GET(
       txt: "text/plain",
       zip: "application/zip",
     };
-    const contentType = (ext && mimeMap[ext]) || "application/octet-stream";
+    // SVG served as octet-stream to prevent browser executing embedded JS
+    const contentType = ext === "svg"
+      ? "application/octet-stream"
+      : (ext && mimeMap[ext]) || "application/octet-stream";
 
-    return new NextResponse(fileBuffer, {
-      headers: {
-        "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`,
-        "Content-Length": String(fileBuffer.byteLength),
-        "Cache-Control": "private, max-age=3600",
-      },
-    });
+    const headers: Record<string, string> = {
+      "Content-Type": contentType,
+      "Content-Disposition": `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`,
+      "Cache-Control": "private, max-age=3600",
+      "X-Content-Type-Options": "nosniff",
+    };
+
+    // Forward Content-Length from upstream if available
+    if (contentLength) {
+      headers["Content-Length"] = contentLength;
+    }
+
+    // Stream the response body directly instead of buffering into memory
+    return new NextResponse(response.body, { headers });
   } catch (error) {
-    console.error("Attachment download error:", error);
+    log.error("Attachment download error", { error: String(error) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

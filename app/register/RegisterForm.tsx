@@ -33,8 +33,8 @@ export default function RegisterForm() {
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError("הסיסמא חייבת להיות לפחות 6 תווים");
+    if (formData.password.length < 10) {
+      setError("הסיסמא חייבת להיות לפחות 10 תווים");
       setLoading(false);
       return;
     }

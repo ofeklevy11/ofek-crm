@@ -3,13 +3,36 @@
 import { prisma as db } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
+import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { revalidatePath } from "next/cache";
 import { inngest } from "@/lib/inngest/client";
 import { withRetry } from "@/lib/db-retry";
+import {
+  createQuoteSchema,
+  updateQuoteSchema,
+  cuidSchema,
+} from "@/lib/quotes-validation";
+import { createLogger } from "@/lib/logger";
 
-export async function getQuotes(showTrashed: boolean = false, cursor?: string) {
+const log = createLogger("Quotes");
+
+async function requireQuoteAccess(rateKey: "quoteRead" | "quoteMutation") {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  if (!hasUserFlag(user, "canViewQuotes")) throw new Error("Forbidden");
+  const limited = await checkActionRateLimit(String(user.id), RATE_LIMITS[rateKey]);
+  if (limited) throw new Error("Rate limit exceeded. Please try again later.");
+  return user;
+}
+
+export async function getQuotes(showTrashed: boolean = false, cursor?: string) {
+  const user = await requireQuoteAccess("quoteRead");
+
+  if (cursor != null) {
+    const cursorResult = cuidSchema.safeParse(cursor);
+    if (!cursorResult.success) throw new Error("Invalid cursor format");
+  }
 
   const pageSize = 50;
 
@@ -22,7 +45,6 @@ export async function getQuotes(showTrashed: boolean = false, cursor?: string) {
       id: true,
       quoteNumber: true,
       clientName: true,
-      clientEmail: true,
       total: true,
       status: true,
       createdAt: true,
@@ -47,18 +69,43 @@ export async function getQuotes(showTrashed: boolean = false, cursor?: string) {
 }
 
 export async function getQuoteById(id: string) {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
+  const user = await requireQuoteAccess("quoteRead");
+
+  const idResult = cuidSchema.safeParse(id);
+  if (!idResult.success) throw new Error("Invalid quote ID format");
 
   const quote = await withRetry(() => db.quote.findUnique({
     where: { id, companyId: user.companyId },
-    include: {
+    select: {
+      id: true, quoteNumber: true, clientId: true, clientName: true, clientEmail: true,
+      clientPhone: true, clientTaxId: true, clientAddress: true, total: true, status: true,
+      pdfUrl: true, validUntil: true, createdAt: true, updatedAt: true,
+      isPriceWithVat: true, title: true, currency: true, exchangeRate: true,
+      discountType: true, discountValue: true,
       items: {
         include: {
-          product: true,
+          product: {
+            select: {
+              id: true,
+              name: true,
+              price: true,
+              cost: true,
+              sku: true,
+            },
+          },
         },
       },
-      company: true,
+      company: {
+        select: {
+          name: true,
+          businessType: true,
+          taxId: true,
+          businessAddress: true,
+          businessEmail: true,
+          businessWebsite: true,
+          logoUrl: true,
+        },
+      },
     },
   }));
 
@@ -104,22 +151,16 @@ export async function createQuote(data: {
   discountType?: string;
   discountValue?: number;
 }) {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
+  const user = await requireQuoteAccess("quoteMutation");
 
-  if (data.items.length > 200) throw new Error("Too many items (max 200)");
-
-  // SECURITY: Validate clientId belongs to user's company
-  if (data.clientId) {
-    const client = await withRetry(() => db.client.findFirst({
-      where: { id: data.clientId, companyId: user.companyId },
-      select: { id: true },
-    }));
-    if (!client) throw new Error("Invalid client");
+  const parsed = createQuoteSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues.map((e) => e.message).join(", "));
   }
+  const valid = parsed.data;
 
   // Calculate total
-  const total = data.items.reduce(
+  const total = valid.items.reduce(
     (acc, item) => acc + item.quantity * item.unitPrice,
     0,
   );
@@ -131,6 +172,15 @@ export async function createQuote(data: {
   for (let attempt = 0; ; attempt++) {
     try {
       quote = await withRetry(() => db.$transaction(async (tx) => {
+        // SECURITY: Validate clientId inside transaction to prevent TOCTOU race
+        if (valid.clientId) {
+          const client = await tx.client.findFirst({
+            where: { id: valid.clientId, companyId: user.companyId, deletedAt: null },
+            select: { id: true },
+          });
+          if (!client) throw new Error("Invalid client");
+        }
+
         const lastQuote = await tx.quote.findFirst({
           where: {
             companyId: user.companyId,
@@ -146,19 +196,19 @@ export async function createQuote(data: {
           data: {
             companyId: user.companyId,
             quoteNumber: nextQuoteNumber,
-            clientId: data.clientId,
-            clientName: data.clientName,
-            clientEmail: data.clientEmail,
-            clientPhone: data.clientPhone,
-            clientTaxId: data.clientTaxId,
-            clientAddress: data.clientAddress,
-            validUntil: data.validUntil,
-            title: data.title,
+            clientId: valid.clientId,
+            clientName: valid.clientName,
+            clientEmail: valid.clientEmail,
+            clientPhone: valid.clientPhone,
+            clientTaxId: valid.clientTaxId,
+            clientAddress: valid.clientAddress,
+            validUntil: valid.validUntil,
+            title: valid.title,
             total,
             status: "DRAFT",
             shareToken: crypto.randomUUID(),
             items: {
-              create: data.items.map((item) => ({
+              create: valid.items.map((item) => ({
                 productId: item.productId,
                 description: item.description,
                 quantity: item.quantity,
@@ -166,11 +216,11 @@ export async function createQuote(data: {
                 unitCost: item.unitCost,
               })),
             },
-            isPriceWithVat: data.isPriceWithVat ?? false,
-            currency: data.currency || "ILS",
-            exchangeRate: data.exchangeRate,
-            discountType: data.discountType || null,
-            discountValue: data.discountValue || null,
+            isPriceWithVat: valid.isPriceWithVat ?? false,
+            currency: valid.currency || "ILS",
+            exchangeRate: valid.exchangeRate,
+            discountType: valid.discountType || null,
+            discountValue: valid.discountValue || null,
           },
           select: { id: true },
         });
@@ -180,7 +230,8 @@ export async function createQuote(data: {
       if (err?.code === "P2034" && attempt < MAX_RETRIES) {
         continue; // Serialization conflict — retry
       }
-      throw err;
+      log.error("createQuote transaction error", { error: String(err) });
+      throw new Error("Failed to create quote");
     }
   }
 
@@ -189,7 +240,7 @@ export async function createQuote(data: {
     id: `pdf-quote-${user.companyId}-${quote.id}-${Math.floor(Date.now() / 5000)}`,
     name: "pdf/generate-quote",
     data: { quoteId: quote.id, companyId: user.companyId },
-  }).catch((err) => console.error("[quotes] Failed to trigger PDF generation:", err));
+  }).catch((err) => log.error("Failed to trigger PDF generation after create", { error: String(err) }));
 
   revalidatePath("/quotes");
 
@@ -223,97 +274,110 @@ export async function updateQuote(
     discountValue?: number;
   },
 ) {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
+  const user = await requireQuoteAccess("quoteMutation");
 
-  if (data.items.length > 200) throw new Error("Too many items (max 200)");
+  const idResult = cuidSchema.safeParse(id);
+  if (!idResult.success) throw new Error("Invalid quote ID format");
 
-  // SECURITY: Validate clientId belongs to user's company
-  if (data.clientId) {
-    const client = await withRetry(() => db.client.findFirst({
-      where: { id: data.clientId, companyId: user.companyId },
-      select: { id: true },
-    }));
-    if (!client) throw new Error("Invalid client");
+  const parsed = updateQuoteSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues.map((e) => e.message).join(", "));
   }
+  const valid = parsed.data;
 
   // Calculate total
-  const total = data.items.reduce(
+  const total = valid.items.reduce(
     (acc, item) => acc + item.quantity * item.unitPrice,
     0,
   );
 
-  // Transaction to update quote and replace items safely?
-  // Or just delete all and recreate. Deleting all is safer for order and cleanup.
+  // Transaction to update quote and replace items safely.
+  // Deleting all and recreating is safer for order and cleanup.
 
   let oldPdfUrl: string | null = null;
 
-  await withRetry(() => db.$transaction(async (tx) => {
-    // Read current pdfUrl before nulling so Inngest job can delete the old file
-    const current = await tx.quote.findUnique({
-      where: { id, companyId: user.companyId },
-      select: { pdfUrl: true },
-    });
-    oldPdfUrl = current?.pdfUrl || null;
+  try {
+    await withRetry(() => db.$transaction(async (tx) => {
+      // SECURITY: Validate clientId inside transaction to prevent TOCTOU race
+      if (valid.clientId) {
+        const client = await tx.client.findFirst({
+          where: { id: valid.clientId, companyId: user.companyId, deletedAt: null },
+          select: { id: true },
+        });
+        if (!client) throw new Error("Invalid client");
+      }
 
-    // 1. Update basic info
-    // NOTE: shareToken is intentionally preserved — do not reset on update
-    await tx.quote.update({
-      where: { id, companyId: user.companyId },
-      data: {
-        clientId: data.clientId,
-        clientName: data.clientName,
-        clientEmail: data.clientEmail,
-        clientPhone: data.clientPhone,
-        clientTaxId: data.clientTaxId,
-        clientAddress: data.clientAddress,
-        validUntil: data.validUntil,
-        status: data.status,
-        title: data.title,
-        total,
-        isPriceWithVat: data.isPriceWithVat,
-        currency: data.currency || "ILS",
-        exchangeRate: data.exchangeRate,
-        discountType: data.discountType || null,
-        discountValue: data.discountValue || null,
-        pdfUrl: null, // Reset cached PDF on update
-      },
-    });
-
-    // 2. Handle items: simple strategy -> delete all, recreate all
-    await tx.quoteItem.deleteMany({
-      where: { quoteId: id },
-    });
-
-    // 3. Create new items
-    if (data.items.length > 0) {
-      await tx.quoteItem.createMany({
-        data: data.items.map((item) => ({
-          quoteId: id,
-          productId: item.productId,
-          description: item.description,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          unitCost: item.unitCost,
-        })),
+      // Read current pdfUrl before nulling so Inngest job can delete the old file
+      const current = await tx.quote.findUnique({
+        where: { id, companyId: user.companyId },
+        select: { pdfUrl: true },
       });
-    }
-  }, { maxWait: 5000, timeout: 30000 }));
+      oldPdfUrl = current?.pdfUrl || null;
+
+      // 1. Update basic info
+      // NOTE: shareToken is intentionally preserved — do not reset on update
+      await tx.quote.update({
+        where: { id, companyId: user.companyId },
+        data: {
+          clientId: valid.clientId,
+          clientName: valid.clientName,
+          clientEmail: valid.clientEmail,
+          clientPhone: valid.clientPhone,
+          clientTaxId: valid.clientTaxId,
+          clientAddress: valid.clientAddress,
+          validUntil: valid.validUntil,
+          status: valid.status,
+          title: valid.title,
+          total,
+          isPriceWithVat: valid.isPriceWithVat,
+          currency: valid.currency || "ILS",
+          exchangeRate: valid.exchangeRate,
+          discountType: valid.discountType || null,
+          discountValue: valid.discountValue || null,
+          pdfUrl: null, // Reset cached PDF on update
+        },
+      });
+
+      // 2. Handle items: simple strategy -> delete all, recreate all
+      await tx.quoteItem.deleteMany({
+        where: { quoteId: id },
+      });
+
+      // 3. Create new items
+      if (valid.items.length > 0) {
+        await tx.quoteItem.createMany({
+          data: valid.items.map((item) => ({
+            quoteId: id,
+            productId: item.productId,
+            description: item.description,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            unitCost: item.unitCost,
+          })),
+        });
+      }
+    }, { maxWait: 5000, timeout: 30000 }));
+  } catch (err) {
+    log.error("updateQuote transaction error", { error: String(err) });
+    throw new Error("Failed to update quote");
+  }
 
   // Re-generate PDF in background after update
   inngest.send({
     id: `pdf-quote-${user.companyId}-${id}-${Math.floor(Date.now() / 5000)}`,
     name: "pdf/generate-quote",
     data: { quoteId: id, companyId: user.companyId, oldPdfUrl },
-  }).catch((err) => console.error("[quotes] Failed to trigger PDF generation:", err));
+  }).catch((err) => log.error("Failed to trigger PDF generation after update", { error: String(err) }));
 
   revalidatePath("/quotes");
   revalidatePath(`/quotes/${id}`);
 }
 
 export async function trashQuote(id: string) {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
+  const user = await requireQuoteAccess("quoteMutation");
+
+  const idResult = cuidSchema.safeParse(id);
+  if (!idResult.success) throw new Error("Invalid quote ID format");
 
   // Atomically read old pdfUrl and trash to prevent race with PDF job
   let oldPdfUrl: string | null = null;
@@ -338,17 +402,19 @@ export async function trashQuote(id: string) {
         const fileKey = url.pathname.split("/").pop();
         if (fileKey) utapi.deleteFiles([fileKey]);
       } catch (err) {
-        console.error("[quotes] Failed to delete trashed quote PDF:", err);
+        log.error("Failed to delete trashed quote PDF", { error: String(err) });
       }
-    }).catch((err) => console.error("[quotes] Failed to import UTApi for cleanup:", err));
+    }).catch((err) => log.error("Failed to import UTApi for cleanup", { error: String(err) }));
   }
 
   revalidatePath("/quotes");
 }
 
 export async function restoreQuote(id: string) {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
+  const user = await requireQuoteAccess("quoteMutation");
+
+  const idResult = cuidSchema.safeParse(id);
+  if (!idResult.success) throw new Error("Invalid quote ID format");
 
   await db.quote.update({
     where: { id, companyId: user.companyId },
@@ -360,14 +426,13 @@ export async function restoreQuote(id: string) {
     id: `pdf-quote-${user.companyId}-${id}-${Math.floor(Date.now() / 5000)}`,
     name: "pdf/generate-quote",
     data: { quoteId: id, companyId: user.companyId },
-  }).catch((err) => console.error("[quotes] Failed to trigger PDF generation on restore:", err));
+  }).catch((err) => log.error("Failed to trigger PDF generation on restore", { error: String(err) }));
 
   revalidatePath("/quotes");
 }
 
 export async function getClientsForDropdown() {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
+  const user = await requireQuoteAccess("quoteRead");
 
   // EEE: Add take limit to prevent massive payloads for companies with thousands of clients
   return withRetry(() => db.client.findMany({

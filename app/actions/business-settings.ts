@@ -45,6 +45,7 @@ export async function updateBusinessSettings(data: {
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  if (user.role !== "admin") throw new Error("Only admins can update business settings");
 
   const company = await db.company.update({
     where: { id: user.companyId },

@@ -6,6 +6,9 @@
 import { PrismaClient } from "@prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("PrismaBackground");
 
 const globalForBg = global as unknown as {
   bgPrisma: PrismaClient | undefined;
@@ -22,7 +25,7 @@ const bgPool =
   });
 
 bgPool.on("error", (err) => {
-  console.error("[pg-pool-bg] Unexpected error on idle client:", err);
+  log.error("Unexpected error on idle client", { error: String(err) });
 });
 
 const bgAdapter = new PrismaPg(bgPool);

@@ -1,10 +1,14 @@
-"use server";
-
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { validateUserInCompany } from "@/lib/company-validation";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { updateTaskSchema } from "@/lib/validations/tasks";
 import { inngest } from "@/lib/inngest/client";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("TaskAPI");
 
 // GET a single task
 export async function GET(
@@ -19,12 +23,25 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // CRITICAL: Filter by companyId
+    // Permission check
+    const canView = user.role === "admin" || hasUserFlag(user, "canViewTasks");
+    if (!canView) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Rate limit
+    const rateLimited = await checkRateLimit(String(user.id), RATE_LIMITS.taskRead);
+    if (rateLimited) return rateLimited;
+
+    // Visibility filtering
+    const canViewAll =
+      user.role === "admin" || hasUserFlag(user, "canViewAllTasks");
+    const whereClause = canViewAll
+      ? { id, companyId: user.companyId }
+      : { id, companyId: user.companyId, assigneeId: user.id };
+
     const task = await prisma.task.findFirst({
-      where: {
-        id,
-        companyId: user.companyId,
-      },
+      where: whereClause,
       select: {
         id: true,
         title: true,
@@ -38,7 +55,7 @@ export async function GET(
         createdAt: true,
         updatedAt: true,
         assignee: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true },
         },
         creator: {
           select: { id: true, name: true },
@@ -51,7 +68,7 @@ export async function GET(
     }
     return NextResponse.json(task);
   } catch (error) {
-    console.error("Error fetching task:", error);
+    log.error("Failed to fetch task", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to fetch task" },
       { status: 500 }
@@ -72,40 +89,70 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    // Permission check
+    if (!hasUserFlag(user, "canViewTasks")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Rate limit
+    const rateLimited = await checkRateLimit(String(user.id), RATE_LIMITS.taskMutation);
+    if (rateLimited) return rateLimited;
+
+    // Validate input
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    const parsed = updateTaskSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+
+    const data = parsed.data;
 
     // SECURITY: Validate assigneeId belongs to same company
-    if (body.assigneeId) {
-      if (!(await validateUserInCompany(body.assigneeId, user.companyId))) {
+    if (data.assigneeId) {
+      if (!(await validateUserInCompany(data.assigneeId, user.companyId))) {
         return NextResponse.json({ error: "Invalid assignee" }, { status: 400 });
       }
     }
 
-    // Whitelist allowed update fields to prevent mass assignment
-    const allowedFields = ["title", "description", "status", "assigneeId", "priority", "dueDate", "tags"] as const;
+    // Fetch existing task for permission check and status-change detection
+    const existingTask = await prisma.task.findFirst({
+      where: { id, companyId: user.companyId },
+      select: { id: true, assigneeId: true, status: true },
+    });
+
+    if (!existingTask) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+
+    // Authorization: only admin/canViewAllTasks or the assignee can edit
+    const canViewAll =
+      user.role === "admin" || hasUserFlag(user, "canViewAllTasks");
+    const isAssignee = existingTask.assigneeId === user.id;
+    if (!canViewAll && !isAssignee) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Build update data from validated fields
     const dataToUpdate: Record<string, unknown> = {};
-    for (const field of allowedFields) {
-      if (body[field] !== undefined) {
-        dataToUpdate[field] = field === "dueDate" && body[field] ? new Date(body[field]) : body[field];
-      }
-    }
+    if (data.title !== undefined) dataToUpdate.title = data.title;
+    if (data.description !== undefined) dataToUpdate.description = data.description;
+    if (data.status !== undefined) dataToUpdate.status = data.status;
+    if (data.assigneeId !== undefined) dataToUpdate.assigneeId = data.assigneeId;
+    if (data.priority !== undefined) dataToUpdate.priority = data.priority;
+    if (data.tags !== undefined) dataToUpdate.tags = data.tags;
+    if (data.dueDate !== undefined) dataToUpdate.dueDate = data.dueDate;
 
-    // Fetch old status for change detection (only when status is being updated)
-    let oldStatus: string | undefined;
-    if (dataToUpdate.status !== undefined) {
-      const existing = await prisma.task.findFirst({
-        where: { id, companyId: user.companyId },
-        select: { status: true },
-      });
-      if (!existing) {
-        return NextResponse.json({ error: "Task not found" }, { status: 404 });
-      }
-      oldStatus = existing.status;
-    }
+    const isStatusChange = data.status !== undefined && existingTask.status !== data.status;
 
-    const isStatusChange = dataToUpdate.status !== undefined && oldStatus !== dataToUpdate.status;
-
-    // Wrap update + audit log in a transaction to match server action behavior
+    // Wrap update + audit log in a transaction
     const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.task.update({
         where: { id, companyId: user.companyId },
@@ -123,7 +170,7 @@ export async function PATCH(
           createdAt: true,
           updatedAt: true,
           assignee: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true },
           },
           creator: {
             select: { id: true, name: true },
@@ -140,8 +187,8 @@ export async function PATCH(
             userId: user.id,
             diffJson: {
               status: {
-                from: oldStatus,
-                to: dataToUpdate.status,
+                from: existingTask.status,
+                to: data.status,
               },
             },
           },
@@ -151,34 +198,34 @@ export async function PATCH(
       return result;
     });
 
-    // Send automation event outside transaction (idempotent, has own retry, with direct fallback)
+    // Send automation event outside transaction
     if (isStatusChange) {
       try {
         await inngest.send({
-          id: `task-status-${user.companyId}-${updated.id}-${dataToUpdate.status}`,
+          id: `task-status-${user.companyId}-${updated.id}-${data.status}`,
           name: "automation/task-status-change",
           data: {
             taskId: updated.id,
             taskTitle: updated.title,
-            fromStatus: oldStatus,
-            toStatus: dataToUpdate.status,
+            fromStatus: existingTask.status,
+            toStatus: data.status,
             companyId: user.companyId,
           },
         });
       } catch (autoError) {
-        console.error(`[Tasks API] Inngest send failed, falling back to direct automation execution:`, autoError);
+        log.error("Inngest send failed, falling back to direct automation execution", { error: String(autoError) });
         try {
-          const { processTaskStatusChange } = await import("@/app/actions/automations");
-          await processTaskStatusChange(updated.id, updated.title, oldStatus!, dataToUpdate.status!, user.companyId);
+          const { processTaskStatusChange } = await import("@/app/actions/automations-core");
+          await processTaskStatusChange(updated.id, updated.title, existingTask.status, data.status!, user.companyId);
         } catch (directErr) {
-          console.error(`[Tasks API] Direct automation execution also failed:`, directErr);
+          log.error("Direct automation execution also failed", { error: String(directErr) });
         }
       }
     }
 
     return NextResponse.json(updated);
   } catch (error: any) {
-    console.error("Error updating task:", error);
+    log.error("Failed to update task", { error: String(error) });
     if (error.code === "P2025") {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
@@ -202,6 +249,17 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Permission check
+    const canDelete =
+      user.role === "admin" || hasUserFlag(user, "canCreateTasks");
+    if (!canDelete) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Rate limit
+    const rateLimited = await checkRateLimit(String(user.id), RATE_LIMITS.taskMutation);
+    if (rateLimited) return rateLimited;
+
     // Single query: deleteMany returns count, no need for find-first
     const result = await prisma.task.deleteMany({
       where: { id, companyId: user.companyId },
@@ -213,7 +271,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting task:", error);
+    log.error("Failed to delete task", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to delete task" },
       { status: 500 }

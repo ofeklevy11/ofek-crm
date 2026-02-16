@@ -1,4 +1,7 @@
 import { inngest } from "../client";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("TicketJobs");
 
 /**
  * Background job for ticket notifications (assignee, comment).
@@ -20,7 +23,7 @@ export const processTicketNotificationJob = inngest.createFunction(
     const { type, companyId } = event.data;
 
     const { createNotificationForCompany } = await import(
-      "@/app/actions/notifications"
+      "@/lib/notifications-internal"
     );
 
     if (type === "assignee") {
@@ -82,7 +85,7 @@ export const processTicketStatusChangeJob = inngest.createFunction(
     const { prisma } = await import("@/lib/prisma");
     const {
       createNotificationForCompany,
-    } = await import("@/app/actions/notifications");
+    } = await import("@/lib/notifications-internal");
 
     const statusMap: Record<string, string> = {
       OPEN: "פתוח",
@@ -104,7 +107,7 @@ export const processTicketStatusChangeJob = inngest.createFunction(
       take: RULES_LIMIT,
     });
     if (rules.length >= RULES_LIMIT) {
-      console.warn(`[ticket-jobs] Company ${companyId} has ${RULES_LIMIT}+ ticket automation rules — some may be skipped`);
+      log.warn("Company has too many ticket automation rules — some may be skipped", { companyId, limit: RULES_LIMIT });
     }
 
     for (const rule of rules) {
@@ -173,7 +176,7 @@ export const processTicketActivityLogJob = inngest.createFunction(
     const { ticketId, userId, companyId, previousData, newData } = event.data;
 
     const { createTicketActivityLogs } = await import(
-      "@/app/actions/ticket-activity-logs"
+      "@/lib/ticket-activity-utils"
     );
     await createTicketActivityLogs(ticketId, userId, previousData, newData, undefined, undefined, companyId);
 

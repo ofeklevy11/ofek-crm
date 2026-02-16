@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { redis } from "@/lib/redis";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("AiJobs");
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +17,9 @@ export async function GET(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rl = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+  if (rl) return rl;
 
   const { jobId } = await params;
 
@@ -38,7 +45,7 @@ export async function GET(
       error: data.status === "failed" ? "AI generation failed" : undefined,
     });
   } catch (err) {
-    console.error("Corrupted job data for jobId:", jobId, err);
+    log.error("Corrupted job data", { jobId, error: String(err) });
     return NextResponse.json({ status: "failed", error: "Corrupted job data" });
   }
 }

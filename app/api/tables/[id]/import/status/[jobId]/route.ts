@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("ImportStatus");
 
 /**
  * Get Import Job Status
@@ -20,7 +24,13 @@ export async function GET(
       return NextResponse.json({ error: "אין הרשאה" }, { status: 401 });
     }
 
-    const tableId = parseInt(id);
+    const rl = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+    if (rl) return rl;
+
+    const tableId = parseInt(id, 10);
+    if (!Number.isFinite(tableId) || tableId < 1) {
+      return NextResponse.json({ error: "Invalid table ID" }, { status: 400 });
+    }
 
     // Get job with access control — companyId in query for defense-in-depth
     const job = await prisma.importJob.findFirst({
@@ -50,9 +60,9 @@ export async function GET(
       queuedAt: summary?.queuedAt || null,
     });
   } catch (err: any) {
-    console.error("Import status error:", err);
+    log.error("Import status error", { error: String(err) });
     return NextResponse.json(
-      { error: err.message || "שגיאת שרת פנימית" },
+      { error: "שגיאת שרת פנימית" },
       { status: 500 },
     );
   }

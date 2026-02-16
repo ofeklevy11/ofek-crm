@@ -1,6 +1,9 @@
 import { inngest } from "../client";
 import { prismaBg as prisma } from "@/lib/prisma-background";
-import { executeSyncRule } from "@/app/actions/finance-sync";
+import { executeSyncRule } from "@/lib/finance-sync-internal";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("FinanceSyncJob");
 
 /**
  * Background job for processing finance sync rules.
@@ -22,7 +25,7 @@ export const processFinanceSyncJob = inngest.createFunction(
     // Handle failures — mark job as FAILED
     onFailure: async ({ event, error }) => {
       const { jobId } = event.data.event.data;
-      console.error(`Finance sync job ${jobId} failed:`, error);
+      log.error("Finance sync job failed", { jobId, error: String(error) });
 
       try {
         // Only mark as FAILED if the job hasn't already been marked COMPLETED
@@ -44,7 +47,7 @@ export const processFinanceSyncJob = inngest.createFunction(
           });
         }
       } catch (updateError) {
-        console.error("Failed to update sync job status:", updateError);
+        log.error("Failed to update sync job status", { error: String(updateError) });
       }
     },
   },

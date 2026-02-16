@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { inngest } from "@/lib/inngest/client";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { isSafeStorageUrl } from "@/lib/security/safe-hosts";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("QuoteDownload");
+
+const CUID_RE = /^c[a-z0-9]{24,}$/;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +24,17 @@ export async function GET(
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
+  if (!hasUserFlag(user, "canViewQuotes")) {
+    return new NextResponse("Forbidden", { status: 403 });
+  }
+
+  if (!CUID_RE.test(resolvedParams.id)) {
+    return new NextResponse("Invalid quote ID", { status: 400 });
+  }
+
+  const rateLimited = await checkRateLimit(String(user.id), RATE_LIMITS.quoteRead);
+  if (rateLimited) return rateLimited;
+
   const quote = await prisma.quote.findUnique({
     where: { id: resolvedParams.id, companyId: user.companyId },
     select: { id: true, pdfUrl: true, quoteNumber: true, updatedAt: true, companyId: true },
@@ -29,9 +48,18 @@ export async function GET(
 
   // Serve cached PDF if available
   if (quote.pdfUrl) {
+    // SECURITY: Validate URL host before server-side fetch to prevent SSRF
+    if (!isSafeStorageUrl(quote.pdfUrl)) {
+      return NextResponse.json(
+        { status: "error", message: "PDF storage error" },
+        { status: 500 },
+      );
+    }
+
     try {
       const cachedRes = await fetch(quote.pdfUrl, {
         signal: AbortSignal.timeout(8000),
+        redirect: "error",
       });
       if (cachedRes.ok) {
         // Validate that storage actually returned a PDF, not an HTML error/redirect page
@@ -45,17 +73,18 @@ export async function GET(
           inngest.send({
             name: "pdf/generate-quote",
             data: { quoteId: quote.id, companyId: quote.companyId },
-          }).catch((err) => console.error("[download] Regenerate after stale URL:", err));
+          }).catch((err) => log.error("Regenerate after stale URL", { error: String(err) }));
           return NextResponse.json(
             { status: "generating", message: "PDF is being regenerated" },
             { status: 202 },
           );
         }
-        const blob = await cachedRes.blob();
-        return new NextResponse(blob, {
+        return new NextResponse(cachedRes.body, {
           headers: {
             "Content-Type": "application/pdf",
             "Content-Disposition": `attachment; filename="${filename}"`,
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
           },
         });
       }
@@ -69,7 +98,7 @@ export async function GET(
         inngest.send({
           name: "pdf/generate-quote",
           data: { quoteId: quote.id, companyId: quote.companyId },
-        }).catch((err) => console.error("[download] Regenerate after 404:", err));
+        }).catch((err) => log.error("Regenerate after 404", { error: String(err) }));
       } else {
         return NextResponse.json(
           { status: "error", message: "PDF storage temporarily unavailable" },
@@ -101,7 +130,7 @@ export async function GET(
     inngest.send({
       name: "pdf/generate-quote",
       data: { quoteId: quote.id, companyId: quote.companyId },
-    }).catch((err) => console.error("[download] Recovery PDF trigger failed:", err));
+    }).catch((err) => log.error("Recovery PDF trigger failed", { error: String(err) }));
   }
 
   return NextResponse.json(

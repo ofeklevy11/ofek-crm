@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Save, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-fetch";
 import {
   SelectOptionsEditor,
   SelectOption,
@@ -253,7 +254,7 @@ export default function EditTableModal({
         };
       });
 
-      const res = await fetch(`/api/tables/${tableId}`, {
+      const res = await apiFetch(`/api/tables/${tableId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

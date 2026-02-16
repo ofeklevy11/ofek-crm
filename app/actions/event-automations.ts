@@ -1,8 +1,14 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { executeRuleActions } from "./automations";
+import { executeRuleActions } from "./automations-core";
 import { revalidatePath } from "next/cache";
+import { hasUserFlag } from "@/lib/permissions";
+import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { validateActionConfigSize, MAX_TITLE_LENGTH } from "@/lib/calendar-validation";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("EventAutomations");
 
 // --- Types ---
 
@@ -14,6 +20,44 @@ interface EventAutomationData {
   name?: string;
 }
 
+const VALID_ACTION_TYPES = new Set([
+  "SEND_NOTIFICATION",
+  "SEND_WHATSAPP",
+  "SEND_EMAIL",
+  "CREATE_TASK",
+  "UPDATE_RECORD_FIELD",
+]);
+
+function validateAutomationInput(data: { minutesBefore: number; actionType: string; actionConfig: any; name?: string }): string | null {
+  if (typeof data.minutesBefore !== "number" || !Number.isFinite(data.minutesBefore) || data.minutesBefore < 0 || data.minutesBefore > 43200) {
+    return "minutesBefore must be a number between 0 and 43200 (30 days)";
+  }
+  if (!data.actionType || typeof data.actionType !== "string" || !VALID_ACTION_TYPES.has(data.actionType)) {
+    return "Invalid action type";
+  }
+  if (data.actionConfig !== undefined && data.actionConfig !== null && !validateActionConfigSize(data.actionConfig)) {
+    return "Action configuration is too large";
+  }
+  if (data.name !== undefined && data.name !== null) {
+    if (typeof data.name !== "string") {
+      return `Name must be a string under ${MAX_TITLE_LENGTH} characters`;
+    }
+    const trimmedName = data.name.trim();
+    if (trimmedName.length === 0 || trimmedName.length > MAX_TITLE_LENGTH) {
+      return `Name must be a non-empty string under ${MAX_TITLE_LENGTH} characters`;
+    }
+  }
+  return null;
+}
+
+function validateEventId(id: unknown): boolean {
+  return typeof id === "string" && id.length > 0 && id.length <= 30;
+}
+
+function validateRuleId(id: unknown): boolean {
+  return typeof id === "number" && Number.isInteger(id) && id > 0;
+}
+
 // --- Global Automations CRUD ---
 export async function createGlobalEventAutomation(
   data: Omit<EventAutomationData, "eventId">,
@@ -23,6 +67,14 @@ export async function createGlobalEventAutomation(
     const currentUser = await getCurrentUser();
     if (!currentUser)
       return { success: false, error: "Authentication required" };
+    if (!hasUserFlag(currentUser, "canViewCalendar"))
+      return { success: false, error: "Forbidden" };
+
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationMutate);
+    if (limited) return { success: false, error: "Rate limit exceeded. Please try again later." };
+
+    const validationError = validateAutomationInput(data);
+    if (validationError) return { success: false, error: validationError };
 
     let finalActionConfig = data.actionConfig;
     if (
@@ -40,7 +92,7 @@ export async function createGlobalEventAutomation(
           `אוטומציה קבועה לאירועים (${data.minutesBefore} דקות לפני)`,
         triggerType: "EVENT_TIME",
         triggerConfig: { minutesBefore: data.minutesBefore },
-        actionType: data.actionType,
+        actionType: data.actionType as any,
         actionConfig: finalActionConfig,
         calendarEventId: null, // Global
         createdBy: currentUser.id,
@@ -51,7 +103,7 @@ export async function createGlobalEventAutomation(
     // revalidatePath("/calendar");
     return { success: true, data: rule };
   } catch (error) {
-    console.error("Error creating global event automation:", error);
+    log.error("Error creating global event automation", { error: String(error) });
     return { success: false, error: "Failed to create global automation" };
   }
 }
@@ -62,6 +114,11 @@ export async function getGlobalEventAutomations() {
     const currentUser = await getCurrentUser();
     if (!currentUser)
       return { success: false, error: "Authentication required" };
+    if (!hasUserFlag(currentUser, "canViewCalendar"))
+      return { success: false, error: "Forbidden" };
+
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationRead);
+    if (limited) return { success: false, error: "Rate limit exceeded. Please try again later." };
 
     const rules = await prisma.automationRule.findMany({
       where: {
@@ -82,7 +139,7 @@ export async function getGlobalEventAutomations() {
 
     return { success: true, data: rules };
   } catch (error) {
-    console.error("Error fetching global automations:", error);
+    log.error("Error fetching global automations", { error: String(error) });
     return { success: false, error: "Failed to fetch global automations" };
   }
 }
@@ -91,10 +148,21 @@ export async function updateGlobalEventAutomation(
   data: Omit<EventAutomationData, "eventId"> & { id: number },
 ) {
   try {
+    if (!validateRuleId(data.id))
+      return { success: false, error: "Invalid rule ID" };
+
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser)
       return { success: false, error: "Authentication required" };
+    if (!hasUserFlag(currentUser, "canViewCalendar"))
+      return { success: false, error: "Forbidden" };
+
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationMutate);
+    if (limited) return { success: false, error: "Rate limit exceeded. Please try again later." };
+
+    const validationError = validateAutomationInput(data);
+    if (validationError) return { success: false, error: validationError };
 
     let finalActionConfig = data.actionConfig;
     if (
@@ -111,7 +179,7 @@ export async function updateGlobalEventAutomation(
           data.name ||
           `אוטומציה קבועה לאירועים (${data.minutesBefore} דקות לפני)`,
         triggerConfig: { minutesBefore: data.minutesBefore },
-        actionType: data.actionType,
+        actionType: data.actionType as any,
         actionConfig: finalActionConfig,
       },
       select: { id: true },
@@ -119,7 +187,7 @@ export async function updateGlobalEventAutomation(
 
     return { success: true, data: rule };
   } catch (error) {
-    console.error("Error updating global event automation:", error);
+    log.error("Error updating global event automation", { error: String(error) });
     return { success: false, error: "Failed to update global automation" };
   }
 }
@@ -138,8 +206,16 @@ export async function createEventAutomation(data: EventAutomationData) {
     const currentUser = await getCurrentUser();
     if (!currentUser)
       return { success: false, error: "Authentication required" };
+    if (!hasUserFlag(currentUser, "canViewCalendar"))
+      return { success: false, error: "Forbidden" };
 
-    if (!data.eventId) return { success: false, error: "Event ID is required" };
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationMutate);
+    if (limited) return { success: false, error: "Rate limit exceeded. Please try again later." };
+
+    const validationError = validateAutomationInput(data);
+    if (validationError) return { success: false, error: validationError };
+
+    if (!data.eventId || !validateEventId(data.eventId)) return { success: false, error: "Invalid event ID" };
 
     const event = await prisma.calendarEvent.findFirst({
       where: { id: data.eventId, companyId: currentUser.companyId },
@@ -163,7 +239,7 @@ export async function createEventAutomation(data: EventAutomationData) {
         name: data.name || `אוטומציה לאירוע (${data.minutesBefore} דקות לפני)`,
         triggerType: "EVENT_TIME",
         triggerConfig: { minutesBefore: data.minutesBefore },
-        actionType: data.actionType,
+        actionType: data.actionType as any,
         actionConfig: finalActionConfig,
         calendarEventId: data.eventId,
         createdBy: currentUser.id,
@@ -174,7 +250,7 @@ export async function createEventAutomation(data: EventAutomationData) {
     revalidatePath("/calendar");
     return { success: true, data: rule };
   } catch (error) {
-    console.error("Error creating event automation:", error);
+    log.error("Error creating event automation", { error: String(error) });
     return { success: false, error: "Failed to create automation" };
   }
 }
@@ -185,6 +261,14 @@ export async function getEventAutomations(eventId: string) {
     const currentUser = await getCurrentUser();
     if (!currentUser)
       return { success: false, error: "Authentication required" };
+    if (!hasUserFlag(currentUser, "canViewCalendar"))
+      return { success: false, error: "Forbidden" };
+
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationRead);
+    if (limited) return { success: false, error: "Rate limit exceeded. Please try again later." };
+
+    if (!validateEventId(eventId))
+      return { success: false, error: "Invalid event ID" };
 
     const rules = await prisma.automationRule.findMany({
       where: {
@@ -204,7 +288,7 @@ export async function getEventAutomations(eventId: string) {
 
     return { success: true, data: rules };
   } catch (error) {
-    console.error("Error fetching event automations:", error);
+    log.error("Error fetching event automations", { error: String(error) });
     return { success: false, error: "Failed to fetch event automations" };
   }
 }
@@ -231,11 +315,16 @@ export async function getMaxEventAutomationCount() {
     const currentUser = await getCurrentUser();
     if (!currentUser)
       return { success: false, error: "Authentication required" };
+    if (!hasUserFlag(currentUser, "canViewCalendar"))
+      return { success: false, error: "Forbidden" };
+
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationRead);
+    if (limited) return { success: false, error: "Rate limit exceeded. Please try again later." };
 
     const count = await queryMaxEventAutomationCount(currentUser.companyId);
     return { success: true, count };
   } catch (error) {
-    console.error("Error fetching max event automation count:", error);
+    log.error("Error fetching max event automation count", { error: String(error) });
     return { success: false, error: "Failed to fetch max count" };
   }
 }
@@ -248,11 +337,18 @@ export async function getEventModalInitData(eventId?: string) {
     const currentUser = await getCurrentUser();
     if (!currentUser)
       return { success: false, error: "Authentication required" };
+    if (!hasUserFlag(currentUser, "canViewCalendar"))
+      return { success: false, error: "Forbidden" };
+
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationRead);
+    if (limited) return { success: false, error: "Rate limit exceeded. Please try again later." };
+
+    const safeEventId = eventId && validateEventId(eventId) ? eventId : undefined;
 
     const [eventAutomations, globalAutomationCount] = await Promise.all([
-      eventId
+      safeEventId
         ? prisma.automationRule.findMany({
-            where: { calendarEventId: eventId, companyId: currentUser.companyId },
+            where: { calendarEventId: safeEventId, companyId: currentUser.companyId },
             select: {
               id: true,
               name: true,
@@ -282,7 +378,7 @@ export async function getEventModalInitData(eventId?: string) {
       },
     };
   } catch (error) {
-    console.error("Error fetching event modal init data:", error);
+    log.error("Error fetching event modal init data", { error: String(error) });
     return { success: false, error: "Failed to fetch modal data" };
   }
 }
@@ -293,6 +389,11 @@ export async function getGlobalAutomationsModalData() {
     const currentUser = await getCurrentUser();
     if (!currentUser)
       return { success: false, error: "Authentication required" };
+    if (!hasUserFlag(currentUser, "canViewCalendar"))
+      return { success: false, error: "Forbidden" };
+
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationRead);
+    if (limited) return { success: false, error: "Rate limit exceeded. Please try again later." };
 
     const [globalRules, maxSpecificCount] = await Promise.all([
       prisma.automationRule.findMany({
@@ -323,7 +424,7 @@ export async function getGlobalAutomationsModalData() {
       },
     };
   } catch (error) {
-    console.error("Error fetching global automations modal data:", error);
+    log.error("Error fetching global automations modal data", { error: String(error) });
     return { success: false, error: "Failed to fetch modal data" };
   }
 }
@@ -332,10 +433,21 @@ export async function updateEventAutomation(
   data: Omit<EventAutomationData, "eventId"> & { id: number },
 ) {
   try {
+    if (!validateRuleId(data.id))
+      return { success: false, error: "Invalid rule ID" };
+
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser)
       return { success: false, error: "Authentication required" };
+    if (!hasUserFlag(currentUser, "canViewCalendar"))
+      return { success: false, error: "Forbidden" };
+
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationMutate);
+    if (limited) return { success: false, error: "Rate limit exceeded. Please try again later." };
+
+    const validationError = validateAutomationInput(data);
+    if (validationError) return { success: false, error: validationError };
 
     let finalActionConfig = data.actionConfig;
     if (
@@ -352,7 +464,7 @@ export async function updateEventAutomation(
           data.name ||
           `אוטומציה לאירוע (${data.minutesBefore} דקות לפני)`,
         triggerConfig: { minutesBefore: data.minutesBefore },
-        actionType: data.actionType,
+        actionType: data.actionType as any,
         actionConfig: finalActionConfig,
       },
       select: { id: true },
@@ -361,17 +473,25 @@ export async function updateEventAutomation(
     revalidatePath("/calendar");
     return { success: true, data: rule };
   } catch (error) {
-    console.error("Error updating event automation:", error);
+    log.error("Error updating event automation", { error: String(error) });
     return { success: false, error: "Failed to update automation" };
   }
 }
 
 export async function deleteEventAutomation(ruleId: number) {
   try {
+    if (!validateRuleId(ruleId))
+      return { success: false, error: "Invalid rule ID" };
+
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser)
       return { success: false, error: "Authentication required" };
+    if (!hasUserFlag(currentUser, "canViewCalendar"))
+      return { success: false, error: "Forbidden" };
+
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationMutate);
+    if (limited) return { success: false, error: "Rate limit exceeded. Please try again later." };
 
     await prisma.automationRule.delete({
       where: { id: ruleId, companyId: currentUser.companyId },
@@ -380,149 +500,8 @@ export async function deleteEventAutomation(ruleId: number) {
     revalidatePath("/calendar");
     return { success: true };
   } catch (error) {
-    console.error("Error deleting event automation:", error);
+    log.error("Error deleting event automation", { error: String(error) });
     return { success: false, error: "Failed to delete automation" };
   }
 }
 
-// --- CRON Logic ---
-
-export async function processEventAutomations(companyId?: number) {
-  if (!companyId) {
-    throw new Error("[EventAutomations] companyId is required — skipping to prevent cross-tenant query");
-  }
-  console.log(`⏰ Checking event-based automations for company ${companyId}...`);
-  try {
-    // Single query: fetch rules + events + existing logs in one pass
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const rules = await prisma.automationRule.findMany({
-      where: {
-        isActive: true,
-        triggerType: "EVENT_TIME",
-        calendarEventId: { not: null },
-        companyId,
-        calendarEvent: {
-          startTime: { gte: cutoff },
-        },
-      },
-      include: {
-        calendarEvent: {
-          select: { id: true, title: true, description: true, startTime: true, endTime: true },
-        },
-        executedLogs: {
-          where: { calendarEventId: { not: null } },
-          select: { calendarEventId: true },
-        },
-      },
-      take: 500,
-    });
-
-    console.log(`[Event Automations] Found ${rules.length} active rules.`);
-
-    const now = new Date();
-
-    // Filter in one pass: trigger time must have passed, event must exist, not already executed
-    const unexecutedRules = rules.filter((rule) => {
-      if (!rule.calendarEvent) return false;
-      // Already executed for this event?
-      if (rule.executedLogs.some((l) => l.calendarEventId === rule.calendarEventId)) return false;
-      const eventStart = new Date(rule.calendarEvent.startTime);
-      const minutesBefore = Number((rule.triggerConfig as any)?.minutesBefore || 0);
-      const targetTime = new Date(eventStart.getTime() - minutesBefore * 60000);
-      return now >= targetTime;
-    });
-
-    if (unexecutedRules.length === 0) return;
-
-    console.log(`[Event Automations] ${unexecutedRules.length} rules to execute.`);
-
-    // Issue C fix: Process rules in parallel with concurrency limit of 5
-    const RULE_CONCURRENCY = 5;
-    let totalFailures = 0;
-    for (let i = 0; i < unexecutedRules.length; i += RULE_CONCURRENCY) {
-      const batch = unexecutedRules.slice(i, i + RULE_CONCURRENCY);
-      const results = await Promise.allSettled(
-        batch.map(async (rule) => {
-          // Issue B fix: Create log FIRST to claim execution, then execute.
-          // If another worker already claimed it, the unique constraint will throw P2002.
-          try {
-            await prisma.automationLog.create({
-              data: {
-                automationRuleId: rule.id,
-                calendarEventId: rule.calendarEventId as string,
-                companyId: rule.companyId,
-              },
-            });
-          } catch (createErr: any) {
-            if (createErr?.code === "P2002") {
-              // Another worker already claimed this — skip
-              console.log(`[Event Automations] Rule ${rule.id} already claimed by another worker, skipping.`);
-              return;
-            }
-            throw createErr;
-          }
-
-          console.log(
-            `[Event Automations] 🔔 Triggering rule ${rule.id} (Type: ${rule.actionType}) for event ${rule.calendarEvent!.title}`,
-          );
-
-          const event = rule.calendarEvent!;
-          const eventRecordData = {
-            title: event.title,
-            description: event.description,
-            start: event.startTime.toISOString(),
-            end: event.endTime.toISOString(),
-            taskTitle: event.title,
-            eventTitle: event.title,
-            eventStart: event.startTime.toLocaleString("he-IL"),
-            eventEnd: event.endTime.toLocaleString("he-IL"),
-            eventStartDate: event.startTime.toISOString().split("T")[0],
-            eventStartTime: event.startTime.toTimeString().slice(0, 5),
-            eventEndDate: event.endTime.toISOString().split("T")[0],
-            eventEndTime: event.endTime.toTimeString().slice(0, 5),
-            time: event.startTime.toLocaleString("he-IL"),
-          };
-
-          try {
-            await executeRuleActions(rule, {
-              recordData: eventRecordData,
-              tableName: "Calendar",
-            });
-            console.log(`[Event Automations] ✅ Rule ${rule.id} executed successfully.`);
-          } catch (execErr) {
-            // Execution failed but log is already created — delete it so it can be retried
-            try {
-              await prisma.automationLog.delete({
-                where: {
-                  automationRuleId_calendarEventId: {
-                    automationRuleId: rule.id,
-                    calendarEventId: rule.calendarEventId as string,
-                  },
-                },
-              });
-            } catch (cleanupErr) { console.error(`[Event Automations] Cleanup failed for rule ${rule.id}:`, cleanupErr); }
-            throw execErr;
-          }
-        }),
-      );
-
-      for (let j = 0; j < results.length; j++) {
-        if (results[j].status === "rejected") {
-          totalFailures++;
-          console.error(
-            `[Event Automations] ❌ Error processing rule ${batch[j].id}:`,
-            (results[j] as PromiseRejectedResult).reason,
-          );
-        }
-      }
-    }
-
-    // Signal failure to Inngest so it can retry if majority of rules failed
-    if (totalFailures > 0 && totalFailures >= unexecutedRules.length * 0.5) {
-      throw new Error(`[Event Automations] ${totalFailures}/${unexecutedRules.length} event rules failed — triggering Inngest retry`);
-    }
-  } catch (error) {
-    console.error("Error processing event automations:", error);
-    throw error; // Re-throw so Inngest sees the failure
-  }
-}

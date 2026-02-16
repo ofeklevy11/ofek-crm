@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { getCalendarEvents, createCalendarEvent } from "@/app/actions/calendar";
+import { validateCalendarEventInput } from "@/lib/calendar-validation";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("CalendarAPI");
 
 export async function GET(request: Request) {
   try {
@@ -9,9 +15,24 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (!hasUserFlag(user, "canViewCalendar")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const rateLimited = await checkRateLimit(String(user.id), RATE_LIMITS.calendarRead);
+    if (rateLimited) return rateLimited;
+
     const { searchParams } = new URL(request.url);
     const rangeStart = searchParams.get("rangeStart");
     const rangeEnd = searchParams.get("rangeEnd");
+
+    // Validate date params if provided
+    if (rangeStart && isNaN(new Date(rangeStart).getTime())) {
+      return NextResponse.json({ error: "Invalid rangeStart date" }, { status: 400 });
+    }
+    if (rangeEnd && isNaN(new Date(rangeEnd).getTime())) {
+      return NextResponse.json({ error: "Invalid rangeEnd date" }, { status: 400 });
+    }
 
     const result = await getCalendarEvents(
       rangeStart ?? undefined,
@@ -24,7 +45,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(result.data);
   } catch (error) {
-    console.error("Error fetching calendar events:", error);
+    log.error("Failed to fetch calendar events", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to fetch calendar events" },
       { status: 500 }
@@ -39,15 +60,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (!hasUserFlag(user, "canViewCalendar")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Rate limit is enforced in the server action (createCalendarEvent) to avoid double-counting
     const body = await request.json();
-    const { title, description, startTime, endTime, color } = body;
+    const validation = validateCalendarEventInput(body);
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
 
     const result = await createCalendarEvent({
-      title,
-      description,
-      startTime,
-      endTime,
-      color,
+      title: validation.data.title,
+      description: validation.data.description,
+      startTime: validation.data.startTime.toISOString(),
+      endTime: validation.data.endTime.toISOString(),
+      color: validation.data.color,
     });
 
     if (!result.success) {
@@ -56,7 +85,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result.data);
   } catch (error) {
-    console.error("Error creating calendar event:", error);
+    log.error("Failed to create calendar event", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to create calendar event" },
       { status: 500 }

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Calendar as CalendarIcon, Info } from "lucide-react";
 import ClientSelector from "./ClientSelector";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface Client {
   id: number;
@@ -96,7 +97,7 @@ export default function CreatePaymentForm() {
           };
         }
 
-        const clientResponse = await fetch("/api/finance/clients", {
+        const clientResponse = await apiFetch("/api/finance/clients", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(clientData),
@@ -119,7 +120,7 @@ export default function CreatePaymentForm() {
         notes: formData.get("notes") || "",
       };
 
-      const response = await fetch("/api/finance/payments", {
+      const response = await apiFetch("/api/finance/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(paymentData),

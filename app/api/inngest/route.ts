@@ -1,5 +1,8 @@
 import { serve } from "inngest/next";
 import { inngest } from "@/lib/inngest/client";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("InngestAPI");
 import { processImportJob } from "@/lib/inngest/functions/import-job";
 import {
   processNewRecordAutomation,
@@ -77,10 +80,7 @@ const functions = [
   cleanupOldLogData,
 ];
 
-console.log(
-  "Inngest route loaded, functions:",
-  functions.map((f) => f.id),
-);
+log.info("Inngest route loaded", { functionIds: functions.map((f) => f.id) });
 
 // This is the Inngest serve handler for Next.js App Router
 // It handles both GET (dashboard) and POST (event handling) requests

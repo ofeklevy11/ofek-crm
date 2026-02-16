@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Edit2, Trash2, Eye, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-fetch";
 import EditRetainerModal from "./EditRetainerModal";
 import RetainerPaymentModal from "./RetainerPaymentModal";
 
@@ -38,7 +39,7 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
 
     setDeletingId(id);
     try {
-      const response = await fetch(`/api/finance/retainers/${id}`, {
+      const response = await apiFetch(`/api/finance/retainers/${id}`, {
         method: "DELETE",
       });
 

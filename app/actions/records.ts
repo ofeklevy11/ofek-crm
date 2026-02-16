@@ -8,6 +8,10 @@ import { revalidatePath } from "next/cache";
 import { inngest } from "@/lib/inngest/client";
 import { deleteRecordWithCleanup } from "@/lib/record-cleanup";
 import { withRetry } from "@/lib/db-retry";
+import { logSecurityEvent, SEC_BULK_DELETE } from "@/lib/security/audit-security";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("Records");
 
 export async function getRecordsByTableId(
   tableId: number,
@@ -35,6 +39,10 @@ export async function getRecordsByTableId(
       },
       orderBy: [{ id: "desc" }],
       take: pageSize + 1, // +1 to detect next page
+      select: {
+        id: true, tableId: true, data: true, createdBy: true, updatedBy: true,
+        createdAt: true, updatedAt: true,
+      },
     }));
 
     const hasMore = records.length > pageSize;
@@ -43,7 +51,7 @@ export async function getRecordsByTableId(
 
     return { success: true, data: page, nextCursor, hasMore };
   } catch (error) {
-    console.error("Error fetching records:", error);
+    log.error("Error fetching records", { error: String(error) });
     return { success: false, error: "Failed to fetch records" };
   }
 }
@@ -89,6 +97,10 @@ export async function createRecord(data: {
           createdBy: actualCreatedBy,
           ...(createdAt && { createdAt: new Date(createdAt) }),
         },
+        select: {
+          id: true, tableId: true, data: true, createdBy: true, updatedBy: true,
+          createdAt: true, updatedAt: true,
+        },
       });
 
       await createAuditLog(created.id, actualCreatedBy, "CREATE", recordData, tx, user.companyId);
@@ -116,12 +128,12 @@ export async function createRecord(data: {
         },
       ]);
     } catch (autoError) {
-      console.error(`[Records] Inngest send failed, falling back to direct automation execution:`, autoError);
+      log.error("Inngest send failed, falling back to direct automation execution", { error: String(autoError) });
       try {
-        const { processNewRecordTrigger } = await import("@/app/actions/automations");
+        const { processNewRecordTrigger } = await import("@/app/actions/automations-core");
         await processNewRecordTrigger(tableId, table.name, record.id, user.companyId);
       } catch (directErr) {
-        console.error(`[Records] Direct automation execution also failed:`, directErr);
+        log.error("Direct automation execution also failed", { error: String(directErr) });
       }
     }
 
@@ -130,7 +142,7 @@ export async function createRecord(data: {
 
     return { success: true, data: record };
   } catch (error) {
-    console.error("Error creating record:", error);
+    log.error("Error creating record", { error: String(error) });
     return { success: false, error: "Failed to create record" };
   }
 }
@@ -187,6 +199,10 @@ export async function updateRecord(
           updatedBy: actualUpdatedBy,
           ...(createdAt && { createdAt: new Date(createdAt) }),
         },
+        select: {
+          id: true, tableId: true, data: true, createdBy: true, updatedBy: true,
+          createdAt: true, updatedAt: true,
+        },
       });
 
       await createAuditLog(updated.id, actualUpdatedBy, "UPDATE", recordData, tx, user.companyId);
@@ -215,12 +231,12 @@ export async function updateRecord(
         },
       ]);
     } catch (autoError) {
-      console.error(`[Records] Inngest send failed, falling back to direct automation execution:`, autoError);
+      log.error("Inngest send failed on record update, falling back to direct automation execution", { error: String(autoError) });
       try {
-        const { processRecordUpdate } = await import("@/app/actions/automations");
+        const { processRecordUpdate } = await import("@/app/actions/automations-core");
         await processRecordUpdate(record.tableId, record.id, oldData, recordData, user.companyId);
       } catch (directErr) {
-        console.error(`[Records] Direct automation execution also failed:`, directErr);
+        log.error("Direct automation execution also failed on record update", { error: String(directErr) });
       }
     }
 
@@ -232,7 +248,7 @@ export async function updateRecord(
     if (error?.message === "אין לך הרשאה לערוך רשומות בטבלה זו") {
       return { success: false, error: error.message };
     }
-    console.error("Error updating record:", error);
+    log.error("Error updating record", { error: String(error) });
     return { success: false, error: "Failed to update record" };
   }
 }
@@ -276,14 +292,14 @@ export async function deleteRecord(recordId: number) {
         data: { companyId: user.companyId },
       });
     } catch (e) {
-      console.error("[Records] Failed to send dashboard refresh:", e);
+      log.error("Failed to send dashboard refresh", { error: String(e) });
     }
 
     revalidatePath("/");
 
     return { success: true };
   } catch (error) {
-    console.error("Error deleting record:", error);
+    log.error("Error deleting record", { error: String(error) });
     return { success: false, error: "Failed to delete record" };
   }
 }
@@ -328,6 +344,8 @@ export async function bulkDeleteRecords(recordIds: number[]) {
       };
     }
 
+    logSecurityEvent({ action: SEC_BULK_DELETE, companyId: user.companyId, userId: user.id, details: { tableId, recordCount: validIds.length } });
+
     // Offload the heavy work (finance cascade + delete + audit) to Inngest
     await inngest.send({
       id: `bulk-delete-${user.companyId}-${tableId}-${Math.floor(Date.now() / 1000)}`,
@@ -345,7 +363,7 @@ export async function bulkDeleteRecords(recordIds: number[]) {
 
     return { success: true };
   } catch (error) {
-    console.error("Error bulk deleting records:", error);
+    log.error("Error bulk deleting records", { error: String(error) });
     return { success: false, error: "Failed to bulk delete records" };
   }
 }
@@ -359,7 +377,7 @@ export async function uploadAttachment(recordId: number, file: FormData) {
       message: "File upload functionality to be implemented",
     };
   } catch (error) {
-    console.error("Error uploading attachment:", error);
+    log.error("Error uploading attachment", { error: String(error) });
     return { success: false, error: "Failed to upload attachment" };
   }
 }

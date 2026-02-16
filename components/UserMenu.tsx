@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { LogOut, User as UserIcon, BadgeCheck, Settings } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 export default function UserMenu({ user }: UserMenuProps) {
   if (!user) return null;
@@ -100,7 +101,7 @@ export default function UserMenu({ user }: UserMenuProps) {
           className="text-destructive focus:text-destructive cursor-pointer gap-2"
           onClick={async () => {
             try {
-              await fetch("/api/auth/logout", {
+              await apiFetch("/api/auth/logout", {
                 method: "POST",
               });
               window.location.href = "/login";

@@ -2,9 +2,9 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
-import { User } from "@/lib/permissions";
-import { getGoalsForCompany } from "@/app/actions/goals";
-import { getAnalyticsDataForCompany } from "@/app/actions/analytics";
+import { canReadTable, hasUserFlag } from "@/lib/permissions";
+import { getGoalsForCompanyInternal } from "@/lib/services/goal-computation";
+import { getAnalyticsDataAuthed } from "@/app/actions/analytics";
 import { getTablesForDashboard } from "@/app/actions/tables";
 import {
   getCachedGoals,
@@ -14,16 +14,29 @@ import {
 } from "@/lib/services/dashboard-cache";
 import { withRetry } from "@/lib/db-retry";
 import { getTableViewDataInternal, getCustomTableDataInternal } from "@/lib/dashboard-internal";
+import { checkActionRateLimit, DASHBOARD_RATE_LIMITS } from "@/lib/rate-limit-action";
+import {
+  tableViewDataSchema,
+  customTableSettingsSchema,
+  batchTableDataSchema,
+} from "@/lib/validations/dashboard";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("Dashboard");
 
 function settled<T>(result: PromiseSettledResult<T>, label: string, fallback: T): T {
   if (result.status === "fulfilled") return result.value;
-  console.error(`[Dashboard] ${label} failed:`, result.reason);
+  log.error(`${label} failed`, { error: String(result.reason) });
   return fallback;
 }
 
-export async function getDashboardInitialData(existingUser?: User) {
-  const user = existingUser ?? await getCurrentUser();
+export async function getDashboardInitialData() {
+  const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  if (!hasUserFlag(user, "canViewDashboardData")) throw new Error("Forbidden");
+
+  const rl = await checkActionRateLimit(String(user.id), DASHBOARD_RATE_LIMITS.read);
+  if (rl) throw new Error(rl.error);
 
   // Try to load goals from cache first (stale-while-revalidate)
   const cachedGoals = await getCachedGoals(user.companyId);
@@ -44,9 +57,9 @@ export async function getDashboardInitialData(existingUser?: User) {
 
   // Fetch analytics, tables, goals, AND views all in parallel (eliminates views waterfall)
   const results = await Promise.allSettled([
-    getAnalyticsDataForCompany(user.companyId),
-    getTablesForDashboard(user),
-    cachedGoals ? Promise.resolve(cachedGoals.data) : getGoalsForCompany(user.companyId),
+    getAnalyticsDataAuthed(user.companyId),
+    getTablesForDashboard(),
+    cachedGoals ? Promise.resolve(cachedGoals.data) : getGoalsForCompanyInternal(user.companyId),
     withRetry(() => prisma.view.findMany({
       where: { companyId: user.companyId, isEnabled: true },
       select: { id: true, tableId: true, name: true, config: true },
@@ -87,13 +100,24 @@ export async function getDashboardInitialData(existingUser?: User) {
 }
 
 export async function getTableViewData(
-  tableId: number,
-  viewId: number | string,
+  rawTableId: number,
+  rawViewId: number | string,
   bypassCache?: boolean,
 ) {
   try {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+
+    const rl = await checkActionRateLimit(String(user.id), DASHBOARD_RATE_LIMITS.read);
+    if (rl) return { success: false, error: rl.error };
+
+    const parsed = tableViewDataSchema.safeParse({ tableId: rawTableId, viewId: rawViewId, bypassCache });
+    if (!parsed.success) return { success: false, error: "Invalid input" };
+    const { tableId, viewId } = parsed.data;
+
+    if (!canReadTable(user, tableId)) {
+      return { success: false, error: "Access denied" };
+    }
 
     if (viewId === "custom") {
       return {
@@ -120,14 +144,14 @@ export async function getTableViewData(
 
     return { success: true, data };
   } catch (error) {
-    console.error("Error fetching table view data", error);
+    log.error("Error fetching table view data", { error: String(error) });
     return { success: false, error: "Failed to fetch data" };
   }
 }
 
 export async function getCustomTableData(
-  tableId: number,
-  settings: {
+  rawTableId: number,
+  rawSettings: {
     columns?: string[];
     limit?: number;
     sort?: "asc" | "desc";
@@ -138,6 +162,22 @@ export async function getCustomTableData(
   try {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+
+    const rl = await checkActionRateLimit(String(user.id), DASHBOARD_RATE_LIMITS.read);
+    if (rl) return { success: false, error: rl.error };
+
+    const tableId = rawTableId;
+    if (typeof tableId !== "number" || tableId < 1 || !Number.isInteger(tableId)) {
+      return { success: false, error: "Invalid input" };
+    }
+
+    const parsedSettings = customTableSettingsSchema.safeParse(rawSettings);
+    if (!parsedSettings.success) return { success: false, error: "Invalid settings" };
+    const settings = parsedSettings.data;
+
+    if (!canReadTable(user, tableId)) {
+      return { success: false, error: "Access denied" };
+    }
 
     // Check cache first (skip when user triggers manual refresh)
     const hash = buildWidgetHash(tableId, "custom", settings);
@@ -157,7 +197,7 @@ export async function getCustomTableData(
 
     return { success: true, data };
   } catch (error) {
-    console.error("Error fetching custom table data", error);
+    log.error("Error fetching custom table data", { error: String(error) });
     return { success: false, error: "Failed to fetch data" };
   }
 }
@@ -167,7 +207,7 @@ export async function getCustomTableData(
  * Uses cache-first strategy — only computes live for cache misses.
  */
 export async function getBatchTableData(
-  requests: Array<{
+  rawRequests: Array<{
     widgetId: string;
     tableId: number;
     viewId: number | string;
@@ -179,33 +219,57 @@ export async function getBatchTableData(
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
 
-    // FFF: Limit batch size to prevent abuse
-    if (requests.length > 50) {
-      return { success: false, error: "Too many requests in batch (max 50)" };
-    }
+    const rl = await checkActionRateLimit(String(user.id), DASHBOARD_RATE_LIMITS.batch);
+    if (rl) return { success: false, error: rl.error };
+
+    const parsed = batchTableDataSchema.safeParse({ requests: rawRequests, bypassCache });
+    if (!parsed.success) return { success: false, error: "Invalid input" };
+    const { requests } = parsed.data;
+
+    // Filter out requests for tables the user can't access
+    const authorizedRequests = requests.filter((r) => canReadTable(user, r.tableId));
 
     // Process in chunks of 5 to limit concurrent DB queries
     const BATCH_CONCURRENCY = 5;
     const results: Array<{ widgetId: string; success: boolean; data?: any; error?: string }> = [];
 
-    for (let i = 0; i < requests.length; i += BATCH_CONCURRENCY) {
-      const chunk = requests.slice(i, i + BATCH_CONCURRENCY);
+    for (let i = 0; i < authorizedRequests.length; i += BATCH_CONCURRENCY) {
+      const chunk = authorizedRequests.slice(i, i + BATCH_CONCURRENCY);
       const chunkResults = await Promise.all(
         chunk.map(async ({ widgetId, tableId, viewId, settings }) => {
           try {
-            let res;
-            if (typeof viewId === "string" && viewId === "custom") {
-              res = await getCustomTableData(tableId, settings || {}, bypassCache);
+            const isCustom = typeof viewId === "string" && viewId === "custom";
+            const hash = buildWidgetHash(tableId, viewId, isCustom ? settings : undefined);
+
+            // Check cache first (skip when user triggers manual refresh)
+            if (!bypassCache) {
+              const cached = await getCachedTableWidget(user.companyId, hash);
+              if (cached) {
+                return { widgetId, success: true, data: cached };
+              }
+            }
+
+            // Cache miss — compute live using internal functions (no redundant auth/rate-limit)
+            let data;
+            if (isCustom) {
+              data = await getCustomTableDataInternal(tableId, user.companyId, settings || {});
             } else {
-              res = await getTableViewData(
+              data = await getTableViewDataInternal(
                 tableId,
+                user.companyId,
                 typeof viewId === "string" ? Number(viewId) : viewId,
-                bypassCache,
               );
             }
-            return { widgetId, ...res };
+
+            if (!data) {
+              return { widgetId, success: false, error: "Table or view not found" };
+            }
+
+            // Cache for next time
+            await setCachedTableWidget(user.companyId, hash, data);
+            return { widgetId, success: true, data };
           } catch (err) {
-            console.error(`Error fetching data for widget ${widgetId}`, err);
+            log.error("Error fetching data for widget", { widgetId, error: String(err) });
             return { widgetId, success: false, error: "Failed to fetch data" };
           }
         }),
@@ -215,7 +279,7 @@ export async function getBatchTableData(
 
     return { success: true, results };
   } catch (error) {
-    console.error("Error in batch table data fetch", error);
+    log.error("Error in batch table data fetch", { error: String(error) });
     return { success: false, error: "Failed to fetch batch data" };
   }
 }

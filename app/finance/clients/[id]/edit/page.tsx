@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Save, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { apiFetch } from "@/lib/api-fetch";
 
 export default function EditClientPage({
   params,
@@ -58,7 +59,7 @@ export default function EditClientPage({
     setError(null);
 
     try {
-      const response = await fetch(`/api/finance/clients/${clientId}`, {
+      const response = await apiFetch(`/api/finance/clients/${clientId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),

@@ -11,9 +11,13 @@ interface PageProps {
 
 export default async function FilesPage({ searchParams }: PageProps) {
   const resolvedSearchParams = await searchParams;
-  const folderId = resolvedSearchParams.folderId
-    ? parseInt(resolvedSearchParams.folderId)
-    : null;
+  const parsedFolderId = resolvedSearchParams.folderId
+    ? parseInt(resolvedSearchParams.folderId, 10)
+    : NaN;
+  const folderId =
+    Number.isSafeInteger(parsedFolderId) && parsedFolderId > 0
+      ? parsedFolderId
+      : null;
   const data = await getStorageData(folderId);
 
   return (

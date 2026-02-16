@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Edit2, Trash2, Eye, Mail, Phone, Building } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface ClientsTableProps {
   clients: any[];
@@ -23,7 +24,7 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
 
     setDeletingId(id);
     try {
-      const response = await fetch(`/api/finance/clients/${id}`, {
+      const response = await apiFetch(`/api/finance/clients/${id}`, {
         method: "DELETE",
       });
 

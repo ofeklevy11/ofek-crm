@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { sharedSubscriber } from "@/lib/redis-subscriber";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("SSE");
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +74,7 @@ export async function GET(req: NextRequest) {
           },
         );
       } catch (err) {
-        console.error(`[SSE] Redis subscribe failed for user=${userId}, company=${companyId}:`, err);
+        log.error("Redis subscribe failed", { userId, companyId, error: String(err) });
         controller.close();
         return;
       }

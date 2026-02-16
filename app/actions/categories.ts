@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { canManageTables } from "@/lib/permissions";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("Categories");
 
 export async function getCategories() {
   try {
@@ -13,16 +16,18 @@ export async function getCategories() {
     const categories = await prisma.tableCategory.findMany({
       where: { companyId: user.companyId },
       orderBy: { createdAt: "asc" },
-      include: {
-        tables: {
-          select: { id: true },
-        },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        updatedAt: true,
+        tables: { select: { id: true } },
       },
       take: 200, // P92: Bound categories query
     });
     return { success: true, data: categories };
   } catch (error) {
-    console.error("Error fetching categories:", error);
+    log.error("Error fetching categories", { error: String(error) });
     return { success: false, error: "Failed to fetch categories" };
   }
 }
@@ -43,6 +48,7 @@ export async function createCategory(name: string) {
         name,
         companyId: user.companyId,
       },
+      select: { id: true, name: true, createdAt: true, updatedAt: true },
     });
 
     revalidatePath("/");
@@ -50,7 +56,7 @@ export async function createCategory(name: string) {
 
     return { success: true, data: category };
   } catch (error) {
-    console.error("Error creating category:", error);
+    log.error("Error creating category", { error: String(error) });
     return { success: false, error: "Failed to create category" };
   }
 }
@@ -70,6 +76,7 @@ export async function updateCategory(id: number, name: string) {
     const category = await prisma.tableCategory.update({
       where: { id, companyId: user.companyId },
       data: { name },
+      select: { id: true, name: true, createdAt: true, updatedAt: true },
     });
 
     revalidatePath("/");
@@ -77,7 +84,7 @@ export async function updateCategory(id: number, name: string) {
 
     return { success: true, data: category };
   } catch (error) {
-    console.error("Error updating category:", error);
+    log.error("Error updating category", { error: String(error) });
     return { success: false, error: "Failed to update category" };
   }
 }
@@ -98,7 +105,7 @@ export async function deleteCategory(id: number) {
 
     return { success: true };
   } catch (error) {
-    console.error("Error deleting category:", error);
+    log.error("Error deleting category", { error: String(error) });
     return { success: false, error: "Failed to delete category" };
   }
 }
@@ -120,6 +127,7 @@ export async function convertUncategorizedToCategory(name: string) {
         name,
         companyId: user.companyId,
       },
+      select: { id: true, name: true, createdAt: true, updatedAt: true },
     });
 
     // 2. Update all uncategorized tables belonging to THIS company
@@ -136,7 +144,7 @@ export async function convertUncategorizedToCategory(name: string) {
 
     return { success: true, data: category };
   } catch (error) {
-    console.error("Error converting uncategorized:", error);
+    log.error("Error converting uncategorized", { error: String(error) });
     return { success: false, error: "Failed to convert uncategorized tables" };
   }
 }

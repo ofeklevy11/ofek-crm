@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import UserModal from "@/components/UserModal";
 import AlertDialog from "@/components/AlertDialog";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface User {
   id: number;
@@ -107,7 +108,7 @@ export default function UsersPage() {
 
     setIsDeleting(true);
     try {
-      const response = await fetch(`/api/users/${deleteUserId}`, {
+      const response = await apiFetch(`/api/users/${deleteUserId}`, {
         method: "DELETE",
       });
 

@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface ArchivedGoalRowProps {
   goal: GoalWithProgress;
@@ -73,7 +74,7 @@ export default function ArchivedGoalRow({
     if (!confirm("האם אתה בטוח שברצונך למחוק את היעד לצמיתות?")) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/finance/goals/${goal.id}`, {
+      const res = await apiFetch(`/api/finance/goals/${goal.id}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Failed");

@@ -9,6 +9,25 @@ import { getCachedMetric } from "@/lib/services/cache-service";
 import { redis } from "@/lib/redis";
 import { TicketStatus, TicketPriority, TicketType } from "@prisma/client";
 import { withRetry } from "@/lib/db-retry";
+import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { hasUserFlag } from "@/lib/permissions";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("Tickets");
+
+const MAX_TITLE = 500;
+const MAX_DESCRIPTION = 10_000;
+const MAX_COMMENT = 5_000;
+const MAX_TAGS = 20;
+const MAX_TAG_LENGTH = 100;
+const MIN_SLA_MINUTES = 1;
+const MAX_SLA_MINUTES = 525_600; // 1 year
+
+function assertServiceAccess(user: { role: string; permissions?: Record<string, boolean> }) {
+  if (!hasUserFlag(user as any, "canViewServiceCalls")) {
+    throw new Error("Unauthorized");
+  }
+}
 
 function serviceStatsKey(companyId: number) {
   return `service:stats:${companyId}`;
@@ -36,6 +55,10 @@ const PAGE_SIZE = 100;
 export async function getTickets(cursor?: number) {
   const user = await getCurrentUser();
   if (!user) return { items: [] as any[], nextCursor: null as number | null };
+  assertServiceAccess(user);
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceRead)) {
+    throw new Error("Rate limit exceeded");
+  }
 
   const items = await withRetry(() => prisma.ticket.findMany({
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -73,25 +96,36 @@ export async function getTickets(cursor?: number) {
 export async function getTicketDetails(ticketId: number) {
   const user = await getCurrentUser();
   if (!user) return null;
+  assertServiceAccess(user);
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceRead)) {
+    throw new Error("Rate limit exceeded");
+  }
 
   return await withRetry(() => prisma.ticket.findFirst({
     where: {
       id: ticketId,
       companyId: user.companyId,
     },
-    include: {
-      assignee: { select: { id: true, name: true, email: true } },
+    select: {
+      id: true, title: true, description: true, status: true, priority: true,
+      type: true, clientId: true, assigneeId: true, creatorId: true, tags: true,
+      slaDueDate: true, slaResponseDueDate: true, createdAt: true, updatedAt: true,
+      assignee: { select: { id: true, name: true } },
       client: { select: { id: true, name: true, email: true, businessName: true } },
       creator: { select: { id: true, name: true } },
       comments: {
-        include: {
+        select: {
+          id: true, content: true, isInternal: true, createdAt: true, updatedAt: true,
+          userId: true,
           user: { select: { id: true, name: true } },
         },
         orderBy: { createdAt: "desc" },
         take: 100,
       },
       activityLogs: {
-        include: {
+        select: {
+          id: true, fieldName: true, fieldLabel: true, oldValue: true, newValue: true,
+          oldLabel: true, newLabel: true, createdAt: true,
           user: { select: { id: true, name: true } },
         },
         orderBy: { createdAt: "desc" },
@@ -115,6 +149,18 @@ export async function createTicket(data: {
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  assertServiceAccess(user);
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
+
+  // Input validation
+  if (!data.title || data.title.length > MAX_TITLE) throw new Error("Invalid title");
+  if (data.description && data.description.length > MAX_DESCRIPTION) throw new Error("Description too long");
+  if (data.tags) {
+    if (data.tags.length > MAX_TAGS) throw new Error("Too many tags");
+    if (data.tags.some(t => t.length > MAX_TAG_LENGTH)) throw new Error("Tag too long");
+  }
 
   // Validate enum values before any DB operations
   if (!VALID_STATUSES.has(data.status)) throw new Error("Invalid status");
@@ -178,6 +224,12 @@ export async function createTicket(data: {
       companyId: user.companyId,
       creatorId: user.id,
     },
+    select: {
+      id: true, title: true, description: true, status: true,
+      priority: true, type: true, clientId: true, assigneeId: true,
+      creatorId: true, tags: true, slaDueDate: true, slaResponseDueDate: true,
+      createdAt: true, updatedAt: true,
+    },
   }));
 
   if (data.assigneeId && data.assigneeId !== user.id) {
@@ -195,7 +247,7 @@ export async function createTicket(data: {
         },
       });
     } catch (error) {
-      console.error("[ticket/notification] inngest.send failed:", error);
+      log.error("Ticket notification inngest.send failed", { error: String(error) });
     }
   }
 
@@ -220,6 +272,18 @@ export async function updateTicket(
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  assertServiceAccess(user);
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
+
+  // Input validation
+  if (data.title !== undefined && (!data.title || data.title.length > MAX_TITLE)) throw new Error("Invalid title");
+  if (data.description !== undefined && data.description.length > MAX_DESCRIPTION) throw new Error("Description too long");
+  if (data.tags) {
+    if (data.tags.length > MAX_TAGS) throw new Error("Too many tags");
+    if (data.tags.some(t => t.length > MAX_TAG_LENGTH)) throw new Error("Tag too long");
+  }
 
   // Validate enum values if provided
   if (data.status && !VALID_STATUSES.has(data.status)) throw new Error("Invalid status");
@@ -265,8 +329,14 @@ export async function updateTicket(
 
     if (!current) throw new Error("Ticket not found");
 
-    // P3: Build update data with proper enum casts
-    const updateData: Record<string, any> = { ...data };
+    // P3: Build update data with explicit field picking (no spread — prevents field injection)
+    const updateData: Record<string, any> = {};
+    if (data.title !== undefined) updateData.title = data.title;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.clientId !== undefined) updateData.clientId = data.clientId;
+    if (data.assigneeId !== undefined) updateData.assigneeId = data.assigneeId;
+    if (data.tags !== undefined) updateData.tags = data.tags;
+    if (data.slaDueDate !== undefined) updateData.slaDueDate = data.slaDueDate;
     if (data.status) updateData.status = data.status as TicketStatus;
     if (data.priority) updateData.priority = data.priority as TicketPriority;
     if (data.type) updateData.type = data.type as TicketType;
@@ -306,6 +376,12 @@ export async function updateTicket(
     const updated = await tx.ticket.update({
       where: { id, companyId: user.companyId },
       data: updateData,
+      select: {
+        id: true, title: true, description: true, status: true,
+        priority: true, type: true, clientId: true, assigneeId: true,
+        creatorId: true, tags: true, slaDueDate: true, slaResponseDueDate: true,
+        createdAt: true, updatedAt: true,
+      },
     });
 
     return { ticket: updated, currentTicket: current };
@@ -358,7 +434,7 @@ export async function updateTicket(
   try {
     await inngest.send(events);
   } catch (error) {
-    console.error("[updateTicket] Inngest send failed, falling back to direct execution:", error);
+    log.error("Inngest send failed, falling back to direct execution", { error: String(error) });
     // Direct fallback: process ticket status change automations inline
     try {
       if (data.status && data.status !== currentTicket.status) {
@@ -386,7 +462,7 @@ export async function updateTicket(
                 .replace("{ticketId}", String(ticket.id))
                 .replace("{fromStatus}", fromStatusHebrew)
                 .replace("{toStatus}", toStatusHebrew);
-              const { createNotificationForCompany } = await import("@/app/actions/notifications");
+              const { createNotificationForCompany } = await import("@/lib/notifications-internal");
               await createNotificationForCompany({
                 companyId: user.companyId,
                 userId: ac.recipientId,
@@ -399,7 +475,7 @@ export async function updateTicket(
         }
       }
     } catch (directErr) {
-      console.error("[updateTicket] Direct automation execution also failed:", directErr);
+      log.error("Direct automation execution also failed", { error: String(directErr) });
     }
   }
 
@@ -415,6 +491,11 @@ export async function addTicketComment(
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  assertServiceAccess(user);
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
+  if (!content || content.length > MAX_COMMENT) throw new Error("Invalid comment");
 
   // Verify ticket belongs to user's company before creating comment
   const ticket = await withRetry(() => prisma.ticket.findFirst({
@@ -429,6 +510,10 @@ export async function addTicketComment(
       userId: user.id,
       content,
       isInternal,
+    },
+    select: {
+      id: true, ticketId: true, userId: true, content: true,
+      isInternal: true, createdAt: true, updatedAt: true,
     },
   }));
 
@@ -446,7 +531,7 @@ export async function addTicketComment(
       },
     });
   } catch (error) {
-    console.error("[ticket/notification] inngest.send failed:", error);
+    log.error("Comment notification inngest.send failed", { error: String(error) });
   }
 
   revalidatePath("/service");
@@ -456,6 +541,11 @@ export async function addTicketComment(
 export async function updateTicketComment(commentId: number, content: string) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  assertServiceAccess(user);
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
+  if (!content || content.length > MAX_COMMENT) throw new Error("Invalid comment");
 
   // Find the comment and verify permissions
   const comment = await withRetry(() => prisma.ticketComment.findFirst({
@@ -487,6 +577,10 @@ export async function updateTicketComment(commentId: number, content: string) {
 export async function deleteTicketComment(commentId: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  assertServiceAccess(user);
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
 
   // Find the comment and verify permissions
   const comment = await withRetry(() => prisma.ticketComment.findFirst({
@@ -517,12 +611,20 @@ export async function deleteTicketComment(commentId: number) {
 export async function getSlaPolicies() {
   const user = await getCurrentUser();
   if (!user) return [];
+  assertServiceAccess(user);
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceRead)) {
+    throw new Error("Rate limit exceeded");
+  }
 
   return getCachedMetric(
     slaPoliciesKey(user.companyId),
     async () => {
       return withRetry(() => prisma.slaPolicy.findMany({
         where: { companyId: user.companyId },
+        select: {
+          id: true, name: true, description: true, priority: true,
+          responseTimeMinutes: true, resolveTimeMinutes: true,
+        },
         take: 50,
       }));
     },
@@ -537,9 +639,21 @@ export async function updateSlaPolicy(data: {
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  assertServiceAccess(user);
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
 
   // P3: Validate priority against enum
   if (!VALID_PRIORITIES.has(data.priority)) throw new Error("Invalid priority");
+
+  // Validate SLA minute ranges
+  if (!Number.isInteger(data.responseTimeMinutes) || data.responseTimeMinutes < MIN_SLA_MINUTES || data.responseTimeMinutes > MAX_SLA_MINUTES) {
+    throw new Error("Invalid response time");
+  }
+  if (!Number.isInteger(data.resolveTimeMinutes) || data.resolveTimeMinutes < MIN_SLA_MINUTES || data.resolveTimeMinutes > MAX_SLA_MINUTES) {
+    throw new Error("Invalid resolve time");
+  }
 
   const policy = await prisma.slaPolicy.upsert({
     where: {
@@ -559,6 +673,10 @@ export async function updateSlaPolicy(data: {
       responseTimeMinutes: data.responseTimeMinutes,
       resolveTimeMinutes: data.resolveTimeMinutes,
     },
+    select: {
+      id: true, name: true, description: true, priority: true,
+      responseTimeMinutes: true, resolveTimeMinutes: true,
+    },
   });
 
   await invalidateServiceCache(user.companyId);
@@ -570,6 +688,10 @@ export async function updateSlaPolicy(data: {
 export async function deleteTicket(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  assertServiceAccess(user);
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
 
   const { count } = await prisma.ticket.deleteMany({
     where: { id, companyId: user.companyId },
@@ -591,6 +713,10 @@ export async function getTicketStats() {
       closed: 0,
       breached: 0,
     };
+  assertServiceAccess(user);
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceRead)) {
+    throw new Error("Rate limit exceeded");
+  }
 
   return getCachedMetric(
     serviceStatsKey(user.companyId),
@@ -630,6 +756,10 @@ export async function getTicketStats() {
 export async function getServiceAutomationRules() {
   const user = await getCurrentUser();
   if (!user) return [];
+  assertServiceAccess(user);
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceRead)) {
+    throw new Error("Rate limit exceeded");
+  }
 
   return withRetry(() => prisma.automationRule.findMany({
     where: {
@@ -656,10 +786,14 @@ export async function getServiceAutomationRules() {
 export async function getServiceUsers() {
   const user = await getCurrentUser();
   if (!user) return [];
+  assertServiceAccess(user);
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceRead)) {
+    throw new Error("Rate limit exceeded");
+  }
 
   return withRetry(() => prisma.user.findMany({
     where: { companyId: user.companyId },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true },
     orderBy: { name: "asc" },
     take: 200,
   }));

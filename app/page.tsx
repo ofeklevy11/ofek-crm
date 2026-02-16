@@ -4,6 +4,7 @@ import { hasUserFlag } from "@/lib/permissions";
 import { getDashboardInitialData } from "@/app/actions/dashboard";
 import DashboardClient from "@/components/DashboardClient";
 import { ArrowLeft, CheckCircle2, LayoutDashboard, Zap } from "lucide-react";
+import { checkActionRateLimit, DASHBOARD_RATE_LIMITS } from "@/lib/rate-limit-action";
 
 export const dynamic = "force-dynamic";
 
@@ -135,10 +136,20 @@ export default async function Home() {
     );
   }
 
+  // Rate limit page SSR renders to prevent flooding
+  const rl = await checkActionRateLimit(String(user.id), DASHBOARD_RATE_LIMITS.page);
+  if (rl) {
+    return (
+      <div className="min-h-screen bg-muted/40 flex items-center justify-center p-4" dir="rtl">
+        <p className="text-muted-foreground">יותר מדי בקשות. נסה שוב בעוד מספר שניות.</p>
+      </div>
+    );
+  }
+
   // Fetch Dashboard Data only if user has permission
   const canView = hasUserFlag(user, "canViewDashboardData");
   const { analyticsViews, tables, goals } = canView
-    ? await getDashboardInitialData(user)
+    ? await getDashboardInitialData()
     : { analyticsViews: [], tables: [], goals: [] };
 
   return (

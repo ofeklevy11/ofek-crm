@@ -1,5 +1,8 @@
 import { inngest } from "../client";
 import { prismaBg as prisma } from "@/lib/prisma-background";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("AutoCleanupJobs");
 
 const BATCH_SIZE = 5000;
 const MAX_BATCHES = 50;
@@ -89,11 +92,7 @@ export const cleanupOldAutomationData = inngest.createFunction(
       return total;
     });
 
-    console.log(
-      `[cleanup-automation-data] Deleted ${logsDeleted} automation logs (>90d), ` +
-      `${statusDurationsDeleted} status durations (>365d), ` +
-      `${multiEventDeleted} multi-event durations (>365d)`,
-    );
+    log.info("Cleanup completed", { logsDeleted, statusDurationsDeleted, multiEventDeleted });
 
     return { logsDeleted, statusDurationsDeleted, multiEventDeleted };
   },

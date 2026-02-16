@@ -1,43 +1,10 @@
 import { inngest } from "../client";
 import { NonRetriableError } from "inngest";
-import { isIP } from "net";
+import { isPrivateUrl } from "@/lib/security/ssrf";
+import { createHmac, randomBytes } from "crypto";
+import { createLogger } from "@/lib/logger";
 
-/**
- * BB7: Validate webhook URL against SSRF — block private/internal IPs.
- */
-function isPrivateUrl(urlStr: string): boolean {
-  try {
-    const url = new URL(urlStr);
-    const hostname = url.hostname.toLowerCase();
-
-    // Block common private/internal hostnames
-    if (
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname === "::1" ||
-      hostname === "0.0.0.0" ||
-      hostname.endsWith(".local") ||
-      hostname.endsWith(".internal") ||
-      hostname === "metadata.google.internal" ||
-      hostname === "169.254.169.254"
-    ) {
-      return true;
-    }
-
-    // Block private IP ranges
-    if (isIP(hostname)) {
-      const parts = hostname.split(".").map(Number);
-      if (parts[0] === 10) return true; // 10.0.0.0/8
-      if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 172.16.0.0/12
-      if (parts[0] === 192 && parts[1] === 168) return true; // 192.168.0.0/16
-      if (parts[0] === 169 && parts[1] === 254) return true; // link-local
-    }
-
-    return false;
-  } catch {
-    return true; // Malformed URL — block
-  }
-}
+const log = createLogger("WhatsappJobs");
 
 /**
  * Dedicated background job for sending WhatsApp messages via Green API.
@@ -92,10 +59,10 @@ export const sendWhatsAppJob = inngest.createFunction(
         await sendGreenApiMessage(companyId, String(phone), content);
       }
 
-      console.log(`[WhatsApp Job] Message sent to ${phone} (company ${companyId})`);
+      log.info("WhatsApp message sent", { companyId });
     });
 
-    return { success: true, phone };
+    return { success: true, phone: phone.slice(0, 3) + "****" + phone.slice(-2) };
   },
 );
 
@@ -150,27 +117,58 @@ export const sendWebhookJob = inngest.createFunction(
       });
     }
 
-    const result = await step.run("send-webhook", async () => {
-      // Set timestamp at actual send time (not enqueue time)
-      const enrichedPayload = { ...payload, timestamp: new Date().toISOString() };
+    // Fetch or generate webhook signing secret for this company (atomic to prevent race condition)
+    const signingSecret = await step.run("get-signing-secret", async () => {
+      const { prisma } = await import("@/lib/prisma");
+      const newSecret = randomBytes(32).toString("hex");
 
-      console.log(`[Webhook Job] Sending to ${url} for rule ${ruleId}`);
+      // Atomic set-if-null: COALESCE ensures only the first writer's secret is kept
+      const result = await prisma.$queryRaw<{ webhookSigningSecret: string }[]>`
+        UPDATE "Company"
+        SET "webhookSigningSecret" = COALESCE("webhookSigningSecret", ${newSecret})
+        WHERE id = ${Number(companyId)}
+        RETURNING "webhookSigningSecret"
+      `;
+
+      if (!result[0]?.webhookSigningSecret) {
+        throw new Error(`Company ${companyId} not found`);
+      }
+      return result[0].webhookSigningSecret;
+    });
+
+    const result = await step.run("send-webhook", async () => {
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const enrichedPayload = { ...payload, timestamp: new Date().toISOString() };
+      const body = JSON.stringify(enrichedPayload);
+
+      // HMAC-SHA256 signature: sign "{timestamp}.{body}" to bind timestamp to payload
+      const signature = createHmac("sha256", signingSecret)
+        .update(`${timestamp}.${body}`)
+        .digest("hex");
+
+      // SECURITY: Log only hostname, not full URL (may contain sensitive query params)
+      const urlHostname = (() => { try { return new URL(url).hostname; } catch { return "invalid-url"; } })();
+      log.info("Sending webhook", { hostname: urlHostname, ruleId });
 
       const response = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(enrichedPayload),
+        headers: {
+          "Content-Type": "application/json",
+          "X-Webhook-Signature": `sha256=${signature}`,
+          "X-Webhook-Timestamp": timestamp,
+        },
+        body,
         signal: AbortSignal.timeout(30_000),
+        redirect: "error",
       });
 
       if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        const msg = `Webhook failed: ${response.status} ${response.statusText} — ${text.substring(0, 200)}`;
-        console.error(`[Webhook Job] ${msg}`);
+        const msg = `Webhook failed: ${response.status} ${response.statusText}`;
+        log.error("Webhook request failed", { status: response.status, statusText: response.statusText });
         throw new Error(msg);
       }
 
-      console.log(`[Webhook Job] Success for rule ${ruleId}`);
+      log.info("Webhook sent successfully", { ruleId });
       return { success: true, status: response.status };
     });
 

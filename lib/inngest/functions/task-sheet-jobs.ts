@@ -5,6 +5,9 @@ import {
   type AutomationItem,
   type AutomationUser,
 } from "@/lib/task-sheet-automations";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("TaskSheetJobs");
 
 /**
  * Background job for processing task sheet item automations.
@@ -37,15 +40,15 @@ export const processTaskSheetItemCompletion = inngest.createFunction(
 
     // BB13: Cross-validate companyId to prevent cross-tenant execution
     if (!eventCompanyId) {
-      console.error(`[TaskSheets] Missing companyId in event data`);
+      log.error("Missing companyId in event data");
       return { success: false, skipped: true, reason: "missing-companyId" };
     }
     if ((user as any).companyId && (user as any).companyId !== eventCompanyId) {
-      console.error(`[TaskSheets] companyId mismatch: event=${eventCompanyId} user=${(user as any).companyId}`);
+      log.error("companyId mismatch between event and user", { eventCompanyId, userCompanyId: (user as any).companyId });
       return { success: false, skipped: true, reason: "company-mismatch" };
     }
     if ((item as any).companyId && (item as any).companyId !== eventCompanyId) {
-      console.error(`[TaskSheets] companyId mismatch: event=${eventCompanyId} item=${(item as any).companyId}`);
+      log.error("companyId mismatch between event and item", { eventCompanyId, itemCompanyId: (item as any).companyId });
       return { success: false, skipped: true, reason: "company-mismatch" };
     }
 
@@ -53,9 +56,7 @@ export const processTaskSheetItemCompletion = inngest.createFunction(
       return { success: true, skipped: true };
     }
 
-    console.log(
-      `[TaskSheets] Executing ${actions.length} automations for item ${item.id}`,
-    );
+    log.info("Executing automations for item", { actionCount: actions.length, itemId: item.id });
 
     // TT: Track failures so we can return accurate success status
     let failedCount = 0;
@@ -67,10 +68,7 @@ export const processTaskSheetItemCompletion = inngest.createFunction(
         });
       } catch (actionError) {
         failedCount++;
-        console.error(
-          `[TaskSheets] Action ${i} (${action.actionType}) failed after retries for item ${item.id}:`,
-          actionError,
-        );
+        log.error("Action failed after retries", { actionIndex: i, actionType: action.actionType, itemId: item.id, error: String(actionError) });
       }
     }
 
@@ -83,10 +81,7 @@ export const processTaskSheetItemCompletion = inngest.createFunction(
           data: { companyId: eventCompanyId },
         });
       } catch (err) {
-        console.error(
-          "[task-sheet] Failed to trigger analytics refresh:",
-          err,
-        );
+        log.error("Failed to trigger analytics refresh", { error: String(err) });
       }
     }
 

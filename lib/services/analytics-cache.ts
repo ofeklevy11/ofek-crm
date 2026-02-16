@@ -1,5 +1,8 @@
 import { redis } from "@/lib/redis";
 import { randomUUID } from "crypto";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("AnalyticsCache");
 
 const FULL_CACHE_TTL = 4 * 60 * 60; // 4 hours in seconds
 const ITEM_CACHE_TTL = 4 * 60 * 60; // 4 hours in seconds
@@ -31,7 +34,7 @@ export async function setFullAnalyticsCache(companyId: number, views: any[]): Pr
   try {
     await redis.set(fullKey(companyId), JSON.stringify(views), "EX", FULL_CACHE_TTL);
   } catch (err) {
-    console.error("[analytics-cache] Failed to set full cache:", err);
+    log.error("Failed to set full cache", { error: String(err) });
   }
 }
 
@@ -58,7 +61,7 @@ export async function setSingleItemCache(
   try {
     await redis.set(itemKey(companyId, type, id), JSON.stringify(data), "EX", ITEM_CACHE_TTL);
   } catch (err) {
-    console.error("[analytics-cache] Failed to set item cache:", err);
+    log.error("Failed to set item cache", { error: String(err) });
   }
 }
 
@@ -66,7 +69,7 @@ export async function invalidateFullCache(companyId: number): Promise<void> {
   try {
     await redis.del(fullKey(companyId));
   } catch (err) {
-    console.error("[analytics-cache] Failed to invalidate full cache:", err);
+    log.error("Failed to invalidate full cache", { error: String(err) });
   }
 }
 
@@ -74,7 +77,7 @@ export async function invalidateItemCache(companyId: number, type: "rule" | "vie
   try {
     await redis.del(itemKey(companyId, type, id));
   } catch (err) {
-    console.error("[analytics-cache] Failed to invalidate item cache:", err);
+    log.error("Failed to invalidate item cache", { error: String(err) });
   }
 }
 
@@ -104,6 +107,6 @@ export async function releaseRefreshLock(companyId: number, lockValue: string): 
   try {
     await redis.eval(RELEASE_LOCK_SCRIPT, 1, lockKey(companyId), lockValue);
   } catch (err) {
-    console.error("[analytics-cache] Failed to release lock:", err);
+    log.error("Failed to release lock", { error: String(err) });
   }
 }

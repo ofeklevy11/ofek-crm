@@ -1,4 +1,7 @@
 import { inngest } from "../client";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("AutomationJobs");
 
 /**
  * Background job for processing automations on new records.
@@ -19,7 +22,7 @@ export const processNewRecordAutomation = inngest.createFunction(
   async ({ event }) => {
     const { tableId, tableName, recordId, companyId } = event.data;
     const { processNewRecordTrigger } = await import(
-      "@/app/actions/automations"
+      "@/app/actions/automations-core"
     );
     await processNewRecordTrigger(tableId, tableName, recordId, companyId);
 
@@ -28,7 +31,7 @@ export const processNewRecordAutomation = inngest.createFunction(
       try {
         await inngest.send({ id: `analytics-refresh-${companyId}-${Math.floor(Date.now() / 60000)}`, name: "analytics/refresh-company", data: { companyId } });
       } catch (err) {
-        console.warn("[automation] Failed to trigger analytics refresh:", err);
+        log.warn("Failed to trigger analytics refresh", { error: String(err) });
       }
     }
 
@@ -54,7 +57,7 @@ export const processRecordUpdateAutomation = inngest.createFunction(
   { event: "automation/record-update" },
   async ({ event }) => {
     const { tableId, recordId, oldData, newData, companyId, tableName } = event.data;
-    const { processRecordUpdate } = await import("@/app/actions/automations");
+    const { processRecordUpdate } = await import("@/app/actions/automations-core");
     await processRecordUpdate(tableId, recordId, oldData, newData, companyId, tableName);
 
     // Trigger background analytics refresh (debounced per company)
@@ -62,7 +65,7 @@ export const processRecordUpdateAutomation = inngest.createFunction(
       try {
         await inngest.send({ id: `analytics-refresh-${companyId}-${Math.floor(Date.now() / 60000)}`, name: "analytics/refresh-company", data: { companyId } });
       } catch (err) {
-        console.warn("[automation] Failed to trigger analytics refresh:", err);
+        log.warn("Failed to trigger analytics refresh", { error: String(err) });
       }
     }
 
@@ -89,7 +92,7 @@ export const processTaskStatusAutomation = inngest.createFunction(
   async ({ event }) => {
     const { taskId, taskTitle, fromStatus, toStatus, companyId } = event.data;
     const { processTaskStatusChange } = await import(
-      "@/app/actions/automations"
+      "@/app/actions/automations-core"
     );
     await processTaskStatusChange(taskId, taskTitle, fromStatus, toStatus, companyId);
 
@@ -98,7 +101,7 @@ export const processTaskStatusAutomation = inngest.createFunction(
       try {
         await inngest.send({ id: `analytics-refresh-${companyId}-${Math.floor(Date.now() / 60000)}`, name: "analytics/refresh-company", data: { companyId } });
       } catch (err) {
-        console.warn("[automation] Failed to trigger analytics refresh:", err);
+        log.warn("Failed to trigger analytics refresh", { error: String(err) });
       }
     }
 
@@ -125,7 +128,7 @@ export const processDirectDialAutomation = inngest.createFunction(
   async ({ event }) => {
     const { tableId, recordId, companyId, previousDialedAt } = event.data;
     const { processDirectDialTrigger } = await import(
-      "@/app/actions/automations"
+      "@/app/actions/automations-core"
     );
     await processDirectDialTrigger(tableId, recordId, companyId, previousDialedAt);
 
@@ -134,7 +137,7 @@ export const processDirectDialAutomation = inngest.createFunction(
       try {
         await inngest.send({ id: `analytics-refresh-${companyId}-${Math.floor(Date.now() / 60000)}`, name: "analytics/refresh-company", data: { companyId } });
       } catch (err) {
-        console.warn("[automation] Failed to trigger analytics refresh:", err);
+        log.warn("Failed to trigger analytics refresh", { error: String(err) });
       }
     }
 
@@ -161,7 +164,7 @@ export const processTimeBasedAutomationJob = inngest.createFunction(
   async ({ event }) => {
     const { companyId } = event.data;
     const { processTimeBasedAutomations } = await import(
-      "@/app/actions/automations"
+      "@/app/actions/automations-core"
     );
     await processTimeBasedAutomations(companyId);
     return { success: true, companyId };
@@ -187,9 +190,9 @@ export const processEventAutomationJob = inngest.createFunction(
   async ({ event }) => {
     const { companyId } = event.data;
     const { processEventAutomations } = await import(
-      "@/app/actions/event-automations"
+      "@/app/actions/event-automations-core"
     );
-    await processEventAutomations(companyId);
+    await processEventAutomations(companyId, process.env.CRON_SECRET);
     return { success: true, companyId };
   },
 );

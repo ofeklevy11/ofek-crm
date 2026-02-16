@@ -1,6 +1,9 @@
 import { inngest } from "../client";
 import { NonRetriableError } from "inngest";
 import { redis } from "@/lib/redis";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("AiGenerationJobs");
 
 const AI_JOB_TTL = 600; // 10 minutes TTL for results in Redis
 
@@ -202,7 +205,9 @@ async function callOpenRouter(systemPrompt: string, maxTokens: number): Promise<
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": "http://localhost:3000",
+      ...(process.env.NEXT_PUBLIC_APP_URL
+        ? { "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL }
+        : {}),
       "X-Title": "CRM AI Generator",
     },
     body: JSON.stringify({
@@ -216,7 +221,9 @@ async function callOpenRouter(systemPrompt: string, maxTokens: number): Promise<
 
   if (!response.ok) {
     const errorData = await response.text();
-    throw new Error(`AI API responded with ${response.status}: ${errorData}`);
+    // SECURITY: Truncate error to avoid leaking full external API response into logs/Redis
+    const truncated = errorData.length > 200 ? errorData.slice(0, 200) + "..." : errorData;
+    throw new Error(`AI API responded with ${response.status}: ${truncated}`);
   }
 
   const data = await response.json();
@@ -350,7 +357,7 @@ export const processAIGeneration = inngest.createFunction(
           AI_JOB_TTL
         );
       } catch (err) {
-        console.error("onFailure: failed to write status to Redis", err);
+        log.error("onFailure: failed to write status to Redis", { error: String(err) });
       }
     },
   },
@@ -391,11 +398,11 @@ export const processAIGeneration = inngest.createFunction(
       // BB16: Truncate context to avoid oversized prompts
       const safeContext = { ...context };
       if (Array.isArray(safeContext.formattedTables) && safeContext.formattedTables.length > 50) {
-        console.warn(`[AI Job] Truncating formattedTables from ${safeContext.formattedTables.length} to 50`);
+        log.warn("Truncating formattedTables", { from: safeContext.formattedTables.length, to: 50 });
         safeContext.formattedTables = safeContext.formattedTables.slice(0, 50);
       }
       if (typeof safeContext.existingTables === "string" && safeContext.existingTables.length > 30000) {
-        console.warn(`[AI Job] Truncating existingTables context to 30000 chars`);
+        log.warn("Truncating existingTables context", { maxChars: 30000 });
         safeContext.existingTables = safeContext.existingTables.slice(0, 30000);
       }
 

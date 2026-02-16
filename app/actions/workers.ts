@@ -4,10 +4,26 @@ import { prisma } from "@/lib/prisma";
 import { withRetry } from "@/lib/db-retry";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { validateUserInCompany, validateWorkerInCompany } from "@/lib/company-validation";
 import { redis } from "@/lib/redis";
+import {
+  checkServerActionRateLimit,
+  WORKER_RATE_LIMITS,
+  validateStringLength,
+  validateJsonValue,
+  validateUrl,
+  validateWebhookUrl,
+  validateOnCompleteActions,
+  wrapPrismaError,
+  validateNonNegativeInt,
+  MAX_LENGTHS,
+} from "@/lib/server-action-utils";
+import { createLogger } from "@/lib/logger";
 
-// -- Status validation (P6) --
+const log = createLogger("Workers");
+
+// -- Status validation --
 const VALID_WORKER_STATUSES = ["ONBOARDING", "ACTIVE", "ON_LEAVE", "TERMINATED"] as const;
 const VALID_STEP_STATUSES = ["PENDING", "IN_PROGRESS", "COMPLETED", "SKIPPED"] as const;
 const VALID_TASK_STATUSES = ["PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"] as const;
@@ -20,7 +36,20 @@ function validateEnum(value: string | undefined, valid: readonly string[], label
   }
 }
 
-// -- Cache helpers (P9) --
+// -- Permission helpers --
+function requireManageWorkers(user: { role: string; permissions?: Record<string, boolean> }): void {
+  if (!hasUserFlag(user as any, "canManageWorkers")) {
+    throw new Error("Permission denied");
+  }
+}
+
+function requireViewWorkers(user: { role: string; permissions?: Record<string, boolean> }): void {
+  if (!hasUserFlag(user as any, "canViewWorkers")) {
+    throw new Error("Permission denied");
+  }
+}
+
+// -- Cache helpers --
 const CACHE_TTL = 60; // 60 seconds
 
 async function getCached<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
@@ -36,12 +65,9 @@ async function getCached<T>(key: string, fetcher: () => Promise<T>): Promise<T> 
 async function invalidateWorkersCache(companyId: number) {
   try {
     await redis.del(`workers:${companyId}:departments`);
-    // Delete all path cache variants (base + per-department)
     const prefix = redis.options.keyPrefix || "";
     const pathKeys = await redis.keys(`workers:${companyId}:paths*`);
     if (pathKeys.length > 0) {
-      // redis.keys() returns fully-prefixed keys; redis.del() auto-prepends prefix,
-      // so strip prefix before passing to del()
       await redis.del(...pathKeys.map(k => k.startsWith(prefix) ? k.slice(prefix.length) : k));
     }
   } catch { /* non-critical */ }
@@ -54,11 +80,16 @@ async function invalidateWorkersCache(companyId: number) {
 export async function getDepartments() {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireViewWorkers(user);
+
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.read);
 
   return getCached(`workers:${user.companyId}:departments`, () =>
     withRetry(() => prisma.department.findMany({
       where: { companyId: user.companyId, deletedAt: null },
-      include: {
+      select: {
+        id: true, name: true, description: true, color: true, icon: true,
+        managerId: true, isActive: true, createdAt: true, updatedAt: true,
         _count: {
           select: { workers: { where: { deletedAt: null } }, onboardingPaths: true },
         },
@@ -72,10 +103,15 @@ export async function getDepartments() {
 export async function getDepartment(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireViewWorkers(user);
+
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.read);
 
   return withRetry(() => prisma.department.findFirst({
     where: { id, companyId: user.companyId, deletedAt: null },
-    include: {
+    select: {
+      id: true, name: true, description: true, color: true, icon: true,
+      managerId: true, isActive: true, createdAt: true, updatedAt: true,
       workers: {
         where: { deletedAt: null },
         select: { id: true, firstName: true, lastName: true, status: true, position: true },
@@ -83,10 +119,7 @@ export async function getDepartment(id: number) {
       },
       onboardingPaths: {
         select: {
-          id: true,
-          name: true,
-          isDefault: true,
-          isActive: true,
+          id: true, name: true, isDefault: true, isActive: true,
           steps: {
             select: { id: true, title: true, order: true, type: true },
             orderBy: { order: "asc" },
@@ -107,24 +140,45 @@ export async function createDepartment(data: {
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.mutation);
 
-  // SECURITY: Validate managerId belongs to same company
+  // Validate & whitelist fields
+  const name = validateStringLength(data.name, MAX_LENGTHS.name, "Department name");
+  if (!name) throw new Error("Department name is required");
+  const description = validateStringLength(data.description, MAX_LENGTHS.description, "Description");
+  const color = validateStringLength(data.color, MAX_LENGTHS.color, "Color");
+  const icon = validateStringLength(data.icon, MAX_LENGTHS.icon, "Icon");
+
+  // Validate managerId belongs to same company
   if (data.managerId) {
     if (!(await validateUserInCompany(data.managerId, user.companyId))) {
       throw new Error("Invalid manager");
     }
   }
 
-  const department = await withRetry(() => prisma.department.create({
-    data: {
-      ...data,
-      companyId: user.companyId,
-    },
-  }));
+  try {
+    const department = await withRetry(() => prisma.department.create({
+      data: {
+        name,
+        description,
+        color,
+        icon,
+        managerId: data.managerId,
+        companyId: user.companyId,
+      },
+      select: {
+        id: true, name: true, description: true, color: true, icon: true,
+        managerId: true, isActive: true, createdAt: true, updatedAt: true,
+      },
+    }));
 
-  revalidatePath("/workers");
-  await invalidateWorkersCache(user.companyId);
-  return department;
+    revalidatePath("/workers");
+    await invalidateWorkersCache(user.companyId);
+    return department;
+  } catch (e: any) {
+    wrapPrismaError(e, "Department");
+  }
 }
 
 export async function updateDepartment(
@@ -140,45 +194,69 @@ export async function updateDepartment(
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.mutation);
 
-  // SECURITY: Validate managerId belongs to same company
-  if (data.managerId) {
-    if (!(await validateUserInCompany(data.managerId, user.companyId))) {
-      throw new Error("Invalid manager");
+  // Validate & whitelist fields
+  const updateData: Record<string, unknown> = {};
+  if (data.name !== undefined) updateData.name = validateStringLength(data.name, MAX_LENGTHS.name, "Department name");
+  if (data.description !== undefined) updateData.description = validateStringLength(data.description, MAX_LENGTHS.description, "Description");
+  if (data.color !== undefined) updateData.color = validateStringLength(data.color, MAX_LENGTHS.color, "Color");
+  if (data.icon !== undefined) updateData.icon = validateStringLength(data.icon, MAX_LENGTHS.icon, "Icon");
+  if (typeof data.isActive === "boolean") updateData.isActive = data.isActive;
+
+  // Validate managerId belongs to same company
+  if (data.managerId !== undefined) {
+    if (data.managerId !== null && data.managerId) {
+      if (!(await validateUserInCompany(data.managerId, user.companyId))) {
+        throw new Error("Invalid manager");
+      }
     }
+    updateData.managerId = data.managerId;
   }
 
-  // SECURITY: Atomic companyId check in update WHERE clause
-  const department = await withRetry(() => prisma.department.update({
-    where: { id, companyId: user.companyId, deletedAt: null },
-    data,
-  }));
+  try {
+    const department = await withRetry(() => prisma.department.update({
+      where: { id, companyId: user.companyId, deletedAt: null },
+      data: updateData,
+      select: {
+        id: true, name: true, description: true, color: true, icon: true,
+        managerId: true, isActive: true, createdAt: true, updatedAt: true,
+      },
+    }));
 
-  revalidatePath("/workers");
-  await invalidateWorkersCache(user.companyId);
-  return department;
+    revalidatePath("/workers");
+    await invalidateWorkersCache(user.companyId);
+    return department;
+  } catch (e: any) {
+    wrapPrismaError(e, "Department");
+  }
 }
 
 export async function deleteDepartment(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.dangerous);
 
-  // Transaction prevents race: a concurrent createWorker could assign a worker
-  // between the count check and the soft-delete, causing orphans
-  await withRetry(() => prisma.$transaction(async (tx) => {
-    const workersCount = await tx.worker.count({
-      where: { departmentId: id, companyId: user.companyId, deletedAt: null },
-    });
+  try {
+    await withRetry(() => prisma.$transaction(async (tx) => {
+      const workersCount = await tx.worker.count({
+        where: { departmentId: id, companyId: user.companyId, deletedAt: null },
+      });
 
-    if (workersCount > 0) {
-      throw new Error("Cannot delete department with active workers");
-    }
+      if (workersCount > 0) {
+        throw new Error("Cannot delete department with active workers");
+      }
 
-    await tx.department.update({
-      where: { id, companyId: user.companyId, deletedAt: null },
-      data: { deletedAt: new Date() },
-    });
-  }, { maxWait: 5000, timeout: 10000 }));
+      await tx.department.update({
+        where: { id, companyId: user.companyId, deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
+    }, { maxWait: 5000, timeout: 10000 }));
+  } catch (e: any) {
+    wrapPrismaError(e, "Department");
+  }
 
   revalidatePath("/workers");
   await invalidateWorkersCache(user.companyId);
@@ -197,9 +275,17 @@ export async function getWorkers(filters?: {
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireViewWorkers(user);
 
-  const pageSize = Math.min(filters?.pageSize ?? 500, 500);
-  const page = filters?.page ?? 1;
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.read);
+
+  // Validate status filter against enum
+  if (filters?.status) {
+    validateEnum(filters.status, VALID_WORKER_STATUSES, "worker status filter");
+  }
+
+  const pageSize = Math.min(Math.max(1, Math.floor(filters?.pageSize ?? 500)), 500);
+  const page = Math.max(1, Math.floor(filters?.page ?? 1));
   const skip = (page - 1) * pageSize;
 
   const where = {
@@ -263,18 +349,35 @@ export async function getWorkers(filters?: {
 export async function getWorker(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireViewWorkers(user);
+
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.read);
 
   return withRetry(() => prisma.worker.findFirst({
     where: { id, companyId: user.companyId, deletedAt: null },
-    include: {
+    select: {
+      id: true, firstName: true, lastName: true, email: true, phone: true,
+      avatar: true, position: true, employeeId: true, status: true,
+      startDate: true, endDate: true, notes: true, customFields: true,
+      departmentId: true, linkedUserId: true, createdAt: true, updatedAt: true,
       department: {
         select: { id: true, name: true, description: true, color: true, icon: true, managerId: true, isActive: true },
       },
       onboardingProgress: {
-        include: {
+        select: {
+          id: true, pathId: true, workerId: true, status: true, completedAt: true, createdAt: true,
           path: {
-            include: {
-              steps: { orderBy: { order: "asc" } },
+            select: {
+              id: true, name: true, description: true, departmentId: true,
+              isDefault: true, isActive: true, estimatedDays: true,
+              steps: {
+                orderBy: { order: "asc" },
+                select: {
+                  id: true, pathId: true, title: true, description: true, type: true,
+                  order: true, estimatedMinutes: true, resourceUrl: true,
+                  resourceType: true, isRequired: true, onCompleteActions: true,
+                },
+              },
             },
           },
           stepProgress: {
@@ -285,6 +388,11 @@ export async function getWorker(id: number) {
       assignedTasks: {
         orderBy: { createdAt: "desc" },
         take: 100,
+        select: {
+          id: true, title: true, description: true, priority: true,
+          status: true, dueDate: true, completedAt: true,
+          createdAt: true, updatedAt: true,
+        },
       },
     },
   }));
@@ -304,63 +412,93 @@ export async function createWorker(data: {
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.mutation);
 
-  // Validate FK refs outside transaction (read-only, safe)
+  // Validate & whitelist fields
+  const firstName = validateStringLength(data.firstName, MAX_LENGTHS.name, "First name");
+  if (!firstName) throw new Error("First name is required");
+  const lastName = validateStringLength(data.lastName, MAX_LENGTHS.name, "Last name");
+  if (!lastName) throw new Error("Last name is required");
+  const email = validateStringLength(data.email, MAX_LENGTHS.email, "Email");
+  const phone = validateStringLength(data.phone, MAX_LENGTHS.phone, "Phone");
+  const position = validateStringLength(data.position, MAX_LENGTHS.position, "Position");
+  const employeeId = validateStringLength(data.employeeId, MAX_LENGTHS.employeeId, "Employee ID");
+  const notes = validateStringLength(data.notes, MAX_LENGTHS.notes, "Notes");
+
+  // Validate FK refs
   const dept = await withRetry(() => prisma.department.findFirst({
     where: { id: data.departmentId, companyId: user.companyId, deletedAt: null },
     select: { id: true },
   }));
   if (!dept) throw new Error("Department not found or access denied");
 
-  // SECURITY: Validate linkedUserId belongs to same company
   if (data.linkedUserId) {
     if (!(await validateUserInCompany(data.linkedUserId, user.companyId))) {
       throw new Error("Invalid linked user");
     }
   }
 
-  // Atomic: create worker + assign default path in one transaction (P2)
-  const worker = await withRetry(() => prisma.$transaction(async (tx) => {
-    const w = await tx.worker.create({
-      data: {
-        ...data,
-        companyId: user.companyId,
-        status: "ONBOARDING",
-      },
-    });
-
-    const defaultPath = await tx.onboardingPath.findFirst({
-      where: {
-        companyId: user.companyId,
-        departmentId: data.departmentId,
-        isDefault: true,
-        isActive: true,
-      },
-      select: { id: true, steps: { select: { id: true } } },
-    });
-
-    if (defaultPath) {
-      const onboarding = await tx.workerOnboarding.create({
-        data: { companyId: user.companyId, workerId: w.id, pathId: defaultPath.id, status: "IN_PROGRESS" },
+  try {
+    const worker = await withRetry(() => prisma.$transaction(async (tx) => {
+      const w = await tx.worker.create({
+        data: {
+          firstName,
+          lastName,
+          email,
+          phone,
+          position,
+          employeeId,
+          notes,
+          departmentId: data.departmentId,
+          startDate: data.startDate,
+          linkedUserId: data.linkedUserId,
+          companyId: user.companyId,
+          status: "ONBOARDING",
+        },
+        select: {
+          id: true, firstName: true, lastName: true, email: true, phone: true,
+          avatar: true, position: true, employeeId: true, status: true,
+          startDate: true, endDate: true, notes: true, customFields: true,
+          departmentId: true, linkedUserId: true, createdAt: true, updatedAt: true,
+        },
       });
-      if (defaultPath.steps.length > 0) {
-        await tx.workerOnboardingStep.createMany({
-          data: defaultPath.steps.map((s) => ({
-            companyId: user.companyId,
-            onboardingId: onboarding.id,
-            stepId: s.id,
-            status: "PENDING",
-          })),
+
+      const defaultPath = await tx.onboardingPath.findFirst({
+        where: {
+          companyId: user.companyId,
+          departmentId: data.departmentId,
+          isDefault: true,
+          isActive: true,
+        },
+        select: { id: true, steps: { select: { id: true } } },
+      });
+
+      if (defaultPath) {
+        const onboarding = await tx.workerOnboarding.create({
+          data: { companyId: user.companyId, workerId: w.id, pathId: defaultPath.id, status: "IN_PROGRESS" },
         });
+        if (defaultPath.steps.length > 0) {
+          await tx.workerOnboardingStep.createMany({
+            data: defaultPath.steps.map((s) => ({
+              companyId: user.companyId,
+              onboardingId: onboarding.id,
+              stepId: s.id,
+              status: "PENDING",
+            })),
+          });
+        }
       }
-    }
 
-    return w;
-  }, { maxWait: 5000, timeout: 10000 }));
+      return w;
+    }, { maxWait: 5000, timeout: 10000 }));
 
-  revalidatePath("/workers");
-  await invalidateWorkersCache(user.companyId);
-  return worker;
+    revalidatePath("/workers");
+    await invalidateWorkersCache(user.companyId);
+    return worker;
+  } catch (e: any) {
+    wrapPrismaError(e, "Worker");
+  }
 }
 
 export async function updateWorker(
@@ -380,36 +518,61 @@ export async function updateWorker(
     linkedUserId?: number;
     avatar?: string;
     customFields?: Record<string, unknown>;
-    expectedUpdatedAt?: string; // ISO string for optimistic locking (P5)
+    expectedUpdatedAt?: string;
   },
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.mutation);
 
-  const { expectedUpdatedAt, ...updateData } = data;
+  const { expectedUpdatedAt, customFields: rawCustomFields, ...rest } = data;
 
-  // P6: validate status
-  validateEnum(updateData.status, VALID_WORKER_STATUSES, "worker status");
+  // Validate status
+  validateEnum(rest.status, VALID_WORKER_STATUSES, "worker status");
 
-  // SECURITY: Validate departmentId belongs to user's company if provided
-  if (updateData.departmentId) {
+  // Validate & whitelist fields
+  const updateData: Record<string, unknown> = {};
+  if (rest.firstName !== undefined) updateData.firstName = validateStringLength(rest.firstName, MAX_LENGTHS.name, "First name");
+  if (rest.lastName !== undefined) updateData.lastName = validateStringLength(rest.lastName, MAX_LENGTHS.name, "Last name");
+  if (rest.email !== undefined) updateData.email = validateStringLength(rest.email, MAX_LENGTHS.email, "Email");
+  if (rest.phone !== undefined) updateData.phone = validateStringLength(rest.phone, MAX_LENGTHS.phone, "Phone");
+  if (rest.position !== undefined) updateData.position = validateStringLength(rest.position, MAX_LENGTHS.position, "Position");
+  if (rest.employeeId !== undefined) updateData.employeeId = validateStringLength(rest.employeeId, MAX_LENGTHS.employeeId, "Employee ID");
+  if (rest.notes !== undefined) updateData.notes = validateStringLength(rest.notes, MAX_LENGTHS.notes, "Notes");
+  if (rest.avatar !== undefined) updateData.avatar = validateStringLength(rest.avatar, MAX_LENGTHS.avatar, "Avatar");
+  if (rest.status !== undefined) updateData.status = rest.status;
+  if (rest.startDate !== undefined) updateData.startDate = rest.startDate;
+  if (rest.endDate !== undefined) updateData.endDate = rest.endDate;
+
+  // Validate customFields JSON
+  if (rawCustomFields !== undefined) {
+    updateData.customFields = validateJsonValue(rawCustomFields, 3, 51200, "Custom fields");
+  }
+
+  // Validate departmentId belongs to user's company
+  if (rest.departmentId !== undefined) {
     const dept = await withRetry(() => prisma.department.findFirst({
-      where: { id: updateData.departmentId, companyId: user.companyId, deletedAt: null },
+      where: { id: rest.departmentId, companyId: user.companyId, deletedAt: null },
       select: { id: true },
     }));
     if (!dept) throw new Error("Department not found or access denied");
+    updateData.departmentId = rest.departmentId;
   }
 
-  // SECURITY: Validate linkedUserId belongs to same company
-  if (updateData.linkedUserId) {
-    if (!(await validateUserInCompany(updateData.linkedUserId, user.companyId))) {
-      throw new Error("Invalid linked user");
+  // Validate linkedUserId belongs to same company
+  if (rest.linkedUserId !== undefined) {
+    if (rest.linkedUserId) {
+      if (!(await validateUserInCompany(rest.linkedUserId, user.companyId))) {
+        throw new Error("Invalid linked user");
+      }
     }
+    updateData.linkedUserId = rest.linkedUserId;
   }
 
   try {
     const worker = await withRetry(() => prisma.$transaction(async (tx) => {
-      // P5: optimistic lock check
+      // Optimistic lock check
       if (expectedUpdatedAt) {
         const current = await tx.worker.findFirst({
           where: { id, companyId: user.companyId, deletedAt: null },
@@ -423,31 +586,36 @@ export async function updateWorker(
 
       return tx.worker.update({
         where: { id, companyId: user.companyId, deletedAt: null },
-        data: updateData as any,
+        data: updateData,
+        select: {
+          id: true, firstName: true, lastName: true, email: true, phone: true,
+          avatar: true, position: true, employeeId: true, status: true,
+          startDate: true, endDate: true, notes: true, customFields: true,
+          departmentId: true, linkedUserId: true, createdAt: true, updatedAt: true,
+        },
       });
     }, { maxWait: 5000, timeout: 10000 }));
 
     revalidatePath("/workers");
     return worker;
   } catch (e: any) {
-    if (e.code === "P2025") throw new Error("Worker not found or access denied");
-    throw e;
+    wrapPrismaError(e, "Worker");
   }
 }
 
 export async function deleteWorker(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.dangerous);
 
-  // P10: Soft delete instead of hard delete
   try {
     await withRetry(() => prisma.worker.update({
       where: { id, companyId: user.companyId, deletedAt: null },
       data: { deletedAt: new Date() },
     }));
   } catch (e: any) {
-    if (e.code === "P2025") throw new Error("Worker not found or access denied");
-    throw e;
+    wrapPrismaError(e, "Worker");
   }
 
   revalidatePath("/workers");
@@ -462,6 +630,9 @@ export async function deleteWorker(id: number) {
 export async function getOnboardingPaths(departmentId?: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireViewWorkers(user);
+
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.read);
 
   return getCached(
     `workers:${user.companyId}:paths${departmentId ? `:${departmentId}` : ""}`,
@@ -470,22 +641,18 @@ export async function getOnboardingPaths(departmentId?: number) {
         companyId: user.companyId,
         ...(departmentId && { departmentId }),
       },
-      include: {
+      select: {
+        id: true, name: true, description: true, departmentId: true,
+        isDefault: true, isActive: true, estimatedDays: true,
+        createdAt: true, updatedAt: true,
         department: {
           select: { id: true, name: true, color: true },
         },
         steps: {
           select: {
-            id: true,
-            pathId: true,
-            title: true,
-            description: true,
-            type: true,
-            order: true,
-            estimatedMinutes: true,
-            resourceUrl: true,
-            resourceType: true,
-            isRequired: true,
+            id: true, pathId: true, title: true, description: true,
+            type: true, order: true, estimatedMinutes: true,
+            resourceUrl: true, resourceType: true, isRequired: true,
             onCompleteActions: true,
           },
           orderBy: { order: "asc" },
@@ -503,30 +670,31 @@ export async function getOnboardingPaths(departmentId?: number) {
 export async function getOnboardingPath(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireViewWorkers(user);
+
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.read);
 
   return withRetry(() => prisma.onboardingPath.findFirst({
     where: { id, companyId: user.companyId },
-    include: {
+    select: {
+      id: true, name: true, description: true, departmentId: true,
+      isDefault: true, isActive: true, estimatedDays: true,
+      createdAt: true, updatedAt: true,
       department: {
         select: { id: true, name: true, description: true, color: true, icon: true, managerId: true, isActive: true },
       },
       steps: {
         orderBy: { order: "asc" },
         select: {
-          id: true,
-          title: true,
-          description: true,
-          type: true,
-          order: true,
-          estimatedMinutes: true,
-          isRequired: true,
-          resourceUrl: true,
-          resourceType: true,
-          onCompleteActions: true,
+          id: true, title: true, description: true, type: true,
+          order: true, estimatedMinutes: true, isRequired: true,
+          resourceUrl: true, resourceType: true, onCompleteActions: true,
         },
       },
       workerProgress: {
-        include: {
+        select: {
+          id: true, pathId: true, workerId: true, status: true,
+          completedAt: true, createdAt: true,
           worker: {
             select: { id: true, firstName: true, lastName: true, avatar: true, position: true, status: true },
           },
@@ -561,55 +729,95 @@ export async function createOnboardingPath(data: {
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.mutation);
 
-  const { steps: stepsData, ...pathData } = data;
+  // Validate & whitelist path fields
+  const name = validateStringLength(data.name, MAX_LENGTHS.name, "Path name");
+  if (!name) throw new Error("Path name is required");
+  const description = validateStringLength(data.description, MAX_LENGTHS.description, "Description");
 
-  // Validate step types upfront
+  const estimatedDays = validateNonNegativeInt(data.estimatedDays, "Estimated days");
+
+  // Cross-tenant departmentId validation
+  if (data.departmentId) {
+    const dept = await withRetry(() => prisma.department.findFirst({
+      where: { id: data.departmentId, companyId: user.companyId, deletedAt: null },
+      select: { id: true },
+    }));
+    if (!dept) throw new Error("Department not found or access denied");
+  }
+
+  // Validate & whitelist step fields
+  const stepsData = data.steps;
+  if (stepsData && stepsData.length > 200) {
+    throw new Error("Onboarding path can have at most 200 steps");
+  }
   if (stepsData?.length) {
     for (const s of stepsData) {
       validateEnum(s.type, VALID_STEP_TYPES, "step type");
     }
   }
 
-  // Transaction prevents race: two concurrent creates both unsetting the old default
-  // Also creates steps atomically with the path
-  const path = await withRetry(() => prisma.$transaction(async (tx) => {
-    // If setting as default, unset other defaults for this department
-    if (pathData.isDefault && pathData.departmentId) {
-      await tx.onboardingPath.updateMany({
-        where: {
+  const validatedSteps = stepsData?.map((s, i) => ({
+    title: validateStringLength(s.title, MAX_LENGTHS.title, `Step ${i} title`) || "",
+    description: validateStringLength(s.description, MAX_LENGTHS.description, `Step ${i} description`),
+    type: s.type,
+    order: validateNonNegativeInt(s.order, `Step ${i} order`) ?? i,
+    estimatedMinutes: validateNonNegativeInt(s.estimatedMinutes, `Step ${i} estimatedMinutes`),
+    resourceUrl: validateUrl(s.resourceUrl, `Step ${i} resourceUrl`),
+    resourceType: validateStringLength(s.resourceType, MAX_LENGTHS.resourceType, `Step ${i} resourceType`),
+    isRequired: s.isRequired,
+    onCompleteActions: s.onCompleteActions !== undefined
+      ? validateOnCompleteActions(s.onCompleteActions)
+      : undefined,
+  }));
+
+  try {
+    const path = await withRetry(() => prisma.$transaction(async (tx) => {
+      // If setting as default, unset other defaults for this department
+      if (data.isDefault && data.departmentId) {
+        await tx.onboardingPath.updateMany({
+          where: {
+            companyId: user.companyId,
+            departmentId: data.departmentId,
+            isDefault: true,
+          },
+          data: { isDefault: false },
+        });
+      }
+
+      const created = await tx.onboardingPath.create({
+        data: {
+          name,
+          description,
+          departmentId: data.departmentId,
+          isDefault: data.isDefault,
+          isActive: data.isActive,
+          estimatedDays,
           companyId: user.companyId,
-          departmentId: pathData.departmentId,
-          isDefault: true,
         },
-        data: { isDefault: false },
       });
-    }
 
-    const created = await tx.onboardingPath.create({
-      data: {
-        ...pathData,
-        companyId: user.companyId,
-      },
-    });
+      if (validatedSteps?.length) {
+        await tx.onboardingStep.createMany({
+          data: validatedSteps.map((s) => ({
+            ...s,
+            pathId: created.id,
+            companyId: user.companyId,
+          })),
+        });
+      }
 
-    if (stepsData?.length) {
-      await tx.onboardingStep.createMany({
-        data: stepsData.map((s, i) => ({
-          ...s,
-          pathId: created.id,
-          companyId: user.companyId,
-          order: s.order ?? i,
-        })),
-      });
-    }
+      return created;
+    }, { maxWait: 5000, timeout: 10000 }));
 
-    return created;
-  }, { maxWait: 5000, timeout: 10000 }));
-
-  revalidatePath("/workers");
-  await invalidateWorkersCache(user.companyId);
-  return path;
+    revalidatePath("/workers");
+    await invalidateWorkersCache(user.companyId);
+    return path;
+  } catch (e: any) {
+    wrapPrismaError(e, "Onboarding path");
+  }
 }
 
 export async function updateOnboardingPath(
@@ -625,9 +833,29 @@ export async function updateOnboardingPath(
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.mutation);
 
-  // Transaction prevents race: concurrent updates both unsetting the old default
-  console.error("[updateOnboardingPath] id:", id, "companyId:", user.companyId, "data:", JSON.stringify(data));
+  // Validate & whitelist fields
+  const updateData: Record<string, unknown> = {};
+  if (data.name !== undefined) updateData.name = validateStringLength(data.name, MAX_LENGTHS.name, "Path name");
+  if (data.description !== undefined) updateData.description = validateStringLength(data.description, MAX_LENGTHS.description, "Description");
+  if (typeof data.isDefault === "boolean") updateData.isDefault = data.isDefault;
+  if (typeof data.isActive === "boolean") updateData.isActive = data.isActive;
+  if (data.estimatedDays !== undefined) updateData.estimatedDays = validateNonNegativeInt(data.estimatedDays, "Estimated days");
+
+  // Cross-tenant departmentId validation
+  if (data.departmentId !== undefined) {
+    if (data.departmentId) {
+      const dept = await withRetry(() => prisma.department.findFirst({
+        where: { id: data.departmentId, companyId: user.companyId, deletedAt: null },
+        select: { id: true },
+      }));
+      if (!dept) throw new Error("Department not found or access denied");
+    }
+    updateData.departmentId = data.departmentId;
+  }
+
   try {
     const path = await withRetry(() => prisma.$transaction(async (tx) => {
       if (data.isDefault) {
@@ -652,7 +880,7 @@ export async function updateOnboardingPath(
 
       return tx.onboardingPath.update({
         where: { id, companyId: user.companyId },
-        data,
+        data: updateData,
       });
     }, { maxWait: 5000, timeout: 10000 }));
 
@@ -660,31 +888,28 @@ export async function updateOnboardingPath(
     await invalidateWorkersCache(user.companyId);
     return path;
   } catch (e: any) {
-    if (e.code === "P2025") throw new Error("Onboarding path not found or access denied");
-    throw e;
+    wrapPrismaError(e, "Onboarding path");
   }
 }
 
 export async function deleteOnboardingPath(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.dangerous);
 
-  // Transaction prevents concurrent assignOnboardingPath from inserting between deleteMany and delete
   try {
     await withRetry(() => prisma.$transaction(async (tx) => {
-      // Delete all related WorkerOnboarding records first (WorkerOnboardingStep will cascade delete)
       await tx.workerOnboarding.deleteMany({
         where: { pathId: id, path: { companyId: user.companyId } },
       });
 
-      // Now delete the path (OnboardingStep will cascade delete due to onDelete: Cascade)
       await tx.onboardingPath.delete({
         where: { id, companyId: user.companyId },
       });
     }, { maxWait: 5000, timeout: 10000 }));
   } catch (e: any) {
-    if (e.code === "P2025") throw new Error("Onboarding path not found or access denied");
-    throw e;
+    wrapPrismaError(e, "Onboarding path");
   }
 
   revalidatePath("/workers");
@@ -709,12 +934,24 @@ export async function createOnboardingStep(data: {
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.mutation);
 
-  // P6: validate step type
+  // Validate step type
   validateEnum(data.type, VALID_STEP_TYPES, "step type");
 
-  // SECURITY: Verify pathId belongs to user's company
-  console.error("[createOnboardingStep] pathId:", data.pathId, "companyId:", user.companyId);
+  // Validate & whitelist fields
+  const title = validateStringLength(data.title, MAX_LENGTHS.title, "Step title");
+  if (!title) throw new Error("Step title is required");
+  const description = validateStringLength(data.description, MAX_LENGTHS.description, "Description");
+  const resourceUrl = validateUrl(data.resourceUrl, "Resource URL");
+  const resourceType = validateStringLength(data.resourceType, MAX_LENGTHS.resourceType, "Resource type");
+
+  // Validate numeric fields
+  const estimatedMinutes = validateNonNegativeInt(data.estimatedMinutes, "Estimated minutes");
+  const validatedOrder = validateNonNegativeInt(data.order, "Order");
+
+  // Verify pathId belongs to user's company
   const path = await withRetry(() => prisma.onboardingPath.findFirst({
     where: { id: data.pathId, companyId: user.companyId },
     select: { id: true },
@@ -722,21 +959,43 @@ export async function createOnboardingStep(data: {
   if (!path) throw new Error("Onboarding path not found or access denied");
 
   // Get max order if not specified
-  if (data.order === undefined) {
+  let order = validatedOrder;
+  if (order === undefined) {
     const maxOrder = await withRetry(() => prisma.onboardingStep.aggregate({
       where: { pathId: data.pathId, companyId: user.companyId },
       _max: { order: true },
     }));
-    data.order = (maxOrder._max.order ?? -1) + 1;
+    order = (maxOrder._max.order ?? -1) + 1;
   }
 
-  const step = await withRetry(() => prisma.onboardingStep.create({
-    data: { ...data, companyId: user.companyId },
-  }));
+  try {
+    const step = await withRetry(() => prisma.onboardingStep.create({
+      data: {
+        title,
+        description,
+        type: data.type,
+        order,
+        estimatedMinutes,
+        resourceUrl,
+        resourceType,
+        isRequired: data.isRequired,
+        pathId: data.pathId,
+        companyId: user.companyId,
+      },
+      select: {
+        id: true, title: true, description: true, type: true, order: true,
+        estimatedMinutes: true, resourceUrl: true, resourceType: true,
+        isRequired: true, pathId: true, onCompleteActions: true,
+        createdAt: true, updatedAt: true,
+      },
+    }));
 
-  revalidatePath("/workers");
-  await invalidateWorkersCache(user.companyId);
-  return step;
+    revalidatePath("/workers");
+    await invalidateWorkersCache(user.companyId);
+    return step;
+  } catch (e: any) {
+    wrapPrismaError(e, "Onboarding step");
+  }
 }
 
 export async function updateOnboardingStep(
@@ -755,46 +1014,81 @@ export async function updateOnboardingStep(
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.mutation);
 
-  // P115: Atomic verify+update in transaction to prevent TOCTOU
-  const step = await withRetry(() => prisma.$transaction(async (tx) => {
-    const existing = await tx.onboardingStep.findFirst({
-      where: { id, path: { companyId: user.companyId } },
-      select: { id: true },
-    });
-    if (!existing) {
-      throw new Error("Step not found or access denied");
-    }
+  // Validate step type
+  validateEnum(data.type, VALID_STEP_TYPES, "step type");
 
-    return tx.onboardingStep.update({
-      where: { id },
-      data: data as any,
-    });
-  }, { maxWait: 5000, timeout: 10000 }));
+  // Validate & whitelist fields
+  const updateData: Record<string, unknown> = {};
+  if (data.title !== undefined) updateData.title = validateStringLength(data.title, MAX_LENGTHS.title, "Step title");
+  if (data.description !== undefined) updateData.description = validateStringLength(data.description, MAX_LENGTHS.description, "Description");
+  if (data.type !== undefined) updateData.type = data.type;
+  if (data.order !== undefined) updateData.order = validateNonNegativeInt(data.order, "Order");
+  if (data.estimatedMinutes !== undefined) updateData.estimatedMinutes = validateNonNegativeInt(data.estimatedMinutes, "Estimated minutes");
+  if (data.resourceUrl !== undefined) updateData.resourceUrl = validateUrl(data.resourceUrl, "Resource URL");
+  if (data.resourceType !== undefined) updateData.resourceType = validateStringLength(data.resourceType, MAX_LENGTHS.resourceType, "Resource type");
+  if (typeof data.isRequired === "boolean") updateData.isRequired = data.isRequired;
 
-  revalidatePath("/workers");
-  await invalidateWorkersCache(user.companyId);
-  return step;
+  // Validate onCompleteActions
+  if (data.onCompleteActions !== undefined) {
+    updateData.onCompleteActions = validateOnCompleteActions(data.onCompleteActions);
+  }
+
+  try {
+    const step = await withRetry(() => prisma.$transaction(async (tx) => {
+      const existing = await tx.onboardingStep.findFirst({
+        where: { id, path: { companyId: user.companyId } },
+        select: { id: true },
+      });
+      if (!existing) {
+        throw new Error("Step not found or access denied");
+      }
+
+      return tx.onboardingStep.update({
+        where: { id },
+        data: updateData,
+        select: {
+          id: true, title: true, description: true, type: true, order: true,
+          estimatedMinutes: true, resourceUrl: true, resourceType: true,
+          isRequired: true, pathId: true, onCompleteActions: true,
+          createdAt: true, updatedAt: true,
+        },
+      });
+    }, { maxWait: 5000, timeout: 10000 }));
+
+    revalidatePath("/workers");
+    await invalidateWorkersCache(user.companyId);
+    return step;
+  } catch (e: any) {
+    wrapPrismaError(e, "Onboarding step");
+  }
 }
 
 export async function deleteOnboardingStep(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.dangerous);
 
-  // P115: Atomic verify+delete in transaction to prevent TOCTOU
-  await withRetry(() => prisma.$transaction(async (tx) => {
-    const existing = await tx.onboardingStep.findFirst({
-      where: { id, path: { companyId: user.companyId } },
-      select: { id: true },
-    });
-    if (!existing) {
-      throw new Error("Step not found or access denied");
-    }
+  try {
+    await withRetry(() => prisma.$transaction(async (tx) => {
+      const existing = await tx.onboardingStep.findFirst({
+        where: { id, path: { companyId: user.companyId } },
+        select: { id: true },
+      });
+      if (!existing) {
+        throw new Error("Step not found or access denied");
+      }
 
-    await tx.onboardingStep.delete({
-      where: { id },
-    });
-  }, { maxWait: 5000, timeout: 10000 }));
+      await tx.onboardingStep.delete({
+        where: { id },
+      });
+    }, { maxWait: 5000, timeout: 10000 }));
+  } catch (e: any) {
+    wrapPrismaError(e, "Onboarding step");
+  }
 
   revalidatePath("/workers");
   await invalidateWorkersCache(user.companyId);
@@ -807,44 +1101,48 @@ export async function reorderOnboardingSteps(
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.mutation);
 
   if (stepIds.length > 200) {
     throw new Error("Too many steps to reorder");
   }
 
-  // P8: Wrap ownership check + raw SQL in a single transaction
-  await withRetry(() => prisma.$transaction(async (tx) => {
-    const path = await tx.onboardingPath.findFirst({
-      where: { id: pathId, companyId: user.companyId },
-      select: { id: true },
-    });
-    if (!path) throw new Error("Path not found or access denied");
-
-    if (stepIds.length > 0) {
-      // Params layout: [stepId0, order0, stepId1, order1, ..., pathId, companyId]
-      const params: number[] = [];
-      const cases: string[] = [];
-      const inPlaceholders: string[] = [];
-
-      stepIds.forEach((id, index) => {
-        params.push(id, index);
-        const idIdx = params.length - 1; // 0-based
-        const orderIdx = params.length;   // 0-based
-        cases.push(`WHEN "id" = $${idIdx} THEN $${orderIdx}`);
-        inPlaceholders.push(`$${idIdx}`);
+  try {
+    await withRetry(() => prisma.$transaction(async (tx) => {
+      const path = await tx.onboardingPath.findFirst({
+        where: { id: pathId, companyId: user.companyId },
+        select: { id: true },
       });
+      if (!path) throw new Error("Path not found or access denied");
 
-      params.push(pathId, user.companyId);
-      const pathIdx = params.length - 1;
-      const companyIdx = params.length;
+      if (stepIds.length > 0) {
+        const params: number[] = [];
+        const cases: string[] = [];
+        const inPlaceholders: string[] = [];
 
-      await tx.$executeRawUnsafe(
-        `UPDATE "OnboardingStep" SET "order" = CASE ${cases.join(" ")} END, "updatedAt" = NOW()
-         WHERE "pathId" = $${pathIdx} AND "companyId" = $${companyIdx} AND "id" IN (${inPlaceholders.join(", ")})`,
-        ...params,
-      );
-    }
-  }, { maxWait: 5000, timeout: 10000 }));
+        stepIds.forEach((id, index) => {
+          params.push(id, index);
+          const idIdx = params.length - 1;
+          const orderIdx = params.length;
+          cases.push(`WHEN "id" = $${idIdx} THEN $${orderIdx}`);
+          inPlaceholders.push(`$${idIdx}`);
+        });
+
+        params.push(pathId, user.companyId);
+        const pathIdx = params.length - 1;
+        const companyIdx = params.length;
+
+        await tx.$executeRawUnsafe(
+          `UPDATE "OnboardingStep" SET "order" = CASE ${cases.join(" ")} END, "updatedAt" = NOW()
+           WHERE "pathId" = $${pathIdx} AND "companyId" = $${companyIdx} AND "id" IN (${inPlaceholders.join(", ")})`,
+          ...params,
+        );
+      }
+    }, { maxWait: 5000, timeout: 10000 }));
+  } catch (e: any) {
+    wrapPrismaError(e, "Onboarding steps");
+  }
 
   revalidatePath("/workers");
   await invalidateWorkersCache(user.companyId);
@@ -885,6 +1183,8 @@ async function _assignOnboardingPathInternal(
 export async function assignOnboardingPath(workerId: number, pathId: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.mutation);
 
   const path = await withRetry(() => prisma.onboardingPath.findFirst({
     where: { id: pathId, companyId: user.companyId },
@@ -892,23 +1192,26 @@ export async function assignOnboardingPath(workerId: number, pathId: number) {
   }));
   if (!path) throw new Error("Onboarding path not found");
 
-  // SECURITY: Verify worker belongs to user's company
   const worker = await withRetry(() => prisma.worker.findFirst({
     where: { id: workerId, companyId: user.companyId, deletedAt: null },
     select: { id: true },
   }));
   if (!worker) throw new Error("Worker not found or access denied");
 
-  const onboarding = await _assignOnboardingPathInternal(
-    workerId,
-    pathId,
-    path.steps.map((s) => s.id),
-    user.companyId,
-  );
+  try {
+    const onboarding = await _assignOnboardingPathInternal(
+      workerId,
+      pathId,
+      path.steps.map((s) => s.id),
+      user.companyId,
+    );
 
-  revalidatePath("/workers");
-  await invalidateWorkersCache(user.companyId);
-  return onboarding;
+    revalidatePath("/workers");
+    await invalidateWorkersCache(user.companyId);
+    return onboarding;
+  } catch (e: any) {
+    wrapPrismaError(e, "Onboarding assignment");
+  }
 }
 
 export async function updateStepProgress(
@@ -923,9 +1226,22 @@ export async function updateStepProgress(
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.mutation);
 
-  // P6: validate step status
+  // Validate step status
   validateEnum(data.status, VALID_STEP_STATUSES, "step status");
+
+  // Validate string fields
+  const notes = validateStringLength(data.notes, MAX_LENGTHS.notes, "Notes");
+  const feedback = validateStringLength(data.feedback, MAX_LENGTHS.feedback, "Feedback");
+
+  // Validate score range
+  if (data.score !== undefined) {
+    if (typeof data.score !== "number" || !Number.isFinite(data.score) || data.score < 0 || data.score > 100) {
+      throw new Error("Score must be between 0 and 100");
+    }
+  }
 
   // Get the step with its onCompleteActions — scoped by companyId
   const step = await withRetry(() => prisma.onboardingStep.findFirst({
@@ -944,50 +1260,61 @@ export async function updateStepProgress(
     throw new Error("Step not found or access denied");
   }
 
-  // Lightweight ownership check — avoids loading worker/path/steps for non-COMPLETED updates
+  // Lightweight ownership check
   const onboardingCheck = await withRetry(() => prisma.workerOnboarding.findFirst({
     where: { id: onboardingId, worker: { companyId: user.companyId } },
     select: { id: true, workerId: true },
   }));
   if (!onboardingCheck) throw new Error("Onboarding not found or access denied");
 
-  // P4: Wrap upsert in transaction to detect if status actually changed
-  const { stepProgress, statusChanged } = await withRetry(() => prisma.$transaction(async (tx) => {
-    const current = await tx.workerOnboardingStep.findUnique({
-      where: { onboardingId_stepId: { onboardingId, stepId } },
-      select: { status: true },
-    });
-    const wasAlreadyCompleted = current?.status === "COMPLETED";
+  // Wrap upsert in transaction to detect if status actually changed
+  let stepProgress, statusChanged;
+  try {
+    const result = await withRetry(() => prisma.$transaction(async (tx) => {
+      const current = await tx.workerOnboardingStep.findUnique({
+        where: { onboardingId_stepId: { onboardingId, stepId } },
+        select: { status: true },
+      });
+      const wasAlreadyCompleted = current?.status === "COMPLETED";
 
-    const sp = await tx.workerOnboardingStep.upsert({
-      where: {
-        onboardingId_stepId: { onboardingId, stepId },
-      },
-      update: {
-        status: data.status,
-        notes: data.notes,
-        score: data.score,
-        feedback: data.feedback,
-        completedAt: data.status === "COMPLETED" ? new Date() : null,
-      },
-      create: {
-        companyId: user.companyId,
-        onboardingId,
-        stepId,
-        status: data.status,
-        notes: data.notes,
-        score: data.score,
-        feedback: data.feedback,
-        completedAt: data.status === "COMPLETED" ? new Date() : null,
-      },
-    });
+      const sp = await tx.workerOnboardingStep.upsert({
+        where: {
+          onboardingId_stepId: { onboardingId, stepId },
+        },
+        update: {
+          status: data.status as any,
+          notes,
+          score: data.score,
+          feedback,
+          completedAt: data.status === "COMPLETED" ? new Date() : null,
+        },
+        create: {
+          companyId: user.companyId,
+          onboardingId,
+          stepId,
+          status: data.status as any,
+          notes,
+          score: data.score,
+          feedback,
+          completedAt: data.status === "COMPLETED" ? new Date() : null,
+        },
+        select: {
+          id: true, onboardingId: true, stepId: true, status: true,
+          notes: true, score: true, feedback: true, completedAt: true,
+          createdAt: true, updatedAt: true,
+        },
+      });
 
-    return { stepProgress: sp, statusChanged: data.status === "COMPLETED" && !wasAlreadyCompleted };
-  }, { maxWait: 5000, timeout: 10000 }));
+      return { stepProgress: sp, statusChanged: data.status === "COMPLETED" && !wasAlreadyCompleted };
+    }, { maxWait: 5000, timeout: 10000 }));
+    stepProgress = result.stepProgress;
+    statusChanged = result.statusChanged;
+  } catch (e: any) {
+    wrapPrismaError(e, "Step progress");
+  }
 
-  // P4: Only run automations if this request actually caused the transition
+  // Only run automations if this request actually caused the transition
   if (statusChanged) {
-    // Acquire Redis NX lock to prevent duplicate automations from concurrent requests
     let lockAcquired = false;
     try {
       const result = await redis.set(`workers:step-lock:${onboardingId}:${stepId}`, "1", "EX", 30, "NX");
@@ -1017,9 +1344,7 @@ export async function updateStepProgress(
             config: Record<string, unknown>;
           }>;
           if (Array.isArray(actions) && actions.length > 0) {
-            console.log(
-              `[Workers] Executing ${actions.length} automations for step ${step.title}`,
-            );
+            log.debug("Executing automations for step", { count: actions.length, stepTitle: step.title });
 
             await executeOnboardingStepAutomations(
               actions,
@@ -1029,12 +1354,11 @@ export async function updateStepProgress(
             );
           }
         } catch (autoError) {
-          console.error("[Workers] Error executing automations:", autoError);
-          // Don't fail the whole operation if automation fails
+          log.error("Error executing automations", { error: String(autoError) });
         }
       }
 
-      // Check onboarding completion in a transaction with fresh data to prevent race conditions
+      // Check onboarding completion
       if (onboarding) {
         await withRetry(() => prisma.$transaction(async (tx) => {
           const freshStepProgress = await tx.workerOnboardingStep.findMany({
@@ -1089,8 +1413,10 @@ export async function updateStepProgress(
 export async function getWorkersByOnboardingPath(pathId: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireViewWorkers(user);
 
-  // Fetch path steps once (shared across all workers) instead of duplicating per row
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.read);
+
   const path = await withRetry(() => prisma.onboardingPath.findFirst({
     where: { id: pathId, companyId: user.companyId },
     select: {
@@ -1162,6 +1488,9 @@ export async function getWorkersByOnboardingPath(pathId: number) {
 export async function getWorkerTasks(workerId?: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireViewWorkers(user);
+
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.read);
 
   return withRetry(() => prisma.workerTask.findMany({
     where: {
@@ -1169,7 +1498,10 @@ export async function getWorkerTasks(workerId?: number) {
       ...(workerId && { workerId }),
       worker: { deletedAt: null },
     },
-    include: {
+    select: {
+      id: true, workerId: true, title: true, description: true,
+      priority: true, status: true, dueDate: true, completedAt: true,
+      createdAt: true, updatedAt: true,
       worker: {
         select: { id: true, firstName: true, lastName: true },
       },
@@ -1188,25 +1520,45 @@ export async function createWorkerTask(data: {
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.mutation);
 
-  // P6: validate priority
+  // Validate priority
   validateEnum(data.priority, VALID_TASK_PRIORITIES, "task priority");
 
-  // SECURITY: Validate workerId belongs to same company
+  // Validate & whitelist fields
+  const title = validateStringLength(data.title, MAX_LENGTHS.title, "Task title");
+  if (!title) throw new Error("Task title is required");
+  const description = validateStringLength(data.description, MAX_LENGTHS.description, "Description");
+
+  // Validate workerId belongs to same company
   if (!(await validateWorkerInCompany(data.workerId, user.companyId))) {
     throw new Error("Worker not found or access denied");
   }
 
-  const task = await withRetry(() => prisma.workerTask.create({
-    data: {
-      ...data,
-      companyId: user.companyId,
-    },
-  }));
+  try {
+    const task = await withRetry(() => prisma.workerTask.create({
+      data: {
+        title,
+        description,
+        priority: data.priority as any,
+        dueDate: data.dueDate,
+        workerId: data.workerId,
+        companyId: user.companyId,
+      },
+      select: {
+        id: true, workerId: true, title: true, description: true,
+        priority: true, status: true, dueDate: true, completedAt: true,
+        createdAt: true, updatedAt: true,
+      },
+    }));
 
-  revalidatePath("/workers");
-  await invalidateWorkersCache(user.companyId);
-  return task;
+    revalidatePath("/workers");
+    await invalidateWorkersCache(user.companyId);
+    return task;
+  } catch (e: any) {
+    wrapPrismaError(e, "Worker task");
+  }
 }
 
 export async function updateWorkerTask(
@@ -1222,44 +1574,59 @@ export async function updateWorkerTask(
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.mutation);
 
-  // P6: validate status and priority
+  // Validate status and priority
   validateEnum(data.status, VALID_TASK_STATUSES, "task status");
   validateEnum(data.priority, VALID_TASK_PRIORITIES, "task priority");
 
+  // Validate & whitelist fields
+  const updateData: Record<string, unknown> = {};
+  if (data.title !== undefined) updateData.title = validateStringLength(data.title, MAX_LENGTHS.title, "Task title");
+  if (data.description !== undefined) updateData.description = validateStringLength(data.description, MAX_LENGTHS.description, "Description");
+  if (data.priority !== undefined) updateData.priority = data.priority;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.dueDate !== undefined) updateData.dueDate = data.dueDate;
+
   // Auto-set completedAt if marking as completed
-  if (data.status === "COMPLETED" && !data.completedAt) {
-    data.completedAt = new Date();
+  if (data.status === "COMPLETED") {
+    updateData.completedAt = data.completedAt ?? new Date();
+  } else if (data.completedAt !== undefined) {
+    updateData.completedAt = data.completedAt;
   }
 
-  // P115: Add companyId to prevent cross-tenant worker task updates
   try {
     const task = await withRetry(() => prisma.workerTask.update({
       where: { id, companyId: user.companyId },
-      data,
+      data: updateData,
+      select: {
+        id: true, workerId: true, title: true, description: true,
+        priority: true, status: true, dueDate: true, completedAt: true,
+        createdAt: true, updatedAt: true,
+      },
     }));
 
     revalidatePath("/workers");
     await invalidateWorkersCache(user.companyId);
     return task;
   } catch (e: any) {
-    if (e.code === "P2025") throw new Error("Worker task not found or access denied");
-    throw e;
+    wrapPrismaError(e, "Worker task");
   }
 }
 
 export async function deleteWorkerTask(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireManageWorkers(user);
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.dangerous);
 
-  // P115: Add companyId to prevent cross-tenant worker task deletes
   try {
     await withRetry(() => prisma.workerTask.delete({
       where: { id, companyId: user.companyId },
     }));
   } catch (e: any) {
-    if (e.code === "P2025") throw new Error("Worker task not found or access denied");
-    throw e;
+    wrapPrismaError(e, "Worker task");
   }
 
   revalidatePath("/workers");
@@ -1274,6 +1641,9 @@ export async function deleteWorkerTask(id: number) {
 export async function getWorkersStats() {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireViewWorkers(user);
+
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.read);
 
   const [
     totalWorkers,
@@ -1304,10 +1674,13 @@ export async function getWorkersStats() {
   };
 }
 
-// P11: Lightweight path summaries (no step details) for worker detail pages
+// Lightweight path summaries for worker detail pages
 export async function getOnboardingPathSummaries(departmentId?: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
+  requireViewWorkers(user);
+
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.read);
 
   return withRetry(() => prisma.onboardingPath.findMany({
     where: {
@@ -1357,9 +1730,7 @@ async function executeOnboardingStepAutomations(
 
   const { inngest } = await import("@/lib/inngest/client");
 
-  console.log(
-    `[Workers] Executing ${actions.length} automations for step: ${step.title}`,
-  );
+  log.debug("Executing automations for onboarding step", { count: actions.length, stepTitle: step.title });
 
   for (const action of actions) {
     try {
@@ -1386,17 +1757,14 @@ async function executeOnboardingStepAutomations(
           if (workerData) {
             let phoneNumber: string | null = null;
 
-            // Check if phone source is from table
             if (
               action.config.phoneSource === "table" &&
               action.config.waTableId &&
               action.config.waPhoneColumn
             ) {
-              // Fetch phone from the specified table
               try {
                 let record;
                 if (action.config.waRecordId) {
-                  // Fetch specific record by ID — only need `data` for phone extraction
                   record = await withRetry(() => prisma.record.findFirst({
                     where: {
                       id: Number(action.config.waRecordId),
@@ -1406,7 +1774,6 @@ async function executeOnboardingStepAutomations(
                     select: { data: true },
                   }));
                 } else {
-                  // Fetch the last created record from the table — only need `data`
                   record = await withRetry(() => prisma.record.findFirst({
                     where: {
                       tableId: Number(action.config.waTableId),
@@ -1422,22 +1789,14 @@ async function executeOnboardingStepAutomations(
                   phoneNumber = recordData[
                     action.config.waPhoneColumn as string
                   ] as string;
-                  console.log(
-                    `[Workers] WhatsApp: Fetched phone ${phoneNumber} from table ${action.config.waTableId}, column ${action.config.waPhoneColumn}`,
-                  );
+                  log.debug("WhatsApp: Fetched phone from table", { tableId: action.config.waTableId, column: action.config.waPhoneColumn });
                 } else {
-                  console.warn(
-                    `[Workers] WhatsApp: Record not found in table ${action.config.waTableId}`,
-                  );
+                  log.warn("WhatsApp: Record not found in table", { tableId: action.config.waTableId });
                 }
               } catch (fetchError) {
-                console.error(
-                  "[Workers] WhatsApp: Error fetching phone from table:",
-                  fetchError,
-                );
+                log.error("WhatsApp: Error fetching phone from table", { error: String(fetchError) });
               }
             } else {
-              // Manual phone entry
               phoneNumber = action.config.phone as string;
             }
 
@@ -1456,12 +1815,10 @@ async function executeOnboardingStepAutomations(
                   },
                 });
               } catch (err) {
-                console.error("[Workers] Failed to enqueue WhatsApp job:", err);
+                log.error("Failed to enqueue WhatsApp job", { error: String(err) });
               }
             } else {
-              console.warn(
-                "[Workers] WhatsApp: No valid phone number available",
-              );
+              log.warn("WhatsApp: No valid phone number available");
             }
           }
           break;
@@ -1474,8 +1831,16 @@ async function executeOnboardingStepAutomations(
               pathName: step.path.name,
               actorName: user.name,
             };
-            const webhookUrl = action.config.webhookUrl || action.config.url;
-            if (webhookUrl) {
+            const rawWebhookUrl = action.config.webhookUrl || action.config.url;
+            if (rawWebhookUrl) {
+              // SSRF protection: validate webhook URL
+              let webhookUrl: string;
+              try {
+                webhookUrl = validateWebhookUrl(String(rawWebhookUrl));
+              } catch (err) {
+                log.error("Webhook URL rejected", { error: String(err) });
+                break;
+              }
               try {
                 await inngest.send({
                   id: `webhook-worker-${step.path.companyId}-${step.id}-${Math.floor(Date.now() / 5000)}`,
@@ -1494,10 +1859,10 @@ async function executeOnboardingStepAutomations(
                   },
                 });
               } catch (err) {
-                console.error("[Workers] Failed to enqueue Webhook job:", err);
+                log.error("Failed to enqueue Webhook job", { error: String(err) });
               }
             } else {
-              console.error("[Workers] Webhook: No URL configured");
+              log.error("Webhook: No URL configured");
             }
           }
           break;
@@ -1505,13 +1870,10 @@ async function executeOnboardingStepAutomations(
           await executeCreateCalendarEventAction(action.config, user);
           break;
         default:
-          console.warn(`[Workers] Unknown action type: ${action.actionType}`);
+          log.warn("Unknown action type", { actionType: action.actionType });
       }
     } catch (error) {
-      console.error(
-        `[Workers] Failed to execute ${action.actionType} for step "${step.title}" (path "${step.path.name}", company ${step.path.companyId}):`,
-        error,
-      );
+      log.error("Failed to execute action for step", { actionType: action.actionType, stepTitle: step.title, pathName: step.path.name, companyId: step.path.companyId, error: String(error) });
     }
   }
 }
@@ -1540,7 +1902,7 @@ async function executeCreateCalendarEventAction(
     color: color || undefined,
   });
 
-  console.log(`[Workers] Created calendar event: ${title}`);
+  log.info("Created calendar event", { title });
 }
 
 // Update a record in a table
@@ -1556,14 +1918,13 @@ async function executeUpdateRecordAction(
 
   if (!tableId || !recordId || !updates) return;
 
-  // Verify record belongs to company
   const record = await withRetry(() => prisma.record.findFirst({
     where: { id: recordId, tableId, companyId },
     select: { id: true, data: true },
   }));
 
   if (!record) {
-    console.warn(`[Workers] Record ${recordId} not found or unauthorized`);
+    log.warn("Record not found or unauthorized", { recordId });
     return;
   }
 
@@ -1575,7 +1936,7 @@ async function executeUpdateRecordAction(
     data: { data: JSON.parse(JSON.stringify(newData)) },
   }));
 
-  console.log(`[Workers] Updated record ${recordId} in table ${tableId}`);
+  log.info("Updated record", { recordId, tableId });
 }
 
 // Create a new record in a table
@@ -1590,7 +1951,6 @@ async function executeCreateRecordAction(
 
   if (!tableId) return;
 
-  // SECURITY: Validate tableId belongs to same company
   const tableOk = await withRetry(() => prisma.tableMeta.findFirst({
     where: { id: tableId, companyId },
     select: { id: true },
@@ -1605,7 +1965,7 @@ async function executeCreateRecordAction(
     },
   }));
 
-  console.log(`[Workers] Created record in table ${tableId}`);
+  log.info("Created record", { tableId });
 }
 
 // Create a new task
@@ -1625,7 +1985,6 @@ async function executeCreateTaskAction(
 
   if (!title) return;
 
-  // SECURITY: Validate assigneeId at execution time
   let validatedAssigneeId: number | null = null;
   if (assigneeId) {
     const ok = await validateUserInCompany(assigneeId, user.companyId);
@@ -1644,7 +2003,7 @@ async function executeCreateTaskAction(
     },
   }));
 
-  console.log(`[Workers] Created task: ${title}`);
+  log.info("Created task", { title });
   revalidatePath("/tasks");
 }
 
@@ -1671,7 +2030,7 @@ async function executeUpdateTaskAction(config: Record<string, unknown>, companyI
     data: updateData,
   }));
 
-  console.log(`[Workers] Updated task ${taskId}`);
+  log.info("Updated task", { taskId });
   revalidatePath("/tasks");
 }
 
@@ -1691,7 +2050,6 @@ async function executeCreateFinanceAction(
 
   if (!title || !amount || !type) return;
 
-  // SECURITY: Validate clientId belongs to same company
   let validatedClientId: number | null = null;
   if (clientId) {
     const clientOk = await withRetry(() => prisma.client.findFirst({
@@ -1706,7 +2064,7 @@ async function executeCreateFinanceAction(
       companyId,
       title,
       amount,
-      type, // "INCOME" or "EXPENSE"
+      type,
       category: category || null,
       clientId: validatedClientId,
       description: description || null,
@@ -1714,7 +2072,7 @@ async function executeCreateFinanceAction(
     },
   }));
 
-  console.log(`[Workers] Created finance record: ${title} - ${amount}`);
+  log.info("Created finance record", { title });
   revalidatePath("/finance");
 }
 
@@ -1732,13 +2090,11 @@ async function executeSendNotificationAction(
 
   if (!recipientId) return;
 
-  // SECURITY: Validate recipientId belongs to the same company before sending
   if (!(await validateUserInCompany(recipientId, step.path.companyId))) {
-    console.warn(`[Workers] Notification recipient ${recipientId} not in company ${step.path.companyId}`);
+    log.warn("Notification recipient not in company", { recipientId, companyId: step.path.companyId });
     return;
   }
 
-  // Replace placeholders
   const finalTitle = (title || "שלב קליטה הושלם")
     .replace("{stepTitle}", step.title)
     .replace("{pathName}", step.path.name)
@@ -1749,7 +2105,7 @@ async function executeSendNotificationAction(
     .replace("{pathName}", step.path.name)
     .replace("{userName}", user.name);
 
-  const { createNotificationForCompany } = await import("./notifications");
+  const { createNotificationForCompany } = await import("@/lib/notifications-internal");
   await createNotificationForCompany({
     companyId: step.path.companyId,
     userId: recipientId,
@@ -1758,5 +2114,5 @@ async function executeSendNotificationAction(
     link: "/workers",
   });
 
-  console.log(`[Workers] Sent notification to user ${recipientId}`);
+  log.info("Sent notification to user", { recipientId });
 }

@@ -1,5 +1,8 @@
 import { inngest } from "../client";
 import { prismaBg as prisma } from "@/lib/prisma-background";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("AnalyticsJobs");
 import {
   calculateRuleStats,
   calculateViewStats,
@@ -113,7 +116,7 @@ export const refreshCompanyAnalytics = inngest.createFunction(
           take: LIMIT,
         });
         if (results.length >= LIMIT) {
-          console.warn(`[analytics-refresh] Company ${companyId} has ${LIMIT}+ analytics rules — some may be skipped`);
+          log.warn("Company has too many analytics rules — some may be skipped", { companyId, limit: LIMIT });
         }
         // Filter MULTI_ACTION rules to only those containing a duration action
         return results.filter((r: any) => {
@@ -132,7 +135,7 @@ export const refreshCompanyAnalytics = inngest.createFunction(
           take: LIMIT,
         });
         if (results.length >= LIMIT) {
-          console.warn(`[analytics-refresh] Company ${companyId} has ${LIMIT}+ analytics views — some may be skipped`);
+          log.warn("Company has too many analytics views — some may be skipped", { companyId, limit: LIMIT });
         }
         return results;
       });
@@ -184,7 +187,7 @@ export const refreshCompanyAnalytics = inngest.createFunction(
                 lastRefreshed: now.toISOString(),
               });
             } catch (e) {
-              console.error(`[analytics-refresh] Failed to calculate rule ${rule.id}:`, e);
+              log.error("Failed to calculate rule", { ruleId: rule.id, error: String(e) });
             }
           }
 
@@ -281,7 +284,7 @@ export const refreshCompanyAnalytics = inngest.createFunction(
                       lastRefreshed: now.toISOString(),
                     });
                   } catch (e) {
-                    console.error(`[analytics-refresh] Failed to calculate view ${view.id}:`, e);
+                    log.error("Failed to calculate view", { viewId: view.id, error: String(e) });
                   }
                 }
 
@@ -289,7 +292,7 @@ export const refreshCompanyAnalytics = inngest.createFunction(
                 if (dbUpdates.length > 0) await prisma.$transaction(dbUpdates);
                 await Promise.all(redisWrites.map(fn => fn()));
               } catch (e) {
-                console.error(`[analytics-refresh] Batch transaction failed for views batch starting at ${i}, continuing:`, e);
+                log.error("Batch transaction failed for views batch, continuing", { batchStart: i, error: String(e) });
               }
             }
             // sourceCache for this chunk is released when overwritten on next iteration
@@ -428,11 +431,11 @@ export const refreshAnalyticsItemJob = inngest.createFunction(
       await step.run("process-automations", async () => {
         try {
           const { processViewAutomations } = await import(
-            "@/app/actions/automations"
+            "@/app/actions/automations-core"
           );
           await processViewAutomations(undefined, undefined, companyId);
         } catch (err) {
-          console.error("[analytics-refresh-item] Failed to process view automations:", err);
+          log.error("Failed to process view automations", { error: String(err) });
         }
       });
     } catch (e) {

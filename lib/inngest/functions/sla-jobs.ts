@@ -1,5 +1,9 @@
 import { inngest } from "../client";
 import { prismaBg as prisma } from "@/lib/prisma-background";
+import { isPrivateUrl } from "@/lib/security/ssrf";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("SlaJobs");
 
 // Serialized automation rule embedded in breach events to avoid N+1 queries
 type EmbeddedRule = {
@@ -68,7 +72,7 @@ export const slaScan = inngest.createFunction(
       });
 
       if (responseCompanies.length >= COMPANY_LIMIT || resolveCompanies.length >= COMPANY_LIMIT) {
-        console.warn(`[SLA] ${COMPANY_LIMIT}+ companies with overdue tickets — some may be skipped`);
+        log.warn("Too many companies with overdue tickets — some may be skipped", { limit: COMPANY_LIMIT });
       }
 
       const ids = new Set([
@@ -420,7 +424,7 @@ async function executeSlaAction(
     case "SEND_NOTIFICATION": {
       if (actionConfig.recipientId) {
         const { createNotificationForCompany } = await import(
-          "@/app/actions/notifications"
+          "@/lib/notifications-internal"
         );
         const message = replaceTemplateVars(
           actionConfig.messageTemplate ||
@@ -443,9 +447,7 @@ async function executeSlaAction(
           );
         }
 
-        console.log(
-          `[SLA] Notification sent to user ${actionConfig.recipientId} for ticket #${contextData.ticketId}`,
-        );
+        log.info("Notification sent for SLA breach", { recipientId: actionConfig.recipientId, ticketId: contextData.ticketId });
       }
       break;
     }
@@ -477,7 +479,7 @@ async function executeSlaAction(
           mediaFileId: actionConfig.mediaFileId,
         },
       });
-      console.log(`[SLA] WhatsApp job enqueued for ${phone}`);
+      log.info("WhatsApp job enqueued for SLA breach");
       break;
     }
 
@@ -486,6 +488,13 @@ async function executeSlaAction(
       if (!url) {
         throw new Error(
           `[SLA] Webhook action missing URL for Rule ${rule.id} ("${rule.name}")`
+        );
+      }
+
+      // SECURITY: Block SSRF before dispatching to Inngest queue
+      if (isPrivateUrl(url)) {
+        throw new Error(
+          `[SLA] Webhook URL targets private/internal address for Rule ${rule.id} ("${rule.name}")`
         );
       }
 
@@ -508,7 +517,8 @@ async function executeSlaAction(
           },
         },
       });
-      console.log(`[SLA] Webhook job enqueued for ${url}`);
+      const urlHostname = (() => { try { return new URL(url).hostname; } catch { return "invalid-url"; } })();
+      log.info("Webhook job enqueued for SLA breach", { hostname: urlHostname });
       break;
     }
 
@@ -556,11 +566,11 @@ async function executeSlaAction(
         },
       });
 
-      console.log(`[SLA] Task created: ${finalTitle}`);
+      log.info("Task created for SLA breach", { title: finalTitle });
       break;
     }
 
     default:
-      console.warn(`[SLA] Unknown action type: ${actionType}`);
+      log.warn("Unknown SLA action type", { actionType });
   }
 }

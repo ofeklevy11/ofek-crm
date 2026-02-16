@@ -3,6 +3,9 @@
 import { getCurrentUser, invalidateUserCache } from "@/lib/permissions-server";
 import { prisma as db } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("CompanyName");
 
 export async function updateCompanyName(data: {
   newCompanyName: string;
@@ -60,7 +63,7 @@ export async function updateCompanyName(data: {
 
     return { success: true, message: "שם הארגון עודכן בהצלחה" };
   } catch (error) {
-    console.error("Error updating company name:", error);
+    log.error("Error updating company name", { error: String(error) });
     return { success: false, error: "שגיאה בעדכון שם הארגון" };
   }
 }

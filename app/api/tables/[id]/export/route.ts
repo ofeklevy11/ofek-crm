@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag, canReadTable } from "@/lib/permissions";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 /** Format a single record as a CSV or TSV row. */
 function formatRow(
@@ -23,9 +25,9 @@ function formatRow(
     record.id,
     ...fieldValues,
     wrap(new Date(record.createdAt).toLocaleString()),
-    wrap(record.creator?.name || record.creator?.email || ""),
+    wrap(record.creator?.name || ""),
     wrap(new Date(record.updatedAt).toLocaleString()),
-    wrap(record.updater?.name || record.updater?.email || ""),
+    wrap(record.updater?.name || ""),
   ].join(sep);
 }
 
@@ -41,8 +43,15 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const tableIdNum = Number(id);
-    if (!tableIdNum || Number.isNaN(tableIdNum)) {
+    if (!hasUserFlag(user, "canExportTables")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const rl = await checkRateLimit(String(user.id), RATE_LIMITS.bulk);
+    if (rl) return rl;
+
+    const tableIdNum = parseInt(id, 10);
+    if (!Number.isFinite(tableIdNum) || tableIdNum < 1) {
       return NextResponse.json({ error: "Invalid table ID" }, { status: 400 });
     }
 
@@ -59,9 +68,13 @@ export async function GET(
 
     if (!table) {
       return NextResponse.json(
-        { error: "Table not found", id: tableIdNum },
+        { error: "Table not found" },
         { status: 404 },
       );
+    }
+
+    if (!canReadTable(user, tableIdNum)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Parse schema for field definitions
@@ -144,8 +157,8 @@ export async function GET(
                 data: true,
                 createdAt: true,
                 updatedAt: true,
-                creator: { select: { name: true, email: true } },
-                updater: { select: { name: true, email: true } },
+                creator: { select: { name: true } },
+                updater: { select: { name: true } },
               },
             });
 
@@ -162,7 +175,7 @@ export async function GET(
 
           controller.close();
         } catch (err) {
-          controller.error(err);
+          controller.error(new Error("Export failed"));
         }
       },
     });
@@ -173,12 +186,14 @@ export async function GET(
           format === "csv"
             ? "text/csv; charset=utf-8"
             : "text/plain; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (err) {
     return NextResponse.json(
-      { error: "Export failed", details: String(err) },
+      { error: "Export failed" },
       { status: 500 },
     );
   }

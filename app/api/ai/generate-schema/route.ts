@@ -3,6 +3,11 @@ import { inngest } from "@/lib/inngest/client";
 import { randomUUID } from "crypto";
 import { redis } from "@/lib/redis";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { canManageTables } from "@/lib/permissions";
+import { checkMemoryRateLimit } from "@/lib/rate-limit-action";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("AiSchema");
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,18 +22,28 @@ export async function POST(req: Request) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!canManageTables(user)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const { prompt, currentSchema } = await req.json();
 
-    if (!prompt) {
+    if (!prompt || typeof prompt !== "string" || prompt.length > 10000) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
     }
 
-    // Rate limiting per user (atomic INCR + EXPIRE via pipeline)
-    const rateLimitKey = `ai-rate:${user.id}`;
-    const results = await redis.multi().incr(rateLimitKey).expire(rateLimitKey, RATE_LIMIT_WINDOW).exec();
-    if (!results || (results[0]?.[1] as number) > RATE_LIMIT_MAX) {
-      return NextResponse.json({ error: "Rate limit exceeded. Please wait a minute." }, { status: 429 });
+    // Rate limiting per user (atomic INCR + EXPIRE via pipeline, with in-memory fallback)
+    try {
+      const rateLimitKey = `ai-rate:${user.id}`;
+      const results = await redis.multi().incr(rateLimitKey).expire(rateLimitKey, RATE_LIMIT_WINDOW).exec();
+      if (!results || (results[0]?.[1] as number) > RATE_LIMIT_MAX) {
+        return NextResponse.json({ error: "Rate limit exceeded. Please wait a minute." }, { status: 429 });
+      }
+    } catch {
+      // Redis down — fall back to in-memory rate limiting
+      if (checkMemoryRateLimit(`ai-rate:${user.id}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW)) {
+        return NextResponse.json({ error: "Rate limit exceeded. Please wait a minute." }, { status: 429 });
+      }
     }
 
     // SECURITY: Fetch existing tables from DB scoped by companyId (Issue G)
@@ -67,7 +82,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ jobId }, { status: 202 });
   } catch (error: any) {
-    console.error("Error dispatching schema generation:", error);
+    log.error("Failed to dispatch schema generation", { error: String(error) });
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }

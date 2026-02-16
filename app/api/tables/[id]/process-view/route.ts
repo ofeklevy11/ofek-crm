@@ -4,6 +4,9 @@ import { canReadTable } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { processViewServer } from "@/lib/viewProcessorServer";
 import { ViewConfig } from "@/app/actions/views";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("ProcessView");
 
 export async function POST(
   request: NextRequest,
@@ -65,9 +68,7 @@ export async function POST(
         // Check usage - specific to USER only (global limit), not per view
         try {
           if (!(prisma as any).viewRefreshLog) {
-            console.warn(
-              "ViewRefreshLog model not found in Prisma Client. Skipping rate limit check.",
-            );
+            log.warn("ViewRefreshLog model not found in Prisma Client, skipping rate limit check");
           } else {
             const usageCount = await (prisma as any).viewRefreshLog.count({
               where: {
@@ -93,10 +94,7 @@ export async function POST(
             });
           }
         } catch (e) {
-          console.error(
-            "Rate limit check failed (ignoring to allow view process):",
-            e,
-          );
+          log.error("Rate limit check failed, allowing view process", { error: String(e) });
           // We fail open - allow the refresh if the check fails
         }
       }
@@ -112,7 +110,7 @@ export async function POST(
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error("View processing error:", error);
+    log.error("View processing error", { error: String(error) });
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 }

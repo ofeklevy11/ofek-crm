@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import { VALID_FIXED_EXPENSE_STATUSES } from "@/lib/finance-constants";
 
@@ -18,6 +19,7 @@ const getValidDate = (y: number, m: number, d: number) => {
 export async function getFixedExpenses(opts?: { cursor?: number; take?: number }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  if (!hasUserFlag(user, "canViewFinance")) throw new Error("Forbidden");
 
   const take = Math.min(opts?.take ?? 500, 500);
   const expenses = await prisma.fixedExpense.findMany({
@@ -29,6 +31,12 @@ export async function getFixedExpenses(opts?: { cursor?: number; take?: number }
     },
     take: take + 1,
     ...(opts?.cursor && { cursor: { id: opts.cursor }, skip: 1 }),
+    select: {
+      id: true, title: true, amount: true, frequency: true,
+      payDay: true, category: true, description: true,
+      startDate: true, status: true,
+      createdAt: true, updatedAt: true,
+    },
   });
 
   const hasMore = expenses.length > take;
@@ -154,6 +162,15 @@ export async function getFixedExpenses(opts?: { cursor?: number; take?: number }
 export async function markFixedExpensePaid(expenseId: number, count: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  if (!hasUserFlag(user, "canViewFinance")) throw new Error("Forbidden");
+
+  const { checkActionRateLimit, RATE_LIMITS } = await import("@/lib/rate-limit");
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.financeMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
+
+  if (!Number.isInteger(expenseId) || expenseId <= 0) throw new Error("Invalid expense ID");
+  if (!Number.isInteger(count) || count < 1 || count > 100) throw new Error("Invalid count");
 
   const expense = await prisma.fixedExpense.findFirst({
     where: { id: expenseId, companyId: user.companyId },
@@ -162,7 +179,7 @@ export async function markFixedExpensePaid(expenseId: number, count: number) {
   if (!expense) throw new Error("Expense not found");
 
   // P1: Resolve FIXED_EXPENSES sync rule so @@unique([syncRuleId, originId]) prevents duplicates
-  const { ensureDefaultSyncRules } = await import("./finance-sync");
+  const { ensureDefaultSyncRules } = await import("@/lib/finance-sync-internal");
   await ensureDefaultSyncRules(user.companyId);
   const fixedExpenseRule = await prisma.financeSyncRule.findFirst({
     where: { companyId: user.companyId, sourceType: "FIXED_EXPENSES", isActive: true },
@@ -261,7 +278,7 @@ export async function markFixedExpensePaid(expenseId: number, count: number) {
   }
 
   // Trigger Auto-Sync
-  const { triggerSyncByType } = await import("./finance-sync");
+  const { triggerSyncByType } = await import("@/lib/finance-sync-internal");
   await triggerSyncByType(user.companyId, "FIXED_EXPENSES");
 
   revalidatePath("/finance/fixed-expenses");
@@ -280,15 +297,33 @@ export async function createFixedExpense(data: {
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  if (!hasUserFlag(user, "canViewFinance")) throw new Error("Forbidden");
 
-  if (typeof data.amount !== "number" || data.amount <= 0) {
+  const { checkActionRateLimit, RATE_LIMITS } = await import("@/lib/rate-limit");
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.financeMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
+
+  if (!data.title || typeof data.title !== "string" || data.title.length > 200) {
+    throw new Error("Title is required and must be under 200 characters");
+  }
+  if (typeof data.amount !== "number" || !Number.isFinite(data.amount) || data.amount <= 0) {
     throw new Error("Amount must be a positive number");
   }
   if (!["MONTHLY", "QUARTERLY", "YEARLY", "ONE_TIME"].includes(data.frequency)) {
     throw new Error("Invalid frequency");
   }
-  if (data.payDay !== undefined && (data.payDay < 1 || data.payDay > 31)) {
-    throw new Error("payDay must be between 1 and 31");
+  if (data.payDay !== undefined && (!Number.isInteger(data.payDay) || data.payDay < 1 || data.payDay > 31)) {
+    throw new Error("payDay must be an integer between 1 and 31");
+  }
+  if (data.category !== undefined && (typeof data.category !== "string" || data.category.length > 200)) {
+    throw new Error("Category must be under 200 characters");
+  }
+  if (data.description !== undefined && (typeof data.description !== "string" || data.description.length > 5000)) {
+    throw new Error("Description must be under 5000 characters");
+  }
+  if (data.startDate !== undefined && (!(data.startDate instanceof Date) || isNaN(data.startDate.getTime()))) {
+    throw new Error("Invalid start date");
   }
 
   await prisma.fixedExpense.create({
@@ -296,7 +331,7 @@ export async function createFixedExpense(data: {
       companyId: user.companyId,
       title: data.title,
       amount: data.amount,
-      frequency: data.frequency,
+      frequency: data.frequency as any,
       payDay: data.payDay,
       category: data.category,
       description: data.description,
@@ -306,7 +341,7 @@ export async function createFixedExpense(data: {
   });
 
   // Trigger Auto-Sync
-  const { triggerSyncByType } = await import("./finance-sync");
+  const { triggerSyncByType } = await import("@/lib/finance-sync-internal");
   await triggerSyncByType(user.companyId, "FIXED_EXPENSES");
 
   revalidatePath("/finance/fixed-expenses");
@@ -329,31 +364,78 @@ export async function updateFixedExpense(
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  if (!hasUserFlag(user, "canViewFinance")) throw new Error("Forbidden");
 
-  if (data.status && !VALID_FIXED_EXPENSE_STATUSES.includes(data.status as any)) {
+  const { checkActionRateLimit, RATE_LIMITS } = await import("@/lib/rate-limit");
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.financeMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
+
+  if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid expense ID");
+
+  if (data.status !== undefined && !VALID_FIXED_EXPENSE_STATUSES.includes(data.status as any)) {
     throw new Error(`Invalid status: ${data.status}`);
   }
+
+  // SECURITY: Whitelist allowed fields to prevent companyId/id injection
+  const updateData: Record<string, unknown> = {};
+  if (data.title !== undefined) {
+    if (typeof data.title !== "string" || data.title.length > 200) throw new Error("Invalid title");
+    updateData.title = data.title;
+  }
+  if (data.amount !== undefined) {
+    if (typeof data.amount !== "number" || !Number.isFinite(data.amount) || data.amount <= 0) throw new Error("Invalid amount");
+    updateData.amount = data.amount;
+  }
+  if (data.frequency !== undefined) {
+    if (!["MONTHLY", "QUARTERLY", "YEARLY", "ONE_TIME"].includes(data.frequency)) throw new Error("Invalid frequency");
+    updateData.frequency = data.frequency;
+  }
+  if (data.payDay !== undefined) {
+    if (!Number.isInteger(data.payDay) || data.payDay < 1 || data.payDay > 31) throw new Error("Invalid payDay");
+    updateData.payDay = data.payDay;
+  }
+  if (data.category !== undefined) {
+    if (typeof data.category !== "string" || data.category.length > 200) throw new Error("Invalid category");
+    updateData.category = data.category;
+  }
+  if (data.description !== undefined) {
+    if (typeof data.description !== "string" || data.description.length > 5000) throw new Error("Invalid description");
+    updateData.description = data.description;
+  }
+  if (data.startDate !== undefined) {
+    if (!(data.startDate instanceof Date) || isNaN(data.startDate.getTime())) throw new Error("Invalid start date");
+    updateData.startDate = data.startDate;
+  }
+  if (data.status !== undefined) updateData.status = data.status;
 
   await prisma.fixedExpense.update({
     where: {
       id,
       companyId: user.companyId,
     },
-    data,
+    data: updateData,
   });
 
   // Trigger Auto-Sync
-  const { triggerSyncByType } = await import("./finance-sync");
+  const { triggerSyncByType } = await import("@/lib/finance-sync-internal");
   await triggerSyncByType(user.companyId, "FIXED_EXPENSES");
 
   revalidatePath("/finance/fixed-expenses");
   revalidatePath("/finance/income-expenses");
-  // await processFixedExpenses(); // Disabled automatic processing
 }
 
 export async function deleteFixedExpense(id: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  if (!hasUserFlag(user, "canViewFinance")) throw new Error("Forbidden");
+
+  const { checkActionRateLimit, RATE_LIMITS } = await import("@/lib/rate-limit");
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.financeMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
+
+  if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid expense ID");
 
   await prisma.fixedExpense.delete({
     where: {
@@ -363,133 +445,29 @@ export async function deleteFixedExpense(id: number) {
   });
 
   // Trigger Auto-Sync
-  const { triggerSyncByType } = await import("./finance-sync");
+  const { triggerSyncByType } = await import("@/lib/finance-sync-internal");
   await triggerSyncByType(user.companyId, "FIXED_EXPENSES");
 
   revalidatePath("/finance/fixed-expenses");
 }
 
-export async function processFixedExpenses(companyIdParam?: number) {
-  const companyId = companyIdParam ?? (await getCurrentUser())?.companyId;
-  if (!companyId) return;
+export async function processFixedExpenses() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+  if (!hasUserFlag(user, "canViewFinance")) throw new Error("Forbidden");
 
-  // P1: Resolve FIXED_EXPENSES sync rule so @@unique([syncRuleId, originId]) prevents duplicates
-  const fixedExpenseRule = await prisma.financeSyncRule.findFirst({
-    where: { companyId, sourceType: "FIXED_EXPENSES", isActive: true },
-    select: { id: true },
-  });
-
-  const expenses = await prisma.fixedExpense.findMany({
-    where: {
-      companyId,
-      status: "ACTIVE",
-    },
-    take: 500,
-  });
-
-  // P123: Pre-fetch all existing originIds to avoid N+1 queries
-  const existingRecords = await prisma.financeRecord.findMany({
-    where: {
-      companyId,
-      deletedAt: null,
-      originId: { startsWith: "fixed_" },
-    },
-    select: { originId: true },
-    take: 5000, // P212: Lowered from 10000 to cap memory usage
-  });
-  const existingOriginIds = new Set(existingRecords.map((r) => r.originId));
-
-  const today = new Date();
-  // P226: Collect all creates, then batch with createMany (avoids N+1 sequential creates)
-  const toCreate: {
-    companyId: number;
-    title: string;
-    amount: any;
-    type: string;
-    category: string;
-    date: Date;
-    status: string;
-    description: string;
-    originId: string;
-    syncRuleId: number | null;
-  }[] = [];
-
-  for (const expense of expenses) {
-    const startDate = expense.startDate || expense.createdAt;
-    const frequency = expense.frequency;
-    const payDay = expense.payDay || startDate.getDate();
-    const baseOriginId = `fixed_${expense.id}`;
-
-    // Logic to iterate valid dates from startDate to today
-    let year = startDate.getFullYear();
-    let month = startDate.getMonth(); // 0-based
-
-    // Helper to get clamped date
-    const getValidDate = (y: number, m: number, d: number) => {
-      const date = new Date(y, m, d);
-      // Check overflow (e.g. Feb 30 -> Mar 2)
-      if (date.getMonth() !== ((m % 12) + 12) % 12) {
-        return new Date(y, m + 1, 0); // Last day of intended month
-      }
-      return date;
-    };
-
-    // Calculate first potential date
-    let checkDate = getValidDate(year, month, payDay);
-
-    // If the first calculated date is strictly before the creation date (ignoring time), skip to next period
-    // We compare start of days to be loose, or precise?
-    // Let's use precise: if checkDate < startDate, we assume that cycle passed before creation.
-    if (checkDate < startDate) {
-      if (frequency === "MONTHLY") month++;
-      else if (frequency === "QUARTERLY") month += 3;
-      else if (frequency === "YEARLY") year++;
-      checkDate = getValidDate(year, month, payDay);
-    }
-
-    while (checkDate <= today) {
-      // Create Record
-      // Unique ID needs to be specific to the day to allow for rescheduling/precision
-      const yStr = checkDate.getFullYear();
-      const mStr = checkDate.getMonth() + 1;
-      const dStr = checkDate.getDate();
-      const originId = `${baseOriginId}_${yStr}_${mStr}_${dStr}`;
-
-      // P123: Use pre-fetched set instead of per-iteration DB query
-      const exists = existingOriginIds.has(originId);
-
-      if (!exists) {
-        toCreate.push({
-          companyId,
-          title: expense.title,
-          amount: expense.amount,
-          type: "EXPENSE",
-          category: expense.category || "Fixed Expense",
-          date: new Date(checkDate),
-          status: "COMPLETED",
-          description: expense.description || `Fixed Expense: ${frequency}`,
-          originId: originId,
-          syncRuleId: fixedExpenseRule?.id ?? null,
-        });
-      }
-
-      // Advance
-      if (frequency === "MONTHLY") month++;
-      else if (frequency === "QUARTERLY") month += 3;
-      else if (frequency === "YEARLY") year++;
-
-      checkDate = getValidDate(year, month, payDay);
-    }
+  const { checkActionRateLimit, RATE_LIMITS } = await import("@/lib/rate-limit");
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.financeMutation)) {
+    throw new Error("Rate limit exceeded");
   }
 
-  if (toCreate.length > 0) {
-    await prisma.financeRecord.createMany({ data: toCreate, skipDuplicates: true });
-    // Only revalidate in request context (not Inngest background)
-    if (!companyIdParam) {
-      revalidatePath("/finance/income-expenses");
-      revalidatePath("/finance");
-    }
+  const { processFixedExpensesInternal } = await import("@/lib/finance-sync-internal");
+  const count = await processFixedExpensesInternal(user.companyId);
+
+  if (count && count > 0) {
+    revalidatePath("/finance/income-expenses");
+    revalidatePath("/finance");
   }
 
-  return toCreate.length;
+  return count;
 }

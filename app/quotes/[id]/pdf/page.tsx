@@ -1,6 +1,7 @@
 import { getQuoteById } from "@/app/actions/quotes";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import PrintButton from "./print-button";
 import QuoteDocument from "@/components/quotes/QuoteDocument";
 import Navbar from "@/components/Navbar";
@@ -14,6 +15,7 @@ export default async function QuotePdfPage({
   params: Promise<{ id: string }>;
 }) {
   const resolvedParams = await params;
+  const nonce = (await headers()).get("x-nonce") ?? "";
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
@@ -71,6 +73,7 @@ export default async function QuotePdfPage({
 
       {/* Print Styles Injection */}
       <style
+        nonce={nonce}
         dangerouslySetInnerHTML={{
           __html: `
         @page {

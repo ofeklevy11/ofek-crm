@@ -1,9 +1,12 @@
-"use server";
-
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { withRetry } from "@/lib/db-retry";
-import { createNotificationForCompany } from "./notifications";
+import { createNotificationForCompany } from "@/lib/notifications-internal";
+import { isPrivateUrl } from "@/lib/security/ssrf";
+import { validateUserInCompany } from "@/lib/company-validation";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("MultiEventAuto");
 
 const MAX_VISITED_RECORDS = 500;
 const MAX_AUDIT_LOGS = 5000;
@@ -97,7 +100,7 @@ async function getRelatedRecordIdsBFS(rootId: number, companyId: number): Promis
       }
       currentLevel = Array.from(nextLevelSet);
     } catch (err) {
-      console.error("[Multi-Event] Error in BFS lookup at depth", depth, ":", err);
+      log.error("Error in BFS lookup", { depth, error: String(err) });
       break;
     }
   }
@@ -150,7 +153,7 @@ export async function calculateMultiEventDuration(
   shared?: SharedQueryData,
   ruleSnapshot?: RuleSnapshot,
 ) {
-  console.log(`[Multi-Event] Starting calculation for Record ${recordId}`);
+  log.info("Starting calculation for record", { recordId });
 
   try {
     // Issue R: Use pre-fetched rule snapshot if available, otherwise fetch from DB
@@ -161,7 +164,7 @@ export async function calculateMultiEventDuration(
     // Issue H: Use shared data if provided, otherwise compute (backwards compatible)
     const resolvedCompanyId = companyId || rule?.companyId;
     if (!resolvedCompanyId && !shared?.targetRecordIds) {
-      console.error(`[Multi-Event] No companyId available for BFS traversal, skipping rule ${automationRuleId}`);
+      log.error("No companyId available for BFS traversal, skipping rule", { automationRuleId });
       return { result: null, pendingActions: [] };
     }
     const targetRecordIds = shared?.targetRecordIds
@@ -175,9 +178,7 @@ export async function calculateMultiEventDuration(
         }));
 
     // Issue F: Log only the count, not the full ID list
-    console.log(
-      `[Multi-Event] Looking for logs in ${targetRecordIds.size} records`,
-    );
+    log.debug("Looking for logs in related records", { count: targetRecordIds.size });
 
     // Issue O-2: Sort DESC to get the most recent logs, then reverse for chronological order.
     // This ensures that when truncated at MAX_AUDIT_LOGS, we keep the most relevant (recent) logs.
@@ -199,7 +200,7 @@ export async function calculateMultiEventDuration(
       allLogs = rawLogs;
     }
 
-    console.log(`[Multi-Event] Found ${allLogs.length} logs combined`);
+    log.debug("Found logs combined", { count: allLogs.length });
 
     // BUG 6 FIX: Batch-load all table names upfront instead of N+1 queries
     const tableIds = [
@@ -260,9 +261,7 @@ export async function calculateMultiEventDuration(
             tableName: tableName,
           });
           found = true;
-          console.log(
-            `[Multi-Event] Found '${event.eventName}' at ${log.timestamp} (Record: ${log.recordId})`,
-          );
+          log.debug("Found event match", { eventName: event.eventName, timestamp: String(log.timestamp), recordId: log.recordId });
           break;
         }
       }
@@ -280,9 +279,7 @@ export async function calculateMultiEventDuration(
           existingValue !== undefined &&
           String(existingValue).trim().toLowerCase() === targetValue
         ) {
-          console.log(
-            `[Multi-Event] Event '${event.eventName}' matches previous state (oldData). Using record creation time.`,
-          );
+          log.debug("Event matches previous state, using record creation time", { eventName: event.eventName });
           found = true;
           eventTimestamps.push({
             eventName: event.eventName,
@@ -295,9 +292,7 @@ export async function calculateMultiEventDuration(
       }
 
       if (!found) {
-        console.log(
-          `[Multi-Event] Event '${event.eventName}' NOT found. Searched for Column: '${event.columnId}' with Value: '${targetValue}'`,
-        );
+        log.debug("Event not found", { eventName: event.eventName, columnId: event.columnId, targetValue });
         // Issue J: Return consistent shape instead of bare null to prevent silent action loss
         return { result: null, pendingActions: [] };
       }
@@ -321,9 +316,7 @@ export async function calculateMultiEventDuration(
         new Date(currentEvent.timestamp).getTime();
       let diffSeconds = Math.floor(diffMs / 1000);
       if (diffSeconds < 0) {
-        console.warn(
-          `[Multi-Event] Negative duration detected (${diffSeconds}s) between "${currentEvent.eventName}" and "${nextEvent.eventName}" for record. Possible clock skew or out-of-order audit logs. Clamping to 0.`,
-        );
+        log.warn("Negative duration detected, clamping to 0", { diffSeconds, from: currentEvent.eventName, to: nextEvent.eventName });
         diffSeconds = 0;
       }
 
@@ -377,9 +370,7 @@ export async function calculateMultiEventDuration(
 
     if (existingDuration) {
       // Issue T: Warn that actions from the original attempt may have been lost
-      console.warn(
-        `[Multi-Event] Dedup: duration #${existingDuration.id} already exists for rule ${automationRuleId} + record ${recordId}, skipping create. NOTE: if the original attempt crashed before executing actions, those actions are permanently lost.`,
-      );
+      log.warn("Dedup: duration already exists, skipping create", { durationId: existingDuration.id, automationRuleId, recordId });
       return { result: existingDuration, pendingActions: [] };
     }
 
@@ -399,7 +390,7 @@ export async function calculateMultiEventDuration(
       });
     } catch (createErr) {
       if (createErr instanceof Prisma.PrismaClientKnownRequestError && createErr.code === "P2002") {
-        console.warn(`[Multi-Event] P2002 race: duplicate for rule ${automationRuleId} + record ${recordId}, updating instead.`);
+        log.warn("P2002 race: duplicate, updating instead", { automationRuleId, recordId });
         result = await prisma.multiEventDuration.updateMany({
           where: { automationRuleId, recordId },
           data: {
@@ -415,9 +406,7 @@ export async function calculateMultiEventDuration(
       throw createErr;
     }
 
-    console.log(
-      `[Multi-Event] Successfully saved result #${result.id}. Duration: ${totalDurationString}`,
-    );
+    log.info("Successfully saved duration result", { resultId: result.id, duration: totalDurationString });
 
     // 6. ביצוע פעולה (Action) לפי סוג הכלל
     const pendingActions: Array<{ type: string; config: any; contextData: any; ruleSnapshot: any; companyId: number; delay: number }> = [];
@@ -433,7 +422,7 @@ export async function calculateMultiEventDuration(
         weightedScore: weightedScore,
       };
 
-      console.log(`[Multi-Event] Executing Action: ${rule.actionType}`);
+      log.info("Executing action", { actionType: rule.actionType });
 
       const executeSingleAction = async (
         type: string,
@@ -452,9 +441,7 @@ export async function calculateMultiEventDuration(
                 companyId,
                 delay: Number(config.delay),
               });
-              console.log(
-                `[Multi-Event] WhatsApp action deferred with ${config.delay}s delay`,
-              );
+              log.info("WhatsApp action deferred with delay", { delay: config.delay });
               return;
             }
 
@@ -485,14 +472,18 @@ export async function calculateMultiEventDuration(
                   },
                 });
               } catch (err) {
-                console.error("[Multi-Event] Failed to enqueue WhatsApp job:", err);
+                log.error("Failed to enqueue WhatsApp job", { error: String(err) });
               }
             } else {
-              console.error(`[Multi-Event] WhatsApp: No phone resolved from ${phoneColumnId}`);
+              log.error("WhatsApp: No phone resolved", { phoneColumnId });
             }
           } else if (type === "WEBHOOK") {
             const webhookUrl = config.webhookUrl || config.url;
             if (webhookUrl) {
+              if (isPrivateUrl(webhookUrl)) {
+                log.warn("SSRF blocked on multi-event webhook", { ruleId: rule.id });
+                return;
+              }
               const { inngest } = await import("@/lib/inngest/client");
               try {
                 await inngest.send({
@@ -512,10 +503,10 @@ export async function calculateMultiEventDuration(
                   },
                 });
               } catch (err) {
-                console.error("[Multi-Event] Failed to enqueue Webhook job:", err);
+                log.error("Failed to enqueue Webhook job", { error: String(err) });
               }
             } else {
-              console.error(`[Multi-Event] Webhook: No URL configured for rule ${rule.id}`);
+              log.error("Webhook: No URL configured for rule", { ruleId: rule.id });
             }
           } else if (type === "SEND_NOTIFICATION") {
             if (config.recipientId) {
@@ -528,7 +519,6 @@ export async function calculateMultiEventDuration(
                   "התהליך הושלם בהצלחה.\nמשך: {durationString}"
                 ).replace("{durationString}", totalDurationString),
                 link: `/tables/${tableId}?recordId=${recordId}`,
-                skipValidation: true,
               });
             }
           } else if (type === "CREATE_TASK") {
@@ -550,13 +540,15 @@ export async function calculateMultiEventDuration(
               taskData.dueDate = new Date(config.dueDate);
             }
 
-            if (config.assigneeId)
-              taskData.assigneeId = Number(config.assigneeId);
+            if (config.assigneeId) {
+              const assigneeOk = await validateUserInCompany(Number(config.assigneeId), companyId);
+              if (assigneeOk) taskData.assigneeId = Number(config.assigneeId);
+            }
 
             await prisma.task.create({
               data: taskData,
             });
-            console.log(`[Multi-Event] Task created for rule ${rule.id}`);
+            log.info("Task created for rule", { ruleId: rule.id });
           } else if (type === "UPDATE_RECORD_FIELD") {
             if (config.columnId) {
               // Issue I: Use serializable transaction to prevent lost-update race condition
@@ -583,17 +575,13 @@ export async function calculateMultiEventDuration(
                         data: { data: JSON.parse(JSON.stringify(newData)) },
                       });
 
-                      console.log(
-                        `[Multi-Event] Updated field ${config.columnId} to "${config.value}" for record ${recordId}`,
-                      );
+                      log.info("Updated record field", { columnId: config.columnId, recordId });
                     }
                   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 10000 }));
                   break; // Success — exit retry loop
                 } catch (txErr: any) {
                   if (txErr?.code === "P2034" && attempt < MAX_SERIALIZATION_RETRIES) {
-                    console.warn(
-                      `[Multi-Event] Serialization conflict on UPDATE_RECORD_FIELD for record ${recordId}, retrying (attempt ${attempt + 1}/${MAX_SERIALIZATION_RETRIES})`,
-                    );
+                    log.warn("Serialization conflict on UPDATE_RECORD_FIELD, retrying", { recordId, attempt: attempt + 1, maxRetries: MAX_SERIALIZATION_RETRIES });
                     continue;
                   }
                   throw txErr; // Non-serialization error or retries exhausted — propagate
@@ -602,10 +590,7 @@ export async function calculateMultiEventDuration(
             }
           }
         } catch (actionErr) {
-          console.error(
-            `[Multi-Event] Action execution failed (${type}):`,
-            actionErr,
-          );
+          log.error("Action execution failed", { type, error: String(actionErr) });
         }
       };
 
@@ -635,13 +620,12 @@ export async function calculateMultiEventDuration(
                 title: "משימה הושלמה: " + rule.name,
                 message: `${config.notification.message}\nמשך כולל: ${totalDurationString}`,
                 link: `/tables/${tableId}?recordId=${recordId}`,
-                skipValidation: true,
               });
             }
           }
         }
       } catch (err) {
-        console.error("[Multi-Event] Error in action orchestration:", err);
+        log.error("Error in action orchestration", { error: String(err) });
       }
     }
 
@@ -661,7 +645,7 @@ export async function calculateMultiEventDuration(
     if (isTransient) {
       throw error;
     }
-    console.error("[Multi-Event] Error calculating duration:", error);
+    log.error("Error calculating duration", { error: String(error) });
     return { result: null, pendingActions: [] };
   }
 }
@@ -829,7 +813,7 @@ export async function calculateSingleRule(
   ruleSnapshot: RuleSnapshot,
   prefetchedLogs?: any[],
 ): Promise<{ pendingActions: Array<{ type: string; config: any; contextData: any; ruleSnapshot: any; companyId: number; delay: number }> }> {
-  console.log(`[Multi-Event Trigger] Chain completion detected for Rule ${ruleId}`);
+  log.info("Chain completion detected for rule", { ruleId });
 
   const targetRecordIds = new Set(sharedData.targetRecordIds);
 
@@ -906,9 +890,7 @@ export async function processMultiEventDurationTrigger(
     };
 
     for (const { ruleId, eventChain, ruleSnapshot } of matchingRules) {
-      console.log(
-        `[Multi-Event Trigger] Chain completion detected for Rule ${ruleId}`,
-      );
+      log.info("Chain completion detected for rule (legacy)", { ruleId });
 
       const calcResult = await calculateMultiEventDuration(
         tableId,
@@ -926,7 +908,7 @@ export async function processMultiEventDurationTrigger(
       }
     }
   } catch (error) {
-    console.error("[Multi-Event Trigger] Error:", error);
+    log.error("Multi-Event Trigger error", { error: String(error) });
   }
 
   return { pendingActions: allPendingActions };

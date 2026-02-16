@@ -2,7 +2,25 @@ import { Prisma } from "@prisma/client";
 import { inngest } from "../client";
 import { prismaBg as prisma } from "@/lib/prisma-background";
 import { validateUserInCompany } from "@/lib/company-validation";
-import { createNotificationForCompany } from "@/app/actions/notifications";
+import { createNotificationForCompany } from "@/lib/notifications-internal";
+import { isPrivateUrl } from "@/lib/security/ssrf";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("WorkflowAutoJobs");
+
+/** Max number of automation actions per stage to prevent abuse via crafted details JSON */
+const MAX_ACTIONS_PER_STAGE = 20;
+
+/** Allowed action types — unknown types are skipped for defense-in-depth */
+const ALLOWED_ACTION_TYPES = new Set([
+  "create_task",
+  "notification",
+  "create_record",
+  "update_record",
+  "create_event",
+  "whatsapp",
+  "webhook",
+]);
 
 /**
  * Background job for executing workflow stage automations.
@@ -16,6 +34,7 @@ export const processWorkflowStageAutomations = inngest.createFunction(
     timeouts: { finish: "120s" },
     concurrency: [
       { limit: 3, key: "event.data.companyId" },
+      { limit: 10 },
     ],
   },
   { event: "workflow/execute-stage-automations" },
@@ -32,19 +51,25 @@ export const processWorkflowStageAutomations = inngest.createFunction(
 
     if (!stageDetails || !Array.isArray(stageDetails.systemActions)) return;
 
-    console.log(
-      `[Automation] Processing ${stageDetails.systemActions.length} actions for stage ${stageName}`,
-    );
+    // Cap the number of actions to prevent abuse via crafted details JSON
+    const actions = stageDetails.systemActions.slice(0, MAX_ACTIONS_PER_STAGE);
 
-    for (let i = 0; i < stageDetails.systemActions.length; i++) {
-      const action = stageDetails.systemActions[i];
+    log.info("Processing stage automations", { actionCount: actions.length, stageName });
+
+    for (let i = 0; i < actions.length; i++) {
+      const action = actions[i];
       if (typeof action === "string") {
-        console.log(`[Automation] Legacy action skipped: ${action}`);
+        log.info("Legacy action skipped", { action });
         continue;
       }
 
       const { type, config } = action;
       if (!type) continue;
+
+      if (!ALLOWED_ACTION_TYPES.has(type)) {
+        log.warn("Unknown action type skipped", { type });
+        continue;
+      }
 
       try {
         switch (type) {
@@ -82,7 +107,7 @@ export const processWorkflowStageAutomations = inngest.createFunction(
                     tags: ['נוצר ע"י אוטומציה מתהליך עבודה'],
                   },
                 });
-                console.log(`[Automation] Task created: ${config.title}`);
+                log.info("Task created", { title: config.title });
               });
             }
             break;
@@ -90,20 +115,25 @@ export const processWorkflowStageAutomations = inngest.createFunction(
           case "notification":
             if (config.recipientId && config.message) {
               await step.run(`notification-${i}-${config.recipientId}`, async () => {
+                const recipientOk = await validateUserInCompany(
+                  Number(config.recipientId),
+                  companyId,
+                );
+                if (!recipientOk) {
+                  log.warn("Notification skipped — recipient not in company", { recipientId: config.recipientId });
+                  return;
+                }
                 const result = await createNotificationForCompany({
                   companyId,
                   userId: Number(config.recipientId),
                   title: "התראה מתהליך עבודה",
                   message: `${config.message} (תהליך: ${instanceName})`,
                   link: `/workflows`,
-                  skipValidation: true, // companyId verified upstream
                 });
                 if (!result.success) {
                   throw new Error(`Notification creation failed: ${result.error}`);
                 }
-                console.log(
-                  `[Automation] Notification sent to user ${config.recipientId}`,
-                );
+                log.info("Notification sent", { recipientId: config.recipientId });
               });
             }
             break;
@@ -127,9 +157,7 @@ export const processWorkflowStageAutomations = inngest.createFunction(
                     createdBy: userId,
                   },
                 });
-                console.log(
-                  `[Automation] Record created in table ${config.tableId}`,
-                );
+                log.info("Record created in table", { tableId: config.tableId });
               });
             }
             break;
@@ -153,22 +181,22 @@ export const processWorkflowStageAutomations = inngest.createFunction(
                   });
 
                   if (!record) {
-                    console.log(
-                      `[Automation] Record ${recordId} not found for update in table ${tableId}`,
-                    );
+                    log.info("Record not found for update", { recordId, tableId });
                     return;
                   }
 
                   let newData = { ...(record.data as any) };
                   const field = config.fieldName;
                   let val = config.value;
+                  let currentVal = 0;
 
                   if (
                     config.operation &&
                     config.operation !== "set" &&
-                    !isNaN(Number(val))
+                    Number.isFinite(Number(val))
                   ) {
-                    const currentVal = Number(newData[field] || 0);
+                    const rawCurrent = Number(newData[field] || 0);
+                    currentVal = Number.isFinite(rawCurrent) ? rawCurrent : 0;
                     const operVal = Number(val);
                     switch (config.operation) {
                       case "add":
@@ -186,15 +214,17 @@ export const processWorkflowStageAutomations = inngest.createFunction(
                     }
                   }
 
+                  if (typeof val === "number" && !Number.isFinite(val)) {
+                    val = currentVal; // overflow — keep original value
+                  }
+
                   newData[field] = val;
 
                   await tx.record.update({
                     where: { id: recordId, companyId },
                     data: { data: newData },
                   });
-                  console.log(
-                    `[Automation] Record ${recordId} updated: ${field} = ${val}`,
-                  );
+                  log.info("Record updated", { recordId, field });
                 }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
                 try {
@@ -256,7 +286,7 @@ export const processWorkflowStageAutomations = inngest.createFunction(
                   color: config.color || "#3788d8",
                 },
               });
-              console.log(`[Automation] Event created: ${config.title}`);
+              log.info("Calendar event created", { title: config.title });
             });
             break;
 
@@ -278,15 +308,21 @@ export const processWorkflowStageAutomations = inngest.createFunction(
                   mediaFileId: config.mediaFileId,
                 },
               });
-              console.log(`[Automation] WhatsApp job enqueued for ${target}`);
+              log.info("WhatsApp job enqueued");
             } else {
-              console.warn("[Automation] WhatsApp: No phone number resolved");
+              log.warn("WhatsApp: No phone number resolved");
             }
             break;
           }
 
           case "webhook":
             if (config.url) {
+              // SSRF protection: block requests to private/internal addresses
+              if (isPrivateUrl(config.url)) {
+                const blockedHost = (() => { try { return new URL(config.url).hostname; } catch { return "invalid-url"; } })();
+                log.warn("Webhook blocked — private URL", { hostname: blockedHost });
+                break;
+              }
               const urlHost = (() => {
                 try {
                   return new URL(config.url).hostname;
@@ -314,12 +350,13 @@ export const processWorkflowStageAutomations = inngest.createFunction(
                   },
                 },
               });
-              console.log(`[Automation] Webhook job enqueued to ${config.url}`);
+              const webhookHost = (() => { try { return new URL(config.url).hostname; } catch { return "invalid-url"; } })();
+              log.info("Webhook job enqueued", { hostname: webhookHost });
             }
             break;
         }
       } catch (e) {
-        console.error(`[Automation] Failed to execute ${type}:`, e);
+        log.error("Failed to execute automation action", { type, error: String(e) });
       }
     }
 

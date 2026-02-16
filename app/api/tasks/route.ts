@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { validateUserInCompany } from "@/lib/company-validation";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createTaskSchema } from "@/lib/validations/tasks";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("TasksAPI");
 
 // GET all tasks
 export async function GET(request: NextRequest) {
@@ -11,9 +17,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // CRITICAL: Filter by companyId for multi-tenancy
+    // Permission check
+    const canView = user.role === "admin" || hasUserFlag(user, "canViewTasks");
+    if (!canView) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Rate limit
+    const rateLimited = await checkRateLimit(String(user.id), RATE_LIMITS.taskRead);
+    if (rateLimited) return rateLimited;
+
+    // Visibility filtering: non-admin without canViewAllTasks only sees own tasks
+    const canViewAll =
+      user.role === "admin" || hasUserFlag(user, "canViewAllTasks");
+    const whereClause = canViewAll
+      ? { companyId: user.companyId }
+      : { companyId: user.companyId, assigneeId: user.id };
+
     const tasks = await prisma.task.findMany({
-      where: { companyId: user.companyId },
+      where: whereClause,
       select: {
         id: true,
         title: true,
@@ -31,7 +53,7 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json(tasks);
   } catch (error) {
-    console.error("Error fetching tasks:", error);
+    log.error("Failed to fetch tasks", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to fetch tasks" },
       { status: 500 }
@@ -47,29 +69,52 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    // Permission check
+    const canCreate =
+      user.role === "admin" || hasUserFlag(user, "canCreateTasks");
+    if (!canCreate) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Rate limit
+    const rateLimited = await checkRateLimit(String(user.id), RATE_LIMITS.taskMutation);
+    if (rateLimited) return rateLimited;
+
+    // Validate input
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    const parsed = createTaskSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+
+    const data = parsed.data;
 
     // SECURITY: Validate assigneeId belongs to same company
-    if (body.assigneeId) {
-      if (!(await validateUserInCompany(body.assigneeId, user.companyId))) {
+    if (data.assigneeId) {
+      if (!(await validateUserInCompany(data.assigneeId, user.companyId))) {
         return NextResponse.json({ error: "Invalid assignee" }, { status: 400 });
       }
     }
 
-    // Convert dueDate string to Date object if present
-    const dueDate = body.dueDate ? new Date(body.dueDate) : null;
-
     const newTask = await prisma.task.create({
       data: {
-        companyId: user.companyId, // CRITICAL: Set companyId for multi-tenancy
+        companyId: user.companyId,
         creatorId: user.id,
-        title: body.title,
-        description: body.description,
-        status: body.status ?? "todo",
-        assigneeId: body.assigneeId,
-        priority: body.priority,
-        tags: body.tags || [],
-        dueDate: dueDate,
+        title: data.title,
+        description: data.description ?? undefined,
+        status: data.status,
+        assigneeId: data.assigneeId ?? undefined,
+        priority: data.priority ?? undefined,
+        tags: data.tags || [],
+        dueDate: data.dueDate,
       },
       select: {
         id: true,
@@ -87,7 +132,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(newTask, { status: 201 });
   } catch (error) {
-    console.error("Error creating task:", error);
+    log.error("Failed to create task", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to create task" },
       { status: 500 }

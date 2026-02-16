@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
-import { canReadTable } from "@/lib/permissions";
+import { canReadTable, canWriteTable, hasUserFlag } from "@/lib/permissions";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("RecordAttachments");
 
 function parseId(raw: string): number | null {
   const n = parseInt(raw, 10);
@@ -29,6 +33,9 @@ export async function POST(
       );
     }
 
+    const rl = await checkRateLimit(String(currentUser.id), RATE_LIMITS.fileMutation);
+    if (rl) return rl;
+
     let body;
     try {
       body = await request.json();
@@ -37,10 +44,29 @@ export async function POST(
     }
     const { filename, url, size, displayName } = body;
 
+    // Validate filename
+    if (typeof filename !== "string" || filename.length === 0 || filename.length > 500) {
+      return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
+    }
+
+    // Validate size (non-negative integer)
+    if (size != null && (typeof size !== "number" || !Number.isFinite(size) || size < 0)) {
+      return NextResponse.json({ error: "Invalid file size" }, { status: 400 });
+    }
+
+    // Validate displayName
+    if (displayName != null && (typeof displayName !== "string" || displayName.length > 500)) {
+      return NextResponse.json({ error: "Invalid display name" }, { status: 400 });
+    }
+
     // Validate URL scheme (must be http or https)
     if (url != null && url !== "") {
       if (typeof url !== "string" || url.length > 2048 || !/^https?:\/\//i.test(url)) {
         return NextResponse.json({ error: "Invalid URL: must be http or https" }, { status: 400 });
+      }
+      const { isPrivateUrl } = await import("@/lib/security/ssrf");
+      if (isPrivateUrl(url)) {
+        return NextResponse.json({ error: "URL targets a private address" }, { status: 400 });
       }
     }
 
@@ -56,6 +82,14 @@ export async function POST(
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
+    if (!hasUserFlag(currentUser, "canViewFiles")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (!canWriteTable(currentUser, existingRecord.tableId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const attachment = await prisma.attachment.create({
       data: {
         recordId,
@@ -65,6 +99,7 @@ export async function POST(
         displayName: displayName?.trim() || null,
         uploadedBy: currentUser.id,
       },
+      select: { id: true, recordId: true, filename: true, url: true, size: true, displayName: true, uploadedAt: true },
     });
 
     return NextResponse.json({
@@ -94,6 +129,9 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const rl = await checkRateLimit(String(currentUser.id), RATE_LIMITS.fileRead);
+    if (rl) return rl;
+
     // Verify record access
     const existingRecord = await prisma.record.findFirst({
       where: {
@@ -114,6 +152,7 @@ export async function GET(
       where: { recordId, record: { companyId: currentUser.companyId } },
       orderBy: { uploadedAt: "desc" },
       take: 500,
+      select: { id: true, recordId: true, filename: true, url: true, size: true, displayName: true, uploadedAt: true },
     });
 
     // Add proxied download URLs alongside the user-entered link URLs
@@ -124,7 +163,7 @@ export async function GET(
 
     return NextResponse.json(sanitized);
   } catch (error) {
-    console.error("Error fetching attachments:", error);
+    log.error("Failed to fetch attachments", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to fetch attachments" },
       { status: 500 },

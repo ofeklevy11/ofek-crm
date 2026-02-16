@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { canManageTables } from "@/lib/permissions";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("TablesAPI");
+
+// Input constraints
+const MAX_NAME_LENGTH = 200;
+const MAX_SLUG_LENGTH = 100;
+const MAX_SCHEMA_JSON_SIZE = 200_000; // 200KB max for schemaJson
+const SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 
 export async function GET(request: Request) {
   try {
@@ -9,6 +19,13 @@ export async function GET(request: Request) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    // Rate limiting
+    const rlResponse = await checkRateLimit(
+      String(user.id),
+      RATE_LIMITS.api
+    );
+    if (rlResponse) return rlResponse;
 
     const { searchParams } = new URL(request.url);
     const cursor = searchParams.get("cursor");
@@ -38,6 +55,10 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "desc" },
       take: limit + 1,
       ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+      select: {
+        id: true, name: true, slug: true, schemaJson: true,
+        categoryId: true, order: true, createdAt: true, updatedAt: true,
+      },
     });
 
     const hasMore = tables.length > limit;
@@ -49,7 +70,7 @@ export async function GET(request: Request) {
       nextCursor: hasMore ? data[data.length - 1]?.id : undefined,
     });
   } catch (error) {
-    console.error("Error fetching tables:", error);
+    log.error("Failed to fetch tables", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to fetch tables" },
       { status: 500 }
@@ -71,6 +92,13 @@ export async function POST(request: Request) {
       );
     }
 
+    // Rate limiting — stricter for mutations
+    const rlResponse = await checkRateLimit(
+      String(user.id),
+      RATE_LIMITS.bulk
+    );
+    if (rlResponse) return rlResponse;
+
     let body;
     try {
       body = await request.json();
@@ -79,7 +107,7 @@ export async function POST(request: Request) {
     }
     const { name, slug, schemaJson } = body;
 
-    // Basic validation
+    // Input validation
     if (!name || !slug) {
       return NextResponse.json(
         { error: "Missing required fields" },
@@ -87,11 +115,55 @@ export async function POST(request: Request) {
       );
     }
 
+    if (typeof name !== "string" || name.length > MAX_NAME_LENGTH) {
+      return NextResponse.json(
+        { error: `Name must be a string of at most ${MAX_NAME_LENGTH} characters` },
+        { status: 400 }
+      );
+    }
+
+    if (typeof slug !== "string" || slug.length > MAX_SLUG_LENGTH) {
+      return NextResponse.json(
+        { error: `Slug must be a string of at most ${MAX_SLUG_LENGTH} characters` },
+        { status: 400 }
+      );
+    }
+
+    if (!SLUG_PATTERN.test(slug)) {
+      return NextResponse.json(
+        { error: "Slug must start with a letter or number and contain only lowercase letters, numbers, hyphens, and underscores" },
+        { status: 400 }
+      );
+    }
+
+    if (schemaJson !== undefined) {
+      if (typeof schemaJson !== "object" || schemaJson === null || Array.isArray(schemaJson)) {
+        return NextResponse.json(
+          { error: "schemaJson must be a JSON object" },
+          { status: 400 }
+        );
+      }
+      const schemaSize = JSON.stringify(schemaJson).length;
+      if (schemaSize > MAX_SCHEMA_JSON_SIZE) {
+        return NextResponse.json(
+          { error: `schemaJson exceeds maximum size of ${MAX_SCHEMA_JSON_SIZE} bytes` },
+          { status: 400 }
+        );
+      }
+    }
+
     // SECURITY: Validate categoryId belongs to user's company
     let validatedCategoryId: number | undefined;
     if (body.categoryId) {
+      const categoryIdNum = Number(body.categoryId);
+      if (!Number.isFinite(categoryIdNum) || categoryIdNum <= 0) {
+        return NextResponse.json(
+          { error: "Invalid category ID" },
+          { status: 400 }
+        );
+      }
       const category = await prisma.tableCategory.findFirst({
-        where: { id: Number(body.categoryId), companyId: user.companyId },
+        where: { id: categoryIdNum, companyId: user.companyId },
         select: { id: true },
       });
       if (!category) {
@@ -105,12 +177,16 @@ export async function POST(request: Request) {
 
     const table = await prisma.tableMeta.create({
       data: {
-        name,
-        slug,
+        name: name.trim(),
+        slug: slug.trim(),
         schemaJson: schemaJson || {},
         companyId: user.companyId,
         createdBy: user.id,
         categoryId: validatedCategoryId,
+      },
+      select: {
+        id: true, name: true, slug: true, schemaJson: true,
+        categoryId: true, order: true, createdAt: true, updatedAt: true,
       },
     });
 
@@ -123,7 +199,7 @@ export async function POST(request: Request) {
         { status: 409 }
       );
     }
-    console.error("Error creating table:", error);
+    log.error("Failed to create table", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to create table" },
       { status: 500 }

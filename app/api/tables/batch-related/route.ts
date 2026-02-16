@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { canReadTable } from "@/lib/permissions";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("TablesBatch");
 
 /**
  * Batched endpoint to fetch display values for related records.
@@ -30,6 +35,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const rl = await checkRateLimit(String(currentUser.id), RATE_LIMITS.api);
+    if (rl) return rl;
+
     const body = await request.json();
     const { tables } = body;
 
@@ -55,7 +63,9 @@ export async function POST(request: Request) {
       select: { id: true },
     });
 
-    const validTableIds = new Set(validTables.map((t) => t.id));
+    const validTableIds = new Set(
+      validTables.map((t) => t.id).filter((id) => canReadTable(currentUser, id))
+    );
 
     // Collect all record IDs per table, only for valid tables
     const allRecordIds: number[] = [];
@@ -136,7 +146,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Error fetching batch related records:", error);
+    log.error("Failed to fetch batch related records", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to fetch related records" },
       { status: 500 },

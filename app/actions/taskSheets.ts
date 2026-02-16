@@ -6,6 +6,10 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { inngest } from "@/lib/inngest/client";
 import type { OnCompleteAction } from "@/lib/task-sheet-automations";
 import { withRetry } from "@/lib/db-retry";
+import { validateUserInCompany } from "@/lib/company-validation";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("TaskSheets");
 
 // Types
 export interface TaskSheetItemInput {
@@ -57,22 +61,26 @@ export async function getTaskSheets() {
         ...(isAdmin ? {} : { assigneeId: user.id }),
         isActive: true,
       },
-      include: {
+      select: {
+        id: true, title: true, description: true, type: true,
+        assigneeId: true, createdById: true, isActive: true,
+        validFrom: true, validUntil: true,
+        createdAt: true, updatedAt: true,
         assignee: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
+          select: { id: true, name: true, email: true },
         },
         createdBy: {
-          select: {
-            id: true,
-            name: true,
-          },
+          select: { id: true, name: true },
         },
         items: {
           orderBy: { order: "asc" },
+          select: {
+            id: true, sheetId: true, title: true, description: true,
+            priority: true, category: true, order: true, dueTime: true,
+            isCompleted: true, completedAt: true, notes: true,
+            linkedTaskId: true, onCompleteActions: true,
+            createdAt: true, updatedAt: true,
+          },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -80,7 +88,7 @@ export async function getTaskSheets() {
 
     return { success: true, data: sheets };
   } catch (error) {
-    console.error("Error fetching task sheets:", error);
+    log.error("Error fetching task sheets", { error: String(error) });
     return { success: false, error: "Failed to fetch task sheets" };
   }
 }
@@ -100,30 +108,27 @@ export async function getTaskSheetById(id: number) {
         // Allow access if admin or assigned to this user
         ...(user.role !== "admin" ? { assigneeId: user.id } : {}),
       },
-      include: {
+      select: {
+        id: true, title: true, description: true, type: true,
+        assigneeId: true, createdById: true, isActive: true,
+        validFrom: true, validUntil: true,
+        createdAt: true, updatedAt: true,
         assignee: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
+          select: { id: true, name: true, email: true },
         },
         createdBy: {
-          select: {
-            id: true,
-            name: true,
-          },
+          select: { id: true, name: true },
         },
         items: {
           orderBy: [{ order: "asc" }, { priority: "asc" }],
-          include: {
+          select: {
+            id: true, sheetId: true, title: true, description: true,
+            priority: true, category: true, order: true, dueTime: true,
+            isCompleted: true, completedAt: true, notes: true,
+            linkedTaskId: true, onCompleteActions: true,
+            createdAt: true, updatedAt: true,
             linkedTask: {
-              select: {
-                id: true,
-                title: true,
-                status: true,
-                priority: true,
-              },
+              select: { id: true, title: true, status: true, priority: true },
             },
           },
         },
@@ -136,7 +141,7 @@ export async function getTaskSheetById(id: number) {
 
     return { success: true, data: sheet };
   } catch (error) {
-    console.error("Error fetching task sheet:", error);
+    log.error("Error fetching task sheet", { error: String(error) });
     return { success: false, error: "Failed to fetch task sheet" };
   }
 }
@@ -151,6 +156,12 @@ export async function createTaskSheet(data: TaskSheetInput) {
 
     if (user.role !== "admin") {
       return { success: false, error: "רק מנהלים יכולים ליצור דפי משימות" };
+    }
+
+    // SECURITY: Validate assigneeId belongs to the same company
+    if (data.assigneeId) {
+      const assigneeOk = await validateUserInCompany(data.assigneeId, user.companyId);
+      if (!assigneeOk) return { success: false, error: "Invalid assignee" };
     }
 
     const sheet = await prisma.taskSheet.create({
@@ -180,11 +191,23 @@ export async function createTaskSheet(data: TaskSheetInput) {
             }
           : undefined,
       },
-      include: {
+      select: {
+        id: true, title: true, description: true, type: true,
+        assigneeId: true, createdById: true, isActive: true,
+        validFrom: true, validUntil: true,
+        createdAt: true, updatedAt: true,
         assignee: {
           select: { id: true, name: true, email: true },
         },
-        items: true,
+        items: {
+          select: {
+            id: true, sheetId: true, title: true, description: true,
+            priority: true, category: true, order: true, dueTime: true,
+            isCompleted: true, completedAt: true, notes: true,
+            linkedTaskId: true, onCompleteActions: true,
+            createdAt: true, updatedAt: true,
+          },
+        },
       },
     });
 
@@ -193,7 +216,7 @@ export async function createTaskSheet(data: TaskSheetInput) {
 
     return { success: true, data: sheet };
   } catch (error) {
-    console.error("Error creating task sheet:", error);
+    log.error("Error creating task sheet", { error: String(error) });
     return { success: false, error: "Failed to create task sheet" };
   }
 }
@@ -213,6 +236,12 @@ export async function updateTaskSheet(
       return { success: false, error: "רק מנהלים יכולים לערוך דפי משימות" };
     }
 
+    // SECURITY: Validate assigneeId belongs to the same company
+    if (data.assigneeId) {
+      const assigneeOk = await validateUserInCompany(data.assigneeId, user.companyId);
+      if (!assigneeOk) return { success: false, error: "Invalid assignee" };
+    }
+
     // P114: Add companyId to prevent cross-tenant task sheet updates
     const sheet = await prisma.taskSheet.update({
       where: { id, companyId: user.companyId },
@@ -228,11 +257,23 @@ export async function updateTaskSheet(
           validUntil: data.validUntil ? new Date(data.validUntil) : null,
         }),
       },
-      include: {
+      select: {
+        id: true, title: true, description: true, type: true,
+        assigneeId: true, createdById: true, isActive: true,
+        validFrom: true, validUntil: true,
+        createdAt: true, updatedAt: true,
         assignee: {
           select: { id: true, name: true, email: true },
         },
-        items: true,
+        items: {
+          select: {
+            id: true, sheetId: true, title: true, description: true,
+            priority: true, category: true, order: true, dueTime: true,
+            isCompleted: true, completedAt: true, notes: true,
+            linkedTaskId: true, onCompleteActions: true,
+            createdAt: true, updatedAt: true,
+          },
+        },
       },
     });
 
@@ -241,7 +282,7 @@ export async function updateTaskSheet(
 
     return { success: true, data: sheet };
   } catch (error) {
-    console.error("Error updating task sheet:", error);
+    log.error("Error updating task sheet", { error: String(error) });
     return { success: false, error: "Failed to update task sheet" };
   }
 }
@@ -268,7 +309,7 @@ export async function deleteTaskSheet(id: number) {
 
     return { success: true };
   } catch (error) {
-    console.error("Error deleting task sheet:", error);
+    log.error("Error deleting task sheet", { error: String(error) });
     return { success: false, error: "Failed to delete task sheet" };
   }
 }
@@ -329,6 +370,13 @@ export async function addTaskSheetItem(
             JSON.stringify(item.onCompleteActions || []),
           ),
         },
+        select: {
+          id: true, sheetId: true, title: true, description: true,
+          priority: true, category: true, order: true, dueTime: true,
+          isCompleted: true, completedAt: true, notes: true,
+          linkedTaskId: true, onCompleteActions: true,
+          createdAt: true, updatedAt: true,
+        },
       });
     }, { isolationLevel: "Serializable", maxWait: 5000, timeout: 10000 }));
 
@@ -337,7 +385,7 @@ export async function addTaskSheetItem(
 
     return { success: true, data: newItem };
   } catch (error) {
-    console.error("Error adding task sheet item:", error);
+    log.error("Error adding task sheet item", { error: String(error) });
     return { success: false, error: "Failed to add item" };
   }
 }
@@ -451,7 +499,7 @@ export async function updateTaskSheetItem(
           },
         });
       } catch (sendError) {
-        console.error("[TaskSheets] Error sending automation event:", sendError);
+        log.error("Error sending automation event", { error: String(sendError) });
       }
     }
 
@@ -460,7 +508,7 @@ export async function updateTaskSheetItem(
 
     return { success: true, data: updatedItem };
   } catch (error) {
-    console.error("Error updating task sheet item:", error);
+    log.error("Error updating task sheet item", { error: String(error) });
     return { success: false, error: "Failed to update item" };
   }
 }
@@ -491,7 +539,7 @@ export async function deleteTaskSheetItem(itemId: number) {
 
     return { success: true };
   } catch (error) {
-    console.error("Error deleting task sheet item:", error);
+    log.error("Error deleting task sheet item", { error: String(error) });
     return { success: false, error: "Failed to delete item" };
   }
 }
@@ -580,7 +628,7 @@ export async function toggleTaskSheetItemCompletion(itemId: number) {
           },
         });
       } catch (sendError) {
-        console.error("[TaskSheets] Error sending automation event:", sendError);
+        log.error("Error sending automation event on toggle", { error: String(sendError) });
         // Don't fail the toggle if event dispatch fails
       }
     }
@@ -590,7 +638,7 @@ export async function toggleTaskSheetItemCompletion(itemId: number) {
 
     return { success: true, data: updatedItem };
   } catch (error) {
-    console.error("Error toggling item completion:", error);
+    log.error("Error toggling item completion", { error: String(error) });
     return { success: false, error: "Failed to toggle completion" };
   }
 }
@@ -614,29 +662,30 @@ export async function getMyTaskSheets() {
         validFrom: { lte: now },
         OR: [{ validUntil: null }, { validUntil: { gte: now } }],
       },
-      include: {
+      select: {
+        id: true, title: true, description: true, type: true,
+        assigneeId: true, createdById: true, isActive: true,
+        validFrom: true, validUntil: true,
+        createdAt: true, updatedAt: true,
         items: {
           orderBy: [
             { isCompleted: "asc" },
             { priority: "asc" },
             { order: "asc" },
           ],
-          include: {
+          select: {
+            id: true, sheetId: true, title: true, description: true,
+            priority: true, category: true, order: true, dueTime: true,
+            isCompleted: true, completedAt: true, notes: true,
+            linkedTaskId: true, onCompleteActions: true,
+            createdAt: true, updatedAt: true,
             linkedTask: {
-              select: {
-                id: true,
-                title: true,
-                status: true,
-                priority: true,
-              },
+              select: { id: true, title: true, status: true, priority: true },
             },
           },
         },
         createdBy: {
-          select: {
-            id: true,
-            name: true,
-          },
+          select: { id: true, name: true },
         },
       },
       orderBy: [{ type: "asc" }, { createdAt: "desc" }],
@@ -644,7 +693,7 @@ export async function getMyTaskSheets() {
 
     return { success: true, data: sheets };
   } catch (error) {
-    console.error("Error fetching my task sheets:", error);
+    log.error("Error fetching my task sheets", { error: String(error) });
     return { success: false, error: "Failed to fetch task sheets" };
   }
 }
@@ -688,7 +737,7 @@ export async function resetTaskSheetItems(sheetId: number) {
 
     return { success: true, count: result.count };
   } catch (error) {
-    console.error("Error resetting task sheet:", error);
+    log.error("Error resetting task sheet", { error: String(error) });
     return { success: false, error: "Failed to reset task sheet" };
   }
 }

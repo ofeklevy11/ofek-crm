@@ -1,4 +1,7 @@
 import { inngest } from "../client";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("PdfJobs");
 
 /**
  * Background job for generating quote PDFs.
@@ -92,7 +95,7 @@ export const generateQuotePdf = inngest.createFunction(
           const fileKey = new URL(url).pathname.split("/").pop();
           if (fileKey) await utapi.deleteFiles([fileKey]);
         } catch (err) {
-          console.error("[pdf-jobs] Failed to clean up orphaned upload:", err);
+          log.error("Failed to clean up orphaned upload", { error: String(err) });
         }
         return null;
       }
@@ -106,7 +109,7 @@ export const generateQuotePdf = inngest.createFunction(
             await utapi.deleteFiles([fileKey]);
           }
         } catch (err) {
-          console.error("[pdf-jobs] Failed to delete old file:", err);
+          log.error("Failed to delete old file", { error: String(err) });
           // Non-critical — new file is already saved
         }
       }

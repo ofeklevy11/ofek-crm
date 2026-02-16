@@ -21,7 +21,19 @@
       "Bash(git diff:*)",
       "Bash(done)",
       "Bash(node -e:*)",
-      "Bash(node -c:*)"
+      "Bash(node -c:*)",
+      "Bash(node:*)",
+      "Bash(git mv:*)",
+      "Bash(pnpm audit:*)",
+      "Bash(pnpm outdated:*)",
+      "Bash(pnpm ls:*)",
+      "Bash(pnpm why:*)",
+      "Bash(pnpm info:*)",
+      "Bash(while IFS= read -r file)",
+      "Bash(do if ! grep -q \"getCurrentUser\\\\|CRON_SECRET\\\\|MAKE_WEBHOOK_SECRET\\\\|Inngest\\\\|Bearer\" \"$file\")",
+      "Bash(then echo \"$file\" fi done)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm build:*)"
     ]
   }
 }

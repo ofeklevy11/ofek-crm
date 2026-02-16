@@ -71,11 +71,9 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
         },
       });
 
-      console.log("=== UPLOAD RESULT ===");
-      console.log("Response:", res);
+      console.log("[Upload] Files uploaded:", res?.length ?? 0);
 
       if (res && res.length > 0) {
-        console.log("First file:", JSON.stringify(res[0], null, 2));
         await saveMetadata(res);
       } else {
         console.error("No valid response from uploadFiles");

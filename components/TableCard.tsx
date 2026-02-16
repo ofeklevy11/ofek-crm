@@ -6,6 +6,7 @@ import EditTableModal from "./EditTableModal";
 import AlertDialog from "./AlertDialog";
 import { User, Pencil, Trash2, Copy } from "lucide-react";
 import { duplicateTable } from "@/app/actions/tables";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface TableCardProps {
   table: {
@@ -94,7 +95,7 @@ export default function TableCard({
     setIsDeleting(true);
 
     try {
-      const res = await fetch(`/api/tables/${table.id}`, {
+      const res = await apiFetch(`/api/tables/${table.id}`, {
         method: "DELETE",
       });
 

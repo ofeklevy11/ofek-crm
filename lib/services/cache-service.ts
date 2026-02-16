@@ -1,4 +1,7 @@
 import { redis } from "@/lib/redis";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("CacheService");
 
 /**
  * Retrieves a cached metric or calculates it if missing/stale.
@@ -76,10 +79,7 @@ export async function getCachedMetric<T>(
     try { await redis.del(lockKey); } catch {}
     // Fallback: return stale data if available
     if (cached) {
-      console.warn(
-        `Cache refresh failed for key "${key}". Returning stale data. Error:`,
-        error,
-      );
+      log.warn("Cache refresh failed, returning stale data", { key, error: String(error) });
       try {
         return JSON.parse(cached) as T;
       } catch {
@@ -94,7 +94,7 @@ export async function getCachedMetric<T>(
     await redis.set(cacheKey, JSON.stringify(newValue), "EX", ttlSeconds);
   } catch {
     // Cache write failure is non-fatal — we still have the computed value
-    console.warn(`Cache write to Redis failed for key "${key}".`);
+    log.warn("Cache write to Redis failed", { key });
   }
   try { await redis.del(lockKey); } catch {}
 

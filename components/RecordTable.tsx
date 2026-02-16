@@ -2,6 +2,7 @@
 
 import { uploadFiles } from "@/lib/uploadthing";
 import { saveFileMetadata, updateFile } from "@/app/actions/storage";
+import { apiFetch } from "@/lib/api-fetch";
 import { useState, useEffect, useRef, useMemo } from "react";
 
 import { useRouter } from "next/navigation";
@@ -230,7 +231,7 @@ export default function RecordTable({
     if (!filename || filename.length === 0) filename = "link";
 
     try {
-      const res = await fetch(`/api/records/${recordId}/attachments`, {
+      const res = await apiFetch(`/api/records/${recordId}/attachments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -276,7 +277,7 @@ export default function RecordTable({
     }
 
     try {
-      const res = await fetch(`/api/attachments/${attachmentId}`, {
+      const res = await apiFetch(`/api/attachments/${attachmentId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -408,7 +409,7 @@ export default function RecordTable({
         }
 
         try {
-          const res = await fetch("/api/tables/batch-related", {
+          const res = await apiFetch("/api/tables/batch-related", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ tables: tablesRequest }),
@@ -574,7 +575,7 @@ export default function RecordTable({
       return;
     setIsDeleting(true);
     try {
-      const res = await fetch("/api/records/bulk", {
+      const res = await apiFetch("/api/records/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "delete", recordIds: selectedIds }),
@@ -611,7 +612,7 @@ export default function RecordTable({
     if (!confirm("האם למחוק לינק זה?")) return;
 
     try {
-      const res = await fetch(`/api/attachments/${attachmentId}`, {
+      const res = await apiFetch(`/api/attachments/${attachmentId}`, {
         method: "DELETE",
       });
 

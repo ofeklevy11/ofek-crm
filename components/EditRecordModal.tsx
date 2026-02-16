@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface SchemaField {
   name: string;
@@ -189,7 +190,7 @@ export default function EditRecordModal({
 
     // Record the dial action
     try {
-      const res = await fetch(`/api/records/${record.id}/dial`, {
+      const res = await apiFetch(`/api/records/${record.id}/dial`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -313,7 +314,7 @@ export default function EditRecordModal({
 
     setUploading(true);
     try {
-      const res = await fetch(`/api/records/${record.id}/attachments`, {
+      const res = await apiFetch(`/api/records/${record.id}/attachments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -346,7 +347,7 @@ export default function EditRecordModal({
 
     setUploading(true);
     try {
-      const res = await fetch(`/api/attachments/${attachmentId}`, {
+      const res = await apiFetch(`/api/attachments/${attachmentId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -376,7 +377,7 @@ export default function EditRecordModal({
   const handleDeleteAttachment = async (attachmentId: number) => {
     if (!confirm("האם למחוק לינק זה?")) return;
     try {
-      const res = await fetch(`/api/attachments/${attachmentId}`, {
+      const res = await apiFetch(`/api/attachments/${attachmentId}`, {
         method: "DELETE",
       });
       if (res.ok) {
@@ -394,7 +395,7 @@ export default function EditRecordModal({
   const handleUpdateFile = async (fileId: number) => {
     setUploading(true);
     try {
-      const res = await fetch(`/api/files/${fileId}`, {
+      const res = await apiFetch(`/api/files/${fileId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -442,7 +443,7 @@ export default function EditRecordModal({
         }
       });
 
-      const res = await fetch(`/api/records/${record.id}`, {
+      const res = await apiFetch(`/api/records/${record.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

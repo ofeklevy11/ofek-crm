@@ -25,7 +25,7 @@ export default async function IncomeExpensesPage() {
 
   // Ensure data is synced and up to date
   try {
-    const { triggerSyncByType } = await import("@/app/actions/finance-sync");
+    const { triggerSyncByType } = await import("@/lib/finance-sync-internal");
     await Promise.all([
       triggerSyncByType(user.companyId, "FIXED_EXPENSES"),
       triggerSyncByType(user.companyId, "PAYMENTS_RETAINERS"),

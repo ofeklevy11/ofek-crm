@@ -1,15 +1,20 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("MakeTasks");
 import { findApiKeyByValue } from "@/lib/api-key-utils";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { verifyWebhookSecret, checkIdempotencyKey, setIdempotencyResult } from "@/lib/webhook-auth";
+import { makeCreateTaskSchema } from "@/lib/validations/tasks";
 
 export async function POST(req: Request) {
   try {
-    // 1. Validate global webhook secret
+    // 1. Validate global webhook secret (timing-safe)
     const secret = process.env.MAKE_WEBHOOK_SECRET;
     const authHeader = req.headers.get("x-api-secret");
 
-    if (!secret || authHeader !== secret) {
+    if (!verifyWebhookSecret(authHeader, secret)) {
       return NextResponse.json(
         { error: "Unauthorized: Invalid or missing secret key" },
         { status: 401 }
@@ -38,35 +43,39 @@ export async function POST(req: Request) {
     const rateLimited = await checkRateLimit(String(keyRecord.companyId), RATE_LIMITS.webhook);
     if (rateLimited) return rateLimited;
 
+    // Idempotency: if X-Idempotency-Key header is present, deduplicate
+    const { key: idempotencyKey, cachedResponse } = await checkIdempotencyKey(req, "tasks");
+    if (cachedResponse) return cachedResponse;
+
     const companyId = keyRecord.companyId;
 
-    const body = await req.json();
-    const {
-      title,
-      description,
-      email,
-      status = "OPEN",
-      priority = "MEDIUM",
-      due_date,
-    } = body;
-
-    if (!title) {
+    // Validate input
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    const parsed = makeCreateTaskSchema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "Missing required field: title" },
+        { error: "Validation failed", details: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
 
+    const data = parsed.data;
+
     // Optionally resolve assignee by email (must belong to same company)
     let assigneeId: number | undefined;
-    if (email) {
-      const user = await prisma.user.findUnique({
-        where: { email },
-        select: { id: true, companyId: true },
+    if (data.email) {
+      const user = await prisma.user.findFirst({
+        where: { email: data.email, companyId },
+        select: { id: true },
       });
-      if (!user || user.companyId !== companyId) {
+      if (!user) {
         return NextResponse.json(
-          { error: "Invalid request: user not found in this company" },
+          { error: "Invalid request" },
           { status: 400 }
         );
       }
@@ -77,21 +86,20 @@ export async function POST(req: Request) {
     const task = await prisma.task.create({
       data: {
         companyId,
-        title,
-        description,
-        status,
-        priority,
+        title: data.title,
+        description: data.description,
+        status: data.status,
+        priority: data.priority,
         assigneeId,
-        dueDate:
-          due_date && due_date !== "YYYY-MM-DD" && !isNaN(Date.parse(due_date))
-            ? new Date(due_date)
-            : undefined,
+        dueDate: data.due_date,
       },
     });
 
-    return NextResponse.json({ success: true, task });
+    const responseBody = { success: true, task };
+    if (idempotencyKey) await setIdempotencyResult("tasks", idempotencyKey, 200, responseBody);
+    return NextResponse.json(responseBody);
   } catch (error) {
-    console.error("Error creating task:", error);
+    log.error("Failed to create task via webhook", { error: String(error) });
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }

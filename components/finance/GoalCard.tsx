@@ -36,6 +36,7 @@ import GoalContextExplanation from "./GoalContextExplanation";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface GoalCardProps {
   goal: GoalWithProgress;
@@ -101,7 +102,7 @@ export default function GoalCard({
 
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/finance/goals/${goal.id}`, {
+      const res = await apiFetch(`/api/finance/goals/${goal.id}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Failed");

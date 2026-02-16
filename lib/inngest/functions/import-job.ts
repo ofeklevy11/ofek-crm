@@ -3,6 +3,9 @@ import { prismaBg as prisma } from "@/lib/prisma-background";
 import { buildUploadThingUrl } from "@/lib/uploadthing-utils";
 import { processImportFile } from "@/lib/import-service";
 import { createAuditLogsBatch } from "@/lib/audit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("ImportJob");
 
 // Batch size for CSV parse callbacks
 const PARSE_BATCH_SIZE = 300;
@@ -53,7 +56,7 @@ export const processImportJob = inngest.createFunction(
     // Handle failures - mark job as failed
     onFailure: async ({ event, error }) => {
       const { importJobId } = event.data.event.data;
-      console.error(`Import job ${importJobId} failed:`, error);
+      log.error("Import job failed", { importJobId, error: String(error) });
 
       try {
         await prisma.importJob.update({
@@ -67,7 +70,7 @@ export const processImportJob = inngest.createFunction(
           },
         });
       } catch (updateError) {
-        console.error("Failed to update job status:", updateError);
+        log.error("Failed to update job status", { error: String(updateError) });
       }
     },
   },

@@ -1,4 +1,7 @@
 import { CalendarEvent } from "./types";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("StorageLib");
 
 const STORAGE_KEY = "calendar-events";
 
@@ -7,7 +10,7 @@ export function saveEventsToLocalStorage(events: CalendarEvent[]): void {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
     } catch (error) {
-      console.error("Failed to save events to localStorage:", error);
+      log.error("Failed to save events to localStorage", { error: String(error) });
     }
   }
 }
@@ -26,7 +29,7 @@ export function loadEventsFromLocalStorage(): CalendarEvent[] {
         }));
       }
     } catch (error) {
-      console.error("Failed to load events from localStorage:", error);
+      log.error("Failed to load events from localStorage", { error: String(error) });
     }
   }
   return [];
@@ -37,7 +40,7 @@ export function clearEventsFromLocalStorage(): void {
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (error) {
-      console.error("Failed to clear events from localStorage:", error);
+      log.error("Failed to clear events from localStorage", { error: String(error) });
     }
   }
 }

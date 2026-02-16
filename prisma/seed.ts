@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -59,7 +60,8 @@ async function main() {
   // יצירת משתמש אדמין ראשוני
   console.log("👤 יוצר משתמש אדמין ראשוני...");
 
-  const hashedPassword = await bcrypt.hash("admin123", 10);
+  const generatedPassword = crypto.randomBytes(16).toString("hex");
+  const hashedPassword = await bcrypt.hash(generatedPassword, 10);
 
   const adminUser = await prisma.user.create({
     data: {
@@ -83,7 +85,7 @@ async function main() {
   console.log("✅ נוצר משתמש אדמין בהצלחה!");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("📧 Email: admin@example.com");
-  console.log("🔑 Password: admin123");
+  console.log(`🔑 Password: ${generatedPassword}`);
   console.log("👤 Name: Admin");
   console.log("🏢 Company: " + company.name);
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");

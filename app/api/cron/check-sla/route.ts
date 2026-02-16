@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { inngest } from "@/lib/inngest/client";
+import { timingSafeEqual } from "crypto";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("SlaCron");
 
 /**
  * API Route to trigger SLA breach check.
@@ -13,13 +17,15 @@ import { inngest } from "@/lib/inngest/client";
  * so the heavy work happens in the background (not inline in this HTTP request).
  */
 export async function GET(request: Request) {
-  // Security: Verify CRON_SECRET
+  // Security: Verify CRON_SECRET (timing-safe comparison)
   const authHeader = request.headers.get("authorization");
-  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const secret = process.env.CRON_SECRET;
+  const expected = `Bearer ${secret}`;
+  if (!secret || !authHeader || authHeader.length !== expected.length || !timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  console.log("[CRON] SLA check triggered at", new Date().toISOString());
+  log.info("SLA check triggered");
 
   try {
     await inngest.send({
@@ -34,11 +40,11 @@ export async function GET(request: Request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[CRON] Failed to dispatch SLA scan:", error);
+    log.error("Failed to dispatch SLA scan", { error: String(error) });
     return NextResponse.json(
       {
         success: false,
-        error: String(error),
+        error: "Internal server error",
         timestamp: new Date().toISOString(),
       },
       { status: 500 },

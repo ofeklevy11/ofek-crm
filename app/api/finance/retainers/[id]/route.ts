@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { withRetry } from "@/lib/db-retry";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("RetainerAPI");
 
 const updateRetainerSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -27,6 +32,12 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const limited = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+    if (limited) return limited;
 
     const { id } = await params;
     const retainerId = parseRetainerId(id);
@@ -41,7 +52,14 @@ export async function GET(
         companyId: user.companyId,
         deletedAt: null,
       },
-      include: { client: true },
+      select: {
+        id: true, clientId: true, title: true, amount: true, frequency: true,
+        startDate: true, nextDueDate: true, status: true, notes: true,
+        createdAt: true, updatedAt: true,
+        client: {
+          select: { id: true, name: true, email: true, phone: true, businessName: true },
+        },
+      },
     }));
 
     if (!retainer) {
@@ -53,7 +71,7 @@ export async function GET(
 
     return NextResponse.json(retainer);
   } catch (error) {
-    console.error("Error fetching retainer:", error);
+    log.error("Failed to fetch retainer", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to fetch retainer" },
       { status: 500 }
@@ -70,12 +88,18 @@ export async function PATCH(
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const { id } = await params;
     const retainerId = parseRetainerId(id);
     if (retainerId === null) {
       return NextResponse.json({ error: "Invalid retainer ID" }, { status: 400 });
     }
+
+    const limited = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+    if (limited) return limited;
 
     const raw = await request.json();
     const parsed = updateRetainerSchema.safeParse(raw);
@@ -106,6 +130,19 @@ export async function PATCH(
             ...(data.nextDueDate !== undefined && { nextDueDate: data.nextDueDate }),
             ...(data.notes !== undefined && { notes: data.notes }),
           },
+          select: {
+            id: true,
+            clientId: true,
+            title: true,
+            amount: true,
+            frequency: true,
+            startDate: true,
+            nextDueDate: true,
+            status: true,
+            notes: true,
+            createdAt: true,
+            updatedAt: true,
+          },
         });
       },
       { isolationLevel: "RepeatableRead" },
@@ -120,7 +157,7 @@ export async function PATCH(
 
     return NextResponse.json(updatedRetainer);
   } catch (error) {
-    console.error("Error updating retainer:", error);
+    log.error("Failed to update retainer", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to update retainer" },
       { status: 500 }
@@ -137,12 +174,18 @@ export async function DELETE(
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const { id } = await params;
     const retainerId = parseRetainerId(id);
     if (retainerId === null) {
       return NextResponse.json({ error: "Invalid retainer ID" }, { status: 400 });
     }
+
+    const limited = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+    if (limited) return limited;
 
     // P3: Soft delete for audit trail — scoped to company
     const { count } = await withRetry(() => prisma.retainer.updateMany({
@@ -163,7 +206,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting retainer:", error);
+    log.error("Failed to delete retainer", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to delete retainer" },
       { status: 500 }

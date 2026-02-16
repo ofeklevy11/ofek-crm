@@ -1,6 +1,9 @@
 import { createHash } from "crypto";
 import { inngest } from "../client";
 import { prismaBg as prisma } from "@/lib/prisma-background";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("DashboardJobs");
 import {
   setCachedGoals,
   setCachedTableWidget,
@@ -50,8 +53,8 @@ export const refreshDashboardWidgets = inngest.createFunction(
     try {
       // Step 1: Refresh goals cache
       const goalCount = await step.run("refresh-goals", async () => {
-        const { getGoalsForCompany } = await import("@/app/actions/goals");
-        const goals = await getGoalsForCompany(companyId, { skipCache: true });
+        const { getGoalsForCompanyInternal } = await import("@/lib/services/goal-computation");
+        const goals = await getGoalsForCompanyInternal(companyId, { skipCache: true });
         await setCachedGoals(companyId, goals);
         return goals.length;
       });
@@ -155,10 +158,7 @@ export const refreshDashboardWidgets = inngest.createFunction(
                 }
                 return 0;
               } catch (err) {
-                console.error(
-                  `[dashboard-refresh] Failed widget ${req.hash}:`,
-                  err,
-                );
+                log.error("Failed to compute widget", { widgetHash: req.hash, error: String(err) });
                 return 0;
               }
             }),
@@ -210,8 +210,8 @@ export const refreshDashboardGoals = inngest.createFunction(
     const { companyId } = event.data;
 
     const goalCount = await step.run("refresh-goals", async () => {
-      const { getGoalsForCompany } = await import("@/app/actions/goals");
-      const goals = await getGoalsForCompany(companyId, { skipCache: true });
+      const { getGoalsForCompanyInternal } = await import("@/lib/services/goal-computation");
+      const goals = await getGoalsForCompanyInternal(companyId, { skipCache: true });
       await setCachedGoals(companyId, goals);
       return goals.length;
     });

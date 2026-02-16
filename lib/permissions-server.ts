@@ -1,9 +1,13 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
-import { verifyUserId } from "@/lib/auth";
+import { verifyUserIdWithMeta } from "@/lib/auth";
 import { User } from "@/lib/permissions";
 import { redis } from "@/lib/redis";
+import { isTokenIssuedAtValid } from "@/lib/session";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("Permissions");
 
 const USER_SELECT = {
   id: true,
@@ -85,7 +89,7 @@ export async function getUserById(userId: number): Promise<User | null> {
   try {
     return await fetchUserWithCache(userId);
   } catch (error) {
-    console.error("Error fetching user:", error);
+    log.error("Error fetching user", { error: String(error) });
     return null;
   }
 }
@@ -104,15 +108,21 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
       return null;
     }
 
-    const userId = verifyUserId(token);
+    const meta = verifyUserIdWithMeta(token);
 
-    if (!userId) {
+    if (!meta) {
       return null;
     }
 
-    return await fetchUserWithCache(userId);
+    // Check if token has been revoked (e.g. after logout or password change)
+    const isValid = await isTokenIssuedAtValid(meta.userId, meta.issuedAt);
+    if (!isValid) {
+      return null;
+    }
+
+    return await fetchUserWithCache(meta.userId);
   } catch (error) {
-    console.error("Error fetching current user:", error);
+    log.error("Error fetching current user", { error: String(error) });
     return null;
   }
 });

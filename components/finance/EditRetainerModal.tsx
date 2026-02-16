@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, Trash2, Save } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface EditRetainerModalProps {
   retainer: any;
@@ -52,7 +53,7 @@ export default function EditRetainerModal({
     setError(null);
 
     try {
-      const response = await fetch(`/api/finance/retainers/${retainer.id}`, {
+      const response = await apiFetch(`/api/finance/retainers/${retainer.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -78,7 +79,7 @@ export default function EditRetainerModal({
 
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/finance/retainers/${retainer.id}`, {
+      const response = await apiFetch(`/api/finance/retainers/${retainer.id}`, {
         method: "DELETE",
       });
 

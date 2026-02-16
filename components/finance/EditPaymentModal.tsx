@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, Trash2, Save } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface EditPaymentModalProps {
   payment: any;
@@ -50,7 +51,7 @@ export default function EditPaymentModal({
     setError(null);
 
     try {
-      const response = await fetch(`/api/finance/payments/${payment.id}`, {
+      const response = await apiFetch(`/api/finance/payments/${payment.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -74,7 +75,7 @@ export default function EditPaymentModal({
 
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/finance/payments/${payment.id}`, {
+      const response = await apiFetch(`/api/finance/payments/${payment.id}`, {
         method: "DELETE",
       });
 

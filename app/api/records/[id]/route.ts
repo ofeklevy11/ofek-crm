@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { withRetry } from "@/lib/db-retry";
 import { handlePrismaError } from "@/lib/prisma-error";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("RecordAPI");
 
 function parseId(raw: string): number | null {
   const n = parseInt(raw, 10);
@@ -32,6 +36,9 @@ export async function GET(
       );
     }
 
+    const rl = await checkRateLimit(String(currentUser.id), RATE_LIMITS.api);
+    if (rl) return rl;
+
     // CRITICAL: Filter by companyId
     const record = await withRetry(() => prisma.record.findFirst({
       where: {
@@ -40,16 +47,36 @@ export async function GET(
       },
       include: {
         creator: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true },
         },
         updater: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true },
         },
         dialedBy: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true },
         },
-        files: true,
-        attachments: true,
+        files: {
+          select: {
+            id: true,
+            filename: true,
+            displayName: true,
+            size: true,
+            type: true,
+            createdAt: true,
+            url: true,
+            key: true,
+          },
+        },
+        attachments: {
+          select: {
+            id: true,
+            filename: true,
+            displayName: true,
+            url: true,
+            size: true,
+            createdAt: true,
+          },
+        },
       },
     }));
 
@@ -77,7 +104,7 @@ export async function GET(
 
     return NextResponse.json(sanitized);
   } catch (error) {
-    console.error("Error fetching record:", error);
+    log.error("Failed to fetch record", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to fetch record" },
       { status: 500 },
@@ -108,6 +135,9 @@ export async function PUT(
         { status: 401 },
       );
     }
+
+    const rlPut = await checkRateLimit(String(currentUser.id), RATE_LIMITS.api);
+    if (rlPut) return rlPut;
 
     let body;
     try {
@@ -142,6 +172,15 @@ export async function PUT(
           updatedBy: currentUser.id,
           ...(createdAt && { createdAt: new Date(createdAt) }),
         },
+        select: {
+          id: true,
+          tableId: true,
+          data: true,
+          createdBy: true,
+          updatedBy: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       });
 
       await createAuditLog(record.id, currentUser.id, "UPDATE", data, tx, currentUser.companyId);
@@ -156,9 +195,7 @@ export async function PUT(
     const { record, existingRecord } = txResult;
 
     // Trigger Automations (async via Inngest, with direct fallback)
-    console.log(
-      `[API Records] Sending automation event for record ${record.id}, table ${record.tableId}`,
-    );
+    log.info("Sending automation event for record update", { recordId: record.id, tableId: record.tableId });
     try {
       const { inngest } = await import("@/lib/inngest/client");
       await inngest.send({
@@ -172,11 +209,11 @@ export async function PUT(
           companyId: currentUser.companyId,
         },
       });
-      console.log(`[API Records] Successfully sent automation event`);
+      log.info("Successfully sent automation event");
     } catch (autoError) {
-      console.error("[API Records] Inngest send failed, falling back to direct automation execution:", autoError);
+      log.error("Inngest send failed, falling back to direct automation execution", { error: String(autoError) });
       try {
-        const { processRecordUpdate } = await import("@/app/actions/automations");
+        const { processRecordUpdate } = await import("@/app/actions/automations-core");
         await processRecordUpdate(
           record.tableId,
           record.id,
@@ -185,7 +222,7 @@ export async function PUT(
           currentUser.companyId,
         );
       } catch (directErr) {
-        console.error("[API Records] Direct automation execution also failed:", directErr);
+        log.error("Direct automation execution also failed", { error: String(directErr) });
       }
     }
 
@@ -218,6 +255,9 @@ export async function DELETE(
         { status: 401 },
       );
     }
+
+    const rlDel = await checkRateLimit(String(currentUser.id), RATE_LIMITS.api);
+    if (rlDel) return rlDel;
 
     // Check write permissions
     // CRITICAL: Filter by companyId
@@ -256,7 +296,7 @@ export async function DELETE(
         data: { companyId: currentUser.companyId },
       });
     } catch (e) {
-      console.error("[Records API] Failed to send dashboard refresh:", e);
+      log.error("Failed to send dashboard refresh", { error: String(e) });
     }
 
     return NextResponse.json({ success: true });

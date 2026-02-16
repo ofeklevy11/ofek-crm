@@ -2,6 +2,9 @@ import { inngest } from "../client";
 import { prismaBg as prisma } from "@/lib/prisma-background";
 import { createAuditLogsBatch } from "@/lib/audit";
 import { cleanupBeforeRecordDelete } from "@/lib/record-cleanup";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("BulkRecordJobs");
 
 /** Process record IDs in chunks to avoid query-size limits */
 const BATCH_SIZE = 300;
@@ -38,10 +41,7 @@ export const processBulkDeleteRecords = inngest.createFunction(
         tableId: number;
         recordIds: number[];
       };
-      console.error(
-        `[BulkDelete] FAILED for company=${companyId} table=${tableId} (${recordIds?.length ?? 0} records):`,
-        error.message,
-      );
+      log.error("Bulk delete failed", { companyId, tableId, recordCount: recordIds?.length ?? 0, error: error.message });
     },
   },
   { event: "records/bulk-delete" },

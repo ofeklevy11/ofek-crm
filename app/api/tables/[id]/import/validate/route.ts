@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { canWriteTable } from "@/lib/permissions";
 import { processImportFile } from "@/lib/import-service";
 import { buildUploadThingUrl } from "@/lib/uploadthing-utils";
+import { createLogger } from "@/lib/logger";
 
 import { redis } from "@/lib/redis";
+
+const log = createLogger("ImportValidate");
 
 export async function POST(
   req: NextRequest,
@@ -33,7 +37,13 @@ export async function POST(
       );
     }
 
-    const tableId = parseInt(id);
+    const tableId = parseInt(id, 10);
+    if (!Number.isFinite(tableId) || tableId < 1) {
+      return NextResponse.json({ error: "Invalid table ID" }, { status: 400 });
+    }
+    if (!canWriteTable(user, tableId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     const body = await req.json();
     // SECURITY: Only accept fileKey from client, never fileUrl
     // URL is constructed server-side to prevent SSRF attacks
@@ -101,7 +111,7 @@ export async function POST(
     // SECURITY: Build URL from fileKey, never use stored fileUrl directly
     // This prevents SSRF even if old malicious URLs exist in DB
     const secureUrl = buildUploadThingUrl(job.fileKey);
-    console.log("Fetching file from (secure):", secureUrl);
+    log.debug("Fetching file from secure URL");
     const fileRes = await fetch(secureUrl, {
       signal: AbortSignal.timeout(30_000), // P215: 30s timeout matching import job
     });
@@ -118,7 +128,7 @@ export async function POST(
         schema = (table.schemaJson as any[]) || [];
       }
     } catch (e) {
-      console.error("Schema parse error", e);
+      log.error("Schema parse error", { error: String(e) });
       return NextResponse.json(
         { error: "מבנה הטבלה אינו תקין" },
         { status: 500 },
@@ -197,9 +207,9 @@ ${schemaFields.join(", ")}`,
 
     return NextResponse.json({ ...result.summary, importJobId });
   } catch (err: any) {
-    console.error("Import validate error:", err);
+    log.error("Import validate error", { error: String(err) });
     return NextResponse.json(
-      { error: err.message || "שגיאת שרת פנימית" },
+      { error: "שגיאת שרת פנימית" },
       { status: 500 },
     );
   }

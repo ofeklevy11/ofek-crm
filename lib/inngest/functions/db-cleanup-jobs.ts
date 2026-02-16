@@ -1,5 +1,8 @@
 import { inngest } from "../client";
 import { prismaBg as prisma } from "@/lib/prisma-background";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("DbCleanupJobs");
 
 const BATCH_SIZE = 5000;
 const MAX_BATCHES = 50;
@@ -132,13 +135,7 @@ export const cleanupOldLogData = inngest.createFunction(
       return total;
     });
 
-    console.log(
-      `[cleanup-log-data] Deleted ${auditLogsDeleted} audit logs (>90d), ` +
-      `${ticketActivityDeleted} ticket activity logs (>90d), ` +
-      `${automationLogsDeleted} automation logs (>180d), ` +
-      `${viewRefreshDeleted} view refresh logs (>7d), ` +
-      `${analyticsRefreshDeleted} analytics refresh logs (>7d)`,
-    );
+    log.info("Log cleanup completed", { auditLogsDeleted, ticketActivityDeleted, automationLogsDeleted, viewRefreshDeleted, analyticsRefreshDeleted });
 
     return { auditLogsDeleted, ticketActivityDeleted, automationLogsDeleted, viewRefreshDeleted, analyticsRefreshDeleted };
   },

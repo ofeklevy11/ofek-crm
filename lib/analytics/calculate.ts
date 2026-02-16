@@ -193,7 +193,8 @@ export async function fetchViewSourceData(
   const dateField =
     config.model === "CalendarEvent" ? "startTime" : "createdAt";
   const dateFilter = dateRange ? { [dateField]: dateRange } : {};
-  const companyFilter = companyId ? { companyId } : {};
+  if (!companyId) throw new Error("companyId is required");
+  const companyFilter = { companyId };
 
   if (config.model === "Task") {
     tableName = "משימות מערכת";
@@ -496,11 +497,11 @@ export async function calculateRuleStats(
   const mainTableId = triggerConfig.tableId
     ? parseInt(triggerConfig.tableId)
     : 0;
-  const resolvedCompanyId = companyId ?? rule.companyId;
+  if (!companyId) throw new Error("companyId is required");
   const tableName =
     rule.triggerType === "TASK_STATUS_CHANGE"
       ? "משימות"
-      : await getTableName(mainTableId, resolvedCompanyId);
+      : await getTableName(mainTableId, companyId);
 
   // For MULTI_ACTION rules, determine the effective duration action type
   const effectiveActionType = rule.actionType === "MULTI_ACTION"
@@ -515,7 +516,7 @@ export async function calculateRuleStats(
       for (const event of triggerConfig.eventChain) {
         const tId = event.tableId ? Number(event.tableId) : mainTableId;
         if (tId) {
-          eventTableMap.set(event.eventName, await getTableName(tId, resolvedCompanyId));
+          eventTableMap.set(event.eventName, await getTableName(tId, companyId));
         }
       }
     }
@@ -524,7 +525,7 @@ export async function calculateRuleStats(
     const multiEventDurations = await prisma.multiEventDuration.findMany({
       where: {
         automationRuleId: rule.id,
-        automationRule: { companyId: resolvedCompanyId },
+        automationRule: { companyId: companyId },
         createdAt: { gte: rule.createdAt },
       },
       include: {
@@ -592,7 +593,7 @@ export async function calculateRuleStats(
     const durations = await prisma.statusDuration.findMany({
       where: {
         automationRuleId: rule.id,
-        automationRule: { companyId: resolvedCompanyId },
+        automationRule: { companyId: companyId },
         createdAt: { gte: rule.createdAt },
       },
       include: {

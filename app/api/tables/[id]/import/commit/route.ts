@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { canWriteTable } from "@/lib/permissions";
 import { redis } from "@/lib/redis";
 import { inngest } from "@/lib/inngest/client";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("ImportCommit");
 
 /**
  * Commit Import Job Endpoint
@@ -40,7 +44,13 @@ export async function POST(
       );
     }
 
-    const tableId = parseInt(id);
+    const tableId = parseInt(id, 10);
+    if (!Number.isFinite(tableId) || tableId < 1) {
+      return NextResponse.json({ error: "Invalid table ID" }, { status: 400 });
+    }
+    if (!canWriteTable(user, tableId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     const body = await req.json();
     const { importJobId } = body;
 
@@ -119,9 +129,9 @@ export async function POST(
       importJobId: job.id,
     });
   } catch (err: any) {
-    console.error("Import commit error:", err);
+    log.error("Import commit error", { error: String(err) });
     return NextResponse.json(
-      { error: err.message || "שגיאת שרת פנימית" },
+      { error: "שגיאת שרת פנימית" },
       { status: 500 },
     );
   }

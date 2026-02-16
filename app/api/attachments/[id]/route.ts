@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { canWriteTable } from "@/lib/permissions";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("AttachmentsAPI");
 
 function parseId(raw: string): number | null {
   const n = parseInt(raw, 10);
@@ -27,24 +32,28 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Atomic delete scoped to company — eliminates TOCTOU
-    const { count } = await prisma.attachment.deleteMany({
-      where: {
-        id: attachmentId,
-        record: { companyId: currentUser.companyId },
-      },
-    });
+    const rlDel = await checkRateLimit(String(currentUser.id), RATE_LIMITS.fileMutation);
+    if (rlDel) return rlDel;
 
-    if (count === 0) {
+    // Fetch attachment to check table-level write permission
+    const attachment = await prisma.attachment.findFirst({
+      where: { id: attachmentId, record: { companyId: currentUser.companyId } },
+      select: { id: true, record: { select: { tableId: true } } },
+    });
+    if (!attachment) {
       return NextResponse.json(
         { error: "Attachment not found" },
         { status: 404 },
       );
     }
+    if (!canWriteTable(currentUser, attachment.record.tableId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    await prisma.attachment.delete({ where: { id: attachmentId } });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting attachment:", error);
+    log.error("Failed to delete attachment", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to delete attachment" },
       { status: 500 },
@@ -72,6 +81,9 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const rlPut = await checkRateLimit(String(currentUser.id), RATE_LIMITS.fileMutation);
+    if (rlPut) return rlPut;
+
     let body;
     try {
       body = await request.json();
@@ -98,6 +110,10 @@ export async function PUT(
           { status: 400 },
         );
       }
+      const { isPrivateUrl } = await import("@/lib/security/ssrf");
+      if (isPrivateUrl(url)) {
+        return NextResponse.json({ error: "URL targets a private address" }, { status: 400 });
+      }
       updateData.url = url;
       // Update filename from URL
       let filename = url.replace(/^https?:\/\//i, "");
@@ -118,12 +134,15 @@ export async function PUT(
       async (tx) => {
         const att = await tx.attachment.findFirst({
           where: { id: attachmentId, record: { companyId: currentUser.companyId } },
+          include: { record: { select: { tableId: true } } },
         });
         if (!att) return null;
+        if (!canWriteTable(currentUser, att.record.tableId)) return null;
 
         return tx.attachment.update({
           where: { id: attachmentId },
           data: updateData,
+          select: { id: true, recordId: true, filename: true, url: true, size: true, displayName: true, uploadedAt: true },
         });
       },
       { isolationLevel: "RepeatableRead" },
@@ -138,7 +157,7 @@ export async function PUT(
 
     return NextResponse.json(updatedAttachment);
   } catch (error) {
-    console.error("Error updating attachment:", error);
+    log.error("Failed to update attachment", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to update attachment" },
       { status: 500 },

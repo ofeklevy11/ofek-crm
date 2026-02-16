@@ -2,16 +2,22 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { canReadTable, hasUserFlag } from "@/lib/permissions";
 import { Prisma } from "@prisma/client";
 import { inngest } from "@/lib/inngest/client";
 import { withRetry } from "@/lib/db-retry";
+import { checkActionRateLimit, DASHBOARD_RATE_LIMITS } from "@/lib/rate-limit-action";
+import {
+  addWidgetSchema,
+  updateWidgetSchema,
+  widgetIdSchema,
+  widgetIdsOrderSchema,
+  migrateWidgetsSchema,
+  MAX_WIDGETS_PER_USER,
+} from "@/lib/validations/dashboard";
+import { createLogger } from "@/lib/logger";
 
-interface DashboardWidgetInput {
-  widgetType: "ANALYTICS" | "TABLE" | "GOAL" | "TABLE_VIEWS_DASHBOARD";
-  referenceId?: string; // Made optional
-  tableId?: number;
-  settings?: any; // New settings field - for TABLE_VIEWS_DASHBOARD includes views: ViewItem[]
-}
+const log = createLogger("DashboardWidgets");
 
 /**
  * Get all dashboard widgets for the current user
@@ -23,15 +29,27 @@ export async function getDashboardWidgets() {
       return { success: false, error: "Unauthorized" };
     }
 
+    if (!hasUserFlag(user, "canViewDashboardData")) {
+      return { success: false, error: "Forbidden" };
+    }
+
+    const rl = await checkActionRateLimit(String(user.id), DASHBOARD_RATE_LIMITS.read);
+    if (rl) return { success: false, error: rl.error };
+
     const widgets = await withRetry(() => prisma.dashboardWidget.findMany({
       where: { userId: user.id, companyId: user.companyId },
       orderBy: { order: "asc" },
       take: 200,
+      select: {
+        id: true, userId: true, widgetType: true, referenceId: true,
+        tableId: true, settings: true, order: true,
+        createdAt: true, updatedAt: true,
+      },
     }));
 
     return { success: true, data: widgets };
   } catch (error) {
-    console.error("Error fetching dashboard widgets:", error);
+    log.error("Error fetching dashboard widgets", { error: String(error) });
     return { success: false, error: "Failed to fetch widgets" };
   }
 }
@@ -39,31 +57,53 @@ export async function getDashboardWidgets() {
 /**
  * Add a new widget to the dashboard
  */
-export async function addDashboardWidget(data: DashboardWidgetInput) {
+export async function addDashboardWidget(rawData: unknown) {
   try {
     const user = await getCurrentUser();
     if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
-    // Atomic max+1 order assignment — prevents duplicate order from concurrent adds
+    const rl = await checkActionRateLimit(String(user.id), DASHBOARD_RATE_LIMITS.write);
+    if (rl) return { success: false, error: rl.error };
+
+    const parsed = addWidgetSchema.safeParse(rawData);
+    if (!parsed.success) return { success: false, error: "Invalid input" };
+    const data = parsed.data;
+
+    // Table permission check when a tableId is provided
+    if (data.tableId && !canReadTable(user, data.tableId)) {
+      return { success: false, error: "Access denied to this table" };
+    }
+
+    // Atomic max+1 order assignment + widget count limit
     const widget = await prisma.$transaction(async (tx) => {
-      const [{ nextOrder }] = await tx.$queryRaw<[{ nextOrder: number }]>`
-        SELECT COALESCE(MAX("order"), -1) + 1 AS "nextOrder"
+      const [{ nextOrder, currentCount }] = await tx.$queryRaw<[{ nextOrder: number; currentCount: bigint }]>`
+        SELECT COALESCE(MAX("order"), -1) + 1 AS "nextOrder",
+               COUNT(*)::bigint AS "currentCount"
         FROM "DashboardWidget"
         WHERE "userId" = ${user.id} AND "companyId" = ${user.companyId}
         FOR UPDATE
       `;
 
+      if (Number(currentCount) >= MAX_WIDGETS_PER_USER) {
+        throw new Error(`Widget limit reached (max ${MAX_WIDGETS_PER_USER})`);
+      }
+
       return tx.dashboardWidget.create({
         data: {
           companyId: user.companyId,
           userId: user.id,
-          widgetType: data.widgetType,
+          widgetType: data.widgetType as any,
           referenceId: data.referenceId || "custom",
           tableId: data.tableId,
           settings: data.settings ?? undefined,
           order: nextOrder,
+        },
+        select: {
+          id: true, userId: true, widgetType: true, referenceId: true,
+          tableId: true, settings: true, order: true,
+          createdAt: true, updatedAt: true,
         },
       });
     }, { maxWait: 5000, timeout: 10000 });
@@ -73,11 +113,11 @@ export async function addDashboardWidget(data: DashboardWidgetInput) {
       id: `dash-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
       name: "dashboard/refresh-widgets",
       data: { companyId: user.companyId },
-    }).catch((e) => console.error("[DashboardWidgets] Failed to send refresh:", e));
+    }).catch((e) => log.error("Failed to send refresh", { error: String(e) }));
 
     return { success: true, data: widget };
   } catch (error) {
-    console.error("Error adding dashboard widget:", error);
+    log.error("Error adding dashboard widget", { error: String(error) });
     return { success: false, error: "Failed to add widget" };
   }
 }
@@ -85,12 +125,19 @@ export async function addDashboardWidget(data: DashboardWidgetInput) {
 /**
  * Remove a widget from the dashboard
  */
-export async function removeDashboardWidget(widgetId: string) {
+export async function removeDashboardWidget(rawWidgetId: string) {
   try {
     const user = await getCurrentUser();
     if (!user) {
       return { success: false, error: "Unauthorized" };
     }
+
+    const rl = await checkActionRateLimit(String(user.id), DASHBOARD_RATE_LIMITS.write);
+    if (rl) return { success: false, error: rl.error };
+
+    const parsedId = widgetIdSchema.safeParse(rawWidgetId);
+    if (!parsedId.success) return { success: false, error: "Invalid widget ID" };
+    const widgetId = parsedId.data;
 
     // Verify ownership (defense-in-depth: companyId in query)
     const widget = await withRetry(() => prisma.dashboardWidget.findFirst({
@@ -111,11 +158,11 @@ export async function removeDashboardWidget(widgetId: string) {
       id: `dash-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
       name: "dashboard/refresh-widgets",
       data: { companyId: user.companyId },
-    }).catch((e) => console.error("[DashboardWidgets] Failed to send refresh:", e));
+    }).catch((e) => log.error("Failed to send refresh", { error: String(e) }));
 
     return { success: true };
   } catch (error) {
-    console.error("Error removing dashboard widget:", error);
+    log.error("Error removing dashboard widget", { error: String(error) });
     return { success: false, error: "Failed to remove widget" };
   }
 }
@@ -123,16 +170,19 @@ export async function removeDashboardWidget(widgetId: string) {
 /**
  * Update the order of dashboard widgets
  */
-export async function updateDashboardWidgetOrder(widgetIds: string[]) {
+export async function updateDashboardWidgetOrder(rawWidgetIds: string[]) {
   try {
     const user = await getCurrentUser();
     if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
-    if (widgetIds.length > 200) {
-      return { success: false, error: "Too many widgets to reorder" };
-    }
+    const rl = await checkActionRateLimit(String(user.id), DASHBOARD_RATE_LIMITS.write);
+    if (rl) return { success: false, error: rl.error };
+
+    const parsed = widgetIdsOrderSchema.safeParse(rawWidgetIds);
+    if (!parsed.success) return { success: false, error: "Invalid input" };
+    const widgetIds = parsed.data;
 
     // Single SQL statement instead of N individual updates
     await withRetry(() => prisma.$executeRaw`
@@ -147,7 +197,7 @@ export async function updateDashboardWidgetOrder(widgetIds: string[]) {
 
     return { success: true };
   } catch (error) {
-    console.error("Error updating widget order:", error);
+    log.error("Error updating widget order", { error: String(error) });
     return { success: false, error: "Failed to update order" };
   }
 }
@@ -157,7 +207,7 @@ export async function updateDashboardWidgetOrder(widgetIds: string[]) {
  * This can be called on first load to move existing localStorage widgets to DB
  */
 export async function migrateDashboardWidgets(
-  localStorageWidgets: DashboardWidgetInput[],
+  rawWidgets: unknown[],
 ) {
   try {
     const user = await getCurrentUser();
@@ -165,24 +215,39 @@ export async function migrateDashboardWidgets(
       return { success: false, error: "Unauthorized" };
     }
 
-    if (localStorageWidgets.length > 200) {
-      return { success: false, error: "Too many widgets to migrate" };
+    const rl = await checkActionRateLimit(String(user.id), DASHBOARD_RATE_LIMITS.migrate);
+    if (rl) return { success: false, error: rl.error };
+
+    const parsed = migrateWidgetsSchema.safeParse(rawWidgets);
+    if (!parsed.success) return { success: false, error: "Invalid input" };
+    const localStorageWidgets = parsed.data;
+
+    if (localStorageWidgets.length > MAX_WIDGETS_PER_USER) {
+      return { success: false, error: `Too many widgets to migrate (max ${MAX_WIDGETS_PER_USER})` };
     }
 
-    // Atomic check+insert inside transaction to prevent duplicate migration from concurrent first-loads
-    const migrated = await prisma.$transaction(async (tx) => {
-      const existingCount = await tx.dashboardWidget.count({
-        where: { userId: user.id, companyId: user.companyId },
-      });
+    // Filter out widgets referencing tables the user can't access
+    const authorizedWidgets = localStorageWidgets.filter(
+      (w) => !w.tableId || canReadTable(user, w.tableId),
+    );
 
-      if (existingCount > 0) {
+    // Atomic check+insert inside transaction with FOR UPDATE to prevent duplicate migration
+    const migrated = await prisma.$transaction(async (tx) => {
+      const [{ cnt }] = await tx.$queryRaw<[{ cnt: bigint }]>`
+        SELECT COUNT(*)::bigint AS cnt
+        FROM "DashboardWidget"
+        WHERE "userId" = ${user.id} AND "companyId" = ${user.companyId}
+        FOR UPDATE
+      `;
+
+      if (Number(cnt) > 0) {
         return false; // Already migrated
       }
 
-      const rows = localStorageWidgets.map((w, index) => ({
+      const rows = authorizedWidgets.map((w, index) => ({
         companyId: user.companyId,
         userId: user.id,
-        widgetType: w.widgetType,
+        widgetType: w.widgetType as any,
         referenceId: w.referenceId,
         tableId: w.tableId,
         order: index,
@@ -197,7 +262,7 @@ export async function migrateDashboardWidgets(
 
     return { success: true, migrated };
   } catch (error) {
-    console.error("Error migrating dashboard widgets:", error);
+    log.error("Error migrating dashboard widgets", { error: String(error) });
     return { success: false, error: "Failed to migrate widgets" };
   }
 }
@@ -209,13 +274,29 @@ export async function migrateDashboardWidgets(
  * Update a widget's full configuration
  */
 export async function updateDashboardWidget(
-  widgetId: string,
-  data: Partial<DashboardWidgetInput>,
+  rawWidgetId: string,
+  rawData: unknown,
 ) {
   try {
     const user = await getCurrentUser();
     if (!user) {
       return { success: false, error: "Unauthorized" };
+    }
+
+    const rl = await checkActionRateLimit(String(user.id), DASHBOARD_RATE_LIMITS.write);
+    if (rl) return { success: false, error: rl.error };
+
+    const parsedId = widgetIdSchema.safeParse(rawWidgetId);
+    if (!parsedId.success) return { success: false, error: "Invalid widget ID" };
+    const widgetId = parsedId.data;
+
+    const parsed = updateWidgetSchema.safeParse(rawData);
+    if (!parsed.success) return { success: false, error: "Invalid input" };
+    const data = parsed.data;
+
+    // Table permission check when changing tableId
+    if (data.tableId && !canReadTable(user, data.tableId)) {
+      return { success: false, error: "Access denied to this table" };
     }
 
     // Verify ownership (defense-in-depth: companyId in query)
@@ -247,11 +328,11 @@ export async function updateDashboardWidget(
       id: `dash-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,
       name: "dashboard/refresh-widgets",
       data: { companyId: user.companyId },
-    }).catch((e) => console.error("[DashboardWidgets] Failed to send refresh:", e));
+    }).catch((e) => log.error("Failed to send refresh", { error: String(e) }));
 
     return { success: true };
   } catch (error) {
-    console.error("Error updating widget:", error);
+    log.error("Error updating widget", { error: String(error) });
     return { success: false, error: "Failed to update widget" };
   }
 }
@@ -261,7 +342,7 @@ export async function updateDashboardWidget(
  */
 export async function updateDashboardWidgetSettings(
   widgetId: string,
-  settings: any,
+  settings: unknown,
 ) {
   return updateDashboardWidget(widgetId, { settings });
 }

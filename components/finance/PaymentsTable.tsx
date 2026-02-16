@@ -12,6 +12,7 @@ import {
   Clock,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-fetch";
 import EditPaymentModal from "./EditPaymentModal";
 
 interface PaymentsTableProps {
@@ -35,7 +36,7 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
 
     setDeletingId(id);
     try {
-      const response = await fetch(`/api/finance/payments/${id}`, {
+      const response = await apiFetch(`/api/finance/payments/${id}`, {
         method: "DELETE",
       });
 

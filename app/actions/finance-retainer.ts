@@ -2,8 +2,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import { withRetry } from "@/lib/db-retry";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("FinanceRetainer");
 
 export async function markRetainerAsPaid(
   retainerId: number,
@@ -11,8 +15,16 @@ export async function markRetainerAsPaid(
 ) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+  if (!hasUserFlag(user, "canViewFinance")) throw new Error("Forbidden");
 
-  if (count < 1 || count > 100) throw new Error("Invalid count");
+  const { checkActionRateLimit, RATE_LIMITS } = await import("@/lib/rate-limit");
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.financeMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
+
+  // Validate inputs — server actions receive untrusted data
+  if (!Number.isInteger(retainerId) || retainerId <= 0) throw new Error("Invalid retainer ID");
+  if (!Number.isInteger(count) || count < 1 || count > 100) throw new Error("Invalid count");
 
   await withRetry(() => prisma.$transaction(async (tx) => {
     const retainer = await tx.retainer.findFirst({
@@ -29,10 +41,7 @@ export async function markRetainerAsPaid(
       ? new Date(retainer.nextDueDate)
       : new Date();
 
-    const paymentsData: {
-      title: string; clientId: number; companyId: number; amount: typeof retainer.amount;
-      dueDate: Date; paidDate: Date; status: string; notes: string;
-    }[] = [];
+    const paymentsData: any[] = [];
     for (let i = 0; i < count; i++) {
       const dueDate = new Date(nextDate);
       paymentsData.push({
@@ -42,11 +51,11 @@ export async function markRetainerAsPaid(
         amount: retainer.amount,
         dueDate,
         paidDate: dueDate,
-        status: "paid",
+        status: "paid" as const,
         notes: `נוצר אוטומטית מריטיינר #${retainer.id} (תשלום ${i + 1} מתוך ${count})`,
       });
 
-      switch (retainer.frequency) {
+      switch (retainer.frequency as string) {
         case "monthly":
           nextDate.setMonth(nextDate.getMonth() + 1);
           break;
@@ -61,7 +70,7 @@ export async function markRetainerAsPaid(
     }
 
     // Batch create all payments in one statement
-    await tx.oneTimePayment.createMany({ data: paymentsData });
+    await tx.oneTimePayment.createMany({ data: paymentsData as any });
 
     // Update retainer with final next date
     await tx.retainer.updateMany({
@@ -72,10 +81,10 @@ export async function markRetainerAsPaid(
 
   // Trigger Sync Rules
   try {
-    const { triggerSyncByType } = await import("./finance-sync");
+    const { triggerSyncByType } = await import("@/lib/finance-sync-internal");
     await triggerSyncByType(user.companyId, "PAYMENTS_RETAINERS");
   } catch (e) {
-    console.error("Failed to trigger sync from retainer payment", e);
+    log.error("Failed to trigger sync from retainer payment", { error: String(e) });
   }
 
   revalidatePath("/finance/retainers");

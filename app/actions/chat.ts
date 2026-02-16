@@ -2,10 +2,44 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import { withRetry } from "@/lib/db-retry";
+import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import {
+  sendMessageSchema,
+  sendGroupMessageSchema,
+  getMessagesSchema,
+  getGroupMessagesSchema,
+  createGroupSchema,
+  updateGroupSchema,
+  markAsReadSchema,
+  sanitizeImageUrl,
+} from "@/lib/chat/validation";
+import { createLogger } from "@/lib/logger";
 
-// ... imports
+const log = createLogger("Chat");
+
+// ── Helpers ────────────────────────────────────────────────────────────
+
+type ChatRateLimitKey = "chatSend" | "chatRead" | "chatMutate" | "chatMark";
+
+/** Authenticate + authorize (canViewChat) + rate-limit. Returns user or throws. */
+async function requireChatUser(rateLimitKey: ChatRateLimitKey) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+  if (!hasUserFlag(user, "canViewChat")) throw new Error("Forbidden");
+
+  const limited = await checkActionRateLimit(
+    String(user.id),
+    RATE_LIMITS[rateLimitKey],
+  ).catch(() => false);
+  if (limited) throw new Error("Rate limit exceeded");
+
+  return user;
+}
+
+// ── Actions ────────────────────────────────────────────────────────────
 
 export async function updateGroup(
   groupId: number,
@@ -13,73 +47,68 @@ export async function updateGroup(
   imageUrl: string,
   memberIds: number[],
 ) {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) throw new Error("Not authenticated");
+  const currentUser = await requireChatUser("chatMutate");
 
-  // Verify admin/creator status? For now, we'll allow any member to edit, or check if they are creator.
-  // The prompt didn't strictly specify permissions, but usually group management is for admins or all members in small teams.
-  // Let's check membership first.
-  const membership = await withRetry(() => prisma.groupMember.findUnique({
-    where: {
-      groupId_userId: {
-        groupId,
-        userId: currentUser.id,
-      },
-    },
-  }));
+  const parsed = updateGroupSchema.safeParse({ groupId, name, imageUrl, memberIds });
+  if (!parsed.success) throw new Error("Invalid input");
 
-  if (!membership) throw new Error("Not a member of this group");
+  const safeImageUrl = sanitizeImageUrl(parsed.data.imageUrl);
 
-  // SECURITY: Verify group belongs to user's company
+  // Verify group belongs to user's company
   const group = await withRetry(() => prisma.group.findFirst({
-    where: { id: groupId, companyId: currentUser.companyId },
+    where: { id: parsed.data.groupId, companyId: currentUser.companyId },
     select: { id: true },
   }));
   if (!group) throw new Error("Group not found or access denied");
 
-  // Update group details (companyId in where prevents TOCTOU cross-tenant writes)
+  // Verify membership
+  const membership = await withRetry(() => prisma.groupMember.findUnique({
+    where: {
+      groupId_userId: {
+        groupId: parsed.data.groupId,
+        userId: currentUser.id,
+      },
+    },
+  }));
+  if (!membership) throw new Error("Group not found or access denied");
+
+  // Cross-tenant verification: only keep memberIds that belong to same company
+  const verifiedUsers = await withRetry(() => prisma.user.findMany({
+    where: { id: { in: parsed.data.memberIds }, companyId: currentUser.companyId },
+    select: { id: true },
+  }));
+  const verifiedIds = verifiedUsers.map((u) => u.id);
+
+  // Ensure current user stays in the group
+  const idsToKeep = [...new Set([...verifiedIds, currentUser.id])];
+
+  // Update group details
   await prisma.group.update({
-    where: { id: groupId, companyId: currentUser.companyId },
+    where: { id: parsed.data.groupId, companyId: currentUser.companyId },
     data: {
-      name,
-      imageUrl,
+      name: parsed.data.name,
+      imageUrl: safeImageUrl,
     },
   });
 
-  // Update members.
-  // Strategy: Get current members, identify to add/remove.
-  // Or simpler: delete interactions that are NOT in the new list (except creator/current user?)
-  // and create ones that don't exist.
-  // A safer way with Prisma relations:
-  const validMemberIds = memberIds.filter((id) => id !== currentUser.id); // Ensure current user is handled separately or kept
-
-  // We want to ensure the current user (editor) remains in the group?
-  // Usually creators shouldn't be removed, but if self-editing, ensure we don't accidentally kick ourselves out
-  // if the UI didn't pass our ID.
-  const idsToKeep = [...new Set([...validMemberIds, currentUser.id])];
-
-  // Using a transaction to ensure safety
+  // Update members in a transaction
   await withRetry(() => prisma.$transaction(async (tx) => {
-    // 1. Remove members not in the new list
+    // Remove members not in the new list
     await tx.groupMember.deleteMany({
       where: {
-        groupId,
-        userId: {
-          notIn: idsToKeep,
-        },
+        groupId: parsed.data.groupId,
+        userId: { notIn: idsToKeep },
       },
     });
 
-    // 2. Add members that are pending
-    // We can use createMany with skipDuplicates if the DB supports it, or upsert.
-    // simpler: find existing, filter, create new.
+    // Add new members
     const existingMembers = await tx.groupMember.findMany({
       where: {
-        groupId,
+        groupId: parsed.data.groupId,
         userId: { in: idsToKeep },
       },
       select: { userId: true },
-      take: 500, // P93: Bound groupMembers query
+      take: 500,
     });
 
     const existingIds = existingMembers.map((m) => m.userId);
@@ -88,8 +117,9 @@ export async function updateGroup(
     if (newIds.length > 0) {
       await tx.groupMember.createMany({
         data: newIds.map((userId) => ({
-          groupId,
+          groupId: parsed.data.groupId,
           userId,
+          companyId: currentUser.companyId,
         })),
       });
     }
@@ -99,36 +129,25 @@ export async function updateGroup(
 }
 
 export async function getUsers() {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
-    throw new Error("Not authenticated");
-  }
+  const currentUser = await requireChatUser("chatRead");
 
-  // CRITICAL: Filter by companyId for multi-tenancy - users only see colleagues from same company
   const users = await withRetry(() => prisma.user.findMany({
     where: {
       companyId: currentUser.companyId,
-      id: {
-        not: currentUser.id,
-      },
+      id: { not: currentUser.id },
     },
     select: {
       id: true,
       name: true,
-      email: true,
       role: true,
     },
-    take: 500, // P86: Bound users query for large companies
+    take: 500,
   }));
 
-  // Fetch last message for each user to sort or display timestamp
-  // Optimization: Fetch all messages involving current user, order by desc,
-  // then process in memory to find the latest "interaction" with each user.
-  // This is better than N queries.
   const recentMessages = await withRetry(() => prisma.message.findMany({
     where: {
       OR: [{ senderId: currentUser.id }, { receiverId: currentUser.id }],
-      groupId: null, // Only DMs
+      groupId: null,
     },
     orderBy: { createdAt: "desc" },
     select: {
@@ -136,8 +155,6 @@ export async function getUsers() {
       senderId: true,
       receiverId: true,
     },
-    // We can't easily limit per-user in Prisma without raw query,
-    // but fetching metadata of recent 1000 messages is lightweight enough for now.
     take: 1000,
   }));
 
@@ -153,14 +170,13 @@ export async function getUsers() {
     };
   });
 
-  // Sort by last message (optional, but good UX)
   usersWithTimestamp.sort((a, b) => {
     if (a.lastMessageAt && b.lastMessageAt) {
       return b.lastMessageAt.getTime() - a.lastMessageAt.getTime();
     }
     if (a.lastMessageAt) return -1;
     if (b.lastMessageAt) return 1;
-    return 0; // Keep original order if no messages
+    return 0;
   });
 
   return usersWithTimestamp;
@@ -171,24 +187,43 @@ export async function createGroup(
   imageUrl: string,
   memberIds: number[],
 ) {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) throw new Error("Not authenticated");
+  const currentUser = await requireChatUser("chatMutate");
 
-  // Filter out any invalid users or potentially the creator if included (we'll add creator manually)
-  const validMemberIds = memberIds.filter((id) => id !== currentUser.id);
+  const parsed = createGroupSchema.safeParse({ name, imageUrl, memberIds });
+  if (!parsed.success) throw new Error("Invalid input");
+
+  const safeImageUrl = sanitizeImageUrl(parsed.data.imageUrl);
+
+  // Per-company group resource cap
+  const MAX_GROUPS_PER_COMPANY = 200;
+  const groupCount = await withRetry(() => prisma.group.count({
+    where: { companyId: currentUser.companyId },
+  }));
+  if (groupCount >= MAX_GROUPS_PER_COMPANY) throw new Error("Group limit reached");
+
+  // Cross-tenant verification: only keep memberIds that belong to same company
+  const verifiedUsers = await withRetry(() => prisma.user.findMany({
+    where: { id: { in: parsed.data.memberIds }, companyId: currentUser.companyId },
+    select: { id: true },
+  }));
+  const verifiedIds = verifiedUsers.map((u) => u.id).filter((id) => id !== currentUser.id);
 
   const group = await prisma.group.create({
     data: {
-      companyId: currentUser.companyId, // CRITICAL: Set companyId for multi-tenancy
-      name,
-      imageUrl,
+      companyId: currentUser.companyId,
+      name: parsed.data.name,
+      imageUrl: safeImageUrl,
       creatorId: currentUser.id,
       members: {
         create: [
-          { userId: currentUser.id }, // Add creator
-          ...validMemberIds.map((id) => ({ userId: id })), // Add other members
+          { userId: currentUser.id, companyId: currentUser.companyId },
+          ...verifiedIds.map((id) => ({ userId: id, companyId: currentUser.companyId })),
         ],
       },
+    },
+    select: {
+      id: true, name: true, imageUrl: true, creatorId: true,
+      createdAt: true, updatedAt: true,
     },
   });
 
@@ -197,27 +232,26 @@ export async function createGroup(
 }
 
 export async function getGroups() {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) throw new Error("Not authenticated");
+  const currentUser = await requireChatUser("chatRead");
 
   const groups = await withRetry(() => prisma.group.findMany({
     where: {
       companyId: currentUser.companyId,
       members: {
-        some: {
-          userId: currentUser.id,
-        },
+        some: { userId: currentUser.id },
       },
     },
-    include: {
+    select: {
+      id: true, name: true, imageUrl: true, creatorId: true, createdAt: true, updatedAt: true,
       members: {
-        include: {
-          user: {
-            select: { id: true, name: true },
-          },
+        select: {
+          userId: true, lastReadAt: true,
+          user: { select: { id: true, name: true } },
         },
+        take: 50,
       },
       messages: {
+        select: { id: true, content: true, senderId: true, createdAt: true },
         orderBy: { createdAt: "desc" },
         take: 1,
       },
@@ -229,40 +263,33 @@ export async function getGroups() {
 }
 
 export async function getMessages(otherUserId: number) {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
-    throw new Error("Not authenticated");
-  }
+  const currentUser = await requireChatUser("chatRead");
 
-  // K13: Verify otherUserId belongs to same company
+  const parsed = getMessagesSchema.safeParse({ otherUserId });
+  if (!parsed.success) throw new Error("Invalid input");
+
+  // Verify otherUserId belongs to same company
   const otherUser = await withRetry(() => prisma.user.findFirst({
-    where: { id: otherUserId, companyId: currentUser.companyId },
+    where: { id: parsed.data.otherUserId, companyId: currentUser.companyId },
     select: { id: true },
   }));
-  if (!otherUser) {
-    throw new Error("User not found");
-  }
+  if (!otherUser) throw new Error("User not found or access denied");
 
-  // P132: Add take limit to bound DM message loading
   const messages = await withRetry(() => prisma.message.findMany({
     where: {
       OR: [
-        { senderId: currentUser.id, receiverId: otherUserId },
-        { senderId: otherUserId, receiverId: currentUser.id },
+        { senderId: currentUser.id, receiverId: parsed.data.otherUserId },
+        { senderId: parsed.data.otherUserId, receiverId: currentUser.id },
       ],
       groupId: null,
     },
-    orderBy: {
-      createdAt: "asc",
-    },
+    orderBy: { createdAt: "asc" },
     take: 1000,
-    include: {
-      sender: {
-        select: { name: true },
-      },
-      receiver: {
-        select: { name: true },
-      },
+    select: {
+      id: true, content: true, senderId: true, receiverId: true,
+      read: true, createdAt: true,
+      sender: { select: { name: true } },
+      receiver: { select: { name: true } },
     },
   }));
 
@@ -270,12 +297,14 @@ export async function getMessages(otherUserId: number) {
 }
 
 export async function getGroupMessages(groupId: number) {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) throw new Error("Not authenticated");
+  const currentUser = await requireChatUser("chatRead");
 
-  // SECURITY: Verify group belongs to user's company AND user is a member
+  const parsed = getGroupMessagesSchema.safeParse({ groupId });
+  if (!parsed.success) throw new Error("Invalid input");
+
+  // Verify group belongs to user's company
   const groupExists = await withRetry(() => prisma.group.findFirst({
-    where: { id: groupId, companyId: currentUser.companyId },
+    where: { id: parsed.data.groupId, companyId: currentUser.companyId },
     select: { id: true },
   }));
   if (!groupExists) throw new Error("Group not found or access denied");
@@ -284,27 +313,21 @@ export async function getGroupMessages(groupId: number) {
   const membership = await withRetry(() => prisma.groupMember.findUnique({
     where: {
       groupId_userId: {
-        groupId,
+        groupId: parsed.data.groupId,
         userId: currentUser.id,
       },
     },
   }));
+  if (!membership) throw new Error("Group not found or access denied");
 
-  if (!membership) throw new Error("Not a member of this group");
-
-  // P132: Add take limit to bound group message loading
   const messages = await withRetry(() => prisma.message.findMany({
-    where: {
-      groupId,
-    },
-    orderBy: {
-      createdAt: "asc",
-    },
+    where: { groupId: parsed.data.groupId },
+    orderBy: { createdAt: "asc" },
     take: 1000,
-    include: {
-      sender: {
-        select: { name: true },
-      },
+    select: {
+      id: true, content: true, senderId: true, groupId: true,
+      createdAt: true,
+      sender: { select: { name: true } },
     },
   }));
 
@@ -312,28 +335,26 @@ export async function getGroupMessages(groupId: number) {
 }
 
 export async function sendMessage(receiverId: number, content: string) {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
-    throw new Error("Not authenticated");
-  }
+  const currentUser = await requireChatUser("chatSend");
 
-  if (!content.trim()) return;
+  const parsed = sendMessageSchema.safeParse({ receiverId, content });
+  if (!parsed.success) throw new Error("Invalid input");
 
-  // L13: Verify receiverId belongs to same company
+  if (parsed.data.receiverId === currentUser.id) throw new Error("Invalid input");
+
+  // Verify receiverId belongs to same company
   const receiver = await withRetry(() => prisma.user.findFirst({
-    where: { id: receiverId, companyId: currentUser.companyId },
+    where: { id: parsed.data.receiverId, companyId: currentUser.companyId },
     select: { id: true },
   }));
-  if (!receiver) {
-    throw new Error("User not found");
-  }
+  if (!receiver) throw new Error("User not found or access denied");
 
   await withRetry(() => prisma.message.create({
     data: {
-      companyId: currentUser.companyId, // CRITICAL: Set companyId for multi-tenancy
-      content,
+      companyId: currentUser.companyId,
+      content: parsed.data.content,
       senderId: currentUser.id,
-      receiverId,
+      receiverId: parsed.data.receiverId,
     },
   }));
 
@@ -341,26 +362,25 @@ export async function sendMessage(receiverId: number, content: string) {
   try {
     const { redisPublisher } = await import("@/lib/redis");
     await redisPublisher.publish(
-      `company:${currentUser.companyId}:user:${receiverId}:chat`,
+      `company:${currentUser.companyId}:user:${parsed.data.receiverId}:chat`,
       JSON.stringify({ type: "new-message", senderId: currentUser.id }),
     );
   } catch (err) {
-    console.error("Redis Publish Error", err);
+    log.error("Redis publish error", { error: String(err) });
   }
-  // -----------------------
 
   revalidatePath("/chat");
 }
 
 export async function sendGroupMessage(groupId: number, content: string) {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) throw new Error("Not authenticated");
+  const currentUser = await requireChatUser("chatSend");
 
-  if (!content.trim()) return;
+  const parsed = sendGroupMessageSchema.safeParse({ groupId, content });
+  if (!parsed.success) throw new Error("Invalid input");
 
-  // SECURITY: Verify group belongs to user's company
+  // Verify group belongs to user's company
   const groupExists = await withRetry(() => prisma.group.findFirst({
-    where: { id: groupId, companyId: currentUser.companyId },
+    where: { id: parsed.data.groupId, companyId: currentUser.companyId },
     select: { id: true },
   }));
   if (!groupExists) throw new Error("Group not found or access denied");
@@ -369,21 +389,19 @@ export async function sendGroupMessage(groupId: number, content: string) {
   const membership = await withRetry(() => prisma.groupMember.findUnique({
     where: {
       groupId_userId: {
-        groupId,
+        groupId: parsed.data.groupId,
         userId: currentUser.id,
       },
     },
   }));
-
-  if (!membership) throw new Error("Not a member of this group");
+  if (!membership) throw new Error("Group not found or access denied");
 
   await withRetry(() => prisma.message.create({
     data: {
-      companyId: currentUser.companyId, // CRITICAL: Set companyId for multi-tenancy
-      content,
+      companyId: currentUser.companyId,
+      content: parsed.data.content,
       senderId: currentUser.id,
-      groupId,
-      // receiverId is null
+      groupId: parsed.data.groupId,
     },
   }));
 
@@ -391,7 +409,7 @@ export async function sendGroupMessage(groupId: number, content: string) {
   try {
     const { redisPublisher } = await import("@/lib/redis");
     const members = await withRetry(() => prisma.groupMember.findMany({
-      where: { groupId },
+      where: { groupId: parsed.data.groupId },
       select: { userId: true },
       take: 500,
     }));
@@ -400,89 +418,80 @@ export async function sendGroupMessage(groupId: number, content: string) {
       .map((m) =>
         redisPublisher.publish(
           `company:${currentUser.companyId}:user:${m.userId}:chat`,
-          JSON.stringify({ type: "new-group-message", groupId, senderId: currentUser.id }),
+          JSON.stringify({ type: "new-group-message", groupId: parsed.data.groupId, senderId: currentUser.id }),
         ),
       );
     await Promise.all(publishPromises);
   } catch (err) {
-    console.error("Redis Publish Error (group)", err);
+    log.error("Redis publish error (group)", { error: String(err) });
   }
-  // -----------------------
 
   revalidatePath("/chat");
 }
 
 export async function markAsRead(id: number, type: "user" | "group" = "user") {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) throw new Error("Not authenticated");
+  const currentUser = await requireChatUser("chatMark");
 
-  if (type === "user") {
-    // SECURITY: Verify sender belongs to same company
+  const parsed = markAsReadSchema.safeParse({ id, type });
+  if (!parsed.success) throw new Error("Invalid input");
+
+  if (parsed.data.type === "user") {
+    // Verify sender belongs to same company
     const sender = await withRetry(() => prisma.user.findFirst({
-      where: { id, companyId: currentUser.companyId },
+      where: { id: parsed.data.id, companyId: currentUser.companyId },
       select: { id: true },
     }));
     if (!sender) throw new Error("User not found or access denied");
 
-    // Only for DMs
     await prisma.message.updateMany({
       where: {
-        senderId: id,
+        senderId: parsed.data.id,
         receiverId: currentUser.id,
         read: false,
       },
-      data: {
-        read: true,
-      },
+      data: { read: true },
     });
-  } else if (type === "group") {
-    // SECURITY: Verify group belongs to user's company
+  } else if (parsed.data.type === "group") {
+    // Verify group belongs to user's company
     const groupExists = await withRetry(() => prisma.group.findFirst({
-      where: { id, companyId: currentUser.companyId },
+      where: { id: parsed.data.id, companyId: currentUser.companyId },
       select: { id: true },
     }));
     if (!groupExists) throw new Error("Group not found or access denied");
 
-    // For groups, we update the lastReadAt timestamp in GroupMember
     await prisma.groupMember.update({
       where: {
         groupId_userId: {
-          groupId: id,
+          groupId: parsed.data.id,
           userId: currentUser.id,
         },
       },
-      data: {
-        lastReadAt: new Date(),
-      },
+      data: { lastReadAt: new Date() },
     });
   }
 
   // --- REALTIME UPDATE ---
   try {
     const { redisPublisher } = await import("@/lib/redis");
-    // Notify the current user's clients that they have read messages
-    // This allows the Navbar or other tabs to update their unread counts immediately
     await redisPublisher.publish(
       `company:${currentUser.companyId}:user:${currentUser.id}:chat`,
       JSON.stringify({
         type: "messages-read",
-        entityId: id,
-        entityType: type,
+        entityId: parsed.data.id,
+        entityType: parsed.data.type,
       }),
     );
   } catch (err) {
-    console.error("Redis Publish Error (markAsRead)", err);
+    log.error("Redis publish error (markAsRead)", { error: String(err) });
   }
-  // -----------------------
 
   revalidatePath("/chat");
 }
 
 export async function getUnreadCounts() {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) return [];
+  const currentUser = await requireChatUser("chatRead");
 
-  // 1. Unread DMs
+  // Unread DMs
   const unreadDMs = await withRetry(() => prisma.message.groupBy({
     by: ["senderId"],
     where: {
@@ -490,13 +499,10 @@ export async function getUnreadCounts() {
       read: false,
       groupId: null,
     },
-    _count: {
-      id: true,
-    },
+    _count: { id: true },
   }));
 
-  // 2. Unread Group Messages
-  // SECURITY: Filter by companyId to ensure only same-company groups
+  // Unread Group Messages
   const userGroups = await withRetry(() => prisma.groupMember.findMany({
     where: {
       userId: currentUser.id,
@@ -506,11 +512,9 @@ export async function getUnreadCounts() {
       groupId: true,
       lastReadAt: true,
     },
+    take: 200,
   }));
 
-  // DDD: Run all group unread counts concurrently instead of sequentially
-  // Each group has a different lastReadAt so we need per-group counts,
-  // but Promise.all ensures they run in parallel rather than N sequential queries
   const groupIds = userGroups.map((m) => m.groupId);
 
   let unreadGroups: { type: "group"; id: number; count: number }[] = [];

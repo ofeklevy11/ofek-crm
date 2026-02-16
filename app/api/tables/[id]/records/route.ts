@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { inngest } from "@/lib/inngest/client";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("TableRecords");
 
 function parseId(raw: string): number | null {
   const n = parseInt(raw, 10);
@@ -27,6 +31,9 @@ export async function GET(
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const rl = await checkRateLimit(String(currentUser.id), RATE_LIMITS.api);
+    if (rl) return rl;
 
     if (!canReadTable(currentUser, tableId)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -91,15 +98,24 @@ export async function GET(
       take: pageSize + 1, // fetch one extra to detect next page
       include: {
         creator: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true },
         },
         updater: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true },
         },
         dialedBy: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true },
         },
-        attachments: true,
+        attachments: {
+          select: {
+            id: true,
+            filename: true,
+            displayName: true,
+            url: true,
+            size: true,
+            createdAt: true,
+          },
+        },
       },
     });
 
@@ -119,7 +135,7 @@ export async function GET(
 
     return NextResponse.json({ records: sanitized, nextCursor, hasMore });
   } catch (error) {
-    console.error("Error fetching records:", error);
+    log.error("Failed to fetch records", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to fetch records" },
       { status: 500 },
@@ -150,6 +166,9 @@ export async function POST(
         { status: 401 },
       );
     }
+
+    const rl = await checkRateLimit(String(currentUser.id), RATE_LIMITS.api);
+    if (rl) return rl;
 
     // Check write permissions
     if (!canWriteTable(currentUser, tableId)) {
@@ -203,6 +222,14 @@ export async function POST(
           })),
         },
       },
+      select: {
+        id: true,
+        tableId: true,
+        data: true,
+        createdBy: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
 
     await createAuditLog(record.id, currentUser.id, "CREATE", data, undefined, currentUser.companyId);
@@ -220,18 +247,18 @@ export async function POST(
         },
       });
     } catch (autoError) {
-      console.error("[API Records] Inngest send failed, falling back to direct automation execution:", autoError);
+      log.error("Inngest send failed, falling back to direct automation execution", { error: String(autoError) });
       try {
-        const { processNewRecordTrigger } = await import("@/app/actions/automations");
+        const { processNewRecordTrigger } = await import("@/app/actions/automations-core");
         await processNewRecordTrigger(tableId, table.name, record.id, currentUser.companyId);
       } catch (directErr) {
-        console.error("[API Records] Direct automation execution also failed:", directErr);
+        log.error("Direct automation execution also failed", { error: String(directErr) });
       }
     }
 
     return NextResponse.json(record);
   } catch (error) {
-    console.error("Error creating record:", error);
+    log.error("Failed to create record", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to create record" },
       { status: 500 },

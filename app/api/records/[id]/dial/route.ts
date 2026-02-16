@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { canWriteTable } from "@/lib/permissions";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("RecordDial");
 
 function parseId(raw: string): number | null {
   const n = parseInt(raw, 10);
@@ -34,6 +39,9 @@ export async function POST(
       );
     }
 
+    const rl = await checkRateLimit(String(currentUser.id), RATE_LIMITS.api);
+    if (rl) return rl;
+
     // CRITICAL: Filter by companyId to ensure multi-tenant isolation
     const existingRecord = await prisma.record.findFirst({
       where: {
@@ -44,6 +52,10 @@ export async function POST(
 
     if (!existingRecord) {
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
+    }
+
+    if (!canWriteTable(currentUser, existingRecord.tableId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // SECURITY: Atomic companyId check in update WHERE clause
@@ -74,9 +86,9 @@ export async function POST(
         },
       });
     } catch (autoError) {
-      console.error("[Dial] Inngest send failed, falling back to direct automation execution:", autoError);
+      log.error("Inngest send failed, falling back to direct automation execution", { error: String(autoError) });
       try {
-        const { processDirectDialTrigger } = await import("@/app/actions/automations");
+        const { processDirectDialTrigger } = await import("@/app/actions/automations-core");
         await processDirectDialTrigger(
           existingRecord.tableId,
           recordId,
@@ -84,7 +96,7 @@ export async function POST(
           existingRecord.dialedAt?.toISOString() || null,
         );
       } catch (directErr) {
-        console.error("[Dial] Direct automation execution also failed:", directErr);
+        log.error("Direct automation execution also failed", { error: String(directErr) });
       }
     }
 

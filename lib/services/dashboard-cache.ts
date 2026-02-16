@@ -1,5 +1,8 @@
 import { redis } from "@/lib/redis";
 import { randomUUID } from "crypto";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("DashboardCache");
 
 const GOALS_CACHE_FRESH_TTL = 30 * 60; // 30 minutes — considered "fresh"
 const GOALS_CACHE_STALE_TTL = 60 * 60; // 60 minutes — max lifetime (stale served while revalidating)
@@ -64,7 +67,7 @@ export async function getCachedGoals(
     const age = (Date.now() - setAt) / 1000;
     return { data, stale: age >= GOALS_CACHE_FRESH_TTL };
   } catch (err) {
-    console.error("[dashboard-cache] Failed to read goals cache:", err);
+    log.error("Failed to read goals cache", { error: String(err) });
     return null;
   }
 }
@@ -76,7 +79,7 @@ export async function setCachedGoals(companyId: number, goals: any[]): Promise<v
     pipeline.set(goalsTimestampKey(companyId), String(Date.now()), "EX", GOALS_CACHE_STALE_TTL);
     await pipeline.exec();
   } catch (err) {
-    console.error("[dashboard-cache] Failed to set goals cache:", err);
+    log.error("Failed to set goals cache", { error: String(err) });
   }
 }
 
@@ -84,7 +87,7 @@ export async function invalidateGoalsCache(companyId: number): Promise<void> {
   try {
     await redis.del(goalsKey(companyId), goalsTimestampKey(companyId));
   } catch (err) {
-    console.error("[dashboard-cache] Failed to invalidate goals cache:", err);
+    log.error("Failed to invalidate goals cache", { error: String(err) });
   }
 }
 
@@ -99,7 +102,7 @@ export async function getCachedTableWidget(
     if (!raw) return null;
     return JSON.parse(raw);
   } catch (err) {
-    console.error("[dashboard-cache] Failed to read table widget cache:", err);
+    log.error("Failed to read table widget cache", { error: String(err) });
     return null;
   }
 }
@@ -117,7 +120,7 @@ export async function setCachedTableWidget(
       TABLE_WIDGET_CACHE_TTL,
     );
   } catch (err) {
-    console.error("[dashboard-cache] Failed to set table widget cache:", err);
+    log.error("Failed to set table widget cache", { error: String(err) });
   }
 }
 
@@ -148,12 +151,12 @@ export async function invalidateTableWidgetCaches(companyId: number): Promise<vo
       }
       iterations++;
       if (iterations >= MAX_SCAN_ITERATIONS) {
-        console.error(`[dashboard-cache] SCAN loop hit iteration cap (${MAX_SCAN_ITERATIONS}) for company ${companyId} — some cache keys may not have been invalidated`);
+        log.error("SCAN loop hit iteration cap — some cache keys may not have been invalidated", { maxIterations: MAX_SCAN_ITERATIONS, companyId });
         break;
       }
     } while (cursor !== "0");
   } catch (err) {
-    console.error("[dashboard-cache] Failed to invalidate table widget caches:", err);
+    log.error("Failed to invalidate table widget caches", { error: String(err) });
   }
 }
 
@@ -165,7 +168,7 @@ export async function acquireDashboardLock(companyId: number): Promise<string | 
     const result = await redis.set(dashboardLockKey(companyId), lockValue, "EX", LOCK_TTL, "NX");
     return result === "OK" ? lockValue : false;
   } catch (err) {
-    console.error("[dashboard-cache] Failed to acquire lock, skipping refresh:", err);
+    log.error("Failed to acquire lock, skipping refresh", { error: String(err) });
     return false; // Redis down — skip and retry later
   }
 }
@@ -176,6 +179,6 @@ export async function releaseDashboardLock(companyId: number, lockValue: string)
   try {
     await redis.eval(RELEASE_LOCK_SCRIPT, 1, dashboardLockKey(companyId), lockValue);
   } catch (err) {
-    console.error("[dashboard-cache] Failed to release lock:", err);
+    log.error("Failed to release lock", { error: String(err) });
   }
 }

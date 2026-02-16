@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("GreenApiService");
 
 const GREEN_API_BASE_URL = "https://api.green-api.com";
 
@@ -36,8 +39,13 @@ export async function sendGreenApiMessage(
 
   if (!res.ok) {
     const err = await res.text();
-    console.error("Green API Send Error:", err);
+    log.error("Green API send error", { status: res.status, body: err.slice(0, 100) });
     throw new Error("Failed to send WhatsApp message");
+  }
+
+  const contentType = res.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(`Green API returned unexpected content-type: ${contentType.split(";")[0]}`);
   }
 
   return await res.json();
@@ -81,8 +89,13 @@ export async function sendGreenApiFile(
 
   if (!res.ok) {
     const err = await res.text();
-    console.error("Green API Send File Error:", err);
+    log.error("Green API send file error", { status: res.status, body: err.slice(0, 100) });
     throw new Error("Failed to send WhatsApp file");
+  }
+
+  const contentType = res.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(`Green API returned unexpected content-type: ${contentType.split(";")[0]}`);
   }
 
   return await res.json();

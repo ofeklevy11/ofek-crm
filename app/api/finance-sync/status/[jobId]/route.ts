@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("FinanceSyncStatus");
 
 /**
  * Get Finance Sync Job Status
@@ -17,8 +22,14 @@ export async function GET(
     const user = await getCurrentUser();
 
     if (!user) {
-      return NextResponse.json({ error: "אין הרשאה" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const limited = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+    if (limited) return limited;
 
     const job = await prisma.financeSyncJob.findFirst({
       where: { id: jobId, companyId: user.companyId },
@@ -46,9 +57,9 @@ export async function GET(
       completedAt: summary?.completedAt || null,
     });
   } catch (err: any) {
-    console.error("Finance sync status error:", err);
+    log.error("Finance sync status error", { error: String(err) });
     return NextResponse.json(
-      { error: err.message || "שגיאת שרת פנימית" },
+      { error: "Failed to fetch sync status" },
       { status: 500 },
     );
   }

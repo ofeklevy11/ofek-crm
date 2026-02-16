@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { canManageAnalytics } from "@/lib/permissions";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("Views");
 
 export interface ViewConfig {
   type: "stats" | "aggregation" | "chart" | "legend";
@@ -61,6 +65,7 @@ export async function createView(data: {
 
     // P107: Validate tableId belongs to user's company
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!canManageAnalytics(user)) return { success: false, error: "Forbidden" };
     const table = await prisma.tableMeta.findFirst({
       where: { id: data.tableId, companyId: user.companyId },
     });
@@ -106,12 +111,16 @@ export async function createView(data: {
         isEnabled: data.isEnabled ?? true,
         order: nextOrder,
       },
+      select: {
+        id: true, tableId: true, name: true, slug: true, config: true,
+        isEnabled: true, order: true, createdAt: true, updatedAt: true,
+      },
     });
 
     revalidatePath(`/tables/${data.tableId}`);
     return { success: true, view };
   } catch (error: any) {
-    console.error("Error creating view:", error);
+    log.error("Error creating view", { error: String(error) });
 
     // Check if it's a unique constraint error
     if (
@@ -147,6 +156,7 @@ export async function updateView(
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!canManageAnalytics(user)) return { success: false, error: "Forbidden" };
 
     const existingView = await prisma.view.findFirst({
       where: { id: viewId, companyId: user.companyId },
@@ -164,12 +174,16 @@ export async function updateView(
         ...(data.config && { config: data.config as any }),
         ...(data.isEnabled !== undefined && { isEnabled: data.isEnabled }),
       },
+      select: {
+        id: true, tableId: true, name: true, slug: true, config: true,
+        isEnabled: true, order: true, createdAt: true, updatedAt: true,
+      },
     });
 
     revalidatePath(`/tables/${view.tableId}`);
     return { success: true, view };
   } catch (error: any) {
-    console.error("Error updating view:", error);
+    log.error("Error updating view", { error: String(error) });
 
     // Check if it's a unique constraint error
     if (
@@ -206,6 +220,7 @@ export async function toggleView(viewId: number) {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!canManageAnalytics(user)) return { success: false, error: "Forbidden" };
 
     const currentView = await prisma.view.findFirst({
       where: { id: viewId, companyId: user.companyId },
@@ -221,12 +236,16 @@ export async function toggleView(viewId: number) {
       data: {
         isEnabled: !currentView.isEnabled,
       },
+      select: {
+        id: true, tableId: true, name: true, slug: true, config: true,
+        isEnabled: true, order: true, createdAt: true, updatedAt: true,
+      },
     });
 
     revalidatePath(`/tables/${view.tableId}`);
     return { success: true, view };
   } catch (error: any) {
-    console.error("Error toggling view:", error);
+    log.error("Error toggling view", { error: String(error) });
     return {
       success: false,
       error: "אירעה שגיאה בשינוי מצב התצוגה. אנא נסה שוב.",
@@ -240,6 +259,7 @@ export async function deleteView(viewId: number) {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!canManageAnalytics(user)) return { success: false, error: "Forbidden" };
 
     const view = await prisma.view.findFirst({
       where: { id: viewId, companyId: user.companyId },
@@ -273,10 +293,7 @@ export async function deleteView(viewId: number) {
           AND "settings"->'views' @> ${JSON.stringify([{ viewId }])}::jsonb
       `;
     } catch (cleanupError) {
-      console.error(
-        "Error cleaning up dashboard widgets for deleted view:",
-        cleanupError,
-      );
+      log.error("Error cleaning up dashboard widgets for deleted view", { error: String(cleanupError) });
       // We continue with view deletion even if widget cleanup fails
     }
     // ---------------------------------
@@ -289,7 +306,7 @@ export async function deleteView(viewId: number) {
     revalidatePath(`/tables/${view.tableId}`);
     return { success: true };
   } catch (error: any) {
-    console.error("Error deleting view:", error);
+    log.error("Error deleting view", { error: String(error) });
     return {
       success: false,
       error: "אירעה שגיאה במחיקת התצוגה. אנא נסה שוב.",
@@ -314,12 +331,16 @@ export async function getViewsForTable(tableId: number) {
       where: { tableId, companyId: user.companyId },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
       take: 200,
+      select: {
+        id: true, tableId: true, name: true, slug: true, config: true,
+        isEnabled: true, order: true, createdAt: true, updatedAt: true,
+      },
     });
 
     return { success: true, views };
   } catch (error: any) {
-    console.error("Error fetching views:", error);
-    return { success: false, error: error.message, views: [] };
+    log.error("Error fetching views", { error: String(error) });
+    return { success: false, error: "Failed to fetch views", views: [] };
   }
 }
 
@@ -344,12 +365,16 @@ export async function getEnabledViewsForTable(tableId: number) {
       },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
       take: 200,
+      select: {
+        id: true, tableId: true, name: true, slug: true, config: true,
+        isEnabled: true, order: true, createdAt: true, updatedAt: true,
+      },
     });
 
     return { success: true, views };
   } catch (error: any) {
-    console.error("Error fetching enabled views:", error);
-    return { success: false, error: error.message, views: [] };
+    log.error("Error fetching enabled views", { error: String(error) });
+    return { success: false, error: "Failed to fetch views", views: [] };
   }
 }
 
@@ -362,6 +387,7 @@ export async function reorderViews(
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!canManageAnalytics(user)) return { success: false, error: "Forbidden" };
 
     const table = await prisma.tableMeta.findFirst({
       where: { id: tableId, companyId: user.companyId },
@@ -375,6 +401,13 @@ export async function reorderViews(
     if (viewOrders.length === 0) {
       revalidatePath(`/tables/${tableId}`);
       return { success: true };
+    }
+
+    // Validate all IDs and orders are safe integers before SQL interpolation
+    for (const v of viewOrders) {
+      if (!Number.isInteger(v.id) || !Number.isInteger(v.order)) {
+        return { success: false, error: "Invalid view order data" };
+      }
     }
 
     // Single SQL UPDATE with VALUES list instead of N individual updates
@@ -393,8 +426,7 @@ export async function reorderViews(
     revalidatePath(`/tables/${tableId}`);
     return { success: true };
   } catch (error: any) {
-    console.error("❌ Error reordering views:", error);
-    console.error("Error details:", error.message, error.stack);
+    log.error("Error reordering views", { error: String(error), stack: error.stack });
     return {
       success: false,
       error: "אירעה שגיאה בשינוי סדר התצוגות. אנא נסה שוב.",
@@ -427,7 +459,7 @@ export async function getUserRefreshUsage() {
       });
 
       // Find the oldest log in the window to calculate when the next credit returns
-      let nextResetTime = null;
+      let nextResetTime: string | null = null;
       if (usageCount > 0) {
         const oldestLog = await (prisma as any).viewRefreshLog.findFirst({
           where: {
@@ -446,11 +478,11 @@ export async function getUserRefreshUsage() {
 
       return { success: true, usage: usageCount, nextResetTime };
     } catch (e) {
-      console.error("Failed to check refresh usage:", e);
+      log.error("Failed to check refresh usage", { error: String(e) });
       return { success: true, usage: 0 };
     }
   } catch (error) {
-    console.error("Error in getUserRefreshUsage:", error);
+    log.error("Error in getUserRefreshUsage", { error: String(error) });
     return { success: false, usage: 0 };
   }
 }

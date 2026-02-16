@@ -1,0 +1,307 @@
+import { redis } from "@/lib/redis";
+import { isPrivateUrl } from "@/lib/security/ssrf";
+
+// ==========================================
+// RATE LIMITING
+// ==========================================
+
+interface ActionRateLimitConfig {
+  prefix: string;
+  max: number;
+  windowSeconds: number;
+}
+
+/** In-memory fallback counters when Redis is unavailable */
+const inMemoryCounters = new Map<string, { count: number; resetAt: number }>();
+
+/**
+ * Check rate limit for server actions. Throws if exceeded.
+ * Falls back to in-memory rate limiting if Redis is down.
+ */
+export async function checkServerActionRateLimit(
+  identifier: string,
+  config: ActionRateLimitConfig,
+): Promise<void> {
+  try {
+    const key = `rl:${config.prefix}:${identifier}`;
+    const results = await redis
+      .multi()
+      .incr(key)
+      .expire(key, config.windowSeconds)
+      .exec();
+
+    const count = results?.[0]?.[1] as number | undefined;
+    if (count && count > config.max) {
+      throw new Error("Rate limit exceeded. Please try again later.");
+    }
+  } catch (e: any) {
+    if (e?.message === "Rate limit exceeded. Please try again later.") throw e;
+    // Redis down — fall back to in-memory limiting
+    const key = `rl:${config.prefix}:${identifier}`;
+    const now = Date.now();
+    const entry = inMemoryCounters.get(key);
+    if (entry && entry.resetAt > now) {
+      entry.count++;
+      if (entry.count > config.max) {
+        throw new Error("Rate limit exceeded. Please try again later.");
+      }
+    } else {
+      inMemoryCounters.set(key, { count: 1, resetAt: now + config.windowSeconds * 1000 });
+    }
+  }
+}
+
+export const WORKER_RATE_LIMITS = {
+  read: { prefix: "wrk-read", max: 60, windowSeconds: 60 } satisfies ActionRateLimitConfig,
+  mutation: { prefix: "wrk-mut", max: 30, windowSeconds: 60 } satisfies ActionRateLimitConfig,
+  dangerous: { prefix: "wrk-del", max: 10, windowSeconds: 60 } satisfies ActionRateLimitConfig,
+} as const;
+
+// ==========================================
+// STRING VALIDATION
+// ==========================================
+
+/**
+ * Trim and validate string length. Returns trimmed value.
+ * Throws if value exceeds maxLen.
+ */
+export function validateStringLength(
+  value: string | undefined | null,
+  maxLen: number,
+  label: string,
+): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") throw new Error(`${label} must be a string`);
+  const trimmed = value.trim();
+  if (trimmed.length > maxLen) {
+    throw new Error(`${label} must be ${maxLen} characters or less`);
+  }
+  return trimmed;
+}
+
+/** Common max lengths for reuse */
+export const MAX_LENGTHS = {
+  name: 200,
+  title: 200,
+  description: 5000,
+  notes: 5000,
+  email: 320,
+  phone: 50,
+  color: 20,
+  icon: 100,
+  url: 2000,
+  employeeId: 100,
+  position: 200,
+  feedback: 5000,
+  avatar: 2000,
+  resourceType: 100,
+} as const;
+
+// ==========================================
+// JSON VALIDATION
+// ==========================================
+
+/**
+ * Validate a JSON value for safe storage: max depth, max serialized size,
+ * and strip prototype-pollution keys.
+ */
+export function validateJsonValue(
+  value: unknown,
+  maxDepth: number,
+  maxSizeBytes: number,
+  label: string,
+): unknown {
+  if (value === undefined || value === null) return value;
+
+  // Size check
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(value);
+  } catch {
+    throw new Error(`${label} contains invalid JSON`);
+  }
+  if (serialized.length > maxSizeBytes) {
+    throw new Error(`${label} exceeds maximum size of ${Math.round(maxSizeBytes / 1024)}KB`);
+  }
+
+  // Depth check
+  if (exceedsDepth(value, maxDepth)) {
+    throw new Error(`${label} exceeds maximum nesting depth of ${maxDepth}`);
+  }
+
+  // Strip dangerous keys and return
+  return stripDangerousKeys(value);
+}
+
+function exceedsDepth(value: unknown, max: number, current = 0): boolean {
+  if (current > max) return true;
+  if (value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) {
+    return value.some((item) => exceedsDepth(item, max, current + 1));
+  }
+  return Object.values(value).some((v) => exceedsDepth(v, max, current + 1));
+}
+
+function stripDangerousKeys(value: unknown): unknown {
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map(stripDangerousKeys);
+
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (k === "__proto__" || k === "constructor" || k === "prototype") continue;
+    result[k] = stripDangerousKeys(v);
+  }
+  return result;
+}
+
+// ==========================================
+// ON-COMPLETE ACTIONS VALIDATION
+// ==========================================
+
+const VALID_ON_COMPLETE_ACTION_TYPES = new Set([
+  "UPDATE_RECORD",
+  "CREATE_RECORD",
+  "CREATE_TASK",
+  "UPDATE_TASK",
+  "CREATE_FINANCE",
+  "SEND_NOTIFICATION",
+  "SEND_WHATSAPP",
+  "WEBHOOK",
+  "CREATE_CALENDAR_EVENT",
+]);
+
+const MAX_ON_COMPLETE_ACTIONS = 20;
+
+/**
+ * Validate onCompleteActions array for onboarding steps.
+ * Returns sanitized array.
+ */
+export function validateOnCompleteActions(
+  actions: unknown,
+): Array<{ actionType: string; config: Record<string, unknown> }> | undefined {
+  if (actions === undefined || actions === null) return undefined;
+  if (!Array.isArray(actions)) throw new Error("onCompleteActions must be an array");
+  if (actions.length > MAX_ON_COMPLETE_ACTIONS) {
+    throw new Error(`onCompleteActions can have at most ${MAX_ON_COMPLETE_ACTIONS} items`);
+  }
+
+  const serialized = JSON.stringify(actions);
+  if (serialized.length > 51200) {
+    throw new Error("onCompleteActions total size exceeds 50KB limit");
+  }
+
+  return actions.map((action, i) => {
+    if (!action || typeof action !== "object" || Array.isArray(action)) {
+      throw new Error(`onCompleteActions[${i}] must be an object`);
+    }
+    const { actionType, config } = action as Record<string, unknown>;
+    if (!actionType || typeof actionType !== "string") {
+      throw new Error(`onCompleteActions[${i}].actionType is required`);
+    }
+    if (!VALID_ON_COMPLETE_ACTION_TYPES.has(actionType)) {
+      throw new Error(`onCompleteActions[${i}].actionType "${actionType}" is invalid`);
+    }
+    if (config !== undefined && config !== null) {
+      if (typeof config !== "object" || Array.isArray(config)) {
+        throw new Error(`onCompleteActions[${i}].config must be an object`);
+      }
+      if (exceedsDepth(config, 3)) {
+        throw new Error(`onCompleteActions[${i}].config is too deeply nested`);
+      }
+    }
+    return {
+      actionType,
+      config: (config ? stripDangerousKeys(config) : {}) as Record<string, unknown>,
+    };
+  });
+}
+
+// ==========================================
+// URL VALIDATION
+// ==========================================
+
+/**
+ * Validate a URL: http/https only, max 2000 chars.
+ * Rejects javascript: and other dangerous schemes.
+ */
+export function validateUrl(value: string | undefined | null, label: string): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") throw new Error(`${label} must be a string`);
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  if (trimmed.length > MAX_LENGTHS.url) {
+    throw new Error(`${label} must be ${MAX_LENGTHS.url} characters or less`);
+  }
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error(`${label} must use http or https`);
+    }
+  } catch (e: any) {
+    if (e?.message?.includes("must use http")) throw e;
+    throw new Error(`${label} is not a valid URL`);
+  }
+  return trimmed;
+}
+
+/**
+ * Validate a webhook URL: HTTPS only, rejects localhost/private IPs/metadata.
+ */
+export function validateWebhookUrl(url: string): string {
+  const trimmed = url.trim();
+  if (trimmed.length === 0) throw new Error("Webhook URL is required");
+  if (trimmed.length > MAX_LENGTHS.url) {
+    throw new Error(`Webhook URL must be ${MAX_LENGTHS.url} characters or less`);
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "https:") {
+      throw new Error("Webhook URL must use HTTPS");
+    }
+  } catch (e: any) {
+    if (e?.message?.includes("Webhook URL")) throw e;
+    throw new Error("Webhook URL is not valid");
+  }
+  if (isPrivateUrl(trimmed)) {
+    throw new Error("Webhook URL cannot target private/internal addresses");
+  }
+  return trimmed;
+}
+
+// ==========================================
+// NUMERIC VALIDATION
+// ==========================================
+
+export function validateNonNegativeInt(value: number | undefined, label: string): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(`${label} must be a non-negative number`);
+  }
+  return Math.floor(value);
+}
+
+// ==========================================
+// ERROR WRAPPING
+// ==========================================
+
+/**
+ * Map Prisma error codes to user-facing messages.
+ * Prevents leaking schema details.
+ */
+export function wrapPrismaError(e: any, context: string): never {
+  if (e?.code === "P2025") {
+    throw new Error(`${context} not found or access denied`);
+  }
+  if (e?.code === "P2002") {
+    throw new Error(`${context}: duplicate entry`);
+  }
+  if (e?.code === "P2003") {
+    throw new Error(`${context}: referenced record not found`);
+  }
+  // Already a user-facing error (no Prisma code) — rethrow as-is
+  if (!e?.code?.startsWith?.("P")) {
+    throw e;
+  }
+  // Unknown Prisma error — generic message
+  throw new Error(`${context}: operation failed`);
+}

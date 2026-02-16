@@ -320,8 +320,9 @@ model Company {
   auditLogs      AuditLog[]
   automationLogs AutomationLog[]
 
-  greenApiInstanceId String? // Green API Instance ID
-  greenApiToken      String? // Green API Token
+  greenApiInstanceId   String? // Green API Instance ID
+  greenApiToken        String? // Green API Token
+  webhookSigningSecret String? // HMAC-SHA256 secret for signing outbound webhooks
 
   apiKeys             ApiKey[]
   importJobs          ImportJob[]

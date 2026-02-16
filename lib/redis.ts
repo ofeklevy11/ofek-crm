@@ -6,9 +6,17 @@ import Redis from "ioredis";
 
 const globalForRedis = globalThis as unknown as { redis: Redis };
 
+function requireRedisUrl(): string {
+  const url = process.env.REDIS_URL;
+  if (!url) {
+    throw new Error("FATAL: REDIS_URL environment variable is not set.");
+  }
+  return url;
+}
+
 export const redis =
   globalForRedis.redis ||
-  new Redis(process.env.REDIS_URL || "", {
+  new Redis(requireRedisUrl(), {
     tls: process.env.REDIS_URL?.includes("rediss://") ? {} : undefined,
     // Add prefix for environment isolation
     keyPrefix:
@@ -30,7 +38,7 @@ const globalPublisher = globalThis as unknown as { redisPublisher: Redis };
 
 export const redisPublisher =
   globalPublisher.redisPublisher ||
-  new Redis(process.env.REDIS_URL || "", {
+  new Redis(requireRedisUrl(), {
     tls: process.env.REDIS_URL?.includes("rediss://") ? {} : undefined,
     keyPrefix:
       (process.env.NODE_ENV === "production" ? "prod:" : "dev:") + "app:",

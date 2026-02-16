@@ -4,6 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { PAID_STATUS_VARIANTS, normalizePaymentStatus, VALID_PAYMENT_STATUSES } from "@/lib/finance-constants";
 import { withRetry } from "@/lib/db-retry";
+import { hasUserFlag } from "@/lib/permissions";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("Finance");
 
 // ==================== RETAINERS ====================
 
@@ -14,6 +18,9 @@ export async function getRetainers(opts?: { cursor?: number; take?: number }) {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return { success: false, error: "Forbidden" };
+    }
 
     const take = Math.min(opts?.take ?? 500, 500);
     const retainers = await withRetry(() => prisma.retainer.findMany({
@@ -21,7 +28,10 @@ export async function getRetainers(opts?: { cursor?: number; take?: number }) {
         companyId: user.companyId,
         deletedAt: null,
       },
-      include: {
+      select: {
+        id: true, clientId: true, title: true, amount: true, frequency: true,
+        startDate: true, nextDueDate: true, status: true, notes: true,
+        createdAt: true, updatedAt: true,
         client: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -40,7 +50,7 @@ export async function getRetainers(opts?: { cursor?: number; take?: number }) {
       hasMore,
     };
   } catch (error) {
-    console.error("Error fetching retainers:", error);
+    log.error("Error fetching retainers", { error: String(error) });
     return { success: false, error: "Failed to fetch retainers" };
   }
 }
@@ -50,10 +60,17 @@ export async function getRetainerById(id: number) {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return { success: false, error: "Forbidden" };
+    }
+    if (!Number.isInteger(id) || id <= 0) return { success: false, error: "Invalid ID" };
 
     const retainer = await withRetry(() => prisma.retainer.findFirst({
       where: { id, companyId: user.companyId, deletedAt: null },
-      include: {
+      select: {
+        id: true, clientId: true, title: true, amount: true, frequency: true,
+        startDate: true, nextDueDate: true, status: true, notes: true,
+        createdAt: true, updatedAt: true,
         client: { select: { id: true, name: true, email: true, phone: true } },
       },
     }));
@@ -67,7 +84,7 @@ export async function getRetainerById(id: number) {
       data: { ...retainer, amount: Number(retainer.amount) },
     };
   } catch (error) {
-    console.error("Error fetching retainer:", error);
+    log.error("Error fetching retainer", { error: String(error) });
     return { success: false, error: "Failed to fetch retainer" };
   }
 }
@@ -85,6 +102,14 @@ export async function createRetainer(data: {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return { success: false, error: "Forbidden" };
+    }
+
+    const { checkActionRateLimit, RATE_LIMITS } = await import("@/lib/rate-limit");
+    if (await checkActionRateLimit(String(user.id), RATE_LIMITS.financeMutation)) {
+      return { success: false, error: "Rate limit exceeded" };
+    }
 
     const {
       title,
@@ -97,11 +122,20 @@ export async function createRetainer(data: {
     } = data;
 
     // H9: Input validation
-    if (typeof amount !== "number" || amount <= 0) {
+    if (!title || typeof title !== "string" || title.length > 200) {
+      return { success: false, error: "Title is required and must be under 200 characters" };
+    }
+    if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
       return { success: false, error: "Amount must be a positive number" };
+    }
+    if (notes && (typeof notes !== "string" || notes.length > 5000)) {
+      return { success: false, error: "Notes must be under 5000 characters" };
     }
     if (!["monthly", "quarterly", "annually"].includes(frequency)) {
       return { success: false, error: "Invalid frequency" };
+    }
+    if (!Number.isInteger(clientId) || clientId <= 0) {
+      return { success: false, error: "Invalid client ID" };
     }
 
     // Calculate next due date based on frequency
@@ -141,11 +175,16 @@ export async function createRetainer(data: {
           clientId: parseInt(String(clientId)),
           companyId: user.companyId,
           amount,
-          frequency,
+          frequency: frequency as "monthly" | "quarterly" | "annually",
           startDate: start,
           nextDueDate,
-          status: "active",
+          status: "active" as const,
           notes,
+        },
+        select: {
+          id: true, clientId: true, title: true, amount: true, frequency: true,
+          startDate: true, nextDueDate: true, status: true, notes: true,
+          createdAt: true, updatedAt: true,
         },
       });
     }, { maxWait: 5000, timeout: 10000 }));
@@ -159,7 +198,7 @@ export async function createRetainer(data: {
       data: { ...retainer, amount: Number(retainer.amount) },
     };
   } catch (error) {
-    console.error("Error creating retainer:", error);
+    log.error("Error creating retainer", { error: String(error) });
     return { success: false, error: "Failed to create retainer" };
   }
 }
@@ -179,16 +218,48 @@ export async function updateRetainer(
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return { success: false, error: "Forbidden" };
+    }
 
-    const updateData: Record<string, unknown> = { ...data };
+    const { checkActionRateLimit, RATE_LIMITS } = await import("@/lib/rate-limit");
+    if (await checkActionRateLimit(String(user.id), RATE_LIMITS.financeMutation)) {
+      return { success: false, error: "Rate limit exceeded" };
+    }
+
+    // Validate ID
+    if (!Number.isInteger(id) || id <= 0) {
+      return { success: false, error: "Invalid retainer ID" };
+    }
 
     // P2: Validate retainer status
-    if (data.status && !["active", "paused", "cancelled"].includes(data.status)) {
+    if (data.status !== undefined && !["active", "paused", "cancelled"].includes(data.status)) {
       return { success: false, error: `Invalid retainer status: ${data.status}` };
     }
 
-    if (data.nextDueDate) {
-      updateData.nextDueDate = new Date(data.nextDueDate);
+    // SECURITY: Whitelist allowed fields to prevent companyId/id/deletedAt injection
+    const updateData: Record<string, unknown> = {};
+    if (data.title !== undefined) {
+      if (typeof data.title !== "string" || data.title.length > 200) return { success: false, error: "Invalid title" };
+      updateData.title = data.title;
+    }
+    if (data.amount !== undefined) {
+      if (typeof data.amount !== "number" || !Number.isFinite(data.amount) || data.amount <= 0) return { success: false, error: "Invalid amount" };
+      updateData.amount = data.amount;
+    }
+    if (data.frequency !== undefined) {
+      if (!["monthly", "quarterly", "annually"].includes(data.frequency)) return { success: false, error: "Invalid frequency" };
+      updateData.frequency = data.frequency;
+    }
+    if (data.status !== undefined) updateData.status = data.status;
+    if (data.notes !== undefined) {
+      if (data.notes !== null && (typeof data.notes !== "string" || data.notes.length > 5000)) return { success: false, error: "Invalid notes" };
+      updateData.notes = data.notes;
+    }
+    if (data.nextDueDate !== undefined) {
+      const parsed = new Date(data.nextDueDate);
+      if (isNaN(parsed.getTime())) return { success: false, error: "Invalid next due date" };
+      updateData.nextDueDate = parsed;
     }
 
     // SECURITY: Atomic verify+update in transaction to prevent TOCTOU race
@@ -202,6 +273,11 @@ export async function updateRetainer(
       return tx.retainer.update({
         where: { id },
         data: updateData,
+        select: {
+          id: true, clientId: true, title: true, amount: true, frequency: true,
+          startDate: true, nextDueDate: true, status: true, notes: true,
+          createdAt: true, updatedAt: true,
+        },
       });
     }, { maxWait: 5000, timeout: 10000 }));
 
@@ -214,7 +290,7 @@ export async function updateRetainer(
       data: { ...retainer, amount: Number(retainer.amount) },
     };
   } catch (error) {
-    console.error("Error updating retainer:", error);
+    log.error("Error updating retainer", { error: String(error) });
     return { success: false, error: "Failed to update retainer" };
   }
 }
@@ -224,6 +300,16 @@ export async function deleteRetainer(id: number) {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return { success: false, error: "Forbidden" };
+    }
+
+    const { checkActionRateLimit, RATE_LIMITS } = await import("@/lib/rate-limit");
+    if (await checkActionRateLimit(String(user.id), RATE_LIMITS.financeMutation)) {
+      return { success: false, error: "Rate limit exceeded" };
+    }
+
+    if (!Number.isInteger(id) || id <= 0) return { success: false, error: "Invalid retainer ID" };
 
     // P3: Soft delete — mark as deleted instead of hard delete for audit trail
     await withRetry(() => prisma.$transaction(async (tx) => {
@@ -259,7 +345,7 @@ export async function deleteRetainer(id: number) {
 
     return { success: true };
   } catch (error) {
-    console.error("Error deleting retainer:", error);
+    log.error("Error deleting retainer", { error: String(error) });
     return { success: false, error: "Failed to delete retainer" };
   }
 }
@@ -271,6 +357,9 @@ export async function getPayments(opts?: { cursor?: number; take?: number }) {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return { success: false, error: "Forbidden" };
+    }
 
     const take = Math.min(opts?.take ?? 500, 500);
     const payments = await withRetry(() => prisma.oneTimePayment.findMany({
@@ -278,7 +367,9 @@ export async function getPayments(opts?: { cursor?: number; take?: number }) {
         companyId: user.companyId,
         deletedAt: null,
       },
-      include: {
+      select: {
+        id: true, clientId: true, title: true, amount: true, dueDate: true,
+        paidDate: true, status: true, notes: true, createdAt: true, updatedAt: true,
         client: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -297,7 +388,7 @@ export async function getPayments(opts?: { cursor?: number; take?: number }) {
       hasMore,
     };
   } catch (error) {
-    console.error("Error fetching payments:", error);
+    log.error("Error fetching payments", { error: String(error) });
     return { success: false, error: "Failed to fetch payments" };
   }
 }
@@ -307,11 +398,17 @@ export async function getPaymentById(id: number) {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return { success: false, error: "Forbidden" };
+    }
+    if (!Number.isInteger(id) || id <= 0) return { success: false, error: "Invalid ID" };
 
     const payment = await withRetry(() => prisma.oneTimePayment.findFirst({
       where: { id, companyId: user.companyId, deletedAt: null },
-      include: {
-        client: true,
+      select: {
+        id: true, clientId: true, title: true, amount: true, dueDate: true,
+        paidDate: true, status: true, notes: true, createdAt: true, updatedAt: true,
+        client: { select: { id: true, name: true, email: true, phone: true, businessName: true } },
       },
     }));
 
@@ -324,7 +421,7 @@ export async function getPaymentById(id: number) {
       data: { ...payment, amount: Number(payment.amount) },
     };
   } catch (error) {
-    console.error("Error fetching payment:", error);
+    log.error("Error fetching payment", { error: String(error) });
     return { success: false, error: "Failed to fetch payment" };
   }
 }
@@ -340,16 +437,33 @@ export async function createPayment(data: {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return { success: false, error: "Forbidden" };
+    }
+
+    const { checkActionRateLimit, RATE_LIMITS } = await import("@/lib/rate-limit");
+    if (await checkActionRateLimit(String(user.id), RATE_LIMITS.financeMutation)) {
+      return { success: false, error: "Rate limit exceeded" };
+    }
 
     const { title, clientId, amount, dueDate, notes } = data;
 
     // H10: Input validation
-    if (typeof amount !== "number" || amount <= 0) {
+    if (!title || typeof title !== "string" || title.length > 200) {
+      return { success: false, error: "Title is required and must be under 200 characters" };
+    }
+    if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
       return { success: false, error: "Amount must be a positive number" };
+    }
+    if (notes && (typeof notes !== "string" || notes.length > 5000)) {
+      return { success: false, error: "Notes must be under 5000 characters" };
     }
     const parsedDueDate = new Date(dueDate);
     if (isNaN(parsedDueDate.getTime())) {
       return { success: false, error: "Invalid due date" };
+    }
+    if (!Number.isInteger(clientId) || clientId <= 0) {
+      return { success: false, error: "Invalid client ID" };
     }
 
     // H2: Wrap client verify + create in transaction to prevent TOCTOU race
@@ -371,6 +485,10 @@ export async function createPayment(data: {
           status: "pending",
           notes,
         },
+        select: {
+          id: true, clientId: true, title: true, amount: true, dueDate: true,
+          paidDate: true, status: true, notes: true, createdAt: true, updatedAt: true,
+        },
       });
     }, { maxWait: 5000, timeout: 10000 }));
 
@@ -383,7 +501,7 @@ export async function createPayment(data: {
       data: { ...payment, amount: Number(payment.amount) },
     };
   } catch (error) {
-    console.error("Error creating payment:", error);
+    log.error("Error creating payment", { error: String(error) });
     return { success: false, error: "Failed to create payment" };
   }
 }
@@ -402,18 +520,44 @@ export async function updatePayment(
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return { success: false, error: "Forbidden" };
+    }
 
-    const updateData: Record<string, unknown> = { ...data };
+    const { checkActionRateLimit, RATE_LIMITS } = await import("@/lib/rate-limit");
+    if (await checkActionRateLimit(String(user.id), RATE_LIMITS.financeMutation)) {
+      return { success: false, error: "Rate limit exceeded" };
+    }
+
+    if (!Number.isInteger(id) || id <= 0) return { success: false, error: "Invalid payment ID" };
 
     // P2: Normalize status to canonical value before writing
+    let normalizedStatus: string | undefined;
     if (data.status) {
       const normalized = normalizePaymentStatus(data.status);
       if (!normalized) return { success: false, error: `Invalid status: ${data.status}` };
-      updateData.status = normalized;
+      normalizedStatus = normalized;
     }
 
-    if (data.dueDate) {
-      updateData.dueDate = new Date(data.dueDate);
+    // SECURITY: Whitelist allowed fields to prevent companyId/id/deletedAt injection
+    const updateData: Record<string, unknown> = {};
+    if (data.title !== undefined) {
+      if (typeof data.title !== "string" || data.title.length > 200) return { success: false, error: "Invalid title" };
+      updateData.title = data.title;
+    }
+    if (data.amount !== undefined) {
+      if (typeof data.amount !== "number" || !Number.isFinite(data.amount) || data.amount <= 0) return { success: false, error: "Invalid amount" };
+      updateData.amount = data.amount;
+    }
+    if (data.dueDate !== undefined) {
+      const parsed = new Date(data.dueDate);
+      if (isNaN(parsed.getTime())) return { success: false, error: "Invalid due date" };
+      updateData.dueDate = parsed;
+    }
+    if (normalizedStatus !== undefined) updateData.status = normalizedStatus;
+    if (data.notes !== undefined) {
+      if (data.notes !== null && (typeof data.notes !== "string" || data.notes.length > 5000)) return { success: false, error: "Invalid notes" };
+      updateData.notes = data.notes;
     }
 
     // SECURITY: Atomic verify+update in transaction to prevent TOCTOU race
@@ -427,6 +571,10 @@ export async function updatePayment(
       const updated = await tx.oneTimePayment.update({
         where: { id },
         data: updateData,
+        select: {
+          id: true, clientId: true, title: true, amount: true, dueDate: true,
+          paidDate: true, status: true, notes: true, createdAt: true, updatedAt: true,
+        },
       });
       return { payment: updated, clientCompanyId: existing.companyId };
     }, { maxWait: 5000, timeout: 10000 }));
@@ -436,16 +584,13 @@ export async function updatePayment(
     // Intentionally outside the transaction to avoid holding locks during Inngest enqueue.
     if (data.status && (PAID_STATUS_VARIANTS as readonly string[]).includes(data.status)) {
       try {
-        const { triggerSyncByType } = await import("./finance-sync");
+        const { triggerSyncByType } = await import("@/lib/finance-sync-internal");
         await triggerSyncByType(
           clientCompanyId,
           "PAYMENTS_RETAINERS",
         );
       } catch (err) {
-        console.error(
-          "[Finance] Error triggering sync on payment update:",
-          err,
-        );
+        log.error("Error triggering sync on payment update", { error: String(err) });
       }
     }
 
@@ -459,7 +604,7 @@ export async function updatePayment(
       data: { ...payment, amount: Number(payment.amount) },
     };
   } catch (error) {
-    console.error("Error updating payment:", error);
+    log.error("Error updating payment", { error: String(error) });
     return { success: false, error: "Failed to update payment" };
   }
 }
@@ -469,6 +614,16 @@ export async function deletePayment(id: number) {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return { success: false, error: "Forbidden" };
+    }
+
+    const { checkActionRateLimit, RATE_LIMITS } = await import("@/lib/rate-limit");
+    if (await checkActionRateLimit(String(user.id), RATE_LIMITS.financeMutation)) {
+      return { success: false, error: "Rate limit exceeded" };
+    }
+
+    if (!Number.isInteger(id) || id <= 0) return { success: false, error: "Invalid payment ID" };
 
     // P3: Soft delete for audit trail
     await withRetry(() => prisma.$transaction(async (tx) => {
@@ -490,7 +645,7 @@ export async function deletePayment(id: number) {
 
     return { success: true };
   } catch (error) {
-    console.error("Error deleting payment:", error);
+    log.error("Error deleting payment", { error: String(error) });
     return { success: false, error: "Failed to delete payment" };
   }
 }
@@ -499,9 +654,16 @@ export async function deletePayment(id: number) {
 
 export async function searchClients(searchTerm: string) {
   try {
+    if (typeof searchTerm !== "string" || searchTerm.length > 200) {
+      return { success: false, error: "Invalid search term" };
+    }
+
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return { success: false, error: "Forbidden" };
+    }
 
     // Search the Client model directly (primary source for finance)
     const clients = await withRetry(() => prisma.client.findMany({
@@ -520,7 +682,7 @@ export async function searchClients(searchTerm: string) {
 
     return { success: true, data: clients };
   } catch (error) {
-    console.error("Error searching clients:", error);
+    log.error("Error searching clients", { error: String(error) });
     return { success: false, error: "Failed to search clients" };
   }
 }
@@ -530,6 +692,9 @@ export async function getFinanceClients(opts?: { cursor?: number; take?: number 
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return { success: false, error: "Forbidden" };
+    }
 
     const take = Math.min(opts?.take ?? 500, 500);
     const clients = await withRetry(() => prisma.client.findMany({
@@ -546,7 +711,7 @@ export async function getFinanceClients(opts?: { cursor?: number; take?: number 
 
     return { success: true, data, nextCursor, hasMore };
   } catch (error) {
-    console.error("Error fetching finance clients:", error);
+    log.error("Error fetching finance clients", { error: String(error) });
     return { success: false, error: "Failed to fetch finance clients" };
   }
 }

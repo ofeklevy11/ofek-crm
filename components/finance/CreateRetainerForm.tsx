@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Calendar as CalendarIcon, Repeat, Info } from "lucide-react";
 import ClientSelector from "./ClientSelector";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface Client {
   id: number;
@@ -97,7 +98,7 @@ export default function CreateRetainerForm() {
         }
 
         // Create/Get finance client
-        const clientResponse = await fetch("/api/finance/clients", {
+        const clientResponse = await apiFetch("/api/finance/clients", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(clientData),

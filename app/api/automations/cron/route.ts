@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
-import { processTimeBasedAutomations } from "@/app/actions/automations";
+import { timingSafeEqual } from "crypto";
+import { processTimeBasedAutomations } from "@/app/actions/automations-core";
 import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("AutomationsCron");
 
 export const dynamic = "force-dynamic";
 
@@ -10,14 +14,15 @@ export async function GET(request: Request) {
     const authHeader = request.headers.get("authorization");
     const secret = process.env.CRON_SECRET;
 
-    if (!secret || authHeader !== `Bearer ${secret}`) {
+    const expected = `Bearer ${secret}`;
+    if (!secret || !authHeader || authHeader.length !== expected.length || !timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 },
       );
     }
 
-    console.log("Starting Main Automation Job...");
+    log.info("Starting main automation job");
 
     // Only fetch companies that have active time-based or event-based automation rules.
     // This avoids dispatching Inngest events for companies with no automations at all.
@@ -56,8 +61,8 @@ export async function GET(request: Request) {
         }
       } catch (sendErr) {
         // Fallback: parallel processing with timeout (max 50s to stay under Vercel 60s limit)
-        console.error("[Cron] Failed to send Inngest events, falling back to parallel:", sendErr);
-        const { processEventAutomations } = await import("@/app/actions/event-automations");
+        log.error("Failed to send Inngest events, falling back to parallel", { error: String(sendErr) });
+        const { processEventAutomations } = await import("@/app/actions/event-automations-core");
 
         const FALLBACK_CONCURRENCY = 3;
         const FALLBACK_TIMEOUT_MS = 50_000;
@@ -65,14 +70,14 @@ export async function GET(request: Request) {
 
         for (let i = 0; i < companies.length; i += FALLBACK_CONCURRENCY) {
           if (Date.now() >= deadline) {
-            console.warn(`[Cron] Fallback timeout reached after ${i} companies, stopping.`);
+            log.warn("Fallback timeout reached, stopping", { companiesProcessed: i });
             break;
           }
           const batch = companies.slice(i, i + FALLBACK_CONCURRENCY);
           await Promise.allSettled(
             batch.map(async (company) => {
               await processTimeBasedAutomations(company.id);
-              await processEventAutomations(company.id);
+              await processEventAutomations(company.id, secret);
             }),
           );
         }
@@ -84,7 +89,7 @@ export async function GET(request: Request) {
       message: "Automations dispatched to background",
     });
   } catch (error) {
-    console.error("Error in automation cron:", error);
+    log.error("Error in automation cron", { error: String(error) });
     return NextResponse.json(
       { success: false, error: "Internal Server Error" },
       { status: 500 },

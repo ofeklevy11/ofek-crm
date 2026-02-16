@@ -7,6 +7,10 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { isPrivateUrl } from "@/lib/security/ssrf";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("TaskSheetAuto");
 
 // Types for automation actions
 export interface OnCompleteAction {
@@ -73,9 +77,7 @@ export async function executeSingleAction(
       await executeCreateRecord(action.config, user.companyId);
       break;
     default:
-      console.warn(
-        `[TaskSheets] Unknown action type: ${action.actionType}`,
-      );
+      log.warn("Unknown action type", { actionType: action.actionType });
   }
 }
 
@@ -106,7 +108,7 @@ async function executeCreateCalendarEvent(
     },
   });
 
-  console.log(`[TaskSheets] Created calendar event: ${title}`);
+  log.info("Created calendar event", { title });
 }
 
 // Update a record in a table
@@ -128,7 +130,7 @@ async function executeUpdateRecord(
   });
 
   if (!record) {
-    console.warn(`[TaskSheets] Record ${recordId} not found or unauthorized`);
+    log.warn("Record not found or unauthorized", { recordId });
     return;
   }
 
@@ -141,7 +143,7 @@ async function executeUpdateRecord(
     data: { data: JSON.parse(JSON.stringify(newData)) },
   });
 
-  console.log(`[TaskSheets] Updated record ${recordId} in table ${tableId}`);
+  log.info("Updated record", { recordId, tableId });
 }
 
 // Create a new record in a table
@@ -162,7 +164,7 @@ async function executeCreateRecord(
     select: { id: true },
   });
   if (!table) {
-    console.warn(`[TaskSheets] Table ${tableId} not found or unauthorized for company ${companyId}`);
+    log.warn("Table not found or unauthorized", { tableId, companyId });
     return;
   }
 
@@ -174,7 +176,7 @@ async function executeCreateRecord(
     },
   });
 
-  console.log(`[TaskSheets] Created record in table ${tableId}`);
+  log.info("Created record in table", { tableId });
 }
 
 // Create a new task (no revalidatePath — runs in background context)
@@ -216,7 +218,7 @@ async function executeCreateTask(
     },
   });
 
-  console.log(`[TaskSheets] Created task: ${title}`);
+  log.info("Created task", { title });
 }
 
 // Update an existing task (no revalidatePath — runs in background context)
@@ -235,7 +237,7 @@ async function executeUpdateTask(config: Record<string, unknown>, companyId: num
   });
 
   if (!task) {
-    console.warn(`[TaskSheets] Task ${taskId} not found or unauthorized for company ${companyId}`);
+    log.warn("Task not found or unauthorized", { taskId, companyId });
     return;
   }
 
@@ -262,7 +264,7 @@ async function executeUpdateTask(config: Record<string, unknown>, companyId: num
     data: updateData,
   });
 
-  console.log(`[TaskSheets] Updated task ${taskId}`);
+  log.info("Updated task", { taskId });
 }
 
 // Create a finance record (no revalidatePath — runs in background context)
@@ -304,7 +306,7 @@ async function executeCreateFinance(
     },
   });
 
-  console.log(`[TaskSheets] Created finance record: ${title} - ${amount}`);
+  log.info("Created finance record", { title });
 }
 
 // Send a notification
@@ -331,7 +333,7 @@ async function executeSendNotification(
     .replace("{sheetTitle}", item.sheet.title)
     .replace("{userName}", user.name);
 
-  const { createNotificationForCompany } = await import("@/app/actions/notifications");
+  const { createNotificationForCompany } = await import("@/lib/notifications-internal");
   await createNotificationForCompany({
     companyId: item.sheet.companyId,
     userId: recipientId,
@@ -340,7 +342,7 @@ async function executeSendNotification(
     link: "/tasks?view=my-sheets",
   });
 
-  console.log(`[TaskSheets] Sent notification to user ${recipientId}`);
+  log.info("Sent notification to user", { recipientId });
 }
 
 // Send a webhook via Inngest for retry + rate limiting
@@ -352,6 +354,11 @@ async function executeSendWebhook(
   const { url } = config as { url?: string };
 
   if (!url) return;
+
+  if (isPrivateUrl(url)) {
+    log.warn("SSRF blocked on task-sheet webhook");
+    return;
+  }
 
   const { inngest } = await import("@/lib/inngest/client");
   try {
@@ -376,9 +383,10 @@ async function executeSendWebhook(
         },
       },
     });
-    console.log(`[TaskSheets] Webhook job enqueued to ${url}`);
+    const logHost = (() => { try { return new URL(url).hostname; } catch { return "invalid"; } })();
+    log.info("Webhook job enqueued", { hostname: logHost });
   } catch (err) {
-    console.error(`[TaskSheets] Failed to enqueue webhook job:`, err);
+    log.error("Failed to enqueue webhook job", { error: String(err) });
   }
 }
 
@@ -405,7 +413,7 @@ async function executeSendWhatsapp(
       select: { id: true },
     });
     if (!waTable) {
-      console.warn(`[TaskSheets] WhatsApp: Table ${config.waTableId} not found or unauthorized`);
+      log.warn("WhatsApp: Table not found or unauthorized", { waTableId: config.waTableId });
       return;
     }
 
@@ -432,19 +440,12 @@ async function executeSendWhatsapp(
       if (record && record.data) {
         const recordData = record.data as Record<string, unknown>;
         phoneNumber = recordData[config.waPhoneColumn as string] as string;
-        console.log(
-          `[TaskSheets] WhatsApp: Fetched phone ${phoneNumber} from table ${config.waTableId}, column ${config.waPhoneColumn}`,
-        );
+        log.debug("WhatsApp: Fetched phone from table", { waTableId: config.waTableId, waPhoneColumn: config.waPhoneColumn });
       } else {
-        console.warn(
-          `[TaskSheets] WhatsApp: Record not found in table ${config.waTableId}`,
-        );
+        log.warn("WhatsApp: Record not found in table", { waTableId: config.waTableId });
       }
     } catch (fetchError) {
-      console.error(
-        "[TaskSheets] WhatsApp: Error fetching phone from table:",
-        fetchError,
-      );
+      log.error("WhatsApp: Error fetching phone from table", { error: String(fetchError) });
     }
   } else {
     phoneNumber = config.phone as string;
@@ -453,7 +454,7 @@ async function executeSendWhatsapp(
   const message = config.message as string | undefined;
 
   if (!phoneNumber || !message) {
-    console.warn("[TaskSheets] WhatsApp: Missing phone or message");
+    log.warn("WhatsApp: Missing phone or message");
     return;
   }
 
@@ -474,8 +475,8 @@ async function executeSendWhatsapp(
         content: finalMessage,
       },
     });
-    console.log(`[TaskSheets] WhatsApp job enqueued for ${phoneNumber}`);
+    log.info("WhatsApp job enqueued");
   } catch (err) {
-    console.error(`[TaskSheets] Failed to enqueue WhatsApp job:`, err);
+    log.error("Failed to enqueue WhatsApp job", { error: String(err) });
   }
 }

@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { isSafeStorageUrl } from "@/lib/security/safe-hosts";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("FileDownload");
 
 function parseId(raw: string): number | null {
   const n = parseInt(raw, 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
 }
-
-// Only proxy requests to known safe storage hosts to prevent SSRF
-const SAFE_HOSTS = ["utfs.io", "uploadthing.com", "ufs.sh"];
 
 export async function GET(
   request: NextRequest,
@@ -19,6 +22,13 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    if (!hasUserFlag(user, "canViewFiles")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const rateLimited = await checkRateLimit(String(user.id), RATE_LIMITS.fileRead);
+    if (rateLimited) return rateLimited;
 
     const { id } = await params;
     const fileId = parseId(id);
@@ -43,18 +53,7 @@ export async function GET(
     }
 
     // SECURITY: Validate URL host before server-side fetch to prevent SSRF
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(file.url);
-    } catch {
-      return NextResponse.json({ error: "File storage error" }, { status: 500 });
-    }
-
-    const isSafeHost = SAFE_HOSTS.some(
-      (h) => parsedUrl.hostname === h || parsedUrl.hostname.endsWith(`.${h}`),
-    );
-
-    if (!isSafeHost) {
+    if (!isSafeStorageUrl(file.url)) {
       return NextResponse.json(
         { error: "File storage error" },
         { status: 500 },
@@ -64,6 +63,7 @@ export async function GET(
     // Fetch the file content from the external URL
     const response = await fetch(file.url, {
       signal: AbortSignal.timeout(15_000),
+      redirect: "error",
     });
 
     if (!response.ok) {
@@ -73,24 +73,32 @@ export async function GET(
       );
     }
 
-    const fileBuffer = await response.arrayBuffer();
-
     // Determine the filename to use for download
     const downloadFilename = file.displayName || file.name;
-
-    // Encode filename properly for Content-Disposition header
     const encodedFilename = encodeURIComponent(downloadFilename);
 
-    return new NextResponse(fileBuffer, {
-      headers: {
-        "Content-Type": file.type || "application/octet-stream",
-        "Content-Disposition": `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`,
-        "Content-Length": String(fileBuffer.byteLength),
-        "Cache-Control": "private, max-age=3600",
-      },
-    });
+    // Stream the response body directly instead of buffering into memory
+    const headers: Record<string, string> = {
+      "Content-Type": file.type || "application/octet-stream",
+      "Content-Disposition": `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`,
+      "Cache-Control": "private, max-age=3600",
+      "X-Content-Type-Options": "nosniff",
+    };
+
+    // Reject responses exceeding 50MB to prevent bandwidth exhaustion
+    const contentLength = response.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > 50_000_000) {
+      return NextResponse.json({ error: "File too large" }, { status: 413 });
+    }
+
+    // Forward Content-Length from upstream if available
+    if (contentLength) {
+      headers["Content-Length"] = contentLength;
+    }
+
+    return new NextResponse(response.body, { headers });
   } catch (error) {
-    console.error("File download error:", error);
+    log.error("File download error", { error: String(error) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

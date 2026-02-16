@@ -2,6 +2,10 @@
 
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
+import { isTokenIssuedAtValid } from "@/lib/session";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("AuthAction");
 
 export async function getCurrentAuthUser() {
   try {
@@ -12,15 +16,21 @@ export async function getCurrentAuthUser() {
       return { success: false, error: "Not authenticated" };
     }
 
-    const { verifyUserId } = await import("@/lib/auth");
-    const userId = verifyUserId(token);
+    const { verifyUserIdWithMeta } = await import("@/lib/auth");
+    const meta = verifyUserIdWithMeta(token);
 
-    if (!userId) {
+    if (!meta) {
       return { success: false, error: "Invalid token" };
     }
 
+    // Check if token has been revoked (e.g. after logout or password change)
+    const isValid = await isTokenIssuedAtValid(meta.userId, meta.issuedAt);
+    if (!isValid) {
+      return { success: false, error: "Session expired" };
+    }
+
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: meta.userId },
       select: {
         id: true,
         companyId: true,
@@ -40,7 +50,7 @@ export async function getCurrentAuthUser() {
 
     return { success: true, data: user };
   } catch (error) {
-    console.error("Error fetching current auth user:", error);
+    log.error("Error fetching current auth user", { error: String(error) });
     return { success: false, error: "Failed to fetch current user" };
   }
 }

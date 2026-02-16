@@ -2,6 +2,9 @@
 
 import { prisma as db } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("GreenApi");
 
 const GREEN_API_BASE_URL = "https://api.green-api.com";
 
@@ -12,7 +15,7 @@ export async function saveGreenApiCredentials(
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  if (user.role !== "admin" && user.role !== "super") {
+  if (user.role !== "admin" && (user.role as string) !== "super") {
     throw new Error("Only admins can manage Green API connections");
   }
 
@@ -38,7 +41,7 @@ export async function saveGreenApiCredentials(
       throw new Error("Invalid response from Green API");
     }
   } catch (error: any) {
-    console.error("Green API verification failed:", error);
+    log.error("Green API verification failed", { error: String(error) });
     throw new Error(
       "Could not verify Green API credentials. Please check your Instance ID and Token.",
     );
@@ -61,7 +64,7 @@ export async function getGreenApiCredentials() {
   if (!user) throw new Error("Unauthorized");
 
   // Only admins can view the actual credentials
-  if (user.role !== "admin" && user.role !== "super") {
+  if (user.role !== "admin" && (user.role as string) !== "super") {
     // Return connected status but NO credentials for non-admins
     // We check if values exist in DB
     const companyCheck = await db.company.findUnique({
@@ -86,7 +89,13 @@ export async function getGreenApiCredentials() {
     },
   });
 
-  return { ...company, isAdmin: true };
+  return {
+    greenApiInstanceId: company?.greenApiInstanceId || null,
+    greenApiToken: company?.greenApiToken
+      ? `****${company.greenApiToken.slice(-4)}`
+      : null,
+    isAdmin: true,
+  };
 }
 
 export async function getGreenApiStatus() {
@@ -124,7 +133,7 @@ export async function getGreenApiStatus() {
       state: data.stateInstance, // authorized, blocked, sleep, starting
     };
   } catch (error) {
-    console.error("Error fetching Green API status:", error);
+    log.error("Error fetching Green API status", { error: String(error) });
     return { error: "Connection error" };
   }
 }
@@ -133,7 +142,7 @@ export async function disconnectGreenApi() {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  if (user.role !== "admin" && user.role !== "super") {
+  if (user.role !== "admin" && (user.role as string) !== "super") {
     throw new Error("Only admins can manage Green API connections");
   }
 

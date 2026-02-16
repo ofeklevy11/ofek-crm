@@ -1,8 +1,15 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag, canWriteTable } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("Uploadthing");
+
+const MAX_FILES_PER_COMPANY = 5000;
 
 const f = createUploadthing();
 
@@ -20,14 +27,21 @@ export const ourFileRouter = {
   )
     // .input(z.object({ folderId: z.number().nullable() }))
     .middleware(async ({ req }) => {
-      console.log("Uploadthing middleware started");
       const user = await getCurrentUser();
 
       if (!user) {
-        console.error("Uploadthing middleware: Unauthorized");
+        log.error("Middleware unauthorized");
         throw new UploadThingError("Unauthorized");
       }
-      console.log("Uploadthing middleware: User authorized", user.id);
+      if (!hasUserFlag(user, "canViewFiles")) {
+        throw new UploadThingError("Forbidden");
+      }
+
+      const limited = await checkActionRateLimit(
+        String(user.id),
+        RATE_LIMITS.fileMutation,
+      ).catch(() => true);
+      if (limited) throw new UploadThingError("Rate limit exceeded");
 
       return {
         userId: user.id,
@@ -36,10 +50,16 @@ export const ourFileRouter = {
       };
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      console.log("Uploadthing onUploadComplete started");
-      console.log("File uploaded:", file.name, file.url);
-
       try {
+        // Enforce file count cap — file exists in UploadThing but won't be tracked in our DB
+        const fileCount = await prisma.file.count({
+          where: { companyId: metadata.companyId },
+        });
+        if (fileCount >= MAX_FILES_PER_COMPANY) {
+          log.warn("File limit reached for company", { companyId: metadata.companyId });
+          return { uploadedBy: metadata.userId };
+        }
+
         const existing = await prisma.file.findFirst({ where: { key: file.key, companyId: metadata.companyId } });
         if (!existing) {
           await prisma.file.create({
@@ -54,12 +74,10 @@ export const ourFileRouter = {
             },
           });
         }
-        console.log("File metadata saved to DB successfully on server");
       } catch (e) {
-        console.error("Failed to save file metadata on server:", e);
+        log.error("Failed to save file metadata on server", { error: String(e) });
       }
 
-      console.log("Uploadthing onUploadComplete finished");
       return { uploadedBy: metadata.userId };
     }),
 
@@ -80,6 +98,22 @@ export const ourFileRouter = {
     .middleware(async ({ req, input }) => {
       const user = await getCurrentUser();
       if (!user) throw new UploadThingError("Unauthorized");
+
+      const limited = await checkActionRateLimit(
+        String(user.id),
+        RATE_LIMITS.fileMutation,
+      ).catch(() => true);
+      if (limited) throw new UploadThingError("Rate limit exceeded");
+
+      // Verify table exists in user's company and user has write access
+      const table = await prisma.tableMeta.findFirst({
+        where: { id: input.tableId, companyId: user.companyId },
+        select: { id: true },
+      });
+      if (!table) throw new UploadThingError("Table not found");
+      if (!canWriteTable(user, input.tableId))
+        throw new UploadThingError("Forbidden");
+
       return {
         userId: user.id,
         companyId: user.companyId,
@@ -87,7 +121,6 @@ export const ourFileRouter = {
       };
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      console.log("Import file uploaded:", file.key);
       try {
         const job = await prisma.importJob.create({
           data: {
@@ -103,7 +136,7 @@ export const ourFileRouter = {
         });
         return { importJobId: job.id };
       } catch (e) {
-        console.error("Failed to create import job:", e);
+        log.error("Failed to create import job", { error: String(e) });
         // We can't easily throw here to client, but client will see missing job id
         return { importJobId: null };
       }

@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("Audit");
 
 export async function createAuditLog(
   recordId: number | null,
@@ -22,7 +25,7 @@ export async function createAuditLog(
       },
     });
   } catch (error) {
-    console.error("Failed to create audit log:", error);
+    log.error("Failed to create audit log", { error: String(error) });
     // Don't throw, just log error so main action succeeds
   }
 }
@@ -50,6 +53,6 @@ export async function createAuditLogsBatch(
       })),
     });
   } catch (error) {
-    console.error("Failed to create audit logs batch:", error);
+    log.error("Failed to create audit logs batch", { error: String(error) });
   }
 }

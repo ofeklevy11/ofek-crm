@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, Phone, Building, FileText } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 export default function CreateClientForm() {
   const router = useRouter();
@@ -24,7 +25,7 @@ export default function CreateClientForm() {
     };
 
     try {
-      const response = await fetch("/api/finance/clients", {
+      const response = await apiFetch("/api/finance/clients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),

@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { withRetry } from "@/lib/db-retry";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("FinanceClientAPI");
 
 const updateClientSchema = z.object({
   name: z.string().min(1).max(200).optional(),
@@ -26,6 +31,12 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const limited = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+    if (limited) return limited;
 
     const { id } = await params;
     const clientId = parseClientId(id);
@@ -36,7 +47,15 @@ export async function GET(
     // CRITICAL: Filter by companyId + soft delete
     const client = await withRetry(() => prisma.client.findFirst({
       where: { id: clientId, companyId: user.companyId, deletedAt: null },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        businessName: true,
+        notes: true,
+        createdAt: true,
+        updatedAt: true,
         retainers: {
           where: { deletedAt: null },
           select: { id: true, amount: true, frequency: true, status: true, nextDueDate: true, createdAt: true },
@@ -64,7 +83,7 @@ export async function GET(
 
     return NextResponse.json(client);
   } catch (error) {
-    console.error("Error fetching client:", error);
+    log.error("Failed to fetch client", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to fetch client" },
       { status: 500 }
@@ -81,12 +100,18 @@ export async function PATCH(
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const { id } = await params;
     const clientId = parseClientId(id);
     if (clientId === null) {
       return NextResponse.json({ error: "Invalid client ID" }, { status: 400 });
     }
+
+    const limited = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+    if (limited) return limited;
 
     const raw = await request.json();
     const parsed = updateClientSchema.safeParse(raw);
@@ -114,6 +139,16 @@ export async function PATCH(
           ...(data.businessName !== undefined && { businessName: data.businessName }),
           ...(data.notes !== undefined && { notes: data.notes }),
         },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          businessName: true,
+          notes: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       });
     }, { isolationLevel: "RepeatableRead" }));
 
@@ -123,7 +158,7 @@ export async function PATCH(
 
     return NextResponse.json(updatedClient);
   } catch (error) {
-    console.error("Error updating client:", error);
+    log.error("Failed to update client", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to update client" },
       { status: 500 }
@@ -140,12 +175,18 @@ export async function DELETE(
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const { id } = await params;
     const clientId = parseClientId(id);
     if (clientId === null) {
       return NextResponse.json({ error: "Invalid client ID" }, { status: 400 });
     }
+
+    const limited = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+    if (limited) return limited;
 
     // P3: Soft-delete client and all related financial records atomically (TOCTOU-safe)
     const deleted = await withRetry(() => prisma.$transaction(async (tx) => {
@@ -191,7 +232,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting client:", error);
+    log.error("Failed to delete client", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to delete client" },
       { status: 500 }

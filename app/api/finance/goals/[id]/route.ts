@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { Prisma } from "@prisma/client";
 import { inngest } from "@/lib/inngest/client";
 import { z } from "zod";
 import { withRetry } from "@/lib/db-retry";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { goalFiltersSchema, MAX_GOAL_PAYLOAD_BYTES } from "@/lib/validations/goal";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("FinanceGoalAPI");
 
 const Decimal = Prisma.Decimal;
 
@@ -18,7 +24,7 @@ const updateGoalSchema = z.object({
   periodType: z.enum(["MONTHLY", "QUARTERLY", "YEARLY", "CUSTOM"]).optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
-  filters: z.record(z.unknown()).optional(),
+  filters: goalFiltersSchema.optional(),
   tableId: z.number().int().positive().nullable().optional(),
   productId: z.number().int().positive().nullable().optional(),
   warningThreshold: z.number().int().min(0).max(100).optional(),
@@ -48,6 +54,16 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!hasUserFlag(user, "canViewGoals")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const limited = await checkRateLimit(String(user.id), RATE_LIMITS.goalRead);
+    if (limited) return limited;
+
     const { id } = await params;
     const goalId = parseGoalId(id);
     if (goalId === null) {
@@ -56,6 +72,13 @@ export async function GET(
 
     const goal = await withRetry(() => prisma.goal.findUnique({
       where: { id: goalId, companyId: user.companyId },
+      select: {
+        id: true, name: true, metricType: true, targetType: true, targetValue: true,
+        periodType: true, startDate: true, endDate: true, filters: true,
+        tableId: true, productId: true, warningThreshold: true, criticalThreshold: true,
+        isActive: true, isArchived: true, order: true, notes: true,
+        createdAt: true, updatedAt: true,
+      },
     }));
 
     if (!goal) {
@@ -64,7 +87,7 @@ export async function GET(
 
     return NextResponse.json(goal);
   } catch (error) {
-    console.error("Failed to fetch goal:", error);
+    log.error("Failed to fetch goal", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to fetch goal" },
       { status: 500 }
@@ -82,13 +105,35 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!hasUserFlag(user, "canViewGoals")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { id } = await params;
     const goalId = parseGoalId(id);
     if (goalId === null) {
       return NextResponse.json({ error: "Invalid goal ID" }, { status: 400 });
     }
 
-    const raw = await request.json();
+    const limited = await checkRateLimit(String(user.id), RATE_LIMITS.goalMutation);
+    if (limited) return limited;
+
+    // Payload size check
+    const contentLength = parseInt(request.headers.get("content-length") || "0", 10);
+    if (contentLength > MAX_GOAL_PAYLOAD_BYTES) {
+      return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+    }
+
+    let raw: unknown;
+    try {
+      raw = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
     const parsed = updateGoalSchema.safeParse(raw);
     if (!parsed.success) {
       return NextResponse.json(
@@ -168,6 +213,13 @@ export async function PATCH(
         ...(body.notes !== undefined && { notes: body.notes }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),
       },
+      select: {
+        id: true, name: true, metricType: true, targetType: true, targetValue: true,
+        periodType: true, startDate: true, endDate: true, filters: true,
+        tableId: true, productId: true, warningThreshold: true, criticalThreshold: true,
+        isActive: true, isArchived: true, order: true, notes: true,
+        createdAt: true, updatedAt: true,
+      },
     }));
 
     // Invalidate goals cache so dashboard reflects the update
@@ -178,7 +230,7 @@ export async function PATCH(
         data: { companyId: user.companyId },
       });
     } catch (e) {
-      console.error("[Goals API] Failed to send dashboard refresh:", e);
+      log.error("Failed to send dashboard refresh", { error: String(e) });
     }
 
     return NextResponse.json(goal);
@@ -198,11 +250,21 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!hasUserFlag(user, "canViewGoals")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { id } = await params;
     const goalId = parseGoalId(id);
     if (goalId === null) {
       return NextResponse.json({ error: "Invalid goal ID" }, { status: 400 });
     }
+
+    const limited = await checkRateLimit(String(user.id), RATE_LIMITS.goalMutation);
+    if (limited) return limited;
 
     // Soft-delete: archive and deactivate instead of permanent removal
     await withRetry(() => prisma.goal.update({
@@ -218,7 +280,7 @@ export async function DELETE(
         data: { companyId: user.companyId },
       });
     } catch (e) {
-      console.error("[Goals API] Failed to send dashboard refresh:", e);
+      log.error("Failed to send dashboard refresh", { error: String(e) });
     }
 
     return NextResponse.json({ success: true });

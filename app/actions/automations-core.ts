@@ -1,13 +1,19 @@
-"use server";
-
 import { prisma } from "@/lib/prisma";
 import { withRetry } from "@/lib/db-retry";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { createNotificationForCompany } from "./notifications";
+import { createNotificationForCompany } from "@/lib/notifications-internal";
 import { inngest } from "@/lib/inngest/client";
 import { calculateViewStats } from "@/lib/analytics/calculate";
 import { invalidateFullCache } from "@/lib/services/analytics-cache";
+import { isPrivateUrl } from "@/lib/security/ssrf";
+import { validateAutomationInput, validateId, MAX_RULES_PER_COMPANY } from "@/lib/security/automation-validation";
+import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { hasUserFlag } from "@/lib/permissions";
+import { createLogger } from "@/lib/logger";
+import { createHmac, randomBytes } from "crypto";
+
+const log = createLogger("Automations");
 
 // --- Types ---
 interface TriggerConfig {
@@ -37,6 +43,24 @@ interface ActionConfig {
   [key: string]: any;
 }
 
+/** Extract all webhook URLs from action config (recursive for nested MULTI_ACTION) */
+function extractWebhookUrls(actionType: string, actionConfig: any, depth = 0): string[] {
+  if (depth > 3) return []; // Prevent infinite recursion
+  const urls: string[] = [];
+  if (actionType === "WEBHOOK") {
+    const url = actionConfig?.webhookUrl || actionConfig?.url;
+    if (url) urls.push(url);
+  } else if (actionType === "MULTI_ACTION") {
+    const actions = actionConfig?.actions;
+    if (Array.isArray(actions)) {
+      for (const action of actions) {
+        urls.push(...extractWebhookUrls(action.type, action.config, depth + 1));
+      }
+    }
+  }
+  return urls;
+}
+
 // Unified Action Executor
 export async function executeRuleActions(
   rule: any,
@@ -57,7 +81,7 @@ export async function executeRuleActions(
   const { companyId, id: ruleId, createdBy } = rule;
 
   const executeSingle = async (type: string, config: any) => {
-    console.log(`[Automations] Executing Action: ${type} for Rule ${ruleId}`);
+    log.info("Executing action", { type, ruleId });
     try {
       if (type === "SEND_NOTIFICATION") {
         if (config.recipientId) {
@@ -77,10 +101,7 @@ export async function executeRuleActions(
           }
           if (context.recordData) {
             for (const key in context.recordData) {
-              message = message.replace(
-                new RegExp(`{${key}}`, "g"),
-                String(context.recordData[key] || ""),
-              );
+              message = message.split(`{${key}}`).join(String(context.recordData[key] || ""));
             }
           }
           if (context.taskTitle) {
@@ -112,9 +133,7 @@ export async function executeRuleActions(
             link,
           });
           if (!notifRes.success) {
-            console.error(
-              `[Automations] Notification failed for rule ${ruleId}: ${notifRes.error}`,
-            );
+            log.error("Notification failed for rule", { ruleId, error: notifRes.error });
           }
         }
       } else if (type === "SEND_WHATSAPP") {
@@ -142,7 +161,7 @@ export async function executeRuleActions(
         }
 
         if (!phone) {
-          console.error(`[Automations] WhatsApp: No phone resolved from ${phoneColumnId}`);
+          log.error("WhatsApp: No phone resolved from column config");
         } else {
           // Dispatch to dedicated Inngest job with retry + rate limiting
           let inngestOk = false;
@@ -160,9 +179,9 @@ export async function executeRuleActions(
               },
             });
             inngestOk = true;
-            console.log(`[Automations] WhatsApp job enqueued for ${phone}`);
+            log.info("WhatsApp job enqueued", { phoneMasked: `${String(phone).slice(0, 3)}****${String(phone).slice(-2)}` });
           } catch (err) {
-            console.error(`[Automations] Inngest WhatsApp enqueue failed for rule ${ruleId}, falling back to direct send:`, err);
+            log.error("Inngest WhatsApp enqueue failed, falling back to direct send", { ruleId, error: String(err) });
           }
 
           // Direct fallback: send WhatsApp message directly if Inngest is unavailable
@@ -181,10 +200,10 @@ export async function executeRuleActions(
                 } else {
                   await sendGreenApiMessage(companyId, normalizedPhone, waContent);
                 }
-                console.log(`[Automations] WhatsApp sent directly to ${normalizedPhone} (fallback)`);
+                log.info("WhatsApp sent directly (fallback)", { phoneMasked: `${normalizedPhone.slice(0, 3)}****${normalizedPhone.slice(-2)}` });
               }
             } catch (directErr) {
-              console.error(`[Automations] Direct WhatsApp send also failed for rule ${ruleId}:`, directErr);
+              log.error("Direct WhatsApp send also failed", { ruleId, error: String(directErr) });
             }
           }
         }
@@ -198,7 +217,9 @@ export async function executeRuleActions(
         const webhookUrl = config.webhookUrl || config.url;
 
         if (!webhookUrl) {
-          console.error(`[Automations] Webhook missing URL for Rule ${ruleId}`);
+          log.error("Webhook missing URL", { ruleId });
+        } else if (isPrivateUrl(webhookUrl)) {
+          log.error("Webhook URL targets private/internal address, blocking dispatch", { ruleId });
         } else {
           // Dispatch to dedicated Inngest job with retry + rate limiting
           let inngestOk = false;
@@ -221,14 +242,16 @@ export async function executeRuleActions(
               },
             });
             inngestOk = true;
-            console.log(`[Automations] Webhook job enqueued for rule ${ruleId} to ${webhookUrl}`);
+            log.info("Webhook job enqueued", { ruleId });
           } catch (err) {
-            console.error(`[Automations] Inngest Webhook enqueue failed for rule ${ruleId}, falling back to direct send:`, err);
+            log.error("Inngest Webhook enqueue failed, falling back to direct send", { ruleId, error: String(err) });
           }
 
           // Direct fallback: send webhook directly if Inngest is unavailable
           if (!inngestOk) {
-            try {
+            if (isPrivateUrl(webhookUrl)) {
+              log.error("Webhook URL targets private/internal address, blocking fallback", { ruleId });
+            } else try {
               const enrichedPayload = {
                 ruleId: rule.id,
                 ruleName: rule.name,
@@ -237,19 +260,42 @@ export async function executeRuleActions(
                 data: webhookData,
                 timestamp: new Date().toISOString(),
               };
+              const body = JSON.stringify(enrichedPayload);
+
+              // HMAC signing: same pattern as sendWebhookJob (atomic COALESCE)
+              const newSecret = randomBytes(32).toString("hex");
+              const secretResult = await prisma.$queryRaw<{ webhookSigningSecret: string }[]>`
+                UPDATE "Company"
+                SET "webhookSigningSecret" = COALESCE("webhookSigningSecret", ${newSecret})
+                WHERE id = ${Number(companyId)}
+                RETURNING "webhookSigningSecret"
+              `;
+              const signingSecret = secretResult[0]?.webhookSigningSecret;
+              const ts = Math.floor(Date.now() / 1000).toString();
+              const signature = signingSecret
+                ? createHmac("sha256", signingSecret).update(`${ts}.${body}`).digest("hex")
+                : "";
+
               const res = await fetch(webhookUrl, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(enrichedPayload),
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(signature && {
+                    "X-Webhook-Signature": `sha256=${signature}`,
+                    "X-Webhook-Timestamp": ts,
+                  }),
+                },
+                body,
                 signal: AbortSignal.timeout(15_000),
+                redirect: "error",
               });
               if (!res.ok) {
-                console.error(`[Automations] Direct webhook failed: ${res.status} ${res.statusText}`);
+                log.error("Direct webhook failed", { ruleId, status: res.status, statusText: res.statusText });
               } else {
-                console.log(`[Automations] Webhook sent directly for rule ${ruleId} (fallback)`);
+                log.info("Webhook sent directly (fallback)", { ruleId });
               }
             } catch (directErr) {
-              console.error(`[Automations] Direct webhook also failed for rule ${ruleId}:`, directErr);
+              log.error("Direct webhook also failed", { ruleId, error: String(directErr) });
             }
           }
         }
@@ -373,17 +419,13 @@ export async function executeRuleActions(
                     data: { data: JSON.parse(JSON.stringify(newData)) },
                   });
 
-                  console.log(
-                    `[Automations] Updated field ${config.columnId} to "${config.value}" for record ${context.recordId}`,
-                  );
+                  log.info("Updated record field", { columnId: config.columnId, recordId: context.recordId });
                 }
               }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 10000 }));
               break; // Success — exit retry loop
             } catch (txErr: any) {
               if (txErr?.code === "P2034" && attempt < MAX_SERIALIZATION_RETRIES) {
-                console.warn(
-                  `[Automations] Serialization conflict on UPDATE_RECORD_FIELD for record ${context.recordId}, retrying (attempt ${attempt + 1}/${MAX_SERIALIZATION_RETRIES})`,
-                );
+                log.warn("Serialization conflict on UPDATE_RECORD_FIELD, retrying", { recordId: context.recordId, attempt: attempt + 1, maxRetries: MAX_SERIALIZATION_RETRIES });
                 continue;
               }
               throw txErr; // Non-serialization error or retries exhausted — propagate
@@ -404,23 +446,23 @@ export async function executeRuleActions(
         let finalTitle = title || "משימה חדשה";
         let finalDesc = description || "";
 
-        // Dynamic Replacements Helper
+        // Dynamic Replacements Helper (uses split/join to avoid ReDoS)
         const replaceText = (text: string) => {
           let res = text;
           if (context.tableName) {
-            res = res.replace(/{tableName}/g, context.tableName);
+            res = res.split("{tableName}").join(context.tableName);
           }
           if (context.recordData) {
             for (const key in context.recordData) {
               const val = context.recordData[key];
-              res = res.replace(new RegExp(`{${key}}`, "g"), String(val || ""));
+              res = res.split(`{${key}}`).join(String(val || ""));
             }
           }
           if (context.taskTitle) {
             res = res
-              .replace(/{taskTitle}/g, context.taskTitle)
-              .replace(/{fromStatus}/g, context.fromStatus || "")
-              .replace(/{toStatus}/g, context.toStatus || "");
+              .split("{taskTitle}").join(context.taskTitle)
+              .split("{fromStatus}").join(context.fromStatus || "")
+              .split("{toStatus}").join(context.toStatus || "");
           }
           if (
             context.oldRecordData &&
@@ -429,9 +471,9 @@ export async function executeRuleActions(
             const colId = rule.triggerConfig?.columnId;
             if (colId) {
               res = res
-                .replace(/{fieldName}/g, colId)
-                .replace(/{fromValue}/g, String(context.oldRecordData[colId]))
-                .replace(/{toValue}/g, String(context.recordData[colId]));
+                .split("{fieldName}").join(colId)
+                .split("{fromValue}").join(String(context.oldRecordData[colId]))
+                .split("{toValue}").join(String(context.recordData[colId]));
             }
           }
           return res;
@@ -441,16 +483,14 @@ export async function executeRuleActions(
         finalDesc = replaceText(finalDesc);
 
         // Calculate Due Date
-        let dueDate = null;
+        let dueDate = null as Date | null;
         if (dueDays !== undefined && dueDays !== null && dueDays !== "") {
           const date = new Date();
           date.setDate(date.getDate() + Number(dueDays));
           dueDate = date;
         }
 
-        console.log(
-          `[Automations] Creating Task: ${finalTitle} (Assignee: ${assigneeId}, Due: ${dueDate})`,
-        );
+        log.info("Creating task", { title: finalTitle, assigneeId });
 
         try {
           // SECURITY: Validate assigneeId belongs to same company
@@ -475,9 +515,9 @@ export async function executeRuleActions(
               companyId: companyId,
             },
           });
-          console.log(`[Automations] Task created successfully.`);
+          log.info("Task created successfully");
         } catch (taskError) {
-          console.error(`[Automations] Task Creation Error:`, taskError);
+          log.error("Task creation error", { error: String(taskError) });
           // If this fails, we want to know why.
         }
       } else if (type === "CREATE_RECORD") {
@@ -485,7 +525,7 @@ export async function executeRuleActions(
         const { tableId, fieldMappings } = config;
 
         if (!tableId) {
-          console.error(`[Automations] CREATE_RECORD: No tableId specified`);
+          log.error("CREATE_RECORD: No tableId specified");
           return;
         }
 
@@ -495,28 +535,28 @@ export async function executeRuleActions(
           select: { id: true },
         }));
         if (!targetTable) {
-          console.error(`[Automations] CREATE_RECORD: Table ${tableId} not found in company ${companyId}`);
+          log.error("CREATE_RECORD: Table not found in company", { tableId, companyId });
           return;
         }
 
-        // Dynamic Replacements Helper
+        // Dynamic Replacements Helper (uses split/join to avoid ReDoS)
         const replaceText = (text: string) => {
           if (!text) return text;
           let res = text;
           if (context.tableName) {
-            res = res.replace(/{tableName}/g, context.tableName);
+            res = res.split("{tableName}").join(context.tableName);
           }
           if (context.recordData) {
             for (const key in context.recordData) {
               const val = context.recordData[key];
-              res = res.replace(new RegExp(`{${key}}`, "g"), String(val || ""));
+              res = res.split(`{${key}}`).join(String(val || ""));
             }
           }
           if (context.taskTitle) {
             res = res
-              .replace(/{taskTitle}/g, context.taskTitle)
-              .replace(/{fromStatus}/g, context.fromStatus || "")
-              .replace(/{toStatus}/g, context.toStatus || "");
+              .split("{taskTitle}").join(context.taskTitle)
+              .split("{fromStatus}").join(context.fromStatus || "")
+              .split("{toStatus}").join(context.toStatus || "");
           }
           return res;
         };
@@ -534,10 +574,7 @@ export async function executeRuleActions(
             }
           }
 
-          console.log(
-            `[Automations] Creating record in table ${tableId} with data:`,
-            recordData,
-          );
+          log.info("Creating record in table", { tableId });
 
           try {
             await prisma.record.create({
@@ -551,10 +588,7 @@ export async function executeRuleActions(
           } catch (fkError: any) {
             // P101: Only retry without createdBy for FK constraint violations (P2003)
             if (fkError?.code === "P2003") {
-              console.warn(
-                `[Automations] FK violation for creator ${createdBy}, retrying without...`,
-                fkError.message,
-              );
+              log.warn("FK violation for creator, retrying without", { createdBy, error: fkError.message });
               await prisma.record.create({
                 data: {
                   tableId: Number(tableId),
@@ -568,34 +602,32 @@ export async function executeRuleActions(
             }
           }
 
-          console.log(
-            `[Automations] Record created successfully in table ${tableId}`,
-          );
+          log.info("Record created successfully", { tableId });
         } catch (recordError) {
-          console.error(`[Automations] Record Creation Error:`, recordError);
+          log.error("Record creation error", { error: String(recordError) });
         }
       } else if (type === "CREATE_CALENDAR_EVENT") {
         // Create a new calendar event
         const { title, description, startOffset, endOffset, color } = config;
 
-        // Dynamic Replacements Helper
+        // Dynamic Replacements Helper (uses split/join to avoid ReDoS)
         const replaceText = (text: string) => {
           if (!text) return text;
           let res = text;
           if (context.tableName) {
-            res = res.replace(/{tableName}/g, context.tableName);
+            res = res.split("{tableName}").join(context.tableName);
           }
           if (context.recordData) {
             for (const key in context.recordData) {
               const val = context.recordData[key];
-              res = res.replace(new RegExp(`{${key}}`, "g"), String(val || ""));
+              res = res.split(`{${key}}`).join(String(val || ""));
             }
           }
           if (context.taskTitle) {
             res = res
-              .replace(/{taskTitle}/g, context.taskTitle)
-              .replace(/{fromStatus}/g, context.fromStatus || "")
-              .replace(/{toStatus}/g, context.toStatus || "");
+              .split("{taskTitle}").join(context.taskTitle)
+              .split("{fromStatus}").join(context.fromStatus || "")
+              .split("{toStatus}").join(context.toStatus || "");
           }
           return res;
         };
@@ -625,9 +657,7 @@ export async function executeRuleActions(
             startTime.getTime() + (Number(endOffset) || 1) * durationMultiplier,
           );
 
-          console.log(
-            `[Automations] Creating calendar event: ${finalTitle} at ${startTime.toISOString()}`,
-          );
+          log.info("Creating calendar event", { title: finalTitle, startTime: startTime.toISOString() });
 
           await prisma.calendarEvent.create({
             data: {
@@ -640,16 +670,13 @@ export async function executeRuleActions(
             },
           });
 
-          console.log(`[Automations] Calendar event created successfully.`);
+          log.info("Calendar event created successfully");
         } catch (eventError) {
-          console.error(
-            `[Automations] Calendar Event Creation Error:`,
-            eventError,
-          );
+          log.error("Calendar event creation error", { error: String(eventError) });
         }
       }
     } catch (e) {
-      console.error(`[Automations] Error executing action ${type}:`, e);
+      log.error("Error executing action", { type, error: String(e) });
       throw e; // Re-throw so callers know the action failed
     }
   };
@@ -657,7 +684,7 @@ export async function executeRuleActions(
   if (rule.actionType === "MULTI_ACTION") {
     const actions = rule.actionConfig?.actions || [];
     if (actions.length > 50) {
-      console.error(`[Automations] MULTI_ACTION for rule ${ruleId} has ${actions.length} actions (max 50), skipping`);
+      log.error("MULTI_ACTION exceeds max actions, skipping", { ruleId, actionCount: actions.length });
       return;
     }
     const errors: string[] = [];
@@ -670,10 +697,7 @@ export async function executeRuleActions(
       }
     }
     if (errors.length > 0) {
-      console.error(
-        `[Automations] ${errors.length} action(s) failed in MULTI_ACTION for rule ${ruleId}:`,
-        errors,
-      );
+      log.error("Actions failed in MULTI_ACTION", { ruleId, failedCount: errors.length, totalCount: actions.length });
       throw new Error(`MULTI_ACTION: ${errors.length}/${actions.length} action(s) failed — ${errors[0]}`);
     }
   } else {
@@ -685,7 +709,7 @@ export async function executeRuleActions(
 // P94: companyId is required to prevent cross-tenant audit log access
 async function calculateTaskDuration(taskId: string, fromStatus: string, companyId: number) {
   if (!companyId) {
-    console.error("[Automations] calculateTaskDuration called without companyId, skipping");
+    log.error("calculateTaskDuration called without companyId, skipping");
     return;
   }
   const recentLogs = await withRetry(() => prisma.auditLog.findMany({
@@ -729,7 +753,7 @@ async function calculateRecordDuration(
   companyId: number,
 ) {
   if (!companyId) {
-    console.error("[Automations] calculateRecordDuration called without companyId, skipping");
+    log.error("calculateRecordDuration called without companyId, skipping");
     return;
   }
   const recentLogs = await withRetry(() => prisma.auditLog.findMany({
@@ -815,7 +839,18 @@ export async function getAutomationRules(opts?: { cursor?: number; limit?: numbe
       return { success: false, error: "Authentication required" };
     }
 
-    const limit = opts?.limit ?? 500;
+    // Authorization: require canViewAutomations flag
+    if (!hasUserFlag(currentUser, "canViewAutomations")) {
+      return { success: false, error: "Forbidden" };
+    }
+
+    // Rate limit reads
+    if (await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationRead)) {
+      return { success: false, error: "Rate limit exceeded. Please try again later." };
+    }
+
+    // Clamp limit to [1, 500] to prevent unbounded queries
+    const limit = Math.min(Math.max(opts?.limit ?? 500, 1), 500);
     const take = limit + 1; // Fetch one extra to determine hasMore
 
     // CRITICAL: Filter by companyId for multi-tenancy
@@ -845,7 +880,7 @@ export async function getAutomationRules(opts?: { cursor?: number; limit?: numbe
 
     return { success: true, data, hasMore, nextCursor };
   } catch (error) {
-    console.error("Error fetching automation rules:", error);
+    log.error("Error fetching automation rules", { error: String(error) });
     return { success: false, error: "Failed to fetch automation rules" };
   }
 }
@@ -864,6 +899,39 @@ export async function createAutomationRule(data: {
 
     if (!currentUser) {
       return { success: false, error: "Authentication required" };
+    }
+
+    // Authorization: require canViewAutomations flag
+    if (!hasUserFlag(currentUser, "canViewAutomations")) {
+      return { success: false, error: "Forbidden" };
+    }
+
+    // Rate limit mutations
+    if (await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationMutate)) {
+      return { success: false, error: "Rate limit exceeded. Please try again later." };
+    }
+
+    // Input validation
+    const validationError = validateAutomationInput(data);
+    if (validationError) {
+      return { success: false, error: validationError };
+    }
+    data.name = data.name.trim();
+
+    // Cap rules per company
+    const existingCount = await withRetry(() => prisma.automationRule.count({
+      where: { companyId: currentUser.companyId },
+    }));
+    if (existingCount >= MAX_RULES_PER_COMPANY) {
+      return { success: false, error: `Maximum of ${MAX_RULES_PER_COMPANY} automation rules per company reached` };
+    }
+
+    // SSRF check: validate webhook URLs at storage time (top-level + nested MULTI_ACTION)
+    const webhookUrls = extractWebhookUrls(data.actionType, data.actionConfig);
+    for (const wUrl of webhookUrls) {
+      if (isPrivateUrl(wUrl)) {
+        return { success: false, error: "Webhook URL targets a private/internal address" };
+      }
     }
 
     // Validate TIME_SINCE_CREATION with minutes unit
@@ -896,14 +964,20 @@ export async function createAutomationRule(data: {
     const rule = await prisma.automationRule.create({
       data: {
         name: data.name,
-        triggerType: data.triggerType,
+        triggerType: data.triggerType as any,
         triggerConfig: data.triggerConfig as any,
-        actionType: data.actionType,
+        actionType: data.actionType as any,
         actionConfig: data.actionConfig as any,
         folderId: folderId ?? null,
 
         createdBy: currentUser.id,
         companyId: currentUser.companyId,
+      },
+      select: {
+        id: true, name: true, triggerType: true, triggerConfig: true,
+        actionType: true, actionConfig: true, isActive: true,
+        folderId: true, calendarEventId: true, createdBy: true,
+        createdAt: true, updatedAt: true,
       },
     });
 
@@ -915,7 +989,7 @@ export async function createAutomationRule(data: {
         await applyRetroactiveAutomation(rule);
       }
     } catch (retroError) {
-      console.error("Error applying retroactive automation:", retroError);
+      log.error("Error applying retroactive automation", { error: String(retroError) });
     }
     */
 
@@ -924,15 +998,13 @@ export async function createAutomationRule(data: {
     revalidatePath("/analytics");
     return { success: true, data: rule };
   } catch (error) {
-    console.error("Error creating automation rule:", error);
+    log.error("Error creating automation rule", { error: String(error) });
     return { success: false, error: "Failed to create automation rule" };
   }
 }
 
 async function applyRetroactiveAutomation(rule: any) {
-  console.log(
-    `[Automations] Applying retroactive automation for rule ${rule.id}`,
-  );
+  log.info("Applying retroactive automation for rule", { ruleId: rule.id });
   const triggerConfig = rule.triggerConfig as any;
 
   if (rule.triggerType === "TASK_STATUS_CHANGE") {
@@ -1171,6 +1243,37 @@ export async function updateAutomationRule(
       return { success: false, error: "Authentication required" };
     }
 
+    // Authorization: require canViewAutomations flag
+    if (!hasUserFlag(currentUser, "canViewAutomations")) {
+      return { success: false, error: "Forbidden" };
+    }
+
+    // ID validation
+    const idError = validateId(id);
+    if (idError) {
+      return { success: false, error: idError };
+    }
+
+    // Rate limit mutations
+    if (await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationMutate)) {
+      return { success: false, error: "Rate limit exceeded. Please try again later." };
+    }
+
+    // Input validation
+    const validationError = validateAutomationInput(data);
+    if (validationError) {
+      return { success: false, error: validationError };
+    }
+    data.name = data.name.trim();
+
+    // SSRF check: validate webhook URLs at storage time (top-level + nested MULTI_ACTION)
+    const webhookUrls = extractWebhookUrls(data.actionType, data.actionConfig);
+    for (const wUrl of webhookUrls) {
+      if (isPrivateUrl(wUrl)) {
+        return { success: false, error: "Webhook URL targets a private/internal address" };
+      }
+    }
+
     // Validate TIME_SINCE_CREATION with minutes unit
     if (data.triggerType === "TIME_SINCE_CREATION") {
       const { timeValue, timeUnit } = data.triggerConfig || {};
@@ -1186,10 +1289,16 @@ export async function updateAutomationRule(
       where: { id, companyId: currentUser.companyId },
       data: {
         name: data.name,
-        triggerType: data.triggerType,
+        triggerType: data.triggerType as any,
         triggerConfig: data.triggerConfig as any,
-        actionType: data.actionType,
+        actionType: data.actionType as any,
         actionConfig: data.actionConfig as any,
+      },
+      select: {
+        id: true, name: true, triggerType: true, triggerConfig: true,
+        actionType: true, actionConfig: true, isActive: true,
+        folderId: true, calendarEventId: true, createdBy: true,
+        createdAt: true, updatedAt: true,
       },
     });
     await invalidateFullCache(currentUser.companyId);
@@ -1197,7 +1306,7 @@ export async function updateAutomationRule(
     revalidatePath("/analytics");
     return { success: true, data: rule };
   } catch (error) {
-    console.error("Error updating automation rule:", error);
+    log.error("Error updating automation rule", { error: String(error) });
     return { success: false, error: "Failed to update automation rule" };
   }
 }
@@ -1211,6 +1320,22 @@ export async function deleteAutomationRule(id: number) {
       return { success: false, error: "Authentication required" };
     }
 
+    // Authorization: require canViewAutomations flag
+    if (!hasUserFlag(currentUser, "canViewAutomations")) {
+      return { success: false, error: "Forbidden" };
+    }
+
+    // ID validation
+    const idError = validateId(id);
+    if (idError) {
+      return { success: false, error: idError };
+    }
+
+    // Rate limit mutations
+    if (await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationMutate)) {
+      return { success: false, error: "Rate limit exceeded. Please try again later." };
+    }
+
     await prisma.automationRule.delete({
       where: { id, companyId: currentUser.companyId },
     });
@@ -1219,7 +1344,7 @@ export async function deleteAutomationRule(id: number) {
     revalidatePath("/analytics");
     return { success: true };
   } catch (error) {
-    console.error("Error deleting automation rule:", error);
+    log.error("Error deleting automation rule", { error: String(error) });
     return { success: false, error: "Failed to delete automation rule" };
   }
 }
@@ -1233,16 +1358,33 @@ export async function toggleAutomationRule(id: number, isActive: boolean) {
       return { success: false, error: "Authentication required" };
     }
 
+    // Authorization: require canViewAutomations flag
+    if (!hasUserFlag(currentUser, "canViewAutomations")) {
+      return { success: false, error: "Forbidden" };
+    }
+
+    // ID validation
+    const idError = validateId(id);
+    if (idError) {
+      return { success: false, error: idError };
+    }
+
+    // Rate limit mutations
+    if (await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationMutate)) {
+      return { success: false, error: "Rate limit exceeded. Please try again later." };
+    }
+
     await prisma.automationRule.update({
       where: { id, companyId: currentUser.companyId },
       data: { isActive },
+      select: { id: true },
     });
     await invalidateFullCache(currentUser.companyId);
     revalidatePath("/automations");
     revalidatePath("/analytics");
     return { success: true };
   } catch (error) {
-    console.error("Error toggling automation rule:", error);
+    log.error("Error toggling automation rule", { error: String(error) });
     return { success: false, error: "Failed to toggle automation rule" };
   }
 }
@@ -1273,9 +1415,7 @@ function checkBusinessHours(config: any): boolean {
   // 1. Day Check
   if (Array.isArray(days) && days.length > 0) {
     if (!days.includes(currentDay)) {
-      console.log(
-        `[Automations] ⏳ Skipping Rule (Business Hours - Day ${currentDay} not in ${days})`,
-      );
+      log.debug("Skipping rule (business hours - day mismatch)", { currentDay, allowedDays: days });
       return false;
     }
   }
@@ -1292,9 +1432,7 @@ function checkBusinessHours(config: any): boolean {
     currentTimeInMinutes < startTimeInMinutes ||
     currentTimeInMinutes > endTimeInMinutes
   ) {
-    console.log(
-      `[Automations] ⏳ Skipping Rule (Business Hours - Time ${currentHour}:${currentMinute} not in ${start}-${end})`,
-    );
+    log.debug("Skipping rule (business hours - time mismatch)", { currentHour, currentMinute, start, end });
     return false;
   }
 
@@ -1308,13 +1446,11 @@ export async function processViewAutomations(
 ) {
   // P69: Guard against undefined companyId to prevent cross-tenant queries
   if (!companyId) {
-    console.error("[Automations] processViewAutomations called without companyId");
+    log.error("processViewAutomations called without companyId");
     return;
   }
 
-  console.log(
-    `\n🔍🔍🔍 [Automations] CHECKING VIEW AUTOMATIONS - Table=${tableId}, Task=${taskId}, Company=${companyId}\n`,
-  );
+  log.info("Checking view automations", { tableId, taskId, companyId });
   try {
     const rules = await withRetry(() => prisma.automationRule.findMany({
       where: {
@@ -1325,9 +1461,7 @@ export async function processViewAutomations(
       take: 200,
     }));
 
-    console.log(
-      `[Automations DEBUG] Found ${rules.length} active view automation rules.`,
-    );
+    log.debug("Found active view automation rules", { count: rules.length });
 
     // P70: Batch-fetch all views upfront to avoid N+1 queries
     const viewIds = new Set<number>();
@@ -1347,12 +1481,12 @@ export async function processViewAutomations(
       const triggerConfig = rule.triggerConfig as TriggerConfig;
       if (!checkBusinessHours(triggerConfig)) return false;
       if (!triggerConfig || !triggerConfig.viewId) {
-        console.log(`[Automations DEBUG] Rule ${rule.id} missing viewId in config.`);
+        log.debug("Rule missing viewId in config", { ruleId: rule.id });
         return false;
       }
       const view = viewMap.get(Number(triggerConfig.viewId));
       if (!view) {
-        console.log(`[Automations DEBUG] View ${triggerConfig.viewId} not found.`);
+        log.debug("View not found", { viewId: triggerConfig.viewId });
         return false;
       }
       const viewConfig = view.config as any;
@@ -1364,8 +1498,8 @@ export async function processViewAutomations(
         if (tableId && viewConfig.tableId && String(viewConfig.tableId) === String(tableId)) shouldCheck = true;
       }
       if (!shouldCheck) {
-        console.log(`[Automations DEBUG] Skipping Rule ${rule.id} because context doesn't match view config.`, {
-          requestedTable: tableId, requestedTask: taskId, viewTable: viewConfig.tableId, viewModel: viewConfig.model,
+        log.debug("Skipping rule, context does not match view config", {
+          ruleId: rule.id, requestedTable: tableId, requestedTask: taskId, viewTable: viewConfig.tableId, viewModel: viewConfig.model,
         });
         return false;
       }
@@ -1396,11 +1530,11 @@ export async function processViewAutomations(
           const viewId = Number(triggerConfig.viewId);
           const view = viewMap.get(viewId)!;
 
-          console.log(`[Automations DEBUG] Processing Rule ${rule.id} for View ${viewId}`);
+          log.debug("Processing rule for view", { ruleId: rule.id, viewId });
 
           const cached = await getCachedStats(viewId, companyId ?? rule.companyId);
           if (!cached || !cached.stats || cached.stats.rawMetric === undefined) {
-            console.log(`[Automations DEBUG] No valid metric data (rawMetric) for view ${viewId}`);
+            log.debug("No valid metric data for view", { viewId });
             return;
           }
 
@@ -1419,10 +1553,10 @@ export async function processViewAutomations(
             case "neq": triggered = currentVal !== threshold; break;
           }
 
-          console.log(`[Automations DEBUG] Metric Check: ${currentVal} ${triggerConfig.operator} ${threshold} = ${triggered}`);
+          log.debug("Metric check result", { currentVal, operator: triggerConfig.operator, threshold, triggered });
 
           if (!triggered) {
-            console.log(`[Automations DEBUG] Rule condition not met.`);
+            log.debug("Rule condition not met");
             return;
           }
 
@@ -1434,28 +1568,27 @@ export async function processViewAutomations(
 
           if (frequency === "once" && lastRunAt) {
             shouldRunFrequency = false;
-            console.log(`[Automations] ⏳ Skipping Rule ${rule.id} (Frequency: ONCE, already ran at ${lastRunAt})`);
+            log.debug("Skipping rule (frequency: once, already ran)", { ruleId: rule.id });
           } else if (frequency === "daily" && lastRunAt) {
             const diffHours = (now.getTime() - lastRunAt.getTime()) / (1000 * 60 * 60);
             if (diffHours < 24) {
               shouldRunFrequency = false;
-              console.log(`[Automations] ⏳ Skipping Rule ${rule.id} (Frequency: DAILY, ran ${diffHours.toFixed(1)}h ago)`);
+              log.debug("Skipping rule (frequency: daily, too recent)", { ruleId: rule.id, hoursAgo: diffHours.toFixed(1) });
             }
           } else if (frequency === "weekly" && lastRunAt) {
             const diffDays = (now.getTime() - lastRunAt.getTime()) / (1000 * 60 * 60 * 24);
             if (diffDays < 7) {
               shouldRunFrequency = false;
-              console.log(`[Automations] ⏳ Skipping Rule ${rule.id} (Frequency: WEEKLY, ran ${diffDays.toFixed(1)}d ago)`);
+              log.debug("Skipping rule (frequency: weekly, too recent)", { ruleId: rule.id, daysAgo: diffDays.toFixed(1) });
             }
           } else if (frequency === "always" && triggerConfig.lastDataSnapshot === currentSnapshot) {
             shouldRunFrequency = false;
-            console.log(`[Automations] ⏳ Skipping Rule ${rule.id} (Frequency: ALWAYS, data unchanged since last check)`);
+            log.debug("Skipping rule (frequency: always, data unchanged)", { ruleId: rule.id });
           }
 
           if (!shouldRunFrequency) return;
 
-          console.log(`[Automations] 🔔 Rule ${rule.id} TRIGGERED! Executing Action: ${rule.actionType}`);
-          console.log(`[Automations] Action Config:`, JSON.stringify(rule.actionConfig).substring(0, 500));
+          log.info("Rule triggered", { ruleId: rule.id, actionType: rule.actionType });
 
           let actionSuccess = false;
           try {
@@ -1469,7 +1602,7 @@ export async function processViewAutomations(
             });
             actionSuccess = true;
           } catch (execErr) {
-            console.error(`[Automations] Failed to execute actions for rule ${rule.id}:`, execErr);
+            log.error("Failed to execute actions for rule", { ruleId: rule.id, error: String(execErr) });
           }
 
           // Atomic conditional update using top-level lastRunAt column
@@ -1490,12 +1623,12 @@ export async function processViewAutomations(
               },
             });
             if (updated.count === 0) {
-              console.warn(`[Automations] CAS conflict for rule ${rule.id} — another worker already updated lastRunAt`);
+              log.warn("CAS conflict for rule, another worker already updated lastRunAt", { ruleId: rule.id });
             } else {
-              console.log(`[Automations] ✅ Updated lastRunAt for rule ${rule.id} (actionSuccess: ${actionSuccess})`);
+              log.info("Updated lastRunAt for rule", { ruleId: rule.id, actionSuccess });
             }
           } catch (updateErr) {
-            console.error(`[Automations] Failed to update lastRunAt for rule ${rule.id}:`, updateErr);
+            log.error("Failed to update lastRunAt for rule", { ruleId: rule.id, error: String(updateErr) });
           }
         }),
       );
@@ -1503,7 +1636,7 @@ export async function processViewAutomations(
       for (let j = 0; j < results.length; j++) {
         if (results[j].status === "rejected") {
           totalFailures++;
-          console.error(`[Automations] Error processing view rule ${batch[j].id}:`, (results[j] as PromiseRejectedResult).reason);
+          log.error("Error processing view rule", { ruleId: batch[j].id, error: String((results[j] as PromiseRejectedResult).reason) });
         }
       }
     }
@@ -1513,7 +1646,7 @@ export async function processViewAutomations(
       throw new Error(`[Automations] ${totalFailures}/${eligibleRules.length} view automation rules failed — triggering Inngest retry`);
     }
   } catch (e) {
-    console.error("Error processing view automations:", e);
+    log.error("Error processing view automations", { error: String(e) });
     throw e; // Re-throw so Inngest sees the failure
   }
 }
@@ -1564,7 +1697,7 @@ export async function processTaskStatusChange(
         await executeRuleActions(rule, context);
       } catch (ruleError) {
         totalFailures++;
-        console.error(`[Automations] Error executing rule ${rule.id} in processTaskStatusChange:`, ruleError);
+        log.error("Error executing rule in processTaskStatusChange", { ruleId: rule.id, error: String(ruleError) });
       }
     }
 
@@ -1572,7 +1705,7 @@ export async function processTaskStatusChange(
       throw new Error(`[Automations] ${totalFailures}/${totalProcessed} task status rules failed — triggering Inngest retry`);
     }
   } catch (error) {
-    console.error("Error processing task status automations:", error);
+    log.error("Error processing task status automations", { error: String(error) });
     throw error; // Re-throw so Inngest sees the failure
   }
 }
@@ -1586,7 +1719,7 @@ async function checkAndEnqueueFinanceSyncJobs(tableId: number, companyId: number
 
   if (syncRules.length === 0) return;
 
-  console.log(`[Automations] ${context}: Found ${syncRules.length} sync rules for Table ${tableId}. Enqueuing sync jobs...`);
+  log.info("Found sync rules, enqueuing sync jobs", { context, syncRuleCount: syncRules.length, tableId });
 
   // Batch-fetch existing jobs upfront to avoid N+1
   const ruleIds = syncRules.map((r) => r.id);
@@ -1616,7 +1749,7 @@ async function checkAndEnqueueFinanceSyncJobs(tableId: number, companyId: number
       })),
     );
   } catch (e) {
-    console.error(`[Auto-Sync] Failed to batch-enqueue ${jobs.length} sync jobs (${context})`, e);
+    log.error("Failed to batch-enqueue sync jobs", { jobCount: jobs.length, context, error: String(e) });
   }
 }
 
@@ -1631,9 +1764,7 @@ export async function processNewRecordTrigger(
     const record = await withRetry(() => prisma.record.findFirst({ where: { id: recordId, companyId }, select: { data: true, companyId: true } }));
 
     if (!record) {
-      console.log(
-        `[Automations] Record ${recordId} not found, skipping NEW_RECORD automations.`,
-      );
+      log.info("Record not found, skipping NEW_RECORD automations", { recordId });
       return;
     }
 
@@ -1723,7 +1854,7 @@ export async function processNewRecordTrigger(
         });
       } catch (ruleError) {
         totalFailures++;
-        console.error(`[Automations] Error executing rule ${rule.id} in processNewRecordTrigger:`, ruleError);
+        log.error("Error executing rule in processNewRecordTrigger", { ruleId: rule.id, error: String(ruleError) });
       }
     }
 
@@ -1735,10 +1866,10 @@ export async function processNewRecordTrigger(
     try {
       await checkAndEnqueueFinanceSyncJobs(tableId, record.companyId, "New record");
     } catch (err) {
-      console.error("[Automations] Error checking finance sync rules:", err);
+      log.error("Error checking finance sync rules", { error: String(err) });
     }
   } catch (error) {
-    console.error("Error processing new record automations:", error);
+    log.error("Error processing new record automations", { error: String(error) });
     throw error; // Re-throw so Inngest sees the failure
   }
 }
@@ -1751,9 +1882,7 @@ export async function processRecordUpdate(
   companyId: number, // SECURITY: Required for tenant scoping (Issue D)
   passedTableName?: string, // Optional: avoids extra DB query if caller already knows the name
 ) {
-  console.log(
-    `[Automations] Processing update for Table ${tableId}, Record ${recordId}`,
-  );
+  log.info("Processing record update", { tableId, recordId });
   try {
     // companyId is already passed and validated by the Inngest caller — no need
     // to re-fetch the record just to confirm it exists. oldData/newData are
@@ -1849,7 +1978,7 @@ export async function processRecordUpdate(
         });
       } catch (ruleError) {
         totalFailures++;
-        console.error(`[Automations] Error executing rule ${rule.id} in processRecordUpdate:`, ruleError);
+        log.error("Error executing rule in processRecordUpdate", { ruleId: rule.id, error: String(ruleError) });
       }
     }
 
@@ -1866,17 +1995,17 @@ export async function processRecordUpdate(
         data: { tableId, recordId, companyId },
       });
     } catch (err) {
-      console.error("[Automations] Failed to enqueue multi-event job:", err);
+      log.error("Failed to enqueue multi-event job", { error: String(err) });
     }
 
     // --- FINANCE SYNC (ON UPDATE) ---
     try {
       await checkAndEnqueueFinanceSyncJobs(tableId, companyId, "Record update");
     } catch (err) {
-      console.error("[Automations] Error triggering sync on update:", err);
+      log.error("Error triggering sync on update", { error: String(err) });
     }
   } catch (error) {
-    console.error("Error processing record update automations:", error);
+    log.error("Error processing record update automations", { error: String(error) });
     throw error; // Re-throw so Inngest sees the failure
   }
 }
@@ -1886,6 +2015,17 @@ export async function getViewAutomations(viewId: number) {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+
+    if (!hasUserFlag(user, "canViewAutomations")) {
+      return { success: false, error: "Forbidden" };
+    }
+    if (await checkActionRateLimit(String(user.id), RATE_LIMITS.automationRead)) {
+      return { success: false, error: "Rate limit exceeded. Please try again later." };
+    }
+    const idErr = validateId(viewId);
+    if (idErr) {
+      return { success: false, error: idErr };
+    }
 
     // Filter by viewId in DB. triggerConfig.viewId may be stored as number or string,
     // so match both representations to avoid type mismatch.
@@ -1904,7 +2044,7 @@ export async function getViewAutomations(viewId: number) {
 
     return { success: true, data: rules };
   } catch (error) {
-    console.error("Error fetching view automations:", error);
+    log.error("Error fetching view automations", { error: String(error) });
     return { success: false, error: "Failed to fetch view automations" };
   }
 }
@@ -1922,8 +2062,15 @@ export async function getAnalyticsAutomationsActionCount() {
     const currentUser = await getCurrentUser();
 
     if (!currentUser?.companyId) {
-      console.log("[Analytics Actions] No auth or companyId found");
+      log.info("No auth or companyId found for analytics actions");
       return { success: false, error: "Unauthorized", count: 0 };
+    }
+
+    if (!hasUserFlag(currentUser, "canViewAutomations")) {
+      return { success: false, error: "Forbidden", count: 0 };
+    }
+    if (await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationRead)) {
+      return { success: false, error: "Rate limit exceeded", count: 0 };
     }
 
     const companyId = currentUser.companyId;
@@ -1954,7 +2101,7 @@ export async function getAnalyticsAutomationsActionCount() {
 
     return { success: true, count: totalActions };
   } catch (error) {
-    console.error("Error counting analytics automation actions:", error);
+    log.error("Error counting analytics automation actions", { error: String(error) });
     return { success: false, error: "Failed to count actions", count: 0 };
   }
 }
@@ -2061,7 +2208,7 @@ async function addToNurtureList(params: {
 
     return false;
   } catch (error) {
-    console.error("Error adding to nurture list:", error);
+    log.error("Error adding to nurture list", { error: String(error) });
     return false;
   }
 }
@@ -2069,10 +2216,10 @@ async function addToNurtureList(params: {
 // P102: companyId is now required to prevent cross-company rule leakage
 export async function processTimeBasedAutomations(companyId: number) {
   if (!companyId) {
-    console.error("[Automations] processTimeBasedAutomations called without companyId, skipping");
+    log.error("processTimeBasedAutomations called without companyId, skipping");
     return;
   }
-  console.log(`⏰ Checking time-based automations for company ${companyId}...`);
+  log.info("Checking time-based automations", { companyId });
   try {
     const rules = await withRetry(() => prisma.automationRule.findMany({
       where: {
@@ -2083,7 +2230,7 @@ export async function processTimeBasedAutomations(companyId: number) {
       take: 200,
     }));
 
-    console.log(`Found ${rules.length} active time-based rules for company ${companyId}.`);
+    log.info("Found active time-based rules", { count: rules.length, companyId });
 
     // Filter rules that pass basic config validation and business hours check upfront
     const validRules = rules.filter((rule) => {
@@ -2116,7 +2263,7 @@ export async function processTimeBasedAutomations(companyId: number) {
         const result = results[j];
         if (result.status === "rejected") {
           totalFailures++;
-          console.error(`[Automations] Error processing time-based rule ${batch[j].id} (${batch[j].name}):`, result.reason);
+          log.error("Error processing time-based rule", { ruleId: batch[j].id, ruleName: batch[j].name, error: String(result.reason) });
         }
       }
     }
@@ -2126,7 +2273,7 @@ export async function processTimeBasedAutomations(companyId: number) {
       throw new Error(`[Automations] ${totalFailures}/${validRules.length} time-based rules failed — triggering Inngest retry`);
     }
   } catch (error) {
-    console.error("Error processing time-based automations:", error);
+    log.error("Error processing time-based automations", { error: String(error) });
     throw error; // Re-throw so Inngest sees the failure
   }
 }
@@ -2170,9 +2317,7 @@ async function processTimeBasedRule(
     LIMIT 200
   `);
 
-  console.log(
-    `Rule ${rule.name}: Found ${records.length} potential records.`,
-  );
+  log.info("Found potential records for rule", { ruleName: rule.name, count: records.length });
 
   if (records.length === 0) return;
 
@@ -2196,7 +2341,7 @@ async function processTimeBasedRule(
     const batch = matchingRecords.slice(i, i + RECORD_CONCURRENCY);
     const results = await Promise.allSettled(
       batch.map(async (record) => {
-        console.log(`Rule ${rule.name}: Triggering for record ${record.id}`);
+        log.debug("Triggering rule for record", { ruleName: rule.name, recordId: record.id });
         await executeRuleActions(rule, {
           recordData: record.data,
           tableId,
@@ -2211,7 +2356,7 @@ async function processTimeBasedRule(
       if (result.status === "fulfilled") {
         logsToCreate.push({ automationRuleId: rule.id, recordId: result.value, companyId: rule.companyId });
       } else {
-        console.error(`[Automations] Error executing actions for rule ${rule.id}:`, result.reason);
+        log.error("Error executing actions for rule", { ruleId: rule.id, error: String(result.reason) });
       }
     }
   }
@@ -2222,7 +2367,7 @@ async function processTimeBasedRule(
     try {
       await prisma.automationLog.createMany({ data: logsToCreate, skipDuplicates: true });
     } catch (logError) {
-      console.error(`[Automations] Error batch-creating automation logs for rule ${rule.id}:`, logError);
+      log.error("Error batch-creating automation logs", { ruleId: rule.id, error: String(logError) });
       throw logError;
     }
   }
@@ -2238,9 +2383,7 @@ export async function processDirectDialTrigger(
   companyId: number,
   previousDialedAt?: string | null,
 ) {
-  console.log(
-    `[Automations] Processing direct dial trigger for Table ${tableId}, Record ${recordId}`,
-  );
+  log.info("Processing direct dial trigger", { tableId, recordId });
 
   try {
     // Find all active DIRECT_DIAL automation rules for this specific table.
@@ -2259,9 +2402,7 @@ export async function processDirectDialTrigger(
     }));
 
     if (matchingRules.length === 0) {
-      console.log(
-        `[Automations] No DIRECT_DIAL rules found for table ${tableId}`,
-      );
+      log.info("No DIRECT_DIAL rules found for table", { tableId });
       return;
     }
 
@@ -2272,7 +2413,7 @@ export async function processDirectDialTrigger(
     }));
 
     if (!record) {
-      console.log(`[Automations] Record ${recordId} not found`);
+      log.info("Record not found", { recordId });
       return;
     }
 
@@ -2291,9 +2432,7 @@ export async function processDirectDialTrigger(
     // Execute each matching rule
     for (const rule of matchingRules) {
       try {
-        console.log(
-          `[Automations] Executing DIRECT_DIAL rule: ${rule.name} (ID: ${rule.id})`,
-        );
+        log.info("Executing DIRECT_DIAL rule", { ruleName: rule.name, ruleId: rule.id });
 
         totalProcessed++;
         await executeRuleActions(rule, {
@@ -2306,10 +2445,7 @@ export async function processDirectDialTrigger(
         });
       } catch (ruleError) {
         totalFailures++;
-        console.error(
-          `[Automations] Error executing DIRECT_DIAL rule ${rule.id} (${rule.name}):`,
-          ruleError,
-        );
+        log.error("Error executing DIRECT_DIAL rule", { ruleId: rule.id, ruleName: rule.name, error: String(ruleError) });
       }
     }
 
@@ -2317,7 +2453,7 @@ export async function processDirectDialTrigger(
       throw new Error(`[Automations] ${totalFailures}/${totalProcessed} direct dial rules failed — triggering Inngest retry`);
     }
   } catch (error) {
-    console.error("Error processing direct dial automations:", error);
+    log.error("Error processing direct dial automations", { error: String(error) });
     throw error; // Re-throw so Inngest sees the failure
   }
 }

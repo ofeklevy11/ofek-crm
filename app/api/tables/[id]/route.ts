@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { canManageTables, canReadTable } from "@/lib/permissions";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("TableAPI");
+
+// Input constraints
+const MAX_NAME_LENGTH = 200;
+const MAX_SLUG_LENGTH = 100;
+const MAX_SCHEMA_JSON_SIZE = 200_000; // 200KB max for schemaJson
+const SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 
 // P7: Validate and parse route param early — reject NaN before hitting DB
 function parseId(raw: string): number | null {
@@ -18,6 +28,13 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    // Rate limiting
+    const rlResponse = await checkRateLimit(
+      String(user.id),
+      RATE_LIMITS.api
+    );
+    if (rlResponse) return rlResponse;
 
     const { id } = await params;
     const tableId = parseId(id);
@@ -37,7 +54,9 @@ export async function GET(
         companyId: user.companyId,
         deletedAt: null,
       },
-      include: {
+      select: {
+        id: true, name: true, slug: true, schemaJson: true,
+        categoryId: true, order: true, createdAt: true, updatedAt: true,
         _count: {
           select: { records: true },
         },
@@ -50,7 +69,7 @@ export async function GET(
 
     return NextResponse.json(table);
   } catch (error) {
-    console.error("Error fetching table:", error);
+    log.error("Failed to fetch table", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to fetch table" },
       { status: 500 }
@@ -75,6 +94,13 @@ export async function PATCH(
       );
     }
 
+    // Rate limiting — stricter for mutations
+    const rlResponse = await checkRateLimit(
+      String(user.id),
+      RATE_LIMITS.bulk
+    );
+    if (rlResponse) return rlResponse;
+
     const { id } = await params;
     const tableId = parseId(id);
     if (!tableId) {
@@ -89,10 +115,64 @@ export async function PATCH(
     }
     const { name, slug, schemaJson, updatedAt: expectedUpdatedAt } = body;
 
+    // Input validation
+    if (name !== undefined) {
+      if (typeof name !== "string" || name.length === 0 || name.length > MAX_NAME_LENGTH) {
+        return NextResponse.json(
+          { error: `Name must be a non-empty string of at most ${MAX_NAME_LENGTH} characters` },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (slug !== undefined) {
+      if (typeof slug !== "string" || slug.length === 0 || slug.length > MAX_SLUG_LENGTH) {
+        return NextResponse.json(
+          { error: `Slug must be a non-empty string of at most ${MAX_SLUG_LENGTH} characters` },
+          { status: 400 }
+        );
+      }
+      if (!SLUG_PATTERN.test(slug)) {
+        return NextResponse.json(
+          { error: "Slug must start with a letter or number and contain only lowercase letters, numbers, hyphens, and underscores" },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (schemaJson !== undefined) {
+      if (typeof schemaJson !== "object" || schemaJson === null || Array.isArray(schemaJson)) {
+        return NextResponse.json(
+          { error: "schemaJson must be a JSON object" },
+          { status: 400 }
+        );
+      }
+      const schemaSize = JSON.stringify(schemaJson).length;
+      if (schemaSize > MAX_SCHEMA_JSON_SIZE) {
+        return NextResponse.json(
+          { error: `schemaJson exceeds maximum size of ${MAX_SCHEMA_JSON_SIZE} bytes` },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (expectedUpdatedAt !== undefined) {
+      if (typeof expectedUpdatedAt !== "string" || isNaN(Date.parse(expectedUpdatedAt))) {
+        return NextResponse.json(
+          { error: "Invalid updatedAt timestamp" },
+          { status: 400 }
+        );
+      }
+    }
+
     // P9: Only select id — full row not needed for existence check
     if (body.categoryId !== undefined && body.categoryId !== null) {
+      const catId = Number(body.categoryId);
+      if (!Number.isFinite(catId) || catId <= 0) {
+        return NextResponse.json({ error: "Invalid category ID" }, { status: 400 });
+      }
       const category = await prisma.tableCategory.findFirst({
-        where: { id: body.categoryId, companyId: user.companyId },
+        where: { id: catId, companyId: user.companyId },
         select: { id: true },
       });
       if (!category) {
@@ -114,8 +194,8 @@ export async function PATCH(
     const { count } = await prisma.tableMeta.updateMany({
       where,
       data: {
-        ...(name && { name }),
-        ...(slug && { slug }),
+        ...(name && { name: name.trim() }),
+        ...(slug && { slug: slug.trim() }),
         ...(schemaJson && { schemaJson }),
         ...(body.categoryId !== undefined && { categoryId: body.categoryId }),
         updatedAt: new Date(),  // updateMany doesn't auto-set @updatedAt
@@ -142,6 +222,10 @@ export async function PATCH(
     // Return the updated record
     const updatedTable = await prisma.tableMeta.findFirst({
       where: { id: tableId, companyId: user.companyId, deletedAt: null },
+      select: {
+        id: true, name: true, slug: true, schemaJson: true,
+        categoryId: true, order: true, createdAt: true, updatedAt: true,
+      },
     });
 
     return NextResponse.json(updatedTable);
@@ -152,7 +236,7 @@ export async function PATCH(
         { status: 409 }
       );
     }
-    console.error("Error updating table:", error);
+    log.error("Failed to update table", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to update table" },
       { status: 500 }
@@ -176,6 +260,13 @@ export async function DELETE(
         { status: 403 }
       );
     }
+
+    // Rate limiting — stricter for destructive mutations
+    const rlResponse = await checkRateLimit(
+      String(user.id),
+      RATE_LIMITS.bulk
+    );
+    if (rlResponse) return rlResponse;
 
     const { id } = await params;
     const tableId = parseId(id);
@@ -242,7 +333,7 @@ export async function DELETE(
       );
     }
 
-    console.error("Error deleting table:", error);
+    log.error("Failed to delete table", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to delete table" },
       { status: 500 }

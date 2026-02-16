@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { hasUserFlag } from "@/lib/permissions";
 import { withRetry } from "@/lib/db-retry";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("RetainersAPI");
 
 const createRetainerSchema = z.object({
   title: z.string().min(1).max(200),
@@ -19,6 +24,12 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!hasUserFlag(user, "canViewFinance")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const limited = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+    if (limited) return limited;
 
     const raw = await request.json();
     const parsed = createRetainerSchema.safeParse(raw);
@@ -64,6 +75,18 @@ export async function POST(request: NextRequest) {
           status: "active",
           notes: body.notes ?? null,
         },
+        select: {
+          id: true,
+          clientId: true,
+          title: true,
+          amount: true,
+          frequency: true,
+          startDate: true,
+          nextDueDate: true,
+          status: true,
+          notes: true,
+          createdAt: true,
+        },
       });
     }));
 
@@ -73,7 +96,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(retainer, { status: 201 });
   } catch (error) {
-    console.error("Error creating retainer:", error);
+    log.error("Failed to create retainer", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to create retainer" },
       { status: 500 }

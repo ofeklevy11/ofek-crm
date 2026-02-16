@@ -20,6 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Plus, X, Save, RotateCw, Trash2 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface SchemaField {
   name: string;
@@ -198,7 +199,7 @@ export default function AddRecordForm({
           displayName: a.displayName || null,
         }));
 
-      const res = await fetch(`/api/tables/${tableId}/records`, {
+      const res = await apiFetch(`/api/tables/${tableId}/records`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

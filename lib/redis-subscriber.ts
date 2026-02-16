@@ -1,4 +1,7 @@
 import Redis from "ioredis";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("RedisSubscriber");
 
 type MessageHandler = (channel: string, message: string) => void;
 
@@ -20,7 +23,11 @@ class SharedSubscriber {
   private connected = false;
 
   constructor() {
-    this.sub = new Redis(process.env.REDIS_URL || "", {
+    const redisUrl = process.env.REDIS_URL;
+    if (!redisUrl) {
+      throw new Error("FATAL: REDIS_URL environment variable is not set.");
+    }
+    this.sub = new Redis(redisUrl, {
       tls: process.env.REDIS_URL?.includes("rediss://") ? {} : undefined,
       keyPrefix:
         (process.env.NODE_ENV === "production" ? "prod:" : "dev:") + "app:",
@@ -34,7 +41,7 @@ class SharedSubscriber {
         try {
           handler(channel, message);
         } catch (err) {
-          console.error(`[SharedSubscriber] Handler error on channel ${channel}:`, err);
+          log.error("Handler error on channel", { channel, error: String(err) });
         }
       });
     });
@@ -79,9 +86,7 @@ class SharedSubscriber {
       if (this.connected) {
         await this.sub.subscribe(...newChannels);
       } else {
-        console.warn(
-          `[SharedSubscriber] Redis not yet connected, queuing ${newChannels.length} channel(s) — will subscribe on ready`,
-        );
+        log.warn("Redis not yet connected, queuing channels — will subscribe on ready", { channelCount: newChannels.length });
       }
     }
 

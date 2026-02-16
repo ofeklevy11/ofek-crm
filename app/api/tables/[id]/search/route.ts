@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
+import { canReadTable, hasUserFlag } from "@/lib/permissions";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("TableSearch");
 
 export async function GET(
   request: NextRequest,
@@ -11,6 +16,9 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const rl = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+    if (rl) return rl;
 
     const { id } = await params;
     const tableId = parseInt(id);
@@ -56,6 +64,13 @@ export async function GET(
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
 
+    if (!canReadTable(user, tableId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!hasUserFlag(user, "canSearchTables")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     // Parse schema
     let schema: any[] = [];
     try {
@@ -63,7 +78,7 @@ export async function GET(
         schema = table.schemaJson;
       }
     } catch (e) {
-      console.error("Invalid schema JSON", e);
+      log.error("Invalid schema JSON", { error: String(e) });
     }
 
     // OPTIMIZED: Use raw SQL with ILIKE to filter directly in DB
@@ -174,10 +189,7 @@ export async function GET(
 
           relatedDataMap[relTableId] = dataMap;
         } catch (error) {
-          console.error(
-            `Failed to fetch related table ${relTableId}`,
-            error
-          );
+          log.error("Failed to fetch related table", { relTableId, error: String(error) });
         }
       })
     );
@@ -264,7 +276,7 @@ export async function GET(
 
     return NextResponse.json(formattedRecords);
   } catch (error) {
-    console.error("Error searching records:", error);
+    log.error("Failed to search records", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to search records" },
       { status: 500 }

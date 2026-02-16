@@ -1,4 +1,7 @@
 import { inngest } from "../client";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("MultiEventJobs");
 
 /**
  * Background job for multi-event duration calculations.
@@ -93,7 +96,7 @@ export const processMultiEventDuration = inngest.createFunction(
 
     // Fix E: skip processing if record was deleted (with logging for debuggability)
     if (recordSnapshot.skipped) {
-      console.log(`[Multi-Event] Skipping record ${recordId} — not found (likely deleted)`);
+      log.info("Skipping record — not found (likely deleted)", { recordId });
       return { recordId, skipped: true };
     }
 
@@ -128,9 +131,7 @@ export const processMultiEventDuration = inngest.createFunction(
       const serialized = JSON.stringify(logs);
       const byteSize = Buffer.byteLength(serialized, "utf8");
       if (byteSize > 3_500_000) {
-        console.warn(
-          `[Multi-Event] Pre-fetched audit logs too large (${(byteSize / 1_000_000).toFixed(1)}MB), falling back to per-rule fetching`,
-        );
+        log.warn("Pre-fetched audit logs too large, falling back to per-rule fetching", { byteSizeMB: (byteSize / 1_000_000).toFixed(1) });
         return null;
       }
 
@@ -217,9 +218,9 @@ export const processMultiEventDuration = inngest.createFunction(
                 mediaFileId: config.mediaFileId,
               },
             });
-            console.log(`[Multi-Event] Delayed WhatsApp job enqueued after ${action.delay}s delay`);
+            log.info("Delayed WhatsApp job enqueued", { delaySec: action.delay });
           } else {
-            console.error(`[Multi-Event] Delayed WhatsApp: No phone resolved from ${phoneColumnId}`);
+            log.error("Delayed WhatsApp: No phone resolved", { phoneColumnId });
           }
         });
       }

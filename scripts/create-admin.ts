@@ -1,11 +1,12 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 const prisma = new PrismaClient();
 
 async function main() {
   const email = "admin@crm.com";
-  const password = "password123";
+  const password = crypto.randomBytes(16).toString("hex");
   const hashedPassword = await bcrypt.hash(password, 10);
 
   console.log(`Updating/Creating admin user: ${email}...`);
@@ -37,8 +38,8 @@ async function main() {
     },
   });
 
-  console.log(`Success! User: ${user.email}`);
-  console.log(`Password: ${password}`);
+  process.stdout.write(`Success! User: ${user.email}\n`);
+  process.stdout.write(`Password: ${password}\n`);
 }
 
 main()

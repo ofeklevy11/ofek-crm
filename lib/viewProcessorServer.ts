@@ -285,7 +285,7 @@ async function processAggregationServer(
 
         // We also need aggregated target field if present
         let aggSelect = Prisma.sql``;
-        if (config.targetField) {
+        if (config.targetField && SAFE_FIELD_NAME.test(config.targetField)) {
           const tf = config.targetField;
           // Ensure target is cast to numeric
           const targetCol = Prisma.raw(
