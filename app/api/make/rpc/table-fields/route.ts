@@ -88,14 +88,15 @@ export async function GET(req: Request) {
       columns = schema.columns;
     }
 
-    // Build Make-compatible parameter object (NOT array!)
-    const fields: Record<string, any> = {};
+    // Build Make-compatible parameter array
+    const fields: Array<Record<string, any>> = [];
 
     columns
       .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
       .forEach((col: any) => {
         const key = col.key || col.id;
         const field: Record<string, any> = {
+          name: key,
           type: mapColumnType(col.type),
           label: col.name,
         };
@@ -107,7 +108,7 @@ export async function GET(req: Request) {
           }));
         }
 
-        fields[key] = field;
+        fields.push(field);
       });
 
     return NextResponse.json(fields);
