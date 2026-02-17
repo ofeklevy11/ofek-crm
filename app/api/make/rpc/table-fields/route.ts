@@ -25,7 +25,8 @@ function mapColumnType(crmType: string): string {
 
 export async function GET(req: Request) {
   try {
-    const apiKey = req.headers.get("x-company-api-key");
+    const url = new URL(req.url);
+    const apiKey = req.headers.get("x-company-api-key") || url.searchParams.get("apiKey");
     if (!apiKey) {
       return NextResponse.json(
         { error: "Unauthorized: Missing API key" },
@@ -48,7 +49,6 @@ export async function GET(req: Request) {
     if (rateLimited) return rateLimited;
 
     // Get table_slug from query parameters
-    const url = new URL(req.url);
     const tableSlug = url.searchParams.get("table_slug");
 
     if (!tableSlug) {
