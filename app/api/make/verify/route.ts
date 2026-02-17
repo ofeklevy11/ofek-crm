@@ -44,7 +44,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       success: true,
-      apiKey: apiKey,
+      token: apiKey,
       company: { id: company.id, name: company.name },
     });
   } catch (error) {

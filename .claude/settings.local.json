@@ -33,7 +33,10 @@
       "Bash(do if ! grep -q \"getCurrentUser\\\\|CRON_SECRET\\\\|MAKE_WEBHOOK_SECRET\\\\|Inngest\\\\|Bearer\" \"$file\")",
       "Bash(then echo \"$file\" fi done)",
       "Bash(pnpm install:*)",
-      "Bash(pnpm build:*)"
+      "Bash(pnpm build:*)",
+      "WebFetch(domain:developers.make.com)",
+      "WebFetch(domain:www.make.com)",
+      "WebFetch(domain:apps.make.com)"
     ]
   }
 }
