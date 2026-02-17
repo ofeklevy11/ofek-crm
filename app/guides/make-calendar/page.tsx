@@ -76,12 +76,8 @@ export default function MakeCalendarGuide() {
                 <ul className="list-disc list-inside space-y-2 text-slate-700">
                   <li>חשבון Make פעיל.</li>
                   <li>
-                    <strong>סיסמת API (Secret Key):</strong> אותה סיסמה שהגדרת
-                    עבור המערכת (
-                    <code className="mx-1 bg-slate-100 px-1 py-0.5 rounded text-sm font-mono text-pink-600">
-                      MAKE_WEBHOOK_SECRET
-                    </code>
-                    ).
+                    <strong>מפתח חברה (Company API Key):</strong> מפתח ייחודי
+                    לזיהוי החברה שלך. יש להוסיפו ב-Header.
                   </li>
                   <li>
                     <strong>כתובת אימייל משתמש:</strong> חובה לספק את האימייל של
@@ -148,9 +144,9 @@ export default function MakeCalendarGuide() {
                         <span>Value</span>
                       </div>
                       <div className="flex justify-between border-t border-slate-700 pt-2">
-                        <span className="text-cyan-400">x-api-secret</span>
+                        <span className="text-cyan-400">x-company-api-key</span>
                         <span className="text-green-400">
-                          Your-Secret-Password
+                          your-company-api-key
                         </span>
                       </div>
                     </div>

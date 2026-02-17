@@ -79,14 +79,6 @@ export default function MakeIntegrationGuide() {
                 <ul className="list-disc list-inside space-y-2 text-slate-700">
                   <li>חשבון Make פעיל עם Scenario שאתה רוצה לחבר.</li>
                   <li>
-                    <strong>סיסמת API (Secret Key):</strong> הסיסמה שהגדרת
-                    ב-Environment Variables תחת השם
-                    <code className="mx-1 bg-slate-100 px-1 py-0.5 rounded text-sm font-mono text-pink-600">
-                      MAKE_WEBHOOK_SECRET
-                    </code>
-                    .
-                  </li>
-                  <li>
                     <strong>מפתח חברה (Company API Key):</strong> מפתח ייחודי
                     לזיהוי החברה שלך. יש להוסיפו ב-Header.
                   </li>
@@ -157,19 +149,13 @@ export default function MakeIntegrationGuide() {
                       <Info className="h-4 w-4 text-amber-600" />
                       <AlertTitle>חובה להוסיף!</AlertTitle>
                       <AlertDescription>
-                        בלי ה-Headers האלו הבקשה תיחסם (שגיאה 401).
+                        בלי ה-Header הזה הבקשה תיחסם (שגיאה 401).
                       </AlertDescription>
                     </Alert>
                     <div className="bg-slate-900 text-slate-50 p-4 rounded-lg font-mono text-sm">
                       <div className="flex justify-between mb-2 text-slate-400">
                         <span>Name</span>
                         <span>Value</span>
-                      </div>
-                      <div className="flex justify-between border-t border-slate-700 pt-2 pb-2">
-                        <span className="text-cyan-400">x-api-secret</span>
-                        <span className="text-green-400">
-                          Your-Secret-Password
-                        </span>
                       </div>
                       <div className="flex justify-between border-t border-slate-700 pt-2">
                         <span className="text-cyan-400">x-company-api-key</span>
@@ -266,8 +252,8 @@ export default function MakeIntegrationGuide() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-slate-600">
-                  הסיסמה שגויה או שה-Header <code>x-api-secret</code> חסר. וודא
-                  שהגדרת את משתנה הסביבה ב-Vercel ושביצעת Deploy מחדש.
+                  מפתח ה-API חסר או שגוי. וודא שה-Header{" "}
+                  <code>x-company-api-key</code> מוגדר עם מפתח תקין ופעיל.
                 </CardContent>
               </Card>
 

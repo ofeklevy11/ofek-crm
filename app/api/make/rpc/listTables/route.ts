@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { findApiKeyByValue } from "@/lib/api-key-utils";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
-import { verifyWebhookSecret } from "@/lib/webhook-auth";
 import { prisma } from "@/lib/prisma";
 import { createLogger } from "@/lib/logger";
 
@@ -9,13 +8,6 @@ const log = createLogger("MakeRpcTables");
 
 export async function GET(req: Request) {
   try {
-    const secret = process.env.MAKE_WEBHOOK_SECRET;
-    const authHeader = req.headers.get("x-api-secret");
-
-    if (!verifyWebhookSecret(authHeader, secret)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const apiKey = req.headers.get("x-company-api-key");
     if (!apiKey) {
       return NextResponse.json(

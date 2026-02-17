@@ -5,23 +5,12 @@ import { createLogger } from "@/lib/logger";
 const log = createLogger("MakeTasks");
 import { findApiKeyByValue } from "@/lib/api-key-utils";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
-import { verifyWebhookSecret, checkIdempotencyKey, setIdempotencyResult } from "@/lib/webhook-auth";
+import { checkIdempotencyKey, setIdempotencyResult } from "@/lib/webhook-auth";
 import { makeCreateTaskSchema } from "@/lib/validations/tasks";
 
 export async function POST(req: Request) {
   try {
-    // 1. Validate global webhook secret (timing-safe)
-    const secret = process.env.MAKE_WEBHOOK_SECRET;
-    const authHeader = req.headers.get("x-api-secret");
-
-    if (!verifyWebhookSecret(authHeader, secret)) {
-      return NextResponse.json(
-        { error: "Unauthorized: Invalid or missing secret key" },
-        { status: 401 }
-      );
-    }
-
-    // 2. Validate per-company API key (prevents cross-company writes)
+    // 1. Validate per-company API key (prevents cross-company writes)
     const apiKey = req.headers.get("x-company-api-key");
     if (!apiKey) {
       return NextResponse.json(

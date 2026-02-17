@@ -1,25 +1,4 @@
-import { timingSafeEqual } from "crypto";
 import { redis } from "@/lib/redis";
-
-/**
- * Timing-safe webhook secret comparison.
- * Prevents timing side-channel attacks that could leak the secret byte-by-byte.
- */
-export function verifyWebhookSecret(
-  headerValue: string | null,
-  expectedSecret: string | undefined,
-): boolean {
-  if (!headerValue || !expectedSecret) return false;
-  if (headerValue.length !== expectedSecret.length) return false;
-  try {
-    return timingSafeEqual(
-      Buffer.from(headerValue, "utf-8"),
-      Buffer.from(expectedSecret, "utf-8"),
-    );
-  } catch {
-    return false;
-  }
-}
 
 const IDEMPOTENCY_TTL = 86400; // 24 hours
 const MAX_KEY_LENGTH = 256;
