@@ -88,17 +88,18 @@ export async function GET(req: Request) {
       columns = schema.columns;
     }
 
-    // Build Make-compatible parameter list
-    const fields = columns
+    // Build Make-compatible parameter object (NOT array!)
+    const fields: Record<string, any> = {};
+
+    columns
       .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
-      .map((col: any) => {
+      .forEach((col: any) => {
+        const key = col.key || col.id;
         const field: Record<string, any> = {
-          name: col.key || col.id,
-          label: col.name,
           type: mapColumnType(col.type),
+          label: col.name,
         };
 
-        // For select columns, include options
         if (col.type === "select" && Array.isArray(col.options)) {
           field.options = col.options.map((opt: string) => ({
             label: opt,
@@ -106,7 +107,7 @@ export async function GET(req: Request) {
           }));
         }
 
-        return field;
+        fields[key] = field;
       });
 
     return NextResponse.json(fields);
