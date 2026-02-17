@@ -10,7 +10,8 @@ import { checkIdempotencyKey, setIdempotencyResult } from "@/lib/webhook-auth";
 export async function POST(req: Request) {
   try {
     // 1. Validate per-company API key
-    const apiKey = req.headers.get("x-company-api-key");
+    const url = new URL(req.url);
+    const apiKey = req.headers.get("x-company-api-key") || url.searchParams.get("apiKey");
 
     if (!apiKey) {
       return NextResponse.json(
