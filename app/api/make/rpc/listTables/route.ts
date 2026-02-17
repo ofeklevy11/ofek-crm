@@ -6,7 +6,7 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("MakeRpcTables");
 
-
+  
 
 export async function GET(req: Request) {
   try {
