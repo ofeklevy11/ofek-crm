@@ -10,8 +10,6 @@ const log = createLogger("MakeRpcTables");
 
 export async function GET(req: Request) {
   try {
-        const allHeaders = Object.fromEntries(req.headers.entries());
-    console.log("All headers:", JSON.stringify(allHeaders));
     const url = new URL(req.url);
     const apiKey = req.headers.get("x-company-api-key") || url.searchParams.get("apiKey");
     if (!apiKey) {

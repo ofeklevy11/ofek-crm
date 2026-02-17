@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     const companyId = keyRecord.companyId;
 
     // Extract table identifier and strip system fields from record data
-    const { table_slug, company_id: _ignoredCompanyId, ...recordData } = body;
+    const { table_slug, company_id: _ignoredCompanyId, apiKey: _ignoredApiKey, ...recordData } = body;
 
     // Validate table_slug: non-empty string, max 100 chars, alphanumeric + dashes only
     if (
