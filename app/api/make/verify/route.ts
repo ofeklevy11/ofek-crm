@@ -8,7 +8,6 @@ const log = createLogger("MakeVerify");
 
 export async function GET(req: Request) {
   try {
-    // 1. Validate per-company API key
     const apiKey = req.headers.get("x-company-api-key");
     if (!apiKey) {
       return NextResponse.json(
@@ -18,7 +17,6 @@ export async function GET(req: Request) {
     }
 
     const keyRecord = await findApiKeyByValue(apiKey);
-
     if (!keyRecord || !keyRecord.isActive) {
       return NextResponse.json(
         { error: "Unauthorized: Invalid or inactive Company API Key" },
@@ -26,12 +24,10 @@ export async function GET(req: Request) {
       );
     }
 
-    // 3. Rate limit per company
     const companyId = keyRecord.companyId;
     const rateLimited = await checkRateLimit(String(companyId), RATE_LIMITS.api);
     if (rateLimited) return rateLimited;
 
-    // 4. Fetch company name
     const company = await prisma.company.findUnique({
       where: { id: companyId },
       select: { id: true, name: true },
@@ -48,6 +44,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       success: true,
+      apiKey: apiKey,
       company: { id: company.id, name: company.name },
     });
   } catch (error) {
