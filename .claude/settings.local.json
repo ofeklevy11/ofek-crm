@@ -36,7 +36,8 @@
       "Bash(pnpm build:*)",
       "WebFetch(domain:developers.make.com)",
       "WebFetch(domain:www.make.com)",
-      "WebFetch(domain:apps.make.com)"
+      "WebFetch(domain:apps.make.com)",
+      "WebFetch(domain:community.make.com)"
     ]
   }
 }
