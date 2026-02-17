@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const apiKey = req.headers.get("x-company-api-key") || url.searchParams.get("apiKey");
     if (!apiKey) {
-      return NextResponse.json([{ label: "-- Enter API Key first --", value: "__no_key__" }]);
+      return NextResponse.json([]);
     }
 
     const keyRecord = await findApiKeyByValue(apiKey);

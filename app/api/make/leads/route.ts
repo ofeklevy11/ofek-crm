@@ -51,13 +51,16 @@ export async function POST(req: Request) {
     // Extract table identifier and strip system fields from record data
     const { table_slug, company_id: _ignoredCompanyId, apiKey: _ignoredApiKey, ...recordData } = body;
 
-    // Validate table_slug: non-empty string, max 100 chars, alphanumeric + dashes only
+    log.info("Incoming request", { table_slug, recordData, apiKey: apiKey ? "present" : "missing" });
+
+    // Validate table_slug: non-empty string, max 100 chars, alphanumeric + dashes + underscores
     if (
       !table_slug ||
       typeof table_slug !== "string" ||
       table_slug.length > 100 ||
-      !/^[a-zA-Z0-9-]+$/.test(table_slug)
+      !/^[a-zA-Z0-9_-]+$/.test(table_slug)
     ) {
+      log.error("Invalid table_slug", { table_slug, type: typeof table_slug });
       return NextResponse.json(
         { error: "Invalid or missing table_slug" },
         { status: 400 }
