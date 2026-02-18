@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
-import { validateMakeApiKey } from "@/lib/make-auth";
+import { validateMakeApiKey, verifyRpcToken } from "@/lib/make-auth";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("MakeRpcTableFields");
@@ -55,13 +55,22 @@ async function handleTableFields(req: Request) {
     log.info("RPC tableFields called", { tableSlug, method: req.method, fullUrl: req.url });
 
     const auth = await validateMakeApiKey(req, body?.apiKey);
-    if (!auth.success) return auth.response;
-    const { keyRecord } = auth;
+    let companyId: number;
 
-    log.info("Auth passed", { companyId: keyRecord.companyId });
+    if (auth.success) {
+      companyId = auth.keyRecord.companyId;
+    } else {
+      // Fallback: rpcToken from query or body
+      const rpcToken = url.searchParams.get("rpcToken") || body?.rpcToken;
+      const tokenCompanyId = rpcToken ? verifyRpcToken(rpcToken) : null;
+      if (!tokenCompanyId) return NextResponse.json([]);
+      companyId = tokenCompanyId;
+    }
+
+    log.info("Auth passed", { companyId });
 
     const rateLimited = await checkRateLimit(
-      String(keyRecord.companyId),
+      String(companyId),
       RATE_LIMITS.api,
     );
     if (rateLimited) return rateLimited;
@@ -83,7 +92,7 @@ async function handleTableFields(req: Request) {
 
     const table = await prisma.tableMeta.findFirst({
       where: {
-        companyId: keyRecord.companyId,
+        companyId,
         slug: tableSlug,
         deletedAt: null,
       },
@@ -91,7 +100,7 @@ async function handleTableFields(req: Request) {
     });
 
     if (!table) {
-      log.info("Table not found", { companyId: keyRecord.companyId, tableSlug });
+      log.info("Table not found", { companyId, tableSlug });
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
 

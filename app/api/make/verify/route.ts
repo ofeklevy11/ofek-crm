@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { findApiKeyByValue } from "@/lib/api-key-utils";
-import { extractMakeApiKey } from "@/lib/make-auth";
+import { extractMakeApiKey, generateRpcToken } from "@/lib/make-auth";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("MakeVerify");
@@ -37,7 +37,11 @@ export async function GET(req: Request) {
 
     log.info("API Key verified", { companyId: keyRecord.companyId });
 
-    return NextResponse.json({ apiKey });
+    return NextResponse.json({
+      apiKey,
+      companyId: keyRecord.companyId,
+      rpcToken: generateRpcToken(keyRecord.companyId),
+    });
   } catch (error) {
     log.error("Verify failed", { error: String(error) });
     return NextResponse.json(

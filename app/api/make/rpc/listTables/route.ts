@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
-import { validateMakeApiKey } from "@/lib/make-auth";
+import { validateMakeApiKey, verifyRpcToken } from "@/lib/make-auth";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("MakeRpcTables");
@@ -14,18 +14,28 @@ async function handleListTables(req: Request) {
     }
 
     const auth = await validateMakeApiKey(req, body?.apiKey);
-    if (!auth.success) return auth.response;
-    const { keyRecord } = auth;
+    let companyId: number;
+
+    if (auth.success) {
+      companyId = auth.keyRecord.companyId;
+    } else {
+      // Fallback: rpcToken from query or body
+      const url = new URL(req.url);
+      const rpcToken = url.searchParams.get("rpcToken") || body?.rpcToken;
+      const tokenCompanyId = rpcToken ? verifyRpcToken(rpcToken) : null;
+      if (!tokenCompanyId) return NextResponse.json([]);
+      companyId = tokenCompanyId;
+    }
 
     const rateLimited = await checkRateLimit(
-      String(keyRecord.companyId),
+      String(companyId),
       RATE_LIMITS.api,
     );
     if (rateLimited) return rateLimited;
 
     const tables = await prisma.tableMeta.findMany({
       where: {
-        companyId: keyRecord.companyId,
+        companyId,
         deletedAt: null,
       },
       select: { name: true, slug: true },
@@ -36,7 +46,7 @@ async function handleListTables(req: Request) {
     const result = tables.map((t) => ({ label: t.name, value: t.slug }));
 
     log.info("listTables result", {
-      companyId: keyRecord.companyId,
+      companyId,
       count: tables.length,
     });
 

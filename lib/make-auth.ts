@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { findApiKeyByValue } from "@/lib/api-key-utils";
 import { createLogger } from "@/lib/logger";
+import { createHmac, timingSafeEqual } from "crypto";
 
 const log = createLogger("MakeAuth");
 
@@ -75,4 +76,35 @@ export async function validateMakeApiKey(
   }
 
   return { success: true, keyRecord };
+}
+
+// --- RPC token auth (for Make.com RPCs where connection.apiKey doesn't resolve) ---
+
+const RPC_SECRET = process.env.SESSION_SECRET + "_make_rpc";
+
+/** Generate a signed RPC token for a company. Token format: companyId.signature */
+export function generateRpcToken(companyId: number): string {
+  const data = String(companyId);
+  const signature = createHmac("sha256", RPC_SECRET).update(data).digest("hex");
+  return `${data}.${signature}`;
+}
+
+/** Verify an RPC token and return the companyId, or null if invalid. */
+export function verifyRpcToken(token: string): number | null {
+  const dotIndex = token.indexOf(".");
+  if (dotIndex === -1) return null;
+
+  const companyIdStr = token.substring(0, dotIndex);
+  const signature = token.substring(dotIndex + 1);
+  if (!companyIdStr || !signature) return null;
+
+  const companyId = parseInt(companyIdStr, 10);
+  if (isNaN(companyId)) return null;
+
+  const expected = createHmac("sha256", RPC_SECRET).update(companyIdStr).digest("hex");
+  const sigBuf = Buffer.from(signature, "utf-8");
+  const expectedBuf = Buffer.from(expected, "utf-8");
+  if (sigBuf.length !== expectedBuf.length || !timingSafeEqual(sigBuf, expectedBuf)) return null;
+
+  return companyId;
 }
