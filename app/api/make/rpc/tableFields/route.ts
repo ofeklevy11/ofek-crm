@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
-import { findApiKeyByValue } from "@/lib/api-key-utils";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
+import { validateMakeApiKey } from "@/lib/make-auth";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("MakeRpcTableFields");
-
-// Simple in-memory cache for Make RPC calls that arrive without apiKey
-const fieldsCache = new Map<string, { data: any[]; ts: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /** Map CRM column types to Make parameter types */
 function mapColumnType(crmType: string): string {
@@ -30,30 +26,11 @@ function mapColumnType(crmType: string): string {
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const apiKey = req.headers.get("x-company-api-key") || url.searchParams.get("apiKey");
     const tableSlug = url.searchParams.get("table_slug");
 
-    // If no valid apiKey, return cached result if available
-    if (!apiKey || apiKey === "null") {
-      if (tableSlug) {
-        const cacheKey = `_:${tableSlug}`;
-        for (const [key, cached] of fieldsCache) {
-          if (key.endsWith(`:${tableSlug}`) && Date.now() - cached.ts < CACHE_TTL) {
-            log.info("Returning cached fields", { tableSlug, count: cached.data.length });
-            return NextResponse.json(cached.data);
-          }
-        }
-      }
-      return NextResponse.json([]);
-    }
-
-    const keyRecord = await findApiKeyByValue(apiKey);
-    if (!keyRecord || !keyRecord.isActive) {
-      return NextResponse.json(
-        { error: "Unauthorized: Invalid API Key" },
-        { status: 401 },
-      );
-    }
+    const auth = await validateMakeApiKey(req);
+    if (!auth.success) return auth.response;
+    const { keyRecord } = auth;
 
     const rateLimited = await checkRateLimit(
       String(keyRecord.companyId),
@@ -118,10 +95,6 @@ export async function GET(req: Request) {
 
         fields.push(field);
       });
-
-    // Cache the result
-    const cacheKey = `${keyRecord.companyId}:${tableSlug}`;
-    fieldsCache.set(cacheKey, { data: fields, ts: Date.now() });
 
     return NextResponse.json(fields);
   } catch (error) {

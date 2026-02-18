@@ -1,34 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { createLogger } from "@/lib/logger";
-
-const log = createLogger("MakeLeads");
-import { findApiKeyByValue } from "@/lib/api-key-utils";
+import { validateMakeApiKey } from "@/lib/make-auth";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { checkIdempotencyKey, setIdempotencyResult } from "@/lib/webhook-auth";
+
+const log = createLogger("MakeLeads");
 
 export async function POST(req: Request) {
   try {
     // 1. Validate per-company API key
-    const url = new URL(req.url);
-    const apiKey = req.headers.get("x-company-api-key") || url.searchParams.get("apiKey");
-
-    if (!apiKey || apiKey === "null") {
-      return NextResponse.json(
-        { error: "Unauthorized: Missing x-company-api-key header" },
-        { status: 401 }
-      );
-    }
-
-    // Validate Company API Key (looked up by hash)
-    const keyRecord = await findApiKeyByValue(apiKey);
-
-    if (!keyRecord || !keyRecord.isActive) {
-      return NextResponse.json(
-        { error: "Unauthorized: Invalid or inactive Company API Key" },
-        { status: 401 }
-      );
-    }
+    const auth = await validateMakeApiKey(req);
+    if (!auth.success) return auth.response;
+    const { keyRecord } = auth;
 
     // Rate limit per company
     const rateLimited = await checkRateLimit(String(keyRecord.companyId), RATE_LIMITS.webhook);
@@ -51,7 +35,7 @@ export async function POST(req: Request) {
     // Extract table identifier and strip system fields from record data
     const { table_slug, company_id: _ignoredCompanyId, apiKey: _ignoredApiKey, ...recordData } = body;
 
-    log.info("Incoming request", { table_slug, recordData, apiKey: apiKey ? "present" : "missing" });
+    log.info("Incoming request", { table_slug, recordData, apiKey: "present" });
 
     // Validate table_slug: non-empty string, max 100 chars, alphanumeric + dashes + underscores
     if (

@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { findApiKeyByValue } from "@/lib/api-key-utils";
+import { extractMakeApiKey } from "@/lib/make-auth";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("MakeVerify");
 
 export async function GET(req: Request) {
   try {
-    const url = new URL(req.url);
-    const apiKey = req.headers.get("x-company-api-key") || url.searchParams.get("apiKey");
+    const apiKey = extractMakeApiKey(req);
 
     if (!apiKey) {
       return NextResponse.json(

@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { createLogger } from "@/lib/logger";
-
-const log = createLogger("MakeCalendar");
-import { findApiKeyByValue } from "@/lib/api-key-utils";
+import { validateMakeApiKey } from "@/lib/make-auth";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { checkIdempotencyKey, setIdempotencyResult } from "@/lib/webhook-auth";
 import { createCalendarEventForCompany } from "@/lib/calendar-helpers";
@@ -13,6 +11,8 @@ import {
   MAX_EVENTS_PER_COMPANY,
 } from "@/lib/calendar-validation";
 import { defaultEventColors } from "@/lib/types";
+
+const log = createLogger("MakeCalendar");
 
 const ALLOWED_COLORS = new Set([
   ...defaultEventColors,
@@ -39,23 +39,10 @@ const parseIsraelDate = (dateStr: string): Date => {
 
 export async function POST(req: Request) {
   try {
-    // 1. Validate per-company API key (prevents cross-company writes)
-    const apiKey = req.headers.get("x-company-api-key");
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "Unauthorized: Missing x-company-api-key header" },
-        { status: 401 }
-      );
-    }
-
-    const keyRecord = await findApiKeyByValue(apiKey);
-
-    if (!keyRecord || !keyRecord.isActive) {
-      return NextResponse.json(
-        { error: "Unauthorized: Invalid or inactive Company API Key" },
-        { status: 401 }
-      );
-    }
+    // 1. Validate per-company API key
+    const auth = await validateMakeApiKey(req);
+    if (!auth.success) return auth.response;
+    const { keyRecord } = auth;
 
     // Rate limit per company
     const rateLimited = await checkRateLimit(String(keyRecord.companyId), RATE_LIMITS.webhook);
@@ -145,7 +132,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 5. Enforce per-company event limit (soft limit — TOCTOU race is bounded by webhook rate limit to ~60 overshoot)
+    // 5. Enforce per-company event limit
     const eventCount = await prisma.calendarEvent.count({
       where: { companyId },
     });
@@ -156,7 +143,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 6. Create Calendar Event scoped to the API key's company (with global automation rules)
+    // 6. Create Calendar Event scoped to the API key's company
     const event = await createCalendarEventForCompany(
       companyId,
       keyRecord.createdBy,
