@@ -5,6 +5,17 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("MakeVerify");
 
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "x-company-api-key, Content-Type",
+    },
+  });
+}
+
 export async function GET(req: Request) {
   try {
     const apiKey = extractMakeApiKey(req);
@@ -26,7 +37,6 @@ export async function GET(req: Request) {
 
     log.info("API Key verified", { companyId: keyRecord.companyId });
 
-    // Return apiKey so Make can store it in the connection
     return NextResponse.json({ apiKey });
   } catch (error) {
     log.error("Verify failed", { error: String(error) });
