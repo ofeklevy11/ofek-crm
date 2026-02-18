@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     const url = new URL(req.url);
     const apiKey = req.headers.get("x-company-api-key") || url.searchParams.get("apiKey");
 
-    if (!apiKey) {
+    if (!apiKey || apiKey === "null") {
       return NextResponse.json(
         { error: "Unauthorized: Missing x-company-api-key header" },
         { status: 401 }

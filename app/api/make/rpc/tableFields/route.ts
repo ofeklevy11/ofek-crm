@@ -22,15 +22,15 @@ function mapColumnType(crmType: string): string {
       return "text";
   }
 }
- 
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const apiKey = req.headers.get("x-company-api-key") || url.searchParams.get("apiKey");
-    if (!apiKey) {
+    if (!apiKey || apiKey === "null") {
       return NextResponse.json([]);
     }
- 
+
     const keyRecord = await findApiKeyByValue(apiKey);
     if (!keyRecord || !keyRecord.isActive) {
       return NextResponse.json(
@@ -48,7 +48,7 @@ export async function GET(req: Request) {
     // Get table_slug from query parameters
     const tableSlug = url.searchParams.get("table_slug");
 
-    // If no table selected yet, return empty array (Make calls this before user picks a table)
+    // If no table selected yet, return empty array
     if (!tableSlug) {
       return NextResponse.json([]);
     }

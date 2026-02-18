@@ -11,15 +11,14 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const apiKey = req.headers.get("x-company-api-key") || url.searchParams.get("apiKey");
 
-    // Debug: log every call to see what Make sends
     log.info("listTables called", {
       hasApiKey: !!apiKey,
+      apiKeyValue: apiKey,
       queryParams: url.searchParams.toString(),
-      headers: Object.fromEntries(req.headers.entries()),
     });
 
-    if (!apiKey) {
-      log.warn("listTables called without apiKey — returning empty array");
+    if (!apiKey || apiKey === "null") {
+      log.warn("listTables called without valid apiKey — returning empty array");
       return NextResponse.json([]);
     }
 
