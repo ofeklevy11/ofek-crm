@@ -40,6 +40,9 @@ export async function GET(req: Request) {
       take: 200,
     });
 
+    log.info("listTables result", { companyId: keyRecord.companyId, count: tables.length, tables });
+
+
     // Make RPC expects: [{ label, value }]
     return NextResponse.json(
       tables.map((t) => ({ label: t.name, value: t.slug })),
