@@ -48,11 +48,9 @@ export async function GET(req: Request) {
     // Get table_slug from query parameters
     const tableSlug = url.searchParams.get("table_slug");
 
+    // If no table selected yet, return empty array (Make calls this before user picks a table)
     if (!tableSlug) {
-      return NextResponse.json(
-        { error: "Missing table_slug parameter" },
-        { status: 400 },
-      );
+      return NextResponse.json([]);
     }
 
     // Validate slug format (allow alphanumeric, dashes, and underscores)
