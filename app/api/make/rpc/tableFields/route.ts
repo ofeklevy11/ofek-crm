@@ -38,21 +38,41 @@ async function handleTableFields(req: Request) {
   try {
     const url = new URL(req.url);
 
-    // Extract table_slug from query params or POST body
+    // Read raw body to handle any format Make.com sends
+    const rawBody = await req.text();
+
+    log.info("RPC tableFields raw request", {
+      method: req.method,
+      fullUrl: req.url,
+      contentType: req.headers.get("content-type"),
+      bodyLength: rawBody.length,
+      rawBody: rawBody.substring(0, 500),
+    });
+
+    // Try JSON parsing
     let body: any = null;
-    if (req.method === "POST") {
-      try {
-        body = await req.json();
-      } catch { /* no body or invalid JSON */ }
+    if (rawBody) {
+      try { body = JSON.parse(rawBody); } catch { /* not JSON */ }
     }
 
+    // Try URL-encoded parsing if JSON failed
+    if (!body && rawBody) {
+      try {
+        const params = new URLSearchParams(rawBody);
+        if (params.has("table_slug") || params.has("tableSlug")) {
+          body = Object.fromEntries(params.entries());
+        }
+      } catch { /* not URL-encoded */ }
+    }
+
+    // Extract table_slug from all possible locations
     const tableSlug =
       url.searchParams.get("table_slug") ||
       url.searchParams.get("tableSlug") ||
       body?.table_slug ||
-      body?.tableSlug;
-
-    log.info("RPC tableFields called", { tableSlug, method: req.method, fullUrl: req.url });
+      body?.tableSlug ||
+      body?.parameters?.table_slug ||
+      body?.parameters?.tableSlug;
 
     const auth = await validateMakeApiKey(req, body?.apiKey);
     let companyId: number;
