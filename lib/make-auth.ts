@@ -14,19 +14,30 @@ const log = createLogger("MakeAuth");
 export function extractMakeApiKey(req: Request): string | null {
   const url = new URL(req.url);
 
-  // 1. Custom header (primary)
+  // Read all sources once
   const customHeader = req.headers.get("x-company-api-key");
+  const authHeader = req.headers.get("authorization");
+  const queryKey = url.searchParams.get("apiKey");
+
+  log.info("API key extraction debug", {
+    path: url.pathname,
+    customHeader: customHeader ? `${customHeader.substring(0, 8)}...` : customHeader,
+    customHeaderType: typeof customHeader,
+    customHeaderLen: customHeader?.length ?? 0,
+    hasAuth: !!authHeader,
+    hasQuery: !!queryKey,
+  });
+
+  // 1. Custom header (primary)
   if (customHeader && customHeader !== "null") return customHeader;
 
   // 2. Authorization: Bearer
-  const authHeader = req.headers.get("authorization");
   if (authHeader) {
     const match = authHeader.match(/^Bearer\s+(.+)$/i);
     if (match?.[1] && match[1] !== "null") return match[1];
   }
 
   // 3. Query parameter fallback
-  const queryKey = url.searchParams.get("apiKey");
   if (queryKey && queryKey !== "null") return queryKey;
 
   log.warn("No API key found in request", {
