@@ -10,23 +10,14 @@ const log = createLogger("MakeAuth");
  *   1. x-company-api-key header
  *   2. Authorization: Bearer <key> header
  *   3. apiKey query parameter
+ *   4. Body parameter (passed explicitly by RPC handlers)
  */
-export function extractMakeApiKey(req: Request): string | null {
+export function extractMakeApiKey(req: Request, bodyApiKey?: string | null): string | null {
   const url = new URL(req.url);
 
-  // Read all sources once
   const customHeader = req.headers.get("x-company-api-key");
   const authHeader = req.headers.get("authorization");
   const queryKey = url.searchParams.get("apiKey");
-
-  log.info("API key extraction debug", {
-    path: url.pathname,
-    customHeader: customHeader ? `${customHeader.substring(0, 8)}...` : customHeader,
-    customHeaderType: typeof customHeader,
-    customHeaderLen: customHeader?.length ?? 0,
-    hasAuth: !!authHeader,
-    hasQuery: !!queryKey,
-  });
 
   // 1. Custom header (primary)
   if (customHeader && customHeader !== "null") return customHeader;
@@ -40,10 +31,8 @@ export function extractMakeApiKey(req: Request): string | null {
   // 3. Query parameter fallback
   if (queryKey && queryKey !== "null") return queryKey;
 
-  log.warn("No API key found in request", {
-    path: url.pathname,
-    headerNames: Array.from(req.headers.keys()),
-  });
+  // 4. Body parameter (for Make.com RPCs that pass connection params in body)
+  if (bodyApiKey && bodyApiKey !== "null") return bodyApiKey;
 
   return null;
 }
@@ -58,8 +47,11 @@ type ValidateResult =
  * Extract and validate a Make API key in one call.
  * Returns the key record on success, or a 401 response on failure.
  */
-export async function validateMakeApiKey(req: Request): Promise<ValidateResult> {
-  const apiKey = extractMakeApiKey(req);
+export async function validateMakeApiKey(
+  req: Request,
+  bodyApiKey?: string | null,
+): Promise<ValidateResult> {
+  const apiKey = extractMakeApiKey(req, bodyApiKey);
 
   if (!apiKey) {
     return {

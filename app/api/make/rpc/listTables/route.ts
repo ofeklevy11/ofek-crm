@@ -6,9 +6,14 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("MakeRpcTables");
 
-export async function GET(req: Request) {
+async function handleListTables(req: Request) {
   try {
-    const auth = await validateMakeApiKey(req);
+    let body: any = null;
+    if (req.method === "POST") {
+      try { body = await req.json(); } catch { /* no body or invalid JSON */ }
+    }
+
+    const auth = await validateMakeApiKey(req, body?.apiKey);
     if (!auth.success) return auth.response;
     const { keyRecord } = auth;
 
@@ -44,3 +49,6 @@ export async function GET(req: Request) {
     );
   }
 }
+
+export const GET = handleListTables;
+export const POST = handleListTables;

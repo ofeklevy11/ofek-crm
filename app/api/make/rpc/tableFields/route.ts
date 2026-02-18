@@ -54,7 +54,7 @@ async function handleTableFields(req: Request) {
 
     log.info("RPC tableFields called", { tableSlug, method: req.method, fullUrl: req.url });
 
-    const auth = await validateMakeApiKey(req);
+    const auth = await validateMakeApiKey(req, body?.apiKey);
     if (!auth.success) return auth.response;
     const { keyRecord } = auth;
 
