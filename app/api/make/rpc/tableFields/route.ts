@@ -55,8 +55,8 @@ export async function GET(req: Request) {
       );
     }
 
-    // Validate slug format
-    if (tableSlug.length > 100 || !/^[a-zA-Z0-9-]+$/.test(tableSlug)) {
+    // Validate slug format (allow alphanumeric, dashes, and underscores)
+    if (tableSlug.length > 100 || !/^[a-zA-Z0-9_-]+$/.test(tableSlug)) {
       return NextResponse.json(
         { error: "Invalid table_slug format" },
         { status: 400 },
