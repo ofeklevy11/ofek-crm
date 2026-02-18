@@ -6,6 +6,10 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("MakeRpcTables");
 
+// Simple in-memory cache for Make RPC calls that arrive without apiKey
+const tablesCache = new Map<number, { data: any[]; ts: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
@@ -13,12 +17,19 @@ export async function GET(req: Request) {
 
     log.info("listTables called", {
       hasApiKey: !!apiKey,
-      apiKeyValue: apiKey,
-      queryParams: url.searchParams.toString(),
+      apiKeyIsNull: apiKey === "null",
     });
 
+    // If no valid apiKey, return cached result if available
     if (!apiKey || apiKey === "null") {
-      log.warn("listTables called without valid apiKey — returning empty array");
+      // Return most recent cached result (for Make refresh calls)
+      for (const [companyId, cached] of tablesCache) {
+        if (Date.now() - cached.ts < CACHE_TTL) {
+          log.info("Returning cached tables", { companyId, count: cached.data.length });
+          return NextResponse.json(cached.data);
+        }
+      }
+      log.warn("No cached tables available — returning empty array");
       return NextResponse.json([]);
     }
 
@@ -46,16 +57,17 @@ export async function GET(req: Request) {
       take: 200,
     });
 
+    const result = tables.map((t) => ({ label: t.name, value: t.slug }));
+
+    // Cache the result for subsequent calls without apiKey
+    tablesCache.set(keyRecord.companyId, { data: result, ts: Date.now() });
+
     log.info("listTables result", {
       companyId: keyRecord.companyId,
       count: tables.length,
-      tables,
     });
 
-    // Make RPC expects: [{ label, value }]
-    return NextResponse.json(
-      tables.map((t) => ({ label: t.name, value: t.slug })),
-    );
+    return NextResponse.json(result);
   } catch (error) {
     log.error("RPC tables failed", { error: String(error) });
     return NextResponse.json(

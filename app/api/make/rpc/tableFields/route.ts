@@ -6,6 +6,10 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("MakeRpcTableFields");
 
+// Simple in-memory cache for Make RPC calls that arrive without apiKey
+const fieldsCache = new Map<string, { data: any[]; ts: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /** Map CRM column types to Make parameter types */
 function mapColumnType(crmType: string): string {
   switch (crmType) {
@@ -27,7 +31,19 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const apiKey = req.headers.get("x-company-api-key") || url.searchParams.get("apiKey");
+    const tableSlug = url.searchParams.get("table_slug");
+
+    // If no valid apiKey, return cached result if available
     if (!apiKey || apiKey === "null") {
+      if (tableSlug) {
+        const cacheKey = `_:${tableSlug}`;
+        for (const [key, cached] of fieldsCache) {
+          if (key.endsWith(`:${tableSlug}`) && Date.now() - cached.ts < CACHE_TTL) {
+            log.info("Returning cached fields", { tableSlug, count: cached.data.length });
+            return NextResponse.json(cached.data);
+          }
+        }
+      }
       return NextResponse.json([]);
     }
 
@@ -44,9 +60,6 @@ export async function GET(req: Request) {
       RATE_LIMITS.api,
     );
     if (rateLimited) return rateLimited;
-
-    // Get table_slug from query parameters
-    const tableSlug = url.searchParams.get("table_slug");
 
     // If no table selected yet, return empty array
     if (!tableSlug) {
@@ -105,6 +118,10 @@ export async function GET(req: Request) {
 
         fields.push(field);
       });
+
+    // Cache the result
+    const cacheKey = `${keyRecord.companyId}:${tableSlug}`;
+    fieldsCache.set(cacheKey, { data: fields, ts: Date.now() });
 
     return NextResponse.json(fields);
   } catch (error) {
