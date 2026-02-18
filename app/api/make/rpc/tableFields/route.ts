@@ -28,9 +28,13 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const tableSlug = url.searchParams.get("table_slug");
 
+    log.info("RPC tableFields called", { tableSlug, fullUrl: req.url });
+
     const auth = await validateMakeApiKey(req);
     if (!auth.success) return auth.response;
     const { keyRecord } = auth;
+
+    log.info("Auth passed", { companyId: keyRecord.companyId });
 
     const rateLimited = await checkRateLimit(
       String(keyRecord.companyId),
@@ -40,11 +44,13 @@ export async function GET(req: Request) {
 
     // If no table selected yet, return empty array
     if (!tableSlug) {
+      log.info("No table_slug provided, returning empty array");
       return NextResponse.json([]);
     }
 
     // Validate slug format (allow alphanumeric, dashes, and underscores)
     if (tableSlug.length > 100 || !/^[a-zA-Z0-9_-]+$/.test(tableSlug)) {
+      log.info("Invalid table_slug format", { tableSlug });
       return NextResponse.json(
         { error: "Invalid table_slug format" },
         { status: 400 },
@@ -61,6 +67,7 @@ export async function GET(req: Request) {
     });
 
     if (!table) {
+      log.info("Table not found", { companyId: keyRecord.companyId, tableSlug });
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
 
@@ -72,6 +79,15 @@ export async function GET(req: Request) {
     } else if (schema?.columns && Array.isArray(schema.columns)) {
       columns = schema.columns;
     }
+
+    log.info("Schema parsed", {
+      tableSlug,
+      schemaType: typeof schema,
+      isArray: Array.isArray(schema),
+      hasColumns: !!schema?.columns,
+      columnCount: columns.length,
+      rawSchema: JSON.stringify(schema).substring(0, 500),
+    });
 
     // Build Make-compatible parameter array
     const fields: Array<Record<string, any>> = [];
@@ -95,6 +111,8 @@ export async function GET(req: Request) {
 
         fields.push(field);
       });
+
+    log.info("Returning fields", { tableSlug, fieldCount: fields.length });
 
     return NextResponse.json(fields);
   } catch (error) {
