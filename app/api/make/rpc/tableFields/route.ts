@@ -22,7 +22,7 @@ function mapColumnType(crmType: string): string {
       return "text";
   }
 }
-
+ 
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
