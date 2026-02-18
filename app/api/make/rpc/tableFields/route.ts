@@ -6,29 +6,53 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("MakeRpcTableFields");
 
+/** Field types that aren't real data columns and should be excluded */
+const NON_DATA_TYPES = new Set([
+  "relation",
+  "lookup",
+  "automation",
+]);
+
 /** Map CRM column types to Make parameter types */
 function mapColumnType(crmType: string): string {
   switch (crmType) {
     case "number":
     case "currency":
+    case "score":
       return "number";
     case "date":
       return "date";
     case "boolean":
       return "boolean";
     case "select":
+    case "radio":
       return "select";
+    case "url":
+      return "url";
     default:
       return "text";
   }
 }
 
-export async function GET(req: Request) {
+async function handleTableFields(req: Request) {
   try {
     const url = new URL(req.url);
-    const tableSlug = url.searchParams.get("table_slug");
 
-    log.info("RPC tableFields called", { tableSlug, fullUrl: req.url });
+    // Extract table_slug from query params or POST body
+    let body: any = null;
+    if (req.method === "POST") {
+      try {
+        body = await req.json();
+      } catch { /* no body or invalid JSON */ }
+    }
+
+    const tableSlug =
+      url.searchParams.get("table_slug") ||
+      url.searchParams.get("tableSlug") ||
+      body?.table_slug ||
+      body?.tableSlug;
+
+    log.info("RPC tableFields called", { tableSlug, method: req.method, fullUrl: req.url });
 
     const auth = await validateMakeApiKey(req);
     if (!auth.success) return auth.response;
@@ -71,9 +95,18 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
 
-    // Parse schemaJson → columns
+    // Parse schemaJson — handle double-stringified JSON
+    let schema: any = table.schemaJson;
+    let wasDoubleStringified = false;
+
+    if (typeof schema === "string") {
+      try {
+        schema = JSON.parse(schema);
+        wasDoubleStringified = true;
+      } catch { /* leave as-is */ }
+    }
+
     let columns: any[] = [];
-    const schema = table.schemaJson as any;
     if (Array.isArray(schema)) {
       columns = schema;
     } else if (schema?.columns && Array.isArray(schema.columns)) {
@@ -82,27 +115,32 @@ export async function GET(req: Request) {
 
     log.info("Schema parsed", {
       tableSlug,
-      schemaType: typeof schema,
+      schemaType: typeof table.schemaJson,
+      wasDoubleStringified,
       isArray: Array.isArray(schema),
       hasColumns: !!schema?.columns,
       columnCount: columns.length,
       rawSchema: JSON.stringify(schema).substring(0, 500),
     });
 
-    // Build Make-compatible parameter array
+    // Build Make-compatible parameter array, filtering out non-data types
     const fields: Array<Record<string, any>> = [];
 
     columns
+      .filter((col: any) => !NON_DATA_TYPES.has(col.type))
       .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
       .forEach((col: any) => {
-        const key = col.key || col.id;
+        // Format B (finance-setup) has 'key' prop; Format A (UI) uses 'name' as key and 'label' as display
+        const fieldKey = col.key || col.name || col.id;
+        const fieldLabel = col.key ? col.name : (col.label || col.name);
+
         const field: Record<string, any> = {
-          name: key,
+          name: fieldKey,
           type: mapColumnType(col.type),
-          label: col.name,
+          label: fieldLabel,
         };
 
-        if (col.type === "select" && Array.isArray(col.options)) {
+        if ((col.type === "select" || col.type === "radio") && Array.isArray(col.options)) {
           field.options = col.options.map((opt: string) => ({
             label: opt,
             value: opt,
@@ -123,3 +161,6 @@ export async function GET(req: Request) {
     );
   }
 }
+
+export const GET = handleTableFields;
+export const POST = handleTableFields;
