@@ -30,7 +30,7 @@ export async function GET(req: Request) {
     if (!apiKey) {
       return NextResponse.json([]);
     }
-
+ 
     const keyRecord = await findApiKeyByValue(apiKey);
     if (!keyRecord || !keyRecord.isActive) {
       return NextResponse.json(
