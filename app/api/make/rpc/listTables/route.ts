@@ -6,13 +6,20 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("MakeRpcTables");
 
-  
-
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const apiKey = req.headers.get("x-company-api-key") || url.searchParams.get("apiKey");
+
+    // Debug: log every call to see what Make sends
+    log.info("listTables called", {
+      hasApiKey: !!apiKey,
+      queryParams: url.searchParams.toString(),
+      headers: Object.fromEntries(req.headers.entries()),
+    });
+
     if (!apiKey) {
+      log.warn("listTables called without apiKey — returning empty array");
       return NextResponse.json([]);
     }
 
@@ -40,8 +47,11 @@ export async function GET(req: Request) {
       take: 200,
     });
 
-    log.info("listTables result", { companyId: keyRecord.companyId, count: tables.length, tables });
-
+    log.info("listTables result", {
+      companyId: keyRecord.companyId,
+      count: tables.length,
+      tables,
+    });
 
     // Make RPC expects: [{ label, value }]
     return NextResponse.json(
