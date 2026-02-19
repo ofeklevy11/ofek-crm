@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import Script from "next/script";
 import {
   getWhatsAppAccounts,
   disconnectWhatsAppAccount,
@@ -38,6 +39,46 @@ export default function WhatsAppEmbeddedSignup() {
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [sdkLoaded, setSdkLoaded] = useState(false);
+  const [sdkError, setSdkError] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const appId = process.env.NEXT_PUBLIC_WHATSAPP_APP_ID;
+
+  const initFB = useCallback(() => {
+    if (!appId || sdkLoaded) return;
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    window.FB.init({
+      appId,
+      autoLogAppEvents: true,
+      xfbml: false,
+      version: "v21.0",
+    });
+    setSdkLoaded(true);
+  }, [appId, sdkLoaded]);
+
+  // Set up fbAsyncInit fallback and timeout
+  useEffect(() => {
+    if (!appId) return;
+
+    // If FB already loaded (e.g. cached), init immediately
+    if (window.FB) {
+      initFB();
+      return;
+    }
+
+    window.fbAsyncInit = () => {
+      initFB();
+    };
+
+    // Timeout: if SDK hasn't loaded within 15s, show error
+    timeoutRef.current = setTimeout(() => {
+      if (!sdkLoaded) setSdkError(true);
+    }, 15_000);
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [appId, initFB, sdkLoaded]);
 
   const fetchAccounts = useCallback(async () => {
     try {
@@ -47,34 +88,6 @@ export default function WhatsAppEmbeddedSignup() {
       toast.error("שגיאה בטעינת חשבונות WhatsApp");
     } finally {
       setLoading(false);
-    }
-  }, []);
-
-  // Load Facebook SDK
-  useEffect(() => {
-    const appId = process.env.NEXT_PUBLIC_WHATSAPP_APP_ID;
-    if (!appId) return;
-
-    window.fbAsyncInit = () => {
-      window.FB.init({
-        appId,
-        autoLogAppEvents: true,
-        xfbml: false,
-        version: "v21.0",
-      });
-      setSdkLoaded(true);
-    };
-
-    // Load SDK script
-    if (!document.getElementById("facebook-jssdk")) {
-      const script = document.createElement("script");
-      script.id = "facebook-jssdk";
-      script.src = "https://connect.facebook.net/en_US/sdk.js";
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
-    } else if (window.FB) {
-      setSdkLoaded(true);
     }
   }, []);
 
@@ -161,6 +174,21 @@ export default function WhatsAppEmbeddedSignup() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      {appId && (
+        <Script
+          id="facebook-jssdk"
+          src="https://connect.facebook.net/en_US/sdk.js"
+          strategy="afterInteractive"
+          onReady={() => {
+            if (window.FB && !sdkLoaded) initFB();
+          }}
+          onError={() => {
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            setSdkError(true);
+          }}
+        />
+      )}
+
       {/* Header */}
       <div className="bg-white rounded-xl shadow-sm border p-8">
         <div className="flex items-center gap-3 mb-4">
@@ -203,9 +231,14 @@ export default function WhatsAppEmbeddedSignup() {
                 "התחבר ל-WhatsApp"
               )}
             </button>
-            {!sdkLoaded && (
+            {!sdkLoaded && !sdkError && (
               <p className="text-xs text-gray-400 mt-2">
                 טוען Facebook SDK...
+              </p>
+            )}
+            {sdkError && (
+              <p className="text-xs text-red-500 mt-2">
+                שגיאה בטעינת Facebook SDK. נסה לרענן את הדף.
               </p>
             )}
           </div>

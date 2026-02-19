@@ -31,6 +31,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -53,6 +62,8 @@ import {
   ChevronDown,
   ChevronUp,
   Columns3,
+  GripVertical,
+  Eye,
 } from "lucide-react";
 import EditRecordModal from "./EditRecordModal";
 import ImportRecordsModal from "./ImportRecordsModal";
@@ -61,6 +72,43 @@ import { cn } from "@/lib/utils";
 import { getTextColorForBackground } from "@/components/ui/ColorPicker";
 import type { TabsConfig, DisplayConfig, SchemaFieldWithTab } from "@/lib/types/table-tabs";
 import { getVisibleColumns, parseTabsConfig, parseDisplayConfig } from "@/lib/types/table-tabs";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+function SortableColumnItem({ id, label, onRemove }: { id: string; label: string; onRemove: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center gap-2 px-2 py-1.5 rounded border bg-background text-sm">
+      <button type="button" {...attributes} {...listeners} className="cursor-grab touch-none text-muted-foreground hover:text-foreground">
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <span className="flex-1 truncate">{label}</span>
+      <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-destructive">
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
 
 interface SchemaField {
   name: string;
@@ -498,28 +546,36 @@ export default function RecordTable({
   );
   const hasHiddenColumns = uniqueFields.length > visibleFields.length;
 
-  // Toggle column visibility and persist via updateTable
-  const handleToggleColumn = async (fieldName: string) => {
-    const currentVisible = displayConfig?.visibleColumns ?? uniqueFields.slice(0, 12).map((f) => f.name);
-    const currentOrder = displayConfig?.columnOrder ?? currentVisible;
-    let newVisible: string[];
-    let newOrder: string[];
+  // Column dialog local state & DnD
+  const [localOrder, setLocalOrder] = useState<string[]>([]);
+  const columnSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
 
-    if (currentVisible.includes(fieldName)) {
-      // Remove
-      newVisible = currentVisible.filter((n) => n !== fieldName);
-      newOrder = currentOrder.filter((n) => n !== fieldName);
-    } else {
-      // Add (max 12)
-      if (currentVisible.length >= 12) return;
-      newVisible = [...currentVisible, fieldName];
-      newOrder = [...currentOrder, fieldName];
+  const handleColumnDialogOpen = (open: boolean) => {
+    if (open) {
+      const currentVisible = displayConfig?.visibleColumns ?? uniqueFields.slice(0, 12).map((f) => f.name);
+      const currentOrder = displayConfig?.columnOrder ?? currentVisible;
+      setLocalOrder([...currentOrder]);
     }
+    setColumnSelectorOpen(open);
+  };
 
-    const newConfig: DisplayConfig = { visibleColumns: newVisible, columnOrder: newOrder };
+  const handleColumnDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setLocalOrder((prev) => {
+        const oldIndex = prev.indexOf(String(active.id));
+        const newIndex = prev.indexOf(String(over.id));
+        return arrayMove(prev, oldIndex, newIndex);
+      });
+    }
+  };
+
+  const handleColumnSave = async () => {
+    const newConfig: DisplayConfig = { visibleColumns: localOrder, columnOrder: localOrder };
     setDisplayConfig(newConfig);
-
-    // Persist in background
+    setColumnSelectorOpen(false);
     try {
       const { updateTable } = await import("@/app/actions/tables");
       await updateTable(tableId, { displayConfig: newConfig as any });
@@ -1018,38 +1074,86 @@ export default function RecordTable({
                 </>
               )}
               {/* Column Selector */}
-              {hasHiddenColumns && canEdit && (
-                <Popover open={columnSelectorOpen} onOpenChange={setColumnSelectorOpen}>
-                  <PopoverTrigger asChild>
+              {canEdit && (
+                <Dialog open={columnSelectorOpen} onOpenChange={handleColumnDialogOpen}>
+                  <DialogTrigger asChild>
                     <Button variant="outline" size="sm" className="gap-2">
                       <Columns3 className="h-4 w-4" />
                       עמודות ({visibleFields.length}/{uniqueFields.length})
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-64 max-h-80 overflow-y-auto" align="end" dir="rtl">
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold text-muted-foreground mb-2">
-                        בחר עמודות לתצוגה (מקס&apos; 12)
-                      </p>
-                      {uniqueFields.map((field) => {
-                        const isVisible = visibleFields.some((vf) => vf.name === field.name);
-                        return (
-                          <label
-                            key={field.name}
-                            className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/50 cursor-pointer text-sm"
-                          >
-                            <Checkbox
-                              checked={isVisible}
-                              onCheckedChange={() => handleToggleColumn(field.name)}
-                              disabled={!isVisible && visibleFields.length >= 12}
-                            />
-                            <span className="truncate">{field.label}</span>
-                          </label>
-                        );
-                      })}
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col" dir="rtl" showCloseButton={false}>
+                    <DialogHeader>
+                      <DialogTitle>ניהול עמודות</DialogTitle>
+                      <DialogDescription>
+                        גרור לשינוי סדר, הסר או הוסף עמודות (מקס׳ 12)
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-y-auto space-y-4 min-h-0">
+                      {/* Visible columns - sortable */}
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground mb-2">
+                          עמודות מוצגות ({localOrder.length})
+                        </p>
+                        <DndContext sensors={columnSensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
+                          <SortableContext items={localOrder} strategy={verticalListSortingStrategy}>
+                            <div className="space-y-1">
+                              {localOrder.map((fieldName) => {
+                                const field = uniqueFields.find((f) => f.name === fieldName);
+                                if (!field) return null;
+                                return (
+                                  <SortableColumnItem
+                                    key={fieldName}
+                                    id={fieldName}
+                                    label={field.label}
+                                    onRemove={() => setLocalOrder((prev) => prev.filter((n) => n !== fieldName))}
+                                  />
+                                );
+                              })}
+                            </div>
+                          </SortableContext>
+                        </DndContext>
+                        {localOrder.length === 0 && (
+                          <p className="text-xs text-muted-foreground text-center py-3">אין עמודות מוצגות</p>
+                        )}
+                      </div>
+                      {/* Hidden columns */}
+                      {uniqueFields.filter((f) => !localOrder.includes(f.name)).length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground mb-2">
+                            עמודות מוסתרות
+                          </p>
+                          <div className="space-y-1">
+                            {uniqueFields
+                              .filter((f) => !localOrder.includes(f.name))
+                              .map((field) => (
+                                <button
+                                  key={field.name}
+                                  onClick={() => {
+                                    if (localOrder.length >= 12) return;
+                                    setLocalOrder((prev) => [...prev, field.name]);
+                                  }}
+                                  disabled={localOrder.length >= 12}
+                                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/50 text-sm w-full text-right disabled:opacity-50"
+                                >
+                                  <Eye className="h-4 w-4 text-muted-foreground shrink-0" />
+                                  <span className="truncate">{field.label}</span>
+                                </button>
+                              ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </PopoverContent>
-                </Popover>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                      <Button variant="outline" onClick={() => setColumnSelectorOpen(false)}>
+                        ביטול
+                      </Button>
+                      <Button onClick={handleColumnSave}>
+                        שמור
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               )}
               {selectedIds.length === 0 && canExport && (
                 <>
