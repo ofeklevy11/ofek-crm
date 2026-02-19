@@ -399,7 +399,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
             <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Shield className="w-5 h-5 text-indigo-600" />
-                ניהול אינטגרציות 
+                ניהול אינטגרציות  
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
