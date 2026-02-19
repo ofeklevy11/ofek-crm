@@ -412,7 +412,7 @@ export const sendWaOutboundMessage = inngest.createFunction(
         "@/lib/services/whatsapp-cloud-api"
       );
 
-      const accessToken = decrypt({
+      const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || decrypt({
         ciphertext: context.accessTokenEnc,
         iv: context.accessTokenIv,
         authTag: context.accessTokenTag,
@@ -535,7 +535,7 @@ export const downloadWaMedia = inngest.createFunction(
         throw new NonRetriableError("WhatsApp account not found");
       }
 
-      return decrypt({
+      return process.env.WHATSAPP_ACCESS_TOKEN || decrypt({
         ciphertext: account.accessTokenEnc,
         iv: account.accessTokenIv,
         authTag: account.accessTokenTag,
