@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ status: "ok" });
 }
-
+ 
 async function dispatchEvents(
   value: WebhookChangeValue,
   companyId: number,
