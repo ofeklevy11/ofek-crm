@@ -403,37 +403,70 @@ export default function ProfileContent({ user }: ProfileContentProps) {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
-              <div className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-slate-300 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="p-2 bg-green-50 rounded-lg border border-green-100">
-                    <span className="text-green-600 font-bold text-lg">WA</span>
-                    {/* Or use an icon if available */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-slate-300 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-green-50 rounded-lg border border-green-100">
+                      <span className="text-green-600 font-bold text-lg">WA</span>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-slate-900">
+                        Green API (WhatsApp)
+                      </h4>
+                      <p className="text-sm text-slate-500">
+                        חיבור וואטסאפ ארגוני לשליחת הודעות
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-900">
-                      Green API (WhatsApp)
-                    </h4>
-                    <p className="text-sm text-slate-500">
-                      חיבור וואטסאפ ארגוני לשליחת הודעות
-                    </p>
-                  </div>
+                  {isAdmin ? (
+                    <Button
+                      variant="outline"
+                      className="bg-white hover:bg-slate-50 text-indigo-600 border-indigo-200 hover:border-indigo-300"
+                      onClick={() => router.push("/profile/green-api")}
+                    >
+                      הגדרות
+                    </Button>
+                  ) : (
+                    <Badge
+                      variant="secondary"
+                      className="bg-slate-100 text-slate-500"
+                    >
+                      גישה לאדמין בלבד
+                    </Badge>
+                  )}
                 </div>
-                {isAdmin ? (
-                  <Button
-                    variant="outline"
-                    className="bg-white hover:bg-slate-50 text-indigo-600 border-indigo-200 hover:border-indigo-300"
-                    onClick={() => router.push("/profile/green-api")}
-                  >
-                    הגדרות
-                  </Button>
-                ) : (
-                  <Badge
-                    variant="secondary"
-                    className="bg-slate-100 text-slate-500"
-                  >
-                    גישה לאדמין בלבד
-                  </Badge>
-                )}
+
+                <div className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-slate-300 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-green-50 rounded-lg border border-green-100">
+                      <span className="text-green-600 font-bold text-lg">WB</span>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-slate-900">
+                        WhatsApp Business (Cloud API)
+                      </h4>
+                      <p className="text-sm text-slate-500">
+                        חיבור WhatsApp רשמי דרך Meta Business
+                      </p>
+                    </div>
+                  </div>
+                  {isAdmin ? (
+                    <Button
+                      variant="outline"
+                      className="bg-white hover:bg-slate-50 text-indigo-600 border-indigo-200 hover:border-indigo-300"
+                      onClick={() => router.push("/profile/whatsapp")}
+                    >
+                      הגדרות
+                    </Button>
+                  ) : (
+                    <Badge
+                      variant="secondary"
+                      className="bg-slate-100 text-slate-500"
+                    >
+                      גישה לאדמין בלבד
+                    </Badge>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
