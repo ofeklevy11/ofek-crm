@@ -95,6 +95,31 @@ export default function WhatsAppEmbeddedSignup({ nonce }: { nonce: string }) {
     fetchAccounts();
   }, [fetchAccounts]);
 
+  const handleAuthCode = async (code: string) => {
+    try {
+      const res = await fetch("/api/whatsapp/embedded-signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        body: JSON.stringify({ code }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to connect");
+      }
+
+      toast.success("WhatsApp חובר בהצלחה!");
+      await fetchAccounts();
+    } catch (error: any) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setConnecting(false);
+    }
+  };
+
   const handleConnect = () => {
     if (!sdkLoaded || !window.FB) {
       toast.error("טרם נטען חיבור פייסבוק. אנא המתינו ונסו שוב");
@@ -103,45 +128,31 @@ export default function WhatsAppEmbeddedSignup({ nonce }: { nonce: string }) {
 
     setConnecting(true);
 
-    window.FB.login(
-      async (response: any) => {
-        if (response.authResponse?.code) {
-          try {
-            const res = await fetch("/api/whatsapp/embedded-signup", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-Requested-With": "XMLHttpRequest",
-              },
-              body: JSON.stringify({ code: response.authResponse.code }),
-            });
-
-            if (!res.ok) {
-              const err = await res.json().catch(() => ({}));
-              throw new Error(err.error || "Failed to connect");
-            }
-
-            toast.success("WhatsApp חובר בהצלחה!");
-            await fetchAccounts();
-          } catch (error: any) {
-            toast.error(getUserFriendlyError(error));
+    try {
+      window.FB.login(
+        (response: any) => {
+          if (response.authResponse?.code) {
+            handleAuthCode(response.authResponse.code);
+          } else {
+            toast.error("החיבור בוטל");
+            setConnecting(false);
           }
-        } else {
-          toast.error("החיבור בוטל");
-        }
-        setConnecting(false);
-      },
-      {
-        config_id: process.env.NEXT_PUBLIC_WHATSAPP_CONFIG_ID || undefined,
-        response_type: "code",
-        override_default_response_type: true,
-        extras: {
-          setup: {},
-          featureType: "",
-          sessionInfoVersion: 2,
         },
-      },
-    );
+        {
+          config_id: process.env.NEXT_PUBLIC_WHATSAPP_CONFIG_ID || undefined,
+          response_type: "code",
+          override_default_response_type: true,
+          extras: {
+            setup: {},
+            featureType: "",
+            sessionInfoVersion: 2,
+          },
+        },
+      );
+    } catch (error: any) {
+      toast.error(getUserFriendlyError(error));
+      setConnecting(false);
+    }
   };
 
   const handleDisconnect = async (accountId: number) => {
