@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 3: For each WABA, fetch phone numbers and store
-    const results = [];
+    const results: { accountId: number; wabaId: string; businessName: string | null }[] = [];
     for (const wabaId of wabaIds) {
       // Get WABA details
       const wabaRes = await fetch(

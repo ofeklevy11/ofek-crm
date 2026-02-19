@@ -23,6 +23,16 @@ export async function GET(req: NextRequest) {
     return new NextResponse("Bad request", { status: 400 });
   }
 
+  // Check env-based verify token first (useful for testing)
+  const envToken = process.env.WHATSAPP_VERIFY_TOKEN;
+  if (envToken && token === envToken) {
+    log.info("Webhook verified via env token");
+    return new NextResponse(challenge, {
+      status: 200,
+      headers: { "Content-Type": "text/plain" },
+    });
+  }
+
   // Find a WhatsApp account with this verify token
   const account = await prisma.whatsAppAccount.findFirst({
     where: { webhookVerifyToken: token },

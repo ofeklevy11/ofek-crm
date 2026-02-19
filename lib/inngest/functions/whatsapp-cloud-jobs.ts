@@ -101,7 +101,7 @@ export const processWaIncomingMessage = inngest.createFunction(
         });
         if (existing) {
           log.info("Duplicate message skipped", { wamId: message.id });
-          return { id: existing.id, duplicate: true };
+          return { id: existing.id.toString(), duplicate: true };
         }
       }
 
@@ -130,7 +130,7 @@ export const processWaIncomingMessage = inngest.createFunction(
         select: { id: true },
       });
 
-      return { id: created.id, duplicate: false };
+      return { id: created.id.toString(), duplicate: false };
     });
 
     if (storedMessage.duplicate) {
@@ -158,7 +158,7 @@ export const processWaIncomingMessage = inngest.createFunction(
         type: "wa-new-message",
         conversationId: conversation.id,
         contactId: contact.id,
-        messageId: storedMessage.id.toString(),
+        messageId: storedMessage.id,
         direction: "INBOUND",
         messageType: message.type,
         body: extractMessageBody(message)?.slice(0, 100),
@@ -196,14 +196,14 @@ export const processWaIncomingMessage = inngest.createFunction(
           data: {
             companyId,
             accountId,
-            messageId: storedMessage.id.toString(),
+            messageId: storedMessage.id,
             mediaId,
           },
         });
       });
     }
 
-    return { success: true, messageId: storedMessage.id.toString() };
+    return { success: true, messageId: storedMessage.id };
   },
 );
 
@@ -469,7 +469,7 @@ export const sendWaOutboundMessage = inngest.createFunction(
         },
       });
 
-      return { id: msg.id };
+      return { id: msg.id.toString() };
     });
 
     // Step 5: Push real-time notification
@@ -478,7 +478,7 @@ export const sendWaOutboundMessage = inngest.createFunction(
       const payload = JSON.stringify({
         type: "wa-new-message",
         conversationId,
-        messageId: storedMessage.id.toString(),
+        messageId: storedMessage.id,
         direction: "OUTBOUND",
         wamId: sendResult.messageId,
         status: "SENT",
@@ -492,7 +492,7 @@ export const sendWaOutboundMessage = inngest.createFunction(
       );
     });
 
-    return { success: true, messageId: storedMessage.id.toString() };
+    return { success: true, messageId: storedMessage.id };
   },
 );
 

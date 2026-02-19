@@ -39,7 +39,9 @@
       "WebFetch(domain:apps.make.com)",
       "WebFetch(domain:community.make.com)",
       "WebSearch",
-      "Bash(npx next lint:*)"
+      "Bash(npx next lint:*)",
+      "Bash(npm run build:*)",
+      "Bash(pnpm run build:*)"
     ]
   }
 }
