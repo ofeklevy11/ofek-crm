@@ -14,7 +14,7 @@ function buildCspHeader(nonce: string): string {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://utfs.io https://*.ufs.sh",
     "font-src 'self' data:",
-    "connect-src 'self' https://utfs.io https://*.ufs.sh https://*.uploadthing.com https://*.inngest.com https://graph.facebook.com https://www.facebook.com",
+    "connect-src 'self' https://utfs.io https://*.ufs.sh https://*.uploadthing.com https://*.inngest.com https://graph.facebook.com https://www.facebook.com https://connect.facebook.net",
     "frame-src https://www.facebook.com",
     "frame-ancestors 'none'",
     "base-uri 'self'",

@@ -34,7 +34,7 @@ interface WhatsAppAccount {
   createdAt: Date;
 }
 
-export default function WhatsAppEmbeddedSignup() {
+export default function WhatsAppEmbeddedSignup({ nonce }: { nonce: string }) {
   const [accounts, setAccounts] = useState<WhatsAppAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
@@ -178,6 +178,7 @@ export default function WhatsAppEmbeddedSignup() {
         <Script
           id="facebook-jssdk"
           src="https://connect.facebook.net/en_US/sdk.js"
+          nonce={nonce}
           strategy="afterInteractive"
           onReady={() => {
             if (window.FB && !sdkLoaded) initFB();
