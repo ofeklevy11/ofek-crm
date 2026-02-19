@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useUploadThing } from "@/lib/uploadthing";
 import { apiFetch } from "@/lib/api-fetch";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface ImportRecordsModalProps {
   tableId: number;
@@ -170,7 +171,7 @@ export default function ImportRecordsModal({
     } catch (err: any) {
       if (validationInterval) clearInterval(validationInterval);
       console.error("Validation flow error:", err);
-      setError(err.message || "שגיאה לא ידועה");
+      setError(getUserFriendlyError(err));
       setStep("UPLOAD");
       setProgress(0);
     } finally {
@@ -288,7 +289,7 @@ export default function ImportRecordsModal({
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
       }
-      setError(err.message);
+      setError(getUserFriendlyError(err));
       setStep("REVIEW"); // Go back to review so they can try again or fix
       setProgress(0);
     }

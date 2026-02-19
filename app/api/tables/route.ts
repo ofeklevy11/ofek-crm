@@ -57,6 +57,7 @@ export async function GET(request: Request) {
       ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
       select: {
         id: true, name: true, slug: true, schemaJson: true,
+        tabsConfig: true, displayConfig: true,
         categoryId: true, order: true, createdAt: true, updatedAt: true,
       },
     });
@@ -105,7 +106,7 @@ export async function POST(request: Request) {
     } catch {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
-    const { name, slug, schemaJson } = body;
+    const { name, slug, schemaJson, tabsConfig, displayConfig } = body;
 
     // Input validation
     if (!name || !slug) {
@@ -137,7 +138,7 @@ export async function POST(request: Request) {
     }
 
     if (schemaJson !== undefined) {
-      if (typeof schemaJson !== "object" || schemaJson === null || Array.isArray(schemaJson)) {
+      if (typeof schemaJson !== "object" || schemaJson === null) {
         return NextResponse.json(
           { error: "schemaJson must be a JSON object" },
           { status: 400 }
@@ -180,12 +181,15 @@ export async function POST(request: Request) {
         name: name.trim(),
         slug: slug.trim(),
         schemaJson: schemaJson || {},
+        tabsConfig: tabsConfig ?? undefined,
+        displayConfig: displayConfig ?? undefined,
         companyId: user.companyId,
         createdBy: user.id,
         categoryId: validatedCategoryId,
       },
       select: {
         id: true, name: true, slug: true, schemaJson: true,
+        tabsConfig: true, displayConfig: true,
         categoryId: true, order: true, createdAt: true, updatedAt: true,
       },
     });

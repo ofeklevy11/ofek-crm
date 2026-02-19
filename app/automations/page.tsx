@@ -12,7 +12,7 @@ export default async function AutomationsPage() {
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/auth/login");
+    redirect("/login");
   }
 
   if (!hasUserFlag(user, "canViewAutomations")) {

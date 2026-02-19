@@ -23,6 +23,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getFriendlyResultError } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -934,7 +935,7 @@ export default function BirthdayAutomationPage() {
                         setSelectedCustomer(null);
                         refreshData();
                       } else {
-                        alert(result.error || "שגיאה בשמירה");
+                        alert(getFriendlyResultError(result.error, "שגיאה בשמירה"));
                       }
                     }}
                     className="flex-1 bg-indigo-600 hover:bg-indigo-700"
@@ -988,7 +989,7 @@ export default function BirthdayAutomationPage() {
                           setSelectedCustomer(null);
                           refreshData();
                         } else {
-                          alert(result.error || "שגיאה במחיקה");
+                          alert(getFriendlyResultError(result.error, "שגיאה במחיקה"));
                         }
                       }
                     }}

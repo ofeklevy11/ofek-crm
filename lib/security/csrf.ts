@@ -15,6 +15,7 @@ const CSRF_EXEMPT_PREFIXES = [
   "/api/cron/",        // Bearer CRON_SECRET
   "/api/p/",           // Public APIs
   "/api/uploadthing",  // UploadThing SDK auth
+  "/api/webhooks/",    // WhatsApp webhooks (signature-verified in route)
 ];
 
 const CSRF_EXEMPT_EXACT = [

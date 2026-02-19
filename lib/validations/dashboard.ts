@@ -7,6 +7,9 @@ const WIDGET_TYPES = [
   "TABLE_VIEWS_DASHBOARD",
   "GOALS_TABLE",
   "ANALYTICS_TABLE",
+  "MINI_CALENDAR",
+  "MINI_TASKS",
+  "MINI_QUOTES",
 ] as const;
 
 /** Max JSON size for settings field (10 KB) */

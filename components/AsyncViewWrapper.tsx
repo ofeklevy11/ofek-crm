@@ -5,6 +5,7 @@ import DynamicViewCard from "./DynamicViewCard";
 import DynamicViewRenderer from "./DynamicViewRenderer";
 import type { ViewConfig } from "@/app/actions/views";
 import { Loader2 } from "lucide-react";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface AsyncViewWrapperProps {
   view: {
@@ -29,7 +30,7 @@ export default function AsyncViewWrapper({
 }: AsyncViewWrapperProps) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const isMounted = useRef(true);
   const hasFetched = useRef(false);
 
@@ -76,7 +77,7 @@ export default function AsyncViewWrapper({
           // If it was a force refresh (manual), we might want to show a toast or alert.
           // For now, we set error state, but distinct handling for 429 might be good.
           if (force) {
-            alert(err.message); // Simple alert for user feedback on rate limit
+            alert(getUserFriendlyError(err));
           }
           // Don't clear data on refresh error, just show toast?
           // Current logic replaces data/error.
@@ -85,7 +86,7 @@ export default function AsyncViewWrapper({
           // Let's just set Error.
 
           // Actually, improve UX: if force=true and error, don't kill existing data if we have it.
-          if (!force) setError(err.message);
+          if (!force) setError(getUserFriendlyError(err));
           setLoading(false);
         }
       }
@@ -124,7 +125,7 @@ export default function AsyncViewWrapper({
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : error ? (
-        <div className="text-red-500 text-sm p-2">Error loading data</div>
+        <div className="text-red-500 text-sm p-2">שגיאה בטעינת הנתונים</div>
       ) : (
         <DynamicViewRenderer viewData={data} />
       )}

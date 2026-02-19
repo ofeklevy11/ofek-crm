@@ -49,6 +49,7 @@ import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import GreenApiConnection from "./GreenApiConnection";
+import { getFriendlyResultError } from "@/lib/errors";
 
 interface ProfileContentProps {
   user: User;
@@ -100,7 +101,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
         await loadKeys();
       } else {
         console.error("Failed to create key:", res.error);
-        alert("שגיאה ביצירת מפתח: " + (res.error || "Unknown error"));
+        alert(getFriendlyResultError(res.error, "שגיאה ביצירת מפתח"));
       }
     } catch (e) {
       console.error("Exception creating key:", e);
@@ -122,7 +123,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
       await loadKeys();
       router.refresh();
     } else {
-      alert("שגיאה במחיקת מפתח: " + (res.error || "Unknown error"));
+      alert(getFriendlyResultError(res.error, "שגיאה במחיקת מפתח"));
     }
   }
 

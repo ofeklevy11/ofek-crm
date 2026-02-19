@@ -55,6 +55,7 @@ enum TaskStatus {
   todo
   in_progress
   waiting_client
+  on_hold
   completed_month
   done
 }
@@ -236,6 +237,9 @@ enum DashboardWidgetType {
   TABLE
   GOAL
   TABLE_VIEWS_DASHBOARD
+  MINI_CALENDAR
+  MINI_TASKS
+  MINI_QUOTES
 }
 
 enum ImportJobStatus {
@@ -259,6 +263,48 @@ enum AnalyticsViewType {
 enum ViewFolderType {
   ANALYTICS
   AUTOMATION
+}
+
+// ============================================
+// WHATSAPP BUSINESS API ENUMS
+// ============================================
+
+enum WhatsAppAccountStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  DISCONNECTED
+}
+
+enum WaMessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum WaMessageType {
+  TEXT
+  IMAGE
+  AUDIO
+  VIDEO
+  DOCUMENT
+  LOCATION
+  STICKER
+  CONTACTS
+  TEMPLATE
+  UNKNOWN
+}
+
+enum WaMessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum WaConversationStatus {
+  OPEN
+  CLOSED
 }
 
 model Company {
@@ -335,6 +381,13 @@ model Company {
   attachments          Attachment[]
   viewRefreshLogs      ViewRefreshLog[]
   analyticsRefreshLogs AnalyticsRefreshLog[]
+
+  // WhatsApp Business API
+  whatsappAccounts     WhatsAppAccount[]
+  whatsappPhoneNumbers WhatsAppPhoneNumber[]
+  waContacts           WaContact[]
+  waConversations      WaConversation[]
+  waMessages           WaMessage[]
 }
 
 model User {
@@ -380,6 +433,11 @@ model User {
   viewRefreshLogs      ViewRefreshLog[]
   analyticsRefreshLogs AnalyticsRefreshLog[]
   importJobs           ImportJob[]
+
+  // WhatsApp Business API
+  connectedWhatsAppAccounts WhatsAppAccount[]  @relation("WaAccountConnectedBy")
+  assignedWaConversations   WaConversation[]   @relation("WaConversationAssignee")
+  sentWaMessages            WaMessage[]        @relation("WaMessageSender")
 
   @@index([companyId])
 }
@@ -520,7 +578,9 @@ model TableMeta {
   name       String
   slug       String
   createdBy  Int
-  schemaJson Json
+  schemaJson    Json
+  tabsConfig    Json?    // {enabled, tabs[{id, label, order}]}
+  displayConfig Json?    // {visibleColumns[], columnOrder[]}
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
   deletedAt  DateTime?
@@ -703,6 +763,7 @@ model Client {
   quotes          Quote[]
   tickets         Ticket[]
   financeRecords  FinanceRecord[]
+  waContacts      WaContact[]
 
   @@index([companyId])
   @@index([companyId, createdAt]) // For CUSTOMERS goal date-range queries
@@ -1817,4 +1878,180 @@ model ImportJob {
 
   @@index([companyId])
   @@index([tableId])
+}
+
+// ============================================
+// WHATSAPP BUSINESS API MODELS
+// ============================================
+
+// WhatsApp Business Account connected via Meta Embedded Signup
+model WhatsAppAccount {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+
+  wabaId       String  // WhatsApp Business Account ID from Meta
+  appId        String? // Meta App ID used during signup
+  businessName String? // Display name on WhatsApp
+
+  // Encrypted access token (AES-256-GCM)
+  accessTokenEnc String // Encrypted system user access token
+  accessTokenIv  String // IV for decryption
+  accessTokenTag String // Auth tag for decryption
+
+  webhookVerifyToken String // Random token for Meta webhook verification
+
+  status WhatsAppAccountStatus @default(PENDING)
+
+  connectedBy   Int? // User who completed the embedded signup
+  connectedUser User? @relation("WaAccountConnectedBy", fields: [connectedBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company      Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  phoneNumbers WhatsAppPhoneNumber[]
+
+  @@unique([companyId, wabaId])
+  @@index([companyId])
+}
+
+// Phone number registered under a WhatsApp Business Account
+model WhatsAppPhoneNumber {
+  id        Int @id @default(autoincrement())
+  companyId Int
+  accountId Int
+
+  phoneNumberId String  @unique // Meta Phone Number ID — critical for webhook routing
+  displayPhone  String  // Formatted phone number for display
+  verifiedName  String? // Verified business name
+  qualityRating String? // GREEN, YELLOW, RED
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company       Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  account       WhatsAppAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  conversations WaConversation[]
+  messages      WaMessage[]
+
+  @@index([companyId])
+  @@index([accountId])
+}
+
+// External WhatsApp contact (customer the business chats with)
+model WaContact {
+  id        Int @id @default(autoincrement())
+  companyId Int
+
+  waId        String  // WhatsApp ID (phone in E.164 without +)
+  profileName String? // Push name from WhatsApp
+  phone       String? // Formatted phone for display
+
+  // Optional link to CRM client record
+  clientId Int?
+  client   Client? @relation(fields: [clientId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company       Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  conversations WaConversation[]
+  messages      WaMessage[]
+
+  @@unique([companyId, waId])
+  @@index([companyId])
+  @@index([clientId])
+}
+
+// Conversation thread (one per contact per phone number)
+model WaConversation {
+  id        Int @id @default(autoincrement())
+  companyId Int
+
+  phoneNumberId Int
+  contactId     Int
+
+  status WaConversationStatus @default(OPEN)
+
+  // 24-hour window tracking
+  lastInboundAt DateTime? // Last customer message — determines free-form reply window
+
+  // Agent assignment
+  assignedUserId Int?
+  assignedUser   User? @relation("WaConversationAssignee", fields: [assignedUserId], references: [id])
+
+  // Unread tracking
+  unreadCount Int @default(0)
+
+  // For sorting conversation list
+  lastMessageAt      DateTime?
+  lastMessagePreview String? // Truncated text preview
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  phoneNumber WhatsAppPhoneNumber @relation(fields: [phoneNumberId], references: [id], onDelete: Cascade)
+  contact     WaContact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messages    WaMessage[]
+
+  @@unique([phoneNumberId, contactId])
+  @@index([companyId, status, lastMessageAt(sort: Desc)]) // Conversation list query
+  @@index([companyId, assignedUserId, status])             // Agent-filtered list
+  @@index([contactId])
+}
+
+// Individual WhatsApp message (inbound + outbound)
+model WaMessage {
+  id        BigInt @id @default(autoincrement())
+  companyId Int
+
+  conversationId Int
+  phoneNumberId  Int
+  contactId      Int
+
+  wamId String? @unique // WhatsApp message ID from Meta (dedup + status updates)
+
+  direction WaMessageDirection
+  type      WaMessageType    @default(TEXT)
+  status    WaMessageStatus  @default(PENDING)
+
+  // Content
+  body String? // Text body or media caption
+
+  // Media fields
+  mediaId       String? // Meta media ID
+  mediaUrl      String? // Downloaded/cached URL
+  mediaMime     String? // MIME type
+  mediaFileName String? // Original filename (documents)
+  mediaSha256   String? // SHA256 hash for integrity
+
+  // Location
+  latitude        Float?
+  longitude       Float?
+  locationName    String?
+  locationAddress String?
+
+  // Context
+  contextWamId String? // Quoted message ID (reply context)
+  errorCode    String? // Meta error code on failure
+  errorMessage String? // Meta error description on failure
+
+  // Which CRM user sent this (outbound only)
+  sentByUserId Int?
+  sentByUser   User? @relation("WaMessageSender", fields: [sentByUserId], references: [id])
+
+  timestamp DateTime // Message timestamp from Meta or local send time
+  createdAt DateTime @default(now())
+
+  company      Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  conversation WaConversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  phoneNumber  WhatsAppPhoneNumber @relation(fields: [phoneNumberId], references: [id], onDelete: Cascade)
+  contact      WaContact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, timestamp(sort: Desc)]) // Message history with cursor pagination
+  @@index([companyId, wamId])                      // Webhook status update lookups
+  @@index([contactId, timestamp(sort: Desc)])      // Contact message history
 }

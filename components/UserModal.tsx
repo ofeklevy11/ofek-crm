@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { apiFetch } from "@/lib/api-fetch";
+import { getUserFriendlyError } from "@/lib/errors";
+import { Spinner } from "@/components/ui/spinner";
 
 import { USER_FLAGS } from "@/lib/permissions";
 
@@ -104,7 +106,7 @@ export default function UserModal({
 
       onSave();
     } catch (err: any) {
-      setError(err.message || "שגיאה בשמירת המשתמש");
+      setError(getUserFriendlyError(err));
     } finally {
       setIsSaving(false);
     }
@@ -545,9 +547,9 @@ export default function UserModal({
             <button
               type="submit"
               disabled={isSaving}
-              className="flex-1 px-6 py-3 bg-linear-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium disabled:opacity-50"
+              className="flex-1 px-6 py-3 bg-linear-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {isSaving ? "שומר..." : user ? "עדכן" : "צור"}
+              {isSaving ? <><Spinner size="sm" /> שומר...</> : user ? "עדכן" : "צור"}
             </button>
           </div>
         </form>

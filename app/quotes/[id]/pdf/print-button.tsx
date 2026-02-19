@@ -2,6 +2,8 @@
 
 import { Printer, Download, Share2, Mail, Loader2, X } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface PrintButtonProps {
   quoteId: string;
@@ -75,7 +77,7 @@ export default function PrintButton({
       }
     } catch (error: any) {
       console.error(error);
-      alert(`שגיאה ביצירת ה-PDF: ${error.message}`);
+      toast.error(getUserFriendlyError(error));
     } finally {
       setDownloading(false);
     }

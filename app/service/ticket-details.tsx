@@ -55,6 +55,7 @@ import {
 } from "@/app/actions/tickets";
 import { deleteTicketActivityLog } from "@/app/actions/ticket-activity-logs";
 import { useToast } from "@/hooks/use-toast";
+import { getUserFriendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 
 // Combines comments and activity logs into a single sorted timeline
@@ -294,7 +295,7 @@ export default function TicketDetails({
       router.refresh();
     } catch (error: any) {
       toast({
-        title: error.message || "שגיאה במחיקת הלוג",
+        title: getUserFriendlyError(error),
         variant: "destructive",
       });
     }
@@ -414,7 +415,7 @@ export default function TicketDetails({
       router.refresh();
     } catch (error: any) {
       toast({
-        title: error.message || "שגיאה בעדכון ההודעה",
+        title: getUserFriendlyError(error),
         variant: "destructive",
       });
     }
@@ -435,7 +436,7 @@ export default function TicketDetails({
       router.refresh();
     } catch (error: any) {
       toast({
-        title: error.message || "שגיאה במחיקת ההודעה",
+        title: getUserFriendlyError(error),
         variant: "destructive",
       });
     }

@@ -56,6 +56,7 @@ export async function GET(req: NextRequest) {
       const channels = [
         `company:${companyId}:user:${userId}:notifications`,
         `company:${companyId}:user:${userId}:chat`,
+        `company:${companyId}:user:${userId}:whatsapp`,
       ];
 
       try {

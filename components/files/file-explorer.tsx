@@ -24,6 +24,8 @@ import { Progress } from "@/components/ui/progress";
 import { moveFileToFolder } from "@/app/actions/storage";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 type ViewMode = "grid" | "list" | "compact";
 type FileFilter =
@@ -207,7 +209,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
         await moveFileToFolder(draggedFileId, targetFolderId);
         router.refresh();
       } catch (error: any) {
-        alert(`העברת הקובץ נכשלה: ${error.message}`);
+        toast.error(getUserFriendlyError(error));
       }
     }
     setDraggedFileId(null);
@@ -220,7 +222,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
         await moveFileToFolder(draggedFileId, targetFolderId);
         router.refresh();
       } catch (error: any) {
-        alert(`העברת הקובץ נכשלה: ${error.message}`);
+        toast.error(getUserFriendlyError(error));
       }
     }
     setDraggedFileId(null);

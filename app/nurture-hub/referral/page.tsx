@@ -53,6 +53,7 @@ import {
   deleteAutomationRule,
   toggleAutomationRule,
 } from "@/app/actions/automations";
+import { getFriendlyResultError } from "@/lib/errors";
 
 // Type needed for list state
 interface Customer {
@@ -704,7 +705,7 @@ export default function ReferralAutomationPage() {
                         setSelectedCustomer(null);
                         refreshData();
                       } else {
-                        alert(result.error || "שגיאה בשמירה");
+                        alert(getFriendlyResultError(result.error, "שגיאה בשמירה"));
                       }
                     }}
                     className="flex-1 bg-indigo-600 hover:bg-indigo-700"
@@ -758,7 +759,7 @@ export default function ReferralAutomationPage() {
                           setSelectedCustomer(null);
                           refreshData();
                         } else {
-                          alert(result.error || "שגיאה במחיקה");
+                          alert(getFriendlyResultError(result.error, "שגיאה במחיקה"));
                         }
                       }
                     }}

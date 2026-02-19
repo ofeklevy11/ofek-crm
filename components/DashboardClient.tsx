@@ -26,6 +26,9 @@ import {
   Trash2,
   LayoutGrid,
   BarChart3,
+  Calendar,
+  CheckSquare,
+  FileText,
 } from "lucide-react";
 import AnalyticsWidget from "./dashboard/AnalyticsWidget";
 import TableWidget from "./dashboard/TableWidget";
@@ -34,8 +37,13 @@ import GoalWidget from "./dashboard/GoalWidget";
 import TableViewsDashboardWidget from "./dashboard/TableViewsDashboardWidget";
 import GoalsTableWidget from "./dashboard/GoalsTableWidget";
 import AnalyticsTableWidget from "./dashboard/AnalyticsTableWidget";
+import MiniCalendarWidget from "./dashboard/MiniCalendarWidget";
+import MiniTasksWidget from "./dashboard/MiniTasksWidget";
+import MiniQuotesWidget from "./dashboard/MiniQuotesWidget";
+import MiniWidgetConfigModal from "./dashboard/MiniWidgetConfigModal";
 import AnalyticsDetailsModal from "./AnalyticsDetailsModal";
 import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
+import { Spinner } from "@/components/ui/spinner";
 import { getTableViewData, getCustomTableData, getBatchTableData } from "@/app/actions/dashboard";
 import {
   getDashboardWidgets,
@@ -56,7 +64,10 @@ type WidgetType =
   | "GOAL"
   | "TABLE_VIEWS_DASHBOARD"
   | "GOALS_TABLE"
-  | "ANALYTICS_TABLE";
+  | "ANALYTICS_TABLE"
+  | "MINI_CALENDAR"
+  | "MINI_TASKS"
+  | "MINI_QUOTES";
 
 interface DashboardWidget {
   id: string; // Unique ID for this instance on dashboard
@@ -149,6 +160,17 @@ export default function DashboardClient({
   const [selectedTable, setSelectedTable] = useState("");
   const [selectedItem, setSelectedItem] = useState("");
 
+  const [isWidgetsLoaded, setIsWidgetsLoaded] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Mini Widget Config Modal State
+  const [miniConfigModal, setMiniConfigModal] = useState<{
+    open: boolean;
+    widgetType: "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES";
+    editWidgetId?: string;
+    currentSettings?: any;
+  } | null>(null);
+
   // Custom Table State
   const [isCustomMode, setIsCustomMode] = useState(false);
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
@@ -204,46 +226,50 @@ export default function DashboardClient({
 
   const handleAddGoalsTable = async () => {
     if (!goalsTableTitle) return;
+    setActionLoading("goalsTable");
+    try {
+      const settings = {
+        title: goalsTableTitle,
+        goalIds: goalsTableSelectedIds,
+        collapsed: false,
+      };
 
-    const settings = {
-      title: goalsTableTitle,
-      goalIds: goalsTableSelectedIds,
-      collapsed: false,
-    };
+      if (editingGoalsTableId) {
+        const res = await updateDashboardWidget(editingGoalsTableId, {
+          settings,
+        });
+        if (res.success) {
+          setWidgets((prev) =>
+            prev.map((w) =>
+              w.id === editingGoalsTableId ? { ...w, settings } : w,
+            ),
+          );
+        }
+      } else {
+        // @ts-ignore
+        const res = await addDashboardWidget({
+          widgetType: "GOALS_TABLE",
+          referenceId: "custom",
+          settings,
+        });
+        if (res.success && res.data) {
+          const newWidget: DashboardWidget = {
+            id: res.data.id,
+            type: res.data.widgetType as WidgetType,
+            referenceId: res.data.referenceId || "custom",
+            settings: res.data.settings,
+          };
+          setWidgets([...widgets, newWidget]);
+        }
+      }
 
-    if (editingGoalsTableId) {
-      const res = await updateDashboardWidget(editingGoalsTableId, {
-        settings,
-      });
-      if (res.success) {
-        setWidgets((prev) =>
-          prev.map((w) =>
-            w.id === editingGoalsTableId ? { ...w, settings } : w,
-          ),
-        );
-      }
-    } else {
-      // @ts-ignore
-      const res = await addDashboardWidget({
-        widgetType: "GOALS_TABLE",
-        referenceId: "custom",
-        settings,
-      });
-      if (res.success && res.data) {
-        const newWidget: DashboardWidget = {
-          id: res.data.id,
-          type: res.data.widgetType as WidgetType,
-          referenceId: res.data.referenceId || "custom",
-          settings: res.data.settings,
-        };
-        setWidgets([...widgets, newWidget]);
-      }
+      setIsGoalsTableModalOpen(false);
+      setEditingGoalsTableId(null);
+      setGoalsTableSelectedIds([]);
+      setGoalsTableTitle("");
+    } finally {
+      setActionLoading(null);
     }
-
-    setIsGoalsTableModalOpen(false);
-    setEditingGoalsTableId(null);
-    setGoalsTableSelectedIds([]);
-    setGoalsTableTitle("");
   };
 
   // Analytics Table Logic
@@ -274,46 +300,119 @@ export default function DashboardClient({
 
   const handleAddAnalyticsTable = async () => {
     if (!analyticsTableTitle) return;
+    setActionLoading("analyticsTable");
+    try {
+      const settings = {
+        title: analyticsTableTitle,
+        analyticsIds: analyticsTableSelectedIds,
+        collapsed: false,
+      };
 
-    const settings = {
-      title: analyticsTableTitle,
-      analyticsIds: analyticsTableSelectedIds,
-      collapsed: false,
-    };
+      if (editingAnalyticsTableId) {
+        const res = await updateDashboardWidget(editingAnalyticsTableId, {
+          settings,
+        });
+        if (res.success) {
+          setWidgets((prev) =>
+            prev.map((w) =>
+              w.id === editingAnalyticsTableId ? { ...w, settings } : w,
+            ),
+          );
+        }
+      } else {
+        // @ts-ignore
+        const res = await addDashboardWidget({
+          widgetType: "ANALYTICS_TABLE",
+          referenceId: "custom",
+          settings,
+        });
+        if (res.success && res.data) {
+          const newWidget: DashboardWidget = {
+            id: res.data.id,
+            type: res.data.widgetType as WidgetType,
+            referenceId: res.data.referenceId || "custom",
+            settings: res.data.settings,
+          };
+          setWidgets([...widgets, newWidget]);
+        }
+      }
 
-    if (editingAnalyticsTableId) {
-      const res = await updateDashboardWidget(editingAnalyticsTableId, {
-        settings,
-      });
-      if (res.success) {
-        setWidgets((prev) =>
-          prev.map((w) =>
-            w.id === editingAnalyticsTableId ? { ...w, settings } : w,
-          ),
-        );
-      }
-    } else {
-      // @ts-ignore
-      const res = await addDashboardWidget({
-        widgetType: "ANALYTICS_TABLE",
-        referenceId: "custom",
-        settings,
-      });
-      if (res.success && res.data) {
-        const newWidget: DashboardWidget = {
-          id: res.data.id,
-          type: res.data.widgetType as WidgetType,
-          referenceId: res.data.referenceId || "custom",
-          settings: res.data.settings,
-        };
-        setWidgets([...widgets, newWidget]);
-      }
+      setIsAnalyticsTableModalOpen(false);
+      setEditingAnalyticsTableId(null);
+      setAnalyticsTableSelectedIds([]);
+      setAnalyticsTableTitle("");
+    } finally {
+      setActionLoading(null);
     }
+  };
 
-    setIsAnalyticsTableModalOpen(false);
-    setEditingAnalyticsTableId(null);
-    setAnalyticsTableSelectedIds([]);
-    setAnalyticsTableTitle("");
+  // Mini widget handlers — open config modal instead of adding immediately
+  const handleAddMiniCalendar = () => {
+    setMiniConfigModal({ open: true, widgetType: "MINI_CALENDAR" });
+  };
+
+  const handleAddMiniTasks = () => {
+    setMiniConfigModal({ open: true, widgetType: "MINI_TASKS" });
+  };
+
+  const handleAddMiniQuotes = () => {
+    setMiniConfigModal({ open: true, widgetType: "MINI_QUOTES" });
+  };
+
+  const handleMiniConfigConfirm = async (settings: any) => {
+    if (!miniConfigModal) return;
+    setActionLoading("miniConfig");
+    try {
+      const { widgetType, editWidgetId } = miniConfigModal;
+
+      if (editWidgetId) {
+        // Edit existing widget settings
+        const res = await updateDashboardWidgetSettings(editWidgetId, settings);
+        if (res.success) {
+          setWidgets((prev) =>
+            prev.map((w) =>
+              w.id === editWidgetId ? { ...w, settings } : w,
+            ),
+          );
+        }
+      } else {
+        // Add new widget with chosen settings
+        // @ts-ignore
+        const res = await addDashboardWidget({
+          widgetType,
+          referenceId: "custom",
+          settings,
+        });
+        if (res.success && res.data) {
+          setWidgets((prev) => [
+            ...prev,
+            {
+              id: res.data.id,
+              type: res.data.widgetType as WidgetType,
+              referenceId: res.data.referenceId || "custom",
+              settings: res.data.settings,
+            },
+          ]);
+        }
+      }
+
+      setMiniConfigModal(null);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleOpenMiniWidgetSettings = (
+    widgetId: string,
+    widgetType: "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES",
+    currentSettings: any,
+  ) => {
+    setMiniConfigModal({
+      open: true,
+      widgetType,
+      editWidgetId: widgetId,
+      currentSettings,
+    });
   };
 
   // Permissions
@@ -369,6 +468,7 @@ export default function DashboardClient({
         }));
         setWidgets(dbWidgets);
       }
+      setIsWidgetsLoaded(true);
     }
 
     loadWidgets();
@@ -535,7 +635,8 @@ export default function DashboardClient({
 
   const handleAddWidget = async () => {
     if (!selectedItem) return;
-
+    setActionLoading("addWidget");
+    try {
     if (editingWidgetId) {
       const settings = isCustomMode
         ? {
@@ -607,6 +708,9 @@ export default function DashboardClient({
     setSelectedTable("");
     setIsCustomMode(false);
     setSelectedColumns([]);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleRemoveWidget = (widget: DashboardWidget) => {
@@ -623,6 +727,12 @@ export default function DashboardClient({
       title = widget.settings?.title || "טבלת יעדים";
     } else if (widget.type === "ANALYTICS_TABLE") {
       title = widget.settings?.title || "טבלת אנליטיקות";
+    } else if (widget.type === "MINI_CALENDAR") {
+      title = "מיני יומן";
+    } else if (widget.type === "MINI_TASKS") {
+      title = "מיני משימות";
+    } else if (widget.type === "MINI_QUOTES") {
+      title = "מיני הצעות מחיר";
     } else {
       const { view } = content as any;
       title = view?.name || "טבלה";
@@ -638,17 +748,21 @@ export default function DashboardClient({
   const confirmRemoveWidget = async () => {
     const { widgetId } = deleteModal;
     if (!widgetId) return;
-
-    // Remove from database
-    const res = await removeDashboardWidget(widgetId);
-    if (res.success) {
-      setWidgets(widgets.filter((w) => w.id !== widgetId));
-      // Clean up data
-      const newData = { ...tableData };
-      delete newData[widgetId];
-      setTableData(newData);
+    setActionLoading("removeWidget");
+    try {
+      // Remove from database
+      const res = await removeDashboardWidget(widgetId);
+      if (res.success) {
+        setWidgets(widgets.filter((w) => w.id !== widgetId));
+        // Clean up data
+        const newData = { ...tableData };
+        delete newData[widgetId];
+        setTableData(newData);
+      }
+      setDeleteModal({ isOpen: false, widgetId: "", widgetTitle: "" });
+    } finally {
+      setActionLoading(null);
     }
-    setDeleteModal({ isOpen: false, widgetId: "", widgetTitle: "" });
   };
 
   const getWidgetContent = (widget: DashboardWidget) => {
@@ -668,6 +782,8 @@ export default function DashboardClient({
       return widget.settings;
     } else if (widget.type === "ANALYTICS_TABLE") {
       return widget.settings;
+    } else if (widget.type === "MINI_CALENDAR" || widget.type === "MINI_TASKS" || widget.type === "MINI_QUOTES") {
+      return null;
     } else {
       // TABLE
       const table = availableTables.find((t) => t.id === widget.tableId);
@@ -735,49 +851,53 @@ export default function DashboardClient({
   const handleAddMiniDashboard = async () => {
     // Basic validation
     if (!miniDashboardTitle) return;
+    setActionLoading("miniDashboard");
+    try {
+      const settings = {
+        title: miniDashboardTitle,
+        views: miniDashboardViews,
+        collapsed: false,
+      };
 
-    const settings = {
-      title: miniDashboardTitle,
-      views: miniDashboardViews,
-      collapsed: false,
-    };
+      if (editingMiniDashboardId) {
+        const res = await updateDashboardWidget(editingMiniDashboardId, {
+          settings,
+        });
 
-    if (editingMiniDashboardId) {
-      const res = await updateDashboardWidget(editingMiniDashboardId, {
-        settings,
-      });
+        if (res.success) {
+          setWidgets((prev) =>
+            prev.map((w) =>
+              w.id === editingMiniDashboardId ? { ...w, settings } : w,
+            ),
+          );
+        }
+      } else {
+        // @ts-ignore
+        const res = await addDashboardWidget({
+          widgetType: "TABLE_VIEWS_DASHBOARD",
+          referenceId: "custom",
+          settings,
+        });
 
-      if (res.success) {
-        setWidgets((prev) =>
-          prev.map((w) =>
-            w.id === editingMiniDashboardId ? { ...w, settings } : w,
-          ),
-        );
+        if (res.success && res.data) {
+          const newWidget: DashboardWidget = {
+            id: res.data.id,
+            type: res.data.widgetType as WidgetType,
+            referenceId: res.data.referenceId || "custom",
+            tableId: res.data.tableId ?? undefined,
+            settings: res.data.settings,
+          };
+          setWidgets([...widgets, newWidget]);
+        }
       }
-    } else {
-      // @ts-ignore
-      const res = await addDashboardWidget({
-        widgetType: "TABLE_VIEWS_DASHBOARD",
-        referenceId: "custom",
-        settings,
-      });
 
-      if (res.success && res.data) {
-        const newWidget: DashboardWidget = {
-          id: res.data.id,
-          type: res.data.widgetType as WidgetType,
-          referenceId: res.data.referenceId || "custom",
-          tableId: res.data.tableId ?? undefined,
-          settings: res.data.settings,
-        };
-        setWidgets([...widgets, newWidget]);
-      }
+      setIsMiniDashboardModalOpen(false);
+      setEditingMiniDashboardId(null);
+      setMiniDashboardViews([]);
+      setMiniDashboardTitle("");
+    } finally {
+      setActionLoading(null);
     }
-
-    setIsMiniDashboardModalOpen(false);
-    setEditingMiniDashboardId(null);
-    setMiniDashboardViews([]);
-    setMiniDashboardTitle("");
   };
 
   if (!canViewDashboard) {
@@ -812,7 +932,7 @@ export default function DashboardClient({
               }`}
             >
               <LayoutGrid size={16} />
-              הוסף מיני דאשבורד
+              הוסף מיני דאשבורד (תצוגות טבלה)
             </button>
             <button
               onClick={handleOpenGoalsTableModal}
@@ -838,6 +958,48 @@ export default function DashboardClient({
               <BarChart3 size={16} />
               הוסף טבלת אנליטיקות
             </button>
+            {hasUserFlag(user, "canViewCalendar") && (
+              <button
+                onClick={handleAddMiniCalendar}
+                disabled={!canAddWidget}
+                className={`flex items-center justify-center gap-2 px-4 py-2 bg-linear-to-r from-cyan-50 to-blue-50 text-cyan-700 border border-cyan-100 rounded-lg transition shadow-sm font-medium text-sm ${
+                  !canAddWidget
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:shadow-md"
+                }`}
+              >
+                <Calendar size={16} />
+                מיני יומן
+              </button>
+            )}
+            {hasUserFlag(user, "canViewTasks") && (
+              <button
+                onClick={handleAddMiniTasks}
+                disabled={!canAddWidget}
+                className={`flex items-center justify-center gap-2 px-4 py-2 bg-linear-to-r from-orange-50 to-amber-50 text-orange-700 border border-orange-100 rounded-lg transition shadow-sm font-medium text-sm ${
+                  !canAddWidget
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:shadow-md"
+                }`}
+              >
+                <CheckSquare size={16} />
+                מיני משימות
+              </button>
+            )}
+            {hasUserFlag(user, "canViewQuotes") && (
+              <button
+                onClick={handleAddMiniQuotes}
+                disabled={!canAddWidget}
+                className={`flex items-center justify-center gap-2 px-4 py-2 bg-linear-to-r from-indigo-50 to-violet-50 text-indigo-700 border border-indigo-100 rounded-lg transition shadow-sm font-medium text-sm ${
+                  !canAddWidget
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:shadow-md"
+                }`}
+              >
+                <FileText size={16} />
+                מיני הצעות מחיר
+              </button>
+            )}
             <button
               onClick={handleOpenAddModal}
               disabled={!canAddWidget}
@@ -962,6 +1124,45 @@ export default function DashboardClient({
                     />
                   </div>
                 );
+              } else if (widget.type === "MINI_CALENDAR") {
+                return (
+                  <div key={widget.id} className="break-inside-avoid">
+                    <MiniCalendarWidget
+                      id={widget.id}
+                      onRemove={() => handleRemoveWidget(widget)}
+                      settings={(widget as any).settings}
+                      onOpenSettings={() =>
+                        handleOpenMiniWidgetSettings(widget.id, "MINI_CALENDAR", (widget as any).settings)
+                      }
+                    />
+                  </div>
+                );
+              } else if (widget.type === "MINI_TASKS") {
+                return (
+                  <div key={widget.id} className="break-inside-avoid">
+                    <MiniTasksWidget
+                      id={widget.id}
+                      onRemove={() => handleRemoveWidget(widget)}
+                      settings={(widget as any).settings}
+                      onOpenSettings={() =>
+                        handleOpenMiniWidgetSettings(widget.id, "MINI_TASKS", (widget as any).settings)
+                      }
+                    />
+                  </div>
+                );
+              } else if (widget.type === "MINI_QUOTES") {
+                return (
+                  <div key={widget.id} className="break-inside-avoid">
+                    <MiniQuotesWidget
+                      id={widget.id}
+                      onRemove={() => handleRemoveWidget(widget)}
+                      settings={(widget as any).settings}
+                      onOpenSettings={() =>
+                        handleOpenMiniWidgetSettings(widget.id, "MINI_QUOTES", (widget as any).settings)
+                      }
+                    />
+                  </div>
+                );
               } else {
                 const { table, view, fetchedData, isLoading } = content as any;
                 if (!table || !view) return null;
@@ -1013,7 +1214,13 @@ export default function DashboardClient({
               }
             })}
 
-            {widgets.length === 0 && (
+            {!isWidgetsLoaded && widgets.length === 0 && (
+              <div className="w-full flex items-center justify-center min-h-[500px]">
+                <Spinner size="xl" />
+              </div>
+            )}
+
+            {isWidgetsLoaded && widgets.length === 0 && (
               <div className="w-full max-w-4xl flex flex-col items-center justify-center min-h-[500px] relative overflow-hidden bg-white rounded-3xl border border-gray-100 shadow-sm mx-auto">
                 {/* Background decoration */}
                 <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] opacity-20"></div>
@@ -1362,11 +1569,13 @@ export default function DashboardClient({
                 <button
                   disabled={
                     !selectedItem ||
-                    (isCustomMode && selectedColumns.length === 0)
+                    (isCustomMode && selectedColumns.length === 0) ||
+                    actionLoading === "addWidget"
                   }
                   onClick={handleAddWidget}
-                  className="flex-1 py-2.5 text-white bg-blue-600 rounded-xl hover:bg-blue-700 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-2.5 text-white bg-blue-600 rounded-xl hover:bg-blue-700 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
+                  {actionLoading === "addWidget" && <Spinner size="sm" />}
                   {editingWidgetId ? "שמור שינויים" : "הוסף לדאשבורד"}
                 </button>
               </div>
@@ -1563,11 +1772,13 @@ export default function DashboardClient({
               </button>
               <button
                 disabled={
-                  !miniDashboardTitle || miniDashboardViews.length === 0
+                  !miniDashboardTitle || miniDashboardViews.length === 0 ||
+                  actionLoading === "miniDashboard"
                 }
                 onClick={handleAddMiniDashboard}
-                className="flex-1 py-2.5 text-white bg-blue-600 rounded-xl hover:bg-blue-700 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-200"
+                className="flex-1 py-2.5 text-white bg-blue-600 rounded-xl hover:bg-blue-700 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-200 flex items-center justify-center gap-2"
               >
+                {actionLoading === "miniDashboard" && <Spinner size="sm" />}
                 {editingMiniDashboardId ? "שמור שינויים" : "צור מיני דאשבורד"}
               </button>
             </div>
@@ -1698,11 +1909,13 @@ export default function DashboardClient({
               </button>
               <button
                 disabled={
-                  !goalsTableTitle || goalsTableSelectedIds.length === 0
+                  !goalsTableTitle || goalsTableSelectedIds.length === 0 ||
+                  actionLoading === "goalsTable"
                 }
                 onClick={handleAddGoalsTable}
-                className="flex-1 py-2.5 text-white bg-purple-600 rounded-xl hover:bg-purple-700 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-purple-200"
+                className="flex-1 py-2.5 text-white bg-purple-600 rounded-xl hover:bg-purple-700 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-purple-200 flex items-center justify-center gap-2"
               >
+                {actionLoading === "goalsTable" && <Spinner size="sm" />}
                 {editingGoalsTableId ? "שמור שינויים" : "צור טבלה"}
               </button>
             </div>
@@ -1843,11 +2056,13 @@ export default function DashboardClient({
               </button>
               <button
                 disabled={
-                  !analyticsTableTitle || analyticsTableSelectedIds.length === 0
+                  !analyticsTableTitle || analyticsTableSelectedIds.length === 0 ||
+                  actionLoading === "analyticsTable"
                 }
                 onClick={handleAddAnalyticsTable}
-                className="flex-1 py-2.5 text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-emerald-200"
+                className="flex-1 py-2.5 text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-emerald-200 flex items-center justify-center gap-2"
               >
+                {actionLoading === "analyticsTable" && <Spinner size="sm" />}
                 {editingAnalyticsTableId ? "שמור שינויים" : "צור טבלה"}
               </button>
             </div>
@@ -1871,7 +2086,19 @@ export default function DashboardClient({
         }
         onConfirm={confirmRemoveWidget}
         widgetTitle={deleteModal.widgetTitle}
+        isLoading={actionLoading === "removeWidget"}
       />
+
+      {/* Mini Widget Config Modal */}
+      {miniConfigModal?.open && (
+        <MiniWidgetConfigModal
+          widgetType={miniConfigModal.widgetType}
+          currentSettings={miniConfigModal.currentSettings}
+          onConfirm={handleMiniConfigConfirm}
+          onClose={() => setMiniConfigModal(null)}
+          canViewAllTasks={hasUserFlag(user, "canViewAllTasks")}
+        />
+      )}
     </div>
   );
 }

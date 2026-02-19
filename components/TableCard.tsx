@@ -7,6 +7,8 @@ import AlertDialog from "./AlertDialog";
 import { User, Pencil, Trash2, Copy } from "lucide-react";
 import { duplicateTable } from "@/app/actions/tables";
 import { apiFetch } from "@/lib/api-fetch";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface TableCardProps {
   table: {
@@ -84,7 +86,7 @@ export default function TableCard({
       router.refresh();
     } catch (error: any) {
       console.error(error);
-      alert(error.message || "Error duplicating table");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsDuplicateDialogOpen(false);
       setIsDuplicating(false);
@@ -107,7 +109,7 @@ export default function TableCard({
       router.push("/tables"); // ← מונע רינדורים כפולים
     } catch (error: any) {
       console.error(error);
-      alert(error.message || "Error deleting table");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsDeleteDialogOpen(false);
       setIsDeleting(false);

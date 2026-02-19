@@ -9,6 +9,14 @@ import { validateCategoryInCompany } from "@/lib/company-validation";
 import { withRetry } from "@/lib/db-retry";
 import { checkActionRateLimit, TABLE_RATE_LIMITS } from "@/lib/rate-limit-action";
 import { createLogger } from "@/lib/logger";
+import {
+  MAX_TABS,
+  MAX_VISIBLE_COLUMNS,
+  MAX_TABS_CONFIG_SIZE,
+  MAX_DISPLAY_CONFIG_SIZE,
+  parseTabsConfig,
+  parseDisplayConfig,
+} from "@/lib/types/table-tabs";
 
 const log = createLogger("Tables");
 
@@ -60,6 +68,8 @@ export async function getTablesForUser() {
       name: true,
       slug: true,
       schemaJson: true,
+      tabsConfig: true,
+      displayConfig: true,
       companyId: true,
       createdBy: true,
       categoryId: true,
@@ -135,6 +145,7 @@ export async function getTableById(id: number) {
       },
       select: {
         id: true, name: true, slug: true, schemaJson: true,
+        tabsConfig: true, displayConfig: true,
         companyId: true, createdBy: true, categoryId: true,
         order: true, createdAt: true, updatedAt: true,
       },
@@ -160,9 +171,11 @@ export async function createTable(data: {
   slug: string;
   schemaJson?: Record<string, unknown>;
   categoryId?: number;
+  tabsConfig?: Record<string, unknown>;
+  displayConfig?: Record<string, unknown>;
 }) {
   try {
-    const { name, slug, schemaJson, categoryId } = data;
+    const { name, slug, schemaJson, categoryId, tabsConfig, displayConfig } = data;
 
     if (!name || !slug) {
       return { success: false, error: "Missing required fields" };
@@ -183,6 +196,30 @@ export async function createTable(data: {
     if (categoryId) {
       if (!(await validateCategoryInCompany(categoryId, user.companyId))) {
         return { success: false, error: "Invalid category" };
+      }
+    }
+
+    // Validate tabsConfig size and structure
+    if (tabsConfig) {
+      const size = JSON.stringify(tabsConfig).length;
+      if (size > MAX_TABS_CONFIG_SIZE) {
+        return { success: false, error: "tabsConfig exceeds size limit" };
+      }
+      const parsed = parseTabsConfig(tabsConfig);
+      if (parsed && parsed.tabs.length > MAX_TABS) {
+        return { success: false, error: `Maximum ${MAX_TABS} tabs allowed` };
+      }
+    }
+
+    // Validate displayConfig size and structure
+    if (displayConfig) {
+      const size = JSON.stringify(displayConfig).length;
+      if (size > MAX_DISPLAY_CONFIG_SIZE) {
+        return { success: false, error: "displayConfig exceeds size limit" };
+      }
+      const parsed = parseDisplayConfig(displayConfig);
+      if (parsed && parsed.visibleColumns.length > MAX_VISIBLE_COLUMNS) {
+        return { success: false, error: `Maximum ${MAX_VISIBLE_COLUMNS} visible columns allowed` };
       }
     }
 
@@ -208,12 +245,15 @@ export async function createTable(data: {
             name,
             slug: finalSlug,
             schemaJson: (schemaJson || {}) as any,
+            tabsConfig: tabsConfig as any ?? undefined,
+            displayConfig: displayConfig as any ?? undefined,
             companyId: user.companyId,
             createdBy: user.id,
             categoryId: categoryId ? Number(categoryId) : undefined,
           },
           select: {
             id: true, name: true, slug: true, schemaJson: true,
+            tabsConfig: true, displayConfig: true,
             companyId: true, createdBy: true, categoryId: true,
             order: true, createdAt: true, updatedAt: true,
           },
@@ -255,6 +295,8 @@ export async function updateTable(
     slug?: string;
     schemaJson?: Record<string, unknown>;
     categoryId?: number | null;
+    tabsConfig?: Record<string, unknown> | null;
+    displayConfig?: Record<string, unknown> | null;
   },
 ) {
   try {
@@ -264,6 +306,33 @@ export async function updateTable(
     if (data.schemaJson !== undefined) updateData.schemaJson = data.schemaJson;
     if (data.categoryId !== undefined) {
       updateData.categoryId = data.categoryId;
+    }
+    if (data.tabsConfig !== undefined) {
+      // Validate size
+      if (data.tabsConfig !== null) {
+        const size = JSON.stringify(data.tabsConfig).length;
+        if (size > MAX_TABS_CONFIG_SIZE) {
+          return { success: false, error: "tabsConfig exceeds size limit" };
+        }
+        const parsed = parseTabsConfig(data.tabsConfig);
+        if (parsed && parsed.tabs.length > MAX_TABS) {
+          return { success: false, error: `Maximum ${MAX_TABS} tabs allowed` };
+        }
+      }
+      updateData.tabsConfig = data.tabsConfig;
+    }
+    if (data.displayConfig !== undefined) {
+      if (data.displayConfig !== null) {
+        const size = JSON.stringify(data.displayConfig).length;
+        if (size > MAX_DISPLAY_CONFIG_SIZE) {
+          return { success: false, error: "displayConfig exceeds size limit" };
+        }
+        const parsed = parseDisplayConfig(data.displayConfig);
+        if (parsed && parsed.visibleColumns.length > MAX_VISIBLE_COLUMNS) {
+          return { success: false, error: `Maximum ${MAX_VISIBLE_COLUMNS} visible columns allowed` };
+        }
+      }
+      updateData.displayConfig = data.displayConfig;
     }
 
     const user = await getCurrentUser();
@@ -284,6 +353,7 @@ export async function updateTable(
       data: updateData,
       select: {
         id: true, name: true, slug: true, schemaJson: true,
+        tabsConfig: true, displayConfig: true,
         companyId: true, createdBy: true, categoryId: true,
         order: true, createdAt: true, updatedAt: true,
       },
@@ -477,6 +547,7 @@ export async function duplicateTable(id: number) {
       },
       select: {
         id: true, name: true, slug: true, schemaJson: true,
+        tabsConfig: true, displayConfig: true,
         categoryId: true, order: true,
       },
     }));
@@ -511,6 +582,8 @@ export async function duplicateTable(id: number) {
           name: newName,
           slug: finalSlug,
           schemaJson: originalTable.schemaJson as any,
+          tabsConfig: originalTable.tabsConfig as any ?? undefined,
+          displayConfig: originalTable.displayConfig as any ?? undefined,
           companyId: user.companyId,
           createdBy: user.id,
           categoryId: originalTable.categoryId,
@@ -518,6 +591,7 @@ export async function duplicateTable(id: number) {
         },
         select: {
           id: true, name: true, slug: true, schemaJson: true,
+          tabsConfig: true, displayConfig: true,
           companyId: true, createdBy: true, categoryId: true,
           order: true, createdAt: true, updatedAt: true,
         },

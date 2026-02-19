@@ -307,25 +307,19 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
   );
 
   const currency = (quote as any).currency || "ILS";
-  const exchangeRate = (quote as any).exchangeRate ? Number((quote as any).exchangeRate) : null;
   const sym = CURRENCY_SYMBOLS[currency] || "₪";
-
-  const toDisplay = (ilsAmount: number) => {
-    if (currency === "ILS" || !exchangeRate) return ilsAmount;
-    return ilsAmount / exchangeRate;
-  };
 
   const discountType = (quote as any).discountType || null;
   const discountValue = (quote as any).discountValue ? Number((quote as any).discountValue) : 0;
 
-  let discountILS = 0;
+  let discountAmount = 0;
   if (discountType === "percent" && discountValue > 0) {
-    discountILS = total * (discountValue / 100);
+    discountAmount = total * (discountValue / 100);
   } else if (discountType === "fixed" && discountValue > 0) {
-    discountILS = currency !== "ILS" && exchangeRate ? discountValue * exchangeRate : discountValue;
+    discountAmount = discountValue;
   }
-  const totalAfterDiscount = total - discountILS;
-  const hasDiscount = discountILS > 0;
+  const totalAfterDiscount = total - discountAmount;
+  const hasDiscount = discountAmount > 0;
 
   let displaySubtotal = totalAfterDiscount;
   let vatResult = 0;
@@ -427,7 +421,7 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
                 <View style={styles.totalsLine}>
                   <RTLText style={styles.totalsLabel}>סה״כ פריטים</RTLText>
                   <Text style={styles.totalsValue}>
-                    {sym}{formatCurrency(toDisplay(total))}
+                    {sym}{formatCurrency(total)}
                   </Text>
                 </View>
                 <View style={styles.totalsLine}>
@@ -435,7 +429,7 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
                     {`הנחה${discountType === "percent" ? ` (${discountValue}%)` : ""}`}
                   </RTLText>
                   <Text style={[styles.totalsValue, { color: "#16a34a" }]}>
-                    -{sym}{formatCurrency(toDisplay(discountILS))}
+                    -{sym}{formatCurrency(discountAmount)}
                   </Text>
                 </View>
               </>
@@ -447,7 +441,7 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
                     {`סיכום${isIncludeVat ? " (לפני מע״מ)" : ""}`}
                   </RTLText>
                   <Text style={styles.totalsValue}>
-                    {sym}{formatCurrency(toDisplay(displaySubtotal))}
+                    {sym}{formatCurrency(displaySubtotal)}
                   </Text>
                 </View>
                 <View style={[styles.totalsLine, { alignItems: "center" }]}>
@@ -463,7 +457,7 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
                     </Text>
                   </View>
                   <Text style={styles.totalsValue}>
-                    {sym}{formatCurrency(toDisplay(vatResult))}
+                    {sym}{formatCurrency(vatResult)}
                   </Text>
                 </View>
               </>
@@ -476,7 +470,7 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
             <View style={styles.grandTotalLine}>
               <RTLText style={styles.grandTotalLabel}>סה״כ</RTLText>
               <Text style={styles.grandTotalValue}>
-                {sym}{formatCurrency(toDisplay(finalTotal))}
+                {sym}{formatCurrency(finalTotal)}
               </Text>
             </View>
           </View>
@@ -554,14 +548,14 @@ const QuotePdfTemplate = ({ quote }: QuotePdfTemplateProps) => {
               </View>
               <View style={styles.colPrice}>
                 <Text style={styles.tdText}>
-                  {sym}{formatCurrency(toDisplay(Number(item.unitPrice)))}
+                  {sym}{formatCurrency(Number(item.unitPrice))}
                 </Text>
               </View>
               <View style={styles.colTotal}>
                 <Text style={styles.tdBold}>
                   {sym}
                   {formatCurrency(
-                    toDisplay(Number(item.quantity) * Number(item.unitPrice)),
+                    Number(item.quantity) * Number(item.unitPrice),
                   )}
                 </Text>
               </View>

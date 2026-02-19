@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2, Save, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Trash2, Save, ArrowUp, ArrowDown, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-fetch";
 import {
@@ -24,6 +24,16 @@ import {
   optionsToSchemaFormat,
   parseOptionsWithColors,
 } from "@/components/ui/SelectOptionsEditor";
+import type { TabDefinition, TabsConfig } from "@/lib/types/table-tabs";
+import { generateTabId, MAX_TABS, parseTabsConfig } from "@/lib/types/table-tabs";
+
+function sanitizeSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "-")
+    .replace(/^[^a-z0-9]+/, "")
+    .replace(/-+/g, "-");
+}
 
 interface FieldRow {
   name: string;
@@ -39,6 +49,7 @@ interface FieldRow {
   displayField?: string;
   min?: string;
   max?: string;
+  tab?: string;
 }
 
 interface TableOption {
@@ -70,6 +81,8 @@ export default function EditTableModal({
   );
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [users, setUsers] = useState<any[]>([]);
+  const [tabsEnabled, setTabsEnabled] = useState(false);
+  const [tabs, setTabs] = useState<TabDefinition[]>([]);
 
   useEffect(() => {
     fetch("/api/tables")
@@ -88,6 +101,29 @@ export default function EditTableModal({
       .catch((err) => console.error("Failed to load users", err));
   }, []);
 
+  const handleAddTab = () => {
+    if (tabs.length >= MAX_TABS) return;
+    setTabs([
+      ...tabs,
+      { id: generateTabId(), label: `טאב ${tabs.length + 1}`, order: tabs.length },
+    ]);
+  };
+
+  const handleRemoveTab = (tabId: string) => {
+    const remaining = tabs.filter((t) => t.id !== tabId);
+    if (remaining.length > 0) {
+      setFields((prev) =>
+        prev.map((f) =>
+          f.tab === tabId ? { ...f, tab: remaining[0].id } : f,
+        ),
+      );
+    } else {
+      setFields((prev) => prev.map((f) => ({ ...f, tab: undefined })));
+      setTabsEnabled(false);
+    }
+    setTabs(remaining.map((t, i) => ({ ...t, order: i })));
+  };
+
   useEffect(() => {
     if (isOpen && tableId) {
       loadTableData();
@@ -102,7 +138,7 @@ export default function EditTableModal({
 
       const table = await res.json();
       setTableName(table.name);
-      setSlug(table.slug);
+      setSlug(sanitizeSlug(table.slug));
       setCategoryId(table.categoryId || null);
 
       // Parse schema
@@ -126,8 +162,19 @@ export default function EditTableModal({
         displayField: field.displayField,
         min: field.min ? String(field.min) : undefined,
         max: field.max ? String(field.max) : undefined,
+        tab: field.tab || undefined,
       }));
       setFields(parsedFields);
+
+      // Parse tabs config
+      const parsedTabsConfig = parseTabsConfig(table.tabsConfig);
+      if (parsedTabsConfig) {
+        setTabsEnabled(parsedTabsConfig.enabled);
+        setTabs(parsedTabsConfig.tabs);
+      } else {
+        setTabsEnabled(false);
+        setTabs([]);
+      }
     } catch (error) {
       console.error(error);
       alert("שגיאה בטעינת נתוני טבלה");
@@ -251,8 +298,14 @@ export default function EditTableModal({
           displayField: f.displayField,
           min: f.type === "score" ? Number(f.min) || 0 : undefined,
           max: f.type === "score" ? Number(f.max) || 10 : undefined,
+          tab: f.tab || undefined,
         };
       });
+
+      const tabsConfigPayload: TabsConfig | undefined =
+        tabsEnabled && tabs.length > 0
+          ? { enabled: true, tabs }
+          : undefined;
 
       const res = await apiFetch(`/api/tables/${tableId}`, {
         method: "PATCH",
@@ -262,6 +315,7 @@ export default function EditTableModal({
           slug: slug,
           schemaJson,
           categoryId,
+          tabsConfig: tabsConfigPayload,
         }),
       });
 
@@ -309,7 +363,7 @@ export default function EditTableModal({
                   type="text"
                   required
                   value={slug}
-                  onChange={(e) => setSlug(e.target.value)}
+                  onChange={(e) => setSlug(sanitizeSlug(e.target.value))}
                   className="font-mono ltr text-right"
                   placeholder="e.g. projects"
                 />
@@ -334,6 +388,85 @@ export default function EditTableModal({
                   ))}
                 </select>
               </div>
+            </div>
+
+            {/* Tab Layout Toggle */}
+            <div className="border border-primary/20 bg-primary/5 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <LayoutGrid className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold">טאבים</h3>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      ארגן שדות בטאבים לניווט נוח בטפסים
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !tabsEnabled;
+                    setTabsEnabled(next);
+                    if (next && tabs.length === 0) {
+                      setTabs([{ id: generateTabId(), label: "כללי", order: 0 }]);
+                    }
+                  }}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-sm font-bold transition-colors border",
+                    tabsEnabled
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+                  )}
+                >
+                  {tabsEnabled ? "בטל טאבים" : "הפעל טאבים"}
+                </button>
+              </div>
+
+              {tabsEnabled && tabs.length > 0 && (
+                <div className="space-y-3">
+                  {tabs.map((tab) => (
+                    <div
+                      key={tab.id}
+                      className="flex items-center gap-2 p-3 bg-muted/20 rounded-lg border"
+                    >
+                      <Input
+                        value={tab.label}
+                        onChange={(e) =>
+                          setTabs(
+                            tabs.map((t) =>
+                              t.id === tab.id ? { ...t, label: e.target.value } : t,
+                            ),
+                          )
+                        }
+                        className="h-8 flex-1"
+                        placeholder="שם הטאב"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                        onClick={() => handleRemoveTab(tab.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddTab}
+                    disabled={tabs.length >= MAX_TABS}
+                    className="gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    הוסף טאב
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div>
@@ -452,6 +585,29 @@ export default function EditTableModal({
                         </Button>
                       </div>
                     </div>
+
+                    {/* Tab assignment dropdown */}
+                    {tabsEnabled && tabs.length > 0 && (
+                      <div className="pt-2 border-t border-border/50">
+                        <Label className="text-xs font-bold uppercase tracking-wide mb-1 block">
+                          שיוך לטאב
+                        </Label>
+                        <select
+                          value={field.tab || ""}
+                          onChange={(e) =>
+                            handleFieldChange(index, "tab", e.target.value)
+                          }
+                          className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          <option value="">ללא טאב</option>
+                          {tabs.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border/50">
                       <div className="space-y-1">

@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Trash, Plus, Printer, Save, ArrowRight } from "lucide-react";
 import { addWeeks, addMonths, format } from "date-fns";
 import { createQuote, updateQuote } from "@/app/actions/quotes";
 import { getExchangeRate } from "@/app/actions/exchange-rate";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 // removed ui imports
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -66,26 +68,76 @@ export default function QuoteEditor({
 
   const currencySymbol = CURRENCY_SYMBOLS[currency] || "₪";
 
+  const prevCurrencyRef = useRef(currency);
+  const prevExchangeRateRef = useRef(exchangeRate);
+  const isUserCurrencyChange = useRef(false);
+
   useEffect(() => {
+    const convertItems = (converter: (price: number) => number) => {
+      setItems((prev) =>
+        prev.map((item) => ({
+          ...item,
+          unitPrice: Math.round(converter(Number(item.unitPrice)) * 100) / 100,
+          unitCost: Math.round(converter(Number(item.unitCost || 0)) * 100) / 100,
+        })),
+      );
+      if (discountType === "fixed" && discountValue > 0) {
+        setDiscountValue(Math.round(converter(discountValue) * 100) / 100);
+      }
+    };
+
+    if (!isUserCurrencyChange.current) {
+      // Initial load or programmatic change — just fetch rate, don't convert
+      if (currency === "ILS") {
+        setExchangeRate(null);
+        return;
+      }
+      setLoadingRate(true);
+      getExchangeRate(currency)
+        .then((rate) => setExchangeRate(rate))
+        .catch(() => {
+          alert("שגיאה בשליפת שער יציג");
+          setCurrency("ILS");
+          setExchangeRate(null);
+        })
+        .finally(() => setLoadingRate(false));
+      return;
+    }
+
+    isUserCurrencyChange.current = false;
+    const oldCurrency = prevCurrencyRef.current;
+    const oldRate = prevExchangeRateRef.current;
+
     if (currency === "ILS") {
+      // Switching to ILS: convert from foreign → ILS (multiply by old rate)
+      if (oldCurrency !== "ILS" && oldRate) {
+        convertItems((price) => price * oldRate);
+      }
       setExchangeRate(null);
       return;
     }
+
+    // Switching to a foreign currency — fetch new rate, then convert
     setLoadingRate(true);
     getExchangeRate(currency)
-      .then((rate) => setExchangeRate(rate))
+      .then((newRate) => {
+        setExchangeRate(newRate);
+        if (oldCurrency === "ILS") {
+          // ILS → foreign: divide by new rate
+          convertItems((price) => price / newRate);
+        } else if (oldRate) {
+          // Foreign → foreign: convert back to ILS then to new currency
+          convertItems((price) => (price * oldRate) / newRate);
+        }
+      })
       .catch(() => {
         alert("שגיאה בשליפת שער יציג");
-        setCurrency("ILS");
-        setExchangeRate(null);
+        // Revert to previous currency
+        setCurrency(oldCurrency);
+        setExchangeRate(oldRate);
       })
       .finally(() => setLoadingRate(false));
   }, [currency]);
-
-  const toForeign = (ilsAmount: number) => {
-    if (currency === "ILS" || !exchangeRate) return ilsAmount;
-    return ilsAmount / exchangeRate;
-  };
 
   const [discountType, setDiscountType] = useState<"none" | "percent" | "fixed">(
     initialQuote?.discountType || "none",
@@ -172,12 +224,16 @@ export default function QuoteEditor({
           (p) => p.id.toString() === value.toString(),
         );
         if (product) {
+          const ilsPrice = Number(product.price);
+          const ilsCost = Number(product.cost || 0);
+          const displayPrice = currency !== "ILS" && exchangeRate ? ilsPrice / exchangeRate : ilsPrice;
+          const displayCost = currency !== "ILS" && exchangeRate ? ilsCost / exchangeRate : ilsCost;
           newItems[index] = {
             ...newItems[index],
             productId: product.id,
             description: product.description || product.name,
-            unitPrice: Number(product.price),
-            unitCost: Number(product.cost || 0),
+            unitPrice: Math.round(displayPrice * 100) / 100,
+            unitCost: Math.round(displayCost * 100) / 100,
           };
         }
       }
@@ -204,21 +260,17 @@ export default function QuoteEditor({
   const total = calculateTotal();
   const totalCost = calculateTotalCost();
 
-  // Discount calculation (in ILS, before VAT)
-  const calculateDiscountILS = () => {
+  // Discount calculation (in display currency, before VAT)
+  const calculateDiscount = () => {
     if (discountType === "none" || discountValue <= 0) return 0;
     if (discountType === "percent") {
       return total * (discountValue / 100);
     }
-    // fixed - value is in display currency, convert to ILS
-    if (currency !== "ILS" && exchangeRate) {
-      return discountValue * exchangeRate;
-    }
     return discountValue;
   };
 
-  const discountILS = calculateDiscountILS();
-  const totalAfterDiscount = total - discountILS;
+  const discount = calculateDiscount();
+  const totalAfterDiscount = total - discount;
 
   // VAT Calculations
   const vatRate = 0.18;
@@ -226,7 +278,7 @@ export default function QuoteEditor({
     if (isVatExempt) {
       return {
         subtotalBeforeDiscount: total,
-        discount: discountILS,
+        discount: discount,
         subtotal: totalAfterDiscount,
         vat: 0,
         finalTotal: totalAfterDiscount,
@@ -238,7 +290,7 @@ export default function QuoteEditor({
       const vat = totalAfterDiscount - net;
       return {
         subtotalBeforeDiscount: total,
-        discount: discountILS,
+        discount: discount,
         subtotal: net,
         vat: vat,
         finalTotal: totalAfterDiscount,
@@ -247,7 +299,7 @@ export default function QuoteEditor({
       const vat = totalAfterDiscount * vatRate;
       return {
         subtotalBeforeDiscount: total,
-        discount: discountILS,
+        discount: discount,
         subtotal: totalAfterDiscount,
         vat: vat,
         finalTotal: totalAfterDiscount + vat,
@@ -327,7 +379,7 @@ export default function QuoteEditor({
       }
     } catch (error: any) {
       console.error(error);
-      alert("שגיאה בשמירת ההצעה: " + (error.message || "שגיאה לא ידועה"));
+      toast.error(getUserFriendlyError(error));
       setLoading(false);
     }
   };
@@ -509,7 +561,12 @@ export default function QuoteEditor({
               <select
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
+                onChange={(e) => {
+                  prevCurrencyRef.current = currency;
+                  prevExchangeRateRef.current = exchangeRate;
+                  isUserCurrencyChange.current = true;
+                  setCurrency(e.target.value);
+                }}
               >
                 {Object.entries(CURRENCY_NAMES).map(([code, name]) => (
                   <option key={code} value={code}>
@@ -628,17 +685,17 @@ export default function QuoteEditor({
               </label>
               <div className="mt-2 text-sm space-y-1 bg-gray-50 p-3 rounded-md border border-gray-100">
                 <div className="flex justify-between">
-                  <span>הכנסה (נטו):</span> <span>₪{revenue.toFixed(2)}</span>
+                  <span>הכנסה (נטו):</span> <span>{currencySymbol}{revenue.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-red-500">
-                  <span>עלות משוערת:</span> <span>₪{totalCost.toFixed(2)}</span>
+                  <span>עלות משוערת:</span> <span>{currencySymbol}{totalCost.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between font-bold pt-1 border-t border-gray-200 mt-1">
                   <span>רווח:</span>
                   <span
                     className={margin >= 0 ? "text-green-600" : "text-red-600"}
                   >
-                    ₪{margin.toFixed(2)} ({marginPercent.toFixed(1)}%)
+                    {currencySymbol}{margin.toFixed(2)} ({marginPercent.toFixed(1)}%)
                   </span>
                 </div>
               </div>
@@ -674,7 +731,7 @@ export default function QuoteEditor({
                     <option value="custom">פריט מותאם אישית</option>
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name} - {currencySymbol}{toForeign(Number(p.price)).toFixed(2)}
+                        {p.name} - {currencySymbol}{(currency !== "ILS" && exchangeRate ? Number(p.price) / exchangeRate : Number(p.price)).toFixed(2)}
                       </option>
                     ))}
                   </select>
@@ -733,7 +790,7 @@ export default function QuoteEditor({
                 </div>
 
                 <div className="w-24 space-y-2 pt-8 text-left font-medium text-sm">
-                  {currencySymbol}{toForeign(item.quantity * item.unitPrice).toFixed(2)}
+                  {currencySymbol}{(Number(item.quantity) * Number(item.unitPrice)).toFixed(2)}
                 </div>
 
                 <button
@@ -789,7 +846,7 @@ export default function QuoteEditor({
             <div className="w-72 space-y-2 bg-gray-50 p-4 rounded-lg border border-gray-100">
               <div className="flex justify-between text-gray-600 text-sm">
                 <span>סה״כ פריטים:</span>
-                <span className="font-mono">{currencySymbol}{toForeign(displaySubtotalBeforeDiscount).toFixed(2)}</span>
+                <span className="font-mono">{currencySymbol}{displaySubtotalBeforeDiscount.toFixed(2)}</span>
               </div>
 
               {displayDiscount > 0 && (
@@ -797,7 +854,7 @@ export default function QuoteEditor({
                   <span>
                     הנחה{discountType === "percent" ? ` (${discountValue}%)` : ""}:
                   </span>
-                  <span className="font-mono">-{currencySymbol}{toForeign(displayDiscount).toFixed(2)}</span>
+                  <span className="font-mono">-{currencySymbol}{displayDiscount.toFixed(2)}</span>
                 </div>
               )}
 
@@ -806,7 +863,7 @@ export default function QuoteEditor({
                   <span>
                     סה״כ אחרי הנחה{formData.isPriceWithVat ? " (לפני מע״מ)" : ""}:
                   </span>
-                  <span className="font-mono">{currencySymbol}{toForeign(displaySubtotal).toFixed(2)}</span>
+                  <span className="font-mono">{currencySymbol}{displaySubtotal.toFixed(2)}</span>
                 </div>
               )}
 
@@ -815,20 +872,20 @@ export default function QuoteEditor({
                   <span>
                     סה״כ ביניים{formData.isPriceWithVat ? " (לפני מע״מ)" : ""}:
                   </span>
-                  <span className="font-mono">{currencySymbol}{toForeign(displaySubtotal).toFixed(2)}</span>
+                  <span className="font-mono">{currencySymbol}{displaySubtotal.toFixed(2)}</span>
                 </div>
               )}
 
               {!isVatExempt && (
                 <div className="flex justify-between text-gray-600 text-sm">
                   <span>מע״מ (18%):</span>
-                  <span className="font-mono">{currencySymbol}{toForeign(displayVat).toFixed(2)}</span>
+                  <span className="font-mono">{currencySymbol}{displayVat.toFixed(2)}</span>
                 </div>
               )}
 
               <div className="flex justify-between border-t border-gray-200 pt-2 text-xl font-bold text-gray-900">
                 <span>סה״כ לתשלום:</span>
-                <span className="font-mono">{currencySymbol}{toForeign(displayTotal).toFixed(2)}</span>
+                <span className="font-mono">{currencySymbol}{displayTotal.toFixed(2)}</span>
               </div>
             </div>
           </div>

@@ -10,11 +10,12 @@ import {
 function buildCspHeader(nonce: string): string {
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://connect.facebook.net`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://utfs.io https://*.ufs.sh",
     "font-src 'self' data:",
-    "connect-src 'self' https://utfs.io https://*.ufs.sh https://*.uploadthing.com https://*.inngest.com",
+    "connect-src 'self' https://utfs.io https://*.ufs.sh https://*.uploadthing.com https://*.inngest.com https://graph.facebook.com",
+    "frame-src https://www.facebook.com",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -72,6 +73,7 @@ export function middleware(request: NextRequest) {
     publicPaths.includes(path) ||
     path.startsWith("/api/inngest") || // Allow Inngest Dev Server to communicate with the route
     path.startsWith("/api/make/") || // Allow Make webhooks to bypass cookie auth
+    path.startsWith("/api/webhooks/") || // WhatsApp webhooks (signature-verified in route)
     path.startsWith("/api/cron/") || // Allow Cron jobs to bypass cookie auth (secured in route)
     path === "/api/automations/cron" || // Allow automation cron endpoint to bypass cookie auth
     path.startsWith("/p/") || // Allow Public Pages
@@ -89,18 +91,18 @@ export function middleware(request: NextRequest) {
 
   // If no auth token found, redirect to home page
   if (!authToken) {
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   // Token format check: must be either userId.issuedAt.signature (new) or userId.signature (legacy)
   // Signature must be exactly 64 hex characters
   const parts = authToken.split(".");
   if (parts.length < 2 || parts.length > 3) {
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(new URL("/login", request.url));
   }
   const signaturePart = parts[parts.length - 1];
   if (!signaturePart || signaturePart.length !== 64 || !/^[0-9a-f]{64}$/.test(signaturePart)) {
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   // Sliding session: re-set cookie with 1-day maxAge on each authenticated request

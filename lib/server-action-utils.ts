@@ -32,10 +32,10 @@ export async function checkServerActionRateLimit(
 
     const count = results?.[0]?.[1] as number | undefined;
     if (count && count > config.max) {
-      throw new Error("Rate limit exceeded. Please try again later.");
+      throw new Error("בוצעו יותר מדי פניות. אנא המתינו ונסו שוב");
     }
   } catch (e: any) {
-    if (e?.message === "Rate limit exceeded. Please try again later.") throw e;
+    if (e?.message === "בוצעו יותר מדי פניות. אנא המתינו ונסו שוב") throw e;
     // Redis down — fall back to in-memory limiting
     const key = `rl:${config.prefix}:${identifier}`;
     const now = Date.now();
@@ -43,7 +43,7 @@ export async function checkServerActionRateLimit(
     if (entry && entry.resetAt > now) {
       entry.count++;
       if (entry.count > config.max) {
-        throw new Error("Rate limit exceeded. Please try again later.");
+        throw new Error("בוצעו יותר מדי פניות. אנא המתינו ונסו שוב");
       }
     } else {
       inMemoryCounters.set(key, { count: 1, resetAt: now + config.windowSeconds * 1000 });
@@ -71,10 +71,10 @@ export function validateStringLength(
   label: string,
 ): string | undefined {
   if (value === undefined || value === null) return undefined;
-  if (typeof value !== "string") throw new Error(`${label} must be a string`);
+  if (typeof value !== "string") throw new Error("הערך שהוזן אינו תקין");
   const trimmed = value.trim();
   if (trimmed.length > maxLen) {
-    throw new Error(`${label} must be ${maxLen} characters or less`);
+    throw new Error(`הטקסט ארוך מדי, מותר עד ${maxLen} תווים`);
   }
   return trimmed;
 }
@@ -118,15 +118,15 @@ export function validateJsonValue(
   try {
     serialized = JSON.stringify(value);
   } catch {
-    throw new Error(`${label} contains invalid JSON`);
+    throw new Error("הנתונים שהוזנו אינם תקינים");
   }
   if (serialized.length > maxSizeBytes) {
-    throw new Error(`${label} exceeds maximum size of ${Math.round(maxSizeBytes / 1024)}KB`);
+    throw new Error(`הנתונים חורגים מהגודל המרבי המותר (${Math.round(maxSizeBytes / 1024)}KB)`);
   }
 
   // Depth check
   if (exceedsDepth(value, maxDepth)) {
-    throw new Error(`${label} exceeds maximum nesting depth of ${maxDepth}`);
+    throw new Error("מבנה הנתונים מורכב מדי");
   }
 
   // Strip dangerous keys and return
@@ -226,20 +226,20 @@ export function validateOnCompleteActions(
  */
 export function validateUrl(value: string | undefined | null, label: string): string | undefined {
   if (value === undefined || value === null) return undefined;
-  if (typeof value !== "string") throw new Error(`${label} must be a string`);
+  if (typeof value !== "string") throw new Error("הערך שהוזן אינו תקין");
   const trimmed = value.trim();
   if (trimmed.length === 0) return undefined;
   if (trimmed.length > MAX_LENGTHS.url) {
-    throw new Error(`${label} must be ${MAX_LENGTHS.url} characters or less`);
+    throw new Error(`כתובת ה-URL ארוכה מדי, מותר עד ${MAX_LENGTHS.url} תווים`);
   }
   try {
     const url = new URL(trimmed);
     if (url.protocol !== "http:" && url.protocol !== "https:") {
-      throw new Error(`${label} must use http or https`);
+      throw new Error("כתובת ה-URL חייבת להשתמש ב-http או https");
     }
   } catch (e: any) {
-    if (e?.message?.includes("must use http")) throw e;
-    throw new Error(`${label} is not a valid URL`);
+    if (e?.message?.includes("חייבת להשתמש")) throw e;
+    throw new Error("כתובת ה-URL אינה תקינה");
   }
   return trimmed;
 }
@@ -249,21 +249,21 @@ export function validateUrl(value: string | undefined | null, label: string): st
  */
 export function validateWebhookUrl(url: string): string {
   const trimmed = url.trim();
-  if (trimmed.length === 0) throw new Error("Webhook URL is required");
+  if (trimmed.length === 0) throw new Error("יש להזין כתובת Webhook");
   if (trimmed.length > MAX_LENGTHS.url) {
-    throw new Error(`Webhook URL must be ${MAX_LENGTHS.url} characters or less`);
+    throw new Error(`כתובת ה-Webhook ארוכה מדי, מותר עד ${MAX_LENGTHS.url} תווים`);
   }
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol !== "https:") {
-      throw new Error("Webhook URL must use HTTPS");
+      throw new Error("כתובת ה-Webhook חייבת להשתמש ב-HTTPS");
     }
   } catch (e: any) {
-    if (e?.message?.includes("Webhook URL")) throw e;
-    throw new Error("Webhook URL is not valid");
+    if (e?.message?.includes("חייבת להשתמש")) throw e;
+    throw new Error("כתובת ה-Webhook אינה תקינה");
   }
   if (isPrivateUrl(trimmed)) {
-    throw new Error("Webhook URL cannot target private/internal addresses");
+    throw new Error("כתובת ה-Webhook אינה יכולה להפנות לכתובות פרטיות");
   }
   return trimmed;
 }
@@ -275,7 +275,7 @@ export function validateWebhookUrl(url: string): string {
 export function validateNonNegativeInt(value: number | undefined, label: string): number | undefined {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    throw new Error(`${label} must be a non-negative number`);
+    throw new Error("הערך חייב להיות מספר חיובי");
   }
   return Math.floor(value);
 }
@@ -290,18 +290,18 @@ export function validateNonNegativeInt(value: number | undefined, label: string)
  */
 export function wrapPrismaError(e: any, context: string): never {
   if (e?.code === "P2025") {
-    throw new Error(`${context} not found or access denied`);
+    throw new Error("הפריט המבוקש לא נמצא");
   }
   if (e?.code === "P2002") {
-    throw new Error(`${context}: duplicate entry`);
+    throw new Error("פריט עם פרטים אלו כבר קיים במערכת");
   }
   if (e?.code === "P2003") {
-    throw new Error(`${context}: referenced record not found`);
+    throw new Error("לא ניתן למחוק פריט זה כיוון שקיימים פריטים הקשורים אליו");
   }
   // Already a user-facing error (no Prisma code) — rethrow as-is
   if (!e?.code?.startsWith?.("P")) {
     throw e;
   }
   // Unknown Prisma error — generic message
-  throw new Error(`${context}: operation failed`);
+  throw new Error("אירעה שגיאה בעיבוד הבקשה. אנא נסו שוב");
 }

@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createAutomationRule } from "@/app/actions/automations";
 import { useAIJob } from "@/hooks/use-ai-job";
+import { toast } from "sonner";
+import { getUserFriendlyError, getFriendlyResultError } from "@/lib/errors";
 
 interface Message {
   role: "user" | "model";
@@ -147,11 +149,10 @@ export default function AIAutomationCreator({
         onClose();
         router.refresh();
       } else {
-        alert("Failed to create automation: " + result.error);
+        toast.error(getFriendlyResultError(result.error, "שגיאה ביצירת האוטומציה"));
       }
     } catch (e) {
-      console.error(e);
-      alert("Error creating automation");
+      toast.error(getUserFriendlyError(e));
     } finally {
       setCreating(false);
     }

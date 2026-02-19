@@ -10,6 +10,8 @@ import {
   Trash2,
   Palette,
 } from "lucide-react";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import { deleteDepartment } from "@/app/actions/workers";
 
 interface Department {
@@ -54,7 +56,7 @@ export default function DepartmentsList({
       onDelete(department.id);
     } catch (error: any) {
       console.error("Error deleting department:", error);
-      alert(error.message || "שגיאה במחיקת המחלקה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setDeletingId(null);
     }

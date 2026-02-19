@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { createView, ViewConfig } from "@/app/actions/views";
+import { Spinner } from "@/components/ui/spinner";
 import { useRouter } from "next/navigation";
+import { getFriendlyResultError } from "@/lib/errors";
 
 interface AddViewModalProps {
   tableId: number;
@@ -149,7 +151,7 @@ export default function AddViewModal({
       router.refresh();
       onClose();
     } else {
-      setError(result.error || "Failed to create view");
+      setError(getFriendlyResultError(result.error, "שגיאה ביצירת התצוגה"));
     }
   };
 
@@ -811,9 +813,9 @@ export default function AddViewModal({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {isSubmitting ? "יוצר תצוגה..." : "צור תצוגה"}
+              {isSubmitting ? <><Spinner size="sm" /> יוצר תצוגה...</> : "צור תצוגה"}
             </button>
           </div>
         </form>

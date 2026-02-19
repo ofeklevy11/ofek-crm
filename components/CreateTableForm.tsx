@@ -12,6 +12,7 @@ import {
   Save,
   ArrowUp,
   ArrowDown,
+  LayoutGrid,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,8 @@ import {
   optionsToString,
   optionsToSchemaFormat,
 } from "@/components/ui/SelectOptionsEditor";
+import type { TabDefinition, TabsConfig } from "@/lib/types/table-tabs";
+import { generateTabId, MAX_TABS } from "@/lib/types/table-tabs";
 
 interface FieldRow {
   name: string;
@@ -37,6 +40,7 @@ interface FieldRow {
   displayField?: string; // For relation (which field to show in picker)
   min?: string; // For score
   max?: string; // For score
+  tab?: string; // Tab assignment
 }
 
 interface TableOption {
@@ -56,6 +60,33 @@ export default function CreateTableForm() {
   );
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [users, setUsers] = useState<any[]>([]);
+  // Tab layout state
+  const [tabsEnabled, setTabsEnabled] = useState(false);
+  const [tabs, setTabs] = useState<TabDefinition[]>([]);
+
+  const handleAddTab = () => {
+    if (tabs.length >= MAX_TABS) return;
+    setTabs([
+      ...tabs,
+      { id: generateTabId(), label: `טאב ${tabs.length + 1}`, order: tabs.length },
+    ]);
+  };
+
+  const handleRemoveTab = (tabId: string) => {
+    const remaining = tabs.filter((t) => t.id !== tabId);
+    // Reassign orphaned fields to first remaining tab
+    if (remaining.length > 0) {
+      setFields((prev) =>
+        prev.map((f) =>
+          f.tab === tabId ? { ...f, tab: remaining[0].id } : f,
+        ),
+      );
+    } else {
+      setFields((prev) => prev.map((f) => ({ ...f, tab: undefined })));
+      setTabsEnabled(false);
+    }
+    setTabs(remaining.map((t, i) => ({ ...t, order: i })));
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -215,8 +246,15 @@ export default function CreateTableForm() {
           displayField: f.displayField,
           min: f.type === "score" ? Number(f.min) || 0 : undefined,
           max: f.type === "score" ? Number(f.max) || 10 : undefined,
+          tab: f.tab || undefined,
         };
       });
+
+      // Build tabsConfig if tabs are configured
+      const tabsConfigPayload: TabsConfig | undefined =
+        tabsEnabled && tabs.length > 0
+          ? { enabled: true, tabs }
+          : undefined;
 
       const { createTable } = await import("@/app/actions");
       const result = await createTable({
@@ -224,6 +262,7 @@ export default function CreateTableForm() {
         slug: slug,
         schemaJson: schemaJson as any,
         categoryId: categoryId ?? undefined,
+        tabsConfig: tabsConfigPayload as any,
       });
 
       if (!result.success) {
@@ -296,6 +335,87 @@ export default function CreateTableForm() {
           <p className="text-xs text-muted-foreground">
             שייך את הטבלה לקטגוריה לסידור נוח
           </p>
+        </div>
+      </div>
+
+      {/* Tab Layout Toggle */}
+      <div className="mt-2">
+        <div className="border border-primary/20 bg-primary/5 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <LayoutGrid className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold">טאבים</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  ארגן שדות בטאבים לניווט נוח בטפסים
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !tabsEnabled;
+                setTabsEnabled(next);
+                if (next && tabs.length === 0) {
+                  setTabs([{ id: generateTabId(), label: "כללי", order: 0 }]);
+                }
+              }}
+              className={cn(
+                "px-4 py-2 rounded-lg text-sm font-bold transition-colors border",
+                tabsEnabled
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+              )}
+            >
+              {tabsEnabled ? "בטל טאבים" : "הפעל טאבים"}
+            </button>
+          </div>
+
+        {tabsEnabled && tabs.length > 0 && (
+          <div className="space-y-3 mb-6">
+            {tabs.map((tab, index) => (
+              <div
+                key={tab.id}
+                className="flex items-center gap-2 p-3 bg-muted/20 rounded-lg border"
+              >
+                <Input
+                  value={tab.label}
+                  onChange={(e) =>
+                    setTabs(
+                      tabs.map((t) =>
+                        t.id === tab.id ? { ...t, label: e.target.value } : t,
+                      ),
+                    )
+                  }
+                  className="h-8 flex-1"
+                  placeholder="שם הטאב"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                  onClick={() => handleRemoveTab(tab.id)}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleAddTab}
+              disabled={tabs.length >= MAX_TABS}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              הוסף טאב
+            </Button>
+          </div>
+        )}
         </div>
       </div>
 
@@ -421,6 +541,29 @@ export default function CreateTableForm() {
                   </Button>
                 </div>
               </div>
+
+              {/* Tab assignment dropdown */}
+              {tabsEnabled && tabs.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-border/50">
+                  <Label className="text-xs font-bold uppercase tracking-wide mb-2 block">
+                    שיוך לטאב
+                  </Label>
+                  <select
+                    value={field.tab || ""}
+                    onChange={(e) =>
+                      handleFieldChange(index, "tab", e.target.value)
+                    }
+                    className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">ללא טאב</option>
+                    {tabs.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="mt-4 pt-4 border-t border-border/50">
                 <Label className="text-xs font-bold uppercase tracking-wide mb-2 block">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getUserFriendlyError } from "@/lib/errors";
 import {
   X,
   Loader2,
@@ -450,7 +451,7 @@ export default function ViewAutomationModal({
       fetchRules();
       refreshActionCount(); // Refresh action count after save
     } catch (err: any) {
-      setError(err.message || "Failed to save automation");
+      setError(getUserFriendlyError(err));
     } finally {
       setLoading(false);
     }

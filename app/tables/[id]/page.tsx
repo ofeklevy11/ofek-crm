@@ -5,6 +5,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { canReadTable, canWriteTable, hasUserFlag } from "@/lib/permissions";
+import { parseTabsConfig, parseDisplayConfig } from "@/lib/types/table-tabs";
+import TableSettingsButton from "@/components/TableSettingsButton";
 
 export const dynamic = "force-dynamic";
 
@@ -141,6 +143,10 @@ export default async function TableDetailsPage({
     console.error("Invalid schema JSON", e);
   }
 
+  // Parse tabsConfig and displayConfig
+  const parsedTabsConfig = parseTabsConfig(table.tabsConfig);
+  const parsedDisplayConfig = parseDisplayConfig(table.displayConfig);
+
   return (
     <div className="min-h-screen bg-muted/40 p-4 lg:p-6" dir="rtl">
       <div className="w-full">
@@ -164,10 +170,19 @@ export default async function TableDetailsPage({
             <div className="flex gap-3 items-center w-full md:w-auto">
               {canSearch && <SearchInput />}
               {canEdit && (
+                <TableSettingsButton
+                  tableId={tableId}
+                  schema={schema}
+                  tabsConfig={parsedTabsConfig}
+                  displayConfig={parsedDisplayConfig}
+                />
+              )}
+              {canEdit && (
                 <AddRecordForm
                   tableId={tableId}
                   schema={schema}
                   tableName={table.name}
+                  tabsConfig={parsedTabsConfig}
                 />
               )}
             </div>
@@ -195,6 +210,8 @@ export default async function TableDetailsPage({
               canSearch={canSearch}
               canFilter={canFilter}
               canExport={canExport}
+              tabsConfig={parsedTabsConfig}
+              displayConfig={parsedDisplayConfig}
             />
             <Pagination totalPages={totalPages} />
           </div>

@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { uploadFiles } from "@/lib/uploadthing";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import { saveFileMetadata } from "@/app/actions/storage";
 import RelationPicker from "./RelationPicker";
 import {
@@ -21,6 +23,9 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, X, Save, RotateCw, Trash2 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { apiFetch } from "@/lib/api-fetch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { TabsConfig, SchemaFieldWithTab } from "@/lib/types/table-tabs";
+import { getFieldsForTab } from "@/lib/types/table-tabs";
 
 interface SchemaField {
   name: string;
@@ -43,10 +48,12 @@ export default function AddRecordForm({
   tableId,
   schema,
   tableName,
+  tabsConfig,
 }: {
   tableId: number;
   schema: SchemaField[];
   tableName: string;
+  tabsConfig?: TabsConfig | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -253,7 +260,7 @@ export default function AddRecordForm({
       router.refresh();
     } catch (error) {
       console.error(error);
-      alert("שגיאה ביצירת הרשומה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }
@@ -286,13 +293,13 @@ export default function AddRecordForm({
               onSubmit={handleSubmit}
               className="space-y-10 py-8 px-6 sm:px-10 w-full pb-48"
             >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 w-full">
-                {schema
-                  .filter(
-                    (field, index, self) =>
-                      index === self.findIndex((t) => t.name === field.name),
-                  )
-                  .map((field) => (
+              {(() => {
+                const allFields = schema.filter(
+                  (field, index, self) =>
+                    index === self.findIndex((t) => t.name === field.name),
+                );
+
+                const renderFieldInput = (field: SchemaField) => (
                     <div key={field.name} className="space-y-4">
                       <Label className="uppercase tracking-wide text-lg font-bold text-muted-foreground">
                         {field.label}
@@ -610,8 +617,60 @@ export default function AddRecordForm({
                         />
                       )}
                     </div>
-                  ))}
-              </div>
+                );
+
+                // Tab-aware rendering
+                if (tabsConfig?.enabled && tabsConfig.tabs.length > 0) {
+                  const schemaWithTabs = allFields as SchemaFieldWithTab[];
+                  return (
+                    <Tabs defaultValue={tabsConfig.tabs[0]?.id} className="w-full" dir="rtl">
+                      <TabsList className="w-full justify-start mb-4 flex-wrap h-auto gap-1">
+                        {tabsConfig.tabs.map((tab) => (
+                          <TabsTrigger key={tab.id} value={tab.id} className="text-sm">
+                            {tab.label}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                      {tabsConfig.tabs.map((tab) => {
+                        const tabFields = getFieldsForTab(schemaWithTabs, tab.id);
+                        return (
+                          <TabsContent key={tab.id} value={tab.id}>
+                            {tabFields.length > 0 ? (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 w-full">
+                                {tabFields.map((f) => renderFieldInput(f))}
+                              </div>
+                            ) : (
+                              <div className="py-12 text-center text-muted-foreground">
+                                אין שדות בטאב זה
+                              </div>
+                            )}
+                          </TabsContent>
+                        );
+                      })}
+                      {/* Fields without tab assignment */}
+                      {(() => {
+                        const unassigned = getFieldsForTab(schemaWithTabs, null);
+                        if (unassigned.length === 0) return null;
+                        return (
+                          <div className="mt-6 border-t pt-6">
+                            <p className="text-sm font-bold text-muted-foreground mb-4">שדות ללא טאב</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 w-full">
+                              {unassigned.map((f) => renderFieldInput(f))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </Tabs>
+                  );
+                }
+
+                // No tabs: standard grid
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 w-full">
+                    {allFields.map((f) => renderFieldInput(f))}
+                  </div>
+                );
+              })()}
 
               {/* Attachments Section */}
               <div className="mt-8 border-t pt-6">

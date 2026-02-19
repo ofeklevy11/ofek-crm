@@ -13,6 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -31,6 +33,9 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-fetch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { TabsConfig, SchemaFieldWithTab } from "@/lib/types/table-tabs";
+import { getFieldsForTab } from "@/lib/types/table-tabs";
 
 interface SchemaField {
   name: string;
@@ -51,6 +56,7 @@ interface EditRecordModalProps {
   schema: SchemaField[];
   onClose: () => void;
   initialFocusField?: string;
+  tabsConfig?: TabsConfig | null;
 }
 
 export default function EditRecordModal({
@@ -58,6 +64,7 @@ export default function EditRecordModal({
   schema,
   onClose,
   initialFocusField,
+  tabsConfig,
 }: EditRecordModalProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -278,7 +285,7 @@ export default function EditRecordModal({
       }
     } catch (error: any) {
       console.error("Upload error:", error);
-      alert("שגיאה בהעלאה: " + error.message);
+      toast.error(getUserFriendlyError(error));
     } finally {
       setUploading(false);
       e.target.value = ""; // reset
@@ -485,13 +492,13 @@ export default function EditRecordModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {schema
-              .filter(
-                (field, index, self) =>
-                  index === self.findIndex((t) => t.name === field.name),
-              )
-              .map((field) => (
+          {(() => {
+            const allFields = schema.filter(
+              (field, index, self) =>
+                index === self.findIndex((t) => t.name === field.name),
+            );
+
+            const renderFieldInput = (field: SchemaField) => (
                 <div
                   key={field.name}
                   className={
@@ -843,8 +850,82 @@ export default function EditRecordModal({
                     </>
                   )}
                 </div>
-              ))}
+            );
 
+            // Determine smart initial tab: if opened from a cell click, find which tab has that field
+            const getInitialTab = () => {
+              if (tabsConfig?.enabled && tabsConfig.tabs.length > 0) {
+                if (initialFocusField) {
+                  const fieldSchema = (allFields as SchemaFieldWithTab[]).find(
+                    (f) => f.name === initialFocusField,
+                  );
+                  if (fieldSchema?.tab) {
+                    const matchingTab = tabsConfig.tabs.find((t) => t.id === fieldSchema.tab);
+                    if (matchingTab) return matchingTab.id;
+                  }
+                }
+                return tabsConfig.tabs[0]?.id;
+              }
+              return undefined;
+            };
+
+            // Tab-aware rendering
+            if (tabsConfig?.enabled && tabsConfig.tabs.length > 0) {
+              const schemaWithTabs = allFields as SchemaFieldWithTab[];
+              return (
+                <>
+                  <Tabs defaultValue={getInitialTab()} className="w-full" dir="rtl">
+                    <TabsList className="w-full justify-start mb-4 flex-wrap h-auto gap-1">
+                      {tabsConfig.tabs.map((tab) => (
+                        <TabsTrigger key={tab.id} value={tab.id} className="text-sm">
+                          {tab.label}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                    {tabsConfig.tabs.map((tab) => {
+                      const tabFields = getFieldsForTab(schemaWithTabs, tab.id);
+                      return (
+                        <TabsContent key={tab.id} value={tab.id}>
+                          {tabFields.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              {tabFields.map((f) => renderFieldInput(f))}
+                            </div>
+                          ) : (
+                            <div className="py-8 text-center text-muted-foreground">
+                              אין שדות בטאב זה
+                            </div>
+                          )}
+                        </TabsContent>
+                      );
+                    })}
+                    {/* Fields without tab assignment */}
+                    {(() => {
+                      const unassigned = getFieldsForTab(schemaWithTabs, null);
+                      if (unassigned.length === 0) return null;
+                      return (
+                        <div className="mt-4 border-t pt-4">
+                          <p className="text-sm font-bold text-muted-foreground mb-3">שדות ללא טאב</p>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {unassigned.map((f) => renderFieldInput(f))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </Tabs>
+                </>
+              );
+            }
+
+            // No tabs: standard grid
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {allFields.map((f) => renderFieldInput(f))}
+              </div>
+            );
+          })()}
+
+          {/* Metadata Section — always visible outside tabs */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Created At Field - Read Only */}
             <div>
               <Label className="text-sm font-semibold mb-1.5 block text-muted-foreground">

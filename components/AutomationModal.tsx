@@ -30,6 +30,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { getAllFiles } from "@/app/actions/storage";
+import { getFriendlyResultError } from "@/lib/errors";
 
 interface User {
   id: number;
@@ -399,11 +400,11 @@ export default function AutomationModal({
         onCreated();
         onClose();
       } else {
-        alert(result.error || "Failed to save automation");
+        alert(getFriendlyResultError(result.error, "שגיאה בשמירת האוטומציה"));
       }
     } catch (error) {
       console.error(error);
-      alert("Error saving automation");
+      alert("שגיאה בשמירת האוטומציה");
     } finally {
       setLoading(false);
     }

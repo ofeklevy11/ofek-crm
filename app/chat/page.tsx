@@ -11,7 +11,7 @@ export default async function ChatPage() {
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/auth/signin");
+    redirect("/login");
   }
 
   return (

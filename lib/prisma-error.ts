@@ -13,21 +13,22 @@ export function handlePrismaError(
   context: string,
 ): NextResponse {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    log.error(`Prisma error ${error.code}`, { context, meta: error.meta });
     switch (error.code) {
       case "P2025":
         return NextResponse.json(
-          { error: `${context} not found` },
+          { error: "הפריט המבוקש לא נמצא" },
           { status: 404 },
         );
       case "P2002": {
         return NextResponse.json(
-          { error: `A ${context} with these details already exists` },
+          { error: "פריט עם פרטים אלו כבר קיים במערכת" },
           { status: 409 },
         );
       }
       case "P2003":
         return NextResponse.json(
-          { error: `Cannot delete ${context} — it has related records` },
+          { error: "לא ניתן למחוק פריט זה כיוון שקיימים פריטים הקשורים אליו" },
           { status: 400 },
         );
     }
@@ -35,7 +36,7 @@ export function handlePrismaError(
 
   log.error("Unhandled Prisma error", { context, error: (error as Error).message ?? "Unknown error" });
   return NextResponse.json(
-    { error: `Failed to process ${context}` },
+    { error: "אירעה שגיאה בעיבוד הבקשה. אנא נסו שוב" },
     { status: 500 },
   );
 }

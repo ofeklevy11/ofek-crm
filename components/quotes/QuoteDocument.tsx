@@ -53,28 +53,21 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
   const vatRate = 0.18;
 
   const currency = (quote as any).currency || "ILS";
-  const exchangeRate = (quote as any).exchangeRate ? Number((quote as any).exchangeRate) : null;
   const sym = CURRENCY_SYMBOLS[currency] || "₪";
-
-  const toDisplay = (ilsAmount: number) => {
-    if (currency === "ILS" || !exchangeRate) return ilsAmount;
-    return ilsAmount / exchangeRate;
-  };
 
   const total = Number(quote.total);
   const isIncludeVat = (quote as any).isPriceWithVat;
   const discountType = (quote as any).discountType || null;
   const discountValue = (quote as any).discountValue ? Number((quote as any).discountValue) : 0;
 
-  // Calculate discount in ILS
-  let discountILS = 0;
+  let discountAmount = 0;
   if (discountType === "percent" && discountValue > 0) {
-    discountILS = total * (discountValue / 100);
+    discountAmount = total * (discountValue / 100);
   } else if (discountType === "fixed" && discountValue > 0) {
-    discountILS = currency !== "ILS" && exchangeRate ? discountValue * exchangeRate : discountValue;
+    discountAmount = discountValue;
   }
-  const totalAfterDiscount = total - discountILS;
-  const hasDiscount = discountILS > 0;
+  const totalAfterDiscount = total - discountAmount;
+  const hasDiscount = discountAmount > 0;
 
   let subtotal = totalAfterDiscount;
   let vat = 0;
@@ -157,7 +150,7 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
                 <span>סה״כ פריטים</span>
                 <span className="font-mono">
                   {sym}
-                  {toDisplay(total).toLocaleString(undefined, {
+                  {total.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
@@ -167,7 +160,7 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
                 <span>הנחה{discountType === "percent" ? ` (${discountValue}%)` : ""}</span>
                 <span className="font-mono">
                   -{sym}
-                  {toDisplay(discountILS).toLocaleString(undefined, {
+                  {discountAmount.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
@@ -181,7 +174,7 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
                 <span>סיכום{isIncludeVat ? " (לפני מע״מ)" : ""}</span>
                 <span className="font-mono">
                   {sym}
-                  {toDisplay(subtotal).toLocaleString(undefined, {
+                  {subtotal.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
@@ -191,7 +184,7 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
                 <span>מע״מ (18%)</span>
                 <span className="font-mono">
                   {sym}
-                  {toDisplay(vat).toLocaleString(undefined, {
+                  {vat.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
@@ -208,7 +201,7 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
             <span>סה״כ</span>
             <span className="font-mono">
               {sym}
-              {toDisplay(finalTotal).toLocaleString(undefined, {
+              {finalTotal.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
@@ -287,13 +280,11 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
                   {item.quantity}
                 </td>
                 <td className="py-3 px-2 text-left align-top text-sm font-mono text-gray-800">
-                  {sym}{toDisplay(Number(item.unitPrice)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {sym}{Number(item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
                 <td className="py-3 px-2 text-left align-top text-sm font-mono font-medium text-gray-900">
                   {sym}
-                  {toDisplay(
-                    Number(item.quantity) * Number(item.unitPrice)
-                  ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {(Number(item.quantity) * Number(item.unitPrice)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
               </tr>
             ))}

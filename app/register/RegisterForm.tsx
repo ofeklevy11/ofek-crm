@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Loader2, User, Mail, Lock, Building2 } from "lucide-react";
+import { getUserFriendlyError } from "@/lib/errors";
 
 export default function RegisterForm() {
   const [formData, setFormData] = useState({
@@ -19,7 +20,6 @@ export default function RegisterForm() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,10 +67,9 @@ export default function RegisterForm() {
       }
 
       // After successful registration, redirect to login or auto-login
-      router.push("/");
-      router.refresh();
+      window.location.href = "/";
     } catch (err: any) {
-      setError(err.message);
+      setError(getUserFriendlyError(err));
     } finally {
       setLoading(false);
     }

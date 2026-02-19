@@ -5,13 +5,13 @@ CREATE TYPE "UserRole" AS ENUM ('basic', 'admin', 'manager');
 CREATE TYPE "UserTier" AS ENUM ('basic', 'premium', 'super');
 
 -- CreateEnum
-CREATE TYPE "AutomationTriggerType" AS ENUM ('MANUAL', 'TASK_STATUS_CHANGE', 'RECORD_CREATE', 'NEW_RECORD', 'RECORD_FIELD_CHANGE', 'MULTI_EVENT_DURATION', 'DIRECT_DIAL', 'VIEW_METRIC_THRESHOLD', 'TIME_SINCE_CREATION', 'TICKET_STATUS_CHANGE', 'SLA_BREACH');
+CREATE TYPE "AutomationTriggerType" AS ENUM ('MANUAL', 'TASK_STATUS_CHANGE', 'RECORD_CREATE', 'NEW_RECORD', 'RECORD_FIELD_CHANGE', 'MULTI_EVENT_DURATION', 'DIRECT_DIAL', 'VIEW_METRIC_THRESHOLD', 'TIME_SINCE_CREATION', 'TICKET_STATUS_CHANGE', 'SLA_BREACH', 'EVENT_TIME');
 
 -- CreateEnum
 CREATE TYPE "AutomationActionType" AS ENUM ('SEND_NOTIFICATION', 'CALCULATE_DURATION', 'CALCULATE_MULTI_EVENT_DURATION', 'UPDATE_RECORD_FIELD', 'SEND_WHATSAPP', 'WEBHOOK', 'ADD_TO_NURTURE_LIST', 'CREATE_TASK', 'CREATE_RECORD', 'CREATE_CALENDAR_EVENT', 'MULTI_ACTION');
 
 -- CreateEnum
-CREATE TYPE "TaskStatus" AS ENUM ('todo', 'in_progress', 'waiting_client', 'completed_month', 'done');
+CREATE TYPE "TaskStatus" AS ENUM ('todo', 'in_progress', 'waiting_client', 'on_hold', 'completed_month', 'done');
 
 -- CreateEnum
 CREATE TYPE "TaskPriority" AS ENUM ('low', 'medium', 'high');
@@ -92,7 +92,7 @@ CREATE TYPE "WorkerTaskPriority" AS ENUM ('URGENT', 'HIGH', 'NORMAL', 'LOW');
 CREATE TYPE "WorkerTaskStatus" AS ENUM ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED');
 
 -- CreateEnum
-CREATE TYPE "DashboardWidgetType" AS ENUM ('ANALYTICS', 'TABLE', 'GOAL', 'TABLE_VIEWS_DASHBOARD');
+CREATE TYPE "DashboardWidgetType" AS ENUM ('ANALYTICS', 'TABLE', 'GOAL', 'TABLE_VIEWS_DASHBOARD', 'MINI_CALENDAR', 'MINI_TASKS', 'MINI_QUOTES');
 
 -- CreateEnum
 CREATE TYPE "ImportJobStatus" AS ENUM ('UPLOADED', 'VALIDATING', 'VALIDATED', 'IMPORTING', 'IMPORTED', 'FAILED');
@@ -102,6 +102,21 @@ CREATE TYPE "AnalyticsViewType" AS ENUM ('COUNT', 'AVERAGE', 'SUM', 'CONVERSION'
 
 -- CreateEnum
 CREATE TYPE "ViewFolderType" AS ENUM ('ANALYTICS', 'AUTOMATION');
+
+-- CreateEnum
+CREATE TYPE "WhatsAppAccountStatus" AS ENUM ('PENDING', 'ACTIVE', 'SUSPENDED', 'DISCONNECTED');
+
+-- CreateEnum
+CREATE TYPE "WaMessageDirection" AS ENUM ('INBOUND', 'OUTBOUND');
+
+-- CreateEnum
+CREATE TYPE "WaMessageType" AS ENUM ('TEXT', 'IMAGE', 'AUDIO', 'VIDEO', 'DOCUMENT', 'LOCATION', 'STICKER', 'CONTACTS', 'TEMPLATE', 'UNKNOWN');
+
+-- CreateEnum
+CREATE TYPE "WaMessageStatus" AS ENUM ('PENDING', 'SENT', 'DELIVERED', 'READ', 'FAILED');
+
+-- CreateEnum
+CREATE TYPE "WaConversationStatus" AS ENUM ('OPEN', 'CLOSED');
 
 -- CreateEnum
 CREATE TYPE "TicketStatus" AS ENUM ('OPEN', 'IN_PROGRESS', 'WAITING', 'RESOLVED', 'CLOSED');
@@ -133,6 +148,7 @@ CREATE TABLE "Company" (
     "logoUrl" TEXT,
     "greenApiInstanceId" TEXT,
     "greenApiToken" TEXT,
+    "webhookSigningSecret" TEXT,
 
     CONSTRAINT "Company_pkey" PRIMARY KEY ("id")
 );
@@ -256,6 +272,8 @@ CREATE TABLE "TableMeta" (
     "slug" TEXT NOT NULL,
     "createdBy" INTEGER NOT NULL,
     "schemaJson" JSONB NOT NULL,
+    "tabsConfig" JSONB,
+    "displayConfig" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
@@ -1098,6 +1116,104 @@ CREATE TABLE "ImportJob" (
     CONSTRAINT "ImportJob_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "WhatsAppAccount" (
+    "id" SERIAL NOT NULL,
+    "companyId" INTEGER NOT NULL,
+    "wabaId" TEXT NOT NULL,
+    "appId" TEXT,
+    "businessName" TEXT,
+    "accessTokenEnc" TEXT NOT NULL,
+    "accessTokenIv" TEXT NOT NULL,
+    "accessTokenTag" TEXT NOT NULL,
+    "webhookVerifyToken" TEXT NOT NULL,
+    "status" "WhatsAppAccountStatus" NOT NULL DEFAULT 'PENDING',
+    "connectedBy" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "WhatsAppAccount_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "WhatsAppPhoneNumber" (
+    "id" SERIAL NOT NULL,
+    "companyId" INTEGER NOT NULL,
+    "accountId" INTEGER NOT NULL,
+    "phoneNumberId" TEXT NOT NULL,
+    "displayPhone" TEXT NOT NULL,
+    "verifiedName" TEXT,
+    "qualityRating" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "WhatsAppPhoneNumber_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "WaContact" (
+    "id" SERIAL NOT NULL,
+    "companyId" INTEGER NOT NULL,
+    "waId" TEXT NOT NULL,
+    "profileName" TEXT,
+    "phone" TEXT,
+    "clientId" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "WaContact_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "WaConversation" (
+    "id" SERIAL NOT NULL,
+    "companyId" INTEGER NOT NULL,
+    "phoneNumberId" INTEGER NOT NULL,
+    "contactId" INTEGER NOT NULL,
+    "status" "WaConversationStatus" NOT NULL DEFAULT 'OPEN',
+    "lastInboundAt" TIMESTAMP(3),
+    "assignedUserId" INTEGER,
+    "unreadCount" INTEGER NOT NULL DEFAULT 0,
+    "lastMessageAt" TIMESTAMP(3),
+    "lastMessagePreview" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "WaConversation_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "WaMessage" (
+    "id" BIGSERIAL NOT NULL,
+    "companyId" INTEGER NOT NULL,
+    "conversationId" INTEGER NOT NULL,
+    "phoneNumberId" INTEGER NOT NULL,
+    "contactId" INTEGER NOT NULL,
+    "wamId" TEXT,
+    "direction" "WaMessageDirection" NOT NULL,
+    "type" "WaMessageType" NOT NULL DEFAULT 'TEXT',
+    "status" "WaMessageStatus" NOT NULL DEFAULT 'PENDING',
+    "body" TEXT,
+    "mediaId" TEXT,
+    "mediaUrl" TEXT,
+    "mediaMime" TEXT,
+    "mediaFileName" TEXT,
+    "mediaSha256" TEXT,
+    "latitude" DOUBLE PRECISION,
+    "longitude" DOUBLE PRECISION,
+    "locationName" TEXT,
+    "locationAddress" TEXT,
+    "contextWamId" TEXT,
+    "errorCode" TEXT,
+    "errorMessage" TEXT,
+    "sentByUserId" INTEGER,
+    "timestamp" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "WaMessage_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Company_slug_key" ON "Company"("slug");
 
@@ -1572,6 +1688,54 @@ CREATE INDEX "ImportJob_companyId_idx" ON "ImportJob"("companyId");
 -- CreateIndex
 CREATE INDEX "ImportJob_tableId_idx" ON "ImportJob"("tableId");
 
+-- CreateIndex
+CREATE INDEX "WhatsAppAccount_companyId_idx" ON "WhatsAppAccount"("companyId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "WhatsAppAccount_companyId_wabaId_key" ON "WhatsAppAccount"("companyId", "wabaId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "WhatsAppPhoneNumber_phoneNumberId_key" ON "WhatsAppPhoneNumber"("phoneNumberId");
+
+-- CreateIndex
+CREATE INDEX "WhatsAppPhoneNumber_companyId_idx" ON "WhatsAppPhoneNumber"("companyId");
+
+-- CreateIndex
+CREATE INDEX "WhatsAppPhoneNumber_accountId_idx" ON "WhatsAppPhoneNumber"("accountId");
+
+-- CreateIndex
+CREATE INDEX "WaContact_companyId_idx" ON "WaContact"("companyId");
+
+-- CreateIndex
+CREATE INDEX "WaContact_clientId_idx" ON "WaContact"("clientId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "WaContact_companyId_waId_key" ON "WaContact"("companyId", "waId");
+
+-- CreateIndex
+CREATE INDEX "WaConversation_companyId_status_lastMessageAt_idx" ON "WaConversation"("companyId", "status", "lastMessageAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "WaConversation_companyId_assignedUserId_status_idx" ON "WaConversation"("companyId", "assignedUserId", "status");
+
+-- CreateIndex
+CREATE INDEX "WaConversation_contactId_idx" ON "WaConversation"("contactId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "WaConversation_phoneNumberId_contactId_key" ON "WaConversation"("phoneNumberId", "contactId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "WaMessage_wamId_key" ON "WaMessage"("wamId");
+
+-- CreateIndex
+CREATE INDEX "WaMessage_conversationId_timestamp_idx" ON "WaMessage"("conversationId", "timestamp" DESC);
+
+-- CreateIndex
+CREATE INDEX "WaMessage_companyId_wamId_idx" ON "WaMessage"("companyId", "wamId");
+
+-- CreateIndex
+CREATE INDEX "WaMessage_contactId_timestamp_idx" ON "WaMessage"("contactId", "timestamp" DESC);
+
 -- AddForeignKey
 ALTER TABLE "User" ADD CONSTRAINT "User_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -1952,3 +2116,48 @@ ALTER TABLE "ImportJob" ADD CONSTRAINT "ImportJob_tableId_fkey" FOREIGN KEY ("ta
 
 -- AddForeignKey
 ALTER TABLE "ImportJob" ADD CONSTRAINT "ImportJob_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WhatsAppAccount" ADD CONSTRAINT "WhatsAppAccount_connectedBy_fkey" FOREIGN KEY ("connectedBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WhatsAppAccount" ADD CONSTRAINT "WhatsAppAccount_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WhatsAppPhoneNumber" ADD CONSTRAINT "WhatsAppPhoneNumber_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WhatsAppPhoneNumber" ADD CONSTRAINT "WhatsAppPhoneNumber_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "WhatsAppAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WaContact" ADD CONSTRAINT "WaContact_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Client"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WaContact" ADD CONSTRAINT "WaContact_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WaConversation" ADD CONSTRAINT "WaConversation_assignedUserId_fkey" FOREIGN KEY ("assignedUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WaConversation" ADD CONSTRAINT "WaConversation_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WaConversation" ADD CONSTRAINT "WaConversation_phoneNumberId_fkey" FOREIGN KEY ("phoneNumberId") REFERENCES "WhatsAppPhoneNumber"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WaConversation" ADD CONSTRAINT "WaConversation_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "WaContact"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WaMessage" ADD CONSTRAINT "WaMessage_sentByUserId_fkey" FOREIGN KEY ("sentByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WaMessage" ADD CONSTRAINT "WaMessage_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WaMessage" ADD CONSTRAINT "WaMessage_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "WaConversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WaMessage" ADD CONSTRAINT "WaMessage_phoneNumberId_fkey" FOREIGN KEY ("phoneNumberId") REFERENCES "WhatsAppPhoneNumber"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WaMessage" ADD CONSTRAINT "WaMessage_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "WaContact"("id") ON DELETE CASCADE ON UPDATE CASCADE;

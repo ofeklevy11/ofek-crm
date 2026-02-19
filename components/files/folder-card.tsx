@@ -28,6 +28,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface FolderCardProps {
   folder: {
@@ -75,7 +77,7 @@ export function FolderCard({
     try {
       await deleteFolder(folder.id);
     } catch (error: any) {
-      alert(error.message);
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsDeleting(false);
     }
@@ -93,7 +95,7 @@ export function FolderCard({
       router.refresh();
       setIsRenameOpen(false);
     } catch (error: any) {
-      alert(error.message);
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsRenaming(false);
     }

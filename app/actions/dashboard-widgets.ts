@@ -78,12 +78,12 @@ export async function addDashboardWidget(rawData: unknown) {
 
     // Atomic max+1 order assignment + widget count limit
     const widget = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${user.id})`;
       const [{ nextOrder, currentCount }] = await tx.$queryRaw<[{ nextOrder: number; currentCount: bigint }]>`
         SELECT COALESCE(MAX("order"), -1) + 1 AS "nextOrder",
                COUNT(*)::bigint AS "currentCount"
         FROM "DashboardWidget"
         WHERE "userId" = ${user.id} AND "companyId" = ${user.companyId}
-        FOR UPDATE
       `;
 
       if (Number(currentCount) >= MAX_WIDGETS_PER_USER) {
@@ -233,11 +233,11 @@ export async function migrateDashboardWidgets(
 
     // Atomic check+insert inside transaction with FOR UPDATE to prevent duplicate migration
     const migrated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${user.id})`;
       const [{ cnt }] = await tx.$queryRaw<[{ cnt: bigint }]>`
         SELECT COUNT(*)::bigint AS cnt
         FROM "DashboardWidget"
         WHERE "userId" = ${user.id} AND "companyId" = ${user.companyId}
-        FOR UPDATE
       `;
 
       if (Number(cnt) > 0) {

@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { createProduct, updateProduct } from "@/app/actions/products";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface Product {
   id: number;
@@ -86,7 +88,7 @@ export function ProductModal({
       onClose();
     } catch (error: any) {
       console.error(error);
-      alert(error.message || "משהו השתבש");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }

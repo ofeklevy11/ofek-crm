@@ -116,11 +116,11 @@ export default function UsersPage() {
         setUsers(users.filter((u) => u.id !== deleteUserId));
         setDeleteUserId(null);
       } else {
-        alert("Failed to delete user");
+        alert("שגיאה במחיקת המשתמש");
       }
     } catch (error) {
       console.error("Error deleting user:", error);
-      alert("Error deleting user");
+      alert("שגיאה במחיקת המשתמש");
     } finally {
       setIsDeleting(false);
     }

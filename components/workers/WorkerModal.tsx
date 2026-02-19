@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Spinner } from "@/components/ui/spinner";
 import {
   X,
   User,
@@ -460,9 +461,9 @@ export default function WorkerModal({
             type="submit"
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {isSubmitting ? "שומר..." : worker ? "שמור שינויים" : "הוסף עובד"}
+            {isSubmitting ? <><Spinner size="sm" /> שומר...</> : worker ? "שמור שינויים" : "הוסף עובד"}
           </button>
         </div>
       </div>

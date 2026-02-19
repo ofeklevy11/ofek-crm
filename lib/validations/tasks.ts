@@ -9,6 +9,7 @@ export const VALID_TASK_STATUSES = [
   "todo",
   "in_progress",
   "waiting_client",
+  "on_hold",
   "completed_month",
   "done",
 ] as const;

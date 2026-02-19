@@ -1,19 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Loader2, Mail, Lock } from "lucide-react";
 import Link from "next/link";
+import { getUserFriendlyError } from "@/lib/errors";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,10 +35,9 @@ export default function LoginForm() {
         throw new Error(data.error || "שגיאה בהתחברות");
       }
 
-      router.push("/");
-      router.refresh();
+      window.location.href = "/";
     } catch (err: any) {
-      setError(err.message);
+      setError(getUserFriendlyError(err));
     } finally {
       setLoading(false);
     }

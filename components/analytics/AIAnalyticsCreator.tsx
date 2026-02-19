@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getUserFriendlyError } from "@/lib/errors";
 import {
   X,
   Sparkles,
@@ -139,7 +140,7 @@ export default function AIAnalyticsCreator({
         return;
       }
       console.error(err);
-      setError(err.message || "שגיאה ביצירת התצוגה אנא נסה שוב.");
+      setError(getUserFriendlyError(err));
       setLoading(false);
     }
   };

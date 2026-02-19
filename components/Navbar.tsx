@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import UserMenu from "./UserMenu";
 import ChatNavbarLink from "./chat/ChatNavbarLink";
+import WhatsAppNavbarLink from "./whatsapp/WhatsAppNavbarLink";
 import NotificationBell from "./NotificationBell";
 import MobileMenu from "./MobileMenu";
 
@@ -161,6 +162,9 @@ export default async function Navbar() {
                       >
                         תכנון יעדים
                       </a>
+                    )}
+                    {hasUserFlag(user, "canViewWhatsApp") && (
+                      <WhatsAppNavbarLink userId={user.id} />
                     )}
                     {hasUserFlag(user, "canViewChat") && (
                       <ChatNavbarLink userId={user.id} />

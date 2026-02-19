@@ -12,12 +12,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2 } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 
 interface DeleteConfirmationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
   widgetTitle: string;
+  isLoading?: boolean;
 }
 
 export default function DeleteConfirmationModal({
@@ -25,6 +27,7 @@ export default function DeleteConfirmationModal({
   onClose,
   onConfirm,
   widgetTitle,
+  isLoading,
 }: DeleteConfirmationModalProps) {
   const [inputValue, setInputValue] = useState("");
 
@@ -73,15 +76,17 @@ export default function DeleteConfirmationModal({
             type="button"
             variant="destructive"
             onClick={handleConfirm}
-            disabled={inputValue !== widgetTitle}
-            className="flex-1 sm:flex-none"
+            disabled={inputValue !== widgetTitle || isLoading}
+            className="flex-1 sm:flex-none gap-2"
           >
+            {isLoading && <Spinner size="sm" />}
             מחק
           </Button>
           <Button
             type="button"
             variant="outline"
             onClick={handleClose}
+            disabled={isLoading}
             className="flex-1 sm:flex-none"
           >
             ביטול

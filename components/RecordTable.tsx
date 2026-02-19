@@ -3,6 +3,8 @@
 import { uploadFiles } from "@/lib/uploadthing";
 import { saveFileMetadata, updateFile } from "@/app/actions/storage";
 import { apiFetch } from "@/lib/api-fetch";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import { useState, useEffect, useRef, useMemo } from "react";
 
 import { useRouter } from "next/navigation";
@@ -50,12 +52,15 @@ import {
   Upload,
   ChevronDown,
   ChevronUp,
+  Columns3,
 } from "lucide-react";
 import EditRecordModal from "./EditRecordModal";
 import ImportRecordsModal from "./ImportRecordsModal";
 import ViewTextModal from "./ViewTextModal";
 import { cn } from "@/lib/utils";
 import { getTextColorForBackground } from "@/components/ui/ColorPicker";
+import type { TabsConfig, DisplayConfig, SchemaFieldWithTab } from "@/lib/types/table-tabs";
+import { getVisibleColumns, parseTabsConfig, parseDisplayConfig } from "@/lib/types/table-tabs";
 
 interface SchemaField {
   name: string;
@@ -85,6 +90,8 @@ interface RecordTableProps {
   canSearch?: boolean;
   canFilter?: boolean;
   canExport?: boolean;
+  tabsConfig?: TabsConfig | null;
+  displayConfig?: DisplayConfig | null;
 }
 
 export default function RecordTable({
@@ -97,6 +104,8 @@ export default function RecordTable({
   canSearch = false,
   canFilter = false,
   canExport = false,
+  tabsConfig = null,
+  displayConfig: displayConfigProp = null,
 }: RecordTableProps) {
   const router = useRouter();
   const [records, setRecords] = useState<any[]>(initialRecords ?? []);
@@ -208,7 +217,7 @@ export default function RecordTable({
       }
     } catch (error: any) {
       console.error("Upload error:", error);
-      alert("שגיאה בהעלאת הקובץ: " + error.message);
+      toast.error(getUserFriendlyError(error));
     } finally {
       e.target.value = ""; // Reset input
     }
@@ -479,6 +488,46 @@ export default function RecordTable({
       index === self.findIndex((t) => t.name === field.name),
   );
 
+  // Column display limiting: use displayConfig if set, else first 12 data columns
+  const [displayConfig, setDisplayConfig] = useState<DisplayConfig | null>(displayConfigProp);
+  const [columnSelectorOpen, setColumnSelectorOpen] = useState(false);
+
+  const visibleFields = useMemo(
+    () => getVisibleColumns(uniqueFields as SchemaFieldWithTab[], displayConfig),
+    [uniqueFields, displayConfig],
+  );
+  const hasHiddenColumns = uniqueFields.length > visibleFields.length;
+
+  // Toggle column visibility and persist via updateTable
+  const handleToggleColumn = async (fieldName: string) => {
+    const currentVisible = displayConfig?.visibleColumns ?? uniqueFields.slice(0, 12).map((f) => f.name);
+    const currentOrder = displayConfig?.columnOrder ?? currentVisible;
+    let newVisible: string[];
+    let newOrder: string[];
+
+    if (currentVisible.includes(fieldName)) {
+      // Remove
+      newVisible = currentVisible.filter((n) => n !== fieldName);
+      newOrder = currentOrder.filter((n) => n !== fieldName);
+    } else {
+      // Add (max 12)
+      if (currentVisible.length >= 12) return;
+      newVisible = [...currentVisible, fieldName];
+      newOrder = [...currentOrder, fieldName];
+    }
+
+    const newConfig: DisplayConfig = { visibleColumns: newVisible, columnOrder: newOrder };
+    setDisplayConfig(newConfig);
+
+    // Persist in background
+    try {
+      const { updateTable } = await import("@/app/actions/tables");
+      await updateTable(tableId, { displayConfig: newConfig as any });
+    } catch (err) {
+      console.error("Failed to save display config", err);
+    }
+  };
+
   const statusField = schema.find(
     (f) =>
       f.name.toLowerCase() === "status" ||
@@ -595,7 +644,7 @@ export default function RecordTable({
       setSelectedIds([]);
     } catch (error: any) {
       console.error(error);
-      alert(error.message || "שגיאה במחיקת רשומות");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsDeleting(false);
     }
@@ -968,6 +1017,40 @@ export default function RecordTable({
                   )}
                 </>
               )}
+              {/* Column Selector */}
+              {hasHiddenColumns && canEdit && (
+                <Popover open={columnSelectorOpen} onOpenChange={setColumnSelectorOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Columns3 className="h-4 w-4" />
+                      עמודות ({visibleFields.length}/{uniqueFields.length})
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 max-h-80 overflow-y-auto" align="end" dir="rtl">
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground mb-2">
+                        בחר עמודות לתצוגה (מקס&apos; 12)
+                      </p>
+                      {uniqueFields.map((field) => {
+                        const isVisible = visibleFields.some((vf) => vf.name === field.name);
+                        return (
+                          <label
+                            key={field.name}
+                            className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/50 cursor-pointer text-sm"
+                          >
+                            <Checkbox
+                              checked={isVisible}
+                              onCheckedChange={() => handleToggleColumn(field.name)}
+                              disabled={!isVisible && visibleFields.length >= 12}
+                            />
+                            <span className="truncate">{field.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
               {selectedIds.length === 0 && canExport && (
                 <>
                   <div className="hidden sm:block">
@@ -1065,7 +1148,7 @@ export default function RecordTable({
                   </TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                   <TableHead className="w-[80px] text-center">ID</TableHead>
-                  {uniqueFields.map((field) => (
+                  {visibleFields.map((field) => (
                     <TableHead
                       key={field.name}
                       className={`whitespace-nowrap text-center ${
@@ -1129,7 +1212,7 @@ export default function RecordTable({
                       {record.id}
                     </TableCell>
 
-                    {uniqueFields.map((field) => (
+                    {visibleFields.map((field) => (
                       <TableCell
                         key={field.name}
                         onClick={() => {
@@ -1791,6 +1874,7 @@ export default function RecordTable({
           schema={schema}
           onClose={() => setEditingRecord(null)}
           initialFocusField={editingField}
+          tabsConfig={tabsConfig}
         />
       )}
 

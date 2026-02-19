@@ -388,7 +388,7 @@ export default function SlaAutomationModal({
       resetForm();
     } catch (error) {
       console.error(error);
-      alert("Error saving automation");
+      alert("שגיאה בשמירת האוטומציה");
     } finally {
       setLoading(false);
     }

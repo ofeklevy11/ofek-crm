@@ -48,7 +48,7 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
       router.refresh();
     } catch (err) {
       console.error(err);
-      alert("Failed to delete retainer");
+      alert("שגיאה במחיקת הריטיינר");
     } finally {
       setDeletingId(null);
     }

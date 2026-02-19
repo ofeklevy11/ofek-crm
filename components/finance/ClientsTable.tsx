@@ -33,7 +33,7 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
       router.refresh();
     } catch (err) {
       console.error(err);
-      alert("Failed to delete client");
+      alert("שגיאה במחיקת הלקוח");
     } finally {
       setDeletingId(null);
     }

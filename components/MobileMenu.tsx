@@ -106,6 +106,16 @@ export default function MobileMenu({ user }: MobileMenuProps) {
             </Link>
           )}
 
+          {hasUserFlag(user, "canViewWhatsApp") && (
+            <Link
+              href="/whatsapp"
+              className="text-lg font-medium py-3 px-4 bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 rounded-md transition-colors text-right block mb-1"
+              onClick={() => setOpen(false)}
+            >
+              וואטסאפ עסקי
+            </Link>
+          )}
+
           {hasUserFlag(user, "canViewChat") && (
             <Link
               href="/chat"

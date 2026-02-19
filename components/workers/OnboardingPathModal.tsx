@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Spinner } from "@/components/ui/spinner";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import {
   X,
   GraduationCap,
@@ -323,7 +326,7 @@ export default function OnboardingPathModal({
       onSave(savedPath);
     } catch (error) {
       console.error("Error saving onboarding path:", error);
-      alert(error instanceof Error ? error.message : "שגיאה בשמירת מסלול הקליטה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -368,7 +371,7 @@ export default function OnboardingPathModal({
         ]);
       } catch (error) {
         console.error("Error creating onboarding step:", error);
-        alert(error instanceof Error ? error.message : "שגיאה בהוספת שלב");
+        toast.error(getUserFriendlyError(error));
         return;
       }
     } else {
@@ -1507,9 +1510,9 @@ export default function OnboardingPathModal({
             type="submit"
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {isSubmitting ? "שומר..." : path ? "שמור שינויים" : "צור מסלול"}
+            {isSubmitting ? <><Spinner size="sm" /> שומר...</> : path ? "שמור שינויים" : "צור מסלול"}
           </button>
         </div>
       </div>

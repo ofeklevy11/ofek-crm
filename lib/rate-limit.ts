@@ -157,4 +157,14 @@ export const RATE_LIMITS = {
   taskMutation: { prefix: "task-mut", max: 30, windowSeconds: 60 } satisfies RateLimitConfig,
   /** Finance mutations: 30 per user per minute */
   financeMutation: { prefix: "fin-mut", max: 30, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** WhatsApp webhook: 300 per phone number per minute */
+  whatsappWebhook: { prefix: "wa-wh", max: 300, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** WhatsApp sends: 20 per user per minute */
+  whatsappSend: { prefix: "wa-send", max: 20, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** WhatsApp reads: 60 per user per minute */
+  whatsappRead: { prefix: "wa-read", max: 60, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** WhatsApp mutations (assign, close): 30 per user per minute */
+  whatsappMutate: { prefix: "wa-mut", max: 30, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** WhatsApp mark-read: 60 per user per minute */
+  whatsappMark: { prefix: "wa-mark", max: 60, windowSeconds: 60 } satisfies RateLimitConfig,
 } as const;

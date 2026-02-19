@@ -46,6 +46,7 @@ export async function getQuotes(showTrashed: boolean = false, cursor?: string) {
       quoteNumber: true,
       clientName: true,
       total: true,
+      currency: true,
       status: true,
       createdAt: true,
       validUntil: true,

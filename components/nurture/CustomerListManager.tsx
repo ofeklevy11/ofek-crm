@@ -54,6 +54,7 @@ import {
 } from "@/app/actions/automations";
 import { getUsers } from "@/app/actions/users";
 import { Badge } from "@/components/ui/badge";
+import { getFriendlyResultError } from "@/lib/errors";
 
 // Types - Use shared types where possible or map them
 interface Customer {
@@ -347,7 +348,7 @@ export default function CustomerListManager({
         setManualForm({ name: "", email: "", phone: "" });
         setIsOpen(false);
       } else {
-        alert(result.error || "שגיאה בהוספת הלקוח");
+        alert(getFriendlyResultError(result.error, "שגיאה בהוספת הלקוח"));
       }
     } catch (error) {
       console.error(error);
@@ -504,7 +505,7 @@ export default function CustomerListManager({
           condition: { field: "", fromValue: "", toValue: "" },
         });
       } else {
-        alert("שגיאה בשמירת האוטומציה: " + result.error);
+        alert(getFriendlyResultError(result.error, "שגיאה בשמירת האוטומציה"));
       }
     } catch (error) {
       console.error(error);

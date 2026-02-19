@@ -22,10 +22,10 @@ import { BusinessSettings } from "@/app/actions/business-settings";
 import { useRouter } from "next/navigation";
 import BusinessSettingsRequired from "./business-settings-required";
 
-const formatMoney = (amount: number) => {
+const formatMoney = (amount: number, currency: string = "ILS") => {
   return new Intl.NumberFormat("he-IL", {
     style: "currency",
-    currency: "ILS",
+    currency,
   }).format(amount);
 };
 
@@ -35,6 +35,7 @@ interface QuoteSummary {
   clientName: string;
   clientEmail: string | null;
   total: number;
+  currency: string;
   status: string;
   createdAt: Date;
   validUntil: Date | null;
@@ -247,7 +248,7 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
                 </td>
                 <td className="px-6 py-4">
                   <span className="font-semibold text-gray-900">
-                    {formatMoney(Number(quote.total))}
+                    {formatMoney(Number(quote.total), quote.currency || "ILS")}
                   </span>
                   <p className="text-xs text-gray-500">
                     {quote._count?.items || 0} פריטים

@@ -56,6 +56,7 @@ export async function GET(
       },
       select: {
         id: true, name: true, slug: true, schemaJson: true,
+        tabsConfig: true, displayConfig: true,
         categoryId: true, order: true, createdAt: true, updatedAt: true,
         _count: {
           select: { records: true },
@@ -113,7 +114,7 @@ export async function PATCH(
     } catch {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
-    const { name, slug, schemaJson, updatedAt: expectedUpdatedAt } = body;
+    const { name, slug, schemaJson, tabsConfig, displayConfig, updatedAt: expectedUpdatedAt } = body;
 
     // Input validation
     if (name !== undefined) {
@@ -141,7 +142,7 @@ export async function PATCH(
     }
 
     if (schemaJson !== undefined) {
-      if (typeof schemaJson !== "object" || schemaJson === null || Array.isArray(schemaJson)) {
+      if (typeof schemaJson !== "object" || schemaJson === null) {
         return NextResponse.json(
           { error: "schemaJson must be a JSON object" },
           { status: 400 }
@@ -153,6 +154,24 @@ export async function PATCH(
           { error: `schemaJson exceeds maximum size of ${MAX_SCHEMA_JSON_SIZE} bytes` },
           { status: 400 }
         );
+      }
+    }
+
+    // Validate tabsConfig and displayConfig size
+    if (tabsConfig !== undefined && tabsConfig !== null) {
+      if (typeof tabsConfig !== "object") {
+        return NextResponse.json({ error: "tabsConfig must be a JSON object" }, { status: 400 });
+      }
+      if (JSON.stringify(tabsConfig).length > 10_000) {
+        return NextResponse.json({ error: "tabsConfig exceeds 10KB limit" }, { status: 400 });
+      }
+    }
+    if (displayConfig !== undefined && displayConfig !== null) {
+      if (typeof displayConfig !== "object") {
+        return NextResponse.json({ error: "displayConfig must be a JSON object" }, { status: 400 });
+      }
+      if (JSON.stringify(displayConfig).length > 5_000) {
+        return NextResponse.json({ error: "displayConfig exceeds 5KB limit" }, { status: 400 });
       }
     }
 
@@ -197,6 +216,8 @@ export async function PATCH(
         ...(name && { name: name.trim() }),
         ...(slug && { slug: slug.trim() }),
         ...(schemaJson && { schemaJson }),
+        ...(tabsConfig !== undefined && { tabsConfig }),
+        ...(displayConfig !== undefined && { displayConfig }),
         ...(body.categoryId !== undefined && { categoryId: body.categoryId }),
         updatedAt: new Date(),  // updateMany doesn't auto-set @updatedAt
       },
@@ -224,6 +245,7 @@ export async function PATCH(
       where: { id: tableId, companyId: user.companyId, deletedAt: null },
       select: {
         id: true, name: true, slug: true, schemaJson: true,
+        tabsConfig: true, displayConfig: true,
         categoryId: true, order: true, createdAt: true, updatedAt: true,
       },
     });

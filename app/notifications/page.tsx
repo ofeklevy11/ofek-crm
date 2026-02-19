@@ -8,7 +8,7 @@ export default async function NotificationsPage() {
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/auth/login");
+    redirect("/login");
   }
 
   // Fetch all notifications for the full page view

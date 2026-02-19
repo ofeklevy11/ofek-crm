@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getUserFriendlyError } from "@/lib/errors";
 import {
   Card,
   CardContent,
@@ -82,7 +83,7 @@ export default function GreenApiConnection() {
       const statusData = await getGreenApiStatus();
       setStatus(statusData);
     } catch (e: any) {
-      alert(e.message || "שגיאה בחיבור");
+      alert(getUserFriendlyError(e));
     } finally {
       setSaving(false);
     }

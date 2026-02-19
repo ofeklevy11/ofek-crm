@@ -45,7 +45,7 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
       router.refresh();
     } catch (err) {
       console.error(err);
-      alert("Failed to delete payment");
+      alert("שגיאה במחיקת התשלום");
     } finally {
       setDeletingId(null);
     }

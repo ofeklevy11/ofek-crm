@@ -45,6 +45,12 @@ import { processFixedExpensesCron } from "@/lib/inngest/functions/fixed-expense-
 import { processWorkflowStageAutomations } from "@/lib/inngest/functions/workflow-automation-jobs";
 import { cleanupOldAutomationData } from "@/lib/inngest/functions/automation-cleanup-jobs";
 import { cleanupOldLogData } from "@/lib/inngest/functions/db-cleanup-jobs";
+import {
+  processWaIncomingMessage,
+  processWaStatusUpdate,
+  sendWaOutboundMessage,
+  downloadWaMedia,
+} from "@/lib/inngest/functions/whatsapp-cloud-jobs";
 
 const functions = [
   processImportJob,
@@ -78,6 +84,10 @@ const functions = [
   processWorkflowStageAutomations,
   cleanupOldAutomationData,
   cleanupOldLogData,
+  processWaIncomingMessage,
+  processWaStatusUpdate,
+  sendWaOutboundMessage,
+  downloadWaMedia,
 ];
 
 log.info("Inngest route loaded", { functionIds: functions.map((f) => f.id) });
