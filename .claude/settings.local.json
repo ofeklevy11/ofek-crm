@@ -41,7 +41,9 @@
       "WebSearch",
       "Bash(npx next lint:*)",
       "Bash(npm run build:*)",
-      "Bash(pnpm run build:*)"
+      "Bash(pnpm run build:*)",
+      "WebFetch(domain:www.prisma.io)",
+      "WebFetch(domain:neon.com)"
     ]
   }
 }
