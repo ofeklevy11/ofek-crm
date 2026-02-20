@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Edit2, Trash2, Power, PowerOff, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { getFriendlyResultError } from "@/lib/errors";
 
 interface DynamicViewCardProps {
   viewId: number;
@@ -57,7 +59,7 @@ export default function DynamicViewCard({
       setIsEnabled(result.view!.isEnabled);
       router.refresh();
     } else {
-      alert(`שגיאה בשינוי מצב התצוגה: ${result.error}`);
+      toast.error(getFriendlyResultError(result.error, "שגיאה בשינוי מצב התצוגה"));
     }
 
     setIsToggling(false);
@@ -79,7 +81,7 @@ export default function DynamicViewCard({
       router.refresh();
       if (onDelete) onDelete();
     } else {
-      alert(`שגיאה במחיקת התצוגה: ${result.error}`);
+      toast.error(getFriendlyResultError(result.error, "שגיאה במחיקת התצוגה"));
       setIsDeleting(false);
     }
   };

@@ -16,7 +16,7 @@ const ERROR_MAP: [RegExp, string][] = [
   [/not authenticated|unauthenticated/i, "יש להתחבר למערכת כדי לבצע פעולה זו"],
 
   // Rate limiting
-  [/rate limit|too many requests/i, "בוצעו יותר מדי פניות. אנא המתינו ונסו שוב"],
+  [/rate limit|too many requests/i, "בוצעו יותר מדי פניות. אנא נסו שוב בעוד 2 דקות"],
 
   // Validation
   [/must be a string/i, "הערך שהוזן אינו תקין"],

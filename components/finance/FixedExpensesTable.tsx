@@ -10,6 +10,8 @@ import {
   Calendar,
   Briefcase,
 } from "lucide-react";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import {
   createFixedExpense,
   updateFixedExpense,
@@ -120,8 +122,7 @@ export default function FixedExpensesTable({
       router.refresh();
       // Optimistic update could be added here, but router.refresh() handles the re-fetch
     } catch (error) {
-      console.error("Failed to save expense:", error);
-      alert("נכשל בשמירת ההוצאה. אנא נסה שוב.");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -134,7 +135,7 @@ export default function FixedExpensesTable({
       await deleteFixedExpense(id);
       router.refresh();
     } catch (error) {
-      console.error("Failed to delete expense:", error);
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -154,8 +155,7 @@ export default function FixedExpensesTable({
       setPaymentExpense(null);
       router.refresh();
     } catch (error) {
-      console.error("Failed to mark paid:", error);
-      alert("שגיאה בביצוע הפעולה.");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsSubmitting(false);
     }

@@ -32,6 +32,8 @@ export interface FieldConfig {
   placeholder?: string;
   options?: { value: string; label: string }[];
   optional?: boolean;
+  columnIdKey?: string;
+  collapsible?: boolean;
 }
 
 // ─── Label Mappings ──────────────────────────────────────────────────────────
@@ -82,10 +84,14 @@ export const TIER_ACTION_LIMITS: Record<string, number> = {
   super: Infinity,
 };
 
-export const SELECTABLE_TRIGGER_TYPES = Object.keys(TRIGGER_LABELS);
-export const SELECTABLE_ACTION_TYPES = Object.keys(ACTION_LABELS).filter(
-  (t) => t !== "MULTI_ACTION"
-);
+export const SELECTABLE_TRIGGER_TYPES = [
+  "NEW_RECORD", "RECORD_FIELD_CHANGE", "TASK_STATUS_CHANGE",
+  "TIME_SINCE_CREATION", "DIRECT_DIAL",
+];
+export const SELECTABLE_ACTION_TYPES = [
+  "SEND_NOTIFICATION", "CREATE_TASK", "UPDATE_RECORD_FIELD",
+  "SEND_WHATSAPP", "WEBHOOK", "CALCULATE_DURATION",
+];
 
 // ─── Icon & Color Mappings ───────────────────────────────────────────────────
 
@@ -205,9 +211,13 @@ const BREACH_TYPE_OPTIONS = [
 export const TRIGGER_FIELD_CONFIGS: Record<string, FieldConfig[]> = {
   NEW_RECORD: [
     { key: "tableId", label: "טבלה", inputType: "table-select" },
+    { key: "conditionColumnId", label: "תנאי - עמודה", inputType: "column-select", optional: true, collapsible: true },
+    { key: "conditionValue", label: "תנאי - ערך", inputType: "column-value", placeholder: "השאר ריק ללא תנאי", optional: true, columnIdKey: "conditionColumnId", collapsible: true },
   ],
   RECORD_CREATE: [
     { key: "tableId", label: "טבלה", inputType: "table-select" },
+    { key: "conditionColumnId", label: "תנאי - עמודה", inputType: "column-select", optional: true, collapsible: true },
+    { key: "conditionValue", label: "תנאי - ערך", inputType: "column-value", placeholder: "השאר ריק ללא תנאי", optional: true, columnIdKey: "conditionColumnId", collapsible: true },
   ],
   RECORD_FIELD_CHANGE: [
     { key: "tableId", label: "טבלה", inputType: "table-select" },
@@ -231,6 +241,8 @@ export const TRIGGER_FIELD_CONFIGS: Record<string, FieldConfig[]> = {
     { key: "tableId", label: "טבלה", inputType: "table-select" },
     { key: "duration", label: "משך זמן", inputType: "number", placeholder: "5" },
     { key: "unit", label: "יחידה", inputType: "select", options: TIME_UNIT_OPTIONS },
+    { key: "conditionColumnId", label: "תנאי - עמודה", inputType: "column-select", optional: true, collapsible: true },
+    { key: "conditionValue", label: "תנאי - ערך", inputType: "column-value", placeholder: "השאר ריק ללא תנאי", optional: true, columnIdKey: "conditionColumnId", collapsible: true },
   ],
   VIEW_METRIC_THRESHOLD: [
     { key: "viewId", label: "מזהה תצוגה", inputType: "number", placeholder: "1" },
@@ -253,8 +265,8 @@ export const TRIGGER_FIELD_CONFIGS: Record<string, FieldConfig[]> = {
 export const ACTION_FIELD_CONFIGS: Record<string, FieldConfig[]> = {
   SEND_NOTIFICATION: [
     { key: "recipientId", label: "נמען", inputType: "user-select" },
-    { key: "title", label: "כותרת", inputType: "text", placeholder: "כותרת ההתראה" },
-    { key: "message", label: "הודעה", inputType: "textarea", placeholder: "תוכן ההודעה..." },
+    { key: "titleTemplate", label: "כותרת", inputType: "text", placeholder: "כותרת ההתראה" },
+    { key: "messageTemplate", label: "הודעה", inputType: "textarea", placeholder: "תוכן ההודעה..." },
   ],
   CREATE_TASK: [
     { key: "title", label: "כותרת", inputType: "text", placeholder: "כותרת המשימה" },
@@ -265,8 +277,10 @@ export const ACTION_FIELD_CONFIGS: Record<string, FieldConfig[]> = {
     { key: "dueDays", label: "ימים ליעד", inputType: "number", placeholder: "7" },
   ],
   UPDATE_RECORD_FIELD: [
+    { key: "tableId", label: "טבלה", inputType: "table-select" },
     { key: "columnId", label: "עמודה", inputType: "column-select" },
     { key: "value", label: "ערך", inputType: "column-value", placeholder: "הערך החדש" },
+    { key: "recordId", label: "מזהה הרשומה", inputType: "text", placeholder: "הזן את מזהה הרשומה" },
   ],
   SEND_WHATSAPP: [
     { key: "phoneColumnId", label: "יעד שליחה", inputType: "whatsapp-phone" },
@@ -294,27 +308,19 @@ export const ACTION_FIELD_CONFIGS: Record<string, FieldConfig[]> = {
     { key: "startOffsetUnit", label: "יחידת התחלה", inputType: "select", options: TIME_UNIT_OPTIONS },
     { key: "endOffsetUnit", label: "יחידת סיום", inputType: "select", options: TIME_UNIT_OPTIONS },
   ],
-  CALCULATE_DURATION: [
-    { key: "fromField", label: "משדה", inputType: "text", placeholder: "fld_..." },
-    { key: "toField", label: "לשדה", inputType: "text", placeholder: "fld_..." },
-  ],
+  CALCULATE_DURATION: [],
   CALCULATE_MULTI_EVENT_DURATION: [],
   MULTI_ACTION: [], // Handled by expanding into individual action steps
 };
 
 // ─── Schema ↔ Steps Converters ───────────────────────────────────────────────
 
-let stepCounter = 0;
-function nextStepId(): string {
-  return `step_${++stepCounter}_${Date.now()}`;
-}
-
 export function schemaToSteps(schema: AutomationSchema): FlowStep[] {
   const steps: FlowStep[] = [];
 
-  // Trigger step
+  // Trigger step — deterministic ID so React preserves DOM on re-render
   steps.push({
-    id: nextStepId(),
+    id: "trigger_0",
     kind: "trigger",
     type: schema.triggerType,
     config: schema.triggerConfig || {},
@@ -323,9 +329,10 @@ export function schemaToSteps(schema: AutomationSchema): FlowStep[] {
 
   // Action steps — expand MULTI_ACTION into individual steps
   if (schema.actionType === "MULTI_ACTION" && Array.isArray(schema.actionConfig?.actions)) {
+    let actionIdx = 0;
     for (const action of schema.actionConfig.actions) {
       steps.push({
-        id: nextStepId(),
+        id: `action_${actionIdx++}`,
         kind: "action",
         type: action.type,
         config: action.config || {},
@@ -334,7 +341,7 @@ export function schemaToSteps(schema: AutomationSchema): FlowStep[] {
     }
   } else {
     steps.push({
-      id: nextStepId(),
+      id: "action_0",
       kind: "action",
       type: schema.actionType,
       config: schema.actionConfig || {},

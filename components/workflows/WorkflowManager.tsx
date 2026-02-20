@@ -15,6 +15,8 @@ import { WorkflowBoard } from "./WorkflowBoard";
 import { WorkflowDemo } from "./WorkflowDemo";
 import { WorkflowInstancesBoard } from "./WorkflowInstancesBoard";
 import { createWorkflow, deleteWorkflow } from "@/app/actions/workflows";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface WorkflowWithStages extends Workflow {
   stages: WorkflowStage[];
@@ -60,8 +62,7 @@ export function WorkflowManager({
       setWorkflows([...workflows, { ...newWorkflow, stages: [] } as any]);
       setActiveWorkflowId(newWorkflow.id);
     } catch (error) {
-      console.error(error);
-      alert("שגיאה ביצירת תהליך");
+      toast.error(getUserFriendlyError(error));
     }
   };
 

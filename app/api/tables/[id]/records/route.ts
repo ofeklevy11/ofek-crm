@@ -219,6 +219,7 @@ export async function POST(
             size: 0,
             displayName: att.displayName || null,
             uploadedBy: currentUser.id,
+            companyId: currentUser.companyId,
           })),
         },
       },

@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FolderPlus } from "lucide-react";
 import { createFolder } from "@/app/actions/storage";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface CreateFolderModalProps {
   currentFolderId: number | null;
@@ -34,8 +36,7 @@ export function CreateFolderModal({ currentFolderId }: CreateFolderModalProps) {
       setOpen(false);
       setName("");
     } catch (error) {
-      console.error("Failed to create folder:", error);
-      alert("נכשל ביצירת התיקייה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }

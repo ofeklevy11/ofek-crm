@@ -12,8 +12,8 @@ import {
   ArrowRight,
   ArrowLeft,
   RotateCcw,
-  MessageSquare,
   PanelLeftClose,
+  Edit3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -200,6 +200,11 @@ export default function AIAnalyticsCreator({
         return;
       }
       console.error(err);
+      const isRateLimited = err?.message === "RATE_LIMITED" || err?.message?.includes("Rate limit");
+      if (isRateLimited) {
+        setError("יותר מדי בקשות. אנא נסה שוב בעוד 2 דקות והנתונים יוצגו.");
+        setTimeout(() => setError(null), 10000);
+      }
       const errMsg = err?.message && err.message !== "Aborted"
         ? `שגיאה: ${getUserFriendlyError(err)}`
         : "מצטערים, משהו השתבש. אנא נסה שנית.";
@@ -266,6 +271,11 @@ export default function AIAnalyticsCreator({
         return;
       }
       console.error(err);
+      const isRateLimited = err?.message === "RATE_LIMITED" || err?.message?.includes("Rate limit");
+      if (isRateLimited) {
+        setError("יותר מדי בקשות. אנא נסה שוב בעוד 2 דקות והנתונים יוצגו.");
+        setTimeout(() => setError(null), 10000);
+      }
       const errMsg = err?.message && err.message !== "Aborted"
         ? `שגיאה: ${getUserFriendlyError(err)}`
         : "מצטערים, משהו השתבש. אנא נסה שנית.";
@@ -558,15 +568,6 @@ export default function AIAnalyticsCreator({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setIsManualEditOpen(true)}
-                    className="gap-2"
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                    ערוך את האנליטיקה
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
                     onClick={() => setChatMinimized(false)}
                     className="gap-2"
                   >
@@ -613,6 +614,16 @@ export default function AIAnalyticsCreator({
                     <BarChart2 size={18} className="text-primary" />
                     תצוגה מקדימה
                   </h4>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsManualEditOpen(true)}
+                      className="gap-1.5 text-xs"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      ערוך את האנליטיקה
+                    </Button>
                   <span className="text-xs font-medium px-2.5 py-1 bg-primary/10 text-primary rounded-full">
                     {generatedView.type === "CONVERSION"
                       ? "אחוז המרה"
@@ -620,6 +631,7 @@ export default function AIAnalyticsCreator({
                       ? `גרף ${CHART_TYPE_NAMES[generatedView.config.chartType] || "עמודות"}`
                       : "ספירה/פילוח"}
                   </span>
+                  </div>
                 </div>
                 <div className="p-4 space-y-4">
                   <div>
@@ -744,7 +756,7 @@ export default function AIAnalyticsCreator({
                 className="flex-1 h-10 gap-2"
               >
                 <ArrowLeft className="h-4 w-4" />
-                חזור
+                חזור לצ'אט
               </Button>
               <Button
                 onClick={handleSave}

@@ -155,16 +155,13 @@ RULES:
 }
 
 const VALID_AUTOMATION_TRIGGERS = new Set([
-  "MANUAL", "TASK_STATUS_CHANGE", "RECORD_CREATE", "NEW_RECORD",
-  "RECORD_FIELD_CHANGE", "MULTI_EVENT_DURATION", "DIRECT_DIAL",
-  "VIEW_METRIC_THRESHOLD", "TIME_SINCE_CREATION", "TICKET_STATUS_CHANGE",
-  "SLA_BREACH", "EVENT_TIME",
+  "TASK_STATUS_CHANGE", "NEW_RECORD", "RECORD_FIELD_CHANGE",
+  "TIME_SINCE_CREATION", "DIRECT_DIAL",
 ]);
 
 const VALID_AUTOMATION_ACTIONS = new Set([
-  "SEND_NOTIFICATION", "CALCULATE_DURATION", "CALCULATE_MULTI_EVENT_DURATION",
-  "UPDATE_RECORD_FIELD", "SEND_WHATSAPP", "WEBHOOK", "ADD_TO_NURTURE_LIST",
-  "CREATE_TASK", "CREATE_RECORD", "CREATE_CALENDAR_EVENT", "MULTI_ACTION",
+  "SEND_NOTIFICATION", "CALCULATE_DURATION", "UPDATE_RECORD_FIELD",
+  "SEND_WHATSAPP", "WEBHOOK", "CREATE_TASK", "MULTI_ACTION",
 ]);
 
 function buildAutomationSystemPrompt(
@@ -200,99 +197,101 @@ ${fc.nurtureListsText || "None"}
 === SAMPLE DATA ===
 ${fc.sampleData || "None"}
 
-=== ALL TRIGGER TYPES (12 total) ===
+=== ALL TRIGGER TYPES (5 total) ===
 
 1. NEW_RECORD — When a new record is created in a table
-   triggerConfig: { tableId: number }
+   triggerConfig: { tableId: number, conditionColumnId?: "<REAL_FIELD_ID>", conditionValue?: string, operator?: "equals"|"not_equals"|"contains"|"greater_than"|"less_than" }
 
-2. RECORD_CREATE — Alias for NEW_RECORD (same behavior)
-   triggerConfig: { tableId: number }
+   FILTER DETECTION — If the user's request or automation name mentions ANY specific value to match, you MUST include conditionColumnId + conditionValue.
+   Hebrew filter patterns: "ממקור X", "מסטטוס X", "עם סטטוס X", "של סוג X", "שהגיע מ-X", "כאשר X הוא Y", "ששדה X שווה ל-Y"
+   English filter patterns: "from X", "with status X", "of type X", "where X is Y"
 
-3. RECORD_FIELD_CHANGE — When a specific field value changes
-   triggerConfig: { tableId: number, columnId: "fld_xxx", fromValue?: string, toValue?: string }
+   EXAMPLE — User says "התראה על ליד חדש ממקור פייסבוק" for table (ID: 5) with field source (ID: fld_abc123):
+   "triggerConfig": { "tableId": 5, "conditionColumnId": "fld_abc123", "conditionValue": "פייסבוק", "operator": "equals" }
 
-4. TASK_STATUS_CHANGE — When a built-in Task status changes
+   If NO filtering is mentioned at all, do NOT include conditionColumnId/conditionValue.
+
+2. RECORD_FIELD_CHANGE — When a specific field value changes
+   triggerConfig: { tableId: number, columnId: "<REAL_FIELD_ID_FROM_TABLE>", fromValue?: string, toValue?: string, operator?: "equals"|"not_equals"|"contains"|"greater_than"|"less_than" }
+
+3. TASK_STATUS_CHANGE — When a built-in Task status changes
    triggerConfig: { fromStatus?: string, toStatus?: string }
    Status values: "todo", "in_progress", "waiting_client", "on_hold", "completed_month", "done"
 
-5. TICKET_STATUS_CHANGE — When a built-in Ticket status changes
-   triggerConfig: { fromStatus?: string, toStatus?: string }
-   Status values: "OPEN", "IN_PROGRESS", "WAITING_CLIENT", "RESOLVED", "CLOSED"
+4. TIME_SINCE_CREATION — Time-based trigger after record creation
+   triggerConfig: { tableId: number, timeValue: number, timeUnit: "minutes"|"hours"|"days" }
+   IMPORTANT: Use "timeValue" and "timeUnit" (NOT "duration" or "unit"). Minimum 5 minutes for minutes unit.
 
-6. MULTI_EVENT_DURATION — When a chain of events completes across fields/tables
-   triggerConfig: {
-     tableId: number, isMultiTable?: boolean, relationField?: string,
-     eventChain: [{ tableId?: number, eventName: string, columnId: "fld_xxx", value: string, order: number }]
-   }
+5. DIRECT_DIAL — When a phone field is dialed
+   triggerConfig: { tableId: number }
 
-7. DIRECT_DIAL — When a phone field is dialed
-   triggerConfig: { tableId: number, columnId: "fld_xxx" }
-
-8. VIEW_METRIC_THRESHOLD — When a metric crosses a threshold
-   triggerConfig: { viewId: number, operator: "lt"|"lte"|"gt"|"gte"|"eq"|"neq", threshold: number }
-
-9. TIME_SINCE_CREATION — Time-based trigger after record creation
-   triggerConfig: { tableId: number, duration: number, unit: "minutes"|"hours"|"days" }
-   Note: minimum 5 minutes for minutes unit
-
-10. SLA_BREACH — When an SLA deadline is breached
-    triggerConfig: { breachType: "response"|"resolution" }
-
-11. EVENT_TIME — Calendar event time trigger
-    triggerConfig: { offsetMinutes: number, offsetDirection: "before"|"after" }
-
-12. MANUAL — User-triggered manually
-    triggerConfig: { tableId?: number }
-
-=== ALL ACTION TYPES (11 total) ===
+=== ALL ACTION TYPES (6 total + MULTI_ACTION wrapper) ===
 
 1. SEND_NOTIFICATION — Send notification to a user
-   actionConfig: { recipientId: number, title: string, message: string, titleTemplate?: string, messageTemplate?: string }
+   actionConfig: { recipientId: number, messageTemplate: string, titleTemplate?: string }
+   IMPORTANT: Use "messageTemplate" (NOT "message") and "titleTemplate" (NOT "title").
    Template vars: {tableName}, {recordData}, {taskTitle}, {fromStatus}, {toStatus}, {fieldName}, {fromValue}, {toValue}
 
 2. CREATE_TASK — Create a new task
    actionConfig: { title: string, description?: string, assigneeId: number, priority?: "low"|"medium"|"high", status?: string, dueDays?: number, tags?: string[] }
 
 3. UPDATE_RECORD_FIELD — Update a field in the triggering record
-   actionConfig: { columnId: "fld_xxx", value: string|number|boolean }
+   actionConfig: { tableId: number, columnId: "<REAL_FIELD_ID_FROM_TABLE>", value: string|number|boolean, recordId?: string }
 
 4. SEND_WHATSAPP — Send a WhatsApp message
-   actionConfig: { phoneColumnId: "fld_xxx", content: string, messageType?: "text"|"media", delay?: number }
+   actionConfig: { phoneColumnId: "<REAL_FIELD_ID_FROM_TABLE>", content: string, messageType?: "text"|"media", delay?: number, mediaFileId?: string }
 
 5. WEBHOOK — Send HTTP webhook
-   actionConfig: { url: string, method?: "POST"|"GET", headers?: object }
+   actionConfig: { webhookUrl: string }
+   IMPORTANT: Use "webhookUrl" (NOT "url").
 
-6. ADD_TO_NURTURE_LIST — Add record to a nurture/mailing list
-   actionConfig: { listId: string (slug), mapping: { name?: "fld_xxx", email?: "fld_xxx", phone?: "fld_xxx" } }
+6. CALCULATE_DURATION — Calculate time between two field values
+   actionConfig: {} (no config needed)
 
-7. CREATE_RECORD — Create a record in another table
-   actionConfig: { tableId: number, fieldMappings: [{ columnId: "fld_xxx", value: string }] }
-
-8. CREATE_CALENDAR_EVENT — Create a calendar event
-   actionConfig: { title: string, description?: string, startOffset?: number, endOffset?: number, startOffsetUnit?: "minutes"|"hours"|"days", endOffsetUnit?: "minutes"|"hours"|"days", color?: string }
-
-9. CALCULATE_DURATION — Calculate time between two field values
-   actionConfig: { fromField: string, toField: string, fromValue?: string, toValue?: string }
-
-10. CALCULATE_MULTI_EVENT_DURATION — Calculate time across event chain
-    actionConfig: { weightConfig?: { eventWeights: object } }
-
-11. MULTI_ACTION — Execute multiple actions sequentially (max 10)
-    actionConfig: { actions: [{ type: "SEND_NOTIFICATION"|"CREATE_TASK"|etc, config: {...} }] }
-    IMPORTANT: Nested MULTI_ACTION is NOT allowed.
+7. MULTI_ACTION — Execute multiple actions sequentially (max 10)
+   actionConfig: { actions: [{ type: "SEND_NOTIFICATION"|"CREATE_TASK"|"UPDATE_RECORD_FIELD"|"SEND_WHATSAPP"|"WEBHOOK"|"CALCULATE_DURATION", config: {...} }] }
+   IMPORTANT: Nested MULTI_ACTION is NOT allowed. Each nested action uses the same config format as above.
 
 === VALIDATION RULES ===
 - tableId MUST be a real table ID from AVAILABLE TABLES above
-- columnId MUST be a real field ID (fld_xxx) from the table's field list
+- columnId MUST be a real field ID from the table's field list above. NEVER use placeholder values like "fld_xxx".
 - recipientId and assigneeId MUST be real user IDs from AVAILABLE USERS
-- listId for ADD_TO_NURTURE_LIST MUST be a real slug from NURTURE LISTS
 - For MULTI_ACTION: max 10 nested actions, no nested MULTI_ACTION
-- All IDs must be numbers (not strings) except columnId which is "fld_xxx"
+- All IDs must be numbers (not strings) except columnId which is a string like "fld_abc123"
+- CRITICAL: Every columnId, phoneColumnId, and field reference MUST be an actual field ID (starting with "fld_") copied from the AVAILABLE TABLES section. NEVER invent or guess field IDs.
 
 ${mode === "create" ? `=== MODE: CREATE ===
 USER REQUEST: "${prompt}"
 
 Generate a single automation rule based on the user's request.
+
+=== MANDATORY CONDITION DETECTION (follow these steps IN ORDER) ===
+You MUST perform this analysis before generating JSON:
+
+STEP 1 — SCAN the user request for ANY value filter. Look for these patterns:
+   Hebrew: "ממקור X", "מסטטוס X", "עם סטטוס X", "של סוג X", "שהגיע מ-X", "מגוגל", "מפייסבוק", "כאשר X", "ששדה X"
+   English: "from X", "with status X", "of type X", "where X is Y", "source Google"
+   If the user mentions ANY specific value/source/status/type → a condition IS required.
+
+STEP 2 — IDENTIFY the matching field. Find the select/radio/tags field in the table whose options relate to the mentioned value.
+
+STEP 3 — MATCH the value to an EXACT option. The user may write in Hebrew while options are in English (or vice versa).
+   Common translations: מגוגל/גוגל = "Google", מפייסבוק/פייסבוק = "Facebook", אינסטגרם = "Instagram",
+   לינקדאין = "LinkedIn", טוויטר = "Twitter", טיקטוק = "TikTok", אתר = "Website", המלצה = "Referral",
+   ווטסאפ = "WhatsApp", יוטיוב = "YouTube", אורגני = "Organic"
+   Pick the EXACT string from the field's [Options: ...] list.
+
+STEP 4 — SET the condition. Add conditionColumnId (real field ID) + conditionValue (exact option string) + operator "equals".
+
+EXAMPLES:
+- User: "התראה על ליד חדש שהגיע מגוגל", table has field source (fld_abc) [Options: Google, Facebook, Instagram]
+  → conditionColumnId: "fld_abc", conditionValue: "Google", operator: "equals"
+- User: "משימה לליד חדש ממקור פייסבוק", table has field lead_source (fld_xyz) [Options: פייסבוק, גוגל, אתר]
+  → conditionColumnId: "fld_xyz", conditionValue: "פייסבוק", operator: "equals"
+- User: "התראה על כל ליד חדש" (no specific value mentioned)
+  → NO condition needed
+
+IMPORTANT: If you set conditionValue, it MUST be an EXACT string from the field's [Options: ...] list. Never invent option values.
 
 OUTPUT FORMAT (single JSON object):
 {
@@ -306,10 +305,12 @@ OUTPUT FORMAT (single JSON object):
   }
 }` : `=== MODE: SUGGEST ===
 Analyze the organization's tables, data, workflows, and existing automations.
-Suggest 3-5 valuable automations that would help this business.
+Suggest 6-8 valuable automations that would help this business.
 ${prompt ? `User hint: "${prompt}"` : ""}
 Avoid duplicating existing automations.
 Each suggestion should use a different combination of trigger+action when possible.
+At least 2-3 suggestions MUST use simple action types that don't require field references: SEND_NOTIFICATION, CREATE_TASK.
+When using UPDATE_RECORD_FIELD or SEND_WHATSAPP — double-check that every columnId, phoneColumnId, and field reference is a real ID (starting with "fld_") copied exactly from the AVAILABLE TABLES section above.
 
 OUTPUT FORMAT (JSON object with suggestions array):
 {
@@ -1099,7 +1100,7 @@ function parseSchemaResult(cleanedText: string, existingTableIds: Set<number>) {
   return { schema };
 }
 
-function parseAutomationResult(cleanedText: string, rawContext?: AutomationRawContext) {
+function parseAutomationResult(cleanedText: string, rawContext?: AutomationRawContext, userPrompt?: string) {
   const parsed = JSON.parse(cleanedText);
 
   // Detect mode: single automation or suggestions array
@@ -1124,7 +1125,7 @@ function parseAutomationResult(cleanedText: string, rawContext?: AutomationRawCo
   }
 
   const validated = automationObjects
-    .map((a) => validateAutomationObject(a, rawContext))
+    .map((a) => validateAutomationObject(a, rawContext, userPrompt))
     .filter(Boolean);
 
   if (validated.length === 0) {
@@ -1132,7 +1133,7 @@ function parseAutomationResult(cleanedText: string, rawContext?: AutomationRawCo
   }
 
   if (isSuggestMode) {
-    return { suggestions: validated };
+    return { suggestions: validated.slice(0, 5) };
   }
   return { automation: validated[0] };
 }
@@ -1154,7 +1155,212 @@ function findAutomationObject(obj: any, depth = 0): any {
   return null;
 }
 
-function validateAutomationObject(a: any, raw?: AutomationRawContext): any | null {
+function validateFieldId(
+  fieldId: string | undefined,
+  tableId: number | undefined,
+  raw: AutomationRawContext
+): string | undefined {
+  if (!fieldId || typeof fieldId !== "string" || !tableId) return undefined;
+  const validFields = raw.fieldIdsByTable.get(tableId);
+  if (!validFields) return undefined;
+  if (validFields.has(fieldId)) return fieldId;
+  const nameMap = raw.fieldNameToId.get(tableId);
+  const mapped = nameMap?.get(fieldId.toLowerCase());
+  if (mapped) return mapped;
+  log.warn("Invalid field ID, could not map", { fieldId, tableId });
+  return undefined;
+}
+
+// Hebrew single-letter prefixes: מ(from), ב(in), ל(to), ש(that), ה(the), ו(and), כ(as)
+const HEBREW_PREFIXES = "מבלשהוכ";
+
+// Common CRM option values: Hebrew ↔ English transliteration
+const HEBREW_ENGLISH_MAP: Record<string, string> = {
+  "גוגל": "google", "פייסבוק": "facebook", "אינסטגרם": "instagram",
+  "לינקדאין": "linkedin", "טוויטר": "twitter", "טיקטוק": "tiktok",
+  "אתר": "website", "המלצה": "referral", "טלפון": "phone",
+  "אימייל": "email", "אורגני": "organic", "ווטסאפ": "whatsapp",
+  "יוטיוב": "youtube", "חם": "hot", "קר": "cold", "חדש": "new",
+  "פעיל": "active", "סגור": "closed", "ממתין": "pending",
+};
+const ENGLISH_HEBREW_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(HEBREW_ENGLISH_MAP).map(([h, e]) => [e, h])
+);
+
+/**
+ * Strip common Hebrew single-letter prefixes from a word.
+ * E.g., "מגוגל" → "גוגל", "מפייסבוק" → "פייסבוק", "בטלפון" → "טלפון"
+ */
+function stripHebrewPrefix(word: string): string {
+  if (word.length <= 2) return word; // Don't strip from very short words
+  if (HEBREW_PREFIXES.includes(word[0])) return word.slice(1);
+  return word;
+}
+
+/**
+ * Strip up to `maxChars` Hebrew prefix characters from a word.
+ * E.g., maxChars=2: "שמגוגל" → "גוגל", "ומפייסבוק" → "פייסבוק"
+ */
+function stripHebrewPrefixes(word: string, maxChars: number): string {
+  let result = word;
+  for (let i = 0; i < maxChars; i++) {
+    if (result.length <= 2) break;
+    if (HEBREW_PREFIXES.includes(result[0])) result = result.slice(1);
+    else break;
+  }
+  return result;
+}
+
+/**
+ * Check if a word matches an option using transliteration maps.
+ * Handles cross-language matching: Hebrew word → English option or English word → Hebrew option.
+ */
+function transliterationMatch(word: string, optionLower: string): boolean {
+  // Hebrew word → English translation → compare to option
+  const engTranslation = HEBREW_ENGLISH_MAP[word];
+  if (engTranslation && engTranslation === optionLower) return true;
+  // English word → Hebrew translation → compare to option
+  const hebTranslation = ENGLISH_HEBREW_MAP[word];
+  if (hebTranslation && hebTranslation === optionLower) return true;
+  return false;
+}
+
+function inferConditionFromName(
+  a: any,
+  raw: AutomationRawContext,
+  userPrompt?: string,
+  aiConditionHint?: string
+): void {
+  const tc = a.triggerConfig;
+  // Only for NEW_RECORD triggers missing a condition
+  if (a.triggerType !== "NEW_RECORD" || tc.conditionColumnId || !tc.tableId) return;
+
+  const optionsMap = raw.fieldOptionsByTable.get(tc.tableId);
+  if (!optionsMap || optionsMap.size === 0) return;
+
+  // Combine all text sources for searching
+  const searchText = `${a.name || ""} ${a.description || ""} ${userPrompt || ""} ${aiConditionHint || ""}`;
+  if (!searchText.trim()) return;
+
+  const searchTextLower = searchText.toLowerCase();
+  const words = searchText.split(/\s+/).filter(Boolean);
+  // Single prefix strip (1 char)
+  const stripped1Lower = words.map((w) => stripHebrewPrefixes(w, 1).toLowerCase());
+  // Double prefix strip (up to 2 chars) for combos like "שמ", "ומ", "שה"
+  const stripped2Lower = words.map((w) => stripHebrewPrefixes(w, 2).toLowerCase());
+
+  let bestMatch: { fieldId: string; value: string; length: number } | null = null;
+
+  const tryMatch = (fieldId: string, option: string, optionLower: string) => {
+    // Strategy 1: Direct substring (case-insensitive)
+    if (searchTextLower.includes(optionLower)) {
+      if (!bestMatch || option.length > bestMatch.length) {
+        bestMatch = { fieldId, value: option, length: option.length };
+      }
+      return true;
+    }
+
+    // Strategy 2: Word-level exact after single Hebrew prefix strip
+    if (stripped1Lower.some((sw) => sw === optionLower)) {
+      if (!bestMatch || option.length > bestMatch.length) {
+        bestMatch = { fieldId, value: option, length: option.length };
+      }
+      return true;
+    }
+
+    // Strategy 3: Double prefix strip (handles "שמ", "ומ" combos)
+    if (stripped2Lower.some((sw) => sw === optionLower)) {
+      if (!bestMatch || option.length > bestMatch.length) {
+        bestMatch = { fieldId, value: option, length: option.length };
+      }
+      return true;
+    }
+
+    // Strategy 4: Transliteration matching (Hebrew↔English)
+    for (let i = 0; i < stripped2Lower.length; i++) {
+      if (transliterationMatch(stripped2Lower[i], optionLower)) {
+        if (!bestMatch || option.length > bestMatch.length) {
+          bestMatch = { fieldId, value: option, length: option.length };
+        }
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  for (const [fieldId, options] of optionsMap) {
+    for (const option of options) {
+      if (option.length < 2) continue;
+      const optionLower = option.toLowerCase();
+      tryMatch(fieldId, option, optionLower);
+    }
+  }
+
+  // Strategy 5: AI hint matching — if aiConditionHint is provided but no match yet,
+  // try matching the hint directly against options using strategies 1-4
+  if (!bestMatch && aiConditionHint) {
+    const hintLower = aiConditionHint.toLowerCase();
+    const hintStripped1 = stripHebrewPrefixes(aiConditionHint, 1).toLowerCase();
+    const hintStripped2 = stripHebrewPrefixes(aiConditionHint, 2).toLowerCase();
+
+    for (const [fieldId, options] of optionsMap) {
+      for (const option of options) {
+        if (option.length < 2) continue;
+        const optionLower = option.toLowerCase();
+
+        // Direct match of hint against option
+        if (hintLower === optionLower || optionLower.includes(hintLower) || hintLower.includes(optionLower)) {
+          if (!bestMatch || option.length > bestMatch.length) {
+            bestMatch = { fieldId, value: option, length: option.length };
+          }
+          continue;
+        }
+        // Stripped hint match
+        if (hintStripped1 === optionLower || hintStripped2 === optionLower) {
+          if (!bestMatch || option.length > bestMatch.length) {
+            bestMatch = { fieldId, value: option, length: option.length };
+          }
+          continue;
+        }
+        // Transliteration of hint
+        if (transliterationMatch(hintLower, optionLower) ||
+            transliterationMatch(hintStripped1, optionLower) ||
+            transliterationMatch(hintStripped2, optionLower)) {
+          if (!bestMatch || option.length > bestMatch.length) {
+            bestMatch = { fieldId, value: option, length: option.length };
+          }
+        }
+      }
+    }
+  }
+
+  if (bestMatch) {
+    tc.conditionColumnId = bestMatch.fieldId;
+    tc.conditionValue = bestMatch.value;
+    tc.operator = "equals";
+    log.info("Inferred condition from automation name/prompt", {
+      name: a.name,
+      fieldId: bestMatch.fieldId,
+      value: bestMatch.value,
+    });
+  } else if (a.triggerType === "NEW_RECORD") {
+    // Debug logging: help diagnose why no match was found
+    const fieldSummary: Record<string, number> = {};
+    for (const [fieldId, options] of optionsMap) {
+      fieldSummary[fieldId] = options.length;
+    }
+    log.warn("inferConditionFromName: no match found for NEW_RECORD trigger", {
+      tableId: tc.tableId,
+      fieldsWithOptions: fieldSummary,
+      searchTextSnippet: searchText.slice(0, 200),
+      strippedWords: stripped2Lower.slice(0, 15),
+      aiConditionHint: aiConditionHint || "none",
+    });
+  }
+}
+
+function validateAutomationObject(a: any, raw?: AutomationRawContext, userPrompt?: string): any | null {
   if (!a || typeof a !== "object") return null;
 
   // Validate trigger/action types
@@ -1169,14 +1375,11 @@ function validateAutomationObject(a: any, raw?: AutomationRawContext): any | nul
   if (a.triggerConfig.tableId != null) {
     a.triggerConfig.tableId = Number(a.triggerConfig.tableId);
   }
-  if (a.triggerConfig.viewId != null) {
-    a.triggerConfig.viewId = Number(a.triggerConfig.viewId);
-  }
-  if (a.triggerConfig.threshold != null) {
-    a.triggerConfig.threshold = Number(a.triggerConfig.threshold);
-  }
   if (a.triggerConfig.duration != null) {
     a.triggerConfig.duration = Number(a.triggerConfig.duration);
+  }
+  if (a.triggerConfig.timeValue != null) {
+    a.triggerConfig.timeValue = Number(a.triggerConfig.timeValue);
   }
   if (a.actionConfig.recipientId != null) {
     a.actionConfig.recipientId = Number(a.actionConfig.recipientId);
@@ -1191,37 +1394,110 @@ function validateAutomationObject(a: any, raw?: AutomationRawContext): any | nul
     a.actionConfig.dueDays = Number(a.actionConfig.dueDays);
   }
 
+  // ── Normalize field names (safety net for AI using old names) ──
+  const tc = a.triggerConfig;
+  const ac = a.actionConfig;
+
+  // TIME_SINCE_CREATION: duration → timeValue, unit → timeUnit
+  if (a.triggerType === "TIME_SINCE_CREATION") {
+    if (tc.duration != null && tc.timeValue == null) {
+      tc.timeValue = Number(tc.duration);
+      delete tc.duration;
+    }
+    if (tc.unit && !tc.timeUnit) {
+      tc.timeUnit = tc.unit;
+      delete tc.unit;
+    }
+  }
+
+  // SEND_NOTIFICATION: message → messageTemplate, title → titleTemplate
+  if (a.actionType === "SEND_NOTIFICATION") {
+    if (ac.message && !ac.messageTemplate) {
+      ac.messageTemplate = ac.message;
+      delete ac.message;
+    }
+    if (ac.title && !ac.titleTemplate) {
+      ac.titleTemplate = ac.title;
+      delete ac.title;
+    }
+  }
+
+  // WEBHOOK: url → webhookUrl
+  if (a.actionType === "WEBHOOK") {
+    if (ac.url && !ac.webhookUrl) {
+      ac.webhookUrl = ac.url;
+      delete ac.url;
+    }
+  }
+
+  // Normalize nested MULTI_ACTION actions
+  if (a.actionType === "MULTI_ACTION" && Array.isArray(ac.actions)) {
+    for (const nested of ac.actions) {
+      if (!nested?.config) continue;
+      const nc = nested.config;
+      if (nested.type === "SEND_NOTIFICATION") {
+        if (nc.message && !nc.messageTemplate) { nc.messageTemplate = nc.message; delete nc.message; }
+        if (nc.title && !nc.titleTemplate) { nc.titleTemplate = nc.title; delete nc.title; }
+      }
+      if (nested.type === "WEBHOOK") {
+        if (nc.url && !nc.webhookUrl) { nc.webhookUrl = nc.url; delete nc.url; }
+      }
+    }
+  }
+
   // ── Validate IDs against raw context ──
   if (raw) {
-    const tc = a.triggerConfig;
-    const ac = a.actionConfig;
-
     // Validate tableId in triggerConfig
     if (tc.tableId && !raw.tableIds.has(tc.tableId)) {
-      // Try to keep going, but clear invalid tableId
       log.warn("Invalid tableId in triggerConfig", { tableId: tc.tableId });
       delete tc.tableId;
     }
 
-    // Validate columnId — auto-map from field name if needed
-    if (tc.tableId && tc.columnId) {
-      const validFields = raw.fieldIdsByTable.get(tc.tableId);
-      if (validFields && !validFields.has(tc.columnId)) {
-        // Try name-to-ID fallback
-        const nameMap = raw.fieldNameToId.get(tc.tableId);
-        const mapped = nameMap?.get(tc.columnId.toLowerCase());
-        if (mapped) {
-          tc.columnId = mapped;
-        } else {
-          log.warn("Invalid columnId, could not map", { columnId: tc.columnId, tableId: tc.tableId });
-        }
+    // Validate triggerConfig.columnId — auto-map from field name or delete
+    if (tc.columnId) {
+      const validated = validateFieldId(tc.columnId, tc.tableId, raw);
+      if (validated) tc.columnId = validated;
+      else delete tc.columnId;
+    }
+
+    // Validate triggerConfig.conditionColumnId — preserve AI's value hint before cleanup
+    let aiConditionHint: string | undefined;
+    if (tc.conditionColumnId) {
+      const validated = validateFieldId(tc.conditionColumnId, tc.tableId, raw);
+      if (validated) tc.conditionColumnId = validated;
+      else {
+        aiConditionHint = tc.conditionValue; // preserve before deletion
+        delete tc.conditionColumnId;
+        delete tc.conditionValue;
       }
+    }
+    // Clean up orphaned conditionValue without a column
+    if (tc.conditionValue && !tc.conditionColumnId) {
+      if (!aiConditionHint) aiConditionHint = tc.conditionValue;
+      delete tc.conditionValue;
+    }
+
+    // Safety net: infer condition from automation name/description/user prompt if AI omitted it
+    inferConditionFromName(a, raw, userPrompt, aiConditionHint);
+
+    // Validate actionConfig.columnId (e.g. UPDATE_RECORD_FIELD)
+    if (ac.columnId) {
+      const acTableId = ac.tableId || tc.tableId;
+      const validated = validateFieldId(ac.columnId, acTableId, raw);
+      if (validated) ac.columnId = validated;
+      else delete ac.columnId;
+    }
+
+    // Validate actionConfig.phoneColumnId (SEND_WHATSAPP)
+    if (ac.phoneColumnId) {
+      const validated = validateFieldId(ac.phoneColumnId, tc.tableId, raw);
+      if (validated) ac.phoneColumnId = validated;
+      else delete ac.phoneColumnId;
     }
 
     // Validate recipientId
     if (ac.recipientId && !raw.userIds.has(ac.recipientId)) {
       log.warn("Invalid recipientId", { recipientId: ac.recipientId });
-      // Pick first available user as fallback
       const firstUser = [...raw.userIds][0];
       if (firstUser) ac.recipientId = firstUser;
     }
@@ -1233,46 +1509,52 @@ function validateAutomationObject(a: any, raw?: AutomationRawContext): any | nul
       if (firstUser) ac.assigneeId = firstUser;
     }
 
-    // Validate ADD_TO_NURTURE_LIST listId
-    if (a.actionType === "ADD_TO_NURTURE_LIST" && ac.listId) {
-      if (!raw.nurtureListSlugs.has(ac.listId)) {
-        log.warn("Invalid nurture list slug", { listId: ac.listId });
-      }
-    }
-
-    // Validate CREATE_RECORD tableId
-    if (a.actionType === "CREATE_RECORD" && ac.tableId) {
-      if (!raw.tableIds.has(ac.tableId)) {
-        log.warn("Invalid tableId in CREATE_RECORD actionConfig", { tableId: ac.tableId });
-      }
-    }
-
     // Validate MULTI_ACTION nested actions
     if (a.actionType === "MULTI_ACTION" && Array.isArray(ac.actions)) {
       ac.actions = ac.actions.slice(0, 10).filter((nested: any) => {
         if (!nested || typeof nested !== "object") return false;
         if (nested.type === "MULTI_ACTION") return false; // No nested MULTI_ACTION
-        return VALID_AUTOMATION_ACTIONS.has(nested.type);
+        if (!VALID_AUTOMATION_ACTIONS.has(nested.type)) return false;
+
+        // Validate field references inside nested action config
+        const nc = nested.config;
+        if (nc && typeof nc === "object") {
+          if (nc.columnId) {
+            const ncTableId = nc.tableId || tc.tableId;
+            const validated = validateFieldId(nc.columnId, ncTableId, raw);
+            if (validated) nc.columnId = validated;
+            else delete nc.columnId;
+          }
+          if (nc.phoneColumnId) {
+            const validated = validateFieldId(nc.phoneColumnId, tc.tableId, raw);
+            if (validated) nc.phoneColumnId = validated;
+            else delete nc.phoneColumnId;
+          }
+        }
+
+        return true;
       });
     }
   }
 
-  // ── Patch MULTI_EVENT_DURATION ──
-  if (a.triggerType === "MULTI_EVENT_DURATION") {
-    if (a.triggerConfig.events && !a.triggerConfig.eventChain) {
-      a.triggerConfig.eventChain = a.triggerConfig.events;
-      delete a.triggerConfig.events;
+  // ── Final completeness check: reject if required fields were cleaned out ──
+  if (raw) {
+    const tt = a.triggerType;
+    const at = a.actionType;
+
+    if (tt === "RECORD_FIELD_CHANGE" && !tc.columnId) {
+      log.warn("Automation rejected: missing required triggerConfig.columnId", { triggerType: tt, name: a.name });
+      return null;
     }
-    if (!a.triggerConfig.tableId && Array.isArray(a.triggerConfig.eventChain) && a.triggerConfig.eventChain.length > 0) {
-      const firstEventTable = a.triggerConfig.eventChain[0].tableId;
-      if (firstEventTable) a.triggerConfig.tableId = Number(firstEventTable);
+
+    if (at === "UPDATE_RECORD_FIELD" && !ac.columnId) {
+      log.warn("Automation rejected: missing required actionConfig.columnId", { actionType: at, name: a.name });
+      return null;
     }
-    // Coerce eventChain tableIds
-    if (Array.isArray(a.triggerConfig.eventChain)) {
-      for (const ev of a.triggerConfig.eventChain) {
-        if (ev.tableId != null) ev.tableId = Number(ev.tableId);
-        if (ev.order != null) ev.order = Number(ev.order);
-      }
+
+    if (at === "SEND_WHATSAPP" && !ac.phoneColumnId) {
+      log.warn("Automation rejected: missing required actionConfig.phoneColumnId", { actionType: at, name: a.name });
+      return null;
     }
   }
 
@@ -1588,7 +1870,7 @@ export const processAIGeneration = inngest.createFunction(
               log.warn("Failed to deserialize rawContext for automation validation");
             }
           }
-          return parseAutomationResult(cleanedText, rawCtx);
+          return parseAutomationResult(cleanedText, rawCtx, prompt);
         }
         case "analytics":
         case "analytics-single-refine":

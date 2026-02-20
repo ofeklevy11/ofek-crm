@@ -96,7 +96,7 @@ export default function QuoteEditor({
       getExchangeRate(currency)
         .then((rate) => setExchangeRate(rate))
         .catch(() => {
-          alert("שגיאה בשליפת שער יציג");
+          toast.error("שגיאה בשליפת שער יציג");
           setCurrency("ILS");
           setExchangeRate(null);
         })
@@ -131,7 +131,7 @@ export default function QuoteEditor({
         }
       })
       .catch(() => {
-        alert("שגיאה בשליפת שער יציג");
+        toast.error("שגיאה בשליפת שער יציג");
         // Revert to previous currency
         setCurrency(oldCurrency);
         setExchangeRate(oldRate);

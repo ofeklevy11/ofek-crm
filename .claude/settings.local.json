@@ -43,7 +43,9 @@
       "Bash(npm run build:*)",
       "Bash(pnpm run build:*)",
       "WebFetch(domain:www.prisma.io)",
-      "WebFetch(domain:neon.com)"
+      "WebFetch(domain:neon.com)",
+      "Bash(git log:*)",
+      "Bash(git show:*)"
     ]
   }
 }

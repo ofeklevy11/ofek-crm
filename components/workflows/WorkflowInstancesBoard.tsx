@@ -27,6 +27,8 @@ import {
   updateWorkflowInstanceStage,
   resetWorkflowInstance,
 } from "@/app/actions/workflow-instances";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import {
   deleteWorkflowInstance,
   updateWorkflowInstance,
@@ -110,8 +112,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
       setIsCreateModalOpen(false);
       setNewForm({ workflowId: "", name: "", assigneeId: "" });
     } catch (e) {
-      console.error(e);
-      alert("שגיאה ביצירת תהליך");
+      toast.error(getUserFriendlyError(e));
     }
   };
 
@@ -155,8 +156,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
         await deleteWorkflowInstance(id);
         if (selectedInstance?.id === id) setSelectedInstance(null);
       } catch (error) {
-        console.error("Failed to delete instance:", error);
-        alert("שגיאה במחיקת התהליך");
+        toast.error(getUserFriendlyError(error));
       }
     }
   };
@@ -179,8 +179,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
       });
       setEditingInstance(null);
     } catch (error) {
-      console.error("Failed to update instance:", error);
-      alert("שגיאה בעדכון התהליך");
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -210,8 +209,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
           status: "active",
         });
       } catch (error) {
-        console.error("Failed to reset workflow:", error);
-        alert("שגיאה באיפוס התהליך");
+        toast.error(getUserFriendlyError(error));
       }
     }
   };

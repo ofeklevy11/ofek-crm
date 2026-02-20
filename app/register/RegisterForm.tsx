@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Loader2, User, Mail, Lock, Building2 } from "lucide-react";
 import { getUserFriendlyError } from "@/lib/errors";
+import { cn } from "@/lib/utils";
 
 export default function RegisterForm() {
   const [formData, setFormData] = useState({
@@ -20,11 +21,13 @@ export default function RegisterForm() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isRateLimited, setIsRateLimited] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setIsRateLimited(false);
 
     // Validation
     if (formData.password !== formData.confirmPassword) {
@@ -69,7 +72,9 @@ export default function RegisterForm() {
       // After successful registration, redirect to login or auto-login
       window.location.href = "/";
     } catch (err: any) {
-      setError(getUserFriendlyError(err));
+      const msg = getUserFriendlyError(err);
+      setIsRateLimited(/מדי (בקשות|פניות|ניסיונות)/i.test(msg));
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -181,7 +186,12 @@ export default function RegisterForm() {
       </div>
 
       {error && (
-        <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm p-3 rounded-lg text-center animate-in fade-in slide-in-from-top-1">
+        <div className={cn(
+          "text-sm p-3 rounded-lg text-center animate-in fade-in slide-in-from-top-1 border",
+          isRateLimited
+            ? "bg-red-50 border-red-200 text-red-700"
+            : "bg-destructive/10 border-destructive/20 text-destructive"
+        )}>
           {error}
         </div>
       )}

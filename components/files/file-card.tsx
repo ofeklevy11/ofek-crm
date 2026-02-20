@@ -26,6 +26,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 // Secure download function that uses API route
 const downloadFile = async (fileId: number, fileName: string) => {
@@ -47,8 +49,7 @@ const downloadFile = async (fileId: number, fileName: string) => {
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
   } catch (error) {
-    console.error("Download error:", error);
-    alert("שגיאה בהורדת הקובץ");
+    toast.error(getUserFriendlyError(error));
   }
 };
 
@@ -82,8 +83,7 @@ export function FileCard({
     try {
       await deleteFile(file.id);
     } catch (error) {
-      console.error(error);
-      alert("נכשל במחיקת הקובץ");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsDeleting(false);
     }
@@ -98,8 +98,7 @@ export function FileCard({
       setIsEditing(false);
       router.refresh();
     } catch (error) {
-      console.error(error);
-      alert("נכשל בשמירת השם");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsSaving(false);
     }

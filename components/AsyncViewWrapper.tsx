@@ -31,6 +31,7 @@ export default function AsyncViewWrapper({
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [rateLimitError, setRateLimitError] = useState(false);
   const isMounted = useRef(true);
   const hasFetched = useRef(false);
 
@@ -74,19 +75,13 @@ export default function AsyncViewWrapper({
         }
       } catch (err: any) {
         if (isMounted.current) {
-          // If it was a force refresh (manual), we might want to show a toast or alert.
-          // For now, we set error state, but distinct handling for 429 might be good.
-          if (force) {
-            alert(getUserFriendlyError(err));
+          const msg = getUserFriendlyError(err);
+          const isRateLimit = /מדי (בקשות|פניות|ניסיונות)/i.test(msg) || /429|rate.?limit/i.test(msg);
+          if (isRateLimit) {
+            setRateLimitError(true);
+            setTimeout(() => setRateLimitError(false), 10000);
           }
-          // Don't clear data on refresh error, just show toast?
-          // Current logic replaces data/error.
-          // If we fail to refresh, we probably want to keep old data if possible?
-          // But logic sets error and loading=false.
-          // Let's just set Error.
-
-          // Actually, improve UX: if force=true and error, don't kill existing data if we have it.
-          if (!force) setError(getUserFriendlyError(err));
+          if (!force) setError(msg);
           setLoading(false);
         }
       }
@@ -123,6 +118,11 @@ export default function AsyncViewWrapper({
       {loading ? (
         <div className="flex justify-center items-center h-20">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : rateLimitError ? (
+        <div className="text-sm p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          יותר מדי בקשות. אנא נסה שוב בעוד 2 דקות והנתונים יוצגו.
         </div>
       ) : error ? (
         <div className="text-red-500 text-sm p-2">שגיאה בטעינת הנתונים</div>

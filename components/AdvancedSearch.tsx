@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Settings, Search, Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface SchemaField {
   name: string;
@@ -150,7 +152,7 @@ export default function AdvancedSearch({
         setShowDropdown(data.length > 0);
       }
     } catch (error) {
-      console.error("Search error:", error);
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsLoading(false);
     }

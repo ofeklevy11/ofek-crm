@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import UserModal from "@/components/UserModal";
 import AlertDialog from "@/components/AlertDialog";
 import { apiFetch } from "@/lib/api-fetch";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface User {
   id: number;
@@ -116,11 +118,10 @@ export default function UsersPage() {
         setUsers(users.filter((u) => u.id !== deleteUserId));
         setDeleteUserId(null);
       } else {
-        alert("שגיאה במחיקת המשתמש");
+        toast.error("שגיאה במחיקת המשתמש");
       }
     } catch (error) {
-      console.error("Error deleting user:", error);
-      alert("שגיאה במחיקת המשתמש");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsDeleting(false);
     }

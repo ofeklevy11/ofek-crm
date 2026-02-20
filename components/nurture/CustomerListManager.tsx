@@ -54,7 +54,8 @@ import {
 } from "@/app/actions/automations";
 import { getUsers } from "@/app/actions/users";
 import { Badge } from "@/components/ui/badge";
-import { getFriendlyResultError } from "@/lib/errors";
+import { getFriendlyResultError, getUserFriendlyError } from "@/lib/errors";
+import { toast } from "sonner";
 
 // Types - Use shared types where possible or map them
 interface Customer {
@@ -348,11 +349,10 @@ export default function CustomerListManager({
         setManualForm({ name: "", email: "", phone: "" });
         setIsOpen(false);
       } else {
-        alert(getFriendlyResultError(result.error, "שגיאה בהוספת הלקוח"));
+        toast.error(getFriendlyResultError(result.error, "שגיאה בהוספת הלקוח"));
       }
     } catch (error) {
-      console.error(error);
-      alert("שגיאה לא צפויה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }
@@ -389,8 +389,7 @@ export default function CustomerListManager({
       setIsOpen(false);
       setSelectedDbCustomers([]);
     } catch (error) {
-      console.error(error);
-      alert("שגיאה בייבוא הלקוחות");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }
@@ -483,7 +482,7 @@ export default function CustomerListManager({
       }
 
       if (result.success) {
-        alert(
+        toast.success(
           autoViewMode === "edit"
             ? "האוטומציה עודכנה בהצלחה!"
             : "כלל אוטומציה נוצר בהצלחה!"
@@ -505,11 +504,10 @@ export default function CustomerListManager({
           condition: { field: "", fromValue: "", toValue: "" },
         });
       } else {
-        alert(getFriendlyResultError(result.error, "שגיאה בשמירת האוטומציה"));
+        toast.error(getFriendlyResultError(result.error, "שגיאה בשמירת האוטומציה"));
       }
     } catch (error) {
-      console.error(error);
-      alert("שגיאה לא צפויה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsSaving(false);
     }
@@ -549,8 +547,7 @@ export default function CustomerListManager({
         setExistingRules(rules);
         onAddCustomers([]); // Refresh parent
       } catch (error) {
-        console.error(error);
-        alert("שגיאה במחיקת האוטומציה");
+        toast.error(getUserFriendlyError(error));
       }
     }
   };
@@ -562,8 +559,7 @@ export default function CustomerListManager({
       setExistingRules(rules);
       onAddCustomers([]); // Refresh parent
     } catch (error) {
-      console.error(error);
-      alert("שגיאה בעדכון סטטוס האוטומציה");
+      toast.error(getUserFriendlyError(error));
     }
   };
 

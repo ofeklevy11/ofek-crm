@@ -30,7 +30,8 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { getAllFiles } from "@/app/actions/storage";
-import { getFriendlyResultError } from "@/lib/errors";
+import { getFriendlyResultError, getUserFriendlyError } from "@/lib/errors";
+import { toast } from "sonner";
 
 interface User {
   id: number;
@@ -118,10 +119,10 @@ export default function AutomationModal({
 
   // Time Based Trigger specific
   const [timeValue, setTimeValue] = useState(
-    source?.triggerConfig?.timeValue || "",
+    source?.triggerConfig?.timeValue || source?.triggerConfig?.duration || "",
   );
   const [timeUnit, setTimeUnit] = useState(
-    source?.triggerConfig?.timeUnit || "hours",
+    source?.triggerConfig?.timeUnit || source?.triggerConfig?.unit || "hours",
   );
   const [conditionColumnId, setConditionColumnId] = useState(
     source?.triggerConfig?.conditionColumnId || "",
@@ -202,8 +203,12 @@ export default function AutomationModal({
   const [taskTagInput, setTaskTagInput] = useState("");
 
   // Update Record Field Specific
+  const [updateFieldTableId, setUpdateFieldTableId] = useState("");
   const [updateFieldColumnId, setUpdateFieldColumnId] = useState("");
   const [updateFieldValue, setUpdateFieldValue] = useState("");
+  const [updateFieldRecordId, setUpdateFieldRecordId] = useState("");
+  const [updateFieldColumns, setUpdateFieldColumns] = useState<any[]>([]);
+  const [loadingUpdateFieldColumns, setLoadingUpdateFieldColumns] = useState(false);
 
   const handleAddTaskTag = (e: React.KeyboardEvent | React.MouseEvent) => {
     if (e.type === "keydown" && (e as React.KeyboardEvent).key !== "Enter")
@@ -263,6 +268,35 @@ export default function AutomationModal({
       })
       .finally(() => setLoadingColumns(false));
   }, [tableId, triggerType]);
+
+  // Load columns for UPDATE_RECORD_FIELD action when its table changes
+  useEffect(() => {
+    if (!updateFieldTableId) {
+      setUpdateFieldColumns([]);
+      return;
+    }
+    const numId = Number(updateFieldTableId);
+    if (columnsCache.current[numId]) {
+      setUpdateFieldColumns(columnsCache.current[numId]);
+      return;
+    }
+    setLoadingUpdateFieldColumns(true);
+    getTableById(numId)
+      .then((res) => {
+        if (res.success && res.data && res.data.schemaJson) {
+          const schema = res.data.schemaJson as any;
+          let cols: any[] = [];
+          if (Array.isArray(schema)) {
+            cols = schema;
+          } else if (schema && Array.isArray(schema.columns)) {
+            cols = schema.columns;
+          }
+          columnsCache.current[numId] = cols;
+          setUpdateFieldColumns(cols);
+        }
+      })
+      .finally(() => setLoadingUpdateFieldColumns(false));
+  }, [updateFieldTableId]);
 
   // Load files when WhatsApp media is selected (cached — only fetch once)
   useEffect(() => {
@@ -411,11 +445,10 @@ export default function AutomationModal({
         onCreated();
         onClose();
       } else {
-        alert(getFriendlyResultError(result.error, "שגיאה בשמירת האוטומציה"));
+        toast.error(getFriendlyResultError(result.error, "שגיאה בשמירת האוטומציה"));
       }
     } catch (error) {
-      console.error(error);
-      alert("שגיאה בשמירת האוטומציה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }
@@ -454,8 +487,10 @@ export default function AutomationModal({
                 }
               : currentActionType === "UPDATE_RECORD_FIELD"
                 ? {
+                    tableId: updateFieldTableId,
                     columnId: updateFieldColumnId,
                     value: updateFieldValue,
+                    recordId: updateFieldRecordId,
                   }
                 : {};
 
@@ -491,8 +526,10 @@ export default function AutomationModal({
     setTaskDueDays(0);
     setTaskTags([]);
     setTaskTagInput("");
+    setUpdateFieldTableId("");
     setUpdateFieldColumnId("");
     setUpdateFieldValue("");
+    setUpdateFieldRecordId("");
   };
 
   const removeAction = (index: number) => {
@@ -533,8 +570,10 @@ export default function AutomationModal({
       setTaskDueDays(action.config.dueDays || 0);
       setTaskTags(action.config.tags || []);
     } else if (action.type === "UPDATE_RECORD_FIELD") {
+      setUpdateFieldTableId(action.config.tableId || "");
       setUpdateFieldColumnId(action.config.columnId || "");
       setUpdateFieldValue(action.config.value || "");
+      setUpdateFieldRecordId(action.config.recordId || "");
     }
 
     setEditingActionIndex(index);
@@ -607,7 +646,7 @@ export default function AutomationModal({
       return !!taskTitle;
     }
     if (currentActionType === "UPDATE_RECORD_FIELD") {
-      return !!updateFieldColumnId && !!updateFieldValue;
+      return !!updateFieldTableId && !!updateFieldColumnId && !!updateFieldValue && !!updateFieldRecordId;
     }
     if (currentActionType === "CALCULATE_DURATION") return true;
     return false;
@@ -1217,8 +1256,10 @@ export default function AutomationModal({
                 setTaskPriority("low");
                 setTaskAssigneeId("");
                 setTaskTags([]);
+                setUpdateFieldTableId("");
                 setUpdateFieldColumnId("");
                 setUpdateFieldValue("");
+                setUpdateFieldRecordId("");
               }}
               className="text-sm text-gray-500 hover:text-gray-700"
             >
@@ -1886,32 +1927,57 @@ export default function AutomationModal({
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  בחר שדה לעדכון
+                  בחר טבלה
                 </label>
-                {loadingColumns ? (
-                  <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
-                    <Loader2 className="animate-spin" size={16} /> טוען
-                    עמודות...
-                  </div>
-                ) : (
-                  <select
-                    required
-                    value={updateFieldColumnId}
-                    onChange={(e) => {
-                      setUpdateFieldColumnId(e.target.value);
-                      setUpdateFieldValue("");
-                    }}
-                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                  >
-                    <option value="">בחר עמודה...</option>
-                    {columns.map((col: any) => (
-                      <option key={col.id || col.name} value={col.name}>
-                        {col.label || col.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <select
+                  required
+                  value={updateFieldTableId}
+                  onChange={(e) => {
+                    setUpdateFieldTableId(e.target.value);
+                    setUpdateFieldColumnId("");
+                    setUpdateFieldValue("");
+                  }}
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                >
+                  <option value="">בחר טבלה...</option>
+                  {tables.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
               </div>
+
+              {updateFieldTableId && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    בחר שדה לעדכון
+                  </label>
+                  {loadingUpdateFieldColumns ? (
+                    <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                      <Loader2 className="animate-spin" size={16} /> טוען
+                      עמודות...
+                    </div>
+                  ) : (
+                    <select
+                      required
+                      value={updateFieldColumnId}
+                      onChange={(e) => {
+                        setUpdateFieldColumnId(e.target.value);
+                        setUpdateFieldValue("");
+                      }}
+                      className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                    >
+                      <option value="">בחר עמודה...</option>
+                      {updateFieldColumns.map((col: any) => (
+                        <option key={col.id || col.name} value={col.name}>
+                          {col.label || col.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
 
               {updateFieldColumnId && (
                 <div>
@@ -1919,7 +1985,7 @@ export default function AutomationModal({
                     הערך החדש
                   </label>
                   {(() => {
-                    const selectedCol = columns.find(
+                    const selectedCol = updateFieldColumns.find(
                       (c) =>
                         c.id === updateFieldColumnId ||
                         c.name === updateFieldColumnId,
@@ -1964,6 +2030,20 @@ export default function AutomationModal({
                   </p>
                 </div>
               )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  מזהה רשומה
+                </label>
+                <input
+                  required
+                  type="text"
+                  value={updateFieldRecordId}
+                  onChange={(e) => setUpdateFieldRecordId(e.target.value)}
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                  placeholder="הזן את מזהה הרשומה"
+                />
+              </div>
             </div>
           )}
 

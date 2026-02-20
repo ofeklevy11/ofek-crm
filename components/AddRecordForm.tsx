@@ -215,7 +215,10 @@ export default function AddRecordForm({
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to create record");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || err.message || "Failed to create record");
+      }
 
       const newRecord = await res.json();
 
@@ -259,7 +262,6 @@ export default function AddRecordForm({
       setIsOpen(false);
       router.refresh();
     } catch (error) {
-      console.error(error);
       toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);

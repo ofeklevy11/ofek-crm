@@ -2,7 +2,7 @@
 
 import { uploadFiles } from "@/lib/uploadthing";
 import { saveFileMetadata, updateFile } from "@/app/actions/storage";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch, throwResponseError } from "@/lib/api-fetch";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -267,7 +267,6 @@ export default function RecordTable({
         router.refresh();
       }
     } catch (error: any) {
-      console.error("Upload error:", error);
       toast.error(getUserFriendlyError(error));
     } finally {
       e.target.value = ""; // Reset input
@@ -301,7 +300,7 @@ export default function RecordTable({
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to add link");
+      if (!res.ok) await throwResponseError(res, "Failed to add link");
 
       const newAttachment = await res.json();
 
@@ -322,8 +321,7 @@ export default function RecordTable({
       setNewLinkName("");
       setLinkInputRecordId(null);
     } catch (error) {
-      console.error(error);
-      alert("שגיאה בהוספת הלינק");
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -346,7 +344,7 @@ export default function RecordTable({
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to update link");
+      if (!res.ok) await throwResponseError(res, "Failed to update link");
 
       const updatedAttachment = await res.json();
 
@@ -369,8 +367,7 @@ export default function RecordTable({
       setEditLinkUrl("");
       setEditLinkName("");
     } catch (error) {
-      console.error(error);
-      alert("שגיאה בעדכון הלינק");
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -398,8 +395,7 @@ export default function RecordTable({
       setEditingFileId(null);
       setEditFileName("");
     } catch (error) {
-      console.error(error);
-      alert("שגיאה בעדכון שם הקובץ");
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -702,7 +698,6 @@ export default function RecordTable({
       setRecords((prev) => prev.filter((r) => !selectedIdSet.has(r.id)));
       setSelectedIds([]);
     } catch (error: any) {
-      console.error(error);
       toast.error(getUserFriendlyError(error));
     } finally {
       setIsDeleting(false);
@@ -724,7 +719,7 @@ export default function RecordTable({
         method: "DELETE",
       });
 
-      if (!res.ok) throw new Error("Failed to delete attachment");
+      if (!res.ok) await throwResponseError(res, "Failed to delete attachment");
 
       setRecords((prevRecords) =>
         prevRecords.map((r) => {
@@ -740,8 +735,7 @@ export default function RecordTable({
         }),
       );
     } catch (error) {
-      console.error(error);
-      alert("שגיאה במחיקת לינק");
+      toast.error(getUserFriendlyError(error));
     }
   };
 

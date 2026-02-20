@@ -41,6 +41,8 @@ import { getAllFiles } from "@/app/actions/storage";
 import { getTableById } from "@/app/actions/tables";
 import { deleteStage, updateStage, getWorkflowStagesDetails } from "@/app/actions/workflows";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import * as LucideIcons from "lucide-react";
 
 interface StageDetailModalProps {
@@ -1875,8 +1877,7 @@ export function StageDetailModal({
       setIsEditing(false);
       onClose();
     } catch (error) {
-      console.error("Failed to save stage:", error);
-      alert("שגיאה בשמירת השינויים");
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -1894,8 +1895,7 @@ export function StageDetailModal({
 
         onClose();
       } catch (error) {
-        console.error("Failed to delete stage:", error);
-        alert("שגיאה במחיקת השלב");
+        toast.error(getUserFriendlyError(error));
       }
     }
   };

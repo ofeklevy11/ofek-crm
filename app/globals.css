@@ -192,3 +192,8 @@
 .scrollbar-top::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(90deg, #3b82f6, #9333ea);
 }
+
+/* Ensure Radix popper dropdowns render above modal overlays (z-50) */
+[data-radix-popper-content-wrapper] {
+  z-index: 60 !important;
+}

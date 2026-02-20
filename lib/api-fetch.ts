@@ -11,3 +11,9 @@ export async function apiFetch(
   headers.set("X-Requested-With", "XMLHttpRequest");
   return fetch(url, { ...init, headers });
 }
+
+/** Read error from a non-ok Response and throw with the server message. */
+export async function throwResponseError(res: Response, fallback: string): Promise<never> {
+  const body = await res.json().catch(() => ({}));
+  throw new Error(body.error || body.message || fallback);
+}

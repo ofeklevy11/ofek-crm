@@ -16,6 +16,8 @@ import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Save, ArrowUp, ArrowDown, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-fetch";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import {
   SelectOptionsEditor,
   SelectOption,
@@ -142,12 +144,18 @@ export default function EditTableModal({
       setCategoryId(table.categoryId || null);
 
       // Parse schema
-      const schema = table.schemaJson as any[];
+      let schema: any[] = [];
+      if (Array.isArray(table.schemaJson)) {
+        schema = table.schemaJson;
+      } else if (typeof table.schemaJson === "string") {
+        try { schema = JSON.parse(table.schemaJson); } catch { schema = []; }
+      }
+      if (!Array.isArray(schema)) schema = [];
       const parsedFields = schema.map((field) => ({
         name: field.name,
         type: field.type,
         label: field.label,
-        options: field.options ? field.options.join(", ") : "",
+        options: Array.isArray(field.options) ? field.options.join(", ") : "",
         selectOptions: parseOptionsWithColors(
           field.options,
           field.optionColors,
@@ -176,8 +184,7 @@ export default function EditTableModal({
         setTabs([]);
       }
     } catch (error) {
-      console.error(error);
-      alert("שגיאה בטעינת נתוני טבלה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoadingData(false);
     }
@@ -324,8 +331,7 @@ export default function EditTableModal({
       router.refresh();
       onClose();
     } catch (error) {
-      console.error(error);
-      alert("שגיאה בעדכון טבלה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }

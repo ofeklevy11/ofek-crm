@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createAutomationRule } from "@/app/actions/automations";
 import { useAIJob } from "@/hooks/use-ai-job";
@@ -52,6 +52,7 @@ export default function AIAutomationCreator({
   const [suggestions, setSuggestions] = useState<AutomationSchema[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [showManualWizard, setShowManualWizard] = useState(false);
+  const [rateLimitError, setRateLimitError] = useState(false);
   const { dispatch, cancel } = useAIJob();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -137,6 +138,10 @@ export default function AIAutomationCreator({
       }
       console.error(error);
       const isRateLimited = error?.message === "RATE_LIMITED" || error?.message?.includes("Rate limit");
+      if (isRateLimited) {
+        setRateLimitError(true);
+        setTimeout(() => setRateLimitError(false), 10000);
+      }
       setMessages((prev) => [
         ...prev,
         { role: "model", content: isRateLimited
@@ -179,6 +184,10 @@ export default function AIAutomationCreator({
       }
       console.error(error);
       const isRateLimited = error?.message === "RATE_LIMITED" || error?.message?.includes("Rate limit");
+      if (isRateLimited) {
+        setRateLimitError(true);
+        setTimeout(() => setRateLimitError(false), 10000);
+      }
       setMessages((prev) => [
         ...prev,
         { role: "model", content: isRateLimited
@@ -220,6 +229,26 @@ export default function AIAutomationCreator({
       setCreating(false);
     }
   };
+
+  const quickSuggestions = useMemo(() => {
+    const items: string[] = [];
+    tables.forEach((table) => {
+      const columns: any[] = Array.isArray(table.schemaJson) ? table.schemaJson : [];
+      const statusCol = columns.find(
+        (c: any) => c.name?.toLowerCase().includes("status") || c.type === "select"
+      );
+      if (statusCol) {
+        items.push(
+          `שלח התראה כש${statusCol.label || statusCol.name} בטבלת ${table.name} משתנה`
+        );
+      }
+      items.push(`התראה על יצירת רשומה חדשה ב${table.name}`);
+    });
+    if (items.length < 2) {
+      items.push("צור משימה למנהל כשעסקה חדשה נסגרת");
+    }
+    return items.sort(() => 0.5 - Math.random()).slice(0, 4);
+  }, [tables]);
 
   if (!isOpen) return null;
 
@@ -314,25 +343,7 @@ export default function AIAutomationCreator({
 
                 {/* Quick text suggestions */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {(() => {
-                    const quickSuggestions: string[] = [];
-                    tables.forEach((table) => {
-                      const columns: any[] = Array.isArray(table.schemaJson) ? table.schemaJson : [];
-                      const statusCol = columns.find(
-                        (c: any) => c.name?.toLowerCase().includes("status") || c.type === "select"
-                      );
-                      if (statusCol) {
-                        quickSuggestions.push(
-                          `שלח התראה כש${statusCol.label || statusCol.name} בטבלת ${table.name} משתנה`
-                        );
-                      }
-                      quickSuggestions.push(`התראה על יצירת רשומה חדשה ב${table.name}`);
-                    });
-                    if (quickSuggestions.length < 2) {
-                      quickSuggestions.push("צור משימה למנהל כשעסקה חדשה נסגרת");
-                    }
-                    return quickSuggestions.sort(() => 0.5 - Math.random()).slice(0, 4);
-                  })().map((s, i) => (
+                  {quickSuggestions.map((s, i) => (
                     <button
                       key={i}
                       onClick={() => handleSend(s)}
@@ -346,6 +357,17 @@ export default function AIAutomationCreator({
             )}
             <div ref={messagesEndRef} />
           </div>
+
+          {rateLimitError && (
+            <div className="mx-6 mb-2 bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl flex items-center gap-3 animate-in fade-in">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <p className="text-sm">יותר מדי בקשות. אנא נסה שוב בעוד 2 דקות והנתונים יוצגו.</p>
+            </div>
+          )}
 
           <div className="p-4 bg-white border-t border-gray-100">
             <div className="relative">

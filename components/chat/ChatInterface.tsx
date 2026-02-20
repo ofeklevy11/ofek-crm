@@ -14,6 +14,8 @@ import {
   getUnreadCounts,
 } from "@/app/actions/chat";
 import { useRealtime } from "@/hooks/use-realtime";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 type User = {
   id: number;
@@ -93,7 +95,7 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
         setGroups(groupsData as unknown as Group[]);
         setUnreadCounts(unreadData);
       } catch (error) {
-        console.error("Failed to fetch data:", error);
+        toast.error(getUserFriendlyError(error));
       } finally {
         setLoading(false);
       }
@@ -164,7 +166,7 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
         const unreadData = await getUnreadCounts();
         setUnreadCounts(unreadData);
       } catch (error) {
-        console.error("Failed to fetch messages:", error);
+        toast.error(getUserFriendlyError(error));
       } finally {
         setLoadingMessages(false);
       }
@@ -196,7 +198,7 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
       }
       setNewMessage("");
     } catch (error) {
-      console.error("Failed to send message:", error);
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -218,8 +220,7 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
       // Switch to group view
       setActiveTab("groups");
     } catch (error) {
-      console.error("Failed to create group:", error);
-      alert("שגיאה ביצירת הקבוצה");
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -246,8 +247,7 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
 
       setIsEditGroupModalOpen(false);
     } catch (error) {
-      console.error("Failed to update group:", error);
-      alert("שגיאה בעדכון הקבוצה");
+      toast.error(getUserFriendlyError(error));
     }
   };
 

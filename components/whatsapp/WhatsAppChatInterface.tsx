@@ -9,6 +9,8 @@ import {
 } from "@/app/actions/whatsapp";
 import { useRealtime } from "@/hooks/use-realtime";
 import { MessageSquare } from "lucide-react";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface Conversation {
   id: number;
@@ -72,7 +74,7 @@ export default function WhatsAppChatInterface({
       setConversations(convs as Conversation[]);
       setCompanyUsers(users);
     } catch (error) {
-      console.error("Failed to fetch WhatsApp data:", error);
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }

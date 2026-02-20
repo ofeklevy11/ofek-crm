@@ -22,6 +22,8 @@ import {
   ACTION_ICONS,
   TIER_ACTION_LIMITS,
   SELECTABLE_ACTION_TYPES,
+  TRIGGER_FIELD_CONFIGS,
+  ACTION_FIELD_CONFIGS,
 } from "./field-configs";
 
 interface AutomationFlowPreviewProps {
@@ -55,6 +57,11 @@ export default function AutomationFlowPreview({
 
   const steps = useMemo(() => schemaToSteps(schema), [schema]);
 
+  const triggerTableId = useMemo(() => {
+    const trigger = steps.find((s) => s.kind === "trigger");
+    return trigger?.config?.tableId ? Number(trigger.config.tableId) : undefined;
+  }, [steps]);
+
   const actionCount = steps.filter((s) => s.kind === "action").length;
   const maxActions = TIER_ACTION_LIMITS[userPlan ?? "basic"] ?? 2;
   const canAddAction = actionCount < maxActions;
@@ -71,7 +78,17 @@ export default function AutomationFlowPreview({
   const handleFieldChange = (stepId: string, fieldKey: string, value: any) => {
     const updatedSteps = steps.map((s) => {
       if (s.id !== stepId) return s;
-      return { ...s, config: setNestedValue(s.config, fieldKey, value) };
+      let newConfig = setNestedValue(s.config, fieldKey, value);
+      if (fieldKey === "tableId") {
+        const cfgs = s.kind === "trigger" ? TRIGGER_FIELD_CONFIGS : ACTION_FIELD_CONFIGS;
+        const fields = cfgs[s.type] || [];
+        for (const f of fields) {
+          if (f.inputType === "column-select" || f.inputType === "column-value") {
+            newConfig = setNestedValue(newConfig, f.key, "");
+          }
+        }
+      }
+      return { ...s, config: newConfig };
     });
     rebuildSchema(updatedSteps);
   };
@@ -104,9 +121,7 @@ export default function AutomationFlowPreview({
     setAddActionOpen(false);
   };
 
-  const typeBadge = schema.triggerType === "MULTI_EVENT_DURATION"
-    ? { label: "מרובה אירועים", color: "bg-orange-100 text-orange-600" }
-    : schema.actionType === "MULTI_ACTION"
+  const typeBadge = schema.actionType === "MULTI_ACTION"
     ? { label: "פעולות מרובות", color: "bg-purple-100 text-purple-600" }
     : { label: "רגילה", color: "bg-blue-100 text-blue-600" };
 
@@ -182,6 +197,7 @@ export default function AutomationFlowPreview({
                 onTypeChange={handleTypeChange}
                 onRemove={handleRemoveStep}
                 canRemove={step.kind === "action" && actionCount > 1}
+                triggerTableId={triggerTableId}
               />
             </div>
           ))}

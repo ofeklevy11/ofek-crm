@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { useState, useMemo } from "react";
+import { ChevronDown, ChevronUp, Trash2, Plus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -55,6 +55,7 @@ interface FlowStepCardProps {
   onTypeChange?: (stepId: string, newType: string) => void;
   onRemove?: (stepId: string) => void;
   canRemove?: boolean;
+  triggerTableId?: number;
 }
 
 export default function FlowStepCard({
@@ -66,6 +67,7 @@ export default function FlowStepCard({
   onTypeChange,
   onRemove,
   canRemove,
+  triggerTableId,
 }: FlowStepCardProps) {
   const [expanded, setExpanded] = useState(true);
   const [typePickerOpen, setTypePickerOpen] = useState(false);
@@ -82,18 +84,19 @@ export default function FlowStepCard({
   const typeLabel = labels[step.type] || step.type;
   const fields = fieldConfigs[step.type] || [];
 
-  // Find the tableId for column-select fields
+  // Find the tableId for column-select fields (fall back to trigger's tableId)
   const resolveTableId = (): number | undefined => {
     if (step.config.tableId) return Number(step.config.tableId);
+    if (triggerTableId) return triggerTableId;
     return undefined;
   };
 
-  const getColumnOptions = (): { value: string; label: string }[] => {
+  const getColumnOptions = (columnIdKey = "columnId"): { value: string; label: string }[] => {
     const tableId = resolveTableId();
     if (!tableId) return [];
     const table = tables.find((t) => t.id === tableId);
     if (!table || !Array.isArray(table.schemaJson)) return [];
-    const columnId = step.config.columnId;
+    const columnId = step.config[columnIdKey];
     if (!columnId) return [];
     const column = table.schemaJson.find(
       (col: any) => (col.name || col.id) === columnId
@@ -163,7 +166,7 @@ export default function FlowStepCard({
             <SelectTrigger className="h-8 text-sm">
               <SelectValue placeholder="בחר..." />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper">
               {field.options?.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
@@ -182,7 +185,7 @@ export default function FlowStepCard({
             <SelectTrigger className="h-8 text-sm">
               <SelectValue placeholder="בחר משתמש..." />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper">
               {users.map((u) => (
                 <SelectItem key={u.id} value={String(u.id)}>
                   {u.name}
@@ -201,7 +204,7 @@ export default function FlowStepCard({
             <SelectTrigger className="h-8 text-sm">
               <SelectValue placeholder="בחר טבלה..." />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper">
               {tables.map((t) => (
                 <SelectItem key={t.id} value={String(t.id)}>
                   {t.name}
@@ -233,7 +236,7 @@ export default function FlowStepCard({
             <SelectTrigger className="h-8 text-sm">
               <SelectValue placeholder="בחר עמודה..." />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper">
               {columns.map((col: { value: string; label: string }) => (
                 <SelectItem key={col.value} value={col.value}>
                   {col.label}
@@ -245,7 +248,12 @@ export default function FlowStepCard({
       }
 
       case "column-value": {
-        const columnOpts = getColumnOptions();
+        const colKey = field.columnIdKey || "columnId";
+        // Don't render value field until a column is selected
+        if (!step.config[colKey]) {
+          return <p className="text-xs text-gray-400">יש לבחור עמודה תחילה</p>;
+        }
+        const columnOpts = getColumnOptions(colKey);
         if (columnOpts.length === 0) {
           return (
             <Input
@@ -265,7 +273,7 @@ export default function FlowStepCard({
             <SelectTrigger className="h-8 text-sm">
               <SelectValue placeholder={field.placeholder || "בחר ערך..."} />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper">
               {field.optional && (
                 <SelectItem value="__empty__">כל ערך</SelectItem>
               )}
@@ -319,7 +327,12 @@ export default function FlowStepCard({
 
             {/* Mode-specific input */}
             {mode === "column" && (
-              columns.length > 0 ? (
+              !tableId ? (
+                <p className="text-sm text-gray-500 bg-gray-50 p-3 rounded border border-gray-200">
+                  באוטומציה זו, לא ניתן לבחור עמודה דינמית כי אין טבלה משויכת לטריגר.
+                  נא להשתמש במספר ידני או לשנות סוג אוטומציה.
+                </p>
+              ) : columns.length > 0 ? (
                 <Select
                   value={value != null ? String(value) : ""}
                   onValueChange={(v) => onFieldChange(step.id, field.key, v)}
@@ -327,7 +340,7 @@ export default function FlowStepCard({
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue placeholder="בחר עמודה..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper">
                     {columns.map((col: { value: string; label: string }) => (
                       <SelectItem key={col.value} value={col.value}>
                         {col.label}
@@ -386,6 +399,15 @@ export default function FlowStepCard({
     }
   };
 
+  // Split fields into normal vs collapsible groups
+  const normalFields = useMemo(() => fields.filter(f => !f.collapsible), [fields]);
+  const collapsibleFields = useMemo(() => fields.filter(f => f.collapsible), [fields]);
+  const hasCollapsibleValues = collapsibleFields.some(
+    f => getNestedValue(step.config, f.key)
+  );
+
+  const [conditionOpen, setConditionOpen] = useState(hasCollapsibleValues);
+
   // For types with no field configs (MULTI_EVENT_DURATION, CALCULATE_MULTI_EVENT_DURATION),
   // show a read-only JSON preview
   const showJsonFallback = fields.length === 0 && Object.keys(step.config).length > 0;
@@ -433,15 +455,16 @@ export default function FlowStepCard({
         {Icon && <Icon className="w-4 h-4 text-gray-600 shrink-0" />}
 
         {/* Type label — clickable popover for type change */}
-        <div className="flex-1 text-sm font-medium text-gray-800">
-          <span className="text-xs text-gray-400 ml-2">
+        <div className="flex-1 flex flex-col gap-1">
+          <span className="text-xs text-gray-400 mr-1">
             {isTrigger ? "טריגר" : "פעולה"}
           </span>
           {onTypeChange ? (
             <Popover open={typePickerOpen} onOpenChange={setTypePickerOpen}>
               <PopoverTrigger asChild>
-                <button className="hover:text-purple-600 hover:underline underline-offset-2 transition">
+                <button className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-800 hover:border-purple-400 hover:bg-purple-50 transition shadow-sm">
                   {typeLabel}
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-56 p-2 max-h-64 overflow-y-auto" align="start">
@@ -473,7 +496,9 @@ export default function FlowStepCard({
               </PopoverContent>
             </Popover>
           ) : (
-            typeLabel
+            <span className="inline-flex items-center px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-800">
+              {typeLabel}
+            </span>
           )}
         </div>
       </div>
@@ -481,12 +506,50 @@ export default function FlowStepCard({
       {/* Body */}
       {expanded && (
         <div className="px-4 py-3 border-t border-gray-100 space-y-3">
-          {fields.map((field) => (
+          {normalFields.map((field) => (
             <div key={field.key} className="space-y-1">
               <Label className="text-xs text-gray-500">{field.label}</Label>
               {renderField(field)}
             </div>
           ))}
+
+          {/* Collapsible condition fields */}
+          {collapsibleFields.length > 0 && (
+            <>
+              {conditionOpen ? (
+                <div className="space-y-3 border border-dashed border-gray-200 rounded-lg p-3 bg-gray-50/50">
+                  {collapsibleFields.map((field) => (
+                    <div key={field.key} className="space-y-1">
+                      <Label className="text-xs text-gray-500">{field.label}</Label>
+                      {renderField(field)}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      for (const f of collapsibleFields) {
+                        onFieldChange(step.id, f.key, "");
+                      }
+                      setConditionOpen(false);
+                    }}
+                    className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 transition"
+                  >
+                    <X className="w-3 h-3" />
+                    הסר תנאי
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConditionOpen(true)}
+                  className="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 transition"
+                >
+                  <Plus className="w-3 h-3" />
+                  הוסף תנאי
+                </button>
+              )}
+            </>
+          )}
 
           {showJsonFallback && (
             <div className="space-y-1">
@@ -503,7 +566,16 @@ export default function FlowStepCard({
           )}
 
           {fields.length === 0 && !showJsonFallback && (
-            <p className="text-xs text-gray-400">אין שדות לעריכה</p>
+            step.type === "CALCULATE_DURATION" ? (
+              <div className="rounded-lg border border-teal-200 bg-teal-50 p-3 space-y-1">
+                <p className="text-sm font-semibold text-teal-800">איך זה עובד?</p>
+                <p className="text-xs text-teal-700 leading-relaxed">
+                  המערכת תחשב אוטומטית את הזמן שעבר בין השינוי האחרון לשינוי הנוכחי ותשמור אותו בדוח ביצועים. אין צורך בהגדרות נוספות.
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400">אין שדות לעריכה</p>
+            )
           )}
         </div>
       )}

@@ -23,7 +23,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getFriendlyResultError } from "@/lib/errors";
+import { getFriendlyResultError, getUserFriendlyError } from "@/lib/errors";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1370,11 +1371,10 @@ export default function BirthdayAutomationPage() {
                         setEditingRule(null);
                         refreshData();
                       } else {
-                        alert("שגיאה בעדכון האוטומציה: " + result.error);
+                        toast.error(getFriendlyResultError(result.error, "שגיאה בעדכון האוטומציה"));
                       }
                     } catch (error) {
-                      console.error(error);
-                      alert("שגיאה לא צפויה");
+                      toast.error(getUserFriendlyError(error));
                     } finally {
                       setIsSaving(false);
                     }

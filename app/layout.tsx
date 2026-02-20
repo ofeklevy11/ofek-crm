@@ -3,6 +3,7 @@ import { Rubik } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import MobileFeatureDisclaimer from "@/components/MobileFeatureDisclaimer";
 
 const rubik = Rubik({
@@ -30,6 +31,7 @@ export default function RootLayout({
         <Navbar />
         <main>{children}</main>
         <Toaster />
+        <SonnerToaster />
       </body>
     </html>
   );

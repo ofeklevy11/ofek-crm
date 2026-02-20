@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch, throwResponseError } from "@/lib/api-fetch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { TabsConfig, SchemaFieldWithTab } from "@/lib/types/table-tabs";
 import { getFieldsForTab } from "@/lib/types/table-tabs";
@@ -284,7 +284,6 @@ export default function EditRecordModal({
         router.refresh();
       }
     } catch (error: any) {
-      console.error("Upload error:", error);
       toast.error(getUserFriendlyError(error));
     } finally {
       setUploading(false);
@@ -300,8 +299,7 @@ export default function EditRecordModal({
       setFiles((prev) => prev.filter((f) => f.id !== fileId));
       router.refresh();
     } catch (err) {
-      console.error("Delete file error", err);
-      alert("שגיאה במחיקת הקובץ");
+      toast.error(getUserFriendlyError(err));
     }
   };
 
@@ -331,14 +329,13 @@ export default function EditRecordModal({
           displayName: newAttachmentName.trim() || null,
         }),
       });
-      if (res.ok) {
-        setNewAttachmentUrl("");
-        setNewAttachmentName("");
-        fetchRecordData(); // re-fetch attachments
-        router.refresh();
-      }
+      if (!res.ok) await throwResponseError(res, "Failed to add attachment");
+      setNewAttachmentUrl("");
+      setNewAttachmentName("");
+      fetchRecordData(); // re-fetch attachments
+      router.refresh();
     } catch (error) {
-      console.error("Failed to add attachment", error);
+      toast.error(getUserFriendlyError(error));
     } finally {
       setUploading(false);
     }
@@ -363,19 +360,17 @@ export default function EditRecordModal({
         }),
       });
 
-      if (res.ok) {
-        const updatedAttachment = await res.json();
-        setAttachments((prev) =>
-          prev.map((a) => (a.id === attachmentId ? updatedAttachment : a)),
-        );
-        setEditingLinkId(null);
-        setEditLinkUrl("");
-        setEditLinkName("");
-        router.refresh();
-      }
+      if (!res.ok) await throwResponseError(res, "Failed to update link");
+      const updatedAttachment = await res.json();
+      setAttachments((prev) =>
+        prev.map((a) => (a.id === attachmentId ? updatedAttachment : a)),
+      );
+      setEditingLinkId(null);
+      setEditLinkUrl("");
+      setEditLinkName("");
+      router.refresh();
     } catch (error) {
-      console.error("Failed to update attachment", error);
-      alert("שגיאה בעדכון הלינק");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setUploading(false);
     }
@@ -387,15 +382,11 @@ export default function EditRecordModal({
       const res = await apiFetch(`/api/attachments/${attachmentId}`, {
         method: "DELETE",
       });
-      if (res.ok) {
-        setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
-        router.refresh();
-      } else {
-        throw new Error("Failed to delete attachment");
-      }
+      if (!res.ok) await throwResponseError(res, "Failed to delete attachment");
+      setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+      router.refresh();
     } catch (error) {
-      console.error(error);
-      alert("שגיאה במחיקת לינק");
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -410,22 +401,20 @@ export default function EditRecordModal({
         }),
       });
 
-      if (res.ok) {
-        const updatedFile = await res.json();
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.id === fileId
-              ? { ...f, displayName: updatedFile.displayName }
-              : f,
-          ),
-        );
-        setEditingFileId(null);
-        setEditFileName("");
-        router.refresh();
-      }
+      if (!res.ok) await throwResponseError(res, "Failed to update file");
+      const updatedFile = await res.json();
+      setFiles((prev) =>
+        prev.map((f) =>
+          f.id === fileId
+            ? { ...f, displayName: updatedFile.displayName }
+            : f,
+        ),
+      );
+      setEditingFileId(null);
+      setEditFileName("");
+      router.refresh();
     } catch (error) {
-      console.error("Failed to update file", error);
-      alert("שגיאה בעדכון שם הקובץ");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setUploading(false);
     }
@@ -458,13 +447,12 @@ export default function EditRecordModal({
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to update record");
+      if (!res.ok) await throwResponseError(res, "Failed to update record");
 
       router.refresh();
       handleClose();
     } catch (error) {
-      console.error(error);
-      alert("שגיאה בעדכון הרשומה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }

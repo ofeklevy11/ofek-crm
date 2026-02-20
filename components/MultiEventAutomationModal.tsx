@@ -25,6 +25,8 @@ import {
   Loader2,
   Pencil,
 } from "lucide-react";
+import { toast } from "sonner";
+import { getUserFriendlyError, getFriendlyResultError } from "@/lib/errors";
 
 interface MultiEventAutomationModalProps {
   tables: { id: number; name: string }[];
@@ -206,15 +208,15 @@ export default function MultiEventAutomationModal({
     setLoadingSchemas((prev) => ({ ...prev, [tid]: true }));
     try {
       const result = await getTableById(Number(tid));
-      if (
-        result.success &&
-        result.data &&
-        Array.isArray(result.data.schemaJson)
-      ) {
-        setSchemas((prev) => ({
-          ...prev,
-          [tid]: result.data.schemaJson as any,
-        }));
+      if (result.success && result.data && result.data.schemaJson) {
+        const schema = result.data.schemaJson as any;
+        let cols: SchemaField[] = [];
+        if (Array.isArray(schema)) {
+          cols = schema;
+        } else if (schema && Array.isArray(schema.columns)) {
+          cols = schema.columns;
+        }
+        setSchemas((prev) => ({ ...prev, [tid]: cols }));
       } else {
         setSchemas((prev) => ({ ...prev, [tid]: [] }));
       }
@@ -620,11 +622,10 @@ export default function MultiEventAutomationModal({
         onCreated();
         onClose();
       } else {
-        alert("שגיאה בשמירת האוטומציה");
+        toast.error(getFriendlyResultError(result.error, "שגיאה בשמירת האוטומציה"));
       }
     } catch (error) {
-      console.error(error);
-      alert("שגיאה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }

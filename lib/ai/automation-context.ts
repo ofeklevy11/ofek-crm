@@ -7,6 +7,7 @@ export interface AutomationRawContext {
   userIds: Set<number>;
   fieldIdsByTable: Map<number, Set<string>>;
   fieldNameToId: Map<number, Map<string, string>>;
+  fieldOptionsByTable: Map<number, Map<string, string[]>>;
   nurtureListSlugs: Set<string>;
 }
 
@@ -31,6 +32,7 @@ export interface SerializedRawContext {
   userIds: number[];
   fieldIdsByTable: Record<number, string[]>;
   fieldNameToId: Record<number, Record<string, string>>;
+  fieldOptionsByTable: Record<number, Record<string, string[]>>;
   nurtureListSlugs: string[];
 }
 
@@ -137,21 +139,27 @@ export async function buildAutomationContext(companyId: number): Promise<Automat
   const userIds = new Set<number>(users.map((u) => u.id));
   const fieldIdsByTable = new Map<number, Set<string>>();
   const fieldNameToId = new Map<number, Map<string, string>>();
+  const fieldOptionsByTable = new Map<number, Map<string, string[]>>();
   const nurtureListSlugs = new Set<string>(nurtureLists.map((n) => n.slug));
 
   for (const table of tables) {
     const fields = parseSchemaFields(table.schemaJson);
     const idSet = new Set<string>();
     const nameMap = new Map<string, string>();
+    const optionsMap = new Map<string, string[]>();
     for (const f of fields) {
       if (f.id) {
         idSet.add(f.id);
         if (f.name) nameMap.set(f.name.toLowerCase(), f.id);
         if (f.label) nameMap.set(f.label.toLowerCase(), f.id);
+        if (f.options && f.options.length > 0) {
+          optionsMap.set(f.id, f.options);
+        }
       }
     }
     fieldIdsByTable.set(table.id, idSet);
     fieldNameToId.set(table.id, nameMap);
+    fieldOptionsByTable.set(table.id, optionsMap);
   }
 
   const _raw: AutomationRawContext = {
@@ -159,6 +167,7 @@ export async function buildAutomationContext(companyId: number): Promise<Automat
     userIds,
     fieldIdsByTable,
     fieldNameToId,
+    fieldOptionsByTable,
     nurtureListSlugs,
   };
 
@@ -202,11 +211,16 @@ export function serializeRawContext(raw: AutomationRawContext): SerializedRawCon
   for (const [tableId, nameMap] of raw.fieldNameToId) {
     fieldNameToId[tableId] = Object.fromEntries(nameMap);
   }
+  const fieldOptionsByTable: Record<number, Record<string, string[]>> = {};
+  for (const [tableId, optionsMap] of raw.fieldOptionsByTable) {
+    fieldOptionsByTable[tableId] = Object.fromEntries(optionsMap);
+  }
   return {
     tableIds: [...raw.tableIds],
     userIds: [...raw.userIds],
     fieldIdsByTable,
     fieldNameToId,
+    fieldOptionsByTable,
     nurtureListSlugs: [...raw.nurtureListSlugs],
   };
 }
@@ -220,11 +234,18 @@ export function deserializeRawContext(s: SerializedRawContext): AutomationRawCon
   for (const [tableId, nameMap] of Object.entries(s.fieldNameToId)) {
     fieldNameToId.set(Number(tableId), new Map(Object.entries(nameMap)));
   }
+  const fieldOptionsByTable = new Map<number, Map<string, string[]>>();
+  if (s.fieldOptionsByTable) {
+    for (const [tableId, optionsObj] of Object.entries(s.fieldOptionsByTable)) {
+      fieldOptionsByTable.set(Number(tableId), new Map(Object.entries(optionsObj)));
+    }
+  }
   return {
     tableIds: new Set(s.tableIds),
     userIds: new Set(s.userIds),
     fieldIdsByTable,
     fieldNameToId,
+    fieldOptionsByTable,
     nurtureListSlugs: new Set(s.nurtureListSlugs),
   };
 }

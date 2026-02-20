@@ -59,6 +59,7 @@ export default function ImportRecordsModal({
   const [confirmationText, setConfirmationText] = useState("");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [isRateLimited, setIsRateLimited] = useState(false);
   const [importJobId, setImportJobId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -171,7 +172,9 @@ export default function ImportRecordsModal({
     } catch (err: any) {
       if (validationInterval) clearInterval(validationInterval);
       console.error("Validation flow error:", err);
-      setError(getUserFriendlyError(err));
+      const msg = getUserFriendlyError(err);
+      setIsRateLimited(/מדי (בקשות|פניות|ניסיונות)/i.test(msg));
+      setError(msg);
       setStep("UPLOAD");
       setProgress(0);
     } finally {
@@ -306,6 +309,7 @@ export default function ImportRecordsModal({
     setConfirmationText("");
     setStep("UPLOAD");
     setError(null);
+    setIsRateLimited(false);
     setImportJobId(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -415,13 +419,21 @@ export default function ImportRecordsModal({
                 </p>
               </div>
 
-              {error && (
+              {error && isRateLimited ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-red-900 mb-1">יותר מדי בקשות</p>
+                    <p className="text-sm text-red-800">אנא נסה שוב בעוד 2 דקות והנתונים יוצגו.</p>
+                  </div>
+                </div>
+              ) : error ? (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>שגיאה</AlertTitle>
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
-              )}
+              ) : null}
 
               <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-700 space-y-2">
                 <p className="font-semibold flex items-center gap-2">
@@ -548,13 +560,21 @@ export default function ImportRecordsModal({
                 </Alert>
               )}
 
-              {error && (
+              {error && isRateLimited ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-red-900 mb-1">יותר מדי בקשות</p>
+                    <p className="text-sm text-red-800">אנא נסה שוב בעוד 2 דקות והנתונים יוצגו.</p>
+                  </div>
+                </div>
+              ) : error ? (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>שגיאה בשמירה</AlertTitle>
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
-              )}
+              ) : null}
             </div>
           )}
 

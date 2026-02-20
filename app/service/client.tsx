@@ -18,6 +18,10 @@ import {
   User as UserIcon,
   Calendar,
   Settings,
+} from "lucide-react";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
+import {
   Trash2,
   GripVertical,
   AlertTriangle,
@@ -150,7 +154,7 @@ export default function ServicePageClient({
             t.id === ticketId ? { ...t, status: ticket.status } : t
           )
         );
-        alert("נכשל בעדכון סטטוס הקריאה");
+        toast.error(getUserFriendlyError(error));
       }
     }
   };
@@ -687,8 +691,8 @@ function TicketList({
                   onClick={(e) => {
                     e.stopPropagation();
                     if (confirm("האם אתה בטוח שברצונך למחוק קריאה זו?")) {
-                      deleteTicket(ticket.id).catch(() =>
-                        alert("שגיאה במחיקת הקריאה")
+                      deleteTicket(ticket.id).catch((error) =>
+                        toast.error(getUserFriendlyError(error))
                       );
                     }
                   }}

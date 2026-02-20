@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/popover";
 import { Check, ChevronsUpDown, X, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface RelationPickerProps {
   tableId: number;
@@ -70,7 +72,7 @@ export default function RelationPicker({
         }
       }
     } catch (error) {
-      console.error("Failed to fetch relation records", error);
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }

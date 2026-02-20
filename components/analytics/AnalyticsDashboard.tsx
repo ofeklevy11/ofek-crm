@@ -26,6 +26,7 @@ import {
   Sparkles,
   BarChart2,
   RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
 import AnalyticsDetailsModal from "@/components/AnalyticsDetailsModal";
@@ -973,16 +974,6 @@ export default function AnalyticsDashboard({
                 </button>
               </div>
 
-              <button
-                onClick={() => {
-                  setEditingView(null);
-                  setIsCreateModalOpen(true);
-                }}
-                className="flex items-center justify-center gap-2 w-full px-6 py-3 bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300 rounded-xl shadow-sm transition-all font-semibold text-sm"
-              >
-                <Edit3 size={16} />
-                <span>ערוך את הנליטיקה</span>
-              </button>
             </div>
           )}
         </div>
@@ -1202,6 +1193,18 @@ export default function AnalyticsDashboard({
             </div>
           </div>
         </div>
+
+        {loadError && /rate.?limit/i.test(loadError) && (
+          <div className="bg-gradient-to-l from-red-50 to-orange-50 border border-red-100/80 rounded-xl px-5 py-3.5 mt-3 flex items-start gap-3">
+            <div className="bg-red-100 rounded-lg p-2 shrink-0">
+              <AlertCircle size={16} className="text-red-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-red-900 font-semibold">יותר מדי בקשות</p>
+              <p className="text-xs text-red-700/80 mt-1">אנא נסה שוב בעוד 2 דקות והנתונים יוצגו.</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {loading ? (
