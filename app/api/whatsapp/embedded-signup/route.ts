@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
 
     const tokenData = await tokenRes.json();
     const accessToken: string = tokenData.access_token;
+    log.info("Token exchange succeeded", { hasToken: !!accessToken });
     if (!accessToken) {
       return NextResponse.json(
         { error: "No access token received" },
@@ -105,6 +106,7 @@ export async function POST(req: NextRequest) {
       (s: { scope: string }) => s.scope === "whatsapp_business_management",
     );
     const wabaIds: string[] = wabaScope?.target_ids || [];
+    log.info("debug_token succeeded", { wabaIds });
 
     if (!wabaIds.length) {
       return NextResponse.json(
@@ -159,6 +161,8 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      log.info("Account upserted", { accountId: account.id, wabaId });
+
       // Fetch phone numbers for this WABA
       const phonesRes = await fetch(
         `${GRAPH_API_BASE}/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating`,
@@ -172,6 +176,7 @@ export async function POST(req: NextRequest) {
         const phonesData = await phonesRes.json();
         const phones = phonesData.data || [];
 
+        log.info("Phone numbers fetched", { wabaId, count: phones.length });
         for (const phone of phones) {
           await prisma.whatsAppPhoneNumber.upsert({
             where: { phoneNumberId: phone.id },
@@ -218,6 +223,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    log.info("Embedded signup complete", { totalAccounts: results.length, wabaIds: results.map(r => r.wabaId) });
     return NextResponse.json({ success: true, accounts: results });
   } catch (error) {
     log.error("Embedded signup error", { error: String(error) });

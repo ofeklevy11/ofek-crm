@@ -114,27 +114,67 @@ export async function GET(
     }
   }
 
-  // No cached PDF — the background job was already triggered on create/update.
-  const ageMs = Date.now() - new Date(quote.updatedAt).getTime();
+  // No cached PDF — render inline so the user gets it immediately
+  try {
+    const fullQuote = await prisma.quote.findFirst({
+      where: { id: quote.id, companyId: user.companyId },
+      include: {
+        items: { include: { product: true } },
+        company: true,
+      },
+    });
 
-  // Beyond 5min, the PDF job likely failed — tell the user to re-save
-  if (ageMs > 300_000) {
-    return NextResponse.json(
-      { status: "failed", message: "יצירת ה-PDF נכשלה. יש לערוך ולשמור מחדש את ההצעה כדי ליצור PDF חדש." },
-      { status: 422 },
+    if (!fullQuote) {
+      return new NextResponse("Quote not found", { status: 404 });
+    }
+
+    const serializedQuote = JSON.parse(JSON.stringify(fullQuote));
+
+    const { registerFonts } = await import("@/lib/pdf-fonts");
+    const { renderToStream } = await import("@react-pdf/renderer");
+    const React = await import("react");
+    const { default: QuotePdfTemplate } = await import(
+      "@/components/pdf/QuotePdfTemplate"
     );
-  }
 
-  // Recovery: if quote was updated between 60s and 5min ago, re-trigger once.
-  if (ageMs > 60_000) {
+    registerFonts();
+
+    const stream = await renderToStream(
+      React.createElement(QuotePdfTemplate, { quote: serializedQuote }) as any,
+    );
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(Buffer.from(chunk));
+    }
+    const pdfBuffer = Buffer.concat(chunks);
+
+    // Trigger background job to cache the PDF for future downloads (fire-and-forget)
     inngest.send({
       name: "pdf/generate-quote",
       data: { quoteId: quote.id, companyId: quote.companyId },
-    }).catch((err) => log.error("Recovery PDF trigger failed", { error: String(err) }));
-  }
+    }).catch((err) => log.error("Background cache trigger failed", { error: String(err) }));
 
-  return NextResponse.json(
-    { status: "generating", message: "PDF is being generated in the background" },
-    { status: 202 },
-  );
+    return new NextResponse(pdfBuffer, {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, no-store",
+      },
+    });
+  } catch (err) {
+    log.error("Inline PDF render failed", { error: String(err) });
+
+    // Fallback: return 202 and let the background job handle it
+    inngest.send({
+      name: "pdf/generate-quote",
+      data: { quoteId: quote.id, companyId: quote.companyId },
+    }).catch((e) => log.error("Fallback PDF trigger failed", { error: String(e) }));
+
+    return NextResponse.json(
+      { status: "generating", message: "PDF is being generated in the background" },
+      { status: 202 },
+    );
+  }
 }

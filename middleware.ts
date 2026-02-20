@@ -137,6 +137,10 @@ function addCacheControl(path: string, response: NextResponse): NextResponse {
     !path.startsWith("/api/p/")
   ) {
     response.headers.set("Cache-Control", "no-store");
+  } else if (!path.startsWith("/api/")) {
+    // Prevent browser/CDN from caching page responses so auth state is always fresh
+    response.headers.set("Cache-Control", "private, no-store, must-revalidate");
+    response.headers.set("Vary", "Cookie");
   }
   return response;
 }

@@ -101,6 +101,7 @@ export default function WhatsAppEmbeddedSignup({ nonce }: { nonce: string }) {
 
   const handleAuthCode = async (code: string) => {
     try {
+      console.log("[WhatsApp] Calling /api/whatsapp/embedded-signup with code length:", code.length);
       const res = await fetch("/api/whatsapp/embedded-signup", {
         method: "POST",
         headers: {
@@ -110,9 +111,11 @@ export default function WhatsAppEmbeddedSignup({ nonce }: { nonce: string }) {
         body: JSON.stringify({ code }),
       });
 
+      const data = await res.json().catch(() => ({}));
+      console.log("[WhatsApp] API response:", res.status, data);
+
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Failed to connect");
+        throw new Error(data.error || "Failed to connect");
       }
 
       toast.success("WhatsApp חובר בהצלחה!");
@@ -132,9 +135,24 @@ export default function WhatsAppEmbeddedSignup({ nonce }: { nonce: string }) {
 
     setConnecting(true);
 
+    // Watchdog: if FB.login callback never fires, reset after 60s
+    let callbackFired = false;
+    const watchdog = setTimeout(() => {
+      if (!callbackFired) {
+        console.warn("[WhatsApp] FB.login callback did not fire after 60s");
+        setConnecting(false);
+        toast.error("החיבור לא הושלם — נסה חיבור ידני למטה", { duration: 8000 });
+        setShowManual(true);
+      }
+    }, 60_000);
+
     try {
       window.FB.login(
         (response: any) => {
+          callbackFired = true;
+          clearTimeout(watchdog);
+          console.log("[WhatsApp] FB.login callback:", JSON.stringify(response));
+
           if (response.authResponse?.code) {
             handleAuthCode(response.authResponse.code);
           } else {
@@ -154,6 +172,7 @@ export default function WhatsAppEmbeddedSignup({ nonce }: { nonce: string }) {
         },
       );
     } catch (error: any) {
+      clearTimeout(watchdog);
       toast.error(getUserFriendlyError(error));
       setConnecting(false);
     }

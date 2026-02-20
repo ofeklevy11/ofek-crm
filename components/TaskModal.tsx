@@ -22,7 +22,12 @@ export default function TaskModal({
   const [description, setDescription] = useState(task?.description || "");
   // default due date to today (YYYY-MM-DD)
   const today = new Date().toISOString().split("T")[0];
-  const [dueDate, setDueDate] = useState(task?.dueDate || today);
+  const [dueDate, setDueDate] = useState(() => {
+    if (task?.dueDate) {
+      return new Date(task.dueDate).toISOString().split("T")[0];
+    }
+    return today;
+  });
   // allow user to select status (default to passed prop)
   const [selectedStatus, setSelectedStatus] = useState(task?.status || status);
   // priority selector, default low
@@ -34,6 +39,7 @@ export default function TaskModal({
   );
   const [selectedTags, setSelectedTags] = useState<string[]>(task?.tags || []);
   const [tagInput, setTagInput] = useState("");
+  const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<
     Array<{ id: number; name: string; email: string }>
   >([]);
@@ -103,6 +109,7 @@ export default function TaskModal({
       tags: selectedTags,
     };
 
+    setLoading(true);
     try {
       if (task) {
         // Update existing task
@@ -128,6 +135,8 @@ export default function TaskModal({
     } catch (error) {
       console.error("Error saving task:", error);
       alert("שגיאה בשמירת המשימה");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -291,17 +300,26 @@ export default function TaskModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+              disabled={loading}
+              className="px-4 py-2 text-slate-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               ביטול
             </button>
             <button
               type="submit"
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors shadow-lg shadow-blue-900/20"
+              disabled={loading}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span className="w-4 h-4 font-bold" role="img" aria-label="plus">
-                {task ? "✎" : "+"}
-              </span>
+              {loading ? (
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <span className="w-4 h-4 font-bold" role="img" aria-label="plus">
+                  {task ? "✎" : "+"}
+                </span>
+              )}
               {task ? "עדכן משימה" : "שמור משימה"}
             </button>
           </div>

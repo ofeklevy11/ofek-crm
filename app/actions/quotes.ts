@@ -80,7 +80,7 @@ export async function getQuoteById(id: string) {
     select: {
       id: true, quoteNumber: true, clientId: true, clientName: true, clientEmail: true,
       clientPhone: true, clientTaxId: true, clientAddress: true, total: true, status: true,
-      pdfUrl: true, validUntil: true, createdAt: true, updatedAt: true,
+      pdfUrl: true, shareToken: true, validUntil: true, createdAt: true, updatedAt: true,
       isPriceWithVat: true, title: true, currency: true, exchangeRate: true,
       discountType: true, discountValue: true,
       items: {
