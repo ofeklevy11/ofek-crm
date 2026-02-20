@@ -32,6 +32,7 @@ import AnalyticsDetailsModal from "@/components/AnalyticsDetailsModal";
 import CreateAnalyticsViewModal from "@/components/analytics/CreateAnalyticsViewModal";
 import ViewAutomationModal from "@/components/analytics/ViewAutomationModal";
 import AIAnalyticsCreator from "@/components/analytics/AIAnalyticsCreator";
+import AIReportCreator from "@/components/analytics/AIReportCreator";
 import AnalyticsGraph from "@/components/analytics/AnalyticsGraph";
 import {
   DndContext,
@@ -619,6 +620,7 @@ interface AnalyticsDashboardProps {
   initialFolders: any[];
   initialRefreshUsage: { usage: number; nextResetTime: string | null };
   currentUser: { id: number; canManage: boolean; plan: string };
+  loadError?: string | null;
 }
 
 export default function AnalyticsDashboard({
@@ -626,6 +628,7 @@ export default function AnalyticsDashboard({
   initialFolders,
   initialRefreshUsage,
   currentUser,
+  loadError,
 }: AnalyticsDashboardProps) {
   const router = useRouter();
   const [views, setViews] = useState<any[]>(() =>
@@ -645,6 +648,7 @@ export default function AnalyticsDashboard({
   const [editingView, setEditingView] = useState<any | null>(null);
   const canManage = currentUser.canManage;
   const [isAIMode, setIsAIMode] = useState(false);
+  const [isReportMode, setIsReportMode] = useState(false);
 
   // Automation Modal State
   const [viewAutomationTarget, setViewAutomationTarget] = useState<any>(null);
@@ -930,33 +934,54 @@ export default function AnalyticsDashboard({
           </div>
 
           {!loading && canManage && (
-            <div className="flex items-center gap-3">
-              <Link
-                href="/analytics/graphs"
-                className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-xl shadow-sm transition-all font-medium text-sm"
-              >
-                <BarChart2 size={16} />
-                <span>גרפים</span>
-              </Link>
+            <div className="flex flex-col items-stretch gap-3">
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/analytics/graphs"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-xl shadow-sm transition-all font-medium text-sm"
+                >
+                  <BarChart2 size={16} />
+                  <span>גרפים</span>
+                </Link>
 
-              <button
-                onClick={() => setIsAIMode(true)}
-                disabled={true}
-                className="flex items-center gap-2 px-4 py-2.5 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl shadow-lg shadow-purple-200 transition-all font-medium text-sm opacity-50 cursor-not-allowed"
-              >
-                <Sparkles size={16} />
-                <span>צור עם AI</span>
-              </button>
+                <button
+                  onClick={() => setIsReportMode(true)}
+                  disabled={true}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white rounded-xl shadow-lg shadow-violet-200 transition-all font-medium text-sm cursor-not-allowed opacity-50"
+                >
+                  <Sparkles size={16} />
+                  <span>דוח AI (בקרוב...)</span>
+                </button>
+
+                <button
+                  onClick={() => setIsAIMode(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl shadow-lg shadow-purple-200 transition-all font-medium text-sm"
+                >
+                  <Sparkles size={16} />
+                  <span>צור עם AI</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setEditingView(null);
+                    setIsCreateModalOpen(true);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl shadow-lg shadow-gray-200 transition-all font-medium text-sm"
+                >
+                  <Plus size={16} />
+                  <span>חדש</span>
+                </button>
+              </div>
 
               <button
                 onClick={() => {
                   setEditingView(null);
                   setIsCreateModalOpen(true);
                 }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl shadow-lg shadow-gray-200 transition-all font-medium text-sm"
+                className="flex items-center justify-center gap-2 w-full px-6 py-3 bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300 rounded-xl shadow-sm transition-all font-semibold text-sm"
               >
-                <Plus size={16} />
-                <span>חדש</span>
+                <Edit3 size={16} />
+                <span>ערוך את הנליטיקה</span>
               </button>
             </div>
           )}
@@ -1101,6 +1126,13 @@ export default function AnalyticsDashboard({
           </div>
         )}
 
+        {/* AI Report Creator (full-screen overlay) */}
+        <AIReportCreator
+          isOpen={isReportMode}
+          onClose={() => setIsReportMode(false)}
+          onSuccess={handleAIResults}
+        />
+
         {/* Automations Guide Banner */}
         <div className="bg-gradient-to-l from-amber-50 to-orange-50 border border-amber-100/80 rounded-xl px-5 py-3.5 mt-6 flex items-start gap-3">
           <div className="bg-amber-100 rounded-lg p-2 shrink-0">
@@ -1189,6 +1221,26 @@ export default function AnalyticsDashboard({
             >
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredViews.length === 0 ? (
+                  loadError ? (
+                    <div className="col-span-full py-16 text-center bg-white rounded-2xl border border-red-100">
+                      <div className="bg-red-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <BarChart2 className="text-red-400" size={32} />
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900">
+                        שגיאה בטעינת הנתונים
+                      </h3>
+                      <p className="text-gray-500 mt-1 max-w-sm mx-auto mb-6">
+                        לא הצלחנו לטעון את הנתונים. נסה לרענן את הדף.
+                      </p>
+                      <button
+                        onClick={() => router.refresh()}
+                        className="px-6 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200 inline-flex items-center gap-2"
+                      >
+                        <RefreshCw size={16} />
+                        נסה שוב
+                      </button>
+                    </div>
+                  ) : (
                   <div className="col-span-full py-16 text-center bg-white rounded-2xl border border-dashed border-gray-200">
                     <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                       <BarChart2 className="text-gray-300" size={32} />
@@ -1202,6 +1254,7 @@ export default function AnalyticsDashboard({
                         : "צור תצוגה חדשה או הוסף אוטומציה כדי לראות נתונים כאן"}
                     </p>
                   </div>
+                  )
                 ) : (
                   filteredViews.map((view) => (
                     <AnalyticsCard

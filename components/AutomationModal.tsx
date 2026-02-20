@@ -51,6 +51,13 @@ interface AutomationModalProps {
     actionType: string;
     actionConfig: any;
   } | null;
+  initialSchema?: {
+    name: string;
+    triggerType: string;
+    triggerConfig: any;
+    actionType: string;
+    actionConfig: any;
+  } | null;
   userPlan?: string;
 }
 
@@ -61,6 +68,7 @@ export default function AutomationModal({
   onClose,
   onCreated,
   editingRule,
+  initialSchema,
   userPlan = "basic",
 }: AutomationModalProps) {
   // --- Wizard State ---
@@ -70,53 +78,56 @@ export default function AutomationModal({
   // Calculate max actions based on user plan
   const maxActions = userPlan === "premium" || userPlan === "super" ? 6 : 2;
 
+  // Source for pre-populating form fields (editingRule takes priority)
+  const source = editingRule || initialSchema || null;
+
   // --- Form State ---
-  const [name, setName] = useState(editingRule?.name || "");
+  const [name, setName] = useState(source?.name || "");
   const [triggerType, setTriggerType] = useState<
     | "TASK_STATUS_CHANGE"
     | "NEW_RECORD"
     | "RECORD_FIELD_CHANGE"
     | "TIME_SINCE_CREATION"
     | "DIRECT_DIAL"
-  >((editingRule?.triggerType as any) || "RECORD_FIELD_CHANGE");
+  >((source?.triggerType as any) || "RECORD_FIELD_CHANGE");
 
   // Task specific
   const [toStatus, setToStatus] = useState(
-    editingRule?.triggerConfig?.toStatus || "any",
+    source?.triggerConfig?.toStatus || "any",
   );
   const [fromStatus, setFromStatus] = useState(
-    editingRule?.triggerConfig?.fromStatus || "any",
+    source?.triggerConfig?.fromStatus || "any",
   );
 
   // Generic Record specific
   const [tableId, setTableId] = useState(
-    editingRule?.triggerConfig?.tableId || "",
+    source?.triggerConfig?.tableId || "",
   );
   const [columnId, setColumnId] = useState(
-    editingRule?.triggerConfig?.columnId || "",
+    source?.triggerConfig?.columnId || "",
   );
   const [fromValue, setFromValue] = useState(
-    editingRule?.triggerConfig?.fromValue || "",
+    source?.triggerConfig?.fromValue || "",
   );
   const [toValue, setToValue] = useState(
-    editingRule?.triggerConfig?.toValue || "",
+    source?.triggerConfig?.toValue || "",
   );
   const [operator, setOperator] = useState(
-    editingRule?.triggerConfig?.operator || "",
+    source?.triggerConfig?.operator || "",
   );
 
   // Time Based Trigger specific
   const [timeValue, setTimeValue] = useState(
-    editingRule?.triggerConfig?.timeValue || "",
+    source?.triggerConfig?.timeValue || "",
   );
   const [timeUnit, setTimeUnit] = useState(
-    editingRule?.triggerConfig?.timeUnit || "hours",
+    source?.triggerConfig?.timeUnit || "hours",
   );
   const [conditionColumnId, setConditionColumnId] = useState(
-    editingRule?.triggerConfig?.conditionColumnId || "",
+    source?.triggerConfig?.conditionColumnId || "",
   );
   const [conditionValue, setConditionValue] = useState(
-    editingRule?.triggerConfig?.conditionValue || "",
+    source?.triggerConfig?.conditionValue || "",
   );
 
   const [columns, setColumns] = useState<any[]>([]);
@@ -131,14 +142,14 @@ export default function AutomationModal({
   // If editing legacy rule, we convert it to array.
   const [actions, setActions] = useState<{ type: string; config: any }[]>(
     () => {
-      if (!editingRule) return [];
-      if (editingRule.actionType === "MULTI_ACTION") {
-        return editingRule.actionConfig?.actions || [];
+      if (!source) return [];
+      if (source.actionType === "MULTI_ACTION") {
+        return source.actionConfig?.actions || [];
       }
       return [
         {
-          type: editingRule.actionType,
-          config: editingRule.actionConfig || {},
+          type: source.actionType,
+          config: source.actionConfig || {},
         },
       ];
     },
@@ -277,16 +288,16 @@ export default function AutomationModal({
 
   // Advanced Conditions State
   const [useBusinessHours, setUseBusinessHours] = useState(
-    !!editingRule?.triggerConfig?.businessHours,
+    !!source?.triggerConfig?.businessHours,
   );
   const [activeDays, setActiveDays] = useState<number[]>(
-    editingRule?.triggerConfig?.businessHours?.days || [0, 1, 2, 3, 4],
+    source?.triggerConfig?.businessHours?.days || [0, 1, 2, 3, 4],
   );
   const [startTime, setStartTime] = useState(
-    editingRule?.triggerConfig?.businessHours?.start || "09:00",
+    source?.triggerConfig?.businessHours?.start || "09:00",
   );
   const [endTime, setEndTime] = useState(
-    editingRule?.triggerConfig?.businessHours?.end || "17:00",
+    source?.triggerConfig?.businessHours?.end || "17:00",
   );
 
   // --- Logic Helpers ---

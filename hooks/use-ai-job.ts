@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { apiFetch } from "@/lib/api-fetch";
 
 const MAX_POLLS = 40;
 const INITIAL_INTERVAL = 500; // ms
@@ -41,7 +42,7 @@ export function useAIJob() {
     abortRef.current = controller;
 
     // Step 1: Dispatch the job
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -50,6 +51,9 @@ export function useAIJob() {
 
     const data = await res.json();
 
+    if (res.status === 429) {
+      throw new Error("RATE_LIMITED");
+    }
     if (res.status !== 202 || !data.jobId) {
       throw new Error(data.error || "Failed to dispatch AI job");
     }
@@ -81,8 +85,8 @@ export function useAIJob() {
       });
 
       if (!pollRes.ok) {
-        if (pollRes.status === 404) {
-          // Job not in Redis yet — increase interval and continue
+        if (pollRes.status === 404 || pollRes.status === 429) {
+          // Job not in Redis yet or rate-limited — back off and continue
           interval = Math.min(interval * 1.5, MAX_INTERVAL);
           continue;
         }

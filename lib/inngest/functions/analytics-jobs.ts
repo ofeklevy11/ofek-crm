@@ -188,6 +188,26 @@ export const refreshCompanyAnalytics = inngest.createFunction(
               });
             } catch (e) {
               log.error("Failed to calculate rule", { ruleId: rule.id, error: String(e) });
+              // Include the rule with empty data so it isn't silently dropped from the cache
+              const effectiveActionType = rule.actionType === "MULTI_ACTION"
+                ? ((rule.actionConfig as any)?.actions || []).find((a: any) => a.type === "CALCULATE_MULTI_EVENT_DURATION")
+                  ? "CALCULATE_MULTI_EVENT_DURATION"
+                  : "CALCULATE_DURATION"
+                : rule.actionType;
+              results.push({
+                id: `rule_${rule.id}`,
+                ruleId: rule.id,
+                ruleName: rule.name,
+                tableName: "...",
+                type: effectiveActionType === "CALCULATE_MULTI_EVENT_DURATION" ? "multi-event" : "single-event",
+                data: [],
+                stats: null,
+                order: rule.analyticsOrder ?? 0,
+                color: rule.analyticsColor ?? "bg-white",
+                source: "AUTOMATION",
+                folderId: rule.folderId,
+                lastRefreshed: null,
+              });
             }
           }
 
@@ -285,6 +305,22 @@ export const refreshCompanyAnalytics = inngest.createFunction(
                     });
                   } catch (e) {
                     log.error("Failed to calculate view", { viewId: view.id, error: String(e) });
+                    // Include the view with empty data so it isn't silently dropped from the cache
+                    results.push({
+                      id: `view_${view.id}`,
+                      viewId: view.id,
+                      ruleName: view.title,
+                      tableName: "...",
+                      type: view.type,
+                      data: [],
+                      stats: null,
+                      order: view.order,
+                      color: view.color,
+                      source: "CUSTOM",
+                      config: view.config,
+                      folderId: view.folderId,
+                      lastRefreshed: null,
+                    });
                   }
                 }
 

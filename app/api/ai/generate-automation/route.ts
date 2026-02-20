@@ -6,13 +6,14 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import { checkMemoryRateLimit } from "@/lib/rate-limit-action";
 import { createLogger } from "@/lib/logger";
+import { buildAutomationContext, serializeRawContext } from "@/lib/ai/automation-context";
 
 const log = createLogger("AiAutomation");
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_PAYLOAD_BYTES = 400 * 1024; // 400KB
+const MAX_PAYLOAD_BYTES = 600 * 1024; // 600KB
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW = 60; // seconds
 
@@ -26,10 +27,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { prompt, existingAutomations } = await req.json();
+    const body = await req.json();
+    const { prompt, mode: rawMode, currentSchema } = body;
+    const mode: "create" | "suggest" = rawMode === "suggest" ? "suggest" : "create";
 
-    if (!prompt || typeof prompt !== "string" || prompt.length > 10000) {
-      return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
+    // Validate optional currentSchema for modify mode
+    if (currentSchema != null) {
+      if (typeof currentSchema !== "object" || !currentSchema.triggerType || !currentSchema.actionType) {
+        return NextResponse.json({ error: "Invalid currentSchema" }, { status: 400 });
+      }
+    }
+
+    // In create mode, prompt is required. In suggest mode, it's optional.
+    if (mode === "create") {
+      if (!prompt || typeof prompt !== "string" || prompt.length > 10000) {
+        return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
+      }
+    } else if (prompt && (typeof prompt !== "string" || prompt.length > 10000)) {
+      return NextResponse.json({ error: "Invalid prompt" }, { status: 400 });
     }
 
     // Rate limiting per user (atomic INCR + EXPIRE via pipeline, with in-memory fallback)
@@ -46,33 +61,21 @@ export async function POST(req: Request) {
       }
     }
 
-    // SECURITY: Fetch tables and users from DB scoped by companyId (Issue F)
-    const { prisma } = await import("@/lib/prisma");
-    const [dbTables, dbUsers, dbAutomations] = await Promise.all([
-      prisma.tableMeta.findMany({
-        where: { companyId: user.companyId },
-        select: { id: true, name: true, schemaJson: true },
-        take: 200,
-      }),
-      prisma.user.findMany({
-        where: { companyId: user.companyId },
-        select: { id: true, name: true, email: true, role: true },
-        take: 200,
-      }),
-      prisma.automationRule.findMany({
-        where: { companyId: user.companyId },
-        select: { id: true, name: true, triggerType: true, actionType: true },
-        take: 200,
-      }),
-    ]);
+    // Build full context from DB
+    const automationContext = await buildAutomationContext(user.companyId);
 
     // Payload size guard
-    const eventData = {
+    const eventData: Record<string, any> = {
       jobId: "",
       type: "automation",
-      prompt,
-      context: { tables: dbTables, users: dbUsers, existingAutomations: dbAutomations },
+      prompt: prompt || "",
+      context: {
+        formatted: automationContext.formatted,
+        rawContext: serializeRawContext(automationContext._raw),
+        ...(currentSchema ? { currentSchema } : {}),
+      },
       companyId: user.companyId,
+      mode,
     };
     const payloadSize = new TextEncoder().encode(JSON.stringify(eventData)).length;
     if (payloadSize > MAX_PAYLOAD_BYTES) {

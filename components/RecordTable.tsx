@@ -24,6 +24,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -64,6 +66,7 @@ import {
   Columns3,
   GripVertical,
   Eye,
+  ArrowUpDown,
 } from "lucide-react";
 import EditRecordModal from "./EditRecordModal";
 import ImportRecordsModal from "./ImportRecordsModal";
@@ -847,6 +850,8 @@ export default function RecordTable({
       "download",
       `export_${new Date().toISOString().split("T")[0]}.txt`,
     );
+    document.body.appendChild(link);
+    link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
@@ -1158,57 +1163,50 @@ export default function RecordTable({
               {selectedIds.length === 0 && canExport && (
                 <>
                   <div className="hidden sm:block">
-                    {canEdit && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2 mx-2"
-                        onClick={() => setShowImportModal(true)}
-                      >
-                        <Upload className="h-4 w-4" />
-                        ייבוא נתונים
-                      </Button>
-                    )}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="sm" className="gap-2">
-                          <FileDown className="h-4 w-4" />
-                          ייצוא נתונים{" "}
+                          <ArrowUpDown className="h-4 w-4" />
+                          ייבוא / ייצוא נתונים
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        {canEdit && (
+                          <>
+                            <DropdownMenuLabel>ייבוא</DropdownMenuLabel>
+                            <DropdownMenuItem
+                              onClick={() => setShowImportModal(true)}
+                            >
+                              <Upload className="h-4 w-4 ml-2" />
+                              ייבוא נתונים (CSV/TXT)
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
+                        <DropdownMenuLabel>ייצוא</DropdownMenuLabel>
                         <DropdownMenuItem
                           onClick={() => handleExportAll("csv")}
                         >
+                          <FileDown className="h-4 w-4 ml-2" />
                           CSV (Excel)
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => handleExportAll("txt")}
                         >
+                          <FileDown className="h-4 w-4 ml-2" />
                           TXT (Text)
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-                  {canEdit && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2 sm:hidden mx-1"
-                      disabled
-                    >
-                      <Upload className="h-4 w-4" />
-                      ייבוא נתונים (במחשב בלבד)
-                    </Button>
-                  )}
                   <Button
                     variant="outline"
                     size="sm"
                     className="gap-2 sm:hidden"
                     disabled
                   >
-                    <FileDown className="h-4 w-4" />
-                    ייצוא נתונים (במחשב בלבד)
+                    <ArrowUpDown className="h-4 w-4" />
+                    ייבוא / ייצוא (במחשב בלבד)
                   </Button>
                 </>
               )}
@@ -1667,7 +1665,7 @@ export default function RecordTable({
                               // Display mode
                               <div className="flex items-center justify-between w-full">
                                 <a
-                                  href={`/api/attachments/${att.id}/download`}
+                                  href={att.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center gap-1 truncate hover:underline text-blue-600 flex-1 min-w-0"

@@ -1059,7 +1059,7 @@ export default function EditRecordModal({
                     // Display mode
                     <div className="flex items-center justify-between">
                       <a
-                        href={`/api/attachments/${att.id}/download`}
+                        href={att.url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-primary hover:underline truncate max-w-[200px] flex items-center gap-1"

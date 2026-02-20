@@ -18,7 +18,7 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const rl = await checkRateLimit(String(user.id), RATE_LIMITS.api);
+  const rl = await checkRateLimit(String(user.id), RATE_LIMITS.aiJobPoll);
   if (rl) return rl;
 
   const { jobId } = await params;

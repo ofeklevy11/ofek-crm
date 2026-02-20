@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AutomationModal from "@/components/AutomationModal";
 import MultiEventAutomationModal from "@/components/MultiEventAutomationModal";
@@ -56,6 +56,15 @@ export default function AutomationsList({
 
   // Use folders from props
   const [localFolders, setLocalFolders] = useState(propsFolders || []);
+
+  // Sync local state when props change (e.g. after router.refresh())
+  useEffect(() => {
+    setRules(initialRules);
+  }, [initialRules]);
+
+  useEffect(() => {
+    setLocalFolders(propsFolders || []);
+  }, [propsFolders]);
 
   // State for interactions
   const [activeDropdownId, setActiveDropdownId] = useState<number | null>(null);
@@ -418,11 +427,11 @@ export default function AutomationsList({
           </h2>
           <div className="flex gap-2">
             <button
-              disabled
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-500 bg-gray-100 cursor-not-allowed"
+              onClick={() => setIsAIModalOpen(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transition-all"
             >
-              <Sparkles className="ml-2 -mr-1 h-5 w-5 text-gray-400" />
-              צור אוטומציה עם AI (בקרוב...)
+              <Sparkles className="ml-2 -mr-1 h-5 w-5" />
+              צור אוטומציה עם AI
             </button>
             <button
               onClick={() => {
@@ -739,6 +748,7 @@ export default function AutomationsList({
             tables={tables}
             users={users}
             currentUserId={currentUserId}
+            userPlan={userPlan}
           />
         )}
       </div>

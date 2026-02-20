@@ -3,7 +3,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
-import { checkActionRateLimit, ANALYTICS_RATE_LIMITS } from "@/lib/rate-limit-action";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("AnalyticsRefresh");
@@ -18,10 +17,6 @@ export async function getAnalyticsRefreshUsage() {
     if (!hasUserFlag(user, "canViewAnalytics")) {
       return { success: false, usage: 0 };
     }
-
-    // Rate limit
-    const rl = await checkActionRateLimit(String(user.id), ANALYTICS_RATE_LIMITS.read);
-    if (rl) return { success: false, usage: 0 };
 
     const windowStart = new Date(Date.now() - 4 * 60 * 60 * 1000); // 4 hours ago
 

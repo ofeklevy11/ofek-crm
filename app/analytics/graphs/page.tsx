@@ -20,6 +20,10 @@ export default async function GraphsPage() {
     ? (analyticsData.data || []).filter((v: any) => v.type === "GRAPH")
     : [];
 
+  const loadError = !analyticsData.success
+    ? ((analyticsData as any).error || "Failed to load")
+    : null;
+
   const refreshUsage = refreshUsageData.success
     ? { usage: refreshUsageData.usage, nextResetTime: refreshUsageData.nextResetTime ?? null }
     : { usage: 0, nextResetTime: null as string | null };
@@ -29,6 +33,7 @@ export default async function GraphsPage() {
       initialViews={graphViews}
       initialRefreshUsage={refreshUsage}
       userPlan={user.isPremium || "basic"}
+      loadError={loadError}
     />
   );
 }

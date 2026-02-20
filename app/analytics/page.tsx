@@ -20,6 +20,9 @@ export default async function AnalyticsPage() {
 
   const updatedViews = (analyticsData.success && 'data' in analyticsData) ? analyticsData.data : [];
   const updatedFolders = (foldersData.success && 'data' in foldersData) ? foldersData.data ?? [] : [];
+  const loadError = !analyticsData.success
+    ? ((analyticsData as any).error || "Failed to load")
+    : null;
   const refreshUsage: { usage: number; nextResetTime: string | null } = refreshUsageData.success
     ? { usage: refreshUsageData.usage, nextResetTime: ('nextResetTime' in refreshUsageData ? refreshUsageData.nextResetTime : null) ?? null }
     : { usage: 0, nextResetTime: null };
@@ -34,6 +37,7 @@ export default async function AnalyticsPage() {
         canManage: hasUserFlag(user, "canManageAnalytics"),
         plan: user.isPremium || "basic",
       }}
+      loadError={loadError}
     />
   );
 }

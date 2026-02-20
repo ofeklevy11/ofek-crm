@@ -32,7 +32,7 @@ export async function checkRateLimit(
       .exec();
 
     const count = results?.[0]?.[1] as number | undefined;
-    if (!count || count > config.max) {
+    if (count && count > config.max) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Please try again later." },
         {
@@ -81,7 +81,7 @@ export async function checkActionRateLimit(
       .exec();
 
     const count = results?.[0]?.[1] as number | undefined;
-    return !count || count > config.max;
+    return !!count && count > config.max;
   } catch (err) {
     log.error("Redis error, falling back to in-memory", { error: String(err) });
     const memKey = `rl:${config.prefix}:${identifier}`;
@@ -167,4 +167,6 @@ export const RATE_LIMITS = {
   whatsappMutate: { prefix: "wa-mut", max: 30, windowSeconds: 60 } satisfies RateLimitConfig,
   /** WhatsApp mark-read: 60 per user per minute */
   whatsappMark: { prefix: "wa-mark", max: 60, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** AI job polling: 60 per user per minute (lightweight Redis GET, separate from general API) */
+  aiJobPoll: { prefix: "ai-poll", max: 60, windowSeconds: 60 } satisfies RateLimitConfig,
 } as const;

@@ -269,6 +269,7 @@ export async function createAnalyticsView(data: {
     }
 
     await invalidateFullCache(user.companyId);
+    inngest.send({ name: "analytics/refresh-company", data: { companyId: user.companyId } }).catch(() => {});
 
     // Calculate stats inline so the view has data immediately (don't rely solely on background job)
     try {
@@ -294,6 +295,154 @@ export async function createAnalyticsView(data: {
   }
 }
 
+export async function createAnalyticsReport(data: {
+  reportTitle: string;
+  views: Array<{ title: string; type: string; description?: string; config: any }>;
+}) {
+  try {
+    const user = await getCurrentUser();
+    if (!user || !canManageAnalytics(user)) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Rate limit
+    const rl = await checkActionRateLimit(String(user.id), ANALYTICS_RATE_LIMITS.mutation);
+    if (rl) return { success: false, error: rl.error };
+
+    // Validate report title
+    if (!data.reportTitle || data.reportTitle.length > 200) {
+      return { success: false, error: "Report title is required and must be under 200 characters" };
+    }
+
+    // Validate views array
+    if (!Array.isArray(data.views) || data.views.length === 0 || data.views.length > 20) {
+      return { success: false, error: "Views array must have 1-20 items" };
+    }
+
+    // Validate each view
+    for (const view of data.views) {
+      if (!view.title || view.title.length > 200) {
+        return { success: false, error: "Each view must have a title under 200 characters" };
+      }
+      if (!VALID_TYPES.has(view.type)) {
+        return { success: false, error: `Invalid view type: ${view.type}` };
+      }
+      if (view.description && view.description.length > 2000) {
+        return { success: false, error: "View description must be under 2000 characters" };
+      }
+      const configResult = analyticsConfigSchema.safeParse(view.config);
+      if (!configResult.success) {
+        return { success: false, error: "Invalid analytics config in one of the views" };
+      }
+      if (!validateConfigSize(configResult.data)) {
+        return { success: false, error: "Config is too large" };
+      }
+    }
+
+    // Check plan limits for all views at once
+    const userPlan = ((user.isPremium || "basic") as string).toLowerCase();
+    const limits = ANALYTICS_LIMITS[userPlan as keyof typeof ANALYTICS_LIMITS] || ANALYTICS_LIMITS.basic;
+
+    const newGraphCount = data.views.filter(v => v.type === "GRAPH").length;
+    const newRegularCount = data.views.filter(v => v.type !== "GRAPH").length;
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Count existing views inside transaction
+      const groups = await tx.analyticsView.groupBy({
+        by: ["type"],
+        where: { companyId: user.companyId },
+        _count: true,
+      });
+
+      const countMap = new Map(groups.map((g) => [g.type, g._count]));
+      const existingRegular = (countMap.get("CONVERSION") || 0) + (countMap.get("COUNT") || 0);
+      const existingGraph = countMap.get("GRAPH") || 0;
+
+      if (userPlan !== "super") {
+        if (existingGraph + newGraphCount > limits.graph) {
+          return {
+            success: false as const,
+            error: `הגעת למגבלת הגרפים (${limits.graph}). שדרג את התוכנית להוספת גרפים נוספים.`,
+          };
+        }
+        if (existingRegular + newRegularCount > limits.regular) {
+          return {
+            success: false as const,
+            error: `הגעת למגבלת האנליטיקות (${limits.regular}). שדרג את התוכנית להוספת אנליטיקות נוספות.`,
+          };
+        }
+      }
+
+      // Create folder
+      const folder = await tx.viewFolder.create({
+        data: {
+          name: data.reportTitle,
+          companyId: user.companyId,
+        },
+      });
+
+      // Create all views in the folder
+      const createdViews: { id: number; type: string; config: any }[] = [];
+      for (let i = 0; i < data.views.length; i++) {
+        const v = data.views[i];
+        const configResult = analyticsConfigSchema.safeParse(v.config);
+        const strippedConfig = configResult.success ? configResult.data : v.config;
+
+        const view = await tx.analyticsView.create({
+          data: {
+            companyId: user.companyId,
+            title: v.title,
+            type: v.type as "COUNT" | "AVERAGE" | "SUM" | "CONVERSION" | "DISTRIBUTION" | "GRAPH",
+            description: v.description,
+            config: strippedConfig,
+            color: "bg-white",
+            order: i,
+            folderId: folder.id,
+          },
+        });
+        createdViews.push(view);
+      }
+
+      return { success: true as const, data: { folder, views: createdViews } };
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: 5000,
+      timeout: 15000,
+    });
+
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+
+    await invalidateFullCache(user.companyId);
+    inngest.send({ name: "analytics/refresh-company", data: { companyId: user.companyId } }).catch(() => {});
+
+    // Calculate initial stats for each view in parallel (non-blocking)
+    const statsPromises = result.data.views.map(async (view) => {
+      try {
+        const { stats, items, tableName } = await calculateViewStats(
+          { id: view.id, type: view.type, config: view.config },
+          user.companyId,
+        );
+        await withRetry(() =>
+          prisma.analyticsView.update({
+            where: { id: view.id, companyId: user.companyId },
+            data: { cachedStats: { stats, items, tableName }, lastCachedAt: new Date() },
+          }),
+        );
+      } catch (e) {
+        log.error("Failed to calculate initial stats for report view", { viewId: view.id, error: String(e) });
+      }
+    });
+    await Promise.all(statsPromises);
+
+    return { success: true, data: { folderId: result.data.folder.id } };
+  } catch (error) {
+    log.error("Error creating analytics report", { error: String(error) });
+    return { success: false, error: "Failed to create report" };
+  }
+}
+
 export async function deleteAnalyticsView(id: number) {
   try {
     const user = await getCurrentUser();
@@ -308,6 +457,7 @@ export async function deleteAnalyticsView(id: number) {
     await withRetry(() => prisma.analyticsView.delete({ where: { id, companyId: user.companyId } }));
     logSecurityEvent({ action: SEC_ANALYTICS_VIEW_DELETED, companyId: user.companyId, userId: user.id, details: { viewId: id } });
     await invalidateFullCache(user.companyId);
+    inngest.send({ name: "analytics/refresh-company", data: { companyId: user.companyId } }).catch(() => {});
     await invalidateItemCache(user.companyId, "view", id);
     return { success: true };
   } catch (error) {
@@ -382,6 +532,7 @@ export async function updateAnalyticsView(
       },
     }));
     await invalidateFullCache(user.companyId);
+    inngest.send({ name: "analytics/refresh-company", data: { companyId: user.companyId } }).catch(() => {});
     await invalidateItemCache(user.companyId, "view", id);
 
     // Recalculate stats inline if config or type changed
@@ -413,12 +564,16 @@ export async function getAnalyticsData() {
   try {
     const user = await getCurrentUser();
     if (!user || !hasUserFlag(user, "canViewAnalytics")) {
+      log.warn("getAnalyticsData: auth failed", { hasUser: !!user });
       return { success: false, error: "Unauthorized" };
     }
 
     // Rate limit
     const rl = await checkActionRateLimit(String(user.id), ANALYTICS_RATE_LIMITS.read);
-    if (rl) return { success: false, error: rl.error };
+    if (rl) {
+      log.warn("getAnalyticsData: rate limited", { userId: user.id });
+      return { success: false, error: rl.error };
+    }
 
     return getAnalyticsDataForCompany(user.companyId);
   } catch (error) {

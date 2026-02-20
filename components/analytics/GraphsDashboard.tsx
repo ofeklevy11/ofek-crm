@@ -146,12 +146,14 @@ interface GraphsDashboardProps {
   initialViews: any[];
   initialRefreshUsage: { usage: number; nextResetTime: string | null };
   userPlan: string;
+  loadError?: string | null;
 }
 
 export default function GraphsDashboard({
   initialViews,
   initialRefreshUsage,
   userPlan,
+  loadError,
 }: GraphsDashboardProps) {
   const router = useRouter();
   const [views, setViews] = useState<any[]>(initialViews);
@@ -331,24 +333,45 @@ export default function GraphsDashboard({
 
         {/* Content */}
         {views.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100 flex flex-col items-center">
-            <div className="bg-pink-50 p-4 rounded-full mb-4">
-              <BarChart2 className="text-pink-500" size={48} />
+          loadError ? (
+            <div className="bg-white rounded-xl shadow-sm p-12 text-center border border-red-100 flex flex-col items-center">
+              <div className="bg-red-50 p-4 rounded-full mb-4">
+                <BarChart2 className="text-red-400" size={48} />
+              </div>
+              <h3 className="text-xl font-medium text-gray-900 mb-2">
+                שגיאה בטעינת הגרפים
+              </h3>
+              <p className="text-gray-500 max-w-sm mb-6">
+                לא הצלחנו לטעון את הגרפים. נסה לרענן את הדף.
+              </p>
+              <button
+                onClick={() => router.refresh()}
+                className="px-6 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200 flex items-center gap-2"
+              >
+                <RefreshCw size={16} />
+                נסה שוב
+              </button>
             </div>
-            <h3 className="text-xl font-medium text-gray-900 mb-2">
-              אין גרפים להצגה
-            </h3>
-            <p className="text-gray-500 max-w-sm mb-6">
-              צור את הגרף הראשון שלך כדי לראות את הנתונים בצורה ויזואלית
-              ומרשימה.
-            </p>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="px-6 py-2 bg-pink-600 text-white rounded-full hover:bg-pink-700 transition-colors shadow-lg shadow-pink-200"
-            >
-              צור גרף ראשון
-            </button>
-          </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100 flex flex-col items-center">
+              <div className="bg-pink-50 p-4 rounded-full mb-4">
+                <BarChart2 className="text-pink-500" size={48} />
+              </div>
+              <h3 className="text-xl font-medium text-gray-900 mb-2">
+                אין גרפים להצגה
+              </h3>
+              <p className="text-gray-500 max-w-sm mb-6">
+                צור את הגרף הראשון שלך כדי לראות את הנתונים בצורה ויזואלית
+                ומרשימה.
+              </p>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="px-6 py-2 bg-pink-600 text-white rounded-full hover:bg-pink-700 transition-colors shadow-lg shadow-pink-200"
+              >
+                צור גרף ראשון
+              </button>
+            </div>
+          )
         ) : (
           <DndContext
             sensors={sensors}

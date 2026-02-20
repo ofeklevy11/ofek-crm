@@ -55,7 +55,7 @@ export async function checkActionRateLimit(
       .exec();
 
     const count = results?.[0]?.[1] as number | undefined;
-    if (!count || count > config.max) {
+    if (count && count > config.max) {
       return { error: "Rate limit exceeded. Please try again later." };
     }
     return null;
@@ -88,8 +88,8 @@ export const TABLE_RATE_LIMITS = {
 } as const;
 
 export const ANALYTICS_RATE_LIMITS = {
-  /** Analytics data reads: 30 per user per minute */
-  read: { prefix: "ana-read", max: 30, windowSeconds: 60 } satisfies ActionRateLimitConfig,
+  /** Analytics data reads: 60 per user per minute */
+  read: { prefix: "ana-read", max: 60, windowSeconds: 60 } satisfies ActionRateLimitConfig,
   /** Analytics mutations (create/update/delete/refresh): 15 per user per minute */
   mutation: { prefix: "ana-mut", max: 15, windowSeconds: 60 } satisfies ActionRateLimitConfig,
   /** Analytics UI updates (order/color): 20 per user per minute */

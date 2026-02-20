@@ -383,7 +383,7 @@ export default function TablesDashboard({
                       <>
                         <Button
                           variant="outline"
-                          className="gap-2 h-11 sm:hidden order-2"
+                        className="gap-2 h-11 sm:hidden order-2"
                           disabled
                         >
                           <Sparkles className="h-4 w-4 text-indigo-500" />
