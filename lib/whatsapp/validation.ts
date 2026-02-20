@@ -41,3 +41,8 @@ export const searchContactsSchema = z.object({
 export const embeddedSignupSchema = z.object({
   code: z.string().min(1),
 });
+
+export const manualConnectSchema = z.object({
+  wabaId: z.string().min(1).max(64).regex(/^\d+$/, "WABA ID must be numeric"),
+  accessToken: z.string().min(10).max(512),
+});

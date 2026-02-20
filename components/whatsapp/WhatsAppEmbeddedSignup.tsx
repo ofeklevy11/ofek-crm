@@ -40,6 +40,10 @@ export default function WhatsAppEmbeddedSignup({ nonce }: { nonce: string }) {
   const [connecting, setConnecting] = useState(false);
   const [sdkLoaded, setSdkLoaded] = useState(false);
   const [sdkError, setSdkError] = useState(false);
+  const [showManual, setShowManual] = useState(false);
+  const [manualWabaId, setManualWabaId] = useState("");
+  const [manualToken, setManualToken] = useState("");
+  const [manualConnecting, setManualConnecting] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const appId = process.env.NEXT_PUBLIC_WHATSAPP_APP_ID;
@@ -155,6 +159,40 @@ export default function WhatsAppEmbeddedSignup({ nonce }: { nonce: string }) {
     }
   };
 
+  const handleManualConnect = async () => {
+    if (!manualWabaId.trim() || !manualToken.trim()) {
+      toast.error("יש למלא את כל השדות");
+      return;
+    }
+    setManualConnecting(true);
+    try {
+      const res = await fetch("/api/whatsapp/manual-connect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        body: JSON.stringify({
+          wabaId: manualWabaId.trim(),
+          accessToken: manualToken.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to connect");
+      }
+      toast.success("WhatsApp חובר בהצלחה!");
+      setManualWabaId("");
+      setManualToken("");
+      setShowManual(false);
+      await fetchAccounts();
+    } catch (error: any) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setManualConnecting(false);
+    }
+  };
+
   const handleDisconnect = async (accountId: number) => {
     if (!confirm("האם אתה בטוח שברצונך לנתק את חשבון ה-WhatsApp?")) return;
 
@@ -252,6 +290,60 @@ export default function WhatsAppEmbeddedSignup({ nonce }: { nonce: string }) {
               <p className="text-xs text-red-500 mt-2">
                 שגיאה בטעינת Facebook SDK. נסה לרענן את הדף.
               </p>
+            )}
+
+            {/* Manual connect toggle */}
+            <button
+              type="button"
+              onClick={() => setShowManual((v) => !v)}
+              className="mt-4 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              {showManual ? "הסתר חיבור ידני" : "חיבור ידני (למפתחים)"}
+            </button>
+
+            {showManual && (
+              <div className="mt-3 border border-gray-200 rounded-lg p-4 text-start space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    WABA ID
+                  </label>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={manualWabaId}
+                    onChange={(e) => setManualWabaId(e.target.value)}
+                    placeholder="123456789012345"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Access Token
+                  </label>
+                  <input
+                    type="password"
+                    dir="ltr"
+                    value={manualToken}
+                    onChange={(e) => setManualToken(e.target.value)}
+                    placeholder="EAAxxxxxxx..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-400"
+                  />
+                </div>
+                <button
+                  onClick={handleManualConnect}
+                  disabled={manualConnecting}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  {manualConnecting ? (
+                    <>
+                      <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                      מתחבר...
+                    </>
+                  ) : (
+                    "חבר ידנית"
+                  )}
+                </button>
+              </div>
             )}
           </div>
         ) : (
