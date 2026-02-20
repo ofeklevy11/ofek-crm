@@ -85,13 +85,14 @@ export async function POST(req: NextRequest) {
     // Step 2: Debug token to get WABA info and scopes
     const debugUrl = new URL(`${GRAPH_API_BASE}/debug_token`);
     debugUrl.searchParams.set("input_token", accessToken);
-    debugUrl.searchParams.set("access_token", accessToken);
+    debugUrl.searchParams.set("access_token", `${appId}|${appSecret}`);
 
     const debugRes = await fetch(debugUrl.toString(), {
       signal: AbortSignal.timeout(30_000),
     });
     if (!debugRes.ok) {
-      log.error("Debug token failed", { status: debugRes.status });
+      const errBody = await debugRes.text().catch(() => "");
+      log.error("Debug token failed", { status: debugRes.status, body: errBody.slice(0, 300) });
       return NextResponse.json(
         { error: "Failed to verify access token" },
         { status: 400 },

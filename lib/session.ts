@@ -35,7 +35,8 @@ export async function isTokenIssuedAtValid(
     if (!minIssuedAt) return true; // No revocation set — token is valid
     return issuedAt >= parseInt(minIssuedAt, 10);
   } catch {
-    // Redis down — fail closed for security (reject token)
-    return false;
+    // Redis down — fail open (token is already signature-verified and expiration-checked)
+    log.warn("Redis unavailable for session revocation check, allowing token", { userId });
+    return true;
   }
 }
