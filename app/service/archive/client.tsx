@@ -271,7 +271,7 @@ export default function ClosedTicketsClient({
 
       {/* Restore Dialog */}
       <Dialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
-        <DialogContent className="max-w-md" dir="rtl">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>שחזור פנייה</DialogTitle>
           </DialogHeader>
@@ -280,10 +280,10 @@ export default function ClosedTicketsClient({
               בחר לאיזה סטטוס לשחזר את הפנייה "{selectedTicket?.title}"
             </p>
             <Select value={restoreStatus} onValueChange={setRestoreStatus}>
-              <SelectTrigger className="text-right" dir="rtl">
+              <SelectTrigger className="text-right">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent dir="rtl">
+              <SelectContent>
                 <SelectItem value="OPEN">פתוח</SelectItem>
                 <SelectItem value="IN_PROGRESS">בטיפול</SelectItem>
                 <SelectItem value="WAITING">ממתין</SelectItem>
@@ -311,7 +311,7 @@ export default function ClosedTicketsClient({
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="max-w-md" dir="rtl">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
               <AlertTriangle className="w-5 h-5" />

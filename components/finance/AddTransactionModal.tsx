@@ -90,10 +90,10 @@ export default function AddTransactionModal() {
                   setFormData((p) => ({ ...p, type: val }))
                 }
               >
-                <SelectTrigger className="text-right" dir="rtl">
+                <SelectTrigger className="text-right">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent dir="rtl">
+                <SelectContent>
                   <SelectItem value="INCOME">הכנסה (+)</SelectItem>
                   <SelectItem value="EXPENSE">הוצאה (-)</SelectItem>
                 </SelectContent>

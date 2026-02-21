@@ -199,10 +199,10 @@ export default function ServiceAutomationModal({
               value={triggerType}
               onValueChange={(val: any) => setTriggerType(val)}
             >
-              <SelectTrigger className="text-right" dir="rtl">
+              <SelectTrigger className="text-right">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent dir="rtl">
+              <SelectContent>
                 <SelectItem value="TICKET_STATUS_CHANGE">
                   כשיש שינוי סטטוס בקריאה
                 </SelectItem>
@@ -218,10 +218,10 @@ export default function ServiceAutomationModal({
               <div className="space-y-2">
                 <Label>מסטטוס</Label>
                 <Select value={fromStatus} onValueChange={setFromStatus}>
-                  <SelectTrigger className="text-right" dir="rtl">
+                  <SelectTrigger className="text-right">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent dir="rtl">
+                  <SelectContent>
                     <SelectItem value="any">כל סטטוס</SelectItem>
                     <SelectItem value="OPEN">פתוח</SelectItem>
                     <SelectItem value="IN_PROGRESS">בטיפול</SelectItem>
@@ -234,10 +234,10 @@ export default function ServiceAutomationModal({
               <div className="space-y-2">
                 <Label>לסטטוס</Label>
                 <Select value={toStatus} onValueChange={setToStatus}>
-                  <SelectTrigger className="text-right" dir="rtl">
+                  <SelectTrigger className="text-right">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent dir="rtl">
+                  <SelectContent>
                     <SelectItem value="any">כל סטטוס</SelectItem>
                     <SelectItem value="OPEN">פתוח</SelectItem>
                     <SelectItem value="IN_PROGRESS">בטיפול</SelectItem>
@@ -259,10 +259,10 @@ export default function ServiceAutomationModal({
                   value={slaBreachType}
                   onValueChange={(val: any) => setSlaBreachType(val)}
                 >
-                  <SelectTrigger className="text-right" dir="rtl">
+                  <SelectTrigger className="text-right">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent dir="rtl">
+                  <SelectContent>
                     <SelectItem value="any">כל סוג חריגה</SelectItem>
                     <SelectItem value="RESPONSE">חריגת זמן תגובה</SelectItem>
                     <SelectItem value="RESOLVE">חריגת זמן פתרון</SelectItem>
@@ -291,10 +291,10 @@ export default function ServiceAutomationModal({
               <div className="space-y-2">
                 <Label>עבור איזה עדיפות?</Label>
                 <Select value={slaPriority} onValueChange={setSlaPriority}>
-                  <SelectTrigger className="text-right" dir="rtl">
+                  <SelectTrigger className="text-right">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent dir="rtl">
+                  <SelectContent>
                     <SelectItem value="any">כל עדיפות</SelectItem>
                     <SelectItem value="CRITICAL">קריטי</SelectItem>
                     <SelectItem value="HIGH">גבוה</SelectItem>
@@ -346,10 +346,10 @@ export default function ServiceAutomationModal({
                 <div className="space-y-2">
                   <Label>למי לשלוח?</Label>
                   <Select value={recipientId} onValueChange={setRecipientId}>
-                    <SelectTrigger className="text-right bg-white" dir="rtl">
+                    <SelectTrigger className="text-right bg-white">
                       <SelectValue placeholder="בחר משתמש" />
                     </SelectTrigger>
-                    <SelectContent dir="rtl">
+                    <SelectContent>
                       {users.map((u) => (
                         <SelectItem key={u.id} value={u.id.toString()}>
                           {u.name}

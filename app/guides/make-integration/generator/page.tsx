@@ -270,11 +270,10 @@ function GeneratorContent() {
                   >
                     <SelectTrigger
                       className="w-full h-12 text-lg text-right"
-                      dir="rtl"
                     >
                       <SelectValue placeholder="בחר טבלה מהרשימה..." />
                     </SelectTrigger>
-                    <SelectContent dir="rtl">
+                    <SelectContent>
                       {tables.map((table) => (
                         <SelectItem key={table.id} value={table.slug}>
                           {table.name}

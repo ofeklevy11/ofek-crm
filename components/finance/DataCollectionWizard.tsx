@@ -305,11 +305,10 @@ export default function DataCollectionWizard({
                 >
                   <SelectTrigger
                     className="text-right h-12 bg-gray-50/50 border-gray-200"
-                    dir="rtl"
                   >
                     <SelectValue placeholder="בחר טבלה..." />
                   </SelectTrigger>
-                  <SelectContent dir="rtl" className="max-h-[300px]">
+                  <SelectContent className="max-h-[300px]">
                     {tables.map((t) => (
                       <SelectItem key={t.id} value={t.id.toString()}>
                         {t.name}
@@ -376,11 +375,10 @@ export default function DataCollectionWizard({
                   >
                     <SelectTrigger
                       className="text-right h-12 bg-white border-blue-200"
-                      dir="rtl"
                     >
                       <SelectValue placeholder="בחר עמודת מספרים..." />
                     </SelectTrigger>
-                    <SelectContent dir="rtl">
+                    <SelectContent>
                       {numberColumns.length > 0 ? (
                         numberColumns.map((c) => (
                           <SelectItem key={c.key} value={c.key}>
@@ -412,11 +410,10 @@ export default function DataCollectionWizard({
                     >
                       <SelectTrigger
                         className="text-right h-12 bg-gray-50 border-gray-200"
-                        dir="rtl"
                       >
                         <SelectValue placeholder="תאריך יצירה (ברירת מחדל)" />
                       </SelectTrigger>
-                      <SelectContent dir="rtl">
+                      <SelectContent>
                         {currentColumns.map((c) => (
                           <SelectItem key={c.key} value={c.key}>
                             {c.name}
@@ -441,11 +438,10 @@ export default function DataCollectionWizard({
                     >
                       <SelectTrigger
                         className="text-right h-12 bg-gray-50 border-gray-200"
-                        dir="rtl"
                       >
                         <SelectValue placeholder="בחר עמודת תיאור..." />
                       </SelectTrigger>
-                      <SelectContent dir="rtl">
+                      <SelectContent>
                         {currentColumns.map((c) => (
                           <SelectItem key={c.key} value={c.key}>
                             {c.name}
@@ -481,11 +477,10 @@ export default function DataCollectionWizard({
                         >
                           <SelectTrigger
                             className="text-right h-11 bg-white"
-                            dir="rtl"
                           >
                             <SelectValue />
                           </SelectTrigger>
-                          <SelectContent dir="rtl">
+                          <SelectContent>
                             <SelectItem value="static">ערך קבוע</SelectItem>
                             {currentColumns.map((c) => (
                               <SelectItem key={c.key} value={c.key}>

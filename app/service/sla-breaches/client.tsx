@@ -309,7 +309,7 @@ export default function SlaBreachesClient({
 
       {/* Review Dialog */}
       <Dialog open={reviewModalOpen} onOpenChange={setReviewModalOpen}>
-        <DialogContent dir="rtl">
+        <DialogContent>
           <DialogHeader className="text-right">
             <DialogTitle>סקירת חריגת SLA</DialogTitle>
           </DialogHeader>

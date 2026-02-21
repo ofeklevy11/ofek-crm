@@ -299,7 +299,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                       עדכון שם הארגון
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]" dir="rtl">
+                  <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-2">
                         <Lock className="w-5 h-5 text-amber-600" />

@@ -551,11 +551,10 @@ export default function TicketDetails({
             >
               <SelectTrigger
                 className="w-[130px] h-9 bg-white border-slate-200 shadow-sm text-right"
-                dir="rtl"
               >
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent dir="rtl">
+              <SelectContent>
                 <SelectItem value="OPEN">פתוח</SelectItem>
                 <SelectItem value="IN_PROGRESS">בטיפול</SelectItem>
                 <SelectItem value="WAITING">ממתין</SelectItem>
@@ -571,11 +570,10 @@ export default function TicketDetails({
             >
               <SelectTrigger
                 className="w-[110px] h-9 bg-white border-slate-200 shadow-sm text-right"
-                dir="rtl"
               >
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent dir="rtl">
+              <SelectContent>
                 <SelectItem value="LOW">נמוך</SelectItem>
                 <SelectItem value="MEDIUM">בינוני</SelectItem>
                 <SelectItem value="HIGH">גבוה</SelectItem>
@@ -684,11 +682,10 @@ export default function TicketDetails({
                 >
                   <SelectTrigger
                     className="h-9 bg-slate-50 border-slate-200 text-right"
-                    dir="rtl"
                   >
                     <SelectValue placeholder="לא משויך" />
                   </SelectTrigger>
-                  <SelectContent dir="rtl">
+                  <SelectContent>
                     {users.map((user) => (
                       <SelectItem key={user.id} value={user.id.toString()}>
                         {user.name}
@@ -912,7 +909,7 @@ export default function TicketDetails({
 
       {/* Client Selection Dialog */}
       <Dialog open={clientDialogOpen} onOpenChange={setClientDialogOpen}>
-        <DialogContent className="max-w-md max-h-[80vh]" dir="rtl">
+        <DialogContent className="max-w-md max-h-[80vh]">
           <DialogHeader>
             <DialogTitle>בחירת לקוח</DialogTitle>
           </DialogHeader>

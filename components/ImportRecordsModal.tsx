@@ -318,7 +318,7 @@ export default function ImportRecordsModal({
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl" dir="rtl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader className="space-y-4">
           <div className="flex items-center justify-between">
             <DialogTitle className="flex items-center gap-2 text-2xl">

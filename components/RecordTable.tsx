@@ -1081,7 +1081,7 @@ export default function RecordTable({
                       עמודות ({visibleFields.length}/{uniqueFields.length})
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col" dir="rtl" showCloseButton={false}>
+                  <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col" showCloseButton={false}>
                     <DialogHeader>
                       <DialogTitle>ניהול עמודות</DialogTitle>
                       <DialogDescription>
@@ -1164,7 +1164,7 @@ export default function RecordTable({
                           ייבוא / ייצוא נתונים
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" dir="rtl" className="text-right">
+                      <DropdownMenuContent align="end" className="text-right">
                         {canEdit && (
                           <>
                             <DropdownMenuLabel className="text-right">ייבוא</DropdownMenuLabel>

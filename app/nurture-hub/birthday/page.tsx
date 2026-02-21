@@ -1011,7 +1011,7 @@ export default function BirthdayAutomationPage() {
         open={!!editingRule}
         onOpenChange={(open) => !open && setEditingRule(null)}
       >
-        <DialogContent className="sm:max-w-[500px]" dir="rtl">
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader className="text-right">
             <DialogTitle>עריכת חוק אוטומציה</DialogTitle>
             <DialogDescription>ערוך את הגדרות החוק</DialogDescription>

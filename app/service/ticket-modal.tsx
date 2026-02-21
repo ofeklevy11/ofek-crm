@@ -92,7 +92,7 @@ export default function TicketModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]" dir="rtl">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader className="text-right">
           <DialogTitle className="text-[#000000] mt-3">פתיחת קריאה חדשה</DialogTitle>
           <DialogDescription className="text-right">
@@ -128,10 +128,10 @@ export default function TicketModal({
                   setFormData((d) => ({ ...d, type: val }))
                 }
               >
-                <SelectTrigger className="text-right" dir="rtl">
+                <SelectTrigger className="text-right">
                   <SelectValue placeholder="בחר סוג" />
                 </SelectTrigger>
-                <SelectContent dir="rtl">
+                <SelectContent>
                   <SelectItem value="SERVICE">שירות</SelectItem>
                   <SelectItem value="COMPLAINT">תלונה</SelectItem>
                   <SelectItem value="RETENTION">שימור</SelectItem>
@@ -150,10 +150,10 @@ export default function TicketModal({
                   setFormData((d) => ({ ...d, priority: val }))
                 }
               >
-                <SelectTrigger className="text-right" dir="rtl">
+                <SelectTrigger className="text-right">
                   <SelectValue placeholder="בחר עדיפות" />
                 </SelectTrigger>
-                <SelectContent dir="rtl">
+                <SelectContent>
                   <SelectItem value="LOW">נמוך</SelectItem>
                   <SelectItem value="MEDIUM">בינוני</SelectItem>
                   <SelectItem value="HIGH">גבוה</SelectItem>
@@ -173,10 +173,10 @@ export default function TicketModal({
                 setFormData((d) => ({ ...d, status: val }))
               }
             >
-              <SelectTrigger className="text-right" dir="rtl">
+              <SelectTrigger className="text-right">
                 <SelectValue placeholder="בחר סטטוס" />
               </SelectTrigger>
-              <SelectContent dir="rtl">
+              <SelectContent>
                 <SelectItem value="OPEN">פתוח</SelectItem>
                 <SelectItem value="IN_PROGRESS">בטיפול</SelectItem>
                 <SelectItem value="WAITING">ממתין</SelectItem>
@@ -195,10 +195,10 @@ export default function TicketModal({
                 setFormData((d) => ({ ...d, clientId: val }))
               }
             >
-              <SelectTrigger className="text-right" dir="rtl">
+              <SelectTrigger className="text-right">
                 <SelectValue placeholder="ללא לקוח" />
               </SelectTrigger>
-              <SelectContent dir="rtl">
+              <SelectContent>
                 <SelectItem value="0">ללא לקוח</SelectItem>
                 {clients.map((client) => (
                   <SelectItem key={client.id} value={client.id.toString()}>
@@ -219,10 +219,10 @@ export default function TicketModal({
                 setFormData((d) => ({ ...d, assigneeId: val }))
               }
             >
-              <SelectTrigger className="text-right" dir="rtl">
+              <SelectTrigger className="text-right">
                 <SelectValue placeholder="לא משויך" />
               </SelectTrigger>
-              <SelectContent dir="rtl">
+              <SelectContent>
                 <SelectItem value="0">לא משויך</SelectItem>
                 {users.map((user) => (
                   <SelectItem key={user.id} value={user.id.toString()}>

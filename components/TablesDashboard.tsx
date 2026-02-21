@@ -420,7 +420,7 @@ export default function TablesDashboard({
           open={isCategoryModalOpen}
           onOpenChange={setIsCategoryModalOpen}
         >
-          <DialogContent dir="rtl">
+          <DialogContent>
             <DialogHeader className="mt-[10px]">
               <DialogTitle>
                 {editingCategory ? "ערוך קטגוריה" : "קטגוריה חדשה"}
