@@ -261,7 +261,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
             } 0%, ${worker.department.color ?? "#6366F1"}80 100%)`,
           }}
         />
-        <div className="px-6 pb-6 -mt-12">
+        <div className="px-6 pb-6 -mt-6">
           <div className="flex flex-col md:flex-row items-start md:items-end gap-4">
             {/* Avatar */}
             {worker.avatar ? (

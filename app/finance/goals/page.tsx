@@ -163,7 +163,7 @@ export default async function GoalsPage() {
       <div className="space-y-4">
         <h2 className="text-xl font-semibold text-gray-900">לוח היעדים שלך</h2>
         {/* Pass metrics to GoalList if it needs them, otherwise update GoalList to not need them or use these static ones */}
-        <GoalList goals={goals} metrics={metrics} tables={tables} />
+        <GoalList goals={goals} metrics={metrics} tables={tables} clients={clients} />
       </div>
     </div>
   );

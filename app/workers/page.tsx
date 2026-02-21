@@ -9,6 +9,11 @@ import {
 } from "@/app/actions/workers";
 import { prisma } from "@/lib/prisma";
 import WorkersManager from "@/components/workers/WorkersManager";
+import RateLimitFallback from "@/components/RateLimitFallback";
+
+function rethrowRateLimit(err: unknown) {
+  if (err instanceof Error && err.message.includes("יותר מדי פניות")) throw err;
+}
 
 export const metadata = {
   title: "ניהול עובדים | CRM",
@@ -22,45 +27,57 @@ export default async function WorkersPage() {
   }
 
   // Fetch data with error handling + logging (P3)
-  const [workersResult, departments, onboardingPaths, stats, users, tables] =
-    await Promise.all([
-      getWorkers().catch((err) => {
-        console.error("[Workers] Failed to load workers:", err);
-        return { data: [], total: 0, hasMore: false };
-      }),
-      getDepartments().catch((err) => {
-        console.error("[Workers] Failed to load departments:", err);
-        return [];
-      }),
-      getOnboardingPaths().catch((err) => {
-        console.error("[Workers] Failed to load onboarding paths:", err);
-        return [];
-      }),
-      getWorkersStats().catch((err) => {
-        console.error("[Workers] Failed to load stats:", err);
-        return { totalWorkers: 0, onboardingWorkers: 0, activeWorkers: 0, departments: 0, onboardingPaths: 0 };
-      }),
-      prisma.user
-        .findMany({
-          where: { companyId: user.companyId },
-          select: { id: true, name: true, email: true },
-          take: 1000,
-        })
-        .catch((err) => {
-          console.error("[Workers] Failed to load users:", err);
+  let workersResult, departments, onboardingPaths, stats, users, tables;
+  try {
+    [workersResult, departments, onboardingPaths, stats, users, tables] =
+      await Promise.all([
+        getWorkers().catch((err) => {
+          rethrowRateLimit(err);
+          console.error("[Workers] Failed to load workers:", err);
+          return { data: [], total: 0, hasMore: false };
+        }),
+        getDepartments().catch((err) => {
+          rethrowRateLimit(err);
+          console.error("[Workers] Failed to load departments:", err);
           return [];
         }),
-      prisma.tableMeta
-        .findMany({
-          where: { companyId: user.companyId },
-          select: { id: true, name: true },
-          take: 1000,
-        })
-        .catch((err) => {
-          console.error("[Workers] Failed to load tables:", err);
+        getOnboardingPaths().catch((err) => {
+          rethrowRateLimit(err);
+          console.error("[Workers] Failed to load onboarding paths:", err);
           return [];
         }),
-    ]);
+        getWorkersStats().catch((err) => {
+          rethrowRateLimit(err);
+          console.error("[Workers] Failed to load stats:", err);
+          return { totalWorkers: 0, onboardingWorkers: 0, activeWorkers: 0, departments: 0, onboardingPaths: 0 };
+        }),
+        prisma.user
+          .findMany({
+            where: { companyId: user.companyId },
+            select: { id: true, name: true, email: true },
+            take: 1000,
+          })
+          .catch((err) => {
+            console.error("[Workers] Failed to load users:", err);
+            return [];
+          }),
+        prisma.tableMeta
+          .findMany({
+            where: { companyId: user.companyId },
+            select: { id: true, name: true },
+            take: 1000,
+          })
+          .catch((err) => {
+            console.error("[Workers] Failed to load tables:", err);
+            return [];
+          }),
+      ]);
+  } catch (e: any) {
+    if (e?.message?.includes("יותר מדי פניות")) {
+      return <RateLimitFallback />;
+    }
+    throw e;
+  }
 
   const workers = workersResult.data;
 

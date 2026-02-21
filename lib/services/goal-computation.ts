@@ -47,7 +47,7 @@ export async function calculateMetricValue(
     case "RETAINERS": {
       const where: any = {
         companyId,
-        status: { in: ["active", "Active", "ACTIVE"] },
+        status: "active",
         ...clientFilter,
       };
 
@@ -114,9 +114,7 @@ export async function calculateMetricValue(
 
       const transactionWhere: any = {
         companyId,
-        status: {
-          in: ["manual-marked-paid", "paid", "PAID", "completed", "COMPLETED"],
-        },
+        status: "paid",
         ...clientFilter,
         OR: [
           { paidDate: { gte: startDate, lte: endDate } },
@@ -129,9 +127,7 @@ export async function calculateMetricValue(
 
       const paymentWhere: any = {
         companyId,
-        status: {
-          in: ["paid", "PAID", "Pd", "manual-marked-paid", "completed"],
-        },
+        status: "paid",
         ...clientFilter,
         OR: [
           { paidDate: { gte: startDate, lte: endDate } },
@@ -223,17 +219,11 @@ export async function calculateMetricValue(
 
     case "TASKS": {
       const statusMap: Record<string, string[]> = {
-        TODO: ["todo", "Todo", "TODO"],
-        IN_PROGRESS: ["in_progress", "In Progress", "IN_PROGRESS"],
-        WAITING_CLIENT: ["waiting_client", "Waiting Client", "WAITING_CLIENT"],
-        ON_HOLD: ["on_hold", "On Hold", "ON_HOLD"],
-        COMPLETED: [
-          "completed_month",
-          "Completed",
-          "completed",
-          "done",
-          "Done",
-        ],
+        TODO: ["todo"],
+        IN_PROGRESS: ["in_progress"],
+        WAITING_CLIENT: ["waiting_client"],
+        ON_HOLD: ["on_hold"],
+        COMPLETED: ["completed_month", "done"],
       };
 
       if (filters.taskGoalMode === "REDUCE") {

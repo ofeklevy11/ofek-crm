@@ -20,6 +20,7 @@ import {
   Clock,
   ChevronDown,
   Copy,
+  Timer,
 } from "lucide-react";
 import {
   createAutomationRule,
@@ -31,6 +32,7 @@ import {
 } from "@/app/actions/automations";
 import { getUsers } from "@/app/actions/users";
 import { getAllFiles } from "@/app/actions/storage";
+import { getTableById, getTablesForUser } from "@/app/actions/tables";
 
 // Plan limits for analytics automation actions
 const PLAN_LIMITS: Record<string, number> = {
@@ -113,7 +115,7 @@ export default function ViewAutomationModal({
   const [actions, setActions] = useState<{ type: string; config: any }[]>([]);
   const [isAddingAction, setIsAddingAction] = useState(false);
   const [currentActionType, setCurrentActionType] = useState<
-    "SEND_NOTIFICATION" | "SEND_WHATSAPP" | "WEBHOOK" | "CREATE_TASK" | ""
+    "SEND_NOTIFICATION" | "SEND_WHATSAPP" | "WEBHOOK" | "CREATE_TASK" | "CALCULATE_DURATION" | "UPDATE_RECORD_FIELD" | ""
   >("");
   const [editingActionIndex, setEditingActionIndex] = useState<number | null>(
     null,
@@ -142,6 +144,16 @@ export default function ViewAutomationModal({
 
   // Action: Webhook (temporary editing state)
   const [webhookUrl, setWebhookUrl] = useState("");
+
+  // Action: Update Record Field (temporary editing state)
+  const [updateFieldTableId, setUpdateFieldTableId] = useState("");
+  const [updateFieldColumnId, setUpdateFieldColumnId] = useState("");
+  const [updateFieldValue, setUpdateFieldValue] = useState("");
+  const [updateFieldRecordId, setUpdateFieldRecordId] = useState("");
+  const [updateFieldColumns, setUpdateFieldColumns] = useState<any[]>([]);
+  const [loadingUpdateFieldColumns, setLoadingUpdateFieldColumns] = useState(false);
+
+  const [tables, setTables] = useState<{ id: number; name: string }[]>([]);
 
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -176,7 +188,35 @@ export default function ViewAutomationModal({
         setUsers(res.data);
       }
     });
+    getTablesForUser().then((res) => {
+      if (res.success && res.data) {
+        setTables(res.data.map((t: any) => ({ id: t.id, name: t.name })));
+      }
+    });
   }, []);
+
+  // Load columns for UPDATE_RECORD_FIELD action when its table changes
+  useEffect(() => {
+    if (!updateFieldTableId) {
+      setUpdateFieldColumns([]);
+      return;
+    }
+    setLoadingUpdateFieldColumns(true);
+    getTableById(Number(updateFieldTableId))
+      .then((res) => {
+        if (res.success && res.data && res.data.schemaJson) {
+          const schema = res.data.schemaJson as any;
+          let cols: any[] = [];
+          if (Array.isArray(schema)) {
+            cols = schema;
+          } else if (schema && Array.isArray(schema.columns)) {
+            cols = schema.columns;
+          }
+          setUpdateFieldColumns(cols);
+        }
+      })
+      .finally(() => setLoadingUpdateFieldColumns(false));
+  }, [updateFieldTableId]);
 
   // Fetch total actions usage across all analytics automations - only once on mount
   useEffect(() => {
@@ -214,6 +254,10 @@ export default function ViewAutomationModal({
     setWaMediaFileId("");
     setWaDelay(0);
     setWebhookUrl("");
+    setUpdateFieldTableId("");
+    setUpdateFieldColumnId("");
+    setUpdateFieldValue("");
+    setUpdateFieldRecordId("");
   };
 
   const validateCurrentAction = () => {
@@ -243,6 +287,10 @@ export default function ViewAutomationModal({
     }
     if (currentActionType === "CREATE_TASK") {
       return !!taskTitle;
+    }
+    if (currentActionType === "CALCULATE_DURATION") return true;
+    if (currentActionType === "UPDATE_RECORD_FIELD") {
+      return !!updateFieldTableId && !!updateFieldColumnId && !!updateFieldValue && !!updateFieldRecordId;
     }
     return false;
   };
@@ -276,7 +324,14 @@ export default function ViewAutomationModal({
                   assigneeId: assigneeId ? Number(assigneeId) : null,
                   dueDate,
                 }
-              : {};
+              : currentActionType === "UPDATE_RECORD_FIELD"
+                ? {
+                    tableId: updateFieldTableId,
+                    columnId: updateFieldColumnId,
+                    value: updateFieldValue,
+                    recordId: updateFieldRecordId,
+                  }
+                : {};
 
     const actionObj = { type: currentActionType, config: newActionConfig };
 
@@ -321,7 +376,13 @@ export default function ViewAutomationModal({
       setTaskStatus(action.config.status || "todo");
       setTaskPriority(action.config.priority || "medium");
       setDueDate(action.config.dueDate || "");
+    } else if (action.type === "UPDATE_RECORD_FIELD") {
+      setUpdateFieldTableId(action.config.tableId || "");
+      setUpdateFieldColumnId(action.config.columnId || "");
+      setUpdateFieldValue(action.config.value || "");
+      setUpdateFieldRecordId(action.config.recordId || "");
     }
+    // CALCULATE_DURATION has no config to load
 
     setEditingActionIndex(index);
     setIsAddingAction(true);
@@ -468,6 +529,10 @@ export default function ViewAutomationModal({
         return <div className="font-bold text-xs">API</div>;
       case "CREATE_TASK":
         return <CheckSquare size={20} />;
+      case "CALCULATE_DURATION":
+        return <Timer size={20} />;
+      case "UPDATE_RECORD_FIELD":
+        return <Pencil size={20} />;
       default:
         return <Zap size={20} />;
     }
@@ -483,6 +548,10 @@ export default function ViewAutomationModal({
         return "Webhook";
       case "CREATE_TASK":
         return "יצירת משימה";
+      case "CALCULATE_DURATION":
+        return "חישוב זמן";
+      case "UPDATE_RECORD_FIELD":
+        return "עדכון שדה ברשומה";
       default:
         return type;
     }
@@ -793,7 +862,13 @@ export default function ViewAutomationModal({
                     <select
                       value={metric}
                       onChange={(e) => setMetric(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      className="w-full appearance-none pr-3 pl-10 py-2 border border-gray-300 rounded-md text-sm"
+                      style={{
+                        backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                        backgroundRepeat: "no-repeat",
+                        backgroundPosition: "left 12px center",
+                        backgroundSize: "12px",
+                      }}
                     >
                       <option value="rawMetric">ערך מוצג (ראשי)</option>
                     </select>
@@ -805,7 +880,13 @@ export default function ViewAutomationModal({
                     <select
                       value={operator}
                       onChange={(e) => setOperator(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      className="w-full appearance-none pr-3 pl-10 py-2 border border-gray-300 rounded-md text-sm"
+                      style={{
+                        backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                        backgroundRepeat: "no-repeat",
+                        backgroundPosition: "left 12px center",
+                        backgroundSize: "12px",
+                      }}
                     >
                       <option value="lt">&lt; קטן מ-</option>
                       <option value="lte">&le; קטן או שווה ל-</option>
@@ -967,6 +1048,24 @@ export default function ViewAutomationModal({
                         }
                         selected={currentActionType === "CREATE_TASK"}
                         onClick={() => setCurrentActionType("CREATE_TASK")}
+                      />
+                      <ActionCard
+                        title="חישוב זמן"
+                        description="חשב ושמור את זמן השהייה בסטטוס"
+                        icon={
+                          <Timer className="text-teal-500" size={24} />
+                        }
+                        selected={currentActionType === "CALCULATE_DURATION"}
+                        onClick={() => setCurrentActionType("CALCULATE_DURATION")}
+                      />
+                      <ActionCard
+                        title="עדכון שדה ברשומה"
+                        description="עדכן ערך בשדה מסוים ברשומה"
+                        icon={
+                          <Pencil className="text-purple-500" size={24} />
+                        }
+                        selected={currentActionType === "UPDATE_RECORD_FIELD"}
+                        onClick={() => setCurrentActionType("UPDATE_RECORD_FIELD")}
                       />
                     </div>
 
@@ -1302,6 +1401,174 @@ export default function ViewAutomationModal({
                               className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
                             />
                           </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {currentActionType === "CALCULATE_DURATION" && (
+                      <div className="bg-teal-50 p-4 rounded-xl border border-teal-100 text-sm text-teal-800 animate-in slide-in-from-top-2">
+                        <p className="font-semibold mb-1">איך זה עובד?</p>
+                        המערכת תחשב אוטומטית את הזמן שעבר בין השינוי האחרון לשינוי הנוכחי
+                        ותשמור אותו בדוח ביצועים. אין צורך בהגדרות נוספות.
+                      </div>
+                    )}
+
+                    {currentActionType === "UPDATE_RECORD_FIELD" && (
+                      <div className="bg-purple-50 p-6 rounded-xl border border-purple-100 space-y-5 animate-in slide-in-from-top-2">
+                        <div className="flex items-center gap-2 mb-2 text-purple-800 font-medium pb-2 border-b border-purple-200">
+                          <Pencil size={18} />
+                          עדכון שדה ברשומה
+                        </div>
+
+                        <div className="bg-purple-100/50 p-3 rounded-lg text-sm text-purple-700">
+                          <strong>שים לב:</strong> כאשר האוטומציה תפעל, השדה שתבחר יעודכן
+                          אוטומטית לערך שתגדיר.
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            בחר טבלה
+                          </label>
+                          <select
+                            required
+                            value={updateFieldTableId}
+                            onChange={(e) => {
+                              setUpdateFieldTableId(e.target.value);
+                              setUpdateFieldColumnId("");
+                              setUpdateFieldValue("");
+                            }}
+                            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                          >
+                            <option value="">בחר טבלה...</option>
+                            {tables.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {updateFieldTableId && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              בחר שדה לעדכון
+                            </label>
+                            {loadingUpdateFieldColumns ? (
+                              <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                                <Loader2 className="animate-spin" size={16} /> טוען עמודות...
+                              </div>
+                            ) : (
+                              <select
+                                required
+                                value={updateFieldColumnId}
+                                onChange={(e) => {
+                                  setUpdateFieldColumnId(e.target.value);
+                                  setUpdateFieldValue("");
+                                }}
+                                className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                              >
+                                <option value="">בחר עמודה...</option>
+                                {updateFieldColumns.map((col: any) => (
+                                  <option key={col.id || col.name} value={col.name}>
+                                    {col.label || col.name}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        )}
+
+                        {updateFieldColumnId && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              הערך החדש
+                            </label>
+                            {(() => {
+                              const selectedCol = updateFieldColumns.find(
+                                (c: any) =>
+                                  c.id === updateFieldColumnId ||
+                                  c.name === updateFieldColumnId,
+                              );
+                              const isSelectType =
+                                selectedCol &&
+                                (selectedCol.type === "select" ||
+                                  selectedCol.type === "multiSelect" ||
+                                  selectedCol.type === "status" ||
+                                  selectedCol.type === "priority");
+
+                              if (isSelectType && selectedCol?.options) {
+                                return (
+                                  <select
+                                    required
+                                    value={updateFieldValue}
+                                    onChange={(e) => setUpdateFieldValue(e.target.value)}
+                                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                                  >
+                                    <option value="">בחר ערך...</option>
+                                    {selectedCol.options.map((opt: any, i: number) => (
+                                      <option key={i} value={typeof opt === "string" ? opt : opt.value || opt.label}>
+                                        {typeof opt === "string" ? opt : opt.label || opt.value}
+                                      </option>
+                                    ))}
+                                  </select>
+                                );
+                              }
+
+                              if (selectedCol?.type === "boolean" || selectedCol?.type === "checkbox") {
+                                return (
+                                  <select
+                                    required
+                                    value={updateFieldValue}
+                                    onChange={(e) => setUpdateFieldValue(e.target.value)}
+                                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                                  >
+                                    <option value="false">לא / כבוי</option>
+                                    <option value="true">כן / פעיל</option>
+                                  </select>
+                                );
+                              }
+
+                              if (selectedCol?.type === "date") {
+                                return (
+                                  <input
+                                    required
+                                    type="date"
+                                    value={updateFieldValue}
+                                    onChange={(e) => setUpdateFieldValue(e.target.value)}
+                                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                                  />
+                                );
+                              }
+
+                              return (
+                                <input
+                                  required
+                                  type={selectedCol?.type === "number" || selectedCol?.type === "currency" ? "number" : "text"}
+                                  value={updateFieldValue}
+                                  onChange={(e) => setUpdateFieldValue(e.target.value)}
+                                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                                  placeholder={selectedCol?.type === "number" || selectedCol?.type === "currency" ? "0" : 'לדוגמה: "בוצעה שיחה"'}
+                                />
+                              );
+                            })()}
+                            <p className="text-xs text-gray-500 mt-1">
+                              הערך הזה יוזן אוטומטית לשדה כאשר האוטומציה תפעל.
+                            </p>
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            מזהה רשומה
+                          </label>
+                          <input
+                            required
+                            type="text"
+                            value={updateFieldRecordId}
+                            onChange={(e) => setUpdateFieldRecordId(e.target.value)}
+                            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                            placeholder="הזן את מזהה הרשומה"
+                          />
                         </div>
                       </div>
                     )}

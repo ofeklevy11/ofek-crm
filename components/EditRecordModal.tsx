@@ -469,7 +469,7 @@ export default function EditRecordModal({
       onOpenChange={(val) => !val && handleClose()}
       modal={true}
     >
-      <DialogContent className="max-w-[95vw] w-full max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[95vw] sm:max-w-[95vw] w-full max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             עריכת רשומה{" "}

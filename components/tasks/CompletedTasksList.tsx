@@ -205,36 +205,45 @@ export default function CompletedTasksList({
               className={`${inputClass} pr-9 w-52`}
             />
           </div>
-          <select
-            value={filterPriority ?? ""}
-            onChange={(e) => setFilterPriority(e.target.value || null)}
-            className={`${inputClass} min-w-[120px]`}
-          >
-            <option value="">עדיפות</option>
-            <option value="high">גבוהה</option>
-            <option value="medium">בינונית</option>
-            <option value="low">נמוכה</option>
-          </select>
-          <select
-            value={filterAssigneeId ?? ""}
-            onChange={(e) => setFilterAssigneeId(e.target.value ? Number(e.target.value) : null)}
-            className={`${inputClass} min-w-[140px]`}
-          >
-            <option value="">אחראי</option>
-            {uniqueAssignees.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-          <select
-            value={filterTag ?? ""}
-            onChange={(e) => setFilterTag(e.target.value || null)}
-            className={`${inputClass} min-w-[120px]`}
-          >
-            <option value="">תגית</option>
-            {uniqueTags.map((tag) => (
-              <option key={tag} value={tag}>{tag}</option>
-            ))}
-          </select>
+          <div className="relative min-w-[120px]">
+            <select
+              value={filterPriority ?? ""}
+              onChange={(e) => setFilterPriority(e.target.value || null)}
+              className={`${inputClass} w-full pl-10 appearance-none`}
+            >
+              <option value="">עדיפות</option>
+              <option value="high">גבוהה</option>
+              <option value="medium">בינונית</option>
+              <option value="low">נמוכה</option>
+            </select>
+            <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+          </div>
+          <div className="relative min-w-[140px]">
+            <select
+              value={filterAssigneeId ?? ""}
+              onChange={(e) => setFilterAssigneeId(e.target.value ? Number(e.target.value) : null)}
+              className={`${inputClass} w-full pl-10 appearance-none`}
+            >
+              <option value="">אחראי</option>
+              {uniqueAssignees.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+            <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+          </div>
+          <div className="relative min-w-[120px]">
+            <select
+              value={filterTag ?? ""}
+              onChange={(e) => setFilterTag(e.target.value || null)}
+              className={`${inputClass} w-full pl-10 appearance-none`}
+            >
+              <option value="">תגית</option>
+              {uniqueTags.map((tag) => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
+            </select>
+            <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 text-sm text-slate-400">

@@ -192,7 +192,7 @@ export default function TableSettingsModal({
   return (
     <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
       <DialogContent
-        className="max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+        className="max-w-[95vw] sm:max-w-[95vw] w-full max-h-[90vh] overflow-y-auto"
         dir="rtl"
       >
         <DialogHeader>
@@ -304,13 +304,13 @@ export default function TableSettingsModal({
                 {tabs.length > 0 && (
                   <div className="mt-4 space-y-2">
                     <Label className="text-sm font-bold">שיוך שדות לטאבים</Label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                       {schema.map((field) => (
                         <div
                           key={field.name}
                           className="flex items-center gap-2 px-3 py-2 bg-muted/10 rounded border text-sm"
                         >
-                          <span className="truncate flex-1 font-medium">
+                          <span className="flex-1 font-medium">
                             {field.label}
                           </span>
                           <select
@@ -324,7 +324,7 @@ export default function TableSettingsModal({
                               }
                               setFieldTabs(newFieldTabs);
                             }}
-                            className="h-7 w-32 rounded border border-input bg-background px-2 text-xs"
+                            className="h-7 w-48 rounded border border-input bg-background px-2 text-xs"
                           >
                             <option value="">ללא טאב</option>
                             {tabs.map((t) => (

@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { getWorker, getOnboardingPathSummaries } from "@/app/actions/workers";
 import { prisma } from "@/lib/prisma";
 import WorkerDetails from "@/components/workers/WorkerDetails";
+import RateLimitFallback from "@/components/RateLimitFallback";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -39,10 +40,20 @@ export default async function WorkerPage({ params }: Props) {
     redirect("/login");
   }
 
-  const [worker, onboardingPaths] = await Promise.all([
-    getWorker(Number(id)),
-    getOnboardingPathSummaries(),  // P11: lightweight — no step details
-  ]);
+  let worker;
+  let onboardingPaths;
+
+  try {
+    [worker, onboardingPaths] = await Promise.all([
+      getWorker(Number(id)),
+      getOnboardingPathSummaries(),
+    ]);
+  } catch (e: any) {
+    if (e?.message?.includes("יותר מדי פניות")) {
+      return <RateLimitFallback />;
+    }
+    throw e;
+  }
 
   if (!worker) {
     notFound();

@@ -455,8 +455,8 @@ export default function TicketDetails({
         {/* Header with gradient */}
         <div className="bg-gradient-to-l from-[#4f95ff]/10 via-[#a24ec1]/5 to-white border-b">
           {/* Top bar with close and actions */}
-          <div className="flex items-center justify-between p-4 pb-0">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between p-4 pb-5">
+            <div className="flex items-center gap-2 mt-6">
               <Badge
                 variant="outline"
                 className="bg-white/80 backdrop-blur-sm border-slate-200 text-slate-600 font-mono"

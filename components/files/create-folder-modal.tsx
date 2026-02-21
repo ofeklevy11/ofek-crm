@@ -55,7 +55,7 @@ export function CreateFolderModal({ currentFolderId }: CreateFolderModalProps) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px] text-right">
         <DialogHeader>
-          <DialogTitle>יצירת תיקייה חדשה</DialogTitle>
+          <DialogTitle className="mt-4">יצירת תיקייה חדשה</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">

@@ -146,7 +146,7 @@ export function Calendar() {
     setCurrentDate(date);
   };
 
-  const handleSaveEvent = async (eventData: Omit<CalendarEvent, "id">): Promise<boolean> => {
+  const handleSaveEvent = async (eventData: Omit<CalendarEvent, "id">): Promise<string | false> => {
     try {
       if (selectedEvent) {
         // Update existing event
@@ -174,6 +174,11 @@ export function Calendar() {
           ),
         );
         setSelectedEvent(undefined);
+        setIsModalOpen(false);
+        setInitialEventDate(undefined);
+        setInitialEventHour(undefined);
+        setInitialEventMinutes(undefined);
+        return selectedEvent.id;
       } else {
         // Create new event
         const { createCalendarEvent } = await import("@/app/actions");
@@ -196,12 +201,12 @@ export function Calendar() {
             endTime: new Date(newEvent.endTime),
           },
         ]);
+        setIsModalOpen(false);
+        setInitialEventDate(undefined);
+        setInitialEventHour(undefined);
+        setInitialEventMinutes(undefined);
+        return newEvent.id;
       }
-      setIsModalOpen(false);
-      setInitialEventDate(undefined);
-      setInitialEventHour(undefined);
-      setInitialEventMinutes(undefined);
-      return true;
     } catch (error) {
       console.error("Failed to save event:", error);
       return false;

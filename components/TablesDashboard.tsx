@@ -420,8 +420,8 @@ export default function TablesDashboard({
           open={isCategoryModalOpen}
           onOpenChange={setIsCategoryModalOpen}
         >
-          <DialogContent>
-            <DialogHeader>
+          <DialogContent dir="rtl">
+            <DialogHeader className="mt-[10px]">
               <DialogTitle>
                 {editingCategory ? "ערוך קטגוריה" : "קטגוריה חדשה"}
               </DialogTitle>
@@ -443,14 +443,7 @@ export default function TablesDashboard({
                   autoFocus
                 />
               </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={closeCategoryModal}
-                >
-                  ביטול
-                </Button>
+              <DialogFooter className="flex-row-reverse justify-start gap-2">
                 <Button
                   type="submit"
                   disabled={creatingCategory || !newCategoryName.trim()}
@@ -460,6 +453,13 @@ export default function TablesDashboard({
                     : editingCategory
                       ? "עדכן"
                       : "צור"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closeCategoryModal}
+                >
+                  ביטול
                 </Button>
               </DialogFooter>
             </form>

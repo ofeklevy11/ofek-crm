@@ -1,6 +1,7 @@
 import { inngest } from "../client";
 import { NonRetriableError } from "inngest";
 import { redis } from "@/lib/redis";
+import { env } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
 import type { AutomationRawContext, SerializedRawContext } from "@/lib/ai/automation-context";
 import { deserializeRawContext } from "@/lib/ai/automation-context";
@@ -899,7 +900,7 @@ async function callOpenRouter(
   maxTokens: number,
   model = "google/gemini-2.0-flash-001"
 ): Promise<string> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = env.OPENROUTER_API_KEY;
   if (!apiKey) throw new NonRetriableError("OPENROUTER_API_KEY is not configured");
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -907,8 +908,8 @@ async function callOpenRouter(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
-      ...(process.env.NEXT_PUBLIC_APP_URL
-        ? { "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL }
+      ...(env.NEXT_PUBLIC_APP_URL
+        ? { "HTTP-Referer": env.NEXT_PUBLIC_APP_URL }
         : {}),
       "X-Title": "CRM AI Generator",
     },

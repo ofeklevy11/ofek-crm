@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { getTables } from "@/app/actions/tables";
@@ -467,24 +468,30 @@ export default function AIAnalyticsCreator({
 
             <div className="p-4 bg-card border-t border-border">
               <div className="relative flex gap-2">
-                <Input
-                  type="text"
+                <Textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
                   placeholder={
                     generatedView
                       ? "בקש שינוי, למשל: שנה לגרף עוגה..."
                       : "למשל: גרף עמודות של לידים לפי סטטוס..."
                   }
-                  className="pl-5 pr-12 py-6 rounded-xl bg-muted/20"
+                  className="pl-5 pr-12 py-6 rounded-xl bg-muted/20 min-h-[9rem]"
                   autoFocus
+                  rows={6}
+                  style={{ resize: "none" }}
                 />
                 <Button
                   onClick={() => handleSend()}
                   disabled={loading || !input.trim() || tables.length === 0}
                   size="icon"
-                  className="absolute left-2 top-2 h-8 w-8 rounded-lg"
+                  className="absolute left-2 bottom-2 h-8 w-8 rounded-lg"
                 >
                   <ArrowRight className="h-4 w-4" />
                 </Button>

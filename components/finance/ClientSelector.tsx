@@ -64,7 +64,8 @@ export default function ClientSelector({
         }
 
         if (financeRes.ok) {
-          setFinanceClients(await financeRes.json());
+          const financeJson = await financeRes.json();
+          setFinanceClients(financeJson.data ?? financeJson);
         } else {
           console.error("Failed to fetch finance clients");
         }

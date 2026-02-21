@@ -56,7 +56,7 @@ export default function AIAutomationCreator({
   const { dispatch, cancel } = useAIJob();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const chatInputRef = useRef<HTMLInputElement>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Cancel polling when modal closes
   useEffect(() => {
@@ -255,8 +255,8 @@ export default function AIAutomationCreator({
   const showRightPanel = currentSchema || suggestions.length > 0;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-6xl h-[80vh] rounded-3xl shadow-2xl flex overflow-hidden border border-gray-100 flex-col md:flex-row">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white w-full max-w-6xl h-[80vh] rounded-3xl shadow-2xl flex overflow-hidden border border-gray-100 flex-col md:flex-row" onClick={(e) => e.stopPropagation()}>
         {/* Chat Section */}
         <div
           className={`flex flex-col flex-1 h-full ${
@@ -371,12 +371,16 @@ export default function AIAutomationCreator({
 
           <div className="p-4 bg-white border-t border-gray-100">
             <div className="relative">
-              <input
+              <textarea
                 ref={chatInputRef}
-                type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
                 placeholder={
                   currentSchema
                     ? "בקש שינוי, לדוגמה: הוסף שליחת וואטסאפ..."
@@ -385,13 +389,15 @@ export default function AIAutomationCreator({
                     : "נא ליצור טבלאות קודם"
                 }
                 disabled={tables.length === 0}
-                className="w-full pl-5 pr-12 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition text-gray-800 shadow-inner disabled:bg-gray-100 disabled:text-gray-400"
+                rows={6}
+                style={{ resize: "none", fieldSizing: "content" } as React.CSSProperties}
+                className="w-full pl-5 pr-12 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition text-gray-800 shadow-inner disabled:bg-gray-100 disabled:text-gray-400 min-h-[9rem]"
               />
               {tables.length > 0 && (
                 <button
                   onClick={() => handleSend()}
                   disabled={loading || loadingSuggestions || !input.trim()}
-                  className="absolute right-2 top-2 p-2 bg-linear-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition disabled:opacity-50 shadow-md"
+                  className="absolute right-2 bottom-2 p-2 bg-linear-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition disabled:opacity-50 shadow-md"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="22" y1="2" x2="11" y2="13"></line>

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sparkles,
@@ -331,24 +332,30 @@ export default function AIReportCreator({
               </div>
             )}
             <div className="relative flex gap-2">
-              <Input
-                type="text"
+              <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleGenerate();
+                  }
+                }}
                 placeholder={
                   report
                     ? "בקש שינוי בדוח, למשל: ״שנה את הגרף לעוגה״..."
                     : "תאר את הדוח שברצונך ליצור..."
                 }
-                className="pl-5 pr-12 py-6 rounded-xl bg-muted/20"
+                className="pl-5 pr-12 py-6 rounded-xl bg-muted/20 min-h-[9rem]"
                 disabled={loading}
+                rows={6}
+                style={{ resize: "none" }}
               />
               <Button
                 onClick={() => handleGenerate()}
                 disabled={loading || !input.trim()}
                 size="icon"
-                className="absolute left-2 top-2 h-8 w-8 rounded-lg"
+                className="absolute left-2 bottom-2 h-8 w-8 rounded-lg"
               >
                 <ArrowRight className="h-4 w-4" />
               </Button>

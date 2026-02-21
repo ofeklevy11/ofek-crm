@@ -674,6 +674,7 @@ function AutomationConfigModal({
                     <option value="waiting_client">ממתינים לאישור לקוח</option>
                     <option value="on_hold">משימות בהשהייה</option>
                     <option value="completed_month">בוצעו החודש</option>
+                    <option value="done">משימות שבוצעו</option>
                   </select>
                 </div>
               </div>
@@ -1936,8 +1937,8 @@ export function StageDetailModal({
 
       <div
         className={`
-          fixed top-0 left-0 h-full w-[500px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-spring overflow-hidden flex flex-col
-          ${isOpen ? "translate-x-0" : "-translate-x-full"}
+          fixed top-0 right-0 h-full w-[500px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-spring overflow-hidden flex flex-col
+          ${isOpen ? "translate-x-0" : "translate-x-full"}
         `}
         dir="rtl"
       >

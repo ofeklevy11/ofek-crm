@@ -28,7 +28,7 @@ import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
 interface EventModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (event: Omit<CalendarEvent, "id">) => Promise<boolean>;
+  onSave: (event: Omit<CalendarEvent, "id">) => Promise<string | false>;
   onDelete?: () => void;
   event?: CalendarEvent;
   initialDate?: Date;
@@ -64,9 +64,13 @@ export function EventModal({
 
   // --- Automations State ---
   const [automations, setAutomations] = useState<any[]>([]);
+  const [pendingAutomations, setPendingAutomations] = useState<
+    Array<{ minutesBefore: number; actionType: string; actionConfig: any }>
+  >([]);
   const [loadingAutomations, setLoadingAutomations] = useState(false);
   const [showBuilder, setShowBuilder] = useState(false);
   const [editingAutoId, setEditingAutoId] = useState<number | null>(null);
+  const [editingPendingIndex, setEditingPendingIndex] = useState<number | null>(null);
   const [editingAutoData, setEditingAutoData] = useState<any>(null);
   const [userPlan, setUserPlan] = useState("basic");
   const [globalAutomationCount, setGlobalAutomationCount] = useState(0);
@@ -182,8 +186,23 @@ export function EventModal({
 
     setSaving(true);
     try {
-      const success = await onSave(newEvent);
-      if (success) {
+      const result = await onSave(newEvent);
+      if (result) {
+        // If we have pending automations and this was a new event, save them
+        if (!event && pendingAutomations.length > 0) {
+          for (const auto of pendingAutomations) {
+            try {
+              await createEventAutomation({
+                eventId: result,
+                minutesBefore: auto.minutesBefore,
+                actionType: auto.actionType,
+                actionConfig: auto.actionConfig,
+              });
+            } catch (err) {
+              console.error("Failed to create pending automation", err);
+            }
+          }
+        }
         handleClose();
       }
     } catch {
@@ -203,7 +222,9 @@ export function EventModal({
     setColor(defaultEventColors[0]);
     setShowBuilder(false);
     setEditingAutoId(null);
+    setEditingPendingIndex(null);
     setEditingAutoData(null);
+    setPendingAutomations([]);
     onClose();
   };
 
@@ -212,7 +233,20 @@ export function EventModal({
     actionType: string;
     actionConfig: any;
   }) => {
-    if (!event) return;
+    if (!event) {
+      // New event — store in pending list
+      if (editingPendingIndex !== null) {
+        setPendingAutomations((prev) =>
+          prev.map((a, i) => (i === editingPendingIndex ? data : a)),
+        );
+      } else {
+        setPendingAutomations((prev) => [...prev, data]);
+      }
+      setShowBuilder(false);
+      setEditingPendingIndex(null);
+      setEditingAutoData(null);
+      return;
+    }
 
     let res;
     if (editingAutoId) {
@@ -252,10 +286,11 @@ export function EventModal({
     // Check limits
     const limit =
       userPlan === "super" ? Infinity : userPlan === "premium" ? 6 : 2;
-    const currentTotal = globalAutomationCount + automations.length;
+    const displayAutos = event ? automations : pendingAutomations;
+    const currentTotal = globalAutomationCount + displayAutos.length;
 
     // If not editing (creating new), check limit
-    if (!editingAutoId && currentTotal >= limit) {
+    if (!editingAutoId && editingPendingIndex === null && currentTotal >= limit) {
       alert(
         `הגעת למגבלת האוטומציות לאירוע (${limit}). שדרג את החבילה כדי להוסיף עוד.`,
       );
@@ -271,10 +306,27 @@ export function EventModal({
     if (event) loadAutomations(event.id);
   };
 
+  const handleEditPending = (index: number) => {
+    const auto = pendingAutomations[index];
+    setEditingPendingIndex(index);
+    setEditingAutoData({
+      triggerConfig: { minutesBefore: auto.minutesBefore },
+      actionType: auto.actionType,
+      actionConfig: auto.actionConfig,
+    });
+    setShowBuilder(true);
+  };
+
+  const handleDeletePending = (index: number) => {
+    if (!confirm("להסיר אוטומציה זו?")) return;
+    setPendingAutomations((prev) => prev.filter((_, i) => i !== index));
+  };
+
   if (!isOpen) return null;
 
   // -- If Builder Mode --
-  if (showBuilder && event) {
+  if (showBuilder) {
+    const displayAutos = event ? automations : pendingAutomations;
     return (
       <div
         className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70]"
@@ -283,6 +335,7 @@ export function EventModal({
           if (e.target === e.currentTarget) {
             setShowBuilder(false);
             setEditingAutoId(null);
+            setEditingPendingIndex(null);
             setEditingAutoData(null);
           }
         }}
@@ -293,13 +346,14 @@ export function EventModal({
             onCancel={() => {
               setShowBuilder(false);
               setEditingAutoId(null);
+              setEditingPendingIndex(null);
               setEditingAutoData(null);
             }}
-            eventId={event.id}
+            eventId={event?.id}
             initialData={editingAutoData}
             userPlan={userPlan}
             globalCount={globalAutomationCount}
-            specificCount={automations.length}
+            specificCount={displayAutos.length}
           />
         </div>
       </div>
@@ -351,17 +405,16 @@ export function EventModal({
             </button>
             <button
               onClick={() => setActiveTab("automations")}
-              disabled={!event}
               className={`pb-3 px-2 text-sm font-medium transition-all border-b-2 flex items-center gap-1.5 ${
                 activeTab === "automations"
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-gray-500 hover:text-gray-700"
-              } ${!event ? "opacity-50 cursor-not-allowed" : ""}`}
+              }`}
             >
               אוטומציות
-              {event && automations.length > 0 && (
+              {(event ? automations.length : pendingAutomations.length) > 0 && (
                 <span className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.5 rounded-full">
-                  {automations.length}
+                  {event ? automations.length : pendingAutomations.length}
                 </span>
               )}
             </button>
@@ -521,18 +574,6 @@ export function EventModal({
             </form>
           ) : (
             <div className="space-y-6 h-full flex flex-col">
-              {!event ? (
-                <div className="flex flex-col items-center justify-center h-full text-center py-10 opacity-60">
-                  <CalendarIcon size={48} className="text-gray-300 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-700">
-                    שמור את האירוע תחילה
-                  </h3>
-                  <p className="text-gray-500 text-sm mt-1">
-                    לאחר יצירת האירוע תוכל להוסיף לו אוטומציות
-                  </p>
-                </div>
-              ) : (
-                <>
                   {/* Status Bar */}
                   {userPlan !== "super" && (
                     <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-2">
@@ -544,29 +585,29 @@ export function EventModal({
                             : "Basic (עד 2 אוטומציות)"}
                         </span>
                         <span className="bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-blue-200">
-                          {globalAutomationCount + automations.length} מתוך{" "}
+                          {globalAutomationCount + (event ? automations : pendingAutomations).length} מתוך{" "}
                           {userPlan === "premium" ? 6 : 2} בשימוש
                         </span>
                       </div>
                       <div className="w-full bg-blue-100 rounded-full h-1.5 overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all duration-500 ${
-                            globalAutomationCount + automations.length >=
+                            globalAutomationCount + (event ? automations : pendingAutomations).length >=
                             (userPlan === "premium" ? 6 : 2)
                               ? "bg-red-500"
-                              : globalAutomationCount + automations.length >=
+                              : globalAutomationCount + (event ? automations : pendingAutomations).length >=
                                   (userPlan === "premium" ? 4 : 1)
                                 ? "bg-yellow-500"
                                 : "bg-blue-600"
                           }`}
                           style={{
-                            width: `${Math.min(100, ((globalAutomationCount + automations.length) / (userPlan === "premium" ? 6 : 2)) * 100)}%`,
+                            width: `${Math.min(100, ((globalAutomationCount + (event ? automations : pendingAutomations).length) / (userPlan === "premium" ? 6 : 2)) * 100)}%`,
                           }}
                         />
                       </div>
                       <div className="flex justify-between mt-1.5 text-[10px] text-blue-600">
                         <span>{globalAutomationCount} קבועות</span>
-                        <span>{automations.length} ספציפיות לאירוע</span>
+                        <span>{(event ? automations : pendingAutomations).length} ספציפיות לאירוע</span>
                       </div>
                     </div>
                   )}
@@ -592,21 +633,21 @@ export function EventModal({
                         <Plus size={20} className="text-white" />
                       </div>
                       <span className="font-bold text-lg">
-                        {editingAutoId ? "ערוך אוטומציה" : "בנה אוטומציה חדשה"}
+                        {editingAutoId || editingPendingIndex !== null ? "ערוך אוטומציה" : "בנה אוטומציה חדשה"}
                       </span>
                     </div>
                   </button>
 
                   {/* List */}
                   <div className="space-y-3 overflow-y-auto flex-1 pr-1">
-                    {loadingAutomations ? (
+                    {event && loadingAutomations ? (
                       <div className="flex flex-col items-center justify-center py-10 gap-3">
                         <Loader2 className="animate-spin text-blue-500 w-8 h-8" />
                         <span className="text-sm text-gray-500">
                           טוען אוטומציות...
                         </span>
                       </div>
-                    ) : automations.length === 0 ? (
+                    ) : (event ? automations : pendingAutomations).length === 0 ? (
                       <div className="text-center py-12 px-4 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
                         <div className="bg-white w-16 h-16 rounded-full flex items-center justify-center mx-auto shadow-sm mb-4">
                           <Webhook className="text-gray-300 w-8 h-8" />
@@ -618,7 +659,7 @@ export function EventModal({
                           הוסף אוטומציות כדי לחסוך זמן ולייעל את העבודה
                         </p>
                       </div>
-                    ) : (
+                    ) : event ? (
                       <div className="space-y-3">
                         {automations.map((auto) => {
                           let displayName = auto.name || "אוטומציה ללא שם";
@@ -741,10 +782,106 @@ export function EventModal({
                           );
                         })}
                       </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {pendingAutomations.map((auto, index) => (
+                          <div
+                            key={index}
+                            className="bg-white border border-gray-200 rounded-xl p-4 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow group"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div
+                                className={`w-12 h-12 rounded-full flex items-center justify-center shadow-inner ${
+                                  auto.actionType === "SEND_NOTIFICATION"
+                                    ? "bg-yellow-50 text-yellow-600"
+                                    : auto.actionType === "CREATE_TASK"
+                                      ? "bg-green-50 text-green-600"
+                                      : auto.actionType === "SEND_WHATSAPP"
+                                        ? "bg-[#e6f7ee] text-green-700"
+                                        : auto.actionType === "CREATE_RECORD"
+                                          ? "bg-blue-50 text-blue-600"
+                                          : auto.actionType ===
+                                              "CREATE_CALENDAR_EVENT"
+                                            ? "bg-indigo-50 text-indigo-600"
+                                            : "bg-gray-50 text-gray-600"
+                                }`}
+                              >
+                                {auto.actionType === "SEND_NOTIFICATION" ? (
+                                  <Bell size={20} />
+                                ) : auto.actionType === "CREATE_TASK" ? (
+                                  <CheckSquare size={20} />
+                                ) : auto.actionType === "SEND_WHATSAPP" ? (
+                                  <WhatsAppIcon size={20} />
+                                ) : auto.actionType === "CREATE_RECORD" ? (
+                                  <TableIcon size={20} />
+                                ) : auto.actionType ===
+                                  "CREATE_CALENDAR_EVENT" ? (
+                                  <CalendarPlus size={20} />
+                                ) : (
+                                  <Webhook size={20} />
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-bold text-gray-800">
+                                  אוטומציה חדשה
+                                </div>
+                                <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-1">
+                                  <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 font-medium">
+                                    {auto.minutesBefore} דקות לפני
+                                  </span>
+                                  <span>•</span>
+                                  <span>
+                                    {auto.actionType === "SEND_NOTIFICATION"
+                                      ? "התראה"
+                                      : auto.actionType === "CREATE_TASK"
+                                        ? "משימה"
+                                        : auto.actionType === "SEND_WHATSAPP"
+                                          ? "WhatsApp"
+                                          : auto.actionType === "CREATE_RECORD"
+                                            ? "רשומה"
+                                            : auto.actionType ===
+                                                "CREATE_CALENDAR_EVENT"
+                                              ? "אירוע"
+                                              : "פעולה"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 opacity-100">
+                              <button
+                                onClick={() => handleEditPending(index)}
+                                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-all"
+                                title="ערוך אוטומציה"
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="16"
+                                  height="16"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="lucide lucide-pencil"
+                                >
+                                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                                  <path d="m15 5 4 4" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => handleDeletePending(index)}
+                                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                                title="מחק אוטומציה"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-                </>
-              )}
             </div>
           )}
         </div>

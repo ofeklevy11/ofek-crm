@@ -6,7 +6,7 @@ import CompletedTasksList from "@/components/tasks/CompletedTasksList";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { ClipboardList, LayoutGrid, Calendar, Users, CheckCircle } from "lucide-react";
+import { ClipboardList, LayoutGrid, Calendar, Users, CheckCircle, AlertTriangle, RefreshCw } from "lucide-react";
 import { getTasks, getDoneTasks } from "@/app/actions/tasks";
 
 async function getUsers(companyId: number) {
@@ -120,6 +120,7 @@ export default async function TasksPage({
     currentView === "kanban" && user
       ? await getTasks()
       : null;
+  const tasksError = tasksResult && !tasksResult.success ? tasksResult.error : null;
   const initialTasks = tasksResult?.data ?? [];
 
   const taskSheets =
@@ -136,6 +137,7 @@ export default async function TasksPage({
     currentView === "done" && user
       ? await getDoneTasks()
       : null;
+  const doneTasksError = doneTasksResult && !doneTasksResult.success ? doneTasksResult.error : null;
   const doneTasks = doneTasksResult?.data ?? [];
 
   // Lightweight count for the tab badge (only when not already on my-sheets tab)
@@ -154,6 +156,23 @@ export default async function TasksPage({
       ? [{ id: "manage-sheets", label: "ניהול דפי משימות", icon: Users }]
       : []),
   ];
+
+  const ErrorBanner = ({ error }: { error: string }) => (
+    <div className="p-4 bg-red-900/30 border border-red-500/30 rounded-xl flex items-center gap-3">
+      <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+      <div className="flex-1">
+        <p className="text-red-300 font-medium">שגיאה בטעינת המשימות</p>
+        <p className="text-red-400/70 text-sm">{error}</p>
+      </div>
+      <a
+        href="/tasks"
+        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg text-sm transition-colors"
+      >
+        <RefreshCw className="w-3.5 h-3.5" />
+        נסה שוב
+      </a>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -203,36 +222,40 @@ export default async function TasksPage({
           }
         >
           {currentView === "kanban" && (
-            <TaskKanbanBoard currentUser={user} users={users} initialTasks={initialTasks as any} />
+            tasksError
+              ? <ErrorBanner error={tasksError} />
+              : <TaskKanbanBoard currentUser={user} users={users} initialTasks={initialTasks as any} />
           )}
 
           {currentView === "done" && (
-            <div>
-              <div className="mb-6 p-4 bg-gradient-to-r from-purple-900/30 to-indigo-900/30 rounded-xl border border-purple-500/20">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-purple-500/20 rounded-lg">
-                    <CheckCircle className="w-5 h-5 text-purple-400" />
+            doneTasksError
+              ? <ErrorBanner error={doneTasksError} />
+              : <div>
+                  <div className="mb-6 p-4 bg-gradient-to-r from-purple-900/30 to-indigo-900/30 rounded-xl border border-purple-500/20">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-purple-500/20 rounded-lg">
+                        <CheckCircle className="w-5 h-5 text-purple-400" />
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-semibold text-white">
+                          משימות שבוצעו
+                        </h2>
+                        <p className="text-sm text-slate-400">
+                          כל המשימות שסומנו כבוצעו
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-white">
-                      משימות שבוצעו
-                    </h2>
-                    <p className="text-sm text-slate-400">
-                      כל המשימות שסומנו כבוצעו
-                    </p>
-                  </div>
+                  <CompletedTasksList
+                    tasks={doneTasks.map((t: any) => ({
+                      ...t,
+                      id: String(t.id),
+                      dueDate: t.dueDate ? new Date(t.dueDate).toISOString() : null,
+                      createdAt: new Date(t.createdAt).toISOString(),
+                      updatedAt: new Date(t.updatedAt).toISOString(),
+                    }))}
+                  />
                 </div>
-              </div>
-              <CompletedTasksList
-                tasks={doneTasks.map((t: any) => ({
-                  ...t,
-                  id: String(t.id),
-                  dueDate: t.dueDate ? new Date(t.dueDate).toISOString() : null,
-                  createdAt: new Date(t.createdAt).toISOString(),
-                  updatedAt: new Date(t.updatedAt).toISOString(),
-                }))}
-              />
-            </div>
           )}
 
           {currentView === "my-sheets" && (

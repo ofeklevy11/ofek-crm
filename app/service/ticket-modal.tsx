@@ -94,7 +94,7 @@ export default function TicketModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]" dir="rtl">
         <DialogHeader className="text-right">
-          <DialogTitle className="text-[#000000]">פתיחת קריאה חדשה</DialogTitle>
+          <DialogTitle className="text-[#000000] mt-3">פתיחת קריאה חדשה</DialogTitle>
           <DialogDescription className="text-right">
             פתח קריאת שירות חדשה או בקשה לעזרה.
           </DialogDescription>

@@ -141,8 +141,8 @@ export default function TaskModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-xl font-bold text-white mb-4">
           {task ? "עריכת משימה" : "משימה חדשה"}
         </h3>
@@ -183,18 +183,21 @@ export default function TaskModal({
             </div>
             <div>
               <label className="block text-slate-400 text-sm mb-1">סטטוס</label>
-              <select
-                className="w-full bg-slate-900/50 text-white rounded px-3 py-2 border border-slate-700 focus:border-blue-500 outline-none"
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-              >
-                <option value="todo">משימות</option>
-                <option value="in_progress">משימות בטיפול</option>
-                <option value="waiting_client">ממתינים לאישור לקוח</option>
-                <option value="on_hold">משימות בהשהייה</option>
-                <option value="completed_month">בוצעו החודש</option>
-                <option value="done">משימות שבוצעו</option>
-              </select>
+              <div className="relative">
+                <select
+                  className="w-full bg-slate-900/50 text-white rounded pr-3 pl-10 py-2 border border-slate-700 focus:border-blue-500 outline-none appearance-none"
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                >
+                  <option value="todo">משימות</option>
+                  <option value="in_progress">משימות בטיפול</option>
+                  <option value="waiting_client">ממתינים לאישור לקוח</option>
+                  <option value="on_hold">משימות בהשהייה</option>
+                  <option value="completed_month">בוצעו החודש</option>
+                  <option value="done">משימות שבוצעו</option>
+                </select>
+                <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+              </div>
             </div>
           </div>
 
@@ -226,37 +229,43 @@ export default function TaskModal({
               <label className="block text-slate-400 text-sm mb-1">
                 עדיפות
               </label>
-              <select
-                className="w-full bg-slate-900/50 text-white rounded px-3 py-2 border border-slate-700 focus:border-blue-500 outline-none"
-                value={priority}
-                onChange={(e) =>
-                  setPriority(e.target.value as "high" | "medium" | "low")
-                }
-              >
-                <option value="high">גבוה</option>
-                <option value="medium">בינוני</option>
-                <option value="low">נמוך</option>
-              </select>
+              <div className="relative">
+                <select
+                  className="w-full bg-slate-900/50 text-white rounded pr-3 pl-10 py-2 border border-slate-700 focus:border-blue-500 outline-none appearance-none"
+                  value={priority}
+                  onChange={(e) =>
+                    setPriority(e.target.value as "high" | "medium" | "low")
+                  }
+                >
+                  <option value="high">גבוה</option>
+                  <option value="medium">בינוני</option>
+                  <option value="low">נמוך</option>
+                </select>
+                <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+              </div>
             </div>
             <div>
               <label className="block text-slate-400 text-sm mb-1">אחראי</label>
-              <select
-                className="w-full bg-slate-900/50 text-white rounded px-3 py-2 border border-slate-700 focus:border-blue-500 outline-none"
-                value={assigneeId || ""}
-                onChange={(e) =>
-                  setAssigneeId(
-                    e.target.value ? Number(e.target.value) : undefined,
-                  )
-                }
-                disabled={loadingUsers}
-              >
-                <option value="">ללא אחראי</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  className="w-full bg-slate-900/50 text-white rounded pr-3 pl-10 py-2 border border-slate-700 focus:border-blue-500 outline-none appearance-none"
+                  value={assigneeId || ""}
+                  onChange={(e) =>
+                    setAssigneeId(
+                      e.target.value ? Number(e.target.value) : undefined,
+                    )
+                  }
+                  disabled={loadingUsers}
+                >
+                  <option value="">ללא אחראי</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name}
+                    </option>
+                  ))}
+                </select>
+                <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+              </div>
             </div>
           </div>
 
@@ -317,7 +326,7 @@ export default function TaskModal({
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               ) : (
-                <span className="w-4 h-4 font-bold" role="img" aria-label="plus">
+                <span className="w-4 h-4 font-bold flex items-center justify-center" role="img" aria-label="plus">
                   {task ? "✎" : "+"}
                 </span>
               )}

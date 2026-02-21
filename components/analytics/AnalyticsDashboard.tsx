@@ -1314,7 +1314,7 @@ export default function AnalyticsDashboard({
       {isFolderModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">
+            <h3 className="text-xl font-bold text-gray-900 mb-2 ">
               יצירת תיקייה חדשה
             </h3>
             <p className="text-gray-500 text-sm mb-6">

@@ -1164,10 +1164,10 @@ export default function RecordTable({
                           ייבוא / ייצוא נתונים
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
+                      <DropdownMenuContent align="end" dir="rtl" className="text-right">
                         {canEdit && (
                           <>
-                            <DropdownMenuLabel>ייבוא</DropdownMenuLabel>
+                            <DropdownMenuLabel className="text-right">ייבוא</DropdownMenuLabel>
                             <DropdownMenuItem
                               onClick={() => setShowImportModal(true)}
                             >
@@ -1177,7 +1177,7 @@ export default function RecordTable({
                             <DropdownMenuSeparator />
                           </>
                         )}
-                        <DropdownMenuLabel>ייצוא</DropdownMenuLabel>
+                        <DropdownMenuLabel className="text-right">ייצוא</DropdownMenuLabel>
                         <DropdownMenuItem
                           onClick={() => handleExportAll("csv")}
                         >

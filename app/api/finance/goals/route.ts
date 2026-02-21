@@ -168,7 +168,15 @@ export async function POST(request: NextRequest) {
       });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
-    // Invalidate goals cache so dashboard reflects the new goal
+    // Invalidate stale cache immediately so next page load does live computation
+    try {
+      const { invalidateGoalsCache } = await import("@/lib/services/dashboard-cache");
+      await invalidateGoalsCache(user.companyId);
+    } catch (e) {
+      log.error("Failed to invalidate goals cache", { error: String(e) });
+    }
+
+    // Trigger background refresh to warm the cache
     try {
       await inngest.send({
         id: `goals-refresh-${user.companyId}-${Math.floor(Date.now() / 5000)}`,

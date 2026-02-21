@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { GoalWithProgress, updateGoalOrder } from "@/app/actions/goals";
 import GoalCard from "./GoalCard";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Plus } from "lucide-react";
+import GoalModal from "./GoalModal";
+import { Button } from "@/components/ui/button";
 import {
   DndContext,
   closestCenter,
@@ -24,6 +26,7 @@ interface GoalListProps {
   goals: GoalWithProgress[];
   metrics: any[];
   tables: any[];
+  clients: any[];
 }
 
 function SortableGoalItem({
@@ -81,7 +84,7 @@ function SortableGoalItem({
   );
 }
 
-export default function GoalList({ goals, metrics, tables }: GoalListProps) {
+export default function GoalList({ goals, metrics, tables, clients }: GoalListProps) {
   const [items, setItems] = useState<GoalWithProgress[]>(goals);
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
 
@@ -127,6 +130,17 @@ export default function GoalList({ goals, metrics, tables }: GoalListProps) {
         <p className="text-gray-500 mt-2 max-w-sm mx-auto">
           התחל לתכנן את ההצלחה העסקית שלך על ידי הגדרת יעדים ברורים ומדידים.
         </p>
+        <GoalModal
+          metrics={metrics}
+          tables={tables}
+          clients={clients}
+          trigger={
+            <Button className="mt-4 gap-2 bg-[#4f95ff] hover:bg-[#3d7ccc] text-white">
+              <Plus className="w-4 h-4" />
+              צור את היעד הראשון שלך
+            </Button>
+          }
+        />
       </div>
     );
   }
