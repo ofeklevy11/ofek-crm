@@ -1266,12 +1266,12 @@ export default function ViewAutomationModal({
                               onChange={(e) => setTaskStatus(e.target.value)}
                               className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
                             >
-                              <option value="todo">לביצוע</option>
-                              <option value="in_progress">בטיפול</option>
-                              <option value="waiting_client">
-                                ממתין ללקוח
-                              </option>
-                              <option value="done">בוצע</option>
+                              <option value="todo">משימות</option>
+                              <option value="in_progress">משימות בטיפול</option>
+                              <option value="waiting_client">ממתינים לאישור לקוח</option>
+                              <option value="on_hold">משימות בהשהייה</option>
+                              <option value="completed_month">בוצעו החודש</option>
+                              <option value="done">משימות שבוצעו</option>
                             </select>
                           </div>
                         </div>

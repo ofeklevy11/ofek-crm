@@ -156,12 +156,12 @@ export const ACTION_COLORS: Record<string, string> = {
 // ─── Field Definitions per Step Type ─────────────────────────────────────────
 
 const TASK_STATUS_OPTIONS = [
-  { value: "todo", label: "לביצוע" },
-  { value: "in_progress", label: "בתהליך" },
-  { value: "waiting_client", label: "ממתין ללקוח" },
-  { value: "on_hold", label: "בהמתנה" },
-  { value: "completed_month", label: "הושלם החודש" },
-  { value: "done", label: "הושלם" },
+  { value: "todo", label: "משימות" },
+  { value: "in_progress", label: "משימות בטיפול" },
+  { value: "waiting_client", label: "ממתינים לאישור לקוח" },
+  { value: "on_hold", label: "משימות בהשהייה" },
+  { value: "completed_month", label: "בוצעו החודש" },
+  { value: "done", label: "משימות שבוצעו" },
 ];
 
 const TICKET_STATUS_OPTIONS = [
@@ -273,7 +273,7 @@ export const ACTION_FIELD_CONFIGS: Record<string, FieldConfig[]> = {
     { key: "description", label: "תיאור", inputType: "textarea", placeholder: "תיאור המשימה...", optional: true },
     { key: "assigneeId", label: "אחראי", inputType: "user-select" },
     { key: "priority", label: "עדיפות", inputType: "select", options: PRIORITY_OPTIONS },
-    { key: "status", label: "סטטוס", inputType: "select", options: TASK_STATUS_OPTIONS, optional: true },
+    { key: "status", label: "סטטוס", inputType: "select", options: TASK_STATUS_OPTIONS },
     { key: "dueDays", label: "ימים ליעד", inputType: "number", placeholder: "7" },
   ],
   UPDATE_RECORD_FIELD: [
@@ -289,7 +289,6 @@ export const ACTION_FIELD_CONFIGS: Record<string, FieldConfig[]> = {
   ],
   WEBHOOK: [
     { key: "url", label: "URL", inputType: "text", placeholder: "https://..." },
-    { key: "method", label: "Method", inputType: "select", options: HTTP_METHOD_OPTIONS },
   ],
   ADD_TO_NURTURE_LIST: [
     { key: "listId", label: "רשימה (slug)", inputType: "text", placeholder: "my-list" },
@@ -331,20 +330,28 @@ export function schemaToSteps(schema: AutomationSchema): FlowStep[] {
   if (schema.actionType === "MULTI_ACTION" && Array.isArray(schema.actionConfig?.actions)) {
     let actionIdx = 0;
     for (const action of schema.actionConfig.actions) {
+      const cfg = action.config || {};
+      if (action.type === "CREATE_TASK" && !cfg.status) {
+        cfg.status = "todo";
+      }
       steps.push({
         id: `action_${actionIdx++}`,
         kind: "action",
         type: action.type,
-        config: action.config || {},
+        config: cfg,
         label: ACTION_LABELS[action.type] || action.type,
       });
     }
   } else {
+    const cfg = schema.actionConfig || {};
+    if (schema.actionType === "CREATE_TASK" && !cfg.status) {
+      cfg.status = "todo";
+    }
     steps.push({
       id: "action_0",
       kind: "action",
       type: schema.actionType,
-      config: schema.actionConfig || {},
+      config: cfg,
       label: ACTION_LABELS[schema.actionType] || schema.actionType,
     });
   }

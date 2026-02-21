@@ -336,6 +336,13 @@ export default function AutomationModal({
 
   // --- Logic Helpers ---
 
+  const TRIGGER_COLUMN_TYPES = new Set([
+    "select", "multiSelect", "status", "priority",
+    "number", "currency",
+    "boolean", "checkbox",
+    "date",
+  ]);
+
   const selectedColumn = columns.find(
     (c) => c.id === columnId || c.name === columnId,
   );
@@ -811,6 +818,7 @@ export default function AutomationModal({
               <option value="waiting_client">ממתינים לאישור לקוח</option>
               <option value="on_hold">משימות בהשהייה</option>
               <option value="completed_month">בוצעו החודש</option>
+              <option value="done">משימות שבוצעו</option>
             </select>
           </div>
 
@@ -829,6 +837,7 @@ export default function AutomationModal({
               <option value="waiting_client">ממתינים לאישור לקוח</option>
               <option value="on_hold">משימות בהשהייה</option>
               <option value="completed_month">בוצעו החודש</option>
+              <option value="done">משימות שבוצעו</option>
             </select>
           </div>
         </div>
@@ -926,6 +935,10 @@ export default function AutomationModal({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               איזו עמודה לנטר?
             </label>
+            <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 text-sm text-amber-800 mb-2">
+              <AlertCircle className="w-4 h-4 inline-block ml-1" />
+              שים לב: ניתן לנטר רק שדות מסוג בחירה (select), מספרי (number), תאריך או סטטוס. שדות טקסט חופשי אינם נתמכים כטריגר.
+            </div>
             {loadingColumns ? (
               <div className="flex items-center gap-2 text-sm text-gray-500 p-2">
                 <Loader2 className="animate-spin" size={16} /> טוען עמודות...
@@ -943,7 +956,9 @@ export default function AutomationModal({
                 className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">בחר עמודה...</option>
-                {columns.map((col: any) => (
+                {columns
+                  .filter((col: any) => TRIGGER_COLUMN_TYPES.has(col.type))
+                  .map((col: any) => (
                   <option key={col.id || col.name} value={col.name}>
                     {col.label || col.name}
                   </option>
@@ -1821,6 +1836,7 @@ export default function AutomationModal({
                     <option value="waiting_client">ממתינים לאישור לקוח</option>
                     <option value="on_hold">משימות בהשהייה</option>
                     <option value="completed_month">בוצעו החודש</option>
+                    <option value="done">משימות שבוצעו</option>
                   </select>
                 </div>
                 <div>
@@ -1986,7 +2002,7 @@ export default function AutomationModal({
                   </label>
                   {(() => {
                     const selectedCol = updateFieldColumns.find(
-                      (c) =>
+                      (c: any) =>
                         c.id === updateFieldColumnId ||
                         c.name === updateFieldColumnId,
                     );
@@ -1994,7 +2010,8 @@ export default function AutomationModal({
                       selectedCol &&
                       (selectedCol.type === "select" ||
                         selectedCol.type === "multiSelect" ||
-                        selectedCol.type === "status");
+                        selectedCol.type === "status" ||
+                        selectedCol.type === "priority");
 
                     if (isSelectType && selectedCol?.options) {
                       return (
@@ -2005,23 +2022,49 @@ export default function AutomationModal({
                           className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                         >
                           <option value="">בחר ערך...</option>
-                          {selectedCol.options.map((opt: string) => (
-                            <option key={opt} value={opt}>
-                              {opt}
+                          {selectedCol.options.map((opt: any, i: number) => (
+                            <option key={i} value={typeof opt === "string" ? opt : opt.value || opt.label}>
+                              {typeof opt === "string" ? opt : opt.label || opt.value}
                             </option>
                           ))}
                         </select>
                       );
                     }
 
+                    if (selectedCol?.type === "boolean" || selectedCol?.type === "checkbox") {
+                      return (
+                        <select
+                          required
+                          value={updateFieldValue}
+                          onChange={(e) => setUpdateFieldValue(e.target.value)}
+                          className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                        >
+                          <option value="false">לא / כבוי</option>
+                          <option value="true">כן / פעיל</option>
+                        </select>
+                      );
+                    }
+
+                    if (selectedCol?.type === "date") {
+                      return (
+                        <input
+                          required
+                          type="date"
+                          value={updateFieldValue}
+                          onChange={(e) => setUpdateFieldValue(e.target.value)}
+                          className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                        />
+                      );
+                    }
+
                     return (
                       <input
                         required
-                        type="text"
+                        type={selectedCol?.type === "number" || selectedCol?.type === "currency" ? "number" : "text"}
                         value={updateFieldValue}
                         onChange={(e) => setUpdateFieldValue(e.target.value)}
                         className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                        placeholder='לדוגמה: "בוצעה שיחה"'
+                        placeholder={selectedCol?.type === "number" || selectedCol?.type === "currency" ? "0" : 'לדוגמה: "בוצעה שיחה"'}
                       />
                     );
                   })()}

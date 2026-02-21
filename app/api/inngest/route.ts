@@ -2,6 +2,8 @@ import { serve } from "inngest/next";
 import { inngest } from "@/lib/inngest/client";
 import { createLogger } from "@/lib/logger";
 
+export const maxDuration = 60;
+
 const log = createLogger("InngestAPI");
 import { processImportJob } from "@/lib/inngest/functions/import-job";
 import {

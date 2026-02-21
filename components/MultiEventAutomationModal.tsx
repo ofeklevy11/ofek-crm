@@ -407,6 +407,13 @@ export default function MultiEventAutomationModal({
     );
   };
 
+  const TRIGGER_COLUMN_TYPES = new Set([
+    "select", "multiSelect", "status", "priority",
+    "number", "currency",
+    "boolean", "checkbox",
+    "date",
+  ]);
+
   const getColumnsForEvent = (tId: string) => {
     return schemas[tId] || [];
   };
@@ -697,6 +704,10 @@ export default function MultiEventAutomationModal({
         </div>
       </div>
 
+      <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 text-sm text-amber-800 mt-4">
+        שים לב: ניתן לנטר רק שדות מסוג בחירה (select), מספרי (number), תאריך או סטטוס. שדות טקסט חופשי אינם נתמכים כטריגר.
+      </div>
+
       <div className="space-y-4 mt-6">
         {eventChain.map((event, index) => {
           const currentTableId = isMultiTableMode ? event.tableId : tableId;
@@ -777,7 +788,9 @@ export default function MultiEventAutomationModal({
                     disabled={!currentTableId}
                   >
                     <option value="">בחר עמודה...</option>
-                    {currentColumns.map((c) => (
+                    {currentColumns
+                      .filter((c) => TRIGGER_COLUMN_TYPES.has(c.type))
+                      .map((c) => (
                       <option key={c.name} value={c.name}>
                         {c.label || c.name}
                       </option>
@@ -1356,6 +1369,7 @@ export default function MultiEventAutomationModal({
                         </option>
                         <option value="on_hold">משימות בהשהייה</option>
                         <option value="completed_month">בוצעו החודש</option>
+                        <option value="done">משימות שבוצעו</option>
                       </select>
                     </div>
                   </div>
@@ -1476,7 +1490,10 @@ export default function MultiEventAutomationModal({
                       </label>
                       <select
                         value={updateFieldColumnId}
-                        onChange={(e) => setUpdateFieldColumnId(e.target.value)}
+                        onChange={(e) => {
+                          setUpdateFieldColumnId(e.target.value);
+                          setUpdateFieldValue("");
+                        }}
                         className="w-full px-4 py-2 border rounded-lg bg-white"
                       >
                         <option value="">בחר עמודה...</option>
@@ -1491,13 +1508,58 @@ export default function MultiEventAutomationModal({
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         ערך חדש
                       </label>
-                      <input
-                        type="text"
-                        value={updateFieldValue}
-                        onChange={(e) => setUpdateFieldValue(e.target.value)}
-                        placeholder="הזן ערך..."
-                        className="w-full px-4 py-2 border rounded-lg"
-                      />
+                      {(() => {
+                        const selectedCol = getColumnsForEvent(tableId).find(
+                          (c: any) => c.name === updateFieldColumnId || c.id === updateFieldColumnId
+                        );
+                        if (selectedCol?.type === "select" || selectedCol?.type === "multiSelect" || selectedCol?.type === "status" || selectedCol?.type === "priority") {
+                          return (
+                            <select
+                              value={updateFieldValue}
+                              onChange={(e) => setUpdateFieldValue(e.target.value)}
+                              className="w-full px-4 py-2 border rounded-lg bg-white"
+                            >
+                              <option value="">בחר ערך...</option>
+                              {(selectedCol.options || []).map((opt: any, i: number) => (
+                                <option key={i} value={typeof opt === "string" ? opt : opt.value || opt.label}>
+                                  {typeof opt === "string" ? opt : opt.label || opt.value}
+                                </option>
+                              ))}
+                            </select>
+                          );
+                        }
+                        if (selectedCol?.type === "boolean" || selectedCol?.type === "checkbox") {
+                          return (
+                            <select
+                              value={updateFieldValue}
+                              onChange={(e) => setUpdateFieldValue(e.target.value)}
+                              className="w-full px-4 py-2 border rounded-lg bg-white"
+                            >
+                              <option value="false">לא / כבוי</option>
+                              <option value="true">כן / פעיל</option>
+                            </select>
+                          );
+                        }
+                        if (selectedCol?.type === "date") {
+                          return (
+                            <input
+                              type="date"
+                              value={updateFieldValue}
+                              onChange={(e) => setUpdateFieldValue(e.target.value)}
+                              className="w-full px-4 py-2 border rounded-lg"
+                            />
+                          );
+                        }
+                        return (
+                          <input
+                            type={selectedCol?.type === "number" || selectedCol?.type === "currency" ? "number" : "text"}
+                            value={updateFieldValue}
+                            onChange={(e) => setUpdateFieldValue(e.target.value)}
+                            placeholder="הזן ערך..."
+                            className="w-full px-4 py-2 border rounded-lg"
+                          />
+                        );
+                      })()}
                     </div>
                   </div>
 

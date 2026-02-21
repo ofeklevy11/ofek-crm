@@ -8,6 +8,7 @@ export interface AutomationRawContext {
   fieldIdsByTable: Map<number, Set<string>>;
   fieldNameToId: Map<number, Map<string, string>>;
   fieldOptionsByTable: Map<number, Map<string, string[]>>;
+  fieldTypesByTable: Map<number, Map<string, string>>;
   nurtureListSlugs: Set<string>;
 }
 
@@ -33,19 +34,20 @@ export interface SerializedRawContext {
   fieldIdsByTable: Record<number, string[]>;
   fieldNameToId: Record<number, Record<string, string>>;
   fieldOptionsByTable: Record<number, Record<string, string[]>>;
+  fieldTypesByTable?: Record<number, Record<string, string>>;
   nurtureListSlugs: string[];
 }
 
 // ─── Token Budget ────────────────────────────────────────────────────────────
 
-const MAX_TOTAL_CHARS = 24000;
-const PRIORITY_1_BUDGET = 16000; // tables + users + org metadata
-const PRIORITY_2_BUDGET = 5000;  // existing automations + workflows
-const PRIORITY_3_BUDGET = 3000;  // sample data + nurture lists
+const MAX_TOTAL_CHARS = 40000;
+const PRIORITY_1_BUDGET = 26000; // tables + users + org metadata
+const PRIORITY_2_BUDGET = 8000;  // existing automations + workflows
+const PRIORITY_3_BUDGET = 6000;  // sample data + nurture lists
 
-const MAX_FIELDS_PER_TABLE = 30;
-const MAX_SAMPLE_TABLES = 5;
-const MAX_SAMPLE_ROWS = 3;
+const MAX_FIELDS_PER_TABLE = 50;
+const MAX_SAMPLE_TABLES = 8;
+const MAX_SAMPLE_ROWS = 5;
 const MAX_SAMPLE_VALUE_LEN = 50;
 
 // ─── Main Function ───────────────────────────────────────────────────────────
@@ -140,6 +142,7 @@ export async function buildAutomationContext(companyId: number): Promise<Automat
   const fieldIdsByTable = new Map<number, Set<string>>();
   const fieldNameToId = new Map<number, Map<string, string>>();
   const fieldOptionsByTable = new Map<number, Map<string, string[]>>();
+  const fieldTypesByTable = new Map<number, Map<string, string>>();
   const nurtureListSlugs = new Set<string>(nurtureLists.map((n) => n.slug));
 
   for (const table of tables) {
@@ -147,6 +150,7 @@ export async function buildAutomationContext(companyId: number): Promise<Automat
     const idSet = new Set<string>();
     const nameMap = new Map<string, string>();
     const optionsMap = new Map<string, string[]>();
+    const typesMap = new Map<string, string>();
     for (const f of fields) {
       if (f.id) {
         idSet.add(f.id);
@@ -155,11 +159,13 @@ export async function buildAutomationContext(companyId: number): Promise<Automat
         if (f.options && f.options.length > 0) {
           optionsMap.set(f.id, f.options);
         }
+        if (f.type) typesMap.set(f.id, f.type);
       }
     }
     fieldIdsByTable.set(table.id, idSet);
     fieldNameToId.set(table.id, nameMap);
     fieldOptionsByTable.set(table.id, optionsMap);
+    fieldTypesByTable.set(table.id, typesMap);
   }
 
   const _raw: AutomationRawContext = {
@@ -168,6 +174,7 @@ export async function buildAutomationContext(companyId: number): Promise<Automat
     fieldIdsByTable,
     fieldNameToId,
     fieldOptionsByTable,
+    fieldTypesByTable,
     nurtureListSlugs,
   };
 
@@ -215,12 +222,17 @@ export function serializeRawContext(raw: AutomationRawContext): SerializedRawCon
   for (const [tableId, optionsMap] of raw.fieldOptionsByTable) {
     fieldOptionsByTable[tableId] = Object.fromEntries(optionsMap);
   }
+  const fieldTypesByTable: Record<number, Record<string, string>> = {};
+  for (const [tableId, typesMap] of raw.fieldTypesByTable) {
+    fieldTypesByTable[tableId] = Object.fromEntries(typesMap);
+  }
   return {
     tableIds: [...raw.tableIds],
     userIds: [...raw.userIds],
     fieldIdsByTable,
     fieldNameToId,
     fieldOptionsByTable,
+    fieldTypesByTable,
     nurtureListSlugs: [...raw.nurtureListSlugs],
   };
 }
@@ -240,12 +252,19 @@ export function deserializeRawContext(s: SerializedRawContext): AutomationRawCon
       fieldOptionsByTable.set(Number(tableId), new Map(Object.entries(optionsObj)));
     }
   }
+  const fieldTypesByTable = new Map<number, Map<string, string>>();
+  if (s.fieldTypesByTable) {
+    for (const [tableId, typesObj] of Object.entries(s.fieldTypesByTable)) {
+      fieldTypesByTable.set(Number(tableId), new Map(Object.entries(typesObj)));
+    }
+  }
   return {
     tableIds: new Set(s.tableIds),
     userIds: new Set(s.userIds),
     fieldIdsByTable,
     fieldNameToId,
     fieldOptionsByTable,
+    fieldTypesByTable,
     nurtureListSlugs: new Set(s.nurtureListSlugs),
   };
 }
@@ -314,7 +333,7 @@ function formatTables(tables: any[]): string {
       const fieldLines = fields.map((f) => {
         let line = `    - ${f.name || "?"} (ID: ${f.id || "?"}, Type: ${f.type || "?"}, Label: "${f.label || ""}")`;
         if (f.options && f.options.length > 0) {
-          line += ` [Options: ${f.options.slice(0, 15).join(", ")}]`;
+          line += ` [Options: ${f.options.slice(0, 30).join(", ")}]`;
         }
         if (f.relationTableId) {
           line += ` [Relation -> Table ${f.relationTableId}]`;

@@ -76,6 +76,60 @@ export async function getTasks() {
   }
 }
 
+export async function getDoneTasks() {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const canView = user.role === "admin" || hasUserFlag(user, "canViewTasks");
+    if (!canView) {
+      return { success: false, error: "Forbidden" };
+    }
+
+    const rateLimited = await checkActionRateLimit(String(user.id), RATE_LIMITS.taskRead).catch(() => false);
+    if (rateLimited) {
+      return { success: false, error: "Rate limit exceeded. Please try again later." };
+    }
+
+    const canViewAll =
+      user.role === "admin" || hasUserFlag(user, "canViewAllTasks");
+    const whereClause = canViewAll
+      ? { companyId: user.companyId, status: "done" as const }
+      : { companyId: user.companyId, assigneeId: user.id, status: "done" as const };
+
+    const tasks = await withRetry(() => prisma.task.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        assigneeId: true,
+        priority: true,
+        dueDate: true,
+        tags: true,
+        creatorId: true,
+        createdAt: true,
+        updatedAt: true,
+        assignee: {
+          select: { id: true, name: true },
+        },
+        creator: {
+          select: { id: true, name: true },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 500,
+    }));
+    return { success: true, data: tasks };
+  } catch (error) {
+    log.error("Error fetching done tasks", { error: String(error) });
+    return { success: false, error: "Failed to fetch done tasks" };
+  }
+}
+
 export async function getTaskById(id: string) {
   try {
     const user = await getCurrentUser();

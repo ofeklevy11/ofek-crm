@@ -26,11 +26,12 @@ interface MiniTasksWidgetProps {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  todo: { label: "לביצוע", color: "text-slate-700", bg: "bg-slate-200" },
-  in_progress: { label: "בטיפול", color: "text-blue-700", bg: "bg-blue-100" },
-  waiting_client: { label: "ממתין ללקוח", color: "text-amber-700", bg: "bg-amber-100" },
-  completed_month: { label: "הושלם החודש", color: "text-emerald-700", bg: "bg-emerald-100" },
-  done: { label: "הסתיים", color: "text-gray-600", bg: "bg-gray-200" },
+  todo: { label: "משימות", color: "text-slate-700", bg: "bg-slate-200" },
+  in_progress: { label: "משימות בטיפול", color: "text-blue-700", bg: "bg-blue-100" },
+  waiting_client: { label: "ממתינים לאישור לקוח", color: "text-amber-700", bg: "bg-amber-100" },
+  on_hold: { label: "משימות בהשהייה", color: "text-gray-600", bg: "bg-gray-200" },
+  completed_month: { label: "בוצעו החודש", color: "text-emerald-700", bg: "bg-emerald-100" },
+  done: { label: "משימות שבוצעו", color: "text-purple-700", bg: "bg-purple-100" },
 };
 
 const PRIORITY_BADGE: Record<string, { bg: string; color: string }> = {
@@ -132,7 +133,6 @@ export default function MiniTasksWidget({
   };
 
   const totalActive = Object.entries(counts)
-    .filter(([s]) => s !== "done")
     .reduce((sum, [, c]) => sum + c, 0);
 
   // Filter summary
@@ -141,12 +141,24 @@ export default function MiniTasksWidget({
     const preset = settings?.preset || "my_active";
     parts.push(PRESET_LABELS[preset] || "המשימות שלי");
 
+    if (settings?.statusFilter?.length) {
+      const labels = settings.statusFilter.map((s: string) => STATUS_CONFIG[s]?.label || s);
+      parts.push(labels.join(", "));
+    }
+
     if (settings?.priorityFilter?.length) {
       const labels = settings.priorityFilter.map((p: string) => PRIORITY_LABELS[p] || p);
       parts.push(labels.join(", "));
     }
 
     return parts.join(" · ");
+  }, [settings]);
+
+  const widgetTitle = useMemo(() => {
+    const statuses = settings?.statusFilter as string[] | undefined;
+    if (!statuses?.length) return "משימות פעילות";
+    if (statuses.length === 1) return STATUS_CONFIG[statuses[0]]?.label || "משימות פעילות";
+    return "משימות מסוננות";
   }, [settings]);
 
   return (
@@ -173,8 +185,8 @@ export default function MiniTasksWidget({
                 {filterSummary}
               </span>
             </div>
-            <h3 className="text-lg font-bold text-gray-900">משימות פעילות</h3>
-            <p className="text-sm text-gray-500">{totalActive} משימות פתוחות</p>
+            <h3 className="text-lg font-bold text-gray-900">{widgetTitle}</h3>
+            <p className="text-sm text-gray-500">{totalActive} משימות</p>
           </div>
 
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

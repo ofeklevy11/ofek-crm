@@ -2,11 +2,12 @@ import { Suspense } from "react";
 import TaskKanbanBoard from "@/components/TaskKanbanBoard";
 import MyTaskSheets from "@/components/tasks/MyTaskSheets";
 import TaskSheetsManager from "@/components/tasks/TaskSheetsManager";
+import CompletedTasksList from "@/components/tasks/CompletedTasksList";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { ClipboardList, LayoutGrid, Calendar, Users } from "lucide-react";
-import { getTasks } from "@/app/actions/tasks";
+import { ClipboardList, LayoutGrid, Calendar, Users, CheckCircle } from "lucide-react";
+import { getTasks, getDoneTasks } from "@/app/actions/tasks";
 
 async function getUsers(companyId: number) {
   const users = await prisma.user.findMany({
@@ -131,6 +132,12 @@ export default async function TasksPage({
       ? await getMyTaskSheets(user.companyId, user.id)
       : [];
 
+  const doneTasksResult =
+    currentView === "done" && user
+      ? await getDoneTasks()
+      : null;
+  const doneTasks = doneTasksResult?.data ?? [];
+
   // Lightweight count for the tab badge (only when not already on my-sheets tab)
   const mySheetsCount =
     currentView === "my-sheets"
@@ -141,6 +148,7 @@ export default async function TasksPage({
 
   const tabs = [
     { id: "kanban", label: "לוח קנבן", icon: LayoutGrid },
+    { id: "done", label: "משימות שבוצעו", icon: CheckCircle },
     { id: "my-sheets", label: "דפי המשימות שלי", icon: ClipboardList },
     ...(isAdmin
       ? [{ id: "manage-sheets", label: "ניהול דפי משימות", icon: Users }]
@@ -196,6 +204,35 @@ export default async function TasksPage({
         >
           {currentView === "kanban" && (
             <TaskKanbanBoard currentUser={user} users={users} initialTasks={initialTasks as any} />
+          )}
+
+          {currentView === "done" && (
+            <div>
+              <div className="mb-6 p-4 bg-gradient-to-r from-purple-900/30 to-indigo-900/30 rounded-xl border border-purple-500/20">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-purple-500/20 rounded-lg">
+                    <CheckCircle className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">
+                      משימות שבוצעו
+                    </h2>
+                    <p className="text-sm text-slate-400">
+                      כל המשימות שסומנו כבוצעו
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <CompletedTasksList
+                tasks={doneTasks.map((t: any) => ({
+                  ...t,
+                  id: String(t.id),
+                  dueDate: t.dueDate ? new Date(t.dueDate).toISOString() : null,
+                  createdAt: new Date(t.createdAt).toISOString(),
+                  updatedAt: new Date(t.updatedAt).toISOString(),
+                }))}
+              />
+            </div>
           )}
 
           {currentView === "my-sheets" && (

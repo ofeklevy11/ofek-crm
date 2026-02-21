@@ -1997,7 +1997,7 @@ async function executeCreateTaskAction(
       companyId: user.companyId,
       title,
       description: description || null,
-      status: (status || "todo") as "todo" | "in_progress" | "waiting_client" | "completed_month" | "done",
+      status: (status || "todo") as "todo" | "in_progress" | "waiting_client" | "on_hold" | "completed_month" | "done",
       priority: (priority || null) as "low" | "medium" | "high" | null,
       assigneeId: validatedAssigneeId,
       dueDate: dueDate ? new Date(dueDate) : null,

@@ -122,6 +122,7 @@ export interface TasksFilters {
   statusFilter?: string[];
   priorityFilter?: string[];
   assigneeFilter?: string;
+  specificUserId?: number;
   dueDatePreset?: string;
   dueDateFrom?: string;
   dueDateTo?: string;
@@ -130,7 +131,7 @@ export interface TasksFilters {
   showCompleted?: boolean;
 }
 
-const VALID_TASK_STATUSES = ["todo", "in_progress", "waiting_client", "completed_month", "done"];
+const VALID_TASK_STATUSES = ["todo", "in_progress", "waiting_client", "on_hold", "completed_month", "done"];
 const VALID_PRIORITIES = ["high", "medium", "low"];
 const VALID_TASK_SORTS = ["priority", "dueDate", "createdAt"];
 
@@ -147,13 +148,17 @@ export async function getMiniTasksData(filters?: TasksFilters) {
   const now = new Date();
 
   // Assignee filter
-  const assigneeFilter = filters?.assigneeFilter === "all" && canViewAll ? "all" : "mine";
-  const assigneeWhere = assigneeFilter === "all" ? {} : { assigneeId: user.id };
+  let assigneeWhere: any;
+  if (filters?.assigneeFilter === "specific" && canViewAll && typeof filters?.specificUserId === "number") {
+    assigneeWhere = { assigneeId: filters.specificUserId };
+  } else if (filters?.assigneeFilter === "all" && canViewAll) {
+    assigneeWhere = {};
+  } else {
+    assigneeWhere = { assigneeId: user.id };
+  }
 
   // Status filter
   let statusIn: string[] | undefined;
-  const showCompleted = filters?.showCompleted ?? false;
-
   if (filters?.statusFilter && Array.isArray(filters.statusFilter) && filters.statusFilter.length > 0) {
     statusIn = filters.statusFilter.filter((s) => VALID_TASK_STATUSES.includes(s));
     if (statusIn.length === 0) statusIn = undefined;
@@ -170,17 +175,17 @@ export async function getMiniTasksData(filters?: TasksFilters) {
     // Presets auto-configure filters
     switch (safePreset) {
       case "my_active":
-        if (!statusIn) statusIn = VALID_TASK_STATUSES.filter((s) => s !== "done");
+        if (!statusIn) statusIn = VALID_TASK_STATUSES;
         break;
       case "overdue":
-        if (!statusIn) statusIn = VALID_TASK_STATUSES.filter((s) => s !== "done");
+        if (!statusIn) statusIn = VALID_TASK_STATUSES;
         dueDateWhere = { dueDate: { lt: startOfDay(now) } };
         break;
       case "all_active":
-        if (!statusIn) statusIn = VALID_TASK_STATUSES.filter((s) => s !== "done");
+        if (!statusIn) statusIn = VALID_TASK_STATUSES;
         break;
       case "due_this_week":
-        if (!statusIn) statusIn = VALID_TASK_STATUSES.filter((s) => s !== "done");
+        if (!statusIn) statusIn = VALID_TASK_STATUSES;
         dueDateWhere = { dueDate: { gte: startOfDay(now), lte: endOfWeek(now) } };
         break;
     }
@@ -216,9 +221,7 @@ export async function getMiniTasksData(filters?: TasksFilters) {
       // "all" — no filter
     }
     if (!statusIn) {
-      statusIn = showCompleted
-        ? VALID_TASK_STATUSES
-        : VALID_TASK_STATUSES.filter((s) => s !== "done");
+      statusIn = VALID_TASK_STATUSES;
     }
   }
 
@@ -231,10 +234,7 @@ export async function getMiniTasksData(filters?: TasksFilters) {
     }
   }
 
-  // If not showing completed, always remove "done" from list query
-  const listStatusIn = !showCompleted && statusIn
-    ? statusIn.filter((s) => s !== "done")
-    : statusIn;
+  const listStatusIn = statusIn;
 
   // Sort
   const sortBy = VALID_TASK_SORTS.includes(filters?.sortBy || "") ? filters!.sortBy! : "priority";
@@ -276,7 +276,7 @@ export async function getMiniTasksData(filters?: TasksFilters) {
     }),
     prisma.task.groupBy({
       by: ["status"],
-      where: baseWhere,
+      where: listWhere,
       _count: { status: true },
     }),
   ]);

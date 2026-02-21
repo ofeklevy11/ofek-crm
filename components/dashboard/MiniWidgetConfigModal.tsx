@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   X,
   Check,
@@ -9,8 +9,10 @@ import {
   FileText,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import { getUsers } from "@/app/actions/users";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -323,6 +325,10 @@ export default function MiniWidgetConfigModal({
   const [taskShowCompleted, setTaskShowCompleted] = useState(
     currentSettings?.showCompleted ?? false
   );
+  const [taskSpecificUserId, setTaskSpecificUserId] = useState<number | undefined>(
+    currentSettings?.specificUserId
+  );
+  const [users, setUsers] = useState<{ id: number; name: string }[]>([]);
 
   // Quotes state
   const [quotePreset, setQuotePreset] = useState(
@@ -386,6 +392,15 @@ export default function MiniWidgetConfigModal({
     setQuoteMaxQuotes(adv.maxQuotes);
   }, []);
 
+  // Fetch users for "specific user" filter
+  useEffect(() => {
+    if (canViewAllTasks) {
+      getUsers().then((res) => {
+        if (res.success && res.data) setUsers(res.data);
+      });
+    }
+  }, [canViewAllTasks]);
+
   // Switch to custom when advanced field changes
   const goCustom = useCallback(() => {
     if (widgetType === "MINI_CALENDAR") setCalPreset("custom");
@@ -411,6 +426,7 @@ export default function MiniWidgetConfigModal({
         statusFilter: taskStatusFilter,
         priorityFilter: taskPriorityFilter,
         assigneeFilter: taskAssignee,
+        specificUserId: taskAssignee === "specific" ? taskSpecificUserId : undefined,
         dueDatePreset: taskDueDatePreset,
         ...(taskDueDatePreset === "custom" ? { dueDateFrom: taskDueDateFrom, dueDateTo: taskDueDateTo } : {}),
         sortBy: taskSortBy,
@@ -586,11 +602,12 @@ export default function MiniWidgetConfigModal({
                         onClick={() => { setTaskStatusFilter([]); goCustom(); }}
                       />
                       {[
-                        { id: "todo", label: "לביצוע", color: "bg-slate-100 text-slate-700 border-slate-200" },
-                        { id: "in_progress", label: "בטיפול", color: "bg-blue-100 text-blue-700 border-blue-200" },
-                        { id: "waiting_client", label: "ממתין ללקוח", color: "bg-amber-100 text-amber-700 border-amber-200" },
-                        { id: "completed_month", label: "הושלם החודש", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-                        { id: "done", label: "הסתיים", color: "bg-gray-100 text-gray-600 border-gray-200" },
+                        { id: "todo", label: "משימות", color: "bg-slate-100 text-slate-700 border-slate-200" },
+                        { id: "in_progress", label: "משימות בטיפול", color: "bg-blue-100 text-blue-700 border-blue-200" },
+                        { id: "waiting_client", label: "ממתינים לאישור לקוח", color: "bg-amber-100 text-amber-700 border-amber-200" },
+                        { id: "on_hold", label: "משימות בהשהייה", color: "bg-gray-100 text-gray-600 border-gray-200" },
+                        { id: "completed_month", label: "בוצעו החודש", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+                        { id: "done", label: "משימות שבוצעו", color: "bg-purple-100 text-purple-700 border-purple-200" },
                       ].map((s) => (
                         <ToggleChip
                           key={s.id}
@@ -683,10 +700,30 @@ export default function MiniWidgetConfigModal({
                         options={[
                           { value: "mine", label: "המשימות שלי" },
                           { value: "all", label: "כל המשימות" },
+                          { value: "specific", label: "לפי משתמש ספציפי" },
                         ]}
                         value={taskAssignee}
                         onChange={(v: string) => { setTaskAssignee(v); goCustom(); }}
                       />
+                      {taskAssignee === "specific" && (
+                        <div className="mt-2">
+                          <Select
+                            value={taskSpecificUserId !== undefined ? String(taskSpecificUserId) : undefined}
+                            onValueChange={(v) => { setTaskSpecificUserId(Number(v)); goCustom(); }}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="בחר משתמש" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {users.map((u) => (
+                                <SelectItem key={u.id} value={String(u.id)}>
+                                  {u.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
                   )}
 

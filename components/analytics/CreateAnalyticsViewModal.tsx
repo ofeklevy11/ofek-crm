@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Fragment, useState, useEffect } from "react";
 import {
   X,
   Check,
@@ -115,7 +114,6 @@ export default function CreateAnalyticsViewModal({
   initialData,
   mode = "general",
 }: CreateAnalyticsViewModalProps) {
-  const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [tables, setTables] = useState<any[]>([]);
@@ -124,6 +122,11 @@ export default function CreateAnalyticsViewModal({
   const [selectedType, setSelectedType] = useState<string>("");
   const [title, setTitle] = useState("");
   const [config, setConfig] = useState<any>({});
+
+  // Internal mode for inline graph creation from general mode
+  const [internalMode, setInternalMode] = useState<"graph" | null>(null);
+  const effectiveMode = internalMode || mode;
+  const isGraphSubflow = mode === "general" && internalMode === "graph";
 
   // Preview State
   const [previewData, setPreviewData] = useState<any>(null);
@@ -142,16 +145,13 @@ export default function CreateAnalyticsViewModal({
         // Edit Mode
         setTitle(initialData.ruleName || initialData.title || "");
         setSelectedType(initialData.type || "COUNT");
-        // If it's a custom view, config is directly used.
-        // If it came from DB, `initialData.config` should be there.
-        // Note: `getAnalyticsData` returns formatted views, but `initialData` passed here should ideally be the full DB object or close to it.
-        // The `views` array in `page.tsx` has `type`, `ruleName`, but maybe not raw `config`.
-        // Wait, `getAnalyticsData` returns `config`? No it processes data.
-        // We need to pass the raw config. The user request implies editing MANUAL views.
-        // `getAnalyticsData` returns `views` with `data` array but loses the original config in the mapping!
-        // I need to update `getAnalyticsData` to return the `config` object in the view item so we can re-populate this form.
-        // Assuming I will do that in the next step, let's proceed here assuming `initialData.config` exists.
         setConfig(initialData.config || {});
+        // If editing a GRAPH-type view from general mode, enter graph sub-flow
+        if (initialData.type === "GRAPH" && mode === "general") {
+          setInternalMode("graph");
+        } else {
+          setInternalMode(null);
+        }
         setStep(2); // Jump to configuration
       } else {
         // Create Mode - Reset
@@ -161,6 +161,7 @@ export default function CreateAnalyticsViewModal({
         setConfig({});
         setPreviewData(null);
         setShowPreview(false);
+        setInternalMode(null);
       }
     }
   }, [isOpen, initialData]);
@@ -353,14 +354,14 @@ export default function CreateAnalyticsViewModal({
   };
 
   const renderStep1 = () => {
-    const items = mode === "graph" ? GRAPH_TYPES : VIEW_TYPES;
+    const items = effectiveMode === "graph" ? GRAPH_TYPES : VIEW_TYPES;
 
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {items.map((item) => {
           const Icon = item.icon;
           const isSelected =
-            mode === "graph"
+            effectiveMode === "graph"
               ? config.chartType === item.id
               : selectedType === item.id;
 
@@ -374,7 +375,7 @@ export default function CreateAnalyticsViewModal({
             limitsData?.success &&
             limitsData?.remaining
           ) {
-            if (mode === "graph") {
+            if (effectiveMode === "graph") {
               // Creating a graph view
               if (limitsData.remaining.graph <= 0) {
                 isLimitReached = true;
@@ -409,7 +410,7 @@ export default function CreateAnalyticsViewModal({
               onClick={() => {
                 if (isLimitReached) return;
 
-                if (mode === "graph") {
+                if (effectiveMode === "graph") {
                   setSelectedType("GRAPH");
                   setConfig({ ...config, chartType: item.id });
                 } else {
@@ -460,10 +461,12 @@ export default function CreateAnalyticsViewModal({
       displayName: "סטטוס",
       type: "select",
       options: [
-        { label: "פתוח (Todo)", value: "todo" },
-        { label: "בטיפול (In Progress)", value: "in_progress" },
-        { label: "ממתין ללקוח (Waiting)", value: "waiting_client" },
-        { label: "הושלם (Completed)", value: "completed_month" },
+        { label: "משימות", value: "todo" },
+        { label: "משימות בטיפול", value: "in_progress" },
+        { label: "ממתינים לאישור לקוח", value: "waiting_client" },
+        { label: "משימות בהשהייה", value: "on_hold" },
+        { label: "בוצעו החודש", value: "completed_month" },
+        { label: "משימות שבוצעו", value: "done" },
         { label: "ארכיון", value: "archive" },
       ],
     },
@@ -1179,31 +1182,46 @@ export default function CreateAnalyticsViewModal({
           </div>
 
           <div className="mb-8">
-            <div className="flex items-center gap-4 mb-4">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                  step === 1
-                    ? "bg-blue-600 text-white"
-                    : "bg-green-500 text-white"
-                }`}
-              >
-                {step > 1 ? <Check size={16} /> : 1}
-              </div>
-              <div
-                className={`h-1 flex-1 rounded-full ${
-                  step > 1 ? "bg-green-500" : "bg-gray-200"
-                }`}
-              />
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                  step === 2
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-200 text-gray-500"
-                }`}
-              >
-                2
-              </div>
-            </div>
+            {(() => {
+              const totalSteps = isGraphSubflow ? 3 : 2;
+              const displayStep = isGraphSubflow
+                ? step === 1
+                  ? 2
+                  : 3
+                : step;
+
+              return (
+                <div className="flex items-center gap-4 mb-4">
+                  {Array.from({ length: totalSteps }, (_, i) => {
+                    const dotNum = i + 1;
+                    const isCompleted = dotNum < displayStep;
+                    const isCurrent = dotNum === displayStep;
+                    return (
+                      <Fragment key={dotNum}>
+                        {i > 0 && (
+                          <div
+                            className={`h-1 flex-1 rounded-full ${
+                              isCompleted ? "bg-green-500" : "bg-gray-200"
+                            }`}
+                          />
+                        )}
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                            isCompleted
+                              ? "bg-green-500 text-white"
+                              : isCurrent
+                                ? "bg-blue-600 text-white"
+                                : "bg-gray-200 text-gray-500"
+                          }`}
+                        >
+                          {isCompleted ? <Check size={16} /> : dotNum}
+                        </div>
+                      </Fragment>
+                    );
+                  })}
+                </div>
+              );
+            })()}
             {step === 1 ? (
               renderStep1()
             ) : (
@@ -1224,6 +1242,14 @@ export default function CreateAnalyticsViewModal({
               <ChevronRight size={20} />
               חזור
             </button>
+          ) : step === 1 && internalMode === "graph" ? (
+            <button
+              onClick={() => setInternalMode(null)}
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md flex items-center gap-2"
+            >
+              <ChevronRight size={20} />
+              חזור
+            </button>
           ) : (
             <div></div>
           )}
@@ -1231,16 +1257,19 @@ export default function CreateAnalyticsViewModal({
           {step === 1 ? (
             <button
               onClick={() => {
-                // If GRAPH type is selected from general mode, redirect to graphs page
-                if (selectedType === "GRAPH" && mode !== "graph") {
-                  onClose();
-                  router.push("/analytics/graphs");
-                  return;
+                // If GRAPH type is selected from general mode, enter graph sub-flow
+                if (selectedType === "GRAPH" && mode !== "graph" && !internalMode) {
+                  setInternalMode("graph");
+                  return; // Stay on step 1, which now shows GRAPH_TYPES
                 }
                 // Otherwise proceed to step 2
                 setStep(2);
               }}
-              disabled={!selectedType && mode !== "graph"} // In graph mode, type is set on click
+              disabled={
+                effectiveMode === "graph"
+                  ? !config.chartType // In graph mode, need a chart type selected
+                  : !selectedType // In general mode, need a view type selected
+              }
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 shadow-sm"
             >
               המשך

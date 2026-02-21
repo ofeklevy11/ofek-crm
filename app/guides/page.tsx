@@ -5,13 +5,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowRight, Workflow, CheckSquare, Calendar, Info } from "lucide-react";
+import { ArrowRight, Workflow, CheckSquare, Calendar, Info, Puzzle, ListTodo, CalendarPlus } from "lucide-react";
 import Link from "next/link";
 
 export default function GuidesPage() {
   const guides = [
     {
-      title: "חיבור Make לטבלאות",
+      title: "חיבור Make לטבלאות עם HTTP Request",
       description:
         "למד כיצד לחבר אוטומציות מ-Make (כמו פייסבוק לידים) ישירות לטבלאות ה-CRM שלך.",
       icon: Workflow,
@@ -20,7 +20,7 @@ export default function GuidesPage() {
       bgColor: "bg-purple-100",
     },
     {
-      title: "יצירת משימות אוטומטית",
+      title: "יצירת משימות אוטומטית עם HTTP Request",
       description:
         "למד כיצד לפתוח משימות בלוח המשימות ישירות מאוטומציות חיצוניות.",
       icon: CheckSquare,
@@ -29,7 +29,7 @@ export default function GuidesPage() {
       bgColor: "bg-blue-100",
     },
     {
-      title: "יצירת אירועים ביומן",
+      title: "יצירת אירועים ביומן עם HTTP Request",
       description:
         "למד כיצד ליצור פגישות ואירועים בלוח השנה באופן אוטומטי מכל מקור חיצוני.",
       icon: Calendar,
@@ -37,7 +37,33 @@ export default function GuidesPage() {
       color: "text-orange-500",
       bgColor: "bg-orange-100",
     },
-    // Future guides can be added here
+    {
+      title: "הוספת רשומות לטבלאות דרך אפליקציית Make",
+      description:
+        "למד כיצד להוסיף רשומות לטבלאות ה-CRM באמצעות האפליקציה המותאמת שלנו — ללא צורך ב-HTTP ידני.",
+      icon: Puzzle,
+      href: "/guides/make-app",
+      color: "text-green-500",
+      bgColor: "bg-green-100",
+    },
+    {
+      title: "יצירת משימות דרך אפליקציית Make",
+      description:
+        "למד כיצד ליצור משימות בלוח המשימות באמצעות האפליקציה המותאמת שלנו — ללא צורך ב-HTTP ידני.",
+      icon: ListTodo,
+      href: "/guides/make-app-tasks",
+      color: "text-teal-500",
+      bgColor: "bg-teal-100",
+    },
+    {
+      title: "יצירת אירועים ביומן דרך אפליקציית Make",
+      description:
+        "למד כיצד ליצור אירועים ביומן באמצעות האפליקציה המותאמת שלנו — ללא צורך ב-HTTP ידני.",
+      icon: CalendarPlus,
+      href: "/guides/make-app-calendar",
+      color: "text-rose-500",
+      bgColor: "bg-rose-100",
+    },
   ];
 
   return (

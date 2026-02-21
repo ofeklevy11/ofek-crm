@@ -109,11 +109,22 @@ export default function FlowStepCard({
     );
   };
 
-  const getColumnsForTable = (tableId: number | undefined) => {
+  const TRIGGER_COLUMN_TYPES = new Set([
+    "select", "multiSelect", "status", "priority",
+    "number", "currency",
+    "boolean", "checkbox",
+    "date",
+  ]);
+
+  const getColumnsForTable = (tableId: number | undefined, filterForTrigger = false) => {
     if (!tableId) return [];
     const table = tables.find((t) => t.id === tableId);
     if (!table || !Array.isArray(table.schemaJson)) return [];
-    return table.schemaJson.map((col: any) => ({
+    let cols = table.schemaJson;
+    if (filterForTrigger) {
+      cols = cols.filter((col: any) => TRIGGER_COLUMN_TYPES.has(col.type));
+    }
+    return cols.map((col: any) => ({
       value: col.name || col.id || "",
       label: col.label || col.name || col.id || "",
     }));
@@ -216,7 +227,8 @@ export default function FlowStepCard({
 
       case "column-select": {
         const tableId = resolveTableId();
-        const columns = getColumnsForTable(tableId);
+        const shouldFilterForTrigger = isTrigger && step.type === "RECORD_FIELD_CHANGE";
+        const columns = getColumnsForTable(tableId, shouldFilterForTrigger);
         if (columns.length === 0) {
           return (
             <Input
@@ -414,6 +426,7 @@ export default function FlowStepCard({
 
   return (
     <div
+      dir="rtl"
       className={`border-r-4 ${borderColor} rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden transition-all`}
     >
       {/* Header */}

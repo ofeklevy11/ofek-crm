@@ -184,7 +184,7 @@ export default function AutomationFlowPreview({
 
       {/* Flow Canvas */}
       <ScrollArea className="flex-1 min-h-0 px-6 py-4">
-        <div className="space-y-0">
+        <div className="space-y-0" dir="rtl">
           {steps.map((step, i) => (
             <div key={step.id}>
               {i > 0 && <FlowConnector />}

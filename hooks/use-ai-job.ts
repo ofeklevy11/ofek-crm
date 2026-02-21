@@ -62,6 +62,7 @@ export function useAIJob() {
 
     // Step 2: Poll for result with exponential backoff
     let interval = INITIAL_INTERVAL;
+    let consecutive429s = 0;
     for (let i = 0; i < MAX_POLLS; i++) {
       if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
 
@@ -85,8 +86,16 @@ export function useAIJob() {
       });
 
       if (!pollRes.ok) {
-        if (pollRes.status === 404 || pollRes.status === 429) {
-          // Job not in Redis yet or rate-limited — back off and continue
+        if (pollRes.status === 404) {
+          // Job not in Redis yet — back off and continue
+          interval = Math.min(interval * 1.5, MAX_INTERVAL);
+          continue;
+        }
+        if (pollRes.status === 429) {
+          consecutive429s++;
+          if (consecutive429s >= 3) {
+            throw new Error("RATE_LIMITED");
+          }
           interval = Math.min(interval * 1.5, MAX_INTERVAL);
           continue;
         }
@@ -94,6 +103,7 @@ export function useAIJob() {
         throw new Error("Polling request failed");
       }
 
+      consecutive429s = 0; // Reset on successful response
       const jobData: AIJobResult<T> = await pollRes.json();
 
       if (jobData.status === "completed" && jobData.result) {

@@ -202,12 +202,18 @@ ${fc.sampleData || "None"}
 1. NEW_RECORD — When a new record is created in a table
    triggerConfig: { tableId: number, conditionColumnId?: "<REAL_FIELD_ID>", conditionValue?: string, operator?: "equals"|"not_equals"|"contains"|"greater_than"|"less_than" }
 
-   FILTER DETECTION — If the user's request or automation name mentions ANY specific value to match, you MUST include conditionColumnId + conditionValue.
-   Hebrew filter patterns: "ממקור X", "מסטטוס X", "עם סטטוס X", "של סוג X", "שהגיע מ-X", "כאשר X הוא Y", "ששדה X שווה ל-Y"
-   English filter patterns: "from X", "with status X", "of type X", "where X is Y"
+   FILTER DETECTION — If the user's request or automation name mentions ANY specific value to match, you MUST include conditionColumnId + conditionValue + operator.
+   Hebrew equality patterns: "ממקור X", "מסטטוס X", "עם סטטוס X", "של סוג X", "שהגיע מ-X", "כאשר X הוא Y", "ששדה X שווה ל-Y"
+   English equality patterns: "from X", "with status X", "of type X", "where X is Y"
+   Hebrew numeric patterns: "נמוך מ-X", "גבוה מ-X", "פחות מ-X", "יותר מ-X", "מעל X", "מתחת ל-X", "עד X", "מינימום X", "מקסימום X", "תקציב נמוך", "סכום גבוה"
+   English numeric patterns: "less than X", "greater than X", "above X", "below X", "at least X", "at most X"
+   For numeric conditions use operator "less_than" or "greater_than" with a number string as conditionValue. The conditionColumnId must be a number-type field.
 
-   EXAMPLE — User says "התראה על ליד חדש ממקור פייסבוק" for table (ID: 5) with field source (ID: fld_abc123):
+   EXAMPLE 1 (equality) — User says "התראה על ליד חדש ממקור פייסבוק" for table (ID: 5) with field source (ID: fld_abc123):
    "triggerConfig": { "tableId": 5, "conditionColumnId": "fld_abc123", "conditionValue": "פייסבוק", "operator": "equals" }
+
+   EXAMPLE 2 (numeric) — User says "התראה על ליד חדש עם תקציב נמוך מ-1000" for table (ID: 5) with field budget (ID: fld_budget, Type: number):
+   "triggerConfig": { "tableId": 5, "conditionColumnId": "fld_budget", "conditionValue": "1000", "operator": "less_than" }
 
    If NO filtering is mentioned at all, do NOT include conditionColumnId/conditionValue.
 
@@ -233,7 +239,8 @@ ${fc.sampleData || "None"}
    Template vars: {tableName}, {recordData}, {taskTitle}, {fromStatus}, {toStatus}, {fieldName}, {fromValue}, {toValue}
 
 2. CREATE_TASK — Create a new task
-   actionConfig: { title: string, description?: string, assigneeId: number, priority?: "low"|"medium"|"high", status?: string, dueDays?: number, tags?: string[] }
+   actionConfig: { title: string, description?: string, assigneeId: number, priority?: "low"|"medium"|"high", status: "todo"|"in_progress"|"waiting_client"|"on_hold"|"completed_month"|"done", dueDays?: number, tags?: string[] }
+   IMPORTANT: "status" is REQUIRED. Default to "todo" if no specific status is requested. Valid values: "todo", "in_progress", "waiting_client", "on_hold", "completed_month", "done".
 
 3. UPDATE_RECORD_FIELD — Update a field in the triggering record
    actionConfig: { tableId: number, columnId: "<REAL_FIELD_ID_FROM_TABLE>", value: string|number|boolean, recordId?: string }
@@ -265,37 +272,43 @@ USER REQUEST: "${prompt}"
 
 Generate a single automation rule based on the user's request.
 
-=== MANDATORY CONDITION DETECTION (follow these steps IN ORDER) ===
-You MUST perform this analysis before generating JSON:
+=== MANDATORY STEP-BY-STEP THINKING ===
+You MUST fill the "_thinking" field FIRST before writing any other automation fields.
+The "_thinking" field must contain your answers to ALL of these steps in order:
 
-STEP 1 — SCAN the user request for ANY value filter. Look for these patterns:
-   Hebrew: "ממקור X", "מסטטוס X", "עם סטטוס X", "של סוג X", "שהגיע מ-X", "מגוגל", "מפייסבוק", "כאשר X", "ששדה X"
-   English: "from X", "with status X", "of type X", "where X is Y", "source Google"
-   If the user mentions ANY specific value/source/status/type → a condition IS required.
+STEP 1 — WHAT: What does the user want? (1 sentence)
 
-STEP 2 — IDENTIFY the matching field. Find the select/radio/tags field in the table whose options relate to the mentioned value.
+STEP 2 — TRIGGER: What event triggers this? Which table? Write: "TRIGGER: [type] on table [name] (ID: [id])"
 
-STEP 3 — MATCH the value to an EXACT option. The user may write in Hebrew while options are in English (or vice versa).
-   Common translations: מגוגל/גוגל = "Google", מפייסבוק/פייסבוק = "Facebook", אינסטגרם = "Instagram",
-   לינקדאין = "LinkedIn", טוויטר = "Twitter", טיקטוק = "TikTok", אתר = "Website", המלצה = "Referral",
-   ווטסאפ = "WhatsApp", יוטיוב = "YouTube", אורגני = "Organic"
-   Pick the EXACT string from the field's [Options: ...] list.
+STEP 3 — CONDITION CHECK: Does the request mention ANY filter, qualifier, or threshold?
+   Scan for these patterns:
+   - Equality filters: "ממקור X", "מסטטוס X", "מסוג X", "עם סטטוס X", "שהגיע מ-X", "מגוגל", "מפייסבוק"
+   - Numeric filters: "נמוך מ X", "גבוה מ X", "פחות מ X", "יותר מ X", "מעל X", "מתחת ל X", "תקציב נמוך", "סכום גבוה"
+   - English: "from X", "with status X", "less than X", "greater than X", "above X", "below X"
+   If YES → write: "CONDITION REQUIRED: field=[name], id=[fld_xxx], value=[X], operator=[equals/less_than/greater_than]"
+     - For select/radio fields: conditionValue must be EXACT string from [Options: ...]
+     - For number fields: conditionValue is a number string, operator is "less_than" or "greater_than"
+     - Common Hebrew→English: גוגל=Google, פייסבוק=Facebook, אינסטגרם=Instagram, לינקדאין=LinkedIn, אתר=Website, המלצה=Referral
+   If NO → write: "NO CONDITION NEEDED — automation applies to all records"
 
-STEP 4 — SET the condition. Add conditionColumnId (real field ID) + conditionValue (exact option string) + operator "equals".
+STEP 4 — ACTION: What happens when the trigger fires? Write: "ACTION: [type] — [details]"
 
-EXAMPLES:
-- User: "התראה על ליד חדש שהגיע מגוגל", table has field source (fld_abc) [Options: Google, Facebook, Instagram]
-  → conditionColumnId: "fld_abc", conditionValue: "Google", operator: "equals"
-- User: "משימה לליד חדש ממקור פייסבוק", table has field lead_source (fld_xyz) [Options: פייסבוק, גוגל, אתר]
-  → conditionColumnId: "fld_xyz", conditionValue: "פייסבוק", operator: "equals"
-- User: "התראה על כל ליד חדש" (no specific value mentioned)
-  → NO condition needed
+STEP 5 — VERIFY: Re-read the name and description you are about to generate.
+   - Does the name/description mention a filter or threshold? If yes, is conditionColumnId + conditionValue + operator set in triggerConfig? If NOT → STOP and add the condition NOW.
+   - Is every field ID a real fld_ from AVAILABLE TABLES? If NOT → FIX IT.
+   - Are all required action fields present (messageTemplate not message, status in CREATE_TASK, webhookUrl not url, timeValue not duration)? If NOT → FIX IT.
 
-IMPORTANT: If you set conditionValue, it MUST be an EXACT string from the field's [Options: ...] list. Never invent option values.
+=== COMMON MISTAKES TO AVOID ===
+- Name says "מגוגל" or "תקציב נמוך" but triggerConfig has no condition → MUST add condition
+- conditionValue in Hebrew when options are in English (or vice versa) → Copy EXACT string from [Options: ...]
+- Using "message" instead of "messageTemplate", "title" instead of "titleTemplate", "url" instead of "webhookUrl", "duration" instead of "timeValue"
+- Omitting "status" from CREATE_TASK → Always include "status": "todo" as default
+- Inventing field IDs → Copy real fld_ IDs from AVAILABLE TABLES
 
 OUTPUT FORMAT (single JSON object):
 {
   "automation": {
+    "_thinking": "STEP 1: [answer] STEP 2: [answer] STEP 3: [CONDITION REQUIRED: field=budget, id=fld_budget, value=1000, operator=less_than] STEP 4: [answer] STEP 5: [verification result]",
     "name": "string (Hebrew)",
     "description": "string (Hebrew, short explanation)",
     "triggerType": "string",
@@ -303,7 +316,13 @@ OUTPUT FORMAT (single JSON object):
     "actionType": "string",
     "actionConfig": { ... }
   }
-}` : `=== MODE: SUGGEST ===
+}
+
+=== FINAL CHECK ===
+Before outputting, confirm in _thinking:
+1. Does the name/description promise a filter? If yes, is conditionColumnId + conditionValue + operator set? If not → FIX IT.
+2. Is every conditionValue an EXACT match from [Options: ...] or a valid number? If not → FIX IT.
+3. Is every field ID a real fld_ from AVAILABLE TABLES? If not → FIX IT.` : `=== MODE: SUGGEST ===
 Analyze the organization's tables, data, workflows, and existing automations.
 Suggest 6-8 valuable automations that would help this business.
 ${prompt ? `User hint: "${prompt}"` : ""}
@@ -312,10 +331,62 @@ Each suggestion should use a different combination of trigger+action when possib
 At least 2-3 suggestions MUST use simple action types that don't require field references: SEND_NOTIFICATION, CREATE_TASK.
 When using UPDATE_RECORD_FIELD or SEND_WHATSAPP — double-check that every columnId, phoneColumnId, and field reference is a real ID (starting with "fld_") copied exactly from the AVAILABLE TABLES section above.
 
+=== CONDITION GUIDANCE FOR SUGGESTIONS ===
+When suggesting automations with NEW_RECORD or RECORD_FIELD_CHANGE triggers, you MUST evaluate whether adding a condition makes the automation MORE VALUABLE and TARGETED:
+
+RULE 1 — SCAN FOR FILTERABLE FIELDS: Look at each table's select/radio/tags fields and their [Options: ...]. If a table has a field like "source", "status", "type", "category", or "priority" with meaningful options, consider creating TARGETED automations that filter by specific option values.
+
+RULE 2 — TARGETED > GENERIC: An automation "notify when a NEW lead arrives from Google" is MORE VALUABLE than "notify on any new lead", because it enables differentiated workflows per source/type/status. Prefer suggesting targeted automations with conditions over generic ones.
+
+RULE 3 — HOW TO ADD CONDITIONS: For NEW_RECORD triggers, add conditionColumnId (the real fld_ ID of the select/radio field), conditionValue (EXACT string from the field's [Options: ...] list), and operator "equals".
+
+RULE 4 — AT LEAST 2 SUGGESTIONS WITH CONDITIONS: If the org has tables with select/radio fields that have meaningful options, at least 2 of your 6-8 suggestions MUST include conditions. Pick the most business-relevant field+value combinations.
+
+RULE 5 — VALUE MATCHING: conditionValue MUST be an EXACT string copied from the field's [Options: ...] list. Never invent values. If options are in English (e.g., "Google", "Facebook"), use English. If in Hebrew, use Hebrew.
+
+EXAMPLES OF GOOD SUGGESTIONS WITH CONDITIONS:
+Example 1 — Table "leads" (ID: 5) has field source (ID: fld_abc, Options: Google, Facebook, Instagram):
+{
+  "name": "התראה על ליד חדש מגוגל",
+  "description": "קבלת התראה מיידית כשנכנס ליד חדש שמקורו גוגל, לטיפול מהיר",
+  "category": "notifications",
+  "triggerType": "NEW_RECORD",
+  "triggerConfig": { "tableId": 5, "conditionColumnId": "fld_abc", "conditionValue": "Google", "operator": "equals" },
+  "actionType": "SEND_NOTIFICATION",
+  "actionConfig": { "recipientId": 1, "messageTemplate": "ליד חדש מגוגל: {recordData}" }
+}
+
+Example 2 — Table "leads" (ID: 5) has field lead_type (ID: fld_xyz, Options: חם, קר, ממתין):
+{
+  "name": "משימה לטיפול בליד חם",
+  "description": "יצירת משימה אוטומטית לטיפול מיידי בלידים חמים",
+  "category": "tasks",
+  "triggerType": "NEW_RECORD",
+  "triggerConfig": { "tableId": 5, "conditionColumnId": "fld_xyz", "conditionValue": "חם", "operator": "equals" },
+  "actionType": "CREATE_TASK",
+  "actionConfig": { "title": "טיפול בליד חם חדש", "assigneeId": 1, "status": "todo", "priority": "high" }
+}
+
+Example 3 — Suggestion WITHOUT condition (generic, still valuable):
+{
+  "name": "התראה על שינוי סטטוס משימה",
+  "description": "התראה כשמשימה עוברת לסטטוס הושלם",
+  "category": "notifications",
+  "triggerType": "TASK_STATUS_CHANGE",
+  "triggerConfig": { "toStatus": "done" },
+  "actionType": "SEND_NOTIFICATION",
+  "actionConfig": { "recipientId": 1, "messageTemplate": "המשימה {taskTitle} הושלמה" }
+}
+
+IMPORTANT — For EACH suggestion, fill "_thinking" FIRST:
+- If the suggestion name/description mentions ANY filter or threshold (source, status, type, budget amount, etc.), you MUST verify a matching condition (conditionColumnId + conditionValue + operator) exists in triggerConfig.
+- If no filter is mentioned, write "NO CONDITION NEEDED".
+
 OUTPUT FORMAT (JSON object with suggestions array):
 {
   "suggestions": [
     {
+      "_thinking": "Table 'leads' has field source (fld_abc, Options: Google, Facebook). Suggesting filter by Google. Verified: conditionColumnId=fld_abc, conditionValue=Google, operator=equals — MATCHES name.",
       "name": "string (Hebrew)",
       "description": "string (Hebrew, 1-2 sentences explaining the value)",
       "category": "string (one of: 'notifications', 'tasks', 'data', 'communication', 'workflow', 'monitoring')",
@@ -414,7 +485,7 @@ function buildAnalyticsSystemPrompt(prompt: string, context: Record<string, any>
   for (const [modelName, modelDef] of Object.entries(SYSTEM_MODEL_FIELDS)) {
     const count = (systemModels as any)[modelName]?.count || 0;
     systemModelsBlock += `\n### ${modelName} — ${modelDef.label} (${count} רשומות)\nשדות:\n`;
-    for (const [fieldName, fieldInfo] of Object.entries(modelDef.fields)) {
+  for (const [fieldName, fieldInfo] of Object.entries(modelDef.fields)) {
       let line = `  - ${fieldName} (${fieldInfo.type}) — ${fieldInfo.label}`;
       if (fieldInfo.values) line += ` [${fieldInfo.values.join(", ")}]`;
       systemModelsBlock += line + "\n";
@@ -823,7 +894,11 @@ function parseAnalyticsReportResult(cleanedText: string, formattedTables: any[])
   return { report: { reportTitle, summary, insights, views } };
 }
 
-async function callOpenRouter(systemPrompt: string, maxTokens: number): Promise<string> {
+async function callOpenRouter(
+  systemPrompt: string,
+  maxTokens: number,
+  model = "google/gemini-2.0-flash-001"
+): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new NonRetriableError("OPENROUTER_API_KEY is not configured");
 
@@ -838,12 +913,15 @@ async function callOpenRouter(systemPrompt: string, maxTokens: number): Promise<
       "X-Title": "CRM AI Generator",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.0-flash-001",
+      model,
       max_tokens: maxTokens,
       response_format: { type: "json_object" },
-      messages: [{ role: "user", content: systemPrompt }],
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: "Generate the JSON output." },
+      ],
     }),
-    signal: AbortSignal.timeout(15000), // 15s timeout to avoid hanging Inngest slots
+    signal: AbortSignal.timeout(55000), // 55s timeout — must stay under Vercel's 60s maxDuration
   });
 
   if (!response.ok) {
@@ -890,7 +968,12 @@ const SELECT_LIKE_TYPES = new Set(["select", "multi-select", "radio", "tags", "r
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 function parseSchemaResult(cleanedText: string, existingTableIds: Set<number>) {
-  const parsed = JSON.parse(cleanedText);
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleanedText);
+  } catch (e) {
+    throw new Error(`Schema JSON parse failed: ${(e as Error).message}. Raw start: ${cleanedText.slice(0, 200)}`);
+  }
   let schema: any;
   if (parsed.schema) schema = parsed.schema;
   else if (parsed.table) schema = parsed.table;
@@ -1101,7 +1184,12 @@ function parseSchemaResult(cleanedText: string, existingTableIds: Set<number>) {
 }
 
 function parseAutomationResult(cleanedText: string, rawContext?: AutomationRawContext, userPrompt?: string) {
-  const parsed = JSON.parse(cleanedText);
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleanedText);
+  } catch (e) {
+    throw new Error(`Automation JSON parse failed: ${(e as Error).message}. Raw start: ${cleanedText.slice(0, 200)}`);
+  }
 
   // Detect mode: single automation or suggestions array
   let isSuggestMode = false;
@@ -1133,7 +1221,7 @@ function parseAutomationResult(cleanedText: string, rawContext?: AutomationRawCo
   }
 
   if (isSuggestMode) {
-    return { suggestions: validated.slice(0, 5) };
+    return { suggestions: validated.slice(0, 8) };
   }
   return { automation: validated[0] };
 }
@@ -1232,14 +1320,81 @@ function inferConditionFromName(
   aiConditionHint?: string
 ): void {
   const tc = a.triggerConfig;
-  // Only for NEW_RECORD triggers missing a condition
-  if (a.triggerType !== "NEW_RECORD" || tc.conditionColumnId || !tc.tableId) return;
+  // Only for NEW_RECORD triggers
+  if (a.triggerType !== "NEW_RECORD" || !tc.tableId) return;
+  // Skip only if BOTH conditionColumnId AND conditionValue are already set
+  if (tc.conditionColumnId && tc.conditionValue) return;
 
   const optionsMap = raw.fieldOptionsByTable.get(tc.tableId);
+
+  // ── Numeric condition recovery ──
+  // Detect patterns like "תקציב גבוה מ-1000", "budget > 500", "נמוך מ-200"
+  const allText = `${a.name || ""} ${a.description || ""} ${userPrompt || ""} ${aiConditionHint || ""}`;
+  const numericPatterns: { pattern: RegExp; operator: "greater_than" | "less_than" }[] = [
+    // Hebrew: גבוה מ-X, יותר מ-X, מעל X, מעל ל-X
+    { pattern: /(?:גבוה|גדול|יותר)\s*מ-?\s*(\d+(?:\.\d+)?)/,  operator: "greater_than" },
+    { pattern: /מעל\s*(?:ל-?)?\s*(\d+(?:\.\d+)?)/,              operator: "greater_than" },
+    // Hebrew: נמוך מ-X, פחות מ-X, מתחת ל-X
+    { pattern: /(?:נמוך|קטן|פחות)\s*מ-?\s*(\d+(?:\.\d+)?)/,    operator: "less_than" },
+    { pattern: /מתחת\s*(?:ל-?)?\s*(\d+(?:\.\d+)?)/,             operator: "less_than" },
+    // English: greater than X, above X, more than X, over X
+    { pattern: /(?:greater|more|above|over)\s+(?:than\s+)?(\d+(?:\.\d+)?)/i, operator: "greater_than" },
+    // English: less than X, below X, under X
+    { pattern: /(?:less|below|under)\s+(?:than\s+)?(\d+(?:\.\d+)?)/i,        operator: "less_than" },
+    // Symbols: > X, < X
+    { pattern: />\s*(\d+(?:\.\d+)?)/,  operator: "greater_than" },
+    { pattern: /<\s*(\d+(?:\.\d+)?)/,  operator: "less_than" },
+  ];
+
+  for (const { pattern, operator } of numericPatterns) {
+    const match = allText.match(pattern);
+    if (match) {
+      const numValue = match[1];
+      // Find the best number field: prefer one whose label appears in the text
+      const fieldTypes = raw.fieldTypesByTable?.get(tc.tableId);
+      const nameMap = raw.fieldNameToId.get(tc.tableId);
+      if (fieldTypes) {
+        const allTextLower = allText.toLowerCase();
+        let bestNumField: string | null = null;
+
+        // Try to find a number field whose label appears in the text
+        if (nameMap) {
+          for (const [labelLower, fieldId] of nameMap) {
+            if (labelLower.length < 2) continue;
+            const ft = fieldTypes.get(fieldId);
+            if ((ft === "number" || ft === "score") && allTextLower.includes(labelLower)) {
+              bestNumField = fieldId;
+              break;
+            }
+          }
+        }
+
+        // Fallback: if only one number field exists, use it
+        if (!bestNumField) {
+          const numFields: string[] = [];
+          for (const [fieldId, ft] of fieldTypes) {
+            if (ft === "number" || ft === "score") numFields.push(fieldId);
+          }
+          if (numFields.length === 1) bestNumField = numFields[0];
+        }
+
+        if (bestNumField) {
+          tc.conditionColumnId = bestNumField;
+          tc.conditionValue = numValue;
+          tc.operator = operator;
+          log.info("Inferred numeric condition from text", {
+            name: a.name, fieldId: bestNumField, value: numValue, operator,
+          });
+          return;
+        }
+      }
+    }
+  }
+
   if (!optionsMap || optionsMap.size === 0) return;
 
   // Combine all text sources for searching
-  const searchText = `${a.name || ""} ${a.description || ""} ${userPrompt || ""} ${aiConditionHint || ""}`;
+  const searchText = allText;
   if (!searchText.trim()) return;
 
   const searchTextLower = searchText.toLowerCase();
@@ -1289,6 +1444,54 @@ function inferConditionFromName(
     return false;
   };
 
+  // ── Strategy 0 (highest priority): Field-label-aware matching ──
+  // Cross-reference field LABELS in the search text with their option values.
+  // When both a field's label AND one of its options appear in the text,
+  // this is a high-confidence match that disambiguates between fields
+  // sharing the same option values (e.g. "גבוהה" in both "רמת סיכון" and "עדיפות").
+  const nameMap = raw.fieldNameToId.get(tc.tableId);
+  if (nameMap && optionsMap) {
+    let labelMatch: { fieldId: string; value: string; score: number } | null = null;
+
+    for (const [labelLower, fieldId] of nameMap) {
+      if (labelLower.length < 3) continue;
+      if (!searchTextLower.includes(labelLower)) continue;
+
+      // Field label found — check if any of its options also appear
+      const fieldOptions = optionsMap.get(fieldId);
+      if (!fieldOptions || fieldOptions.length === 0) continue;
+
+      for (const option of fieldOptions) {
+        if (option.length < 2) continue;
+        const optionLower = option.toLowerCase();
+
+        let optionFound = searchTextLower.includes(optionLower);
+        if (!optionFound) optionFound = stripped1Lower.some((sw) => sw === optionLower);
+        if (!optionFound) optionFound = stripped2Lower.some((sw) => sw === optionLower);
+
+        if (optionFound) {
+          const score = labelLower.length + option.length;
+          if (!labelMatch || score > labelMatch.score) {
+            labelMatch = { fieldId, value: option, score };
+          }
+        }
+      }
+    }
+
+    if (labelMatch) {
+      tc.conditionColumnId = labelMatch.fieldId;
+      tc.conditionValue = labelMatch.value;
+      tc.operator = "equals";
+      log.info("Inferred condition via field-label-aware match (Strategy 0)", {
+        name: a.name,
+        fieldId: labelMatch.fieldId,
+        value: labelMatch.value,
+      });
+      return; // High-confidence match — skip weaker strategies
+    }
+  }
+
+  // Strategies 1-4: Generic option-value matching across all fields
   for (const [fieldId, options] of optionsMap) {
     for (const option of options) {
       if (option.length < 2) continue;
@@ -1360,6 +1563,201 @@ function inferConditionFromName(
   }
 }
 
+// Hebrew filter phrase patterns used to detect implied conditions in titles
+const FILTER_PATTERNS = [
+  /ממקור\s+(\S+)/,         // "ממקור פייסבוק" → "פייסבוק"
+  /מסטטוס\s+(\S+)/,        // "מסטטוס חדש" → "חדש"
+  /מסוג\s+(\S+)/,           // "מסוג חם" → "חם"
+  /מקטגוריה\s+(\S+)/,      // "מקטגוריה X" → "X"
+  /עם\s+סטטוס\s+(\S+)/,    // "עם סטטוס X" → "X"
+  /של\s+סוג\s+(\S+)/,      // "של סוג X" → "X"
+  /ברמת\s+\S+\s+(\S+)/,    // "ברמת סיכון גבוהה" → "גבוהה"
+  /ברמה\s+(\S+)/,           // "ברמה גבוהה" → "גבוהה"
+  /בעדיפות\s+(\S+)/,       // "בעדיפות גבוהה" → "גבוהה"
+  /בסטטוס\s+(\S+)/,        // "בסטטוס פעיל" → "פעיל"
+  /בדרגת\s+\S+\s+(\S+)/,   // "בדרגת דחיפות גבוהה" → "גבוהה"
+  /בדרגה\s+(\S+)/,          // "בדרגה גבוהה" → "גבוהה"
+  /בשלב\s+(\S+)/,           // "בשלב ביניים" → "ביניים"
+  /במצב\s+(\S+)/,           // "במצב פעיל" → "פעיל"
+];
+
+// Direct single-word filter patterns: "מגוגל", "מפייסבוק", etc.
+const DIRECT_FILTER_WORDS = Object.keys(HEBREW_ENGLISH_MAP);
+
+/**
+ * Final audit: if the automation name implies a filter (e.g. "ממקור פייסבוק")
+ * but no condition exists, attempt one last match or clean the title.
+ */
+function auditTitleConditionMatch(a: any, raw: AutomationRawContext): void {
+  const tc = a.triggerConfig;
+  if (a.triggerType !== "NEW_RECORD" || !tc.tableId) return;
+  // If condition is already complete, nothing to audit
+  if (tc.conditionColumnId && tc.conditionValue) return;
+
+  const name = a.name || "";
+  if (!name) return;
+
+  // Step 1: Detect filter phrases in the title
+  let detectedFilterValue: string | null = null;
+  let matchedPattern: RegExp | null = null;
+
+  // Check multi-word patterns first
+  for (const pattern of FILTER_PATTERNS) {
+    const match = name.match(pattern);
+    if (match) {
+      detectedFilterValue = match[1];
+      matchedPattern = pattern;
+      break;
+    }
+  }
+
+  // Check single-word patterns: "מגוגל", "מפייסבוק", etc.
+  if (!detectedFilterValue) {
+    const words = name.split(/\s+/);
+    for (const word of words) {
+      if (word.length <= 2) continue;
+      // Strip "מ" prefix and check if remainder is a known filter word
+      if (HEBREW_PREFIXES.includes(word[0])) {
+        const stripped = word.slice(1);
+        if (DIRECT_FILTER_WORDS.includes(stripped)) {
+          detectedFilterValue = stripped;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!detectedFilterValue) return; // No filter pattern in title
+
+  // Step 2a: Label-aware match — prefer field whose label appears in the title
+  const optionsMap = raw.fieldOptionsByTable.get(tc.tableId);
+  const nameMap = raw.fieldNameToId.get(tc.tableId);
+  if (nameMap && optionsMap) {
+    const titleLower = name.toLowerCase();
+    const filterLower2a = detectedFilterValue.toLowerCase();
+    const filterStripped2a = stripHebrewPrefixes(detectedFilterValue, 2).toLowerCase();
+    for (const [labelLower, fieldId] of nameMap) {
+      if (labelLower.length < 3) continue;
+      if (!titleLower.includes(labelLower)) continue;
+      const labelOptions = optionsMap.get(fieldId);
+      if (!labelOptions) continue;
+      for (const option of labelOptions) {
+        const optionLower = option.toLowerCase();
+        if (filterLower2a === optionLower || filterStripped2a === optionLower) {
+          tc.conditionColumnId = fieldId;
+          tc.conditionValue = option;
+          tc.operator = "equals";
+          log.info("auditTitleConditionMatch: recovered via label-aware match", {
+            name, label: labelLower, fieldId, value: option,
+          });
+          return;
+        }
+      }
+    }
+  }
+
+  // Step 2b: Generic match against all field options
+  if (optionsMap && optionsMap.size > 0) {
+    const filterLower = detectedFilterValue.toLowerCase();
+    const filterStripped = stripHebrewPrefixes(detectedFilterValue, 2).toLowerCase();
+
+    for (const [fieldId, options] of optionsMap) {
+      for (const option of options) {
+        if (option.length < 2) continue;
+        const optionLower = option.toLowerCase();
+        // Direct match
+        if (filterLower === optionLower || filterStripped === optionLower) {
+          tc.conditionColumnId = fieldId;
+          tc.conditionValue = option;
+          tc.operator = "equals";
+          log.info("auditTitleConditionMatch: recovered condition from title", {
+            name, fieldId, value: option,
+          });
+          return;
+        }
+        // Transliteration match
+        if (transliterationMatch(filterLower, optionLower) ||
+            transliterationMatch(filterStripped, optionLower)) {
+          tc.conditionColumnId = fieldId;
+          tc.conditionValue = option;
+          tc.operator = "equals";
+          log.info("auditTitleConditionMatch: recovered condition via transliteration", {
+            name, fieldId, value: option,
+          });
+          return;
+        }
+      }
+    }
+  }
+
+  // Step 2c: Numeric condition recovery from title
+  const numericTitlePatterns: { pattern: RegExp; operator: "greater_than" | "less_than" }[] = [
+    { pattern: /(?:גבוה|גדול|יותר)\s*מ-?\s*(\d+(?:\.\d+)?)/,  operator: "greater_than" },
+    { pattern: /מעל\s*(?:ל-?)?\s*(\d+(?:\.\d+)?)/,              operator: "greater_than" },
+    { pattern: /(?:נמוך|קטן|פחות)\s*מ-?\s*(\d+(?:\.\d+)?)/,    operator: "less_than" },
+    { pattern: /מתחת\s*(?:ל-?)?\s*(\d+(?:\.\d+)?)/,             operator: "less_than" },
+    { pattern: /(?:greater|more|above|over)\s+(?:than\s+)?(\d+(?:\.\d+)?)/i, operator: "greater_than" },
+    { pattern: /(?:less|below|under)\s+(?:than\s+)?(\d+(?:\.\d+)?)/i,        operator: "less_than" },
+    { pattern: />\s*(\d+(?:\.\d+)?)/,  operator: "greater_than" },
+    { pattern: /<\s*(\d+(?:\.\d+)?)/,  operator: "less_than" },
+  ];
+
+  for (const { pattern, operator } of numericTitlePatterns) {
+    const numMatch = name.match(pattern);
+    if (numMatch) {
+      const fieldTypes = raw.fieldTypesByTable?.get(tc.tableId);
+      if (fieldTypes) {
+        const nameLower = name.toLowerCase();
+        const nameMapLocal = raw.fieldNameToId.get(tc.tableId);
+        let bestNumField: string | null = null;
+
+        if (nameMapLocal) {
+          for (const [labelLower, fieldId] of nameMapLocal) {
+            if (labelLower.length < 2) continue;
+            const ft = fieldTypes.get(fieldId);
+            if ((ft === "number" || ft === "score") && nameLower.includes(labelLower)) {
+              bestNumField = fieldId;
+              break;
+            }
+          }
+        }
+        if (!bestNumField) {
+          const numFields: string[] = [];
+          for (const [fieldId, ft] of fieldTypes) {
+            if (ft === "number" || ft === "score") numFields.push(fieldId);
+          }
+          if (numFields.length === 1) bestNumField = numFields[0];
+        }
+
+        if (bestNumField) {
+          tc.conditionColumnId = bestNumField;
+          tc.conditionValue = numMatch[1];
+          tc.operator = operator;
+          log.info("auditTitleConditionMatch: recovered numeric condition from title", {
+            name, fieldId: bestNumField, value: numMatch[1], operator,
+          });
+          return;
+        }
+      }
+    }
+  }
+
+  // Step 3: Could not add condition — clean the title to remove misleading filter
+  const originalName = a.name;
+  if (matchedPattern) {
+    a.name = a.name.replace(matchedPattern, "").replace(/\s{2,}/g, " ").trim();
+  } else if (detectedFilterValue) {
+    // Remove the "מ+word" pattern
+    const escaped = detectedFilterValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    a.name = a.name.replace(new RegExp(`מ${escaped}`, "g"), "").replace(/\s{2,}/g, " ").trim();
+  }
+  if (a.name !== originalName) {
+    log.info("auditTitleConditionMatch: cleaned misleading filter from title", {
+      original: originalName, cleaned: a.name,
+    });
+  }
+}
+
 function validateAutomationObject(a: any, raw?: AutomationRawContext, userPrompt?: string): any | null {
   if (!a || typeof a !== "object") return null;
 
@@ -1370,6 +1768,11 @@ function validateAutomationObject(a: any, raw?: AutomationRawContext, userPrompt
   if (!a.name || typeof a.name !== "string") a.name = "אוטומציה חדשה";
   if (!a.triggerConfig || typeof a.triggerConfig !== "object") a.triggerConfig = {};
   if (!a.actionConfig || typeof a.actionConfig !== "object") a.actionConfig = {};
+
+  // Strip internal reasoning fields so they don't leak to the frontend
+  delete a._reasoning;
+  delete a._verification;
+  delete a._thinking;
 
   // ── Coerce numeric IDs ──
   if (a.triggerConfig.tableId != null) {
@@ -1464,8 +1867,69 @@ function validateAutomationObject(a: any, raw?: AutomationRawContext, userPrompt
     let aiConditionHint: string | undefined;
     if (tc.conditionColumnId) {
       const validated = validateFieldId(tc.conditionColumnId, tc.tableId, raw);
-      if (validated) tc.conditionColumnId = validated;
-      else {
+      if (validated) {
+        tc.conditionColumnId = validated;
+        // Validate conditionValue against field type and options
+        if (tc.tableId) {
+          const fieldOptions = raw.fieldOptionsByTable.get(tc.tableId);
+          const options = fieldOptions?.get(tc.conditionColumnId);
+          const fieldTypes = raw.fieldTypesByTable?.get(tc.tableId);
+          const fieldType = fieldTypes?.get(tc.conditionColumnId);
+          const isNumericField = fieldType === "number" || fieldType === "score";
+          const isNumericOperator = tc.operator === "greater_than" || tc.operator === "less_than";
+
+          if (options && options.length > 0) {
+            // Select/radio field — try multiple matching strategies before deleting
+            const condVal = String(tc.conditionValue || "").toLowerCase();
+            let matchedOption: string | null = null;
+
+            // Strategy 1: Direct case-insensitive match
+            for (const o of options) {
+              if (o.toLowerCase() === condVal) { matchedOption = o; break; }
+            }
+            // Strategy 2: Transliteration match (Hebrew↔English)
+            if (!matchedOption) {
+              for (const o of options) {
+                if (transliterationMatch(condVal, o.toLowerCase())) { matchedOption = o; break; }
+              }
+            }
+            // Strategy 3: Hebrew prefix-stripped match
+            if (!matchedOption) {
+              const stripped1 = stripHebrewPrefixes(condVal, 1);
+              const stripped2 = stripHebrewPrefixes(condVal, 2);
+              for (const o of options) {
+                const oLow = o.toLowerCase();
+                if (stripped1 === oLow || stripped2 === oLow) { matchedOption = o; break; }
+                if (transliterationMatch(stripped1, oLow) || transliterationMatch(stripped2, oLow)) { matchedOption = o; break; }
+              }
+            }
+
+            if (matchedOption) {
+              tc.conditionValue = matchedOption; // normalize to canonical option
+            } else {
+              aiConditionHint = tc.conditionValue || undefined;
+              delete tc.conditionColumnId;
+              delete tc.conditionValue;
+            }
+          } else if (isNumericField || isNumericOperator) {
+            // Number/score field — allow through if conditionValue is a valid number
+            const numVal = Number(tc.conditionValue);
+            if (!isNaN(numVal) && tc.conditionValue != null && String(tc.conditionValue).trim() !== "") {
+              tc.conditionValue = String(numVal);
+              if (!tc.operator) tc.operator = "greater_than";
+            } else {
+              aiConditionHint = tc.conditionValue || undefined;
+              delete tc.conditionColumnId;
+              delete tc.conditionValue;
+            }
+          } else {
+            // Text/other field with no options and no numeric operator — condition can't work
+            aiConditionHint = tc.conditionValue || undefined;
+            delete tc.conditionColumnId;
+            delete tc.conditionValue;
+          }
+        }
+      } else {
         aiConditionHint = tc.conditionValue; // preserve before deletion
         delete tc.conditionColumnId;
         delete tc.conditionValue;
@@ -1479,6 +1943,9 @@ function validateAutomationObject(a: any, raw?: AutomationRawContext, userPrompt
 
     // Safety net: infer condition from automation name/description/user prompt if AI omitted it
     inferConditionFromName(a, raw, userPrompt, aiConditionHint);
+
+    // Final audit: if title implies a filter but no condition exists, clean the title
+    auditTitleConditionMatch(a, raw);
 
     // Validate actionConfig.columnId (e.g. UPDATE_RECORD_FIELD)
     if (ac.columnId) {
@@ -1562,7 +2029,12 @@ function validateAutomationObject(a: any, raw?: AutomationRawContext, userPrompt
 }
 
 function parseAnalyticsResult(cleanedText: string, formattedTables: any[]) {
-  let parsed = JSON.parse(cleanedText);
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleanedText);
+  } catch (e) {
+    throw new Error(`Analytics JSON parse failed: ${(e as Error).message}. Raw start: ${cleanedText.slice(0, 200)}`);
+  }
 
   // Unwrap nested responses (AI sometimes wraps in {view:...}, {analytics:...}, {result:...})
   if (parsed.view && typeof parsed.view === "object" && (parsed.view.config || parsed.view.type)) parsed = parsed.view;
@@ -1749,18 +2221,21 @@ export const processAIGeneration = inngest.createFunction(
       { limit: 2, key: "event.data.companyId" },
     ],
     retries: 2,
-    timeouts: { finish: "30s" },
+    timeouts: { finish: "120s" },
     onFailure: async ({ event }) => {
       // Called only after ALL retries are exhausted — safe to mark as failed
       try {
         const { jobId, companyId } = event.data.event.data as AIJobPayload;
+        const rawError = (event.data as any).error?.message || (event.data as any).error || "AI generation failed";
+        const errorMsg = String(rawError).slice(0, 300);
         const key = redisKey(jobId);
         await redis.set(
           key,
-          JSON.stringify({ status: "failed", error: "AI generation failed", companyId }),
+          JSON.stringify({ status: "failed", error: errorMsg, companyId }),
           "EX",
           AI_JOB_TTL
         );
+        log.error("AI generation failed after all retries", { jobId, error: errorMsg });
       } catch (err) {
         log.error("onFailure: failed to write status to Redis", { error: String(err) });
       }
@@ -1814,6 +2289,8 @@ export const processAIGeneration = inngest.createFunction(
         safeContext.existingTables = safeContext.existingTables.slice(0, 30000);
       }
 
+      let modelOverride: string | undefined;
+
       switch (type) {
         case "schema":
           systemPrompt = buildSchemaSystemPrompt(prompt, safeContext);
@@ -1823,7 +2300,7 @@ export const processAIGeneration = inngest.createFunction(
           const autoMode = (mode === "suggest") ? "suggest" : "create";
           const existingSchema = safeContext.currentSchema;
           systemPrompt = buildAutomationSystemPrompt(prompt || "", safeContext, autoMode, existingSchema);
-          maxTokens = autoMode === "suggest" ? 6000 : 4000;
+          maxTokens = autoMode === "suggest" ? 8000 : 4000;
           break;
         }
         case "analytics":
@@ -1850,7 +2327,7 @@ export const processAIGeneration = inngest.createFunction(
           throw new Error(`Unknown AI job type: ${type}`);
       }
 
-      const cleanedText = await callOpenRouter(systemPrompt, maxTokens);
+      const cleanedText = await callOpenRouter(systemPrompt, maxTokens, modelOverride);
 
       switch (type) {
         case "schema": {

@@ -233,10 +233,12 @@ export default function AutomationsList({
 
       case "TASK_STATUS_CHANGE": {
         const taskStatusMap: Record<string, string> = {
-          todo: "לביצוע",
-          in_progress: "בטיפול",
-          waiting_client: "ממתין ללקוח",
-          completed_month: "בוצע",
+          todo: "משימות",
+          in_progress: "משימות בטיפול",
+          waiting_client: "ממתינים לאישור לקוח",
+          on_hold: "משימות בהשהייה",
+          completed_month: "בוצעו החודש",
+          done: "משימות שבוצעו",
           any: "כל סטטוס",
         };
         const from = config.fromStatus

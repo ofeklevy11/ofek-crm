@@ -5,7 +5,7 @@ export interface Task {
   id: string;
   title: string;
   description?: string;
-  status: "todo" | "in_progress" | "waiting_client" | "completed_month";
+  status: "todo" | "in_progress" | "waiting_client" | "on_hold" | "completed_month" | "done";
   assignee?: string;
   priority?: "low" | "medium" | "high";
   dueDate?: string;

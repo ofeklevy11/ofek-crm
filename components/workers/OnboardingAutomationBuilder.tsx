@@ -455,11 +455,12 @@ export default function OnboardingAutomationBuilder({
                   onChange={(e) => updateConfig("status", e.target.value)}
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="todo">לביצוע</option>
-                  <option value="in_progress">בטיפול</option>
-                  <option value="waiting_client">ממתין ללקוח</option>
-                  <option value="on_hold">בהשהייה</option>
+                  <option value="todo">משימות</option>
+                  <option value="in_progress">משימות בטיפול</option>
+                  <option value="waiting_client">ממתינים לאישור לקוח</option>
+                  <option value="on_hold">משימות בהשהייה</option>
                   <option value="completed_month">בוצעו החודש</option>
+                  <option value="done">משימות שבוצעו</option>
                 </select>
               </div>
               <div>
@@ -1201,10 +1202,12 @@ export default function OnboardingAutomationBuilder({
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">ללא שינוי</option>
-                <option value="todo">לביצוע</option>
-                <option value="in_progress">בטיפול</option>
-                <option value="waiting_client">ממתין ללקוח</option>
-                <option value="completed_month">בוצע</option>
+                <option value="todo">משימות</option>
+                <option value="in_progress">משימות בטיפול</option>
+                <option value="waiting_client">ממתינים לאישור לקוח</option>
+                <option value="on_hold">משימות בהשהייה</option>
+                <option value="completed_month">בוצעו החודש</option>
+                <option value="done">משימות שבוצעו</option>
               </select>
             </div>
           </div>

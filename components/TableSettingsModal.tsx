@@ -217,24 +217,23 @@ export default function TableSettingsModal({
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !tabsEnabled;
-                    setTabsEnabled(next);
-                    if (next && tabs.length === 0) {
-                      setTabs([{ id: generateTabId(), label: "כללי", order: 0 }]);
-                    }
-                  }}
-                  className={cn(
-                    "px-4 py-2 rounded-lg text-sm font-bold transition-colors border",
-                    tabsEnabled
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
-                  )}
-                >
-                  {tabsEnabled ? "בטל טאבים" : "הפעל טאבים"}
-                </button>
+                {!tabsEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTabsEnabled(true);
+                      if (tabs.length === 0) {
+                        setTabs([{ id: generateTabId(), label: "כללי", order: 0 }]);
+                      }
+                    }}
+                    className={cn(
+                      "px-4 py-2 rounded-lg text-sm font-bold transition-colors border",
+                      "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+                    )}
+                  >
+                    הפעל טאבים
+                  </button>
+                )}
               </div>
             </div>
 

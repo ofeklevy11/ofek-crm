@@ -812,10 +812,12 @@ function AutomationConfigModal({
                 }
               >
                 <option value="">ללא שינוי</option>
-                <option value="todo">לביצוע</option>
-                <option value="in_progress">בטיפול</option>
-                <option value="on_hold">בהשהייה</option>
-                <option value="done">בוצע</option>
+                <option value="todo">משימות</option>
+                <option value="in_progress">משימות בטיפול</option>
+                <option value="waiting_client">ממתינים לאישור לקוח</option>
+                <option value="on_hold">משימות בהשהייה</option>
+                <option value="completed_month">בוצעו החודש</option>
+                <option value="done">משימות שבוצעו</option>
               </select>
             </div>
           )}

@@ -694,6 +694,7 @@ export function EventAutomationBuilder({
                       </option>
                       <option value="on_hold">משימות בהשהייה</option>
                       <option value="completed_month">בוצעו החודש</option>
+                      <option value="done">משימות שבוצעו</option>
                     </select>
                   </div>
                 </div>
