@@ -6,7 +6,7 @@
 cd "c:\Users\Ofek\Desktop\אופק תכנות\gemini3pro-test\my-app"
 
 ─────────────────────────────────────────────
-
+ 
 🔨 שלב 1: הרצת Migration
 ─────────────────────────────────────────────
 npx prisma migrate dev --name add_view_model
