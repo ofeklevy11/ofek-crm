@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import { showConfirm } from "@/hooks/use-modal";
 import {
   Trash2,
   GripVertical,
@@ -688,9 +689,9 @@ function TicketList({
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
-                    if (confirm("האם אתה בטוח שברצונך למחוק קריאה זו?")) {
+                    if (await showConfirm("האם אתה בטוח שברצונך למחוק קריאה זו?")) {
                       deleteTicket(ticket.id).catch((error) =>
                         toast.error(getUserFriendlyError(error))
                       );

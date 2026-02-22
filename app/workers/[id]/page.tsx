@@ -5,6 +5,7 @@ import { getWorker, getOnboardingPathSummaries } from "@/app/actions/workers";
 import { prisma } from "@/lib/prisma";
 import WorkerDetails from "@/components/workers/WorkerDetails";
 import RateLimitFallback from "@/components/RateLimitFallback";
+import { isRateLimitError } from "@/lib/rate-limit-utils";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -48,10 +49,8 @@ export default async function WorkerPage({ params }: Props) {
       getWorker(Number(id)),
       getOnboardingPathSummaries(),
     ]);
-  } catch (e: any) {
-    if (e?.message?.includes("יותר מדי פניות")) {
-      return <RateLimitFallback />;
-    }
+  } catch (e) {
+    if (isRateLimitError(e)) return <RateLimitFallback />;
     throw e;
   }
 

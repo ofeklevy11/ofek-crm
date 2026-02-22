@@ -32,7 +32,7 @@ import { AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";
 import { deleteFinanceRecord } from "@/app/actions/finance-records";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 interface FinanceRecord {
@@ -56,7 +56,6 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
   const [records] = useState(initialRecords);
   const router = useRouter();
 
-  const { toast } = useToast();
   const [filter, setFilter] = useState<"ALL" | "INCOME" | "EXPENSE">("ALL");
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
   const [deleteRecord, setDeleteRecord] = useState<FinanceRecord | null>(null);
@@ -71,14 +70,10 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
     setIsDeleting(deleteRecord.id);
     try {
       await deleteFinanceRecord(deleteRecord.id);
-      toast({ title: "נמחק בהצלחה", description: "התנועה הוסרה מהמערכת" });
+      toast.success("התנועה הוסרה מהמערכת");
       router.refresh();
     } catch (e) {
-      toast({
-        title: "שגיאה",
-        description: "לא ניתן למחוק כעת",
-        variant: "destructive",
-      });
+      toast.error("לא ניתן למחוק כעת");
     } finally {
       setIsDeleting(null);
       setDeleteRecord(null);

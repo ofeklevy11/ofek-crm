@@ -27,7 +27,7 @@ import {
   ArrowDownToLine,
 } from "lucide-react";
 import { createSyncRule, enqueueSyncJob } from "@/app/actions/finance-sync";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface TableMeta {
   id: number;
@@ -41,7 +41,6 @@ export default function DataCollectionWizard({
   tables: TableMeta[];
 }) {
   const router = useRouter();
-  const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -83,22 +82,14 @@ export default function DataCollectionWizard({
 
   const handleCreateAndRun = async () => {
     if (!formData.name) {
-      toast({
-        title: "שגיאה",
-        description: "חסר שם לחוק",
-        variant: "destructive",
-      });
+      toast.error("חסר שם לחוק");
       return;
     }
     if (
       sourceType === "TABLE" &&
       (!formData.sourceId || !formData.mapping.amountField)
     ) {
-      toast({
-        title: "שגיאה",
-        description: "חסרים פרטי מיפוי",
-        variant: "destructive",
-      });
+      toast.error("חסרים פרטי מיפוי");
       return;
     }
 
@@ -133,10 +124,7 @@ export default function DataCollectionWizard({
       const timeoutId = setTimeout(() => {
         stopPolling();
         setLoading(false);
-        toast({
-          title: "זמן המתנה עבר",
-          description: "הסנכרון עדיין רץ ברקע. רענן את הדף בעוד מספר דקות.",
-        });
+        toast.success("הסנכרון עדיין רץ ברקע. רענן את הדף בעוד מספר דקות.");
       }, 120_000);
 
       // Poll for completion
@@ -150,10 +138,7 @@ export default function DataCollectionWizard({
             stopPolling();
             clearTimeout(timeoutId);
             setLoading(false);
-            toast({
-              title: "תהליך הסתיים בהצלחה!",
-              description: `נוצרו ${data.created} רשומות חדשות.`,
-            });
+            toast.success(`נוצרו ${data.created} רשומות חדשות.`);
             router.refresh();
             setStep(1);
             setFormData((p) => ({
@@ -172,11 +157,7 @@ export default function DataCollectionWizard({
             stopPolling();
             clearTimeout(timeoutId);
             setLoading(false);
-            toast({
-              title: "שגיאה",
-              description: data.error || "נכשלה פעולת הסנכרון",
-              variant: "destructive",
-            });
+            toast.error(data.error || "נכשלה פעולת הסנכרון");
           }
         } catch {
           // Ignore polling errors
@@ -185,11 +166,7 @@ export default function DataCollectionWizard({
     } catch (error) {
       console.error(error);
       setLoading(false);
-      toast({
-        title: "שגיאה",
-        description: "נכשלה פעולת הסנכרון",
-        variant: "destructive",
-      });
+      toast.error("נכשלה פעולת הסנכרון");
     }
   };
 

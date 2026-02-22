@@ -1,8 +1,17 @@
 import { getClosedTickets } from "@/app/actions/closed-tickets";
 import ClosedTicketsClient from "./client";
+import { isRateLimitError } from "@/lib/rate-limit-utils";
+import RateLimitFallback from "@/components/RateLimitFallback";
 
 export default async function ClosedTicketsArchivePage() {
-  const { items: tickets } = await getClosedTickets();
+  let tickets;
+  try {
+    const result = await getClosedTickets();
+    tickets = result.items;
+  } catch (e) {
+    if (isRateLimitError(e)) return <RateLimitFallback />;
+    throw e;
+  }
 
   return <ClosedTicketsClient initialTickets={tickets} />;
 }

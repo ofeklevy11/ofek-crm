@@ -5,6 +5,8 @@ import AnalyticsDashboard from "@/components/analytics/AnalyticsDashboard";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import { redirect } from "next/navigation";
+import { isRateLimitError, throwIfAnyRateLimited } from "@/lib/rate-limit-utils";
+import RateLimitFallback from "@/components/RateLimitFallback";
 
 export default async function AnalyticsPage() {
   const user = await getCurrentUser();
@@ -12,11 +14,18 @@ export default async function AnalyticsPage() {
     redirect("/");
   }
 
-  const [analyticsData, foldersData, refreshUsageData] = await Promise.all([
-    getAnalyticsData(),
-    getViewFolders(),
-    getAnalyticsRefreshUsage(),
-  ]);
+  let analyticsData, foldersData, refreshUsageData;
+  try {
+    [analyticsData, foldersData, refreshUsageData] = await Promise.all([
+      getAnalyticsData(),
+      getViewFolders(),
+      getAnalyticsRefreshUsage(),
+    ]);
+    throwIfAnyRateLimited(analyticsData, foldersData, refreshUsageData);
+  } catch (e) {
+    if (isRateLimitError(e)) return <RateLimitFallback />;
+    throw e;
+  }
 
   const updatedViews = (analyticsData.success && 'data' in analyticsData) ? analyticsData.data : [];
   const updatedFolders = (foldersData.success && 'data' in foldersData) ? foldersData.data ?? [] : [];

@@ -900,7 +900,7 @@ async function callOpenRouter(
   maxTokens: number,
   model = "google/gemini-2.0-flash-001"
 ): Promise<string> {
-  const apiKey = env.OPENROUTER_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new NonRetriableError("OPENROUTER_API_KEY is not configured");
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -908,8 +908,8 @@ async function callOpenRouter(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
-      ...(env.NEXT_PUBLIC_APP_URL
-        ? { "HTTP-Referer": env.NEXT_PUBLIC_APP_URL }
+      ...(process.env.NEXT_PUBLIC_APP_URL
+        ? { "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL }
         : {}),
       "X-Title": "CRM AI Generator",
     },
@@ -2302,6 +2302,7 @@ export const processAIGeneration = inngest.createFunction(
           const existingSchema = safeContext.currentSchema;
           systemPrompt = buildAutomationSystemPrompt(prompt || "", safeContext, autoMode, existingSchema);
           maxTokens = autoMode === "suggest" ? 8000 : 4000;
+          modelOverride = "google/gemini-2.0-flash-001";
           break;
         }
         case "analytics":

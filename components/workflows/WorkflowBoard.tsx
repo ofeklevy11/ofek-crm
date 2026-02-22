@@ -7,6 +7,10 @@ import { StageCard } from "./StageCard";
 import { StageDetailModal } from "./StageDetailModal";
 import { createStage, getWorkflowStagesDetails } from "@/app/actions/workflows";
 import { useRouter } from "next/navigation";
+import { showAlert } from "@/hooks/use-modal";
+import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface WorkflowBoardProps {
   workflow: Workflow & { stages: WorkflowStage[] };
@@ -40,7 +44,9 @@ export function WorkflowBoard({
         }
         setStageDetailsMap(map);
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
+      });
   }, [workflow.id]);
 
   useEffect(() => {
@@ -63,6 +69,7 @@ export function WorkflowBoard({
       });
 
       setStageDetailsMap(prev => ({ ...(prev || {}), [newStage.id]: (newStage as any).details }));
+      toast.success("השלב נוצר בהצלחה");
       if (onStageCreated) {
         onStageCreated(newStage);
       } else {
@@ -70,7 +77,7 @@ export function WorkflowBoard({
       }
     } catch (error) {
       console.error(error);
-      alert("שגיאה ביצירת שלב");
+      toast.error(getUserFriendlyError(error));
     }
   };
 

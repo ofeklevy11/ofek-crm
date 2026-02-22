@@ -15,7 +15,9 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { deleteSyncRule, enqueueSyncJob } from "@/app/actions/finance-sync";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+import { showConfirm } from "@/hooks/use-modal";
+import { getUserFriendlyError } from "@/lib/errors";
 import { format } from "date-fns";
 import {
   DropdownMenu,
@@ -33,7 +35,6 @@ import {
 } from "@/components/ui/dialog";
 
 export default function ActiveSyncRules({ rules }: { rules: any[] }) {
-  const { toast } = useToast();
   const router = useRouter();
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [showEditBlocker, setShowEditBlocker] = useState(false);
@@ -60,16 +61,14 @@ export default function ActiveSyncRules({ rules }: { rules: any[] }) {
       const timeoutId = setTimeout(() => {
         stopPolling();
         setLoadingId(null);
-        toast({
-          title: "זמן המתנה עבר",
-          description: "הסנכרון עדיין רץ ברקע. רענן את הדף בעוד מספר דקות.",
-        });
+        toast.success("זמן המתנה עבר", { description: "הסנכרון עדיין רץ ברקע. רענן את הדף בעוד מספר דקות." });
       }, 120_000);
 
       // Poll for completion
       pollRef.current = setInterval(async () => {
         try {
           const res = await fetch(`/api/finance-sync/status/${jobId}`);
+          if (res.status === 429) return; // Skip this poll on rate limit, retry next interval
           if (!res.ok) return;
           const data = await res.json();
 
@@ -80,32 +79,18 @@ export default function ActiveSyncRules({ rules }: { rules: any[] }) {
             const { created, updated, skippedError } = data;
 
             if (created > 0 || (updated && updated > 0)) {
-              toast({
-                title: "סנכרון הושלם בהצלחה",
-                description: `נוצרו ${created} חדשים, עודכנו ${updated || 0} קיימים.`,
-              });
+              toast.success("סנכרון הושלם בהצלחה", { description: `נוצרו ${created} חדשים, עודכנו ${updated || 0} קיימים.` });
             } else if (skippedError > 0) {
-              toast({
-                title: "זוהו שגיאות בסנכרון",
-                description: `נכשלו: ${skippedError} רשומות.`,
-                variant: "destructive",
-              });
+              toast.error(`זוהו שגיאות בסנכרון: נכשלו ${skippedError} רשומות.`);
             } else {
-              toast({
-                title: "הנתונים עדכניים",
-                description: "לא נמצאו רשומות חדשות או שינויים.",
-              });
+              toast.success("הנתונים עדכניים", { description: "לא נמצאו רשומות חדשות או שינויים." });
             }
             router.refresh();
           } else if (data.status === "FAILED") {
             stopPolling();
             clearTimeout(timeoutId);
             setLoadingId(null);
-            toast({
-              title: "שגיאה",
-              description: data.error || "הסנכרון נכשל",
-              variant: "destructive",
-            });
+            toast.error(data.error || "הסנכרון נכשל");
           }
         } catch {
           // Ignore polling errors, keep trying
@@ -113,26 +98,23 @@ export default function ActiveSyncRules({ rules }: { rules: any[] }) {
       }, 2000);
     } catch (e) {
       setLoadingId(null);
-      toast({
-        title: "שגיאה",
-        description: "הסנכרון נכשל (ראה קונסול)",
-        variant: "destructive",
-      });
+      toast.error(getUserFriendlyError(e));
     }
   };
 
   const handleDelete = async (id: number) => {
     if (
-      !confirm(
-        "האם אתה בטוח? הרשומות שכבר נוצרו יישארו בדוח אך ינותקו מחוק זה."
-      )
+      !(await showConfirm({
+        message: "האם אתה בטוח? הרשומות שכבר נוצרו יישארו בדוח אך ינותקו מחוק זה.",
+        variant: "destructive",
+      }))
     )
       return;
     try {
       await deleteSyncRule(id);
-      toast({ title: "חוק נמחק בהצלחה" });
+      toast.success("חוק נמחק בהצלחה");
     } catch (e) {
-      toast({ title: "שגיאה במחיקה", variant: "destructive" });
+      toast.error(getUserFriendlyError(e));
     }
   };
 

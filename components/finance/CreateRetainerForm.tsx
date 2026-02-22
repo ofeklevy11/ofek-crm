@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Calendar as CalendarIcon, Repeat, Info } from "lucide-react";
 import ClientSelector from "./ClientSelector";
 import { apiFetch } from "@/lib/api-fetch";
+import { getUserFriendlyError } from "@/lib/errors";
+import { toast } from "sonner";
 
 interface Client {
   id: number;
@@ -133,11 +135,12 @@ export default function CreateRetainerForm() {
         throw new Error(result.error || "Failed to create retainer");
       }
 
+      toast.success("הריטיינר נוצר בהצלחה");
       router.push("/finance");
       router.refresh();
     } catch (err) {
       console.error("Error creating retainer:", err);
-      setError("שגיאה ביצירת הריטיינר. נסה שוב.");
+      toast.error(getUserFriendlyError(err));
       setIsLoading(false);
     }
   };

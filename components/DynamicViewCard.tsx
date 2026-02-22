@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Edit2, Trash2, Power, PowerOff, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { showConfirm } from "@/hooks/use-modal";
 import { getFriendlyResultError } from "@/lib/errors";
 
 interface DynamicViewCardProps {
@@ -57,6 +58,7 @@ export default function DynamicViewCard({
 
     if (result.success) {
       setIsEnabled(result.view!.isEnabled);
+      toast.success(result.view!.isEnabled ? "התצוגה הופעלה" : "התצוגה כובתה");
       router.refresh();
     } else {
       toast.error(getFriendlyResultError(result.error, "שגיאה בשינוי מצב התצוגה"));
@@ -67,9 +69,10 @@ export default function DynamicViewCard({
 
   const handleDelete = async () => {
     if (
-      !confirm(
-        `האם אתה בטוח שברצונך למחוק את התצוגה "${title}"? פעולה זו בלתי הפיכה.`,
-      )
+      !(await showConfirm({
+        message: `האם אתה בטוח שברצונך למחוק את התצוגה "${title}"? פעולה זו בלתי הפיכה.`,
+        variant: "destructive",
+      }))
     ) {
       return;
     }
@@ -78,6 +81,7 @@ export default function DynamicViewCard({
     const result = await deleteView(viewId);
 
     if (result.success) {
+      toast.success("התצוגה נמחקה בהצלחה");
       router.refresh();
       if (onDelete) onDelete();
     } else {

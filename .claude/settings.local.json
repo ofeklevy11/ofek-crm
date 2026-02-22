@@ -45,7 +45,8 @@
       "WebFetch(domain:www.prisma.io)",
       "WebFetch(domain:neon.com)",
       "Bash(git log:*)",
-      "Bash(git show:*)"
+      "Bash(git show:*)",
+      "Bash(cd:)"
     ]
   }
 }

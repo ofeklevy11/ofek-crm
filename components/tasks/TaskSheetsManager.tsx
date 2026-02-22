@@ -21,7 +21,9 @@ import {
   Timer,
   Settings2,
 } from "lucide-react";
-import AlertDialog from "@/components/AlertDialog";
+import { showConfirm, showPrompt } from "@/hooks/use-modal";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import TaskItemAutomations from "./TaskItemAutomations";
 
 interface TaskSheetItem {
@@ -109,7 +111,6 @@ export default function TaskSheetsManager({
   const [isCreating, setIsCreating] = useState(false);
   const [editingSheet, setEditingSheet] = useState<TaskSheet | null>(null);
   const [expandedSheets, setExpandedSheets] = useState<Set<number>>(new Set());
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [tables, setTables] = useState<Array<{ id: number; name: string }>>([]);
   const [expandedExistingItems, setExpandedExistingItems] = useState<
@@ -395,10 +396,12 @@ export default function TaskSheetsManager({
               : sheet,
           ),
         );
+        toast.success("הפריט עודכן בהצלחה");
         cancelEditingItem();
       }
     } catch (error) {
       console.error("Error updating item:", error);
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -465,6 +468,7 @@ export default function TaskSheetsManager({
             ),
           );
         }
+        toast.success("דף המשימות עודכן בהצלחה");
         closeModal();
       } else {
         // Create new sheet
@@ -529,34 +533,46 @@ export default function TaskSheetsManager({
             })) as TaskSheetItem[],
           };
           setSheets((prev) => [newSheet, ...prev]);
+          toast.success("דף המשימות נוצר בהצלחה");
           closeModal();
         }
       }
     } catch (error) {
       console.error("Error saving task sheet:", error);
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (sheetId: number) => {
+    const confirmed = await showConfirm({
+      message: "האם אתה בטוח שברצונך למחוק את דף המשימות? כל הפריטים בדף יימחקו.",
+      title: "מחיקת דף משימות",
+      confirmText: "מחק",
+      cancelText: "ביטול",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
+
     setLoading(true);
     try {
       const { deleteTaskSheet } = await import("@/app/actions");
       const result = await deleteTaskSheet(sheetId);
       if (result.success) {
         setSheets((prev) => prev.filter((s) => s.id !== sheetId));
+        toast.success("דף המשימות נמחק בהצלחה");
       }
     } catch (error) {
       console.error("Error deleting task sheet:", error);
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
-      setDeleteConfirm(null);
     }
   };
 
   const handleAddItemToSheet = async (sheetId: number) => {
-    const title = prompt("הכנס שם פריט:");
+    const title = await showPrompt({ message: "הכנס שם פריט:" });
     if (!title) return;
 
     try {
@@ -570,9 +586,11 @@ export default function TaskSheetsManager({
               : s,
           ),
         );
+        toast.success("הפריט נוסף בהצלחה");
       }
     } catch (error) {
       console.error("Error adding item:", error);
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -588,9 +606,11 @@ export default function TaskSheetsManager({
               : s,
           ),
         );
+        toast.success("הפריט נמחק בהצלחה");
       }
     } catch (error) {
       console.error("Error deleting item:", error);
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -741,7 +761,7 @@ export default function TaskSheetsManager({
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => setDeleteConfirm(sheet.id)}
+                        onClick={() => handleDelete(sheet.id)}
                         className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                         title="מחק"
                       >
@@ -1395,17 +1415,6 @@ export default function TaskSheetsManager({
         </div>
       )}
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog
-        isOpen={deleteConfirm !== null}
-        onClose={() => setDeleteConfirm(null)}
-        onConfirm={() => deleteConfirm && handleDelete(deleteConfirm)}
-        title="מחיקת דף משימות"
-        description="האם אתה בטוח שברצונך למחוק את דף המשימות? כל הפריטים בדף יימחקו."
-        confirmText="מחק"
-        cancelText="ביטול"
-        isDestructive={true}
-      />
     </div>
   );
 }

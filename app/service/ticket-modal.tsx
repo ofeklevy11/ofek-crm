@@ -21,7 +21,9 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { createTicket } from "@/app/actions/tickets";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
+import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 import { Loader2 } from "lucide-react";
 
 interface TicketModalProps {
@@ -38,7 +40,6 @@ export default function TicketModal({
   clients,
 }: TicketModalProps) {
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
 
   const [formData, setFormData] = useState({
     title: "",
@@ -64,10 +65,7 @@ export default function TicketModal({
           : undefined,
       });
 
-      toast({
-        title: "הצלחה",
-        description: "הקריאה נוצרה בהצלחה",
-      });
+      toast.success("הקריאה נוצרה בהצלחה");
 
       onOpenChange(false);
       setFormData({
@@ -80,11 +78,8 @@ export default function TicketModal({
         assigneeId: "",
       });
     } catch (error) {
-      toast({
-        title: "שגיאה",
-        description: "שגיאה ביצירת הקריאה",
-        variant: "destructive",
-      });
+      if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }

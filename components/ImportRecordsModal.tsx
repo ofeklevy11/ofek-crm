@@ -218,6 +218,8 @@ export default function ImportRecordsModal({
             `/api/tables/${tableId}/import/status/${importJobId}`,
           );
 
+          if (statusRes.status === 429) return; // Skip this poll on rate limit, retry next interval
+
           // Check if response is JSON
           const statusContentType = statusRes.headers.get("content-type");
           if (

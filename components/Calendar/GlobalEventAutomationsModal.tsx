@@ -25,6 +25,9 @@ import {
 } from "lucide-react";
 import { EventAutomationBuilder } from "./EventAutomationBuilder";
 import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
+import { showAlert, showConfirm } from "@/hooks/use-modal";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface GlobalEventAutomationsModalProps {
   isOpen: boolean;
@@ -59,6 +62,7 @@ export function GlobalEventAutomationsModal({
         })
         .catch((e) => {
           console.error("Failed to load global automations data", e);
+          toast.error(getUserFriendlyError(e));
         })
         .finally(() => {
           setLoading(false);
@@ -75,6 +79,7 @@ export function GlobalEventAutomationsModal({
       }
     } catch (e) {
       console.error("Failed to load global automations", e);
+      toast.error(getUserFriendlyError(e));
     } finally {
       setLoading(false);
     }
@@ -85,39 +90,49 @@ export function GlobalEventAutomationsModal({
     actionType: string;
     actionConfig: any;
   }) => {
-    let res;
-    if (editingAutoId) {
-      // Update
-      res = await updateGlobalEventAutomation({
-        id: editingAutoId,
-        minutesBefore: data.minutesBefore,
-        actionType: data.actionType,
-        actionConfig: data.actionConfig,
-        name: "Global Automation", // Optional naming
-      });
-    } else {
-      // Create
-      res = await createGlobalEventAutomation({
-        minutesBefore: data.minutesBefore,
-        actionType: data.actionType,
-        actionConfig: data.actionConfig,
-      });
-    }
+    try {
+      let res;
+      if (editingAutoId) {
+        // Update
+        res = await updateGlobalEventAutomation({
+          id: editingAutoId,
+          minutesBefore: data.minutesBefore,
+          actionType: data.actionType,
+          actionConfig: data.actionConfig,
+          name: "Global Automation", // Optional naming
+        });
+      } else {
+        // Create
+        res = await createGlobalEventAutomation({
+          minutesBefore: data.minutesBefore,
+          actionType: data.actionType,
+          actionConfig: data.actionConfig,
+        });
+      }
 
-    if (res.success) {
-      setShowBuilder(false);
-      setEditingAutoId(null);
-      setEditingAutoData(null);
-      loadAutomations();
-    } else {
-      alert("שגיאה בשמירה: " + res.error);
+      if (res.success) {
+        toast.success("האוטומציה נשמרה בהצלחה");
+        setShowBuilder(false);
+        setEditingAutoId(null);
+        setEditingAutoData(null);
+        loadAutomations();
+      } else {
+        toast.error(getUserFriendlyError(res.error));
+      }
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("האם אתה בטוח שברצונך למחוק אוטומציה קבועה זו?")) return;
-    await deleteGlobalEventAutomation(id);
-    loadAutomations();
+    if (!(await showConfirm("האם אתה בטוח שברצונך למחוק אוטומציה קבועה זו?"))) return;
+    try {
+      await deleteGlobalEventAutomation(id);
+      toast.success("האוטומציה נמחקה בהצלחה");
+      loadAutomations();
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    }
   };
 
   const handleEdit = (auto: any) => {
@@ -142,7 +157,7 @@ export function GlobalEventAutomationsModal({
     // Wait, the logic is: Global Count (existing) + 1 (new) + Max Specific <= Limit
 
     if (automations.length + 1 + maxSpecificCount > limit) {
-      alert(
+      showAlert(
         `לא ניתן להוסיף אוטומציה קבועה נוספת.\n\n` +
           `נמצא אירוע ביומן שיש לו ${maxSpecificCount} אוטומציות ספציפיות.\n` +
           `הוספת אוטומציה קבועה תביא לחריגה מהמגבלה של ${limit} אוטומציות לאותו אירוע.`,
@@ -151,7 +166,7 @@ export function GlobalEventAutomationsModal({
     }
 
     if (automations.length >= limit) {
-      alert(`הגעת למגבלת האוטומציות הקבועות (${limit}). שדרג כדי להוסיף עוד.`);
+      showAlert(`הגעת למגבלת האוטומציות הקבועות (${limit}). שדרג כדי להוסיף עוד.`);
       return;
     }
 

@@ -16,6 +16,9 @@ import { saveFileMetadata } from "@/app/actions/storage";
 import { useRouter } from "next/navigation";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { showAlert } from "@/hooks/use-modal";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface UploadFileModalProps {
   currentFolderId: number | null;
@@ -82,7 +85,7 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
       }
     } catch (e: any) {
       console.error("Upload error:", e);
-      alert(`העלאה נכשלה: ${e.message}`);
+      toast.error(getUserFriendlyError(e));
       setIsStuck(true);
       setIsUploading(false);
     }
@@ -106,12 +109,13 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
         ),
       );
 
+      toast.success("הקובץ הועלה בהצלחה");
       setOpen(false);
       router.refresh();
       setIsUploading(false);
     } catch (e: any) {
       console.error("Error saving file metadata:", e);
-      alert(`הקובץ הועלה לשרת אך נכשלה שמירת הרשומה: ${e.message}`);
+      toast.error(getUserFriendlyError(e));
       setIsUploading(false);
     }
   };

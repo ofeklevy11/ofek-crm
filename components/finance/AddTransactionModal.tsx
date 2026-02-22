@@ -19,13 +19,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { addFinanceRecord } from "@/app/actions/finance-records";
 
 export default function AddTransactionModal() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
 
   const [formData, setFormData] = useState({
     title: "",
@@ -48,7 +47,7 @@ export default function AddTransactionModal() {
         date: new Date(formData.date),
       });
 
-      toast({ title: "נוסף בהצלחה!", description: "התנועה נקלטה במערכת" });
+      toast.success("התנועה נקלטה במערכת");
       setOpen(false);
       setFormData({
         title: "",
@@ -58,11 +57,7 @@ export default function AddTransactionModal() {
         date: new Date().toISOString().split("T")[0],
       });
     } catch (err) {
-      toast({
-        title: "שגיאה",
-        description: "לא ניתן להוסיף כעת",
-        variant: "destructive",
-      });
+      toast.error("לא ניתן להוסיף כעת");
     } finally {
       setLoading(false);
     }

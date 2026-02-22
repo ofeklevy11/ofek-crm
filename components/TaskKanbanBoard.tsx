@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import KanbanColumn from "./KanbanColumn";
 import TaskModal from "./TaskModal";
 import { User, hasUserFlag } from "@/lib/permissions";
@@ -111,6 +114,8 @@ export default function TaskKanbanBoard({
       }
     } catch (error) {
       console.error("Error fetching tasks:", error);
+      if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE, { id: "kanban-fetch" });
+      else toast.error(getUserFriendlyError(error), { id: "kanban-fetch" });
     } finally {
       setIsLoading(false);
     }
@@ -124,9 +129,12 @@ export default function TaskKanbanBoard({
         setTasks(
           tasks.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)),
         );
+        toast.success("המשימה עודכנה בהצלחה");
       }
     } catch (error) {
       console.error("Error updating task:", error);
+      if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -153,13 +161,18 @@ export default function TaskKanbanBoard({
       const result = await deleteTask(taskId);
       if (result.success) {
         setTasks(tasks.filter((t) => t.id !== taskId));
+        toast.success("המשימה נמחקה בהצלחה");
       } else {
         console.error("Failed to delete task");
-        alert("שגיאה במחיקת המשימה");
+        toast.error("שגיאה במחיקת המשימה");
       }
     } catch (error) {
       console.error("Error deleting task:", error);
-      alert("שגיאה במחיקת המשימה");
+      if (isRateLimitError(error)) {
+        toast.error(RATE_LIMIT_MESSAGE);
+      } else {
+        toast.error(getUserFriendlyError(error));
+      }
     }
   };
 

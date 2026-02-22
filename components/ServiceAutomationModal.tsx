@@ -6,6 +6,9 @@ import {
   updateAutomationRule,
 } from "@/app/actions/automations";
 import { X, Loader2, Bell, MessageCircle, Mail } from "lucide-react";
+import { showAlert } from "@/hooks/use-modal";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -102,7 +105,7 @@ export default function ServiceAutomationModal({
 
     // Validate recipient is selected before proceeding
     if (actionType === "SEND_NOTIFICATION" && !recipientId) {
-      alert("יש לבחור נמען להתראה");
+      showAlert("יש לבחור נמען להתראה");
       return;
     }
 
@@ -145,6 +148,7 @@ export default function ServiceAutomationModal({
         await createAutomationRule(commonData);
       }
 
+      toast.success("האוטומציה נשמרה בהצלחה");
       onOpenChange(false);
       // Reset form handled by initialization logic
       if (!initialData) {
@@ -155,7 +159,7 @@ export default function ServiceAutomationModal({
       }
     } catch (error) {
       console.error(error);
-      alert("שגיאה בשמירת האוטומציה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }

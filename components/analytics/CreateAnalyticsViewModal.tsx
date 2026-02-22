@@ -24,6 +24,8 @@ import {
   previewAnalyticsView,
   getAnalyticsLimits,
 } from "@/app/actions/analytics";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 // Plan labels for display
 const PLAN_LABELS: Record<string, string> = {
@@ -202,6 +204,7 @@ export default function CreateAnalyticsViewModal({
           config: config,
         });
         if (res.success) {
+          toast.success("התצוגה עודכנה בהצלחה");
           onSuccess();
           onClose();
         } else {
@@ -215,6 +218,7 @@ export default function CreateAnalyticsViewModal({
           config: config,
         });
         if (res.success) {
+          toast.success("התצוגה נוצרה בהצלחה");
           onSuccess();
           onClose();
         } else {
@@ -223,6 +227,7 @@ export default function CreateAnalyticsViewModal({
       }
     } catch (error) {
       console.error("Failed to save view", error);
+      toast.error(getUserFriendlyError(error));
       setSubmitError("שגיאה בלתי צפויה");
     } finally {
       setLoading(false);
@@ -1103,7 +1108,7 @@ export default function CreateAnalyticsViewModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 overflow-y-auto h-full w-full z-60 flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); onClose(); }}>
+    <div className="fixed inset-0 bg-black/50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); onClose(); }}>
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center p-6 border-b border-gray-200">
           <h3 className="text-xl font-semibold text-gray-900">

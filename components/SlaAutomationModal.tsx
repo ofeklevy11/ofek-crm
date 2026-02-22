@@ -6,6 +6,9 @@ import {
   updateAutomationRule,
 } from "@/app/actions/automations";
 import { getAllFiles } from "@/app/actions/storage";
+import { showAlert } from "@/hooks/use-modal";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import {
   X,
   Loader2,
@@ -336,7 +339,7 @@ export default function SlaAutomationModal({
     }
 
     if (actions.length === 0) {
-      alert("נא להוסיף לפחות פעולה אחת");
+      showAlert("נא להוסיף לפחות פעולה אחת");
       return;
     }
 
@@ -384,11 +387,12 @@ export default function SlaAutomationModal({
         await createAutomationRule(data);
       }
 
+      toast.success("האוטומציה נשמרה בהצלחה");
       onOpenChange(false);
       resetForm();
     } catch (error) {
       console.error(error);
-      alert("שגיאה בשמירת האוטומציה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }

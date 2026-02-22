@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { showConfirm } from "@/hooks/use-modal";
 import { getUserFriendlyError } from "@/lib/errors";
 
 interface FolderCardProps {
@@ -67,15 +68,16 @@ export function FolderCard({
     e.preventDefault();
     e.stopPropagation();
     if (
-      !confirm(
+      !(await showConfirm(
         "האם אתה בטוח שברצונך למחוק תיקייה זו? התיקייה חייבת להיות ריקה.",
-      )
+      ))
     )
       return;
 
     setIsDeleting(true);
     try {
       await deleteFolder(folder.id);
+      toast.success("התיקייה נמחקה בהצלחה");
     } catch (error: any) {
       toast.error(getUserFriendlyError(error));
     } finally {
@@ -92,6 +94,7 @@ export function FolderCard({
     setIsRenaming(true);
     try {
       await renameFolder(folder.id, newName.trim());
+      toast.success("שם התיקייה עודכן בהצלחה");
       router.refresh();
       setIsRenameOpen(false);
     } catch (error: any) {

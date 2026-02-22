@@ -16,8 +16,10 @@ import {
   ChevronRight,
 } from "lucide-react";
 import TaskModal from "@/components/TaskModal";
-import AlertDialog from "@/components/AlertDialog";
 import { deleteTask } from "@/app/actions/tasks";
+import { showConfirm } from "@/hooks/use-modal";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface DoneTask {
   id: string;
@@ -65,8 +67,6 @@ export default function CompletedTasksList({
 }: CompletedTasksListProps) {
   const [tasks, setTasks] = useState<DoneTask[]>(initialTasks);
   const [editingTask, setEditingTask] = useState<DoneTask | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
   // Filter state
@@ -134,21 +134,18 @@ export default function CompletedTasksList({
     setFilterDateTo(null);
   };
 
-  const handleDelete = async () => {
-    if (!confirmDeleteId) return;
-    setDeleting(true);
+  const handleDelete = async (taskId: string) => {
+    if (!(await showConfirm({ message: "האם אתה בטוח שברצונך למחוק את המשימה? פעולה זו לא ניתנת לביטול.", variant: "destructive" }))) return;
     try {
-      const result = await deleteTask(confirmDeleteId);
+      const result = await deleteTask(taskId);
       if (result.success) {
-        setTasks((prev) => prev.filter((t) => t.id !== confirmDeleteId));
+        setTasks((prev) => prev.filter((t) => t.id !== taskId));
+        toast.success("המשימה נמחקה בהצלחה");
       } else {
-        alert(result.error || "מחיקה נכשלה");
+        toast.error(result.error || "מחיקה נכשלה");
       }
-    } catch {
-      alert("שגיאה במחיקת המשימה");
-    } finally {
-      setDeleting(false);
-      setConfirmDeleteId(null);
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -336,7 +333,7 @@ export default function CompletedTasksList({
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                   <button
-                    onClick={() => setConfirmDeleteId(task.id)}
+                    onClick={() => handleDelete(task.id)}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                     title="מחיקה"
                   >
@@ -446,17 +443,6 @@ export default function CompletedTasksList({
         />
       )}
 
-      {/* Delete confirmation */}
-      <AlertDialog
-        isOpen={!!confirmDeleteId}
-        onClose={() => setConfirmDeleteId(null)}
-        onConfirm={handleDelete}
-        title="מחיקת משימה"
-        description="האם אתה בטוח שברצונך למחוק את המשימה? פעולה זו לא ניתנת לביטול."
-        confirmText={deleting ? "מוחק..." : "מחק"}
-        cancelText="ביטול"
-        isDestructive
-      />
     </>
   );
 }

@@ -34,9 +34,11 @@ import { he } from "date-fns/locale";
 import GoalModal from "./GoalModal";
 import GoalContextExplanation from "./GoalContextExplanation";
 import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch, throwResponseError } from "@/lib/api-fetch";
+import { showDestructiveConfirm } from "@/hooks/use-modal";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface GoalCardProps {
   goal: GoalWithProgress;
@@ -54,7 +56,6 @@ export default function GoalCard({
   onDropdownOpenChange,
 }: GoalCardProps) {
   const router = useRouter();
-  const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
 
@@ -98,25 +99,22 @@ export default function GoalCard({
   const Icon = status.icon;
 
   const handleDelete = async () => {
-    if (!confirm("האם אתה בטוח שברצונך למחוק את היעד לצמיתות?")) return;
+    if (!(await showDestructiveConfirm({
+      title: "מחיקת יעד",
+      message: "האם אתה בטוח שברצונך למחוק יעד זה לצמיתות?",
+      confirmationPhrase: "מחק",
+    }))) return;
 
     setIsDeleting(true);
     try {
       const res = await apiFetch(`/api/finance/goals/${goal.id}`, {
         method: "DELETE",
       });
-      if (!res.ok) throw new Error("Failed");
-      toast({
-        title: "הצלחה",
-        description: "היעד נמחק בהצלחה",
-      });
+      if (!res.ok) await throwResponseError(res, "Failed to delete goal");
+      toast.success("היעד נמחק בהצלחה");
       router.refresh();
     } catch (e) {
-      toast({
-        title: "שגיאה",
-        description: "מחיקת היעד נכשלה",
-        variant: "destructive",
-      });
+      toast.error(getUserFriendlyError(e));
     } finally {
       setIsDeleting(false);
     }
@@ -126,19 +124,10 @@ export default function GoalCard({
     setIsArchiving(true);
     try {
       await toggleGoalArchive(goal.id, !goal.isArchived);
-      toast({
-        title: "הצלחה",
-        description: goal.isArchived
-          ? "היעד שוחזר בהצלחה"
-          : "היעד הועבר לארכיון",
-      });
+      toast.success(goal.isArchived ? "היעד שוחזר בהצלחה" : "היעד הועבר לארכיון");
       router.refresh();
     } catch (e) {
-      toast({
-        title: "שגיאה",
-        description: "פעולה נכשלה",
-        variant: "destructive",
-      });
+      toast.error(getUserFriendlyError(e));
     } finally {
       setIsArchiving(false);
     }

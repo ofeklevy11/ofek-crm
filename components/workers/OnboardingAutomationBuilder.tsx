@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { getTableById } from "@/app/actions/tables";
 import { getAllFiles } from "@/app/actions/storage";
+import { toast } from "sonner";
+import { showAlert } from "@/hooks/use-modal";
 
 export interface OnCompleteAction {
   actionType:
@@ -224,6 +226,7 @@ export default function OnboardingAutomationBuilder({
       actionType: selectedType as OnCompleteAction["actionType"],
       config,
     });
+    toast.success("האוטומציה נשמרה בהצלחה");
     onClose();
   };
 
@@ -233,13 +236,13 @@ export default function OnboardingAutomationBuilder({
     switch (selectedType) {
       case "SEND_NOTIFICATION":
         if (!config.recipientId || !config.title) {
-          alert("אנא מלא את כל שדות החובה");
+          showAlert("אנא מלא את כל שדות החובה");
           return false;
         }
         break;
       case "CREATE_TASK":
         if (!config.title) {
-          alert("יש להזין כותרת למשימה");
+          showAlert("יש להזין כותרת למשימה");
           return false;
         }
         break;
@@ -248,25 +251,25 @@ export default function OnboardingAutomationBuilder({
         if (config.phoneSource === "table") {
           // When using table as phone source, validate table and column selection
           if (!config.waTableId || !config.waPhoneColumn) {
-            alert("יש לבחור טבלה ושדה טלפון");
+            showAlert("יש לבחור טבלה ושדה טלפון");
             return false;
           }
         } else {
           // Manual phone entry
           if (!config.phone) {
-            alert("יש למלא מספר טלפון");
+            showAlert("יש למלא מספר טלפון");
             return false;
           }
         }
         // Message is always required
         if (!config.message) {
-          alert("יש למלא תוכן הודעה");
+          showAlert("יש למלא תוכן הודעה");
           return false;
         }
         break;
       case "CREATE_RECORD":
         if (!config.tableId) {
-          alert("יש לבחור טבלה");
+          showAlert("יש לבחור טבלה");
           return false;
         }
         break;
@@ -305,7 +308,7 @@ export default function OnboardingAutomationBuilder({
         [availableCol.name]: "",
       });
     } else {
-      alert("אין עוד שדות זמינים לעדכון בטבלה זו");
+      showAlert("אין עוד שדות זמינים לעדכון בטבלה זו");
     }
   };
 
@@ -360,7 +363,7 @@ export default function OnboardingAutomationBuilder({
         [availableCol.name]: "",
       });
     } else {
-      alert("אין עוד שדות זמינים למילוי בטבלה זו");
+      showAlert("אין עוד שדות זמינים למילוי בטבלה זו");
     }
   };
 

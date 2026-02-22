@@ -84,6 +84,7 @@ export function ProductModal({
         await createProduct(payload);
       }
 
+      toast.success(productToEdit ? "המוצר עודכן בהצלחה" : "המוצר נוצר בהצלחה");
       router.refresh();
       onClose();
     } catch (error: any) {

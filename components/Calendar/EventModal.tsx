@@ -24,6 +24,9 @@ import {
 } from "lucide-react";
 import { EventAutomationBuilder } from "./EventAutomationBuilder";
 import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
+import { showAlert, showConfirm } from "@/hooks/use-modal";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface EventModalProps {
   isOpen: boolean;
@@ -205,8 +208,8 @@ export function EventModal({
         }
         handleClose();
       }
-    } catch {
-      alert("שגיאה ביצירת האירוע. נסה שוב.");
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
     } finally {
       setSaving(false);
     }
@@ -248,27 +251,32 @@ export function EventModal({
       return;
     }
 
-    let res;
-    if (editingAutoId) {
-      res = await updateEventAutomation({
-        id: editingAutoId,
-        minutesBefore: data.minutesBefore,
-        actionType: data.actionType,
-        actionConfig: data.actionConfig,
-      });
-    } else {
-      res = await createEventAutomation({
-        eventId: event.id,
-        minutesBefore: data.minutesBefore,
-        actionType: data.actionType,
-        actionConfig: data.actionConfig,
-      });
-    }
+    try {
+      let res;
+      if (editingAutoId) {
+        res = await updateEventAutomation({
+          id: editingAutoId,
+          minutesBefore: data.minutesBefore,
+          actionType: data.actionType,
+          actionConfig: data.actionConfig,
+        });
+      } else {
+        res = await createEventAutomation({
+          eventId: event.id,
+          minutesBefore: data.minutesBefore,
+          actionType: data.actionType,
+          actionConfig: data.actionConfig,
+        });
+      }
 
-    if (res.success) {
-      loadAutomations(event.id);
-    } else {
-      alert("שגיאה בשמירת אוטומציה: " + res.error);
+      if (res.success) {
+        toast.success("האוטומציה נשמרה בהצלחה");
+        loadAutomations(event.id);
+      } else {
+        toast.error(getUserFriendlyError(res.error));
+      }
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
     }
 
     setShowBuilder(false);
@@ -291,7 +299,7 @@ export function EventModal({
 
     // If not editing (creating new), check limit
     if (!editingAutoId && editingPendingIndex === null && currentTotal >= limit) {
-      alert(
+      showAlert(
         `הגעת למגבלת האוטומציות לאירוע (${limit}). שדרג את החבילה כדי להוסיף עוד.`,
       );
       return;
@@ -301,9 +309,14 @@ export function EventModal({
   };
 
   const handleDeleteAuto = async (id: number) => {
-    if (!confirm("להסיר אוטומציה זו?")) return;
-    await deleteEventAutomation(id);
-    if (event) loadAutomations(event.id);
+    if (!(await showConfirm("להסיר אוטומציה זו?"))) return;
+    try {
+      await deleteEventAutomation(id);
+      toast.success("האוטומציה נמחקה בהצלחה");
+      if (event) loadAutomations(event.id);
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    }
   };
 
   const handleEditPending = (index: number) => {
@@ -317,8 +330,8 @@ export function EventModal({
     setShowBuilder(true);
   };
 
-  const handleDeletePending = (index: number) => {
-    if (!confirm("להסיר אוטומציה זו?")) return;
+  const handleDeletePending = async (index: number) => {
+    if (!(await showConfirm("להסיר אוטומציה זו?"))) return;
     setPendingAutomations((prev) => prev.filter((_, i) => i !== index));
   };
 

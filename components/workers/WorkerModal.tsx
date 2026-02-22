@@ -20,6 +20,9 @@ import {
   updateWorker,
   assignOnboardingPath,
 } from "@/app/actions/workers";
+import { toast } from "sonner";
+import { showAlert } from "@/hooks/use-modal";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface Worker {
   id: number;
@@ -119,12 +122,12 @@ export default function WorkerModal({
     e.preventDefault();
 
     if (!formData.firstName.trim() || !formData.lastName.trim()) {
-      alert("יש למלא שם פרטי ושם משפחה");
+      showAlert("יש למלא שם פרטי ושם משפחה");
       return;
     }
 
     if (!formData.departmentId) {
-      alert("יש לבחור מחלקה");
+      showAlert("יש לבחור מחלקה");
       return;
     }
 
@@ -157,10 +160,11 @@ export default function WorkerModal({
         }
       }
 
+      toast.success(worker ? "העובד עודכן בהצלחה" : "העובד נוצר בהצלחה");
       onSave(result);
     } catch (error) {
       console.error("Error saving worker:", error);
-      alert("שגיאה בשמירת העובד");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsSubmitting(false);
     }

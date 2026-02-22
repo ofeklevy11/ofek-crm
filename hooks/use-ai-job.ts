@@ -54,6 +54,9 @@ export function useAIJob() {
     if (res.status === 429) {
       throw new Error("RATE_LIMITED");
     }
+    if (res.status === 503) {
+      throw new Error("השירות לא זמין זמנית, נסה שוב בעוד מספר שניות");
+    }
     if (res.status !== 202 || !data.jobId) {
       throw new Error(data.error || "Failed to dispatch AI job");
     }
@@ -63,6 +66,7 @@ export function useAIJob() {
     // Step 2: Poll for result with exponential backoff
     let interval = INITIAL_INTERVAL;
     let consecutive429s = 0;
+    let consecutiveServerErrors = 0;
     for (let i = 0; i < MAX_POLLS; i++) {
       if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
 
@@ -99,11 +103,20 @@ export function useAIJob() {
           interval = Math.min(interval * 1.5, MAX_INTERVAL);
           continue;
         }
-        // Auth errors (401/403) or server errors — stop polling immediately
+        if (pollRes.status >= 500) {
+          consecutiveServerErrors++;
+          if (consecutiveServerErrors >= 5) {
+            throw new Error("Polling request failed");
+          }
+          interval = Math.min(interval * 2, MAX_INTERVAL);
+          continue;
+        }
+        // Auth errors (401/403) — stop polling immediately
         throw new Error("Polling request failed");
       }
 
-      consecutive429s = 0; // Reset on successful response
+      consecutive429s = 0;
+      consecutiveServerErrors = 0;
       const jobData: AIJobResult<T> = await pollRes.json();
 
       if (jobData.status === "completed" && jobData.result) {

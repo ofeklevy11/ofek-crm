@@ -4,7 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { uploadFiles } from "@/lib/uploadthing";
 import { toast } from "sonner";
+import { showAlert } from "@/hooks/use-modal";
 import { getUserFriendlyError } from "@/lib/errors";
+import { RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 import { saveFileMetadata } from "@/app/actions/storage";
 import RelationPicker from "./RelationPicker";
 import {
@@ -106,7 +108,7 @@ export default function AddRecordForm({
     if (!files || files.length === 0) return;
     const file = files[0];
     if (file.size > 1024 * 1024) {
-      alert("הקובץ גדול מדי (מקסימום 1MB)");
+      showAlert("הקובץ גדול מדי (מקסימום 1MB)");
       return;
     }
     setAttachmentsData((prev) => [
@@ -183,7 +185,7 @@ export default function AddRecordForm({
       });
 
       if (!hasValue) {
-        alert(
+        showAlert(
           "לא ניתן להוסיף רשומה ריקה. יש למלא לפחות שדה אחד (קבצים ולינקים אינם נחשבים כשדה מלא).",
         );
         setLoading(false);
@@ -258,6 +260,7 @@ export default function AddRecordForm({
         }
       }
 
+      toast.success("הרשומה נוצרה בהצלחה");
       setFormData({});
       setIsOpen(false);
       router.refresh();
@@ -496,6 +499,7 @@ export default function AddRecordForm({
                                       const res = await fetch(
                                         `/api/records/${val}`,
                                       );
+                                      if (res.status === 429) { toast.error(RATE_LIMIT_MESSAGE); return; }
                                       if (res.ok) {
                                         relatedRecord = await res.json();
                                         lookupCache.current[val] = relatedRecord;
@@ -521,6 +525,7 @@ export default function AddRecordForm({
                                       "Failed to fetch lookup data",
                                       error,
                                     );
+                                    toast.error(getUserFriendlyError(error));
                                   }
                                 } else {
                                   const updates: Record<string, any> = {};

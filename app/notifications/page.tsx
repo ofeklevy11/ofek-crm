@@ -1,8 +1,9 @@
 import { getCurrentUser } from "@/lib/permissions-server";
 import { getNotifications } from "@/app/actions/notifications";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import NotificationsList from "@/components/NotificationsList";
+import { isRateLimitError, throwIfAnyRateLimited } from "@/lib/rate-limit-utils";
+import RateLimitFallback from "@/components/RateLimitFallback";
 
 export default async function NotificationsPage() {
   const user = await getCurrentUser();
@@ -11,8 +12,15 @@ export default async function NotificationsPage() {
     redirect("/login");
   }
 
-  // Fetch all notifications for the full page view
-  const response = await getNotifications(null);
+  let response;
+  try {
+    response = await getNotifications(null);
+    throwIfAnyRateLimited(response);
+  } catch (e) {
+    if (isRateLimitError(e)) return <RateLimitFallback />;
+    throw e;
+  }
+
   const notifications = response.success ? response.data : [];
 
   return (

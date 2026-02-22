@@ -12,8 +12,11 @@ import {
   Clock,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch, throwResponseError } from "@/lib/api-fetch";
 import EditPaymentModal from "./EditPaymentModal";
+import { showConfirm } from "@/hooks/use-modal";
+import { getUserFriendlyError } from "@/lib/errors";
+import { toast } from "sonner";
 
 interface PaymentsTableProps {
   payments: any[];
@@ -31,7 +34,7 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("האם אתה בטוח שברצונך למחוק תשלום זה? לא ניתן לבטל פעולה זו."))
+    if (!(await showConfirm({ message: "האם אתה בטוח שברצונך למחוק תשלום זה? לא ניתן לבטל פעולה זו.", variant: "destructive" })))
       return;
 
     setDeletingId(id);
@@ -40,12 +43,13 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
         method: "DELETE",
       });
 
-      if (!response.ok) throw new Error("Failed to delete payment");
+      if (!response.ok) await throwResponseError(response, "Failed to delete payment");
 
+      toast.success("התשלום נמחק בהצלחה");
       router.refresh();
     } catch (err) {
       console.error(err);
-      alert("שגיאה במחיקת התשלום");
+      toast.error(getUserFriendlyError(err));
     } finally {
       setDeletingId(null);
     }

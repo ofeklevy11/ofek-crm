@@ -4,6 +4,9 @@ import { useState } from "react";
 import { X, Building2, Palette, FileText, User } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { createDepartment, updateDepartment } from "@/app/actions/workers";
+import { toast } from "sonner";
+import { showAlert } from "@/hooks/use-modal";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface Department {
   id: number;
@@ -60,7 +63,7 @@ export default function DepartmentModal({
     e.preventDefault();
 
     if (!formData.name.trim()) {
-      alert("יש להזין שם למחלקה");
+      showAlert("יש להזין שם למחלקה");
       return;
     }
 
@@ -82,10 +85,11 @@ export default function DepartmentModal({
         result = await createDepartment(data);
       }
 
+      toast.success(department ? "המחלקה עודכנה בהצלחה" : "המחלקה נוצרה בהצלחה");
       onSave(result);
     } catch (error) {
       console.error("Error saving department:", error);
-      alert("שגיאה בשמירת המחלקה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsSubmitting(false);
     }

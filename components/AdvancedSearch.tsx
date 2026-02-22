@@ -10,7 +10,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Settings, Search, Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { showAlert } from "@/hooks/use-modal";
 import { getUserFriendlyError } from "@/lib/errors";
+import { RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 
 interface SchemaField {
   name: string;
@@ -128,7 +130,7 @@ export default function AdvancedSearch({
 
   const performSearch = async () => {
     if (searchSettings.searchableFields.length === 0) {
-      alert("אנא הגדר עמודות לחיפוש תחילה");
+      showAlert("אנא הגדר עמודות לחיפוש תחילה");
       setShowSettingsModal(true);
       return;
     }
@@ -146,6 +148,7 @@ export default function AdvancedSearch({
         `/api/tables/${tableId}/search?${params.toString()}`
       );
 
+      if (response.status === 429) { toast.error(RATE_LIMIT_MESSAGE); return; }
       if (response.ok) {
         const data = await response.json();
         setResults(data);

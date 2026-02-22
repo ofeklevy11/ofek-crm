@@ -16,6 +16,9 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { showAlert } from "@/hooks/use-modal";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import {
   SelectOptionsEditor,
   SelectOption,
@@ -189,7 +192,7 @@ export default function CreateTableForm() {
     const names = fields.map((f) => f.name);
     const uniqueNames = new Set(names);
     if (uniqueNames.size !== names.length) {
-      alert("שמות שדות מערכת חייבים להיות ייחודיים.");
+      showAlert("שמות שדות מערכת חייבים להיות ייחודיים.");
       setLoading(false);
       return;
     }
@@ -269,11 +272,12 @@ export default function CreateTableForm() {
         throw new Error(result.error || "Failed to create table");
       }
 
+      toast.success("הטבלה נוצרה בהצלחה");
       router.push("/tables");
       router.refresh();
     } catch (error) {
       console.error(error);
-      alert("שגיאה ביצירת הטבלה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }

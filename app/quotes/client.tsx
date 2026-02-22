@@ -21,6 +21,10 @@ import { trashQuote, restoreQuote, getQuotes } from "@/app/actions/quotes";
 import { BusinessSettings } from "@/app/actions/business-settings";
 import { useRouter } from "next/navigation";
 import BusinessSettingsRequired from "./business-settings-required";
+import { showConfirm } from "@/hooks/use-modal";
+import { toast } from "sonner";
+import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
+import { getUserFriendlyError } from "@/lib/errors";
 
 const formatMoney = (amount: number, currency: string = "ILS") => {
   return new Intl.NumberFormat("he-IL", {
@@ -60,28 +64,47 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
 
   const handleTrash = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("האם להעביר הצעת מחיר זו לפח?")) {
+    if (await showConfirm("האם להעביר הצעת מחיר זו לפח?")) {
       setLoadingId(id);
-      await trashQuote(id);
-      setQuotes((prev) => prev.filter((q) => q.id !== id));
-      setLoadingId(null);
+      try {
+        await trashQuote(id);
+        toast.success("ההצעה הועברה לפח");
+        setQuotes((prev) => prev.filter((q) => q.id !== id));
+      } catch (error) {
+        if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
+        else toast.error(getUserFriendlyError(error));
+      } finally {
+        setLoadingId(null);
+      }
     }
   };
 
   const handleRestore = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setLoadingId(id);
-    await restoreQuote(id);
-    setQuotes((prev) => prev.filter((q) => q.id !== id));
-    setLoadingId(null);
+    try {
+      await restoreQuote(id);
+      toast.success("ההצעה שוחזרה בהצלחה");
+      setQuotes((prev) => prev.filter((q) => q.id !== id));
+    } catch (error) {
+      if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(error));
+    } finally {
+      setLoadingId(null);
+    }
   };
 
   const handleLoadMore = () => {
     if (!nextCursor || isLoadingMore) return;
     startLoadMore(async () => {
-      const { quotes: moreQuotes, nextCursor: newCursor } = await getQuotes(showTrashed, nextCursor);
-      setQuotes((prev) => [...prev, ...moreQuotes as QuoteSummary[]]);
-      setNextCursor(newCursor);
+      try {
+        const { quotes: moreQuotes, nextCursor: newCursor } = await getQuotes(showTrashed, nextCursor);
+        setQuotes((prev) => [...prev, ...moreQuotes as QuoteSummary[]]);
+        setNextCursor(newCursor);
+      } catch (err: any) {
+        if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
+        else toast.error(getUserFriendlyError(err));
+      }
     });
   };
 

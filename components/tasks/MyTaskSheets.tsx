@@ -14,6 +14,9 @@ import {
   User,
   RefreshCw,
 } from "lucide-react";
+import { showConfirm } from "@/hooks/use-modal";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface TaskSheetItem {
   id: number;
@@ -129,9 +132,11 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
             ),
           })),
         );
+        toast.success(result.data.isCompleted ? "המשימה הושלמה בהצלחה" : "המשימה סומנה כלא הושלמה");
       }
     } catch (error) {
       console.error("Error toggling completion:", error);
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading((prev) => ({ ...prev, [itemId]: false }));
     }
@@ -139,9 +144,9 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
 
   const handleResetSheet = async (sheetId: number) => {
     if (
-      !confirm(
+      !(await showConfirm(
         "האם אתה בטוח שברצונך לאפס את דף המשימות? כל המשימות שהושלמו יסומנו מחדש כלא הושלמו.",
-      )
+      ))
     ) {
       return;
     }
@@ -165,9 +170,11 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
               : sheet,
           ),
         );
+        toast.success("דף המשימות אופס בהצלחה");
       }
     } catch (error) {
       console.error("Error resetting sheet:", error);
+      toast.error(getUserFriendlyError(error));
     }
   };
 

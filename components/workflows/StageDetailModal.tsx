@@ -43,6 +43,7 @@ import { deleteStage, updateStage, getWorkflowStagesDetails } from "@/app/action
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import { showAlert, showConfirm } from "@/hooks/use-modal";
 import * as LucideIcons from "lucide-react";
 
 interface StageDetailModalProps {
@@ -1771,7 +1772,10 @@ export function StageDetailModal({
         .then((data) => {
           if (Array.isArray(data)) setUsers(data);
         })
-        .catch((err) => console.error("Error loading users", err));
+        .catch((err) => {
+          console.error("Error loading users", err);
+          toast.error(getUserFriendlyError(err));
+        });
 
       fetch("/api/tables")
         .then((res) => res.json())
@@ -1779,7 +1783,10 @@ export function StageDetailModal({
           const list = json.data ?? json;
           if (Array.isArray(list)) setTables(list);
         })
-        .catch((err) => console.error("Error loading tables", err));
+        .catch((err) => {
+          console.error("Error loading tables", err);
+          toast.error(getUserFriendlyError(err));
+        });
     }
 
     // Use preloaded details if available; otherwise fetch lazily
@@ -1794,7 +1801,9 @@ export function StageDetailModal({
           }
           setLoadedStageDetails(map);
         })
-        .catch(() => {});
+        .catch(() => {
+          toast.warning("לא ניתן לטעון פרטי שלבים מוקדמים", { id: "stage-details-preload" });
+        });
     }
   }, [isOpen, workflowId, preloadedStageDetails]);
 
@@ -1839,7 +1848,7 @@ export function StageDetailModal({
   const handleSave = async () => {
     try {
       if (!formData.name.trim()) {
-        alert("נא להזין שם לשלב");
+        showAlert("נא להזין שם לשלב");
         return;
       }
 
@@ -1857,6 +1866,7 @@ export function StageDetailModal({
           description: formData.whatHappens,
           details,
         });
+        toast.success("השלב נוצר בהצלחה");
         onClose();
         return;
       }
@@ -1870,6 +1880,7 @@ export function StageDetailModal({
         details,
       });
 
+      toast.success("השלב עודכן בהצלחה");
       if (onUpdate) {
         // Optimistic update via callback
         // @ts-ignore
@@ -1886,7 +1897,7 @@ export function StageDetailModal({
 
   const handleDelete = async () => {
     if (!stage) return;
-    if (confirm("האם אתה בטוח שברצונך למחוק שלב זה?")) {
+    if (await showConfirm({ message: "האם אתה בטוח שברצונך למחוק שלב זה?", variant: "destructive" })) {
       try {
         await deleteStage(stage.id);
 
@@ -1896,6 +1907,7 @@ export function StageDetailModal({
           router.refresh();
         }
 
+        toast.success("השלב נמחק בהצלחה");
         onClose();
       } catch (error) {
         toast.error(getUserFriendlyError(error));
@@ -1909,7 +1921,7 @@ export function StageDetailModal({
     config: any;
   }) => {
     if (!data.config || Object.keys(data.config).length === 0) {
-      alert("שגיאה: אוטומציה ריקה לא יכולה להישמר.");
+      showAlert("שגיאה: אוטומציה ריקה לא יכולה להישמר.");
       return;
     }
     setFormData((prev: any) => ({

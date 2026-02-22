@@ -23,6 +23,9 @@ import {
   Plus,
 } from "lucide-react";
 import { deleteWorker } from "@/app/actions/workers";
+import { toast } from "sonner";
+import { showDestructiveConfirm } from "@/hooks/use-modal";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface Worker {
   id: number;
@@ -106,15 +109,16 @@ export default function WorkersList({
   });
 
   const handleDelete = async (id: number) => {
-    if (!confirm("האם אתה בטוח שברצונך למחוק עובד זה?")) return;
+    if (!(await showDestructiveConfirm({ title: "מחיקת עובד", message: "האם אתה בטוח שברצונך למחוק עובד זה?", confirmationPhrase: "מחק" }))) return;
 
     setDeletingId(id);
     try {
       await deleteWorker(id);
+      toast.success("העובד נמחק בהצלחה");
       onDelete(id);
     } catch (error) {
       console.error("Error deleting worker:", error);
-      alert("שגיאה במחיקת העובד");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setDeletingId(null);
     }

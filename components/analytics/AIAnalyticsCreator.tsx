@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { getUserFriendlyError } from "@/lib/errors";
+import { toast } from "sonner";
 import {
   X,
   Sparkles,
@@ -73,8 +74,9 @@ export default function AIAnalyticsCreator({
 
   const { dispatch, cancel } = useAIJob();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const hasLoadedTablesRef = useRef(false);
 
-  // Cancel polling when modal closes
+  // Cancel in-flight requests when modal closes
   useEffect(() => {
     if (!isOpen) cancel();
   }, [isOpen, cancel]);
@@ -84,9 +86,9 @@ export default function AIAnalyticsCreator({
   }, [messages]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || hasLoadedTablesRef.current) return;
+    hasLoadedTablesRef.current = true;
     let stale = false;
-    handleReset();
     setInitialLoading(true);
 
     getTables().then((res) => {
@@ -298,13 +300,14 @@ export default function AIAnalyticsCreator({
       });
 
       if (res.success) {
+        toast.success("התצוגה נוצרה בהצלחה");
         onSuccess();
         onClose();
       } else {
-        setError("שגיאה בשמירת התצוגה");
+        toast.error("שגיאה בשמירת התצוגה");
       }
     } catch (err) {
-      setError("שגיאה בשמירת התצוגה");
+      toast.error(getUserFriendlyError(err));
     } finally {
       setLoading(false);
     }
@@ -329,7 +332,7 @@ export default function AIAnalyticsCreator({
         {generatedView && chatMinimized ? null : (
           <div
             className={cn(
-              "flex flex-col flex-1 h-full",
+              "flex flex-col flex-1 h-full min-h-0",
               generatedView
                 ? "md:w-1/2 border-b md:border-b-0 md:border-l border-border"
                 : "w-full"
@@ -394,7 +397,11 @@ export default function AIAnalyticsCreator({
                           : "bg-card border border-border text-foreground rounded-br-none"
                       )}
                     >
-                      {msg.content}
+                      {msg.role === "model" ? (
+                        <div style={{ maxHeight: "12.5rem", overflowY: "auto" }}>{msg.content}</div>
+                      ) : (
+                        msg.content
+                      )}
                     </div>
                   </div>
                 ))}
@@ -485,7 +492,7 @@ export default function AIAnalyticsCreator({
                   className="pl-5 pr-12 py-6 rounded-xl bg-muted/20 min-h-[9rem]"
                   autoFocus
                   rows={6}
-                  style={{ resize: "none" }}
+                  style={{ resize: "none", maxHeight: "12.5rem", overflowY: "auto" }}
                 />
                 <Button
                   onClick={() => handleSend()}
@@ -565,7 +572,7 @@ export default function AIAnalyticsCreator({
         {generatedView && (
           <div
             className={cn(
-              "flex-1 overflow-y-auto bg-card border-r border-border flex flex-col min-h-0",
+              "flex-1 bg-card border-r border-border flex flex-col min-h-0",
               chatMinimized ? "w-full" : "md:w-1/2"
             )}
           >
@@ -602,7 +609,7 @@ export default function AIAnalyticsCreator({
               </div>
             )}
 
-            <div className="flex-1 p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex-1 overflow-y-auto p-8 space-y-6 min-h-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="bg-green-50 dark:bg-green-950/30 border border-green-100 dark:border-green-900 rounded-xl p-4 flex items-start gap-4">
                 <div className="bg-green-100 dark:bg-green-900 p-2 rounded-full text-green-600 dark:text-green-400 mt-1">
                   <Check size={20} />
@@ -747,7 +754,7 @@ export default function AIAnalyticsCreator({
             </div>
 
             {/* Preview Footer */}
-            <div className="pt-5 pb-4 px-5 border-t border-border flex gap-3">
+            <div className="pt-5 pb-4 px-5 border-t border-border flex gap-3 flex-shrink-0">
               <Button
                 variant="outline"
                 onClick={onClose}

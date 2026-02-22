@@ -6,6 +6,7 @@ import DynamicViewRenderer from "./DynamicViewRenderer";
 import type { ViewConfig } from "@/app/actions/views";
 import { Loader2 } from "lucide-react";
 import { getUserFriendlyError } from "@/lib/errors";
+import { isRateLimitError, RateLimitError } from "@/lib/rate-limit-utils";
 
 interface AsyncViewWrapperProps {
   view: {
@@ -58,7 +59,7 @@ export default function AsyncViewWrapper({
         if (!res.ok) {
           if (res.status === 429) {
             const text = await res.text();
-            throw new Error(text || "Rate limit exceeded");
+            throw new RateLimitError(text || "Rate limit exceeded");
           }
           throw new Error("Failed to fetch view data");
         }
@@ -76,8 +77,7 @@ export default function AsyncViewWrapper({
       } catch (err: any) {
         if (isMounted.current) {
           const msg = getUserFriendlyError(err);
-          const isRateLimit = /מדי (בקשות|פניות|ניסיונות)/i.test(msg) || /429|rate.?limit/i.test(msg);
-          if (isRateLimit) {
+          if (isRateLimitError(msg)) {
             setRateLimitError(true);
             setTimeout(() => setRateLimitError(false), 10000);
           }

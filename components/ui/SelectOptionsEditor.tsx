@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { ColorPicker, PRESET_COLORS } from "@/components/ui/ColorPicker";
 import { Plus, Trash2, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { showAlert } from "@/hooks/use-modal";
 
 export interface SelectOption {
   value: string;
@@ -29,7 +30,7 @@ export function SelectOptionsEditor({
   const handleAddOption = () => {
     if (!newOptionValue.trim()) return;
     if (options.some((o) => o.value === newOptionValue.trim())) {
-      alert("אפשרות זו כבר קיימת");
+      showAlert("אפשרות זו כבר קיימת");
       return;
     }
     onChange([...options, { value: newOptionValue.trim(), color: "" }]);

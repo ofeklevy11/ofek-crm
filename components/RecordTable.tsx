@@ -4,7 +4,9 @@ import { uploadFiles } from "@/lib/uploadthing";
 import { saveFileMetadata, updateFile } from "@/app/actions/storage";
 import { apiFetch, throwResponseError } from "@/lib/api-fetch";
 import { toast } from "sonner";
+import { showAlert, showConfirm, showDestructiveConfirm } from "@/hooks/use-modal";
 import { getUserFriendlyError } from "@/lib/errors";
+import { RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 import { useState, useEffect, useRef, useMemo } from "react";
 
 import { useRouter } from "next/navigation";
@@ -239,7 +241,7 @@ export default function RecordTable({
 
     const file = files[0];
     if (file.size > 1 * 1024 * 1024) {
-      alert("גודל הקובץ חייב להיות עד 1MB");
+      showAlert("גודל הקובץ חייב להיות עד 1MB");
       e.target.value = ""; // Reset input
       return;
     }
@@ -264,6 +266,7 @@ export default function RecordTable({
           null, // No folder (root)
           recordId,
         );
+        toast.success("הקובץ הועלה בהצלחה");
         router.refresh();
       }
     } catch (error: any) {
@@ -317,6 +320,7 @@ export default function RecordTable({
         }),
       );
 
+      toast.success("הלינק נוסף בהצלחה");
       setNewLinkUrl("");
       setNewLinkName("");
       setLinkInputRecordId(null);
@@ -363,6 +367,7 @@ export default function RecordTable({
         }),
       );
 
+      toast.success("הלינק עודכן בהצלחה");
       setEditingLinkId(null);
       setEditLinkUrl("");
       setEditLinkName("");
@@ -392,6 +397,7 @@ export default function RecordTable({
         }),
       );
 
+      toast.success("שם הקובץ עודכן בהצלחה");
       setEditingFileId(null);
       setEditFileName("");
     } catch (error) {
@@ -471,8 +477,13 @@ export default function RecordTable({
             body: JSON.stringify({ tables: tablesRequest }),
           });
 
+          if (res.status === 429) {
+            toast.error(RATE_LIMIT_MESSAGE);
+            return;
+          }
           if (!res.ok) {
             console.error("Failed to fetch batch related data");
+            toast.error(getUserFriendlyError("Failed to fetch related data"));
             return;
           }
 
@@ -498,6 +509,7 @@ export default function RecordTable({
           setRelatedData(newRelatedData);
         } catch (error) {
           console.error("Failed to fetch batch related data", error);
+          toast.error(getUserFriendlyError(error));
         }
       };
 
@@ -675,7 +687,7 @@ export default function RecordTable({
   };
 
   const handleBulkDelete = async () => {
-    if (!confirm(`האם אתה בטוח שברצונך למחוק ${selectedIds.length} רשומות?`))
+    if (!(await showDestructiveConfirm({ message: `האם אתה בטוח שברצונך למחוק ${selectedIds.length} רשומות?`, confirmationPhrase: "מחק" })))
       return;
     setIsDeleting(true);
     try {
@@ -697,6 +709,7 @@ export default function RecordTable({
       }
       setRecords((prev) => prev.filter((r) => !selectedIdSet.has(r.id)));
       setSelectedIds([]);
+      toast.success(`${selectedIds.length} רשומות נמחקו בהצלחה`);
     } catch (error: any) {
       toast.error(getUserFriendlyError(error));
     } finally {
@@ -712,7 +725,7 @@ export default function RecordTable({
     e.preventDefault();
     e.stopPropagation();
 
-    if (!confirm("האם למחוק לינק זה?")) return;
+    if (!(await showConfirm("האם למחוק לינק זה?"))) return;
 
     try {
       const res = await apiFetch(`/api/attachments/${attachmentId}`, {
@@ -734,6 +747,7 @@ export default function RecordTable({
           return r;
         }),
       );
+      toast.success("הלינק נמחק בהצלחה");
     } catch (error) {
       toast.error(getUserFriendlyError(error));
     }
@@ -746,7 +760,7 @@ export default function RecordTable({
         : records;
 
     if (recordsToExport.length === 0) {
-      alert("אין רשומות לייצוא");
+      showAlert("אין רשומות לייצוא");
       return;
     }
 
@@ -802,7 +816,7 @@ export default function RecordTable({
         : records;
 
     if (recordsToExport.length === 0) {
-      alert("אין רשומות לייצוא");
+      showAlert("אין רשומות לייצוא");
       return;
     }
 

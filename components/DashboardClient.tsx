@@ -56,6 +56,8 @@ import {
 } from "@/app/actions/dashboard-widgets";
 import { hasUserFlag, User } from "@/lib/permissions";
 import { GoalWithProgress } from "@/app/actions/goals";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 // Define Types
 type WidgetType =
@@ -453,6 +455,7 @@ export default function DashboardClient({
           }
         } catch (e) {
           console.error("Failed to migrate widgets", e);
+          toast.error(getUserFriendlyError(e));
         }
       }
 
@@ -519,6 +522,7 @@ export default function DashboardClient({
       })
       .catch((err) => {
         console.error("Error fetching batch table data", err);
+        toast.error(getUserFriendlyError(err));
       })
       .finally(() => {
         setTableLoading((prev) => {
@@ -562,6 +566,7 @@ export default function DashboardClient({
       }
     } catch (err) {
       console.error("Error fetching table data", err);
+      toast.error(getUserFriendlyError(err));
     } finally {
       setTableLoading((prev) => ({ ...prev, [widgetId]: false }));
     }

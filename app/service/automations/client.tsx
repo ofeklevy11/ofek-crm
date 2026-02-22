@@ -25,6 +25,10 @@ import {
   deleteAutomationRule,
 } from "@/app/actions/automations";
 import { useRouter, useSearchParams } from "next/navigation";
+import { showConfirm } from "@/hooks/use-modal";
+import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
@@ -93,6 +97,8 @@ export default function ServiceAutomationsClient({
       router.refresh();
     } catch (error) {
       console.error("Failed to toggle rule");
+      if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(error));
       // Revert
       setAutomations((prev) =>
         prev.map((a) => (a.id === id ? { ...a, isActive: currentStatus } : a)),
@@ -101,7 +107,7 @@ export default function ServiceAutomationsClient({
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("האם אתה בטוח שברצונך למחוק אוטומציה זו?")) return;
+    if (!(await showConfirm("האם אתה בטוח שברצונך למחוק אוטומציה זו?"))) return;
 
     const prev = [...automations];
     setAutomations((prev) => prev.filter((a) => a.id !== id));
@@ -111,6 +117,8 @@ export default function ServiceAutomationsClient({
       router.refresh();
     } catch (error) {
       console.error("Failed to delete rule");
+      if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(error));
       setAutomations(prev);
     }
   };

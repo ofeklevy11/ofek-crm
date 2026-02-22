@@ -19,6 +19,7 @@ import {
   Plus,
 } from "lucide-react";
 import { getTableById } from "@/app/actions/tables";
+import { showAlert } from "@/hooks/use-modal";
 
 export interface OnCompleteAction {
   actionType:
@@ -227,13 +228,13 @@ export default function TaskItemAutomationBuilder({
     switch (selectedType) {
       case "SEND_NOTIFICATION":
         if (!config.recipientId || !config.title) {
-          alert("אנא מלא את כל שדות החובה");
+          showAlert("אנא מלא את כל שדות החובה");
           return false;
         }
         break;
       case "CREATE_TASK":
         if (!config.title) {
-          alert("יש להזין כותרת למשימה");
+          showAlert("יש להזין כותרת למשימה");
           return false;
         }
         break;
@@ -242,31 +243,31 @@ export default function TaskItemAutomationBuilder({
         if (config.phoneSource === "table") {
           // When using table as phone source, validate table and column selection
           if (!config.waTableId || !config.waPhoneColumn) {
-            alert("יש לבחור טבלה ושדה טלפון");
+            showAlert("יש לבחור טבלה ושדה טלפון");
             return false;
           }
         } else {
           // Manual phone entry
           if (!config.phone) {
-            alert("יש למלא מספר טלפון");
+            showAlert("יש למלא מספר טלפון");
             return false;
           }
         }
         // Message is always required
         if (!config.message) {
-          alert("יש למלא תוכן הודעה");
+          showAlert("יש למלא תוכן הודעה");
           return false;
         }
         break;
       case "CREATE_FINANCE":
         if (!config.title || !config.amount) {
-          alert("יש למלא כותרת וסכום");
+          showAlert("יש למלא כותרת וסכום");
           return false;
         }
         break;
       case "CREATE_CALENDAR_EVENT":
         if (!config.title || !config.startTime || !config.endTime) {
-          alert("יש למלא כותרת, זמן התחלה וזמן סיום");
+          showAlert("יש למלא כותרת, זמן התחלה וזמן סיום");
           return false;
         }
         break;
@@ -306,7 +307,7 @@ export default function TaskItemAutomationBuilder({
         [availableCol.name]: "",
       });
     } else {
-      alert("אין עוד שדות זמינים בטבלה זו");
+      showAlert("אין עוד שדות זמינים בטבלה זו");
     }
   };
 

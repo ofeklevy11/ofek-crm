@@ -56,6 +56,7 @@ import { getUsers } from "@/app/actions/users";
 import { Badge } from "@/components/ui/badge";
 import { getFriendlyResultError, getUserFriendlyError } from "@/lib/errors";
 import { toast } from "sonner";
+import { showAlert, showConfirm } from "@/hooks/use-modal";
 
 // Types - Use shared types where possible or map them
 interface Customer {
@@ -327,7 +328,7 @@ export default function CustomerListManager({
     e.preventDefault();
     // Validation: Name + (Email OR Phone)
     if (!manualForm.name || (!manualForm.email && !manualForm.phone)) {
-      alert("חובה להזין שם ולפחות אמצעי קשר אחד (מייל או טלפון)");
+      showAlert("חובה להזין שם ולפחות אמצעי קשר אחד (מייל או טלפון)");
       return;
     }
 
@@ -340,6 +341,7 @@ export default function CustomerListManager({
       });
 
       if (result.success) {
+        toast.success("הלקוח נוסף בהצלחה");
         const newCustomer: Customer = {
           id: `man_${Date.now()}`,
           ...manualForm,
@@ -385,6 +387,7 @@ export default function CustomerListManager({
           phone: phone ? String(phone) : undefined,
         });
       }
+      toast.success("הלקוחות יובאו בהצלחה");
       onAddCustomers([]);
       setIsOpen(false);
       setSelectedDbCustomers([]);
@@ -409,7 +412,7 @@ export default function CustomerListManager({
       !autoConfig.fields.name ||
       (!autoConfig.fields.email && !autoConfig.fields.phone)
     ) {
-      alert("חובה לבחור שדה שם ולפחות אמצעי קשר אחד (מייל או טלפון)");
+      showAlert("חובה לבחור שדה שם ולפחות אמצעי קשר אחד (מייל או טלפון)");
       return;
     }
 
@@ -540,9 +543,10 @@ export default function CustomerListManager({
   };
 
   const handleDeleteRule = async (ruleId: number) => {
-    if (confirm("האם למחוק את חוק האוטומציה?")) {
+    if (await showConfirm("האם למחוק את חוק האוטומציה?")) {
       try {
         await deleteAutomationRule(ruleId);
+        toast.success("האוטומציה נמחקה בהצלחה");
         const rules = await getNurtureRules(listSlug);
         setExistingRules(rules);
         onAddCustomers([]); // Refresh parent
@@ -555,6 +559,7 @@ export default function CustomerListManager({
   const handleToggleRule = async (ruleId: number, currentStatus: boolean) => {
     try {
       await toggleAutomationRule(ruleId, !currentStatus);
+      toast.success(currentStatus ? "האוטומציה הושבתה" : "האוטומציה הופעלה");
       const rules = await getNurtureRules(listSlug);
       setExistingRules(rules);
       onAddCustomers([]); // Refresh parent

@@ -63,6 +63,14 @@ export async function POST(req: Request) {
       }
     }
 
+    // Early Redis health check — fail fast before expensive DB queries
+    try {
+      await redis.ping();
+    } catch (err) {
+      log.warn("Redis unavailable before schema generation", { error: String(err) });
+      return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+    }
+
     // SECURITY: Fetch existing tables + categories from DB scoped by companyId
     const [dbTables, dbCategories] = await Promise.all([
       prisma.tableMeta.findMany({
@@ -116,7 +124,12 @@ export async function POST(req: Request) {
     eventData.jobId = jobId;
 
     // Mark as pending in Redis immediately (include companyId for isolation)
-    await redis.set(`ai-job:${jobId}`, JSON.stringify({ status: "pending", companyId: user.companyId }), "EX", 600);
+    try {
+      await redis.set(`ai-job:${jobId}`, JSON.stringify({ status: "pending", companyId: user.companyId }), "EX", 600);
+    } catch (err) {
+      log.warn("Redis unavailable when setting pending job", { jobId, error: String(err) });
+      return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+    }
 
     // Dispatch to Inngest background job
     await inngest.send({

@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { showConfirm } from "@/hooks/use-modal";
 import { getUserFriendlyError } from "@/lib/errors";
 
 // Secure download function that uses API route
@@ -77,11 +78,12 @@ export function FileCard({
   const router = useRouter();
 
   const handleDelete = async () => {
-    if (!confirm("האם אתה בטוח שברצונך למחוק קובץ זה?")) return;
+    if (!(await showConfirm("האם אתה בטוח שברצונך למחוק קובץ זה?"))) return;
 
     setIsDeleting(true);
     try {
       await deleteFile(file.id);
+      toast.success("הקובץ נמחק בהצלחה");
     } catch (error) {
       toast.error(getUserFriendlyError(error));
     } finally {
@@ -95,6 +97,7 @@ export function FileCard({
       await updateFile(file.id, {
         displayName: editDisplayName.trim() || null,
       });
+      toast.success("שם הקובץ עודכן בהצלחה");
       setIsEditing(false);
       router.refresh();
     } catch (error) {

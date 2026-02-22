@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { User } from "@/lib/permissions";
+import { showConfirm } from "@/hooks/use-modal";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +35,8 @@ import { Badge } from "@/components/ui/badge";
 import { getApiKeys, createApiKey, deleteApiKey } from "@/app/actions/api-keys";
 import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface UserProfileModalProps {
   user: User;
@@ -72,24 +75,39 @@ export default function UserProfileModal({
   async function handleCreateKey() {
     if (!newKeyName.trim()) return;
     setCreating(true);
-    const res = await createApiKey(newKeyName);
-    if (res.success && res.data) {
-      setNewKeyName("");
-      loadKeys();
+    try {
+      const res = await createApiKey(newKeyName);
+      if (res.success && res.data) {
+        toast.success("המפתח נוצר בהצלחה");
+        setNewKeyName("");
+        loadKeys();
+      } else {
+        toast.error(getUserFriendlyError(res.error || "שגיאה ביצירת מפתח"));
+      }
+    } catch (e) {
+      toast.error(getUserFriendlyError(e));
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   }
 
   async function handleDeleteKey(id: number) {
     if (
-      !confirm(
+      !(await showConfirm(
         "האם אתה בטוח שברצונך למחוק מפתח זה? פעולה זו תחסום כל שימוש קיים במפתח."
-      )
+      ))
     )
       return;
-    const res = await deleteApiKey(id);
-    if (res.success) {
-      loadKeys();
+    try {
+      const res = await deleteApiKey(id);
+      if (res.success) {
+        toast.success("המפתח נמחק בהצלחה");
+        loadKeys();
+      } else {
+        toast.error(getUserFriendlyError(res.error || "שגיאה במחיקת מפתח"));
+      }
+    } catch (e) {
+      toast.error(getUserFriendlyError(e));
     }
   }
 

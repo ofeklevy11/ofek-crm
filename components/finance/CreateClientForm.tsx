@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, Phone, Building, FileText } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { getUserFriendlyError } from "@/lib/errors";
+import { toast } from "sonner";
 
 export default function CreateClientForm() {
   const router = useRouter();
@@ -35,11 +37,12 @@ export default function CreateClientForm() {
         throw new Error("Failed to create client");
       }
 
+      toast.success("הלקוח נוצר בהצלחה");
       router.push("/finance/clients");
       router.refresh();
     } catch (err) {
       console.error("Error creating client:", err);
-      setError("שגיאה ביצירת הלקוח. נסה שוב.");
+      toast.error(getUserFriendlyError(err));
       setIsLoading(false);
     }
   };

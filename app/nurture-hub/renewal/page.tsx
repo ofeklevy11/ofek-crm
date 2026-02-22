@@ -53,7 +53,10 @@ import {
   deleteAutomationRule,
   toggleAutomationRule,
 } from "@/app/actions/automations";
-import { getFriendlyResultError } from "@/lib/errors";
+import { getFriendlyResultError, getUserFriendlyError } from "@/lib/errors";
+import { toast } from "sonner";
+import { showConfirm } from "@/hooks/use-modal";
+import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 
 // Type needed for list state
 interface Customer {
@@ -93,9 +96,15 @@ export default function RenewalAutomationPage() {
           sourceTableName: s.sourceTableName || undefined,
         }))
       );
+    }).catch((err: any) => {
+      if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(err));
     });
     getNurtureRules("renewal").then((r) => {
       setRules(r);
+    }).catch((err: any) => {
+      if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(err));
     });
   };
 
@@ -103,6 +112,9 @@ export default function RenewalAutomationPage() {
   useEffect(() => {
     getDataSources().then((sources) => {
       setTables(sources.filter((s) => s.type === "table"));
+    }).catch((err: any) => {
+      if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(err));
     });
   }, []);
 
@@ -126,7 +138,7 @@ export default function RenewalAutomationPage() {
 
   const handleSave = () => {
     console.log("Saving renewal config:", config, isEnabled);
-    alert("ההגדרות נשמרו בהצלחה (דמו)");
+    toast.success("ההגדרות נשמרו בהצלחה (דמו)");
   };
 
   return (
@@ -303,11 +315,16 @@ export default function RenewalAutomationPage() {
                             {/* Toggle Active/Inactive */}
                             <button
                               onClick={async () => {
-                                await toggleAutomationRule(
-                                  rule.id,
-                                  !rule.isActive
-                                );
-                                refreshData();
+                                try {
+                                  await toggleAutomationRule(
+                                    rule.id,
+                                    !rule.isActive
+                                  );
+                                  refreshData();
+                                } catch (error) {
+                                  if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
+                                  else toast.error(getUserFriendlyError(error));
+                                }
                               }}
                               className={`p-1.5 rounded-md transition-colors ${
                                 rule.isActive
@@ -325,9 +342,14 @@ export default function RenewalAutomationPage() {
                             {/* Delete */}
                             <button
                               onClick={async () => {
-                                if (confirm("האם למחוק את חוק האוטומציה?")) {
-                                  await deleteAutomationRule(rule.id);
-                                  refreshData();
+                                if (await showConfirm("האם למחוק את חוק האוטומציה?")) {
+                                  try {
+                                    await deleteAutomationRule(rule.id);
+                                    refreshData();
+                                  } catch (error) {
+                                    if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
+                                    else toast.error(getUserFriendlyError(error));
+                                  }
                                 }
                               }}
                               className="p-1.5 rounded-md text-red-500 hover:bg-red-50 transition-colors"
@@ -687,7 +709,7 @@ export default function RenewalAutomationPage() {
                         setSelectedCustomer(null);
                         refreshData();
                       } else {
-                        alert(getFriendlyResultError(result.error, "שגיאה בשמירה"));
+                        toast.error(getFriendlyResultError(result.error, "שגיאה בשמירה"));
                       }
                     }}
                     className="flex-1 bg-indigo-600 hover:bg-indigo-700"
@@ -730,10 +752,10 @@ export default function RenewalAutomationPage() {
                   <button
                     onClick={async () => {
                       if (
-                        confirm(
+                        !(await showConfirm(
                           `האם למחוק את ${selectedCustomer.name} מהרשימה?`
-                        )
-                      ) {
+                        ))
+                      ) return;
                         const result = await deleteNurtureSubscriber(
                           selectedCustomer.id
                         );
@@ -741,9 +763,8 @@ export default function RenewalAutomationPage() {
                           setSelectedCustomer(null);
                           refreshData();
                         } else {
-                          alert(getFriendlyResultError(result.error, "שגיאה במחיקה"));
+                          toast.error(getFriendlyResultError(result.error, "שגיאה במחיקה"));
                         }
-                      }
                     }}
                     className="w-full flex items-center justify-center gap-2 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >

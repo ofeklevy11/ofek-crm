@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -175,7 +176,7 @@ export default function TableSettingsModal({
       onClose();
     } catch (error: any) {
       console.error(error);
-      toast.error(error.message || "שגיאה בשמירת ההגדרות");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setSaving(false);
     }

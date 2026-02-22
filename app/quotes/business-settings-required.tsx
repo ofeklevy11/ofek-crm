@@ -21,6 +21,8 @@ import {
 import { saveFileMetadata } from "@/app/actions/storage";
 import { useRouter } from "next/navigation";
 import { useUploadThing } from "@/lib/uploadthing";
+import { showAlert } from "@/hooks/use-modal";
+import { toast } from "sonner";
 
 interface Props {
   initialSettings: BusinessSettings | null;
@@ -64,7 +66,7 @@ export default function BusinessSettingsRequired({
 
     // Validate it's an image
     if (!file.type.startsWith("image/")) {
-      alert("נא לבחור קובץ תמונה בלבד");
+      showAlert("נא לבחור קובץ תמונה בלבד");
       return;
     }
 
@@ -109,7 +111,7 @@ export default function BusinessSettingsRequired({
       }
     } catch (error) {
       console.error("Logo upload failed:", error);
-      alert("שגיאה בהעלאת הלוגו");
+      toast.error("שגיאה בהעלאת הלוגו");
       setLogoPreview(formData.logoUrl); // Revert to old logo if failed
     } finally {
       setUploadingLogo(false);
@@ -133,7 +135,7 @@ export default function BusinessSettingsRequired({
       !formData.taxId ||
       !formData.businessAddress
     ) {
-      alert("נא למלא את כל השדות החובה");
+      showAlert("נא למלא את כל השדות החובה");
       return;
     }
 
@@ -155,7 +157,7 @@ export default function BusinessSettingsRequired({
       }
     } catch (error) {
       console.error(error);
-      alert("שגיאה בשמירת ההגדרות");
+      toast.error("שגיאה בשמירת ההגדרות");
     } finally {
       setLoading(false);
     }

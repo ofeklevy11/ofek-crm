@@ -10,10 +10,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import WorkersManager from "@/components/workers/WorkersManager";
 import RateLimitFallback from "@/components/RateLimitFallback";
-
-function rethrowRateLimit(err: unknown) {
-  if (err instanceof Error && err.message.includes("יותר מדי פניות")) throw err;
-}
+import { isRateLimitError } from "@/lib/rate-limit-utils";
 
 export const metadata = {
   title: "ניהול עובדים | CRM",
@@ -32,22 +29,22 @@ export default async function WorkersPage() {
     [workersResult, departments, onboardingPaths, stats, users, tables] =
       await Promise.all([
         getWorkers().catch((err) => {
-          rethrowRateLimit(err);
+          if (isRateLimitError(err)) throw err;
           console.error("[Workers] Failed to load workers:", err);
           return { data: [], total: 0, hasMore: false };
         }),
         getDepartments().catch((err) => {
-          rethrowRateLimit(err);
+          if (isRateLimitError(err)) throw err;
           console.error("[Workers] Failed to load departments:", err);
           return [];
         }),
         getOnboardingPaths().catch((err) => {
-          rethrowRateLimit(err);
+          if (isRateLimitError(err)) throw err;
           console.error("[Workers] Failed to load onboarding paths:", err);
           return [];
         }),
         getWorkersStats().catch((err) => {
-          rethrowRateLimit(err);
+          if (isRateLimitError(err)) throw err;
           console.error("[Workers] Failed to load stats:", err);
           return { totalWorkers: 0, onboardingWorkers: 0, activeWorkers: 0, departments: 0, onboardingPaths: 0 };
         }),
@@ -72,10 +69,8 @@ export default async function WorkersPage() {
             return [];
           }),
       ]);
-  } catch (e: any) {
-    if (e?.message?.includes("יותר מדי פניות")) {
-      return <RateLimitFallback />;
-    }
+  } catch (e) {
+    if (isRateLimitError(e)) return <RateLimitFallback />;
     throw e;
   }
 

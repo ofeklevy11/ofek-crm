@@ -4,6 +4,8 @@ import { FileExplorer } from "@/components/files/file-explorer";
 import { UploadFileModal } from "@/components/files/upload-modal";
 import { CreateFolderModal } from "@/components/files/create-folder-modal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { isRateLimitError } from "@/lib/rate-limit-utils";
+import RateLimitFallback from "@/components/RateLimitFallback";
 
 interface PageProps {
   searchParams: Promise<{ folderId?: string }>;
@@ -18,7 +20,13 @@ export default async function FilesPage({ searchParams }: PageProps) {
     Number.isSafeInteger(parsedFolderId) && parsedFolderId > 0
       ? parsedFolderId
       : null;
-  const data = await getStorageData(folderId);
+  let data;
+  try {
+    data = await getStorageData(folderId);
+  } catch (e) {
+    if (isRateLimitError(e)) return <RateLimitFallback />;
+    throw e;
+  }
 
   return (
     <div className="container mx-auto py-8" dir="rtl">

@@ -4,9 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { Edit2, Trash2, Eye, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch, throwResponseError } from "@/lib/api-fetch";
 import EditRetainerModal from "./EditRetainerModal";
 import RetainerPaymentModal from "./RetainerPaymentModal";
+import { showDestructiveConfirm } from "@/hooks/use-modal";
+import { getUserFriendlyError } from "@/lib/errors";
+import { toast } from "sonner";
 
 interface RetainersTableProps {
   retainers: any[];
@@ -33,7 +36,11 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
 
   const handleDelete = async (id: string) => {
     if (
-      !confirm("האם אתה בטוח שברצונך למחוק ריטיינר זה? לא ניתן לבטל פעולה זו.")
+      !(await showDestructiveConfirm({
+        title: "מחיקת ריטיינר",
+        message: "האם אתה בטוח שברצונך למחוק ריטיינר זה? לא ניתן לבטל.",
+        confirmationPhrase: "מחק",
+      }))
     )
       return;
 
@@ -43,12 +50,13 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
         method: "DELETE",
       });
 
-      if (!response.ok) throw new Error("Failed to delete retainer");
+      if (!response.ok) await throwResponseError(response, "Failed to delete retainer");
 
+      toast.success("הריטיינר נמחק בהצלחה");
       router.refresh();
     } catch (err) {
       console.error(err);
-      alert("שגיאה במחיקת הריטיינר");
+      toast.error(getUserFriendlyError(err));
     } finally {
       setDeletingId(null);
     }

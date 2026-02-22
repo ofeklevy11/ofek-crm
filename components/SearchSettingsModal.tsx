@@ -16,6 +16,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Search, Eye, Settings, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { showAlert } from "@/hooks/use-modal";
 
 interface SchemaField {
   name: string;
@@ -87,11 +88,11 @@ export default function SearchSettingsModal({
 
   const handleSave = () => {
     if (searchableFields.length === 0) {
-      alert("יש לבחור לפחות עמודה אחת לחיפוש");
+      showAlert("יש לבחור לפחות עמודה אחת לחיפוש");
       return;
     }
     if (displayFields.length === 0) {
-      alert("יש לבחור לפחות עמודה אחת להצגה");
+      showAlert("יש לבחור לפחות עמודה אחת להצגה");
       return;
     }
     onSave({ searchableFields, displayFields });

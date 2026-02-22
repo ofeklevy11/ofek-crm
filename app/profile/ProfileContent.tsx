@@ -49,7 +49,10 @@ import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import GreenApiConnection from "./GreenApiConnection";
-import { getFriendlyResultError } from "@/lib/errors";
+import { getFriendlyResultError, getUserFriendlyError } from "@/lib/errors";
+import { showDestructiveConfirm } from "@/hooks/use-modal";
+import { toast } from "sonner";
+import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 
 interface ProfileContentProps {
   user: User;
@@ -81,11 +84,17 @@ export default function ProfileContent({ user }: ProfileContentProps) {
 
   async function loadKeys() {
     setLoadingKeys(true);
-    const res = await getApiKeys();
-    if (res.success && res.data) {
-      setKeys(res.data);
+    try {
+      const res = await getApiKeys();
+      if (res.success && res.data) {
+        setKeys(res.data);
+      }
+    } catch (err: any) {
+      if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(err));
+    } finally {
+      setLoadingKeys(false);
     }
-    setLoadingKeys(false);
   }
 
   const router = useRouter();
@@ -98,13 +107,15 @@ export default function ProfileContent({ user }: ProfileContentProps) {
       if (res.success && res.data) {
         setNewFullKey(res.data.fullKey);
         setNewKeyName("");
+        toast.success("המפתח נוצר בהצלחה");
         await loadKeys();
       } else {
         console.error("Failed to create key:", res.error);
-        alert(getFriendlyResultError(res.error, "שגיאה ביצירת מפתח"));
+        toast.error(getFriendlyResultError(res.error, "שגיאה ביצירת מפתח"));
       }
     } catch (e) {
       console.error("Exception creating key:", e);
+      toast.error(getUserFriendlyError(e));
     } finally {
       setCreating(false);
     }
@@ -112,18 +123,21 @@ export default function ProfileContent({ user }: ProfileContentProps) {
 
   async function handleDeleteKey(id: number) {
     if (
-      !confirm(
-        "האם אתה בטוח שברצונך למחוק מפתח זה? פעולה זו תחסום כל שימוש קיים במפתח.",
-      )
+      !(await showDestructiveConfirm({
+        title: "מחיקת מפתח API",
+        message: "האם אתה בטוח שברצונך למחוק מפתח API זה?",
+        confirmationPhrase: "מחק",
+      }))
     )
       return;
 
     const res = await deleteApiKey(id);
     if (res.success) {
+      toast.success("המפתח נמחק בהצלחה");
       await loadKeys();
       router.refresh();
     } else {
-      alert(getFriendlyResultError(res.error, "שגיאה במחיקת מפתח"));
+      toast.error(getFriendlyResultError(res.error, "שגיאה במחיקת מפתח"));
     }
   }
 
@@ -152,6 +166,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
       });
 
       if (res.success) {
+        toast.success("שם הארגון עודכן בהצלחה");
         setUpdateSuccess(true);
         setNewCompanyName("");
         setPassword("");
@@ -167,6 +182,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
     } catch (error) {
       console.error("Error updating company name:", error);
       setUpdateError("שגיאה בעדכון שם הארגון");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setUpdatingCompanyName(false);
     }

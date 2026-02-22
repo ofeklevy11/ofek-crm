@@ -32,6 +32,7 @@ import {
 import { getAllFiles } from "@/app/actions/storage";
 import { getFriendlyResultError, getUserFriendlyError } from "@/lib/errors";
 import { toast } from "sonner";
+import { showAlert } from "@/hooks/use-modal";
 
 interface User {
   id: number;
@@ -428,7 +429,7 @@ export default function AutomationModal({
         finalActionConfig = actions[0].config;
       } else {
         // Should not happen if validation works
-        alert("נא לבחור לפחות פעולה אחת");
+        showAlert("נא לבחור לפחות פעולה אחת");
         setLoading(false);
         return;
       }
@@ -449,6 +450,7 @@ export default function AutomationModal({
       }
 
       if (result.success) {
+        toast.success("האוטומציה נשמרה בהצלחה");
         onCreated();
         onClose();
       } else {

@@ -13,6 +13,7 @@ import { Check, ChevronsUpDown, X, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import { RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 
 interface RelationPickerProps {
   tableId: number;
@@ -59,6 +60,7 @@ export default function RelationPicker({
       const params = new URLSearchParams({ for: "picker", limit: "50" });
       if (query) params.set("q", query);
       const res = await fetch(`/api/tables/${tableId}/records?${params}`);
+      if (res.status === 429) { toast.error(RATE_LIMIT_MESSAGE); return; }
       if (res.ok) {
         const data = await res.json();
         setRecords(data);

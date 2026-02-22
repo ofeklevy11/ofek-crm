@@ -132,9 +132,11 @@ export default function AITableCreator({
   const [chatMinimized, setChatMinimized] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const hasLoadedContextRef = useRef(false);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !hasLoadedContextRef.current) {
+      hasLoadedContextRef.current = true;
       const loadContext = async () => {
         try {
           const { getTables, getCategories } = await import("@/app/actions");
@@ -156,9 +158,11 @@ export default function AITableCreator({
     }
   }, [isOpen]);
 
-  // Cancel polling when modal closes
+  // Cancel in-flight requests when modal closes
   useEffect(() => {
-    if (!isOpen) cancel();
+    if (!isOpen) {
+      cancel();
+    }
   }, [isOpen, cancel]);
 
   useEffect(() => {
@@ -438,7 +442,7 @@ export default function AITableCreator({
         {currentSchema && chatMinimized ? null : (
           <div
             className={cn(
-              "flex flex-col flex-1 h-full",
+              "flex flex-col flex-1 h-full min-h-0",
               currentSchema
                 ? "md:w-1/2 border-b md:border-b-0 md:border-l border-border"
                 : "w-full",
@@ -515,7 +519,11 @@ export default function AITableCreator({
                           : "bg-card border border-border text-foreground rounded-br-none",
                       )}
                     >
-                      {msg.content}
+                      {msg.role === "model" ? (
+                        <div style={{ maxHeight: "12.5rem", overflowY: "auto" }}>{msg.content}</div>
+                      ) : (
+                        msg.content
+                      )}
                     </div>
                   </div>
                 ))}
@@ -564,7 +572,7 @@ export default function AITableCreator({
                   placeholder="למשל: טבלת CRM ללידים בנדל״ן..."
                   className="pl-5 pr-12 py-6 rounded-xl bg-muted/20 min-h-[9rem]"
                   rows={6}
-                  style={{ resize: "none" }}
+                  style={{ resize: "none", maxHeight: "12.5rem", overflowY: "auto" }}
                 />
                 <Button
                   onClick={() => handleSend()}
@@ -582,7 +590,7 @@ export default function AITableCreator({
         {/* Preview Section */}
         {currentSchema && (
           <div className={cn(
-            "flex-1 overflow-y-auto bg-card border-r border-border flex flex-col min-h-0",
+            "flex-1 bg-card border-r border-border flex flex-col min-h-0",
             chatMinimized ? "w-full" : "md:w-1/2"
           )}>
             {chatMinimized && (
@@ -629,7 +637,7 @@ export default function AITableCreator({
                 </Button>
               </div>
             )}
-            <div className="flex-1 space-y-6 mb-6 pr-2 p-8">
+            <div className="flex-1 overflow-y-auto space-y-6 mb-6 pr-2 p-8 min-h-0">
               {/* Table Details */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -1022,7 +1030,7 @@ export default function AITableCreator({
               </div>
             </div>
 
-            <div className="pt-5 pb-4 px-5 border-t border-border flex gap-3">
+            <div className="pt-5 pb-4 px-5 border-t border-border flex gap-3 flex-shrink-0">
               <Button
                 variant="outline"
                 onClick={() => setCurrentSchema(null)}

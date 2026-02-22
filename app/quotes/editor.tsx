@@ -8,6 +8,9 @@ import { getExchangeRate } from "@/app/actions/exchange-rate";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import { showAlert } from "@/hooks/use-modal";
+import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 // removed ui imports
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -39,6 +42,8 @@ export default function QuoteEditor({
 }: QuoteEditorProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  useUnsavedChanges(isDirty);
   const [descriptionPopupIndex, setDescriptionPopupIndex] = useState<
     number | null
   >(null);
@@ -95,8 +100,8 @@ export default function QuoteEditor({
       setLoadingRate(true);
       getExchangeRate(currency)
         .then((rate) => setExchangeRate(rate))
-        .catch(() => {
-          toast.error("שגיאה בשליפת שער יציג");
+        .catch((err: any) => {
+          toast.error(isRateLimitError(err) ? RATE_LIMIT_MESSAGE : "שגיאה בשליפת שער יציג", { id: "exchange-rate-error" });
           setCurrency("ILS");
           setExchangeRate(null);
         })
@@ -130,8 +135,8 @@ export default function QuoteEditor({
           convertItems((price) => (price * oldRate) / newRate);
         }
       })
-      .catch(() => {
-        toast.error("שגיאה בשליפת שער יציג");
+      .catch((err: any) => {
+        toast.error(isRateLimitError(err) ? RATE_LIMIT_MESSAGE : "שגיאה בשליפת שער יציג", { id: "exchange-rate-error" });
         // Revert to previous currency
         setCurrency(oldCurrency);
         setExchangeRate(oldRate);
@@ -158,11 +163,13 @@ export default function QuoteEditor({
       ...prev,
       validUntil: format(newDate, "yyyy-MM-dd"),
     }));
+    setIsDirty(true);
   };
 
   const handleClientChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     // ... existing client logic ...
     const clientId = e.target.value;
+    setIsDirty(true);
     if (clientId === "new") {
       setFormData((prev) => ({
         ...prev,
@@ -203,6 +210,7 @@ export default function QuoteEditor({
         unitCost: 0,
       },
     ]);
+    setIsDirty(true);
   };
 
   // ... removeItem and others ...
@@ -211,6 +219,7 @@ export default function QuoteEditor({
     const newItems = [...items];
     newItems.splice(index, 1);
     setItems(newItems);
+    setIsDirty(true);
   };
 
   const updateItem = (index: number, field: string, value: any) => {
@@ -241,6 +250,20 @@ export default function QuoteEditor({
       newItems[index] = { ...newItems[index], [field]: value };
     }
     setItems(newItems);
+    setIsDirty(true);
+  };
+
+  const updateFormData = (updates: Partial<typeof formData>) => {
+    setFormData((prev) => ({ ...prev, ...updates }));
+    setIsDirty(true);
+  };
+
+  const handleBack = () => {
+    if (isDirty) {
+      toast.warning("יש שינויים שלא נשמרו בהצעת המחיר");
+      return;
+    }
+    router.push("/quotes");
   };
 
   const calculateTotal = () => {
@@ -329,11 +352,11 @@ export default function QuoteEditor({
     if (loading) return;
 
     if (!formData.clientName) {
-      alert("נדרש שם לקוח");
+      showAlert("נדרש שם לקוח");
       return;
     }
     if (items.length === 0) {
-      alert("הוסף לפחות פריט אחד");
+      showAlert("הוסף לפחות פריט אחד");
       return;
     }
 
@@ -369,10 +392,13 @@ export default function QuoteEditor({
       if (initialQuote) {
         await updateQuote(initialQuote.id, payload);
         router.refresh();
-        alert("הצעת המחיר עודכנה בהצלחה");
+        toast.success("הצעת המחיר עודכנה בהצלחה");
+        setIsDirty(false);
         setLoading(false);
       } else {
         const newQuote = await createQuote(payload);
+        toast.success("הצעת המחיר נוצרה בהצלחה");
+        setIsDirty(false);
         // Redirect to print/pdf page as requested
         router.push(`/quotes/${newQuote.id}/pdf`);
         router.refresh();
@@ -388,11 +414,9 @@ export default function QuoteEditor({
     <div className="p-6 max-w-[1200px] mx-auto space-y-6" dir="rtl">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <a href="/quotes">
-            <button className="p-2 hover:bg-gray-100 rounded-full text-gray-600">
-              <ArrowRight className="w-5 h-5" />
-            </button>
-          </a>
+          <button onClick={handleBack} className="p-2 hover:bg-gray-100 rounded-full text-gray-600">
+            <ArrowRight className="w-5 h-5" />
+          </button>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-gray-900">
               {initialQuote
@@ -462,7 +486,7 @@ export default function QuoteEditor({
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                   value={formData.clientName}
                   onChange={(e) =>
-                    setFormData({ ...formData, clientName: e.target.value })
+                    updateFormData({ clientName: e.target.value })
                   }
                 />
               </div>
@@ -474,7 +498,7 @@ export default function QuoteEditor({
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                   value={formData.clientEmail}
                   onChange={(e) =>
-                    setFormData({ ...formData, clientEmail: e.target.value })
+                    updateFormData({ clientEmail: e.target.value })
                   }
                 />
               </div>
@@ -486,7 +510,7 @@ export default function QuoteEditor({
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                   value={formData.clientPhone}
                   onChange={(e) =>
-                    setFormData({ ...formData, clientPhone: e.target.value })
+                    updateFormData({ clientPhone: e.target.value })
                   }
                 />
               </div>
@@ -499,7 +523,7 @@ export default function QuoteEditor({
                   placeholder="מספר ח.פ או ת.ז"
                   value={formData.clientTaxId}
                   onChange={(e) =>
-                    setFormData({ ...formData, clientTaxId: e.target.value })
+                    updateFormData({ clientTaxId: e.target.value })
                   }
                 />
               </div>
@@ -511,7 +535,7 @@ export default function QuoteEditor({
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                   value={formData.clientAddress}
                   onChange={(e) =>
-                    setFormData({ ...formData, clientAddress: e.target.value })
+                    updateFormData({ clientAddress: e.target.value })
                   }
                 />
               </div>
@@ -533,7 +557,7 @@ export default function QuoteEditor({
                 placeholder="לדוגמה: הצעת מחיר לפרויקט בניית אתר"
                 value={formData.title}
                 onChange={(e) =>
-                  setFormData({ ...formData, title: e.target.value })
+                  updateFormData({ title: e.target.value })
                 }
               />
             </div>
@@ -545,7 +569,7 @@ export default function QuoteEditor({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                 value={formData.status}
                 onChange={(e) =>
-                  setFormData({ ...formData, status: e.target.value })
+                  updateFormData({ status: e.target.value })
                 }
               >
                 <option value="DRAFT">טיוטה</option>
@@ -594,7 +618,7 @@ export default function QuoteEditor({
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                   value={formData.validUntil}
                   onChange={(e) =>
-                    setFormData({ ...formData, validUntil: e.target.value })
+                    updateFormData({ validUntil: e.target.value })
                   }
                 />
               </div>
@@ -662,10 +686,7 @@ export default function QuoteEditor({
                   className="w-4 h-4 text-[#4f95ff] border-gray-300 rounded focus:ring-[#4f95ff]"
                   checked={formData.isPriceWithVat}
                   onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      isPriceWithVat: e.target.checked,
-                    })
+                    updateFormData({ isPriceWithVat: e.target.checked })
                   }
                 />
                 <label
@@ -817,7 +838,7 @@ export default function QuoteEditor({
               <select
                 className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none text-sm bg-white"
                 value={discountType}
-                onChange={(e) => setDiscountType(e.target.value as "none" | "percent" | "fixed")}
+                onChange={(e) => { setDiscountType(e.target.value as "none" | "percent" | "fixed"); setIsDirty(true); }}
               >
                 <option value="none">ללא הנחה</option>
                 <option value="percent">אחוז (%)</option>
@@ -836,7 +857,7 @@ export default function QuoteEditor({
                   max={discountType === "percent" ? "100" : undefined}
                   className="w-28 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none text-sm bg-white"
                   value={discountValue}
-                  onChange={(e) => setDiscountValue(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => { setDiscountValue(parseFloat(e.target.value) || 0); setIsDirty(true); }}
                 />
               </div>
             )}

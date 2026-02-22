@@ -54,9 +54,10 @@ import {
   deleteTicketComment,
 } from "@/app/actions/tickets";
 import { deleteTicketActivityLog } from "@/app/actions/ticket-activity-logs";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
+import { showConfirm } from "@/hooks/use-modal";
 
 // Combines comments and activity logs into a single sorted timeline
 function getCombinedActivity(ticket: any) {
@@ -112,7 +113,6 @@ export default function TicketDetails({
 }: TicketDetailsProps) {
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const { toast } = useToast();
   const router = useRouter();
 
   const isAdmin = currentUser?.role === "admin";
@@ -179,7 +179,7 @@ export default function TicketDetails({
   const handleStatusChange = async (newStatus: string) => {
     try {
       await updateTicket(ticket.id, { status: newStatus });
-      toast({ title: "הסטטוס עודכן" });
+      toast.success("הסטטוס עודכן");
       // Instant UI update with optimistic log
       const newLog = createOptimisticLog(
         "status",
@@ -196,14 +196,14 @@ export default function TicketDetails({
       });
       router.refresh();
     } catch (error) {
-      toast({ title: "שגיאה בעדכון הסטטוס", variant: "destructive" });
+      toast.error(getUserFriendlyError(error));
     }
   };
 
   const handlePriorityChange = async (newPriority: string) => {
     try {
       await updateTicket(ticket.id, { priority: newPriority });
-      toast({ title: "העדיפות עודכנה" });
+      toast.success("העדיפות עודכנה");
       // Instant UI update with optimistic log
       const newLog = createOptimisticLog(
         "priority",
@@ -220,7 +220,7 @@ export default function TicketDetails({
       });
       router.refresh();
     } catch (error) {
-      toast({ title: "שגיאה בעדכון העדיפות", variant: "destructive" });
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -228,7 +228,7 @@ export default function TicketDetails({
     try {
       const assigneeIdNum = parseInt(assigneeId);
       await updateTicket(ticket.id, { assigneeId: assigneeIdNum });
-      toast({ title: "הנציג עודכן" });
+      toast.success("הנציג עודכן");
       // Instant UI update - find the user for display
       const newAssignee = users.find((u) => u.id === assigneeIdNum);
       const oldAssignee = users.find((u) => u.id === ticket.assigneeId);
@@ -248,7 +248,7 @@ export default function TicketDetails({
       });
       router.refresh();
     } catch (error) {
-      toast({ title: "שגיאה בעדכון הנציג", variant: "destructive" });
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -274,17 +274,17 @@ export default function TicketDetails({
       });
       router.refresh();
     } catch (error) {
-      toast({ title: "שגיאה בשליחת התגובה", variant: "destructive" });
+      toast.error(getUserFriendlyError(error));
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDeleteLog = async (logId: number) => {
-    if (!confirm("האם אתה בטוח שברצונך למחוק לוג זה?")) return;
+    if (!(await showConfirm("האם אתה בטוח שברצונך למחוק לוג זה?"))) return;
     try {
       await deleteTicketActivityLog(logId);
-      toast({ title: "הלוג נמחק" });
+      toast.success("הלוג נמחק");
       // Instant UI update - remove log from list
       onTicketUpdate?.({
         ...ticket,
@@ -294,10 +294,7 @@ export default function TicketDetails({
       });
       router.refresh();
     } catch (error: any) {
-      toast({
-        title: getUserFriendlyError(error),
-        variant: "destructive",
-      });
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -305,7 +302,7 @@ export default function TicketDetails({
   const handleSaveDescription = async () => {
     try {
       await updateTicket(ticket.id, { description: descriptionValue });
-      toast({ title: "התיאור עודכן" });
+      toast.success("התיאור עודכן");
       setEditingDescription(false);
       // Instant UI update with optimistic log
       const newLog = createOptimisticLog(
@@ -323,7 +320,7 @@ export default function TicketDetails({
       });
       router.refresh();
     } catch (error) {
-      toast({ title: "שגיאה בעדכון התיאור", variant: "destructive" });
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -332,7 +329,7 @@ export default function TicketDetails({
     if (!titleValue.trim()) return;
     try {
       await updateTicket(ticket.id, { title: titleValue });
-      toast({ title: "הכותרת עודכנה" });
+      toast.success("הכותרת עודכנה");
       setEditingTitle(false);
       // Instant UI update with optimistic log
       const newLog = createOptimisticLog(
@@ -350,7 +347,7 @@ export default function TicketDetails({
       });
       router.refresh();
     } catch (error) {
-      toast({ title: "שגיאה בעדכון הכותרת", variant: "destructive" });
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -361,7 +358,7 @@ export default function TicketDetails({
       await updateTicket(ticket.id, {
         clientId: clientId as number | null | undefined,
       });
-      toast({ title: "הלקוח עודכן" });
+      toast.success("הלקוח עודכן");
       setClientDialogOpen(false);
       // Instant UI update - find the client for display
       const newClient = clientId
@@ -384,7 +381,7 @@ export default function TicketDetails({
       });
       router.refresh();
     } catch (error) {
-      toast({ title: "שגיאה בעדכון הלקוח", variant: "destructive" });
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -404,7 +401,7 @@ export default function TicketDetails({
   const handleSaveComment = async (commentId: number) => {
     try {
       await updateTicketComment(commentId, editingCommentValue);
-      toast({ title: "ההודעה עודכנה" });
+      toast.success("ההודעה עודכנה");
       // Instant UI update - update the comment in the list
       const updatedComments = (ticket.comments || []).map((c: any) =>
         c.id === commentId ? { ...c, content: editingCommentValue } : c
@@ -414,18 +411,15 @@ export default function TicketDetails({
       setEditingCommentValue("");
       router.refresh();
     } catch (error: any) {
-      toast({
-        title: getUserFriendlyError(error),
-        variant: "destructive",
-      });
+      toast.error(getUserFriendlyError(error));
     }
   };
 
   const handleDeleteComment = async (commentId: number) => {
-    if (!confirm("האם אתה בטוח שברצונך למחוק הודעה זו?")) return;
+    if (!(await showConfirm("האם אתה בטוח שברצונך למחוק הודעה זו?"))) return;
     try {
       await deleteTicketComment(commentId);
-      toast({ title: "ההודעה נמחקה" });
+      toast.success("ההודעה נמחקה");
       // Instant UI update - remove comment from list
       onTicketUpdate?.({
         ...ticket,
@@ -435,10 +429,7 @@ export default function TicketDetails({
       });
       router.refresh();
     } catch (error: any) {
-      toast({
-        title: getUserFriendlyError(error),
-        variant: "destructive",
-      });
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -475,17 +466,14 @@ export default function TicketDetails({
               size="icon"
               className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"
               onClick={async () => {
-                if (confirm("האם אתה בטוח שברצונך למחוק קריאה זו?")) {
+                if (await showConfirm("האם אתה בטוח שברצונך למחוק קריאה זו?")) {
                   try {
                     await deleteTicket(ticket.id);
-                    toast({ title: "הקריאה נמחקה" });
+                    toast.success("הקריאה נמחקה");
                     router.refresh();
                     onOpenChange(false);
                   } catch (error) {
-                    toast({
-                      title: "שגיאה במחיקת הקריאה",
-                      variant: "destructive",
-                    });
+                    toast.error("שגיאה במחיקת הקריאה");
                   }
                 }
               }}

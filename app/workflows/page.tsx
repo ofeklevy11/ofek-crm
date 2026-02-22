@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { WorkflowManager } from "@/components/workflows/WorkflowManager";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
+import { isRateLimitError } from "@/lib/rate-limit-utils";
+import RateLimitFallback from "@/components/RateLimitFallback";
 
 export const metadata = {
   title: "תהליכי עבודה | CRM",
@@ -17,14 +19,20 @@ export default async function WorkflowsPage() {
     redirect("/login");
   }
 
-  const [workflows, rawInstances, users] = await Promise.all([
-    getWorkflows(),
-    getWorkflowInstances(),
-    prisma.user.findMany({
-      where: { companyId: user.companyId },
-      select: { id: true, name: true },
-    }),
-  ]);
+  let workflows, rawInstances, users;
+  try {
+    [workflows, rawInstances, users] = await Promise.all([
+      getWorkflows(),
+      getWorkflowInstances(),
+      prisma.user.findMany({
+        where: { companyId: user.companyId },
+        select: { id: true, name: true },
+      }),
+    ]);
+  } catch (e) {
+    if (isRateLimitError(e)) return <RateLimitFallback />;
+    throw e;
+  }
 
   // Hydrate instances with workflow data from already-loaded workflows
   // to avoid fetching duplicated workflow+stages per instance from DB

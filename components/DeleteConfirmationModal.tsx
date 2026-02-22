@@ -47,7 +47,7 @@ export default function DeleteConfirmationModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-red-600">
+          <DialogTitle className="flex items-center gap-2 text-destructive">
             <Trash2 size={20} />
             מחיקת וידג׳ט
           </DialogTitle>
@@ -55,7 +55,7 @@ export default function DeleteConfirmationModal({
             פעולה זו תמחק את הווידג׳ט מהדאשבורד לצמיתות.
             <br />
             כדי לאשר את המחיקה, אנא הקלד את שם הווידג׳ט:
-            <span className="block font-bold text-gray-900 mt-1 select-all">
+            <span className="block font-bold text-foreground mt-1 select-all">
               {widgetTitle}
             </span>
           </DialogDescription>

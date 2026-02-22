@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Search, X, Database, Users } from "lucide-react";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
+import { RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 
 interface Client {
   id: number;
@@ -56,11 +59,17 @@ export default function ClientSelector({
           fetch("/api/finance/clients"),
         ]);
 
+        if (tablesRes.status === 429 || financeRes.status === 429) {
+          toast.error(RATE_LIMIT_MESSAGE);
+          return;
+        }
+
         if (tablesRes.ok) {
           const json = await tablesRes.json();
           setTables(json.data ?? json);
         } else {
           console.error("Failed to fetch tables");
+          toast.error(getUserFriendlyError("Failed to fetch data"));
         }
 
         if (financeRes.ok) {
@@ -68,9 +77,11 @@ export default function ClientSelector({
           setFinanceClients(financeJson.data ?? financeJson);
         } else {
           console.error("Failed to fetch finance clients");
+          toast.error(getUserFriendlyError("Failed to fetch data"));
         }
       } catch (error) {
         console.error("Error fetching initial data:", error);
+        toast.error(getUserFriendlyError(error));
       } finally {
         setIsLoadingTables(false);
         setIsLoadingFinanceClients(false);
@@ -92,15 +103,18 @@ export default function ClientSelector({
         });
 
         const response = await fetch(`/api/finance/search-clients?${params}`);
+        if (response.status === 429) { toast.error(RATE_LIMIT_MESSAGE); setClients([]); return; }
         if (response.ok) {
           const data = await response.json();
           setClients(data);
         } else {
           console.error("Failed to fetch clients");
+          toast.error(getUserFriendlyError("Failed to fetch clients"));
           setClients([]);
         }
       } catch (error) {
         console.error("Error fetching clients:", error);
+        toast.error(getUserFriendlyError(error));
         setClients([]);
       } finally {
         setIsLoading(false);

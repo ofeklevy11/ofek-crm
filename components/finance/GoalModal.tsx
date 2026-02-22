@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-fetch";
+import { getUserFriendlyError } from "@/lib/errors";
 import {
   Dialog,
   DialogContent,
@@ -48,7 +49,7 @@ import {
   GoalFilters,
   previewGoalValue,
 } from "@/app/actions/goals";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 // Preview has been calculated flag
@@ -89,7 +90,6 @@ export default function GoalModal({
   onSuccess,
 }: GoalModalProps) {
   const router = useRouter();
-  const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
@@ -213,11 +213,7 @@ export default function GoalModal({
       formData.targetValue === undefined ||
       formData.targetValue === null
     ) {
-      toast({
-        title: "שגיאה",
-        description: "נא למלא את כל שדות החובה",
-        variant: "destructive",
-      });
+      toast.error("נא למלא את כל שדות החובה");
       return;
     }
 
@@ -236,20 +232,13 @@ export default function GoalModal({
 
       if (!res.ok) throw new Error("Failed");
 
-      toast({
-        title: "הצלחה!",
-        description: existingGoal ? "היעד עודכן בהצלחה" : "היעד נוצר בהצלחה",
-      });
+      toast.success(existingGoal ? "היעד עודכן בהצלחה" : "היעד נוצר בהצלחה");
 
       setOpen(false);
       router.refresh();
       if (onSuccess) onSuccess();
     } catch (error) {
-      toast({
-        title: "שגיאה",
-        description: "משהו השתבש, נסה שנית",
-        variant: "destructive",
-      });
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { getUserFriendlyError } from "@/lib/errors";
+import { toast } from "sonner";
+import { showConfirm } from "@/hooks/use-modal";
 import {
   X,
   Loader2,
@@ -83,6 +85,7 @@ export default function ViewAutomationModal({
       }
     } catch (e) {
       console.error("Failed to fetch rules", e);
+      toast.error(getUserFriendlyError(e));
     } finally {
       setLoadingRules(false);
     }
@@ -97,6 +100,7 @@ export default function ViewAutomationModal({
       }
     } catch (e) {
       console.error("Failed to fetch action count", e);
+      toast.error(getUserFriendlyError(e));
     }
   };
 
@@ -431,10 +435,15 @@ export default function ViewAutomationModal({
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this automation?")) return;
-    await deleteAutomationRule(id);
-    fetchRules();
-    refreshActionCount(); // Refresh action count after delete
+    if (!(await showConfirm({ message: "האם אתה בטוח שברצונך למחוק אוטומציה זו?", variant: "destructive" }))) return;
+    try {
+      await deleteAutomationRule(id);
+      toast.success("האוטומציה נמחקה בהצלחה");
+      fetchRules();
+      refreshActionCount();
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    }
   };
 
   const handleToggle = async (rule: any) => {
@@ -447,8 +456,9 @@ export default function ViewAutomationModal({
       if (!result.success) {
         throw new Error(result.error);
       }
+      toast.success(newState ? "האוטומציה הופעלה" : "האוטומציה הושבתה");
     } catch (err) {
-      console.error("Failed to toggle rule", err);
+      toast.error(getUserFriendlyError(err));
       fetchRules();
     }
   };
@@ -496,6 +506,7 @@ export default function ViewAutomationModal({
           actionConfig: finalActionConfig,
         });
         if (!result.success) throw new Error(result.error);
+        toast.success("האוטומציה נוצרה בהצלחה");
       } else {
         if (!editingRuleId) return;
         const result = await updateAutomationRule(editingRuleId, {
@@ -506,11 +517,12 @@ export default function ViewAutomationModal({
           actionConfig: finalActionConfig,
         });
         if (!result.success) throw new Error(result.error);
+        toast.success("האוטומציה עודכנה בהצלחה");
       }
 
       setMode("list");
       fetchRules();
-      refreshActionCount(); // Refresh action count after save
+      refreshActionCount();
     } catch (err: any) {
       setError(getUserFriendlyError(err));
     } finally {
@@ -558,7 +570,7 @@ export default function ViewAutomationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
       <div
         className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]"
         dir="rtl"

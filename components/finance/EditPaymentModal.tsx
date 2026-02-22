@@ -3,7 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, Trash2, Save } from "lucide-react";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch, throwResponseError } from "@/lib/api-fetch";
+import { showConfirm } from "@/hooks/use-modal";
+import { getUserFriendlyError } from "@/lib/errors";
+import { toast } from "sonner";
 
 interface EditPaymentModalProps {
   payment: any;
@@ -57,12 +60,13 @@ export default function EditPaymentModal({
         body: JSON.stringify(formData),
       });
 
-      if (!response.ok) throw new Error("Failed to update payment");
+      if (!response.ok) await throwResponseError(response, "Failed to update payment");
 
+      toast.success("התשלום עודכן בהצלחה");
       router.refresh();
       onClose();
     } catch (err) {
-      setError("שגיאה בעדכון התשלום");
+      toast.error(getUserFriendlyError(err));
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -70,7 +74,7 @@ export default function EditPaymentModal({
   };
 
   const handleDelete = async () => {
-    if (!confirm("האם אתה בטוח שברצונך למחוק תשלום זה? לא ניתן לבטל פעולה זו."))
+    if (!(await showConfirm({ message: "האם אתה בטוח שברצונך למחוק תשלום זה? לא ניתן לבטל פעולה זו.", variant: "destructive" })))
       return;
 
     setIsLoading(true);
@@ -79,12 +83,13 @@ export default function EditPaymentModal({
         method: "DELETE",
       });
 
-      if (!response.ok) throw new Error("Failed to delete payment");
+      if (!response.ok) await throwResponseError(response, "Failed to delete payment");
 
+      toast.success("התשלום נמחק בהצלחה");
       router.refresh();
       onClose();
     } catch (err) {
-      setError("שגיאה במחיקת התשלום");
+      toast.error(getUserFriendlyError(err));
       console.error(err);
     } finally {
       setIsLoading(false);

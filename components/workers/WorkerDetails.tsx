@@ -36,6 +36,8 @@ import {
   updateStepProgress,
   assignOnboardingPath,
 } from "@/app/actions/workers";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface OnboardingPath {
   id: number;
@@ -193,11 +195,12 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
     setUpdatingStep(stepId);
     try {
       await updateStepProgress(onboardingId, stepId, { status: newStatus });
+      toast.success("השלב עודכן בהצלחה");
       // Refresh would happen via revalidatePath
       window.location.reload();
     } catch (error) {
       console.error("Error updating step:", error);
-      alert("שגיאה בעדכון השלב");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setUpdatingStep(null);
     }
@@ -209,12 +212,13 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
     setIsAssigning(true);
     try {
       await assignOnboardingPath(worker.id, selectedPathId);
+      toast.success("מסלול הקליטה הוקצה בהצלחה");
       setShowAssignModal(false);
       setSelectedPathId(null);
       window.location.reload();
     } catch (error) {
       console.error("Error assigning path:", error);
-      alert("שגיאה בהקצאת המסלול");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsAssigning(false);
     }

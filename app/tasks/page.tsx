@@ -8,6 +8,8 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { ClipboardList, LayoutGrid, Calendar, Users, CheckCircle, AlertTriangle, RefreshCw } from "lucide-react";
 import { getTasks, getDoneTasks } from "@/app/actions/tasks";
+import { isRateLimitError } from "@/lib/rate-limit-utils";
+import RateLimitFallback from "@/components/RateLimitFallback";
 
 async function getUsers(companyId: number) {
   const users = await prisma.user.findMany({
@@ -139,6 +141,14 @@ export default async function TasksPage({
       : null;
   const doneTasksError = doneTasksResult && !doneTasksResult.success ? doneTasksResult.error : null;
   const doneTasks = doneTasksResult?.data ?? [];
+
+  // If the active view hit a rate limit, show full-page fallback
+  if (
+    (currentView === "kanban" && isRateLimitError(tasksError)) ||
+    (currentView === "done" && isRateLimitError(doneTasksError))
+  ) {
+    return <RateLimitFallback />;
+  }
 
   // Lightweight count for the tab badge (only when not already on my-sheets tab)
   const mySheetsCount =

@@ -9,6 +9,10 @@ import {
 } from "@/app/actions/notifications";
 import Link from "next/link";
 import { Check, Trash2, CheckCircle, Wallet } from "lucide-react";
+import { showConfirm } from "@/hooks/use-modal";
+import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface Notification {
   id: number;
@@ -47,7 +51,8 @@ export default function NotificationsList({
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, read: false } : n)),
       );
-      console.error("Failed to mark as read");
+      if (isRateLimitError(result)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(result.error));
     }
   };
 
@@ -60,13 +65,14 @@ export default function NotificationsList({
     const result = await markAllAsRead();
     if (!result.success) {
       setNotifications(previousState);
-      console.error("Failed to mark all as read");
+      if (isRateLimitError(result)) toast.error(RATE_LIMIT_MESSAGE, { id: "notifications-bulk" });
+      else toast.error(getUserFriendlyError(result.error), { id: "notifications-bulk" });
     }
     setIsProcessing(false);
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("האם אתה בטוח שברצונך למחוק התראה זו?")) return;
+    if (!(await showConfirm("האם אתה בטוח שברצונך למחוק התראה זו?"))) return;
 
     // Optimistic update
     const previousState = [...notifications];
@@ -76,12 +82,13 @@ export default function NotificationsList({
     const result = await deleteNotification(id);
     if (!result.success) {
       setNotifications(previousState);
-      console.error("Failed to delete notification");
+      if (isRateLimitError(result)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(result.error));
     }
   };
 
   const handleDeleteSelected = async () => {
-    if (!confirm(`האם אתה בטוח שברצונך למחוק ${selectedIds.length} התראות?`))
+    if (!(await showConfirm(`האם אתה בטוח שברצונך למחוק ${selectedIds.length} התראות?`)))
       return;
 
     setIsProcessing(true);
@@ -97,7 +104,8 @@ export default function NotificationsList({
     if (!result.success) {
       setNotifications(previousState);
       setSelectedIds(idsToDelete); // Restore selection
-      console.error("Failed to delete notifications");
+      if (isRateLimitError(result)) toast.error(RATE_LIMIT_MESSAGE, { id: "notifications-bulk" });
+      else toast.error(getUserFriendlyError(result.error), { id: "notifications-bulk" });
     }
     setIsProcessing(false);
   };

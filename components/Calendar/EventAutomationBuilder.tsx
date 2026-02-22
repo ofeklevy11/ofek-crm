@@ -21,6 +21,7 @@ import {
 import { getUsers } from "@/app/actions/users";
 import { getTables } from "@/app/actions/tables";
 import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
+import { showAlert } from "@/hooks/use-modal";
 
 interface EventAutomationBuilderProps {
   onSave: (data: {
@@ -219,7 +220,7 @@ export function EventAutomationBuilder({
   const handleNext = () => {
     if (step === 1) {
       if (totalMinutes < 5) {
-        alert("מינימום 5 דקות לפני האירוע");
+        showAlert("מינימום 5 דקות לפני האירוע");
         return;
       }
       setStep(2);

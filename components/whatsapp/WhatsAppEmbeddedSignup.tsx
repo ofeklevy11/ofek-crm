@@ -7,6 +7,7 @@ import {
   disconnectWhatsAppAccount,
 } from "@/app/actions/whatsapp-admin";
 import { toast } from "sonner";
+import { showDestructiveConfirm } from "@/hooks/use-modal";
 import { getUserFriendlyError } from "@/lib/errors";
 
 declare global {
@@ -213,7 +214,7 @@ export default function WhatsAppEmbeddedSignup({ nonce }: { nonce: string }) {
   };
 
   const handleDisconnect = async (accountId: number) => {
-    if (!confirm("האם אתה בטוח שברצונך לנתק את חשבון ה-WhatsApp?")) return;
+    if (!(await showDestructiveConfirm({ title: "ניתוק WhatsApp", message: "האם אתה בטוח שברצונך לנתק את חשבון ה-WhatsApp?", confirmationPhrase: "נתק" }))) return;
 
     try {
       await disconnectWhatsAppAccount(accountId);

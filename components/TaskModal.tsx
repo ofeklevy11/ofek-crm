@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface TaskModalProps {
   // initial column status where the task will be created; user can change it
@@ -55,6 +57,7 @@ export default function TaskModal({
         }
       } catch (error) {
         console.error("Error fetching users:", error);
+        toast.error(getUserFriendlyError(error));
       } finally {
         setLoadingUsers(false);
       }
@@ -116,25 +119,27 @@ export default function TaskModal({
         const { updateTask } = await import("@/app/actions");
         const result = await updateTask(task.id, taskData);
         if (result.success) {
+          toast.success("המשימה עודכנה בהצלחה");
           if (onUpdated) onUpdated(result.data);
           onClose();
         } else {
-          alert("עדכון משימה נכשל");
+          toast.error("עדכון משימה נכשל");
         }
       } else {
         // Create new task
         const { createTask } = await import("@/app/actions");
         const result = await createTask(taskData);
         if (result.success) {
+          toast.success("המשימה נוצרה בהצלחה");
           onCreated(result.data);
           onClose();
         } else {
-          alert("הוספת משימה נכשלה");
+          toast.error("הוספת משימה נכשלה");
         }
       }
     } catch (error) {
       console.error("Error saving task:", error);
-      alert("שגיאה בשמירת המשימה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }

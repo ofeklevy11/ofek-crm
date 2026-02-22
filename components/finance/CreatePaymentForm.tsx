@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Calendar as CalendarIcon, Info } from "lucide-react";
 import ClientSelector from "./ClientSelector";
 import { apiFetch } from "@/lib/api-fetch";
+import { getUserFriendlyError } from "@/lib/errors";
+import { toast } from "sonner";
 
 interface Client {
   id: number;
@@ -43,6 +45,7 @@ export default function CreatePaymentForm() {
           }
         } catch (error) {
           console.error("Error fetching client details:", error);
+          toast.error(getUserFriendlyError(error));
         }
       };
       fetchClient();
@@ -130,11 +133,12 @@ export default function CreatePaymentForm() {
         throw new Error("Failed to create payment");
       }
 
+      toast.success("התשלום נוצר בהצלחה");
       router.push("/finance");
       router.refresh();
     } catch (err) {
       console.error("Error creating payment:", err);
-      setError("שגיאה ביצירת התשלום. נסה שוב.");
+      toast.error(getUserFriendlyError(err));
       setIsLoading(false);
     }
   };

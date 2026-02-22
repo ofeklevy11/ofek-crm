@@ -17,7 +17,9 @@ import { Plus, Trash2, Save, ArrowUp, ArrowDown, LayoutGrid } from "lucide-react
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-fetch";
 import { toast } from "sonner";
+import { showAlert } from "@/hooks/use-modal";
 import { getUserFriendlyError } from "@/lib/errors";
+import { RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 import {
   SelectOptionsEditor,
   SelectOption,
@@ -88,19 +90,31 @@ export default function EditTableModal({
 
   useEffect(() => {
     fetch("/api/tables")
-      .then((res) => res.json())
-      .then((json) => setAvailableTables(json.data ?? json))
-      .catch((err) => console.error("Failed to load tables", err));
+      .then((res) => {
+        if (res.status === 429) { toast.error(RATE_LIMIT_MESSAGE); return null; }
+        if (!res.ok) throw new Error("Failed to load tables");
+        return res.json();
+      })
+      .then((json) => { if (json) setAvailableTables(json.data ?? json); })
+      .catch((err) => { console.error("Failed to load tables", err); toast.error(getUserFriendlyError(err)); });
 
     fetch("/api/categories")
-      .then((res) => res.json())
-      .then((data) => setCategories(data))
-      .catch((err) => console.error("Failed to load categories", err));
+      .then((res) => {
+        if (res.status === 429) { toast.error(RATE_LIMIT_MESSAGE); return null; }
+        if (!res.ok) throw new Error("Failed to load categories");
+        return res.json();
+      })
+      .then((data) => { if (data) setCategories(data); })
+      .catch((err) => { console.error("Failed to load categories", err); toast.error(getUserFriendlyError(err)); });
 
     fetch("/api/users")
-      .then((res) => res.json())
-      .then((data) => setUsers(data))
-      .catch((err) => console.error("Failed to load users", err));
+      .then((res) => {
+        if (res.status === 429) { toast.error(RATE_LIMIT_MESSAGE); return null; }
+        if (!res.ok) throw new Error("Failed to load users");
+        return res.json();
+      })
+      .then((data) => { if (data) setUsers(data); })
+      .catch((err) => { console.error("Failed to load users", err); toast.error(getUserFriendlyError(err)); });
   }, []);
 
   const handleAddTab = () => {
@@ -136,6 +150,7 @@ export default function EditTableModal({
     setLoadingData(true);
     try {
       const res = await fetch(`/api/tables/${tableId}`);
+      if (res.status === 429) { toast.error(RATE_LIMIT_MESSAGE); return; }
       if (!res.ok) throw new Error("Failed to fetch table");
 
       const table = await res.json();
@@ -253,7 +268,7 @@ export default function EditTableModal({
     const names = fields.map((f) => f.name);
     const uniqueNames = new Set(names);
     if (uniqueNames.size !== names.length) {
-      alert("שמות שדות מערכת חייבים להיות ייחודיים.");
+      showAlert("שמות שדות מערכת חייבים להיות ייחודיים.");
       setLoading(false);
       return;
     }
@@ -328,6 +343,7 @@ export default function EditTableModal({
 
       if (!res.ok) throw new Error("Failed to update table");
 
+      toast.success("הטבלה עודכנה בהצלחה");
       router.refresh();
       onClose();
     } catch (error) {

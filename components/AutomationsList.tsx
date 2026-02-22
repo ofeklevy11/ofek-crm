@@ -10,6 +10,9 @@ import {
   toggleAutomationRule,
 } from "@/app/actions/automations";
 import { Plus, Trash2, Power, Edit, Zap, Sparkles } from "lucide-react";
+import { showConfirm } from "@/hooks/use-modal";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface AutomationRule {
   id: number;
@@ -85,7 +88,7 @@ export default function AutomationsList({
   };
 
   const handleDeleteFolder = async (folderId: number) => {
-    if (!confirm("Are you sure? automations inside will be unassigned."))
+    if (!(await showConfirm({ message: "האם אתה בטוח? אוטומציות בתיקייה יוסרו מהתיקייה.", variant: "destructive" })))
       return;
     const { deleteFolder } = await import("@/app/actions/folders");
     await deleteFolder(folderId);
@@ -115,22 +118,33 @@ export default function AutomationsList({
       setTimeout(() => setSuccessRuleId(null), 2000);
     } catch (error) {
       console.error("Failed to move folder", error);
+      toast.error(getUserFriendlyError(error));
       setMovingRuleId(null);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm("האם אתה בטוח שברצונך למחוק אוטומציה זו?")) {
-      await deleteAutomationRule(id);
-      setRules(rules.filter((r) => r.id !== id));
+    if (await showConfirm({ message: "האם אתה בטוח שברצונך למחוק אוטומציה זו?", variant: "destructive" })) {
+      try {
+        await deleteAutomationRule(id);
+        setRules(rules.filter((r) => r.id !== id));
+        toast.success("האוטומציה נמחקה בהצלחה");
+      } catch (error) {
+        toast.error(getUserFriendlyError(error));
+      }
     }
   };
 
   const handleToggle = async (id: number, currentStatus: boolean) => {
-    await toggleAutomationRule(id, !currentStatus);
-    setRules(
-      rules.map((r) => (r.id === id ? { ...r, isActive: !currentStatus } : r)),
-    );
+    try {
+      await toggleAutomationRule(id, !currentStatus);
+      setRules(
+        rules.map((r) => (r.id === id ? { ...r, isActive: !currentStatus } : r)),
+      );
+      toast.success(!currentStatus ? "האוטומציה הופעלה" : "האוטומציה הושבתה");
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    }
   };
 
   const handleEdit = (rule: AutomationRule) => {
@@ -743,16 +757,14 @@ export default function AutomationsList({
           />
         )}
 
-        {isAIModalOpen && (
-          <AIAutomationCreator
-            isOpen={isAIModalOpen}
-            onClose={() => setIsAIModalOpen(false)}
-            tables={tables}
-            users={users}
-            currentUserId={currentUserId}
-            userPlan={userPlan}
-          />
-        )}
+        <AIAutomationCreator
+          isOpen={isAIModalOpen}
+          onClose={() => setIsAIModalOpen(false)}
+          tables={tables}
+          users={users}
+          currentUserId={currentUserId}
+          userPlan={userPlan}
+        />
       </div>
     </div>
   );

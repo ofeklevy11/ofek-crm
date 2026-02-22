@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { showConfirm } from "@/hooks/use-modal";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import {
   deleteAnalyticsView,
   updateAnalyticsViewOrder,
@@ -164,7 +167,6 @@ export default function GraphsDashboard({
   const [nextResetTime, setNextResetTime] = useState<string | null>(
     initialRefreshUsage.nextResetTime,
   );
-  const [toast, setToast] = useState<{ message: string; type: "error" | "success" } | null>(null);
 
   useEffect(() => {
     setViews(initialViews);
@@ -193,8 +195,7 @@ export default function GraphsDashboard({
       const result = await refreshAnalyticsItemWithChecks(view.viewId, "CUSTOM");
 
       if (result.success) {
-        setToast({ message: "מרענן גרף ברקע...", type: "success" });
-        setTimeout(() => setToast(null), 5000);
+        toast.success("מרענן גרף ברקע...");
 
         if (result.usage !== undefined) setRefreshUsage(result.usage);
         if (result.nextResetTime !== undefined) setNextResetTime(result.nextResetTime);
@@ -210,21 +211,24 @@ export default function GraphsDashboard({
           }
         }, 2000);
       } else {
-        setToast({ message: result.error || "שגיאה ברענון הגרף", type: "error" });
-        setTimeout(() => setToast(null), 4000);
+        toast.error(result.error || "שגיאה ברענון הגרף");
         setRefreshingViewId(null);
       }
     } catch (error) {
-      setToast({ message: "שגיאה ברענון הגרף", type: "error" });
-      setTimeout(() => setToast(null), 4000);
+      toast.error(getUserFriendlyError(error));
       setRefreshingViewId(null);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("האם אתה בטוח שברצונך למחוק תרשים זה?")) return;
-    await deleteAnalyticsView(id);
-    router.refresh();
+    if (!(await showConfirm("האם אתה בטוח שברצונך למחוק תרשים זה?"))) return;
+    try {
+      await deleteAnalyticsView(id);
+      toast.success("הגרף נמחק בהצלחה");
+      router.refresh();
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    }
   };
 
   const handleEdit = (view: any) => {
@@ -414,18 +418,6 @@ export default function GraphsDashboard({
         />
       </div>
 
-      {/* Toast */}
-      {toast && (
-        <div
-          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-lg text-sm font-medium ${
-            toast.type === "error"
-              ? "bg-red-600 text-white"
-              : "bg-green-600 text-white"
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
     </div>
   );
 }

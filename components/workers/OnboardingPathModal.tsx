@@ -30,6 +30,7 @@ import {
   deleteOnboardingStep,
   reorderOnboardingSteps,
 } from "@/app/actions/workers";
+import { showAlert, showConfirm } from "@/hooks/use-modal";
 import OnboardingAutomationBuilder, {
   OnCompleteAction,
 } from "./OnboardingAutomationBuilder";
@@ -283,7 +284,7 @@ export default function OnboardingPathModal({
     e.preventDefault();
 
     if (!formData.name.trim()) {
-      alert("יש להזין שם למסלול");
+      showAlert("יש להזין שם למסלול");
       return;
     }
 
@@ -322,6 +323,7 @@ export default function OnboardingPathModal({
         });
       }
 
+      toast.success(path ? "מסלול הכשרה עודכן בהצלחה" : "מסלול הכשרה נוצר בהצלחה");
       const savedPath = { ...result, steps } as OnboardingPath;
       onSave(savedPath);
     } catch (error) {
@@ -345,7 +347,7 @@ export default function OnboardingPathModal({
 
   const handleSaveNewStep = async () => {
     if (!newStep?.title?.trim()) {
-      alert("יש להזין כותרת לשלב");
+      showAlert("יש להזין כותרת לשלב");
       return;
     }
 
@@ -360,6 +362,7 @@ export default function OnboardingPathModal({
           estimatedMinutes: newStep.estimatedMinutes || undefined,
           isRequired: newStep.isRequired ?? true,
         });
+        toast.success("השלב נוסף בהצלחה");
         setSteps([
           ...steps,
           {
@@ -446,7 +449,7 @@ export default function OnboardingPathModal({
   };
 
   const handleDeleteStep = async (stepId: number) => {
-    if (!confirm("האם אתה בטוח שברצונך למחוק שלב זה?")) return;
+    if (!(await showConfirm("האם אתה בטוח שברצונך למחוק שלב זה?"))) return;
 
     if (path && stepId > 0) {
       await deleteOnboardingStep(stepId);

@@ -4,7 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { Edit2, Trash2, Eye, Mail, Phone, Building } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch, throwResponseError } from "@/lib/api-fetch";
+import { showDestructiveConfirm } from "@/hooks/use-modal";
+import { getUserFriendlyError } from "@/lib/errors";
+import { toast } from "sonner";
 
 interface ClientsTableProps {
   clients: any[];
@@ -16,9 +19,11 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
 
   const handleDelete = async (id: number) => {
     if (
-      !confirm(
-        "האם אתה בטוח שברצונך למחוק לקוח זה? פעולה זו תמחק גם את הריטיינרים והתשלומים המקושרים. לא ניתן לבטל פעולה זו.",
-      )
+      !(await showDestructiveConfirm({
+        title: "מחיקת לקוח",
+        message: "פעולה זו תמחק את הלקוח וכל הנתונים המקושרים. לא ניתן לבטל.",
+        confirmationPhrase: "מחק",
+      }))
     )
       return;
 
@@ -28,12 +33,13 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
         method: "DELETE",
       });
 
-      if (!response.ok) throw new Error("Failed to delete client");
+      if (!response.ok) await throwResponseError(response, "Failed to delete client");
 
+      toast.success("הלקוח נמחק בהצלחה");
       router.refresh();
     } catch (err) {
       console.error(err);
-      alert("שגיאה במחיקת הלקוח");
+      toast.error(getUserFriendlyError(err));
     } finally {
       setDeletingId(null);
     }

@@ -10,7 +10,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+import { showConfirm } from "@/hooks/use-modal";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import {
@@ -35,7 +36,8 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch, throwResponseError } from "@/lib/api-fetch";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface ArchivedGoalRowProps {
   goal: GoalWithProgress;
@@ -54,41 +56,27 @@ export default function ArchivedGoalRow({
     setIsRestoring(true);
     try {
       await toggleGoalArchive(goal.id, false);
-      toast({
-        title: "היעד שוחזר",
-        description: "היעד הוחזר לרשימת היעדים הפעילים",
-      });
+      toast.success("היעד שוחזר");
       router.refresh();
     } catch (e) {
-      toast({
-        title: "שגיאה",
-        description: "שחזור היעד נכשל",
-        variant: "destructive",
-      });
+      toast.error(getUserFriendlyError(e));
     } finally {
       setIsRestoring(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm("האם אתה בטוח שברצונך למחוק את היעד לצמיתות?")) return;
+    if (!(await showConfirm({ message: "האם אתה בטוח שברצונך למחוק את היעד לצמיתות?", variant: "destructive" }))) return;
     setIsDeleting(true);
     try {
       const res = await apiFetch(`/api/finance/goals/${goal.id}`, {
         method: "DELETE",
       });
-      if (!res.ok) throw new Error("Failed");
-      toast({
-        title: "היעד נמחק",
-        description: "היעד נמחק לצמיתות מהמערכת",
-      });
+      if (!res.ok) await throwResponseError(res, "Failed to delete goal");
+      toast.success("היעד נמחק");
       router.refresh();
     } catch (e) {
-      toast({
-        title: "שגיאה",
-        description: "מחיקת היעד נכשלה",
-        variant: "destructive",
-      });
+      toast.error(getUserFriendlyError(e));
     } finally {
       setIsDeleting(false);
     }

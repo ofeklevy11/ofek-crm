@@ -19,7 +19,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { markRetainerAsPaid } from "@/app/actions/finance-retainer";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface RetainerPaymentModalProps {
   isOpen: boolean;
@@ -34,7 +34,6 @@ export default function RetainerPaymentModal({
   retainer,
   overdueCount,
 }: RetainerPaymentModalProps) {
-  const { toast } = useToast();
   const [selectedCount, setSelectedCount] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -77,19 +76,12 @@ export default function RetainerPaymentModal({
       // Note: createRetainerPayment is a server action
       await markRetainerAsPaid(retainer.id, selectedCount);
 
-      toast({
-        title: "התשלום נקלט בהצלחה",
-        description: `נרשמו ${selectedCount} תשלומים בסך כולל של ₪${totalAmount.toLocaleString()}`,
-      });
+      toast.success(`התשלום נקלט בהצלחה - נרשמו ${selectedCount} תשלומים בסך כולל של ₪${totalAmount.toLocaleString()}`);
 
       onClose();
     } catch (error) {
       console.error(error);
-      toast({
-        title: "שגיאה",
-        description: "אירעה שגיאה בעדכון התשלומים",
-        variant: "destructive",
-      });
+      toast.error("אירעה שגיאה בעדכון התשלומים");
     } finally {
       setIsLoading(false);
     }

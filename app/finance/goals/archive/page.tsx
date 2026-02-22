@@ -6,6 +6,8 @@ import { Archive, ArrowRight, LayoutList, Search } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
+import { isRateLimitError } from "@/lib/rate-limit-utils";
+import RateLimitFallback from "@/components/RateLimitFallback";
 
 export default async function ArchivedGoalsPage() {
   const user = await getCurrentUser();
@@ -17,10 +19,16 @@ export default async function ArchivedGoalsPage() {
   }
 
   // Fetch data
-  const [goals, creationData] = await Promise.all([
-    getArchivedGoals(),
-    getGoalCreationData(),
-  ]);
+  let goals, creationData;
+  try {
+    [goals, creationData] = await Promise.all([
+      getArchivedGoals(),
+      getGoalCreationData(),
+    ]);
+  } catch (e) {
+    if (isRateLimitError(e)) return <RateLimitFallback />;
+    throw e;
+  }
 
   const { tables } = creationData;
 

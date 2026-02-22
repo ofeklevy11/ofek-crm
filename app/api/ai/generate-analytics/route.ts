@@ -85,6 +85,14 @@ export async function POST(req: Request) {
       }
     }
 
+    // Early Redis health check — fail fast before expensive DB queries
+    try {
+      await redis.ping();
+    } catch (err) {
+      log.warn("Redis unavailable before analytics generation", { error: String(err) });
+      return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+    }
+
     // SECURITY: DB-validate table IDs instead of trusting client-supplied companyId
     const { prisma } = await import("@/lib/prisma");
     const companyId = user.companyId;
@@ -241,7 +249,12 @@ export async function POST(req: Request) {
     const jobId = randomUUID();
     eventData.jobId = jobId;
 
-    await redis.set(`ai-job:${jobId}`, JSON.stringify({ status: "pending", companyId: user.companyId }), "EX", 600);
+    try {
+      await redis.set(`ai-job:${jobId}`, JSON.stringify({ status: "pending", companyId: user.companyId }), "EX", 600);
+    } catch (err) {
+      log.warn("Redis unavailable when setting pending job", { jobId, error: String(err) });
+      return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+    }
 
     await inngest.send({
       id: `ai-gen-${jobId}`,

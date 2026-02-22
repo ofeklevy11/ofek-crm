@@ -40,6 +40,9 @@ import {
 } from "@/components/ui/select";
 import CustomerListManager from "@/components/nurture/CustomerListManager";
 import { getNurtureSubscribers } from "../actions";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
+import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 
 // Mock types for the VIP module
 interface VipPolicy {
@@ -78,6 +81,10 @@ export default function VipClubPage() {
     getNurtureSubscribers("vip").then((subs) => {
       setCustomers(subs);
       setLoading(false);
+    }).catch((err: any) => {
+      setLoading(false);
+      if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(err));
     });
   };
 
@@ -92,7 +99,7 @@ export default function VipClubPage() {
   const handleSavePolicy = () => {
     // Mock save
     console.log("Saving policy:", policy, welcomePackage);
-    alert("הגדרות מועדון ה-VIP נשמרו בהצלחה!");
+    toast.success("הגדרות מועדון ה-VIP נשמרו בהצלחה!");
   };
 
   return (

@@ -33,6 +33,8 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface SlaBreachesClientProps {
   initialBreaches: any[];
@@ -67,9 +69,10 @@ export default function SlaBreachesClient({
     status: string,
     notes?: string
   ) => {
+    const prev = [...breaches];
     // Optimistic update
-    setBreaches((prev) =>
-      prev.map((b) =>
+    setBreaches((curr) =>
+      curr.map((b) =>
         b.id === id ? { ...b, status, notes: notes || b.notes } : b
       )
     );
@@ -79,6 +82,8 @@ export default function SlaBreachesClient({
       router.refresh();
     } catch (error) {
       console.error("Failed to update status");
+      toast.error(getUserFriendlyError(error));
+      setBreaches(prev);
     }
   };
 

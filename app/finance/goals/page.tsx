@@ -7,6 +7,8 @@ import { Target, TrendingUp, ArrowRight, Archive, Plus } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { isRateLimitError } from "@/lib/rate-limit-utils";
+import RateLimitFallback from "@/components/RateLimitFallback";
 
 export default async function GoalsPage() {
   const user = await getCurrentUser();
@@ -18,10 +20,16 @@ export default async function GoalsPage() {
   }
 
   // Fetch data
-  const [goals, creationData] = await Promise.all([
-    getGoalsWithProgress(),
-    getGoalCreationData(),
-  ]);
+  let goals, creationData;
+  try {
+    [goals, creationData] = await Promise.all([
+      getGoalsWithProgress(),
+      getGoalCreationData(),
+    ]);
+  } catch (e) {
+    if (isRateLimitError(e)) return <RateLimitFallback />;
+    throw e;
+  }
 
   const { clients, tables } = creationData;
 

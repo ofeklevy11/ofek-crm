@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import EditTableModal from "./EditTableModal";
-import AlertDialog from "./AlertDialog";
+import { showConfirm, showDestructiveConfirm } from "@/hooks/use-modal";
 import { User, Pencil, Trash2, Copy } from "lucide-react";
 import { duplicateTable } from "@/app/actions/tables";
 import { apiFetch } from "@/lib/api-fetch";
@@ -35,21 +35,15 @@ export default function TableCard({
   const router = useRouter();
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
 
-  // Monitor any open modal
-  const isAnyModalOpen =
-    isEditModalOpen || isDeleteDialogOpen || isDuplicateDialogOpen;
-
   useEffect(() => {
-    if (isAnyModalOpen) {
+    if (isEditModalOpen) {
       onModalOpen?.();
       return () => onModalClose?.();
     }
-  }, [isAnyModalOpen, onModalOpen, onModalClose]);
+  }, [isEditModalOpen, onModalOpen, onModalClose]);
 
   // ---------------------------
   // Handlers
@@ -61,41 +55,16 @@ export default function TableCard({
     setIsEditModalOpen(true);
   };
 
-  const handleDeleteClick = (e: React.MouseEvent) => {
+  const handleDeleteClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDeleteDialogOpen(true);
-  };
+    if (!(await showDestructiveConfirm({
+      title: "מחיקת טבלה",
+      message: `האם אתה בטוח שברצונך למחוק את "${table.name}"? פעולה זו תמחק לצמיתות את כל ${table._count.records} ${table._count.records === 1 ? "הרשומה" : "הרשומות"}, ולא ניתן יהיה לבטל אותה.`,
+      confirmationPhrase: "מחק",
+    }))) return;
 
-  const handleDuplicateClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDuplicateDialogOpen(true);
-  };
-
-  const handleConfirmDuplicate = async () => {
-    setIsDuplicating(true);
-
-    try {
-      const result = await duplicateTable(table.id);
-
-      if (!result.success) {
-        throw new Error(result.error || "Failed to duplicate table");
-      }
-
-      router.refresh();
-    } catch (error: any) {
-      console.error(error);
-      toast.error(getUserFriendlyError(error));
-    } finally {
-      setIsDuplicateDialogOpen(false);
-      setIsDuplicating(false);
-    }
-  };
-
-  const handleConfirmDelete = async () => {
     setIsDeleting(true);
-
     try {
       const res = await apiFetch(`/api/tables/${table.id}`, {
         method: "DELETE",
@@ -106,13 +75,39 @@ export default function TableCard({
         throw new Error(data.error || "Failed using default error");
       }
 
-      router.push("/tables"); // ← מונע רינדורים כפולים
+      toast.success("הטבלה נמחקה בהצלחה");
+      router.push("/tables");
     } catch (error: any) {
       console.error(error);
       toast.error(getUserFriendlyError(error));
     } finally {
-      setIsDeleteDialogOpen(false);
       setIsDeleting(false);
+    }
+  };
+
+  const handleDuplicateClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!(await showConfirm({
+      title: "שכפול טבלה",
+      message: `האם אתה בטוח שברצונך לשכפל את הטבלה "${table.name}"? הטבלה החדשה תכלול את כל ${table._count.records} הרשומות והתצוגות.\n\n⚠️ שים לב: קבצים ולינקים המצורפים לרשומות לא ישוכפלו בטבלה החדשה.`,
+    }))) return;
+
+    setIsDuplicating(true);
+    try {
+      const result = await duplicateTable(table.id);
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to duplicate table");
+      }
+
+      toast.success("הטבלה שוכפלה בהצלחה");
+      router.refresh();
+    } catch (error: any) {
+      console.error(error);
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setIsDuplicating(false);
     }
   };
 
@@ -221,40 +216,6 @@ export default function TableCard({
         />
       )}
 
-      {/* Delete Dialog */}
-      <AlertDialog
-        isOpen={isDeleteDialogOpen}
-        onClose={() => setIsDeleteDialogOpen(false)}
-        onConfirm={handleConfirmDelete}
-        title="מחיקת טבלה"
-        description={`האם אתה בטוח שברצונך למחוק את "${table.name}"? פעולה זו תמחק לצמיתות את כל ${table._count.records} ${
-          table._count.records === 1 ? "הרשומה" : "הרשומות"
-        }, ולא ניתן יהיה לבטל אותה.`}
-        confirmText="מחק"
-        cancelText="ביטול"
-        isDestructive
-      />
-
-      {/* Duplicate Dialog */}
-      <AlertDialog
-        isOpen={isDuplicateDialogOpen}
-        onClose={() => setIsDuplicateDialogOpen(false)}
-        onConfirm={handleConfirmDuplicate}
-        title="שכפול טבלה"
-        description={
-          <div className="space-y-3">
-            <p>
-              האם אתה בטוח שברצונך לשכפל את הטבלה "{table.name}"? הטבלה החדשה
-              תכלול את כל {table._count.records} הרשומות והתצוגות.
-            </p>
-            <div className="text-destructive font-medium bg-destructive/10 p-3 rounded-md border border-destructive/20 text-sm">
-              ⚠️ שים לב: קבצים ולינקים המצורפים לרשומות לא ישוכפלו בטבלה החדשה.
-            </div>
-          </div>
-        }
-        confirmText="שכפל"
-        cancelText="ביטול"
-      />
     </>
   );
 }

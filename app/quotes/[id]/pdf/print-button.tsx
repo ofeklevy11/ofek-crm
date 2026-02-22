@@ -4,6 +4,7 @@ import { Printer, Download, Share2, Mail, Loader2, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import { showAlert } from "@/hooks/use-modal";
 
 interface PrintButtonProps {
   quoteId: string;
@@ -87,7 +88,7 @@ export default function PrintButton({
     const targetPhone = sendOption === "client" ? clientPhone : phone;
 
     if (!targetPhone) {
-      alert("נא להזין מספר טלפון");
+      showAlert("נא להזין מספר טלפון");
       return;
     }
 

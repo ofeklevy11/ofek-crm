@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import UserModal from "@/components/UserModal";
-import AlertDialog from "@/components/AlertDialog";
+import { showConfirm } from "@/hooks/use-modal";
 import { apiFetch } from "@/lib/api-fetch";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import RateLimitFallback from "@/components/RateLimitFallback";
 
 interface User {
   id: number;
@@ -33,9 +34,8 @@ export default function UsersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [deleteUserId, setDeleteUserId] = useState<number | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [rateLimited, setRateLimited] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 30;
 
@@ -46,6 +46,7 @@ export default function UsersPage() {
   const checkPermissions = async () => {
     try {
       const response = await fetch("/api/auth/me");
+      if (response.status === 429) { setRateLimited(true); return; }
       if (response.ok) {
         const user = await response.json();
         if (user.role === "admin") {
@@ -68,12 +69,14 @@ export default function UsersPage() {
     try {
       setIsLoading(true);
       const response = await fetch("/api/users");
+      if (response.status === 429) { setRateLimited(true); return; }
       if (response.ok) {
         const data = await response.json();
         setUsers(data);
       }
     } catch (error) {
       console.error("Error fetching users:", error);
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsLoading(false);
     }
@@ -82,12 +85,14 @@ export default function UsersPage() {
   const fetchTables = async () => {
     try {
       const response = await fetch("/api/tables");
+      if (response.status === 429) { setRateLimited(true); return; }
       if (response.ok) {
         const json = await response.json();
         setTables(json.data ?? json);
       }
     } catch (error) {
       console.error("Error fetching tables:", error);
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -101,33 +106,28 @@ export default function UsersPage() {
     setIsModalOpen(true);
   };
 
-  const handleDeleteClick = (userId: number) => {
-    setDeleteUserId(userId);
-  };
+  const handleDeleteClick = async (userId: number) => {
+    if (!(await showConfirm({ message: "האם אתה בטוח שברצונך למחוק משתמש זה? פעולה זו לא ניתנת לביטול.", variant: "destructive" }))) return;
 
-  const handleConfirmDelete = async () => {
-    if (!deleteUserId) return;
-
-    setIsDeleting(true);
     try {
-      const response = await apiFetch(`/api/users/${deleteUserId}`, {
+      const response = await apiFetch(`/api/users/${userId}`, {
         method: "DELETE",
       });
 
+      if (response.status === 429) { setRateLimited(true); return; }
       if (response.ok) {
-        setUsers(users.filter((u) => u.id !== deleteUserId));
-        setDeleteUserId(null);
+        setUsers(users.filter((u) => u.id !== userId));
+        toast.success("המשתמש נמחק בהצלחה");
       } else {
         toast.error("שגיאה במחיקת המשתמש");
       }
     } catch (error) {
       toast.error(getUserFriendlyError(error));
-    } finally {
-      setIsDeleting(false);
     }
   };
 
   const handleUserSaved = () => {
+    toast.success(editingUser ? "המשתמש עודכן בהצלחה" : "המשתמש נוצר בהצלחה");
     fetchUsers();
     setIsModalOpen(false);
   };
@@ -157,6 +157,10 @@ export default function UsersPage() {
         return role;
     }
   };
+
+  if (rateLimited) {
+    return <RateLimitFallback />;
+  }
 
   if (!isAuthorized) {
     return (
@@ -570,16 +574,6 @@ export default function UsersPage() {
         />
       )}
 
-      <AlertDialog
-        isOpen={deleteUserId !== null}
-        onClose={() => setDeleteUserId(null)}
-        onConfirm={handleConfirmDelete}
-        title="מחק משתמש"
-        description="האם אתה בטוח שברצונך למחוק משתמש זה? פעולה זו לא ניתנת לביטול."
-        confirmText="מחק"
-        cancelText="ביטול"
-        isDestructive
-      />
     </div>
   );
 }

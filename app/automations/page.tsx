@@ -5,6 +5,8 @@ import { getUsers } from "@/app/actions/users";
 import { redirect } from "next/navigation";
 import AutomationsList from "@/components/AutomationsList";
 import { prisma } from "@/lib/prisma";
+import { isRateLimitError, throwIfAnyRateLimited } from "@/lib/rate-limit-utils";
+import RateLimitFallback from "@/components/RateLimitFallback";
 
 export const dynamic = "force-dynamic";
 
@@ -19,20 +21,27 @@ export default async function AutomationsPage() {
     redirect("/");
   }
 
-  const [rulesResponse, usersResponse, tables, foldersResponse] =
-    await Promise.all([
-      getAutomationRules(),
-      getUsers(),
-      // CRITICAL: Filter by companyId for multi-tenancy security
-      prisma.tableMeta.findMany({
-        where: { companyId: user.companyId },
-        select: { id: true, name: true, schemaJson: true },
-        orderBy: { name: "asc" },
-      }),
-      import("@/app/actions/folders").then((mod) =>
-        mod.getFolders("AUTOMATION"),
-      ),
-    ]);
+  let rulesResponse, usersResponse, tables, foldersResponse;
+  try {
+    [rulesResponse, usersResponse, tables, foldersResponse] =
+      await Promise.all([
+        getAutomationRules(),
+        getUsers(),
+        // CRITICAL: Filter by companyId for multi-tenancy security
+        prisma.tableMeta.findMany({
+          where: { companyId: user.companyId },
+          select: { id: true, name: true, schemaJson: true },
+          orderBy: { name: "asc" },
+        }),
+        import("@/app/actions/folders").then((mod) =>
+          mod.getFolders("AUTOMATION"),
+        ),
+      ]);
+    throwIfAnyRateLimited(rulesResponse, usersResponse, foldersResponse);
+  } catch (e) {
+    if (isRateLimitError(e)) return <RateLimitFallback />;
+    throw e;
+  }
 
   const rules = rulesResponse.success ? rulesResponse.data : [];
   const users = usersResponse.success ? usersResponse.data : [];
@@ -75,26 +84,6 @@ export default async function AutomationsPage() {
           </p>
         </div>
       </div>
-
-      {!rulesResponse.success && /rate.?limit/i.test(rulesResponse.error || "") && (
-        <div className="mb-8 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-          <svg
-            className="w-5 h-5 text-red-600 mt-0.5 shrink-0"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
-            <path
-              fillRule="evenodd"
-              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-              clipRule="evenodd"
-            />
-          </svg>
-          <div className="flex-1">
-            <h3 className="text-sm font-semibold text-red-900 mb-1">יותר מדי בקשות</h3>
-            <p className="text-sm text-red-800">אנא נסה שוב בעוד 2 דקות והנתונים יוצגו.</p>
-          </div>
-        </div>
-      )}
 
       <AutomationsList
         initialRules={rules as any[]}

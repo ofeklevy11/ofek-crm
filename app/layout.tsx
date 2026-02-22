@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { Rubik } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import MobileFeatureDisclaimer from "@/components/MobileFeatureDisclaimer";
+import { ModalProvider } from "@/components/ui/modal-provider";
 
 const rubik = Rubik({
   subsets: ["hebrew", "latin"],
@@ -30,8 +30,8 @@ export default function RootLayout({
         <MobileFeatureDisclaimer />
         <Navbar />
         <main>{children}</main>
-        <Toaster />
         <SonnerToaster />
+        <ModalProvider />
       </body>
     </html>
   );

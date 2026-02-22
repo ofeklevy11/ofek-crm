@@ -26,6 +26,8 @@ import type { ViewConfig } from "@/app/actions/views";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Plus, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface ViewsPanelProps {
   tableId: number;
@@ -147,8 +149,8 @@ export default function ViewsPanel({
 
     if (!result.success) {
       // Revert on error
-      console.error("❌ Failed to save order:", result.error);
-      alert(`שגיאה: ${result.error}`);
+      console.error("Failed to save order:", result.error);
+      toast.error(getUserFriendlyError(result.error));
       setViews(originalViews);
     } else {
       // Refresh to ensure sync

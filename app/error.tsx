@@ -1,12 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { isRateLimitError } from "@/lib/rate-limit-utils";
 
 const RATE_LIMIT_COUNTDOWN = 30;
-
-function isRateLimitError(message: string) {
-  return message.includes("יותר מדי פניות");
-}
 
 export default function GlobalError({
   error,
@@ -15,7 +12,7 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  const rateLimited = isRateLimitError(error.message ?? "");
+  const rateLimited = isRateLimitError(error);
   const [countdown, setCountdown] = useState(RATE_LIMIT_COUNTDOWN);
 
   useEffect(() => {

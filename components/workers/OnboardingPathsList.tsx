@@ -28,6 +28,9 @@ import {
   deleteOnboardingPath,
   getWorkersByOnboardingPath,
 } from "@/app/actions/workers";
+import { toast } from "sonner";
+import { showDestructiveConfirm } from "@/hooks/use-modal";
+import { getUserFriendlyError } from "@/lib/errors";
 
 interface OnboardingStep {
   id: number;
@@ -106,16 +109,17 @@ export default function OnboardingPathsList({
   const [loadingWorkers, setLoadingWorkers] = useState(false);
 
   const handleDelete = async (path: OnboardingPath) => {
-    if (!confirm(`האם אתה בטוח שברצונך למחוק את מסלול הקליטה "${path.name}"?`))
+    if (!(await showDestructiveConfirm({ title: "מחיקת מסלול קליטה", message: `האם אתה בטוח שברצונך למחוק את מסלול הקליטה "${path.name}"?`, confirmationPhrase: "מחק" })))
       return;
 
     setDeletingId(path.id);
     try {
       await deleteOnboardingPath(path.id);
+      toast.success("מסלול הכשרה נמחק בהצלחה");
       onDelete(path.id);
     } catch (error) {
       console.error("Error deleting path:", error);
-      alert("שגיאה במחיקת מסלול הקליטה");
+      toast.error(getUserFriendlyError(error));
     } finally {
       setDeletingId(null);
     }

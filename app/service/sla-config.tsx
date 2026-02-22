@@ -13,7 +13,8 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import { updateSlaPolicy } from "@/app/actions/tickets";
 import { Loader2, Timer, AlertCircle, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -35,7 +36,6 @@ export default function SlaConfigModal({
   onOpenAutomationModal,
 }: SlaConfigModalProps) {
   // ... (keep state logic same) ...
-  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,10 +104,10 @@ export default function SlaConfigModal({
         updateSlaPolicy({ priority: "MEDIUM", ...configs.MEDIUM }),
         updateSlaPolicy({ priority: "LOW", ...configs.LOW }),
       ]);
-      toast({ title: "מדיניות SLA עודכנה בהצלחה" });
+      toast.success("מדיניות SLA עודכנה בהצלחה");
       onOpenChange(false);
     } catch (error) {
-      toast({ title: "שגיאה בעדכון המדיניות", variant: "destructive" });
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import { showConfirm } from "@/hooks/use-modal";
 import {
   createFixedExpense,
   updateFixedExpense,
@@ -114,8 +115,10 @@ export default function FixedExpensesTable({
 
       if (editingId) {
         await updateFixedExpense(editingId, payload);
+        toast.success("ההוצאה עודכנה בהצלחה");
       } else {
         await createFixedExpense(payload);
+        toast.success("ההוצאה נוצרה בהצלחה");
       }
 
       setIsModalOpen(false);
@@ -129,10 +132,11 @@ export default function FixedExpensesTable({
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("האם אתה בטוח שברצונך למחוק הוצאה זו?")) return;
+    if (!(await showConfirm({ message: "האם אתה בטוח שברצונך למחוק הוצאה זו?", variant: "destructive" }))) return;
 
     try {
       await deleteFixedExpense(id);
+      toast.success("ההוצאה נמחקה בהצלחה");
       router.refresh();
     } catch (error) {
       toast.error(getUserFriendlyError(error));
@@ -151,6 +155,7 @@ export default function FixedExpensesTable({
     setIsSubmitting(true);
     try {
       await markFixedExpensePaid(paymentExpense.id, paymentCount);
+      toast.success("התשלום סומן כשולם בהצלחה");
       setPaymentModalOpen(false);
       setPaymentExpense(null);
       router.refresh();

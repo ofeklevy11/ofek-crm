@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
 import { deleteDepartment } from "@/app/actions/workers";
+import { showAlert, showDestructiveConfirm } from "@/hooks/use-modal";
 
 interface Department {
   id: number;
@@ -41,18 +42,19 @@ export default function DepartmentsList({
 
   const handleDelete = async (department: Department) => {
     if (department._count && department._count.workers > 0) {
-      alert(
+      showAlert(
         "לא ניתן למחוק מחלקה עם עובדים פעילים. יש להעביר אותם למחלקה אחרת קודם."
       );
       return;
     }
 
-    if (!confirm(`האם אתה בטוח שברצונך למחוק את המחלקה "${department.name}"?`))
+    if (!(await showDestructiveConfirm({ title: "מחיקת מחלקה", message: `האם אתה בטוח שברצונך למחוק מחלקה זו?`, confirmationPhrase: "מחק" })))
       return;
 
     setDeletingId(department.id);
     try {
       await deleteDepartment(department.id);
+      toast.success("המחלקה נמחקה בהצלחה");
       onDelete(department.id);
     } catch (error: any) {
       console.error("Error deleting department:", error);

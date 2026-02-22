@@ -28,6 +28,9 @@ import {
   RefreshCw,
   AlertCircle,
 } from "lucide-react";
+import { showAlert, showConfirm } from "@/hooks/use-modal";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import Link from "next/link";
 import AnalyticsDetailsModal from "@/components/AnalyticsDetailsModal";
 import CreateAnalyticsViewModal from "@/components/analytics/CreateAnalyticsViewModal";
@@ -685,12 +688,6 @@ export default function AnalyticsDashboard({
     setFolders(initialFolders);
   }, [initialViews, initialFolders]);
 
-  // Toast State
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "error" | "success";
-  } | null>(null);
-
   // Filter State
   const [filter, setFilter] = useState<"all" | "manual" | "automation">("all");
 
@@ -737,8 +734,7 @@ export default function AnalyticsDashboard({
       );
 
       if (result.success) {
-        setToast({ message: "מרענן נתונים ברקע...", type: "success" });
-        setTimeout(() => setToast(null), 5000);
+        toast.success("מרענן נתונים ברקע...");
 
         // Update usage from the combined response
         if (result.usage !== undefined) setRefreshUsage(result.usage);
@@ -757,16 +753,11 @@ export default function AnalyticsDashboard({
           }
         }, 2000);
       } else {
-        setToast({
-          message: result.error || "שגיאה ברענון הנתון",
-          type: "error",
-        });
-        setTimeout(() => setToast(null), 4000);
+        toast.error(result.error || "שגיאה ברענון הנתון");
         setRefreshingViewId(null);
       }
     } catch (error) {
-      setToast({ message: "שגיאה ברענון הנתון", type: "error" });
-      setTimeout(() => setToast(null), 4000);
+      toast.error(getUserFriendlyError(error));
       setRefreshingViewId(null);
     }
   };
@@ -833,12 +824,17 @@ export default function AnalyticsDashboard({
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
-    const res = await createViewFolder(newFolderName);
-    if (res.success) {
-      setFolders([...folders, res.data]);
-      setIsFolderModalOpen(false);
-      setNewFolderName("");
-      router.refresh();
+    try {
+      const res = await createViewFolder(newFolderName);
+      if (res.success) {
+        setFolders([...folders, res.data]);
+        setIsFolderModalOpen(false);
+        setNewFolderName("");
+        toast.success("התיקייה נוצרה בהצלחה");
+        router.refresh();
+      }
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -854,15 +850,20 @@ export default function AnalyticsDashboard({
 
   const handleDeleteFolder = async (id: number) => {
     if (
-      !confirm(
+      !(await showConfirm(
         "האם אתה בטוח שברצונך למחוק את התיקייה? הViews לא יימחקו אלא יעברו לתיקייה הראשית.",
-      )
+      ))
     )
       return;
-    await deleteViewFolder(id);
-    setFolders(folders.filter((f) => f.id !== id));
-    if (currentFolder === id) setCurrentFolder("all");
-    router.refresh();
+    try {
+      await deleteViewFolder(id);
+      setFolders(folders.filter((f) => f.id !== id));
+      if (currentFolder === id) setCurrentFolder("all");
+      toast.success("התיקייה נמחקה בהצלחה");
+      router.refresh();
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    }
   };
 
   const handleColorChange = async (
@@ -882,26 +883,28 @@ export default function AnalyticsDashboard({
       await updateAnalyticsViewColor(id, type, color);
     } catch (err) {
       console.error("Failed to update color", err);
+      toast.error(getUserFriendlyError(err));
     }
   };
 
   const handleDelete = async (view: any) => {
     if (view.source === "AUTOMATION") {
-      alert(
+      showAlert(
         "על מנת למחוק אנליטיקה שנוצרה על ידי אוטומציה נצטרך למחוק את האוטומציה עצמה בעמוד אוטומציות.",
       );
       return;
     }
 
-    if (!confirm("האם אתה בטוח שברצונך למחוק את התצוגה?")) return;
+    if (!(await showConfirm("האם אתה בטוח שברצונך למחוק את התצוגה?"))) return;
 
     try {
       setViews((prev) => prev.filter((v) => v.viewId !== view.viewId));
       setGraphViews((prev) => prev.filter((v) => v.viewId !== view.viewId));
       await deleteAnalyticsView(view.viewId);
+      toast.success("התצוגה נמחקה בהצלחה");
       router.refresh();
     } catch (err) {
-      console.error("Failed to delete view", err);
+      toast.error(getUserFriendlyError(err));
     }
   };
 
@@ -1109,15 +1112,11 @@ export default function AnalyticsDashboard({
         )}
 
         {/* AI Creator Panel */}
-        {isAIMode && (
-          <div className="mt-8 mb-8 animate-in slide-in-from-top-4 duration-300">
-            <AIAnalyticsCreator
-              isOpen={isAIMode}
-              onClose={() => setIsAIMode(false)}
-              onSuccess={handleAIResults}
-            />
-          </div>
-        )}
+        <AIAnalyticsCreator
+          isOpen={isAIMode}
+          onClose={() => setIsAIMode(false)}
+          onSuccess={handleAIResults}
+        />
 
         {/* AI Report Creator (full-screen overlay) */}
         <AIReportCreator
@@ -1357,18 +1356,6 @@ export default function AnalyticsDashboard({
         />
       )}
 
-      {/* Toast */}
-      {toast && (
-        <div
-          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-lg text-sm font-medium ${
-            toast.type === "error"
-              ? "bg-red-600 text-white"
-              : "bg-green-600 text-white"
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
     </div>
   );
 }

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AITableCreator from "@/components/AITableCreator";
 import { Pencil, Plus, Sparkles, GripVertical } from "lucide-react";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 import {
   DndContext,
   closestCenter,
@@ -130,6 +132,7 @@ export default function TablesDashboard({
       await updateTablesOrder(updates);
     } catch (error) {
       console.error("Failed to save order", error);
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -186,7 +189,7 @@ export default function TablesDashboard({
       router.refresh();
     } catch (error) {
       console.error(error);
-      alert("שגיאה בשמירת קטגוריה");
+      toast.error("שגיאה בשמירת קטגוריה");
     } finally {
       setCreatingCategory(false);
     }

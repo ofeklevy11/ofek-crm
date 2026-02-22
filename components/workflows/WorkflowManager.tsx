@@ -17,6 +17,7 @@ import { WorkflowInstancesBoard } from "./WorkflowInstancesBoard";
 import { createWorkflow, deleteWorkflow } from "@/app/actions/workflows";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import { showConfirm, showPrompt } from "@/hooks/use-modal";
 
 interface WorkflowWithStages extends Workflow {
   stages: WorkflowStage[];
@@ -49,7 +50,7 @@ export function WorkflowManager({
   const activeWorkflow = workflows.find((w) => w.id === activeWorkflowId);
 
   const handleCreateWorkflow = async () => {
-    const name = prompt("שם התהליך החדש:");
+    const name = await showPrompt({ message: "שם התהליך החדש:" });
     if (!name) return;
 
     try {
@@ -61,6 +62,7 @@ export function WorkflowManager({
       });
       setWorkflows([...workflows, { ...newWorkflow, stages: [] } as any]);
       setActiveWorkflowId(newWorkflow.id);
+      toast.success("תהליך העבודה נוצר בהצלחה");
     } catch (error) {
       toast.error(getUserFriendlyError(error));
     }
@@ -160,19 +162,24 @@ export function WorkflowManager({
                   <button
                     onClick={async () => {
                       if (
-                        confirm(
+                        await showConfirm(
                           `האם אתה בטוח שברצונך למחוק את התבנית "${activeWorkflow.name}"?`,
                         )
                       ) {
-                        await deleteWorkflow(activeWorkflow.id);
-                        setActiveWorkflowId(
-                          workflows.find((w) => w.id !== activeWorkflow.id)
-                            ?.id || null,
-                        );
-                        // Optimistic update
-                        setWorkflows(
-                          workflows.filter((w) => w.id !== activeWorkflow.id),
-                        );
+                        try {
+                          await deleteWorkflow(activeWorkflow.id);
+                          setActiveWorkflowId(
+                            workflows.find((w) => w.id !== activeWorkflow.id)
+                              ?.id || null,
+                          );
+                          // Optimistic update
+                          setWorkflows(
+                            workflows.filter((w) => w.id !== activeWorkflow.id),
+                          );
+                          toast.success("התבנית נמחקה בהצלחה");
+                        } catch (error) {
+                          toast.error(getUserFriendlyError(error));
+                        }
                       }
                     }}
                     className="flex items-center gap-2 text-red-500 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium transition-colors"

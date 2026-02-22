@@ -21,6 +21,8 @@ import {
   permanentlyDeleteTicket,
 } from "@/app/actions/closed-tickets";
 import { useRouter } from "next/navigation";
+import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
+import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -92,7 +94,11 @@ export default function ClosedTicketsClient({
       router.refresh();
     } catch (error) {
       console.error("Failed to restore ticket:", error);
-      alert("שגיאה בשחזור הפנייה");
+      if (isRateLimitError(error)) {
+        toast.error(RATE_LIMIT_MESSAGE);
+      } else {
+        toast.error("שגיאה בשחזור הפנייה");
+      }
     } finally {
       setLoading(false);
     }
@@ -110,7 +116,11 @@ export default function ClosedTicketsClient({
       router.refresh();
     } catch (error) {
       console.error("Failed to delete ticket:", error);
-      alert("שגיאה במחיקת הפנייה");
+      if (isRateLimitError(error)) {
+        toast.error(RATE_LIMIT_MESSAGE);
+      } else {
+        toast.error("שגיאה במחיקת הפנייה");
+      }
     } finally {
       setLoading(false);
     }

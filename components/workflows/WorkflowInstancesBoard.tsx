@@ -29,6 +29,7 @@ import {
 } from "@/app/actions/workflow-instances";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import { showConfirm, showDestructiveConfirm } from "@/hooks/use-modal";
 import {
   deleteWorkflowInstance,
   updateWorkflowInstance,
@@ -77,7 +78,9 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
           return map;
         });
       })
-      .catch(() => {});
+      .catch(() => {
+        toast.warning("לא ניתן לטעון פרטי שלבים מוקדמים", { id: "stage-details-preload" });
+      });
   }, [selectedInstance?.id]);
 
   // New Instance Form State
@@ -109,6 +112,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
         name: newForm.name,
         assigneeId: newForm.assigneeId ? Number(newForm.assigneeId) : undefined,
       });
+      toast.success("התהליך נוצר בהצלחה");
       setIsCreateModalOpen(false);
       setNewForm({ workflowId: "", name: "", assigneeId: "" });
     } catch (e) {
@@ -150,11 +154,12 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
   const handleDeleteInstance = async (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
     if (
-      confirm("האם אתה בטוח שברצונך למחוק תהליך זה? פעולה זו היא בלתי הפיכה.")
+      await showDestructiveConfirm({ title: "מחיקת תהליך", message: "האם אתה בטוח שברצונך למחוק תהליך זה? לא ניתן לבטל.", confirmationPhrase: "מחק" })
     ) {
       try {
         await deleteWorkflowInstance(id);
         if (selectedInstance?.id === id) setSelectedInstance(null);
+        toast.success("התהליך נמחק בהצלחה");
       } catch (error) {
         toast.error(getUserFriendlyError(error));
       }
@@ -177,6 +182,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
           ? parseInt(editingInstance.assigneeId)
           : null,
       });
+      toast.success("התהליך עודכן בהצלחה");
       setEditingInstance(null);
     } catch (error) {
       toast.error(getUserFriendlyError(error));
@@ -195,7 +201,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
   const handleReset = async () => {
     if (!selectedInstance) return;
     if (
-      confirm(
+      await showConfirm(
         "האם אתה בטוח שברצונך לאפס את תהליך העבודה? כל השלבים יסומנו כלא הושלמו.",
       )
     ) {
@@ -208,6 +214,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
           completedStages: [],
           status: "active",
         });
+        toast.success("התהליך אופס בהצלחה");
       } catch (error) {
         toast.error(getUserFriendlyError(error));
       }

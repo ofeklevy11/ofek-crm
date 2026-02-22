@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { Task } from "./TaskKanbanBoard";
-import AlertDialog from "./AlertDialog";
+import { showConfirm } from "@/hooks/use-modal";
 
 interface TaskCardProps {
   task: Task;
@@ -11,8 +11,7 @@ interface TaskCardProps {
 }
 
 export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
-  const [isDragging, setIsDragging] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [isDragging, setIsDragging] = React.useState(false);
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.setData("taskId", task.id);
@@ -52,21 +51,6 @@ export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
         isDragging ? "opacity-50 scale-95" : "hover:scale-[1.02]"
       }`}
     >
-      {/* Delete confirmation dialog */}
-      <AlertDialog
-        isOpen={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={() => {
-          onDelete(task.id);
-          setConfirmOpen(false);
-        }}
-        title="אישור מחיקה"
-        description={`האם אתה בטוח שברצונך למחוק משימה "${task.title}"?`}
-        confirmText="מחיקה"
-        cancelText="ביטול"
-        isDestructive={true}
-      />
-
       {/* Actions */}
       <div className="absolute top-2 end-2 flex gap-1">
         <button
@@ -77,7 +61,11 @@ export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
           ✎
         </button>
         <button
-          onClick={() => setConfirmOpen(true)}
+          onClick={async () => {
+            if (await showConfirm({ message: `האם אתה בטוח שברצונך למחוק משימה "${task.title}"?`, variant: "destructive" })) {
+              onDelete(task.id);
+            }
+          }}
           className="text-slate-400 hover:text-red-400 p-1 rounded transition-colors"
           title="מחיקת משימה"
         >

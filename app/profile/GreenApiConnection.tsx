@@ -30,6 +30,9 @@ import {
   disconnectGreenApi,
 } from "@/app/actions/green-api";
 import { useRouter } from "next/navigation";
+import { showAlert, showConfirm } from "@/hooks/use-modal";
+import { toast } from "sonner";
+import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 
 export default function GreenApiConnection() {
   const [loading, setLoading] = useState(true);
@@ -65,6 +68,8 @@ export default function GreenApiConnection() {
       }
     } catch (e) {
       console.error(e);
+      if (isRateLimitError(e)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(e));
     } finally {
       setLoading(false);
     }
@@ -72,7 +77,7 @@ export default function GreenApiConnection() {
 
   async function handleSave() {
     if (!instanceId || !token) {
-      alert("אנא הזן את כל השדות");
+      showAlert("אנא הזן את כל השדות");
       return;
     }
 
@@ -82,15 +87,16 @@ export default function GreenApiConnection() {
       setConnected(true);
       const statusData = await getGreenApiStatus();
       setStatus(statusData);
+      toast.success("החיבור נשמר בהצלחה");
     } catch (e: any) {
-      alert(getUserFriendlyError(e));
+      toast.error(getUserFriendlyError(e));
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDisconnect() {
-    if (!confirm("האם אתה בטוח שברצונך לנתק את החיבור?")) return;
+    if (!(await showConfirm("האם אתה בטוח שברצונך לנתק את החיבור?"))) return;
 
     setSaving(true);
     try {
@@ -99,8 +105,9 @@ export default function GreenApiConnection() {
       setInstanceId("");
       setToken("");
       setStatus(null);
+      toast.success("החיבור נותק בהצלחה");
     } catch (e) {
-      console.error(e);
+      toast.error(getUserFriendlyError(e));
     } finally {
       setSaving(false);
     }

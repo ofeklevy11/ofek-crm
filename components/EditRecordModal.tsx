@@ -14,7 +14,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { showAlert, showConfirm } from "@/hooks/use-modal";
 import { getUserFriendlyError } from "@/lib/errors";
+import { RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -151,6 +153,10 @@ export default function EditRecordModal({
   const fetchRecordData = async () => {
     try {
       const res = await fetch(`/api/records/${record.id}`);
+      if (res.status === 429) {
+        toast.error(RATE_LIMIT_MESSAGE);
+        return;
+      }
       if (res.ok) {
         const freshRecord = await res.json();
         if (freshRecord.files) {
@@ -187,6 +193,7 @@ export default function EditRecordModal({
       }
     } catch (err) {
       console.error("Failed to fetch record data", err);
+      toast.error(getUserFriendlyError(err));
     }
   };
 
@@ -244,6 +251,7 @@ export default function EditRecordModal({
       }
     } catch (error) {
       console.error("Failed to record dial", error);
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -253,7 +261,7 @@ export default function EditRecordModal({
 
     const file = selectedFiles[0];
     if (file.size > 1024 * 1024) {
-      alert("גודל הקובץ חייב להיות עד 1MB");
+      showAlert("גודל הקובץ חייב להיות עד 1MB");
       return;
     }
 
@@ -292,7 +300,7 @@ export default function EditRecordModal({
   };
 
   const handleDeleteFile = async (fileId: number) => {
-    if (!confirm("האם למחוק קובץ זה?")) return;
+    if (!(await showConfirm("האם למחוק קובץ זה?"))) return;
     try {
       const { deleteFile } = await import("@/app/actions/storage");
       await deleteFile(fileId);
@@ -377,7 +385,7 @@ export default function EditRecordModal({
   };
 
   const handleDeleteAttachment = async (attachmentId: number) => {
-    if (!confirm("האם למחוק לינק זה?")) return;
+    if (!(await showConfirm("האם למחוק לינק זה?"))) return;
     try {
       const res = await apiFetch(`/api/attachments/${attachmentId}`, {
         method: "DELETE",
@@ -449,6 +457,7 @@ export default function EditRecordModal({
 
       if (!res.ok) await throwResponseError(res, "Failed to update record");
 
+      toast.success("הרשומה עודכנה בהצלחה");
       router.refresh();
       handleClose();
     } catch (error) {
@@ -705,6 +714,7 @@ export default function EditRecordModal({
                                   "Failed to fetch lookup data",
                                   error,
                                 );
+                                toast.error(getUserFriendlyError(error));
                               }
                             } else {
                               const updates: Record<string, any> = {};

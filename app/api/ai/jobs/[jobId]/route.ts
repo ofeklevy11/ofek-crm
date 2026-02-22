@@ -27,7 +27,16 @@ export async function GET(
     return NextResponse.json({ error: "jobId is required" }, { status: 400 });
   }
 
-  const raw = await redis.get(`ai-job:${jobId}`);
+  let raw: string | null;
+  try {
+    raw = await redis.get(`ai-job:${jobId}`);
+  } catch (err) {
+    log.warn("Redis unavailable while polling job", { jobId, error: String(err) });
+    return NextResponse.json(
+      { error: "Service temporarily unavailable" },
+      { status: 503, headers: { "Retry-After": "2" } }
+    );
+  }
 
   if (!raw) {
     return NextResponse.json({ status: "not_found" }, { status: 404 });

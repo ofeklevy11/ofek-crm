@@ -58,9 +58,11 @@ export default function AIAutomationCreator({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Cancel polling when modal closes
+  // Cancel in-flight requests when modal closes
   useEffect(() => {
-    if (!isOpen) cancel();
+    if (!isOpen) {
+      cancel();
+    }
   }, [isOpen, cancel]);
 
   useEffect(() => {
@@ -256,13 +258,13 @@ export default function AIAutomationCreator({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-white w-full max-w-6xl h-[80vh] rounded-3xl shadow-2xl flex overflow-hidden border border-gray-100 flex-col md:flex-row" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white w-full max-w-6xl max-h-[90vh] rounded-3xl shadow-2xl flex overflow-hidden border border-gray-100 flex-col md:flex-row" onClick={(e) => e.stopPropagation()}>
         {/* Chat Section */}
         <div
-          className={`flex flex-col flex-1 h-full ${
+          className={`flex flex-col flex-1 min-h-0 ${
             showRightPanel
-              ? "md:w-1/2 border-b md:border-b-0 md:border-r border-gray-200"
-              : "w-full"
+              ? "max-h-[45vh] md:max-h-none md:w-1/2 border-b md:border-b-0 md:border-r border-gray-200"
+              : "h-full w-full"
           }`}
         >
           <div className="p-6 border-b border-gray-100 bg-linear-to-r from-purple-50 to-blue-50 flex justify-between items-center">
@@ -285,7 +287,7 @@ export default function AIAutomationCreator({
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/30">
+          <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-4 bg-gray-50/30">
             {messages.map((msg, i) => (
               <div
                 key={i}
@@ -298,7 +300,11 @@ export default function AIAutomationCreator({
                       : "bg-white border border-gray-100 text-gray-800 rounded-bl-none"
                   }`}
                 >
-                  {msg.content}
+                  {msg.role === "model" ? (
+                    <div style={{ maxHeight: "12.5rem", overflowY: "auto" }}>{msg.content}</div>
+                  ) : (
+                    msg.content
+                  )}
                 </div>
               </div>
             ))}
@@ -390,7 +396,7 @@ export default function AIAutomationCreator({
                 }
                 disabled={tables.length === 0}
                 rows={6}
-                style={{ resize: "none", fieldSizing: "content" } as React.CSSProperties}
+                style={{ resize: "none", fieldSizing: "content", maxHeight: "12.5rem", overflowY: "auto" } as React.CSSProperties}
                 className="w-full pl-5 pr-12 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition text-gray-800 shadow-inner disabled:bg-gray-100 disabled:text-gray-400 min-h-[9rem]"
               />
               {tables.length > 0 && (
@@ -411,7 +417,7 @@ export default function AIAutomationCreator({
 
         {/* Right Panel: Preview OR Suggestions */}
         {showRightPanel && (
-          <div className="flex-1 bg-white border-l border-gray-100 flex flex-col md:w-1/2 h-full min-h-0 overflow-hidden">
+          <div className="flex-1 bg-white border-l border-gray-100 flex flex-col md:w-1/2 min-h-0 overflow-hidden">
             {/* Suggestions View */}
             {suggestions.length > 0 && !currentSchema && (
               <div className="flex-1 overflow-y-auto p-8 flex flex-col">

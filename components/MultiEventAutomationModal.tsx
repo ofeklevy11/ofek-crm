@@ -26,6 +26,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
+import { showAlert, showConfirm } from "@/hooks/use-modal";
 import { getUserFriendlyError, getFriendlyResultError } from "@/lib/errors";
 
 interface MultiEventAutomationModalProps {
@@ -598,11 +599,11 @@ export default function MultiEventAutomationModal({
           // Re-reun submit? No, handleConfirmAction is async state update.
           // We can't easily sync wait.
           // Better to force user to click "Confirm Action" first.
-          alert("אנא אשר את הפעולה הנוכחית לפני השמירה");
+          showAlert("אנא אשר את הפעולה הנוכחית לפני השמירה");
           setLoading(false);
           return;
         }
-        alert("נא להגדיר לפחות פעולה אחת");
+        showAlert("נא להגדיר לפחות פעולה אחת");
         setLoading(false);
         return;
       }
@@ -1705,17 +1706,17 @@ export default function MultiEventAutomationModal({
         <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-between shrink-0">
           {step > 1 ? (
             <button
-              onClick={() => {
+              onClick={async () => {
                 // If user is in the middle of adding an action, try to save it first
                 if (isAddingAction && currentActionType) {
                   if (validateCurrentAction()) {
                     // Auto-save the action
                     handleConfirmAction();
                     // Show success message
-                    alert("הפעולה נשמרה אוטומטית");
+                    toast.success("הפעולה נשמרה אוטומטית");
                   } else {
                     // Ask user if they want to discard
-                    const confirmDiscard = confirm(
+                    const confirmDiscard = await showConfirm(
                       "יש פעולה שלא הושלמה. האם לבטל אותה ולחזור?",
                     );
                     if (!confirmDiscard) {
@@ -1748,7 +1749,7 @@ export default function MultiEventAutomationModal({
             <button
               onClick={() => {
                 if (step === 1 && !name) {
-                  alert("אנא הזן שם לאוטומציה");
+                  showAlert("אנא הזן שם לאוטומציה");
                   return;
                 }
                 if (step === 1 && validationError) return;

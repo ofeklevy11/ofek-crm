@@ -3,7 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, Trash2, Save } from "lucide-react";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch, throwResponseError } from "@/lib/api-fetch";
+import { showConfirm } from "@/hooks/use-modal";
+import { getUserFriendlyError } from "@/lib/errors";
+import { toast } from "sonner";
 
 interface EditRetainerModalProps {
   retainer: any;
@@ -59,12 +62,13 @@ export default function EditRetainerModal({
         body: JSON.stringify(formData),
       });
 
-      if (!response.ok) throw new Error("Failed to update retainer");
+      if (!response.ok) await throwResponseError(response, "Failed to update retainer");
 
+      toast.success("הריטיינר עודכן בהצלחה");
       router.refresh();
       onClose();
     } catch (err) {
-      setError("שגיאה בעדכון הריטיינר");
+      toast.error(getUserFriendlyError(err));
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -73,7 +77,7 @@ export default function EditRetainerModal({
 
   const handleDelete = async () => {
     if (
-      !confirm("האם אתה בטוח שברצונך למחוק ריטיינר זה? לא ניתן לבטל פעולה זו.")
+      !(await showConfirm({ message: "האם אתה בטוח שברצונך למחוק ריטיינר זה? לא ניתן לבטל פעולה זו.", variant: "destructive" }))
     )
       return;
 
@@ -83,12 +87,13 @@ export default function EditRetainerModal({
         method: "DELETE",
       });
 
-      if (!response.ok) throw new Error("Failed to delete retainer");
+      if (!response.ok) await throwResponseError(response, "Failed to delete retainer");
 
+      toast.success("הריטיינר נמחק בהצלחה");
       router.refresh();
       onClose();
     } catch (err) {
-      setError("שגיאה במחיקת הריטיינר");
+      toast.error(getUserFriendlyError(err));
       console.error(err);
     } finally {
       setIsLoading(false);

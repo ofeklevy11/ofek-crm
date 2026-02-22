@@ -10,6 +10,10 @@ import { AllEventsModal } from "./AllEventsModal";
 import { GlobalEventAutomationsModal } from "./GlobalEventAutomationsModal";
 import { addDays, addWeeks, addMonths, getStartOfWeek } from "@/lib/dateUtils";
 import { CalendarEvent } from "@/lib/types";
+import { showConfirm } from "@/hooks/use-modal";
+import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
+import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/errors";
 
 export function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -71,6 +75,8 @@ export function Calendar() {
         }
       } catch (error) {
         console.error("Failed to fetch events:", error);
+        if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE, { id: "calendar-fetch" });
+        else toast.error(getUserFriendlyError(error), { id: "calendar-fetch" });
       }
     }, 300);
 
@@ -173,6 +179,7 @@ export function Calendar() {
               : e,
           ),
         );
+        toast.success("האירוע עודכן בהצלחה");
         setSelectedEvent(undefined);
         setIsModalOpen(false);
         setInitialEventDate(undefined);
@@ -201,6 +208,7 @@ export function Calendar() {
             endTime: new Date(newEvent.endTime),
           },
         ]);
+        toast.success("האירוע נוצר בהצלחה");
         setIsModalOpen(false);
         setInitialEventDate(undefined);
         setInitialEventHour(undefined);
@@ -209,6 +217,8 @@ export function Calendar() {
       }
     } catch (error) {
       console.error("Failed to save event:", error);
+      if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(error));
       return false;
     }
   };
@@ -249,15 +259,18 @@ export function Calendar() {
           setEvents(events.filter((e) => e.id !== selectedEvent.id));
           setSelectedEvent(undefined);
           setIsModalOpen(false);
+          toast.success("האירוע נמחק בהצלחה");
         }
       } catch (error) {
         console.error("Failed to delete event:", error);
+        if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
+        else toast.error(getUserFriendlyError(error));
       }
     }
   };
 
   const handleDeleteById = async (event: CalendarEvent) => {
-    if (confirm("האם אתה בטוח שברצונך למחוק אירוע זה?")) {
+    if (await showConfirm("האם אתה בטוח שברצונך למחוק אירוע זה?")) {
       try {
         const { deleteCalendarEvent } = await import("@/app/actions");
         const result = await deleteCalendarEvent(event.id);
@@ -269,9 +282,12 @@ export function Calendar() {
             setSelectedEvent(undefined);
             setIsModalOpen(false);
           }
+          toast.success("האירוע נמחק בהצלחה");
         }
       } catch (error) {
         console.error("Failed to delete event:", error);
+        if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
+        else toast.error(getUserFriendlyError(error));
       }
     }
   };
@@ -302,6 +318,8 @@ export function Calendar() {
       }
     } catch (error) {
       console.error("Failed to fetch all events:", error);
+      if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE, { id: "calendar-all-events" });
+      else toast.error(getUserFriendlyError(error), { id: "calendar-all-events" });
     }
   };
 
@@ -391,9 +409,12 @@ export function Calendar() {
               : e,
           ),
         );
+        toast.success("האירוע עודכן בהצלחה");
       }
     } catch (error) {
       console.error("Failed to move event:", error);
+      if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(error));
     } finally {
       setDraggingEventId(null);
     }
