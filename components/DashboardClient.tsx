@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback, memo } from "react";
 import {
   DndContext,
   closestCenter,
@@ -186,6 +186,12 @@ export default function DashboardClient({
   const [tableData, setTableData] = useState<Record<string, any>>({});
   const [tableLoading, setTableLoading] = useState<Record<string, boolean>>({});
 
+  // Refs for stable callback access (avoids stale closures in useCallback)
+  const widgetsRef = useRef<DashboardWidget[]>(widgets);
+  widgetsRef.current = widgets;
+  const tableDataRef = useRef<Record<string, any>>(tableData);
+  tableDataRef.current = tableData;
+
   // Mini Dashboard (Table Views Dashboard) State
   const [isMiniDashboardModalOpen, setIsMiniDashboardModalOpen] =
     useState(false);
@@ -221,12 +227,14 @@ export default function DashboardClient({
     setIsGoalsTableModalOpen(true);
   };
 
-  const handleEditGoalsTable = (widget: DashboardWidget) => {
+  const handleEditGoalsTableById = useCallback((widgetId: string) => {
+    const widget = widgetsRef.current.find((w) => w.id === widgetId);
+    if (!widget) return;
     setEditingGoalsTableId(widget.id);
     setGoalsTableTitle(widget.settings?.title || "טבלת יעדים");
     setGoalsTableSelectedIds(widget.settings?.goalIds || []);
     setIsGoalsTableModalOpen(true);
-  };
+  }, []);
 
   const handleAddGoalsTable = async () => {
     if (!goalsTableTitle) return;
@@ -263,7 +271,7 @@ export default function DashboardClient({
             referenceId: res.data.referenceId || "custom",
             settings: res.data.settings,
           };
-          setWidgets([...widgets, newWidget]);
+          setWidgets((prev) => [...prev, newWidget]);
         }
       }
 
@@ -295,12 +303,14 @@ export default function DashboardClient({
     setIsAnalyticsTableModalOpen(true);
   };
 
-  const handleEditAnalyticsTable = (widget: DashboardWidget) => {
+  const handleEditAnalyticsTableById = useCallback((widgetId: string) => {
+    const widget = widgetsRef.current.find((w) => w.id === widgetId);
+    if (!widget) return;
     setEditingAnalyticsTableId(widget.id);
     setAnalyticsTableTitle(widget.settings?.title || "טבלת אנליטיקות");
     setAnalyticsTableSelectedIds(widget.settings?.analyticsIds || []);
     setIsAnalyticsTableModalOpen(true);
-  };
+  }, []);
 
   const handleAddAnalyticsTable = async () => {
     if (!analyticsTableTitle) return;
@@ -337,7 +347,7 @@ export default function DashboardClient({
             referenceId: res.data.referenceId || "custom",
             settings: res.data.settings,
           };
-          setWidgets([...widgets, newWidget]);
+          setWidgets((prev) => [...prev, newWidget]);
         }
       }
 
@@ -427,23 +437,36 @@ export default function DashboardClient({
     }
   };
 
-  const handleOpenMiniWidgetSettings = (
-    widgetId: string,
-    widgetType: "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES",
-    currentSettings: any,
-  ) => {
+  // Stable ID-based handler — uses ref to look up widget type/settings
+  const handleOpenMiniWidgetSettingsById = useCallback((widgetId: string) => {
+    const widget = widgetsRef.current.find((w) => w.id === widgetId);
+    if (!widget) return;
     setMiniConfigModal({
       open: true,
-      widgetType,
+      widgetType: widget.type as "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES",
       editWidgetId: widgetId,
-      currentSettings,
+      currentSettings: widget.settings,
     });
-  };
+  }, []);
 
   // Permissions
   const canViewDashboard = hasUserFlag(user, "canViewDashboard");
   // Default to true if user can view dashboard, they can customize their own dashboard
   const canAddWidget = canViewDashboard;
+
+  // C1: Build O(1) lookup Maps from props to avoid .find() in render loop
+  const analyticsMap = useMemo(
+    () => new Map(initialAnalytics.map((a) => [String(a.id), a])),
+    [initialAnalytics],
+  );
+  const goalsMap = useMemo(
+    () => new Map(availableGoals.map((g) => [String(g.id), g])),
+    [availableGoals],
+  );
+  const tablesMap = useMemo(
+    () => new Map(availableTables.map((t) => [t.id, t])),
+    [availableTables],
+  );
 
   // Track initialization to prevent duplicate loading
   const isInitialized = useRef(false);
@@ -500,6 +523,14 @@ export default function DashboardClient({
     loadWidgets();
   }, []);
 
+  // C2: Derive a stable key that only changes when TABLE widget IDs/referenceIds change
+  const pendingTableWidgetKey = useMemo(() => {
+    return widgets
+      .filter((w) => w.type === "TABLE" && w.tableId && w.referenceId && !w.settings?.collapsed)
+      .map((w) => `${w.id}:${w.tableId}:${w.referenceId}`)
+      .join("|");
+  }, [widgets]);
+
   // Fetch data for table widgets (batched to avoid N+1)
   useEffect(() => {
     const pending = widgets.filter(
@@ -554,9 +585,10 @@ export default function DashboardClient({
           return next;
         });
       });
-  }, [widgets]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingTableWidgetKey]);
 
-  const fetchTableData = async (
+  const fetchTableData = useCallback(async (
     widgetId: string,
     tableId: number,
     viewId: number | string,
@@ -593,7 +625,7 @@ export default function DashboardClient({
     } finally {
       setTableLoading((prev) => ({ ...prev, [widgetId]: false }));
     }
-  };
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -610,24 +642,35 @@ export default function DashboardClient({
     // setActiveId(event.active.id);
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  // C5: Move server action out of state updater; C4: wrap in useCallback
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
+      let newOrder: string[] | undefined;
       setWidgets((items) => {
         const oldIndex = items.findIndex((i) => i.id === active.id);
         const newIndex = items.findIndex((i) => i.id === over.id);
         const newItems = arrayMove(items, oldIndex, newIndex);
-
-        // Update order in database
-        updateDashboardWidgetOrder(newItems.map((w) => w.id));
-
+        newOrder = newItems.map((w) => w.id);
         return newItems;
       });
-    }
-  };
 
-  const handleEditWidget = (widget: DashboardWidget) => {
+      // Persist order to database after state update
+      if (newOrder) {
+        try {
+          await updateDashboardWidgetOrder(newOrder);
+        } catch (err) {
+          toast.error(getUserFriendlyError(err));
+        }
+      }
+    }
+  }, []);
+
+  // Stable ID-based edit handler — uses refs to avoid stale closures
+  const handleEditWidgetById = useCallback((widgetId: string) => {
+    const widget = widgetsRef.current.find((w) => w.id === widgetId);
+    if (!widget) return;
     setEditingWidgetId(widget.id);
     setSelectedType(widget.type);
     if (widget.type === "TABLE" && widget.tableId) {
@@ -635,31 +678,19 @@ export default function DashboardClient({
       setIsCustomMode(true);
       setSelectedItem("custom");
 
-      // Try to get columns from settings, fallback to loaded data if available
       let initialCols = widget.settings?.columns;
-
-      if (
-        !initialCols ||
-        !Array.isArray(initialCols) ||
-        initialCols.length === 0
-      ) {
-        const loadedData = tableData[widget.id];
-        // If legacy view data is loaded, it might have columns in a different format or as part of data
-        // For now, if no settings columns, we rely on user picking them or default empty
-        if (
-          loadedData?.data?.columns &&
-          Array.isArray(loadedData.data.columns)
-        ) {
+      if (!initialCols || !Array.isArray(initialCols) || initialCols.length === 0) {
+        const loadedData = tableDataRef.current[widget.id];
+        if (loadedData?.data?.columns && Array.isArray(loadedData.data.columns)) {
           initialCols = loadedData.data.columns.map((c: any) => c.name);
         }
       }
-
       setSelectedColumns(initialCols || []);
     } else {
       setSelectedItem(String(widget.referenceId));
     }
     setIsAddModalOpen(true);
-  };
+  }, []);
 
   const handleAddWidget = async () => {
     if (!selectedItem) return;
@@ -726,7 +757,7 @@ export default function DashboardClient({
           tableId: res.data.tableId ?? undefined,
           settings: res.data.settings,
         };
-        setWidgets([...widgets, newWidget]);
+        setWidgets((prev) => [...prev, newWidget]);
       }
     }
 
@@ -741,71 +772,12 @@ export default function DashboardClient({
     }
   };
 
-  const handleRemoveWidget = (widget: DashboardWidget) => {
-    // Get the title for verification
-    const content = getWidgetContent(widget);
-    let title = "וידג׳ט";
+  // C1: Use Map.get() instead of .find() for O(1) lookups; C4: wrap in useCallback
+  const getWidgetContent = useCallback((widget: DashboardWidget) => {
     if (widget.type === "ANALYTICS") {
-      title = (content as any)?.ruleName || "אנליטיקה";
+      return analyticsMap.get(String(widget.referenceId));
     } else if (widget.type === "GOAL") {
-      title = (content as any)?.name || "יעד";
-    } else if (widget.type === "TABLE_VIEWS_DASHBOARD") {
-      title = widget.settings?.title || "מיני דאשבורד";
-    } else if (widget.type === "GOALS_TABLE") {
-      title = widget.settings?.title || "טבלת יעדים";
-    } else if (widget.type === "ANALYTICS_TABLE") {
-      title = widget.settings?.title || "טבלת אנליטיקות";
-    } else if (widget.type === "MINI_CALENDAR") {
-      title = "מיני יומן";
-    } else if (widget.type === "MINI_TASKS") {
-      title = "מיני משימות";
-    } else if (widget.type === "MINI_QUOTES") {
-      title = "מיני הצעות מחיר";
-    } else if (widget.type === "MINI_MEETINGS") {
-      title = "מיני פגישות";
-    } else {
-      const { view } = content as any;
-      title = view?.name || "טבלה";
-    }
-
-    setDeleteModal({
-      isOpen: true,
-      widgetId: widget.id,
-      widgetTitle: title,
-    });
-  };
-
-  const confirmRemoveWidget = async () => {
-    const { widgetId } = deleteModal;
-    if (!widgetId) return;
-    setActionLoading("removeWidget");
-    try {
-      // Remove from database
-      const res = await removeDashboardWidget(widgetId);
-      if (res.success) {
-        setWidgets(widgets.filter((w) => w.id !== widgetId));
-        // Clean up data
-        const newData = { ...tableData };
-        delete newData[widgetId];
-        setTableData(newData);
-      }
-      setDeleteModal({ isOpen: false, widgetId: "", widgetTitle: "" });
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const getWidgetContent = (widget: DashboardWidget) => {
-    if (widget.type === "ANALYTICS") {
-      const view = initialAnalytics.find(
-        (a) => String(a.id) === String(widget.referenceId),
-      );
-      return view;
-    } else if (widget.type === "GOAL") {
-      const goal = availableGoals.find(
-        (g) => String(g.id) === String(widget.referenceId),
-      );
-      return goal;
+      return goalsMap.get(String(widget.referenceId));
     } else if (widget.type === "TABLE_VIEWS_DASHBOARD") {
       return widget.settings;
     } else if (widget.type === "GOALS_TABLE") {
@@ -816,7 +788,7 @@ export default function DashboardClient({
       return null;
     } else {
       // TABLE
-      const table = availableTables.find((t) => t.id === widget.tableId);
+      const table = tablesMap.get(widget.tableId!);
       let view;
       if (String(widget.referenceId) === "custom") {
         view = { name: "תצוגה מותאמת אישית", id: "custom" };
@@ -829,6 +801,74 @@ export default function DashboardClient({
       const fetchedData = tableData[widget.id] || [];
       const isLoading = tableLoading[widget.id];
       return { table, view, fetchedData, isLoading };
+    }
+  }, [analyticsMap, goalsMap, tablesMap, tableData, tableLoading]);
+
+  // C8: Lightweight title extraction without full content lookup
+  const getWidgetTitle = useCallback((widget: DashboardWidget): string => {
+    if (widget.type === "ANALYTICS") {
+      const view = analyticsMap.get(String(widget.referenceId));
+      return view?.ruleName || "אנליטיקה";
+    } else if (widget.type === "GOAL") {
+      const goal = goalsMap.get(String(widget.referenceId));
+      return goal?.name || "יעד";
+    } else if (widget.type === "TABLE_VIEWS_DASHBOARD") {
+      return widget.settings?.title || "מיני דאשבורד";
+    } else if (widget.type === "GOALS_TABLE") {
+      return widget.settings?.title || "טבלת יעדים";
+    } else if (widget.type === "ANALYTICS_TABLE") {
+      return widget.settings?.title || "טבלת אנליטיקות";
+    } else if (widget.type === "MINI_CALENDAR") {
+      return "מיני יומן";
+    } else if (widget.type === "MINI_TASKS") {
+      return "מיני משימות";
+    } else if (widget.type === "MINI_QUOTES") {
+      return "מיני הצעות מחיר";
+    } else if (widget.type === "MINI_MEETINGS") {
+      return "מיני פגישות";
+    } else {
+      const table = tablesMap.get(widget.tableId!);
+      if (String(widget.referenceId) === "custom") return "תצוגה מותאמת אישית";
+      const view = table?.views.find((v: any) => String(v.id) === String(widget.referenceId));
+      return view?.name || "טבלה";
+    }
+  }, [analyticsMap, goalsMap, tablesMap]);
+
+  // C8+Issue1: Stable ID-based remove handler — uses ref for widget lookup
+  const handleRemoveWidget = useCallback((widgetId: string) => {
+    const widget = widgetsRef.current.find((w) => w.id === widgetId);
+    setDeleteModal({
+      isOpen: true,
+      widgetId,
+      widgetTitle: widget ? getWidgetTitle(widget) : "",
+    });
+  }, [getWidgetTitle]);
+
+  const confirmRemoveWidget = async () => {
+    const { widgetId } = deleteModal;
+    if (!widgetId) return;
+    setActionLoading("removeWidget");
+    try {
+      // Remove from database
+      const res = await removeDashboardWidget(widgetId);
+      if (res.success) {
+        setWidgets((prev) => prev.filter((w) => w.id !== widgetId));
+        // Clean up data
+        setTableData((prev) => {
+          const newData = { ...prev };
+          delete newData[widgetId];
+          return newData;
+        });
+        setTableLoading((prev) => {
+          const newLoading = { ...prev };
+          delete newLoading[widgetId];
+          return newLoading;
+        });
+        delete lastFetchTime.current[widgetId];
+      }
+      setDeleteModal({ isOpen: false, widgetId: "", widgetTitle: "" });
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -845,23 +885,17 @@ export default function DashboardClient({
   const hasTables = availableTables.length > 0;
   // const hasGoals = availableGoals.length > 0; // Not explicitly used but good context
 
-  const handleWidgetSettingsChange = (widgetId: string, newSettings: any) => {
-    // Read widget info BEFORE async state update to avoid stale closure
-    const widget = widgets.find((w) => w.id === widgetId);
-
-    // Update local widgets state
+  // Issue2: Pure state updater — side effect moved outside
+  const handleWidgetSettingsChange = useCallback((widgetId: string, newSettings: any) => {
     setWidgets((prev) =>
-      prev.map((w) =>
-        w.id === widgetId ? { ...w, settings: newSettings } : w,
-      ),
+      prev.map((w) => w.id === widgetId ? { ...w, settings: newSettings } : w)
     );
-
-    // Fetch data with new settings
-    if (widget && widget.type === "TABLE" && widget.tableId) {
-      if (newSettings?.collapsed) return;
+    // Read widget from ref (not from state updater) to schedule side effect
+    const widget = widgetsRef.current.find((w) => w.id === widgetId);
+    if (widget && widget.type === "TABLE" && widget.tableId && !newSettings?.collapsed) {
       fetchTableData(widgetId, widget.tableId, widget.referenceId, newSettings);
     }
-  };
+  }, [fetchTableData]);
 
   // Mini Dashboard Logic
   const handleOpenMiniDashboardModal = () => {
@@ -871,12 +905,14 @@ export default function DashboardClient({
     setIsMiniDashboardModalOpen(true);
   };
 
-  const handleEditMiniDashboard = (widget: DashboardWidget) => {
+  const handleEditMiniDashboardById = useCallback((widgetId: string) => {
+    const widget = widgetsRef.current.find((w) => w.id === widgetId);
+    if (!widget) return;
     setEditingMiniDashboardId(widget.id);
     setMiniDashboardTitle(widget.settings?.title || "מיני דאשבורד");
     setMiniDashboardViews(widget.settings?.views || []);
     setIsMiniDashboardModalOpen(true);
-  };
+  }, []);
 
   const handleAddMiniDashboard = async () => {
     // Basic validation
@@ -917,7 +953,7 @@ export default function DashboardClient({
             tableId: res.data.tableId ?? undefined,
             settings: res.data.settings,
           };
-          setWidgets([...widgets, newWidget]);
+          setWidgets((prev) => [...prev, newWidget]);
         }
       }
 
@@ -1083,19 +1119,16 @@ export default function DashboardClient({
               if (widget.type === "ANALYTICS") {
                 if (!content) return null;
                 const view = content as any;
-                const isGraph = view.type === "GRAPH";
                 return (
                   <div key={widget.id} className="break-inside-avoid">
                     <AnalyticsWidget
                       id={widget.id}
                       view={view}
-                      onRemove={() => handleRemoveWidget(widget)}
-                      onOpenDetails={(view) => setSelectedView(view)}
-                      onEdit={() => handleEditWidget(widget)}
+                      onRemove={handleRemoveWidget}
+                      onOpenDetails={setSelectedView}
+                      onEdit={handleEditWidgetById}
                       settings={(widget as any).settings}
-                      onSettingsChange={(newSettings) =>
-                        handleWidgetSettingsChange(widget.id, newSettings)
-                      }
+                      onSettingsChange={handleWidgetSettingsChange}
                     />
                   </div>
                 );
@@ -1109,7 +1142,7 @@ export default function DashboardClient({
                       goal={goal}
                       metrics={GOAL_METRICS}
                       tables={availableTables}
-                      onRemove={() => handleRemoveWidget(widget)}
+                      onRemove={handleRemoveWidget}
                     />
                   </div>
                 );
@@ -1122,19 +1155,19 @@ export default function DashboardClient({
                       title={settings.title}
                       views={settings.views || []}
                       availableTables={availableTables}
-                      onRemove={() => handleRemoveWidget(widget)}
-                      onEdit={() => handleEditMiniDashboard(widget)}
+                      onRemove={handleRemoveWidget}
+                      onEdit={handleEditMiniDashboardById}
                       settings={settings}
-                      onSettingsChange={(newSettings) =>
-                        handleWidgetSettingsChange(widget.id, newSettings)
-                      }
+                      onSettingsChange={handleWidgetSettingsChange}
                     />
                   </div>
                 );
               } else if (widget.type === "GOALS_TABLE") {
                 const settings = (widget as any).settings || {};
+                // C7: Use Set for O(1) membership check instead of Array.includes O(K)
+                const goalIdSet = new Set<string>(settings.goalIds || []);
                 const displayedGoals = availableGoals.filter((g) =>
-                  (settings.goalIds || []).includes(String(g.id)),
+                  goalIdSet.has(String(g.id)),
                 );
                 return (
                   <div key={widget.id} className="break-inside-avoid">
@@ -1143,17 +1176,19 @@ export default function DashboardClient({
                       title={settings.title}
                       goals={displayedGoals}
                       tables={availableTables}
-                      onRemove={() => handleRemoveWidget(widget)}
-                      onEdit={() => handleEditGoalsTable(widget)}
+                      onRemove={handleRemoveWidget}
+                      onEdit={handleEditGoalsTableById}
                       settings={settings}
                     />
                   </div>
                 );
               } else if (widget.type === "ANALYTICS_TABLE") {
                 const settings = (widget as any).settings || {};
+                // C7: Use Set for O(1) membership check instead of Array.includes O(K)
+                const analyticsIdSet = new Set<string>(settings.analyticsIds || []);
                 const displayedAnalytics = initialAnalytics.filter(
                   (a) =>
-                    (settings.analyticsIds || []).includes(String(a.id)) &&
+                    analyticsIdSet.has(String(a.id)) &&
                     a.type !== "GRAPH",
                 );
                 return (
@@ -1162,8 +1197,8 @@ export default function DashboardClient({
                       id={widget.id}
                       title={settings.title}
                       analytics={displayedAnalytics}
-                      onRemove={() => handleRemoveWidget(widget)}
-                      onEdit={() => handleEditAnalyticsTable(widget)}
+                      onRemove={handleRemoveWidget}
+                      onEdit={handleEditAnalyticsTableById}
                       settings={settings}
                     />
                   </div>
@@ -1173,11 +1208,9 @@ export default function DashboardClient({
                   <div key={widget.id} className="break-inside-avoid">
                     <MiniCalendarWidget
                       id={widget.id}
-                      onRemove={() => handleRemoveWidget(widget)}
+                      onRemove={handleRemoveWidget}
                       settings={(widget as any).settings}
-                      onOpenSettings={() =>
-                        handleOpenMiniWidgetSettings(widget.id, "MINI_CALENDAR", (widget as any).settings)
-                      }
+                      onOpenSettings={handleOpenMiniWidgetSettingsById}
                     />
                   </div>
                 );
@@ -1186,11 +1219,9 @@ export default function DashboardClient({
                   <div key={widget.id} className="break-inside-avoid">
                     <MiniTasksWidget
                       id={widget.id}
-                      onRemove={() => handleRemoveWidget(widget)}
+                      onRemove={handleRemoveWidget}
                       settings={(widget as any).settings}
-                      onOpenSettings={() =>
-                        handleOpenMiniWidgetSettings(widget.id, "MINI_TASKS", (widget as any).settings)
-                      }
+                      onOpenSettings={handleOpenMiniWidgetSettingsById}
                     />
                   </div>
                 );
@@ -1199,11 +1230,9 @@ export default function DashboardClient({
                   <div key={widget.id} className="break-inside-avoid">
                     <MiniQuotesWidget
                       id={widget.id}
-                      onRemove={() => handleRemoveWidget(widget)}
+                      onRemove={handleRemoveWidget}
                       settings={(widget as any).settings}
-                      onOpenSettings={() =>
-                        handleOpenMiniWidgetSettings(widget.id, "MINI_QUOTES", (widget as any).settings)
-                      }
+                      onOpenSettings={handleOpenMiniWidgetSettingsById}
                     />
                   </div>
                 );
@@ -1212,7 +1241,7 @@ export default function DashboardClient({
                   <div key={widget.id} className="break-inside-avoid">
                     <MiniMeetingsWidget
                       id={widget.id}
-                      onRemove={() => handleRemoveWidget(widget)}
+                      onRemove={handleRemoveWidget}
                       settings={(widget as any).settings}
                     />
                   </div>
@@ -1237,12 +1266,10 @@ export default function DashboardClient({
                         tableId={table.id}
                         data={fetchedData}
                         isLoading={isLoading}
-                        onRemove={() => handleRemoveWidget(widget)}
-                        onEdit={() => handleEditWidget(widget)}
+                        onRemove={handleRemoveWidget}
+                        onEdit={handleEditWidgetById}
                         settings={(widget as any).settings}
-                        onSettingsChange={(newSettings) =>
-                          handleWidgetSettingsChange(widget.id, newSettings)
-                        }
+                        onSettingsChange={handleWidgetSettingsChange}
                       />
                     </div>
                   );
@@ -1256,12 +1283,10 @@ export default function DashboardClient({
                       tableName={table.name}
                       data={fetchedData}
                       isLoading={isLoading}
-                      onRemove={() => handleRemoveWidget(widget)}
-                      onEdit={() => handleEditWidget(widget)}
+                      onRemove={handleRemoveWidget}
+                      onEdit={handleEditWidgetById}
                       settings={(widget as any).settings}
-                      onSettingsChange={(newSettings) =>
-                        handleWidgetSettingsChange(widget.id, newSettings)
-                      }
+                      onSettingsChange={handleWidgetSettingsChange}
                     />
                   </div>
                 );
@@ -1518,9 +1543,8 @@ export default function DashboardClient({
                           </label>
                           <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1">
                             {(
-                              (availableTables.find(
-                                (t) => String(t.id) === selectedTable,
-                              )?.schemaJson as any) || []
+                              (tablesMap.get(Number(selectedTable))
+                                ?.schemaJson as any) || []
                             ).map((field: any) => (
                               <label
                                 key={field.name}

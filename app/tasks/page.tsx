@@ -14,7 +14,7 @@ import RateLimitFallback from "@/components/RateLimitFallback";
 async function getUsers(companyId: number) {
   const users = await prisma.user.findMany({
     where: { companyId },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
   return users;
@@ -41,13 +41,20 @@ async function getTaskSheets(
     },
     include: {
       assignee: {
-        select: { id: true, name: true, email: true },
+        select: { id: true, name: true },
       },
       createdBy: {
         select: { id: true, name: true },
       },
       items: {
         orderBy: [{ order: "asc" }],
+        select: {
+          id: true, sheetId: true, title: true, description: true,
+          priority: true, category: true, order: true, dueTime: true,
+          isCompleted: true, completedAt: true, notes: true,
+          linkedTaskId: true, onCompleteActions: true,
+          createdAt: true, updatedAt: true,
+        },
       },
     },
     orderBy: { createdAt: "desc" },
@@ -69,15 +76,15 @@ async function getMyTaskSheets(companyId: number, userId: number) {
     },
     include: {
       items: {
-        orderBy: [{ isCompleted: "asc" }, { order: "asc" }],
-        include: {
+        orderBy: [{ isCompleted: "asc" }, { priority: "asc" }, { order: "asc" }],
+        select: {
+          id: true, sheetId: true, title: true, description: true,
+          priority: true, category: true, order: true, dueTime: true,
+          isCompleted: true, completedAt: true, notes: true,
+          linkedTaskId: true, onCompleteActions: true,
+          createdAt: true, updatedAt: true,
           linkedTask: {
-            select: {
-              id: true,
-              title: true,
-              status: true,
-              priority: true,
-            },
+            select: { id: true, title: true, status: true, priority: true },
           },
         },
       },
@@ -114,33 +121,40 @@ export default async function TasksPage({
   const currentView = resolvedParams.view || "kanban";
   const isAdmin = user?.role === "admin";
 
-  // Conditionally fetch only the data needed for the current tab
-  const users = user ? await getUsers(user.companyId) : [];
+  // Fetch all independent data in parallel
+  const viewDataPromise = (() => {
+    if (!user) return Promise.resolve(null);
+    switch (currentView) {
+      case "kanban": return getTasks();
+      case "done": return getDoneTasks();
+      case "my-sheets": return getMyTaskSheets(user.companyId, user.id);
+      case "manage-sheets": return isAdmin ? getTaskSheets(user.companyId, isAdmin, user.id) : Promise.resolve([]);
+      default: return Promise.resolve(null);
+    }
+  })();
 
-  // Fetch tab-specific data only
-  const tasksResult =
-    currentView === "kanban" && user
-      ? await getTasks()
-      : null;
+  const usersPromise = user ? getUsers(user.companyId) : Promise.resolve([]);
+  const sheetCountPromise = currentView !== "my-sheets" && user
+    ? getMySheetCount(user.companyId, user.id)
+    : Promise.resolve(0);
+
+  const [viewData, users, mySheetsCountRaw] = await Promise.all([
+    viewDataPromise,
+    usersPromise,
+    sheetCountPromise,
+  ]);
+
+  // Destructure viewData based on currentView
+  const tasksResult = currentView === "kanban" ? viewData as Awaited<ReturnType<typeof getTasks>> | null : null;
   const tasksError = tasksResult && !tasksResult.success ? tasksResult.error : null;
   const initialTasks = tasksResult?.data ?? [];
 
-  const taskSheets =
-    currentView === "manage-sheets" && isAdmin && user
-      ? await getTaskSheets(user.companyId, isAdmin, user.id)
-      : [];
-
-  const mySheets =
-    currentView === "my-sheets" && user
-      ? await getMyTaskSheets(user.companyId, user.id)
-      : [];
-
-  const doneTasksResult =
-    currentView === "done" && user
-      ? await getDoneTasks()
-      : null;
+  const doneTasksResult = currentView === "done" ? viewData as Awaited<ReturnType<typeof getDoneTasks>> | null : null;
   const doneTasksError = doneTasksResult && !doneTasksResult.success ? doneTasksResult.error : null;
   const doneTasks = doneTasksResult?.data ?? [];
+
+  const mySheets = currentView === "my-sheets" ? (viewData as Awaited<ReturnType<typeof getMyTaskSheets>>) || [] : [];
+  const taskSheets = currentView === "manage-sheets" ? (viewData as Awaited<ReturnType<typeof getTaskSheets>>) || [] : [];
 
   // If the active view hit a rate limit, show full-page fallback
   if (
@@ -150,13 +164,7 @@ export default async function TasksPage({
     return <RateLimitFallback />;
   }
 
-  // Lightweight count for the tab badge (only when not already on my-sheets tab)
-  const mySheetsCount =
-    currentView === "my-sheets"
-      ? mySheets.length
-      : user
-        ? await getMySheetCount(user.companyId, user.id)
-        : 0;
+  const mySheetsCount = currentView === "my-sheets" ? mySheets.length : mySheetsCountRaw;
 
   const tabs = [
     { id: "kanban", label: "לוח קנבן", icon: LayoutGrid },

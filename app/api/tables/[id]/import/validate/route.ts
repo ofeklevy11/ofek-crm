@@ -94,7 +94,8 @@ export async function POST(
     // We will inject `importJobId` into the returned JSON summary so client can update state.
 
     const table = await prisma.tableMeta.findFirst({
-      where: { id: tableId, companyId: user.companyId },
+      where: { id: tableId, companyId: user.companyId, deletedAt: null },
+      select: { id: true, schemaJson: true },
     });
 
     if (!table) {

@@ -40,7 +40,9 @@ export async function POST(
       where: {
         id: tableId,
         companyId: user.companyId,
+        deletedAt: null,
       },
+      select: { id: true },
     });
 
     if (!table) {
@@ -67,32 +69,28 @@ export async function POST(
 
         // Check usage - specific to USER only (global limit), not per view
         try {
-          if (!(prisma as any).viewRefreshLog) {
-            log.warn("ViewRefreshLog model not found in Prisma Client, skipping rate limit check");
-          } else {
-            const usageCount = await (prisma as any).viewRefreshLog.count({
-              where: {
-                userId: user.id,
-                // viewId: viewId, // REMOVED: We want a global limit per user
-                timestamp: { gt: windowStart },
-              },
-            });
+          const usageCount = await prisma.viewRefreshLog.count({
+            where: {
+              userId: user.id,
+              timestamp: { gt: windowStart },
+            },
+          });
 
-            if (usageCount >= limit) {
-              return new NextResponse(
-                `הגעת למגבלת הרענונים (${limit} רענונים ב-4 שעות). נסה שוב מאוחר יותר.`,
-                { status: 429 },
-              );
-            }
-
-            // Log usage
-            await (prisma as any).viewRefreshLog.create({
-              data: {
-                userId: user.id,
-                viewId: viewId ?? null, // Log viewId if available, but it's not used for the limit
-              },
-            });
+          if (usageCount >= limit) {
+            return new NextResponse(
+              `הגעת למגבלת הרענונים (${limit} רענונים ב-4 שעות). נסה שוב מאוחר יותר.`,
+              { status: 429 },
+            );
           }
+
+          // Log usage
+          await prisma.viewRefreshLog.create({
+            data: {
+              userId: user.id,
+              companyId: user.companyId,
+              viewId: viewId ?? null,
+            },
+          });
         } catch (e) {
           log.error("Rate limit check failed, allowing view process", { error: String(e) });
           // We fail open - allow the refresh if the check fails

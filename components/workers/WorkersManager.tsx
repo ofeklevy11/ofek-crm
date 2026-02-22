@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
+import { getCompanyUsers, getCompanyTables } from "@/app/actions/workers";
 import {
   Users,
   Building2,
@@ -87,7 +88,8 @@ interface WorkerOnboardingProgress {
     name: string;
     _count?: { steps: number };
   };
-  stepProgress: { stepId: number; status: string }[];
+  _count?: { stepProgress: number };
+  stepProgress: { stepId: number; status?: string }[];
 }
 
 interface Stats {
@@ -109,8 +111,6 @@ interface Props {
   initialDepartments: Department[];
   initialOnboardingPaths: OnboardingPath[];
   stats: Stats;
-  users: User[];
-  tables: Array<{ id: number; name: string }>;
   userPlan?: string;
 }
 
@@ -119,8 +119,6 @@ export default function WorkersManager({
   initialDepartments,
   initialOnboardingPaths,
   stats,
-  users,
-  tables,
   userPlan = "basic",
 }: Props) {
   const [activeTab, setActiveTab] = useState<
@@ -146,6 +144,26 @@ export default function WorkersManager({
     null,
   );
   const [editingPath, setEditingPath] = useState<OnboardingPath | null>(null);
+
+  // Lazy-loaded modal data
+  const [users, setUsers] = useState<User[]>([]);
+  const [tables, setTables] = useState<Array<{ id: number; name: string }>>([]);
+  const modalDataLoaded = useRef(false);
+
+  const ensureModalData = useCallback(async () => {
+    if (modalDataLoaded.current) return;
+    modalDataLoaded.current = true;
+    try {
+      const [u, t] = await Promise.all([
+        getCompanyUsers().catch(() => [] as User[]),
+        getCompanyTables().catch(() => [] as Array<{ id: number; name: string }>),
+      ]);
+      setUsers(u);
+      setTables(t);
+    } catch {
+      modalDataLoaded.current = false;
+    }
+  }, []);
 
   const tabs = [
     {
@@ -232,6 +250,7 @@ export default function WorkersManager({
   };
 
   const handleNewClick = () => {
+    ensureModalData();
     if (activeTab === "workers") {
       if (departments.length === 0) {
         setEditingDepartment(null);
@@ -409,6 +428,7 @@ export default function WorkersManager({
               </p>
               <button
                 onClick={() => {
+                  ensureModalData();
                   setEditingDepartment(null);
                   setIsDepModalOpen(true);
                 }}
@@ -426,6 +446,7 @@ export default function WorkersManager({
               statusFilter={statusFilter}
               departmentFilter={departmentFilter}
               onEdit={(worker) => {
+                ensureModalData();
                 setEditingWorker(worker as Worker);
                 setIsWorkerModalOpen(true);
               }}
@@ -433,6 +454,7 @@ export default function WorkersManager({
                 setWorkers(workers.filter((w) => w.id !== id));
               }}
               onAdd={() => {
+                ensureModalData();
                 setEditingWorker(null);
                 setIsWorkerModalOpen(true);
               }}
@@ -442,6 +464,7 @@ export default function WorkersManager({
           <DepartmentsList
             departments={departments}
             onEdit={(dep) => {
+              ensureModalData();
               setEditingDepartment(dep);
               setIsDepModalOpen(true);
             }}
@@ -455,6 +478,7 @@ export default function WorkersManager({
             paths={onboardingPaths}
             departments={departments}
             onEdit={(path) => {
+              ensureModalData();
               setEditingPath(path as OnboardingPath);
               setIsPathModalOpen(true);
             }}

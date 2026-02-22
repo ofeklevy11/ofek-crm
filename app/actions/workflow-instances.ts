@@ -2,48 +2,22 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/permissions-server";
-import { hasUserFlag } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import { validateUserInCompany } from "@/lib/company-validation";
 import { withRetry } from "@/lib/db-retry";
-import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import {
   createWorkflowInstanceSchema,
   instanceStatusSchema,
 } from "@/lib/workflows/validation";
+import { requireWorkflowUser, sanitizeError } from "@/lib/workflows/helpers";
+import { inngest } from "@/lib/inngest/client";
+import { createNotificationForCompany } from "@/lib/notifications-internal";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("WorkflowInstances");
 
 // ── Resource caps ──────────────────────────────────────────────────────
 const MAX_INSTANCES_PER_WORKFLOW = 500;
-
-// ── Helpers ────────────────────────────────────────────────────────────
-
-/** Authenticate + authorize + rate-limit (returns user or throws) */
-async function requireWorkflowUser(rateLimitKey: "workflowRead" | "workflowMutation") {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
-  if (!hasUserFlag(user, "canViewWorkflows")) throw new Error("Forbidden");
-
-  const limited = await checkActionRateLimit(
-    String(user.id),
-    RATE_LIMITS[rateLimitKey],
-  ).catch(() => false);
-  if (limited) throw new Error("Rate limit exceeded");
-
-  return user;
-}
-
-/** Sanitize Prisma errors so internals never leak to the client */
-function sanitizeError(e: unknown): never {
-  const err = e as any;
-  if (err?.code === "P2025") throw new Error("Not found");
-  if (err?.code === "P2002") throw new Error("Duplicate entry");
-  log.error("Unexpected error", { error: String(e) });
-  throw new Error("An unexpected error occurred");
-}
 
 // ── Queries ────────────────────────────────────────────────────────────
 
@@ -112,7 +86,8 @@ export async function createWorkflowInstance(data: {
     const instance = await withRetry(() => prisma.$transaction(async (tx) => {
       const workflow = await tx.workflow.findFirst({
         where: { id: parsed.workflowId, companyId: user.companyId },
-        include: {
+        select: {
+          id: true,
           stages: { orderBy: { order: "asc" }, take: 1, select: { id: true } },
           _count: { select: { instances: true } },
         },
@@ -205,15 +180,6 @@ export async function updateWorkflowInstanceStage(
         const stageInfo = instance.workflow.stages[currentStageIndex];
         const nextStage = instance.workflow.stages[currentStageIndex + 1];
 
-        // Fetch details only for the completed stage (avoids loading all stages' details)
-        const stageWithDetails = stageInfo
-          ? await tx.workflowStage.findUnique({
-              where: { id: stageInfo.id },
-              select: { id: true, name: true, details: true },
-            })
-          : null;
-        const completedStage = stageWithDetails ? { ...stageInfo, details: stageWithDetails.details } : stageInfo;
-
         await tx.workflowInstance.update({
           where: { id: instanceId, companyId: user.companyId },
           data: {
@@ -223,7 +189,7 @@ export async function updateWorkflowInstanceStage(
           },
         });
 
-        return { instance, completedStage };
+        return { instance, stageInfo, needsAutomation: true };
       } else {
         currentCompleted = currentCompleted.filter((id) => id !== stageId);
 
@@ -236,44 +202,48 @@ export async function updateWorkflowInstanceStage(
           },
         });
 
-        return { instance, completedStage: null };
+        return { instance, stageInfo: null, needsAutomation: false };
       }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 10000 }));
 
-    // TRIGGER AUTOMATION outside transaction — dispatch to Inngest for background execution
-    const { instance, completedStage } = result;
-    if (
-      completed &&
-      completedStage &&
-      ('details' in completedStage) && (completedStage.details as any)?.systemActions?.length
-    ) {
-      try {
-        const { inngest } = await import("@/lib/inngest/client");
-        await inngest.send({
-          name: "workflow/execute-stage-automations",
-          data: {
-            stageDetails: ('details' in completedStage) ? completedStage.details : null,
-            stageName: completedStage.name,
-            stageId: completedStage.id,
-            instanceId: instance.id,
-            instanceName: instance.name,
-            companyId: user.companyId,
-            userId: user.id,
-          },
-        });
-      } catch (e) {
-        log.error("Failed to enqueue workflow automations", { error: String(e) });
+    // Fetch stage details OUTSIDE the transaction (only if needed for automation)
+    const { instance, stageInfo, needsAutomation } = result;
+    if (needsAutomation && stageInfo) {
+      const stageWithDetails = await prisma.workflowStage.findUnique({
+        where: { id: stageInfo.id },
+        select: { id: true, name: true, details: true },
+      });
+      const completedStage = stageWithDetails
+        ? { ...stageInfo, details: stageWithDetails.details }
+        : stageInfo;
+
+      if (('details' in completedStage) && (completedStage.details as any)?.systemActions?.length) {
         try {
-          const { createNotificationForCompany } = await import("@/lib/notifications-internal");
-          await createNotificationForCompany({
-            companyId: user.companyId,
-            userId: user.id,
-            title: "אוטומציות תהליך עבודה לא נשלחו",
-            message: `האוטומציות של שלב "${completedStage.name}" בתהליך "${instance.name}" לא הצליחו להישלח. נסה שוב.`,
-            link: "/workflows",
+          await inngest.send({
+            name: "workflow/execute-stage-automations",
+            data: {
+              stageDetails: completedStage.details,
+              stageName: completedStage.name,
+              stageId: completedStage.id,
+              instanceId: instance.id,
+              instanceName: instance.name,
+              companyId: user.companyId,
+              userId: user.id,
+            },
           });
-        } catch (_) {
-          // notification itself failed — nothing more we can do
+        } catch (e) {
+          log.error("Failed to enqueue workflow automations", { error: String(e) });
+          try {
+            await createNotificationForCompany({
+              companyId: user.companyId,
+              userId: user.id,
+              title: "אוטומציות תהליך עבודה לא נשלחו",
+              message: `האוטומציות של שלב "${completedStage.name}" בתהליך "${instance.name}" לא הצליחו להישלח. נסה שוב.`,
+              link: "/workflows",
+            });
+          } catch (_) {
+            // notification itself failed — nothing more we can do
+          }
         }
       }
     }

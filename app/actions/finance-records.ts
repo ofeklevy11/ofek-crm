@@ -52,30 +52,30 @@ export async function getFinanceRecords(filters?: {
   };
 
   const take = Math.min(filters?.take ?? 500, 500);
-  const records = await withRetry(() => prisma.financeRecord.findMany({
-    where,
-    orderBy: { date: "desc" },
-    take: take + 1,
-    ...(filters?.cursor && { cursor: { id: filters.cursor }, skip: 1 }),
-    select: {
-      id: true, title: true, amount: true, type: true, category: true,
-      date: true, status: true, clientId: true, description: true,
-      originId: true, syncRuleId: true, createdAt: true, updatedAt: true,
-      client: { select: { id: true, name: true } },
-      syncRule: { select: { sourceType: true, name: true } },
-    },
-  }));
+  const [records, totals] = await Promise.all([
+    withRetry(() => prisma.financeRecord.findMany({
+      where,
+      orderBy: { date: "desc" },
+      take: take + 1,
+      ...(filters?.cursor && { cursor: { id: filters.cursor }, skip: 1 }),
+      select: {
+        id: true, title: true, amount: true, type: true, category: true,
+        date: true, status: true, clientId: true, description: true,
+        originId: true, syncRuleId: true, createdAt: true, updatedAt: true,
+        client: { select: { id: true, name: true } },
+        syncRule: { select: { sourceType: true, name: true } },
+      },
+    })),
+    withRetry(() => prisma.financeRecord.groupBy({
+      by: ["type"],
+      where,
+      _sum: { amount: true },
+    })),
+  ]);
 
   const hasMore = records.length > take;
   const pageRecords = records.slice(0, take);
   const nextCursor = hasMore ? pageRecords[pageRecords.length - 1]?.id : undefined;
-
-  // Issue 26: Apply same filters to totals so they match the filtered records view
-  const totals = await withRetry(() => prisma.financeRecord.groupBy({
-    by: ["type"],
-    where,
-    _sum: { amount: true },
-  }));
 
   const income = Number(
     totals.find((t) => t.type === "INCOME")?._sum.amount || 0

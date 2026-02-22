@@ -20,29 +20,22 @@ export async function getAnalyticsRefreshUsage() {
 
     const windowStart = new Date(Date.now() - 4 * 60 * 60 * 1000); // 4 hours ago
 
-    const usageCount = await prisma.analyticsRefreshLog.count({
-      where: {
-        userId: user.id,
-        timestamp: { gt: windowStart },
-      },
-    });
-
-    // Find the oldest log in the window to calculate when the next credit returns
-    let nextResetTime: string | null = null;
-    if (usageCount > 0) {
-      const oldestLog = await prisma.analyticsRefreshLog.findFirst({
-        where: {
-          userId: user.id,
-          timestamp: { gt: windowStart },
-        },
+    const [usageCount, oldestLog] = await Promise.all([
+      prisma.analyticsRefreshLog.count({
+        where: { userId: user.id, timestamp: { gt: windowStart } },
+      }),
+      prisma.analyticsRefreshLog.findFirst({
+        where: { userId: user.id, timestamp: { gt: windowStart } },
         orderBy: { timestamp: "asc" },
-      });
+        select: { timestamp: true },
+      }),
+    ]);
 
-      if (oldestLog) {
-        nextResetTime = new Date(
-          new Date(oldestLog.timestamp).getTime() + 4 * 60 * 60 * 1000,
-        ).toISOString();
-      }
+    let nextResetTime: string | null = null;
+    if (oldestLog) {
+      nextResetTime = new Date(
+        oldestLog.timestamp.getTime() + 4 * 60 * 60 * 1000,
+      ).toISOString();
     }
 
     // Probabilistic cleanup: only 5% of calls trigger delete to reduce DB write contention

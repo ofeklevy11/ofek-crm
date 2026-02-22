@@ -13,6 +13,7 @@ import {
   processDirectDialAutomation,
   processTimeBasedAutomationJob,
   processEventAutomationJob,
+  processMeetingReminderJob,
 } from "@/lib/inngest/functions/automation-jobs";
 import {
   slaScan,
@@ -62,6 +63,7 @@ const functions = [
   processDirectDialAutomation,
   processTimeBasedAutomationJob,
   processEventAutomationJob,
+  processMeetingReminderJob,
   slaScan,
   slaBreachHandler,
   processFinanceSyncJob,

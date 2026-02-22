@@ -2,7 +2,6 @@ import { cache } from "react";
 import { redirect, notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { getWorker, getOnboardingPathSummaries } from "@/app/actions/workers";
-import { prisma } from "@/lib/prisma";
 import WorkerDetails from "@/components/workers/WorkerDetails";
 import RateLimitFallback from "@/components/RateLimitFallback";
 import { isRateLimitError } from "@/lib/rate-limit-utils";
@@ -11,26 +10,23 @@ interface Props {
   params: Promise<{ id: string }>;
 }
 
-const getWorkerName = cache(async (id: number, companyId: number) => {
-  return prisma.worker
-    .findFirst({
-      where: { id, companyId, deletedAt: null },
-      select: { firstName: true, lastName: true },
-    })
-    .catch(() => null);
-});
+const getCachedWorker = cache((id: number) => getWorker(id));
 
 export async function generateMetadata({ params }: Props) {
   const { id } = await params;
   const user = await getCurrentUser();
-  const worker = user
-    ? await getWorkerName(Number(id), user.companyId)
-    : null;
-  return {
-    title: worker
-      ? `${worker.firstName} ${worker.lastName} | Workers`
-      : "Worker Details",
-  };
+  if (!user) return { title: "Worker Details" };
+
+  try {
+    const worker = await getCachedWorker(Number(id));
+    return {
+      title: worker
+        ? `${worker.firstName} ${worker.lastName} | Workers`
+        : "Worker Details",
+    };
+  } catch {
+    return { title: "Worker Details" };
+  }
 }
 
 export default async function WorkerPage({ params }: Props) {
@@ -46,7 +42,7 @@ export default async function WorkerPage({ params }: Props) {
 
   try {
     [worker, onboardingPaths] = await Promise.all([
-      getWorker(Number(id)),
+      getCachedWorker(Number(id)),
       getOnboardingPathSummaries(),
     ]);
   } catch (e) {

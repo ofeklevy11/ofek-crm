@@ -7,7 +7,6 @@ import {
   getOnboardingPaths,
   getWorkersStats,
 } from "@/app/actions/workers";
-import { prisma } from "@/lib/prisma";
 import WorkersManager from "@/components/workers/WorkersManager";
 import RateLimitFallback from "@/components/RateLimitFallback";
 import { isRateLimitError } from "@/lib/rate-limit-utils";
@@ -23,10 +22,9 @@ export default async function WorkersPage() {
     redirect("/login");
   }
 
-  // Fetch data with error handling + logging (P3)
-  let workersResult, departments, onboardingPaths, stats, users, tables;
+  let workersResult, departments, onboardingPaths, stats;
   try {
-    [workersResult, departments, onboardingPaths, stats, users, tables] =
+    [workersResult, departments, onboardingPaths, stats] =
       await Promise.all([
         getWorkers().catch((err) => {
           if (isRateLimitError(err)) throw err;
@@ -48,26 +46,6 @@ export default async function WorkersPage() {
           console.error("[Workers] Failed to load stats:", err);
           return { totalWorkers: 0, onboardingWorkers: 0, activeWorkers: 0, departments: 0, onboardingPaths: 0 };
         }),
-        prisma.user
-          .findMany({
-            where: { companyId: user.companyId },
-            select: { id: true, name: true, email: true },
-            take: 1000,
-          })
-          .catch((err) => {
-            console.error("[Workers] Failed to load users:", err);
-            return [];
-          }),
-        prisma.tableMeta
-          .findMany({
-            where: { companyId: user.companyId },
-            select: { id: true, name: true },
-            take: 1000,
-          })
-          .catch((err) => {
-            console.error("[Workers] Failed to load tables:", err);
-            return [];
-          }),
       ]);
   } catch (e) {
     if (isRateLimitError(e)) return <RateLimitFallback />;
@@ -87,8 +65,6 @@ export default async function WorkersPage() {
           initialDepartments={departments}
           initialOnboardingPaths={onboardingPaths}
           stats={stats}
-          users={users}
-          tables={tables}
           userPlan={user.isPremium || "basic"}
         />
       </Suspense>

@@ -5,6 +5,8 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag, canReadTable } from "@/lib/permissions";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
+const dtFmt = new Intl.DateTimeFormat('he-IL', { dateStyle: 'short', timeStyle: 'short' });
+
 /** Format a single record as a CSV or TSV row. */
 function formatRow(
   record: any,
@@ -24,9 +26,9 @@ function formatRow(
   return [
     record.id,
     ...fieldValues,
-    wrap(new Date(record.createdAt).toLocaleString()),
+    wrap(dtFmt.format(new Date(record.createdAt))),
     wrap(record.creator?.name || ""),
-    wrap(new Date(record.updatedAt).toLocaleString()),
+    wrap(dtFmt.format(new Date(record.updatedAt))),
     wrap(record.updater?.name || ""),
   ].join(sep);
 }
@@ -63,7 +65,9 @@ export async function GET(
       where: {
         id: tableIdNum,
         companyId: user.companyId,
+        deletedAt: null,
       },
+      select: { id: true, name: true, schemaJson: true },
     });
 
     if (!table) {

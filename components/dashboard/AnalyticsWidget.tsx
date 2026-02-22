@@ -1,7 +1,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { X, List, Eye, EyeOff, Settings } from "lucide-react";
-import { useState } from "react";
+import { useState, memo } from "react";
 import { useRouter } from "next/navigation";
 import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
 import {
@@ -168,14 +168,14 @@ function ConfigDetails({ config, type }: { config: any; type: string }) {
 interface AnalyticsWidgetProps {
   id: string; // The DND id (e.g. "analytics-123")
   view: any; // The analytics data object
-  onRemove: () => void;
+  onRemove: (id: string) => void;
   onOpenDetails?: (view: any) => void;
-  onEdit?: () => void;
+  onEdit?: (id: string) => void;
   settings?: any;
-  onSettingsChange?: (newSettings: any) => void;
+  onSettingsChange?: (id: string, newSettings: any) => void;
 }
 
-export default function AnalyticsWidget({
+function AnalyticsWidget({
   id,
   view,
   onRemove,
@@ -219,7 +219,7 @@ export default function AnalyticsWidget({
       await updateDashboardWidgetSettings(id, newSettings);
 
       if (onSettingsChange) {
-        onSettingsChange(newSettings);
+        onSettingsChange(id, newSettings);
       }
       router.refresh();
     } catch (err) {
@@ -334,7 +334,7 @@ export default function AnalyticsWidget({
               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
               onPointerDown={(e) => {
                 e.stopPropagation();
-                onRemove();
+                onRemove(id);
               }}
               title="הסר מהדאשבורד"
             >
@@ -570,3 +570,5 @@ export default function AnalyticsWidget({
     </div>
   );
 }
+
+export default memo(AnalyticsWidget);

@@ -63,15 +63,40 @@ async function getCached<T>(key: string, fetcher: () => Promise<T>): Promise<T> 
   return data;
 }
 
-async function invalidateWorkersCache(companyId: number) {
+async function invalidateDepartmentsCache(companyId: number) {
   try {
     await redis.del(`workers:${companyId}:departments`);
-    const prefix = redis.options.keyPrefix || "";
-    const pathKeys = await redis.keys(`workers:${companyId}:paths*`);
-    if (pathKeys.length > 0) {
-      await redis.del(...pathKeys.map(k => k.startsWith(prefix) ? k.slice(prefix.length) : k));
-    }
   } catch { /* non-critical */ }
+}
+
+async function invalidatePathsCache(companyId: number) {
+  try {
+    const prefix = redis.options.keyPrefix || "";
+    const prefixLen = prefix.length;
+    const pattern = `workers:${companyId}:paths*`;
+    let cursor = "0";
+    let iterations = 0;
+    do {
+      const [nextCursor, keys] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 100);
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        const pipeline = redis.pipeline();
+        for (const key of keys) {
+          pipeline.del(key.slice(prefixLen));
+        }
+        await pipeline.exec();
+      }
+      iterations++;
+      if (iterations >= 1000) break;
+    } while (cursor !== "0");
+  } catch { /* non-critical */ }
+}
+
+async function invalidateWorkersCache(companyId: number) {
+  await Promise.all([
+    invalidateDepartmentsCache(companyId),
+    invalidatePathsCache(companyId),
+  ]);
 }
 
 // ==========================================
@@ -175,7 +200,7 @@ export async function createDepartment(data: {
     }));
 
     revalidatePath("/workers");
-    await invalidateWorkersCache(user.companyId);
+    await invalidateDepartmentsCache(user.companyId);
     return department;
   } catch (e: any) {
     wrapPrismaError(e, "Department");
@@ -227,7 +252,7 @@ export async function updateDepartment(
     }));
 
     revalidatePath("/workers");
-    await invalidateWorkersCache(user.companyId);
+    await invalidateDepartmentsCache(user.companyId);
     return department;
   } catch (e: any) {
     wrapPrismaError(e, "Department");
@@ -260,7 +285,7 @@ export async function deleteDepartment(id: number) {
   }
 
   revalidatePath("/workers");
-  await invalidateWorkersCache(user.companyId);
+  await invalidateDepartmentsCache(user.companyId);
   return { success: true };
 }
 
@@ -328,8 +353,14 @@ export async function getWorkers(filters?: {
                 _count: { select: { steps: true } },
               },
             },
+            _count: {
+              select: {
+                stepProgress: true,
+              },
+            },
             stepProgress: {
-              select: { stepId: true, status: true },
+              where: { status: "COMPLETED" },
+              select: { stepId: true },
             },
           },
         },
@@ -886,7 +917,7 @@ export async function updateOnboardingPath(
     }, { maxWait: 5000, timeout: 10000 }));
 
     revalidatePath("/workers");
-    await invalidateWorkersCache(user.companyId);
+    await invalidatePathsCache(user.companyId);
     return path;
   } catch (e: any) {
     wrapPrismaError(e, "Onboarding path");
@@ -992,7 +1023,7 @@ export async function createOnboardingStep(data: {
     }));
 
     revalidatePath("/workers");
-    await invalidateWorkersCache(user.companyId);
+    await invalidatePathsCache(user.companyId);
     return step;
   } catch (e: any) {
     wrapPrismaError(e, "Onboarding step");
@@ -1060,7 +1091,7 @@ export async function updateOnboardingStep(
     }, { maxWait: 5000, timeout: 10000 }));
 
     revalidatePath("/workers");
-    await invalidateWorkersCache(user.companyId);
+    await invalidatePathsCache(user.companyId);
     return step;
   } catch (e: any) {
     wrapPrismaError(e, "Onboarding step");
@@ -1092,7 +1123,7 @@ export async function deleteOnboardingStep(id: number) {
   }
 
   revalidatePath("/workers");
-  await invalidateWorkersCache(user.companyId);
+  await invalidatePathsCache(user.companyId);
   return { success: true };
 }
 
@@ -1146,7 +1177,7 @@ export async function reorderOnboardingSteps(
   }
 
   revalidatePath("/workers");
-  await invalidateWorkersCache(user.companyId);
+  await invalidatePathsCache(user.companyId);
   return { success: true };
 }
 
@@ -1187,16 +1218,17 @@ export async function assignOnboardingPath(workerId: number, pathId: number) {
   requireManageWorkers(user);
   await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.mutation);
 
-  const path = await withRetry(() => prisma.onboardingPath.findFirst({
-    where: { id: pathId, companyId: user.companyId },
-    select: { id: true, steps: { select: { id: true } } },
-  }));
+  const [path, worker] = await Promise.all([
+    withRetry(() => prisma.onboardingPath.findFirst({
+      where: { id: pathId, companyId: user.companyId },
+      select: { id: true, steps: { select: { id: true } } },
+    })),
+    withRetry(() => prisma.worker.findFirst({
+      where: { id: workerId, companyId: user.companyId, deletedAt: null },
+      select: { id: true },
+    })),
+  ]);
   if (!path) throw new Error("Onboarding path not found");
-
-  const worker = await withRetry(() => prisma.worker.findFirst({
-    where: { id: workerId, companyId: user.companyId, deletedAt: null },
-    select: { id: true },
-  }));
   if (!worker) throw new Error("Worker not found or access denied");
 
   try {
@@ -1208,7 +1240,7 @@ export async function assignOnboardingPath(workerId: number, pathId: number) {
     );
 
     revalidatePath("/workers");
-    await invalidateWorkersCache(user.companyId);
+    await invalidatePathsCache(user.companyId);
     return onboarding;
   } catch (e: any) {
     wrapPrismaError(e, "Onboarding assignment");
@@ -1244,28 +1276,26 @@ export async function updateStepProgress(
     }
   }
 
-  // Get the step with its onCompleteActions — scoped by companyId
-  const step = await withRetry(() => prisma.onboardingStep.findFirst({
-    where: { id: stepId, path: { companyId: user.companyId } },
-    select: {
-      id: true,
-      title: true,
-      onCompleteActions: true,
-      path: {
-        select: { name: true, companyId: true },
+  // Validate step + onboarding ownership in parallel
+  const [step, onboardingCheck] = await Promise.all([
+    withRetry(() => prisma.onboardingStep.findFirst({
+      where: { id: stepId, path: { companyId: user.companyId } },
+      select: {
+        id: true,
+        title: true,
+        onCompleteActions: true,
+        path: {
+          select: { name: true, companyId: true },
+        },
       },
-    },
-  }));
+    })),
+    withRetry(() => prisma.workerOnboarding.findFirst({
+      where: { id: onboardingId, worker: { companyId: user.companyId } },
+      select: { id: true, workerId: true },
+    })),
+  ]);
 
-  if (!step) {
-    throw new Error("Step not found or access denied");
-  }
-
-  // Lightweight ownership check
-  const onboardingCheck = await withRetry(() => prisma.workerOnboarding.findFirst({
-    where: { id: onboardingId, worker: { companyId: user.companyId } },
-    select: { id: true, workerId: true },
-  }));
+  if (!step) throw new Error("Step not found or access denied");
   if (!onboardingCheck) throw new Error("Onboarding not found or access denied");
 
   // Wrap upsert in transaction to detect if status actually changed
@@ -1325,12 +1355,17 @@ export async function updateStepProgress(
     if (lockAcquired) {
       const onboarding = await withRetry(() => prisma.workerOnboarding.findFirst({
         where: { id: onboardingId },
-        include: {
+        select: {
+          id: true,
+          status: true,
           worker: {
             select: { id: true, firstName: true, lastName: true, email: true, phone: true, position: true, status: true, departmentId: true },
           },
           path: {
-            include: {
+            select: {
+              id: true,
+              name: true,
+              companyId: true,
               steps: { select: { id: true, isRequired: true } },
             },
           },
@@ -1418,47 +1453,45 @@ export async function getWorkersByOnboardingPath(pathId: number) {
 
   await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.read);
 
-  const path = await withRetry(() => prisma.onboardingPath.findFirst({
-    where: { id: pathId, companyId: user.companyId },
-    select: {
-      steps: { select: { id: true } },
-    },
-  }));
+  const [path, workerProgress] = await Promise.all([
+    withRetry(() => prisma.onboardingPath.findFirst({
+      where: { id: pathId, companyId: user.companyId },
+      select: {
+        _count: { select: { steps: true } },
+      },
+    })),
+    withRetry(() => prisma.workerOnboarding.findMany({
+      where: {
+        pathId,
+        worker: { companyId: user.companyId, deletedAt: null },
+      },
+      select: {
+        id: true,
+        status: true,
+        completedAt: true,
+        createdAt: true,
+        worker: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+            position: true,
+            department: { select: { name: true, color: true } },
+          },
+        },
+        stepProgress: { where: { status: "COMPLETED" }, select: { stepId: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 500,
+    })),
+  ]);
   if (!path) throw new Error("Path not found or access denied");
 
-  const totalSteps = path.steps.length;
-  const stepIdSet = new Set(path.steps.map((s) => s.id));
-
-  const workerProgress = await withRetry(() => prisma.workerOnboarding.findMany({
-    where: {
-      pathId,
-      worker: { companyId: user.companyId, deletedAt: null },
-    },
-    select: {
-      id: true,
-      status: true,
-      completedAt: true,
-      createdAt: true,
-      worker: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          avatar: true,
-          position: true,
-          department: { select: { name: true, color: true } },
-        },
-      },
-      stepProgress: { select: { stepId: true, status: true } },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 500,
-  }));
+  const totalSteps = path._count.steps;
 
   return workerProgress.map((wp) => {
-    const completedSteps = wp.stepProgress.filter(
-      (sp) => sp.status === "COMPLETED" && stepIdSet.has(sp.stepId),
-    ).length;
+    const completedSteps = Math.min(wp.stepProgress.length, totalSteps);
     const progress =
       totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
 
@@ -1480,6 +1513,24 @@ export async function getWorkersByOnboardingPath(pathId: number) {
       completedAt: wp.completedAt,
     };
   });
+}
+
+// Lazy-load step progress for a specific onboarding (used by expanded rows in WorkersList)
+export async function getWorkerStepProgress(onboardingId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Not authenticated");
+  requireViewWorkers(user);
+
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.read);
+
+  return withRetry(() => prisma.workerOnboardingStep.findMany({
+    where: {
+      onboardingId,
+      onboarding: { worker: { companyId: user.companyId, deletedAt: null } },
+    },
+    select: { stepId: true, status: true },
+    orderBy: { stepId: "asc" },
+  }));
 }
 
 // ==========================================
@@ -1555,7 +1606,6 @@ export async function createWorkerTask(data: {
     }));
 
     revalidatePath("/workers");
-    await invalidateWorkersCache(user.companyId);
     return task;
   } catch (e: any) {
     wrapPrismaError(e, "Worker task");
@@ -1609,7 +1659,6 @@ export async function updateWorkerTask(
     }));
 
     revalidatePath("/workers");
-    await invalidateWorkersCache(user.companyId);
     return task;
   } catch (e: any) {
     wrapPrismaError(e, "Worker task");
@@ -1631,7 +1680,6 @@ export async function deleteWorkerTask(id: number) {
   }
 
   revalidatePath("/workers");
-  await invalidateWorkersCache(user.companyId);
   return { success: true };
 }
 
@@ -1647,18 +1695,14 @@ export async function getWorkersStats() {
   await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.read);
 
   const [
-    totalWorkers,
-    onboardingWorkers,
-    activeWorkers,
+    workersByStatus,
     departments,
     onboardingPaths,
   ] = await Promise.all([
-    withRetry(() => prisma.worker.count({ where: { companyId: user.companyId, deletedAt: null } })),
-    withRetry(() => prisma.worker.count({
-      where: { companyId: user.companyId, status: "ONBOARDING", deletedAt: null },
-    })),
-    withRetry(() => prisma.worker.count({
-      where: { companyId: user.companyId, status: "ACTIVE", deletedAt: null },
+    withRetry(() => prisma.worker.groupBy({
+      by: ["status"],
+      where: { companyId: user.companyId, deletedAt: null },
+      _count: true,
     })),
     withRetry(() => prisma.department.count({ where: { companyId: user.companyId, deletedAt: null } })),
     withRetry(() => prisma.onboardingPath.count({
@@ -1666,10 +1710,13 @@ export async function getWorkersStats() {
     })),
   ]);
 
+  const statusCounts = new Map(workersByStatus.map(g => [g.status, g._count]));
+  const totalWorkers = workersByStatus.reduce((sum, g) => sum + g._count, 0);
+
   return {
     totalWorkers,
-    onboardingWorkers,
-    activeWorkers,
+    onboardingWorkers: statusCounts.get("ONBOARDING") ?? 0,
+    activeWorkers: statusCounts.get("ACTIVE") ?? 0,
     departments,
     onboardingPaths,
   };
@@ -1696,6 +1743,38 @@ export async function getOnboardingPathSummaries(departmentId?: number) {
     },
     orderBy: { name: "asc" },
     take: 500,
+  }));
+}
+
+// ==========================================
+// LAZY-LOADED DATA FOR MODALS
+// ==========================================
+
+export async function getCompanyUsers() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Not authenticated");
+  requireViewWorkers(user);
+
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.read);
+
+  return withRetry(() => prisma.user.findMany({
+    where: { companyId: user.companyId },
+    select: { id: true, name: true, email: true },
+    take: 1000,
+  }));
+}
+
+export async function getCompanyTables() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Not authenticated");
+  requireViewWorkers(user);
+
+  await checkServerActionRateLimit(String(user.id), WORKER_RATE_LIMITS.read);
+
+  return withRetry(() => prisma.tableMeta.findMany({
+    where: { companyId: user.companyId },
+    select: { id: true, name: true },
+    take: 1000,
   }));
 }
 
@@ -1733,148 +1812,142 @@ async function executeOnboardingStepAutomations(
 
   log.debug("Executing automations for onboarding step", { count: actions.length, stepTitle: step.title });
 
-  for (const action of actions) {
-    try {
-      switch (action.actionType) {
-        case "UPDATE_RECORD":
-          await executeUpdateRecordAction(action.config, step.path.companyId);
-          break;
-        case "CREATE_RECORD":
-          await executeCreateRecordAction(action.config, step.path.companyId);
-          break;
-        case "CREATE_TASK":
-          await executeCreateTaskAction(action.config, user);
-          break;
-        case "UPDATE_TASK":
-          await executeUpdateTaskAction(action.config, step.path.companyId);
-          break;
-        case "CREATE_FINANCE":
-          await executeCreateFinanceAction(action.config, step.path.companyId);
-          break;
-        case "SEND_NOTIFICATION":
-          await executeSendNotificationAction(action.config, step, user);
-          break;
-        case "SEND_WHATSAPP":
-          if (workerData) {
-            let phoneNumber: string | null = null;
+  const executeAction = async (action: OnboardingStepAction): Promise<void> => {
+    switch (action.actionType) {
+      case "UPDATE_RECORD":
+        await executeUpdateRecordAction(action.config, step.path.companyId);
+        break;
+      case "CREATE_RECORD":
+        await executeCreateRecordAction(action.config, step.path.companyId);
+        break;
+      case "CREATE_TASK":
+        await executeCreateTaskAction(action.config, user);
+        break;
+      case "UPDATE_TASK":
+        await executeUpdateTaskAction(action.config, step.path.companyId);
+        break;
+      case "CREATE_FINANCE":
+        await executeCreateFinanceAction(action.config, step.path.companyId);
+        break;
+      case "SEND_NOTIFICATION":
+        await executeSendNotificationAction(action.config, step, user);
+        break;
+      case "SEND_WHATSAPP":
+        if (workerData) {
+          let phoneNumber: string | null = null;
 
-            if (
-              action.config.phoneSource === "table" &&
-              action.config.waTableId &&
-              action.config.waPhoneColumn
-            ) {
-              try {
-                let record;
-                if (action.config.waRecordId) {
-                  record = await withRetry(() => prisma.record.findFirst({
-                    where: {
-                      id: Number(action.config.waRecordId),
-                      tableId: Number(action.config.waTableId),
-                      companyId: step.path.companyId,
-                    },
-                    select: { data: true },
-                  }));
-                } else {
-                  record = await withRetry(() => prisma.record.findFirst({
-                    where: {
-                      tableId: Number(action.config.waTableId),
-                      companyId: step.path.companyId,
-                    },
-                    orderBy: { createdAt: "desc" },
-                    select: { data: true },
-                  }));
-                }
-
-                if (record && record.data) {
-                  const recordData = record.data as Record<string, unknown>;
-                  phoneNumber = recordData[
-                    action.config.waPhoneColumn as string
-                  ] as string;
-                  log.debug("WhatsApp: Fetched phone from table", { tableId: action.config.waTableId, column: action.config.waPhoneColumn });
-                } else {
-                  log.warn("WhatsApp: Record not found in table", { tableId: action.config.waTableId });
-                }
-              } catch (fetchError) {
-                log.error("WhatsApp: Error fetching phone from table", { error: String(fetchError) });
-              }
-            } else {
-              phoneNumber = action.config.phone as string;
-            }
-
-            if (phoneNumber) {
-              try {
-                await inngest.send({
-                  id: `wa-worker-${step.path.companyId}-${phoneNumber}-${step.id}-${Math.floor(Date.now() / 5000)}`,
-                  name: "automation/send-whatsapp",
-                  data: {
+          if (
+            action.config.phoneSource === "table" &&
+            action.config.waTableId &&
+            action.config.waPhoneColumn
+          ) {
+            try {
+              let record;
+              if (action.config.waRecordId) {
+                record = await withRetry(() => prisma.record.findFirst({
+                  where: {
+                    id: Number(action.config.waRecordId),
+                    tableId: Number(action.config.waTableId),
                     companyId: step.path.companyId,
-                    phone: String(phoneNumber),
-                    content: action.config.message || "",
-                    messageType: action.config.messageType,
-                    mediaFileId: action.config.mediaFileId,
-                    delay: action.config.delay,
                   },
-                });
-              } catch (err) {
-                log.error("Failed to enqueue WhatsApp job", { error: String(err) });
-              }
-            } else {
-              log.warn("WhatsApp: No valid phone number available");
-            }
-          }
-          break;
-        case "WEBHOOK":
-          if (workerData) {
-            const webhookData = {
-              ...workerData,
-              stepId: step.id,
-              stepTitle: step.title,
-              pathName: step.path.name,
-              actorName: user.name,
-            };
-            const rawWebhookUrl = action.config.webhookUrl || action.config.url;
-            if (rawWebhookUrl) {
-              // SSRF protection: validate webhook URL
-              let webhookUrl: string;
-              try {
-                webhookUrl = validateWebhookUrl(String(rawWebhookUrl));
-              } catch (err) {
-                log.error("Webhook URL rejected", { error: String(err) });
-                break;
-              }
-              try {
-                await inngest.send({
-                  id: `webhook-worker-${step.path.companyId}-${step.id}-${Math.floor(Date.now() / 5000)}`,
-                  name: "automation/send-webhook",
-                  data: {
-                    url: webhookUrl,
+                  select: { data: true },
+                }));
+              } else {
+                record = await withRetry(() => prisma.record.findFirst({
+                  where: {
+                    tableId: Number(action.config.waTableId),
                     companyId: step.path.companyId,
-                    ruleId: 0,
-                    payload: {
-                      ruleId: 0,
-                      ruleName: `Onboarding: ${step.title}`,
-                      triggerType: "ONBOARDING_STEP_COMPLETED",
-                      companyId: step.path.companyId,
-                      data: webhookData,
-                    },
                   },
-                });
-              } catch (err) {
-                log.error("Failed to enqueue Webhook job", { error: String(err) });
+                  orderBy: { createdAt: "desc" },
+                  select: { data: true },
+                }));
               }
-            } else {
-              log.error("Webhook: No URL configured");
+
+              if (record && record.data) {
+                const recordData = record.data as Record<string, unknown>;
+                phoneNumber = recordData[
+                  action.config.waPhoneColumn as string
+                ] as string;
+                log.debug("WhatsApp: Fetched phone from table", { tableId: action.config.waTableId, column: action.config.waPhoneColumn });
+              } else {
+                log.warn("WhatsApp: Record not found in table", { tableId: action.config.waTableId });
+              }
+            } catch (fetchError) {
+              log.error("WhatsApp: Error fetching phone from table", { error: String(fetchError) });
             }
+          } else {
+            phoneNumber = action.config.phone as string;
           }
-          break;
-        case "CREATE_CALENDAR_EVENT":
-          await executeCreateCalendarEventAction(action.config, user);
-          break;
-        default:
-          log.warn("Unknown action type", { actionType: action.actionType });
-      }
-    } catch (error) {
-      log.error("Failed to execute action for step", { actionType: action.actionType, stepTitle: step.title, pathName: step.path.name, companyId: step.path.companyId, error: String(error) });
+
+          if (phoneNumber) {
+            await inngest.send({
+              id: `wa-worker-${step.path.companyId}-${phoneNumber}-${step.id}-${Math.floor(Date.now() / 5000)}`,
+              name: "automation/send-whatsapp",
+              data: {
+                companyId: step.path.companyId,
+                phone: String(phoneNumber),
+                content: action.config.message || "",
+                messageType: action.config.messageType,
+                mediaFileId: action.config.mediaFileId,
+                delay: action.config.delay,
+              },
+            });
+          } else {
+            log.warn("WhatsApp: No valid phone number available");
+          }
+        }
+        break;
+      case "WEBHOOK":
+        if (workerData) {
+          const webhookData = {
+            ...workerData,
+            stepId: step.id,
+            stepTitle: step.title,
+            pathName: step.path.name,
+            actorName: user.name,
+          };
+          const rawWebhookUrl = action.config.webhookUrl || action.config.url;
+          if (rawWebhookUrl) {
+            const webhookUrl = validateWebhookUrl(String(rawWebhookUrl));
+            await inngest.send({
+              id: `webhook-worker-${step.path.companyId}-${step.id}-${Math.floor(Date.now() / 5000)}`,
+              name: "automation/send-webhook",
+              data: {
+                url: webhookUrl,
+                companyId: step.path.companyId,
+                ruleId: 0,
+                payload: {
+                  ruleId: 0,
+                  ruleName: `Onboarding: ${step.title}`,
+                  triggerType: "ONBOARDING_STEP_COMPLETED",
+                  companyId: step.path.companyId,
+                  data: webhookData,
+                },
+              },
+            });
+          } else {
+            log.error("Webhook: No URL configured");
+          }
+        }
+        break;
+      case "CREATE_CALENDAR_EVENT":
+        await executeCreateCalendarEventAction(action.config, user);
+        break;
+      default:
+        log.warn("Unknown action type", { actionType: action.actionType });
+    }
+  };
+
+  const results = await Promise.allSettled(actions.map(executeAction));
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].status === "rejected") {
+      log.error("Failed to execute action for step", {
+        actionType: actions[i].actionType,
+        stepTitle: step.title,
+        pathName: step.path.name,
+        companyId: step.path.companyId,
+        error: String((results[i] as PromiseRejectedResult).reason),
+      });
     }
   }
 }

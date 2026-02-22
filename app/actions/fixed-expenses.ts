@@ -5,16 +5,8 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import { VALID_FIXED_EXPENSE_STATUSES } from "@/lib/finance-constants";
-
-// Helper to get clamped date
-const getValidDate = (y: number, m: number, d: number) => {
-  const date = new Date(y, m, d);
-  // Check overflow (e.g. Feb 30 -> Mar 2)
-  if (date.getMonth() !== ((m % 12) + 12) % 12) {
-    return new Date(y, m + 1, 0); // Last day of intended month
-  }
-  return date;
-};
+import { getValidDate } from "@/lib/date-utils";
+import { withRetry } from "@/lib/db-retry";
 
 export async function getFixedExpenses(opts?: { cursor?: number; take?: number }) {
   const user = await getCurrentUser();
@@ -22,41 +14,39 @@ export async function getFixedExpenses(opts?: { cursor?: number; take?: number }
   if (!hasUserFlag(user, "canViewFinance")) throw new Error("Forbidden");
 
   const take = Math.min(opts?.take ?? 500, 500);
-  const expenses = await prisma.fixedExpense.findMany({
-    where: {
-      companyId: user.companyId,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-    take: take + 1,
-    ...(opts?.cursor && { cursor: { id: opts.cursor }, skip: 1 }),
-    select: {
-      id: true, title: true, amount: true, frequency: true,
-      payDay: true, category: true, description: true,
-      startDate: true, status: true,
-      createdAt: true, updatedAt: true,
-    },
-  });
+  const [expenses, financeRecords] = await Promise.all([
+    withRetry(() => prisma.fixedExpense.findMany({
+      where: {
+        companyId: user.companyId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: take + 1,
+      ...(opts?.cursor && { cursor: { id: opts.cursor }, skip: 1 }),
+      select: {
+        id: true, title: true, amount: true, frequency: true,
+        payDay: true, category: true, description: true,
+        startDate: true, status: true,
+        createdAt: true, updatedAt: true,
+      },
+    })),
+    withRetry(() => prisma.financeRecord.findMany({
+      where: {
+        companyId: user.companyId,
+        deletedAt: null,
+        originId: {
+          startsWith: "fixed_",
+        },
+      },
+      select: {
+        originId: true,
+      },
+    })),
+  ]);
 
   const hasMore = expenses.length > take;
   const pageExpenses = expenses.slice(0, take);
-
-  // Fetch all finance records related to fixed expenses to calculate status
-  const financeRecords = await prisma.financeRecord.findMany({
-    where: {
-      companyId: user.companyId,
-      deletedAt: null,
-      originId: {
-        startsWith: "fixed_",
-      },
-    },
-    select: {
-      originId: true,
-      date: true,
-    },
-    take: 5000,
-  });
 
   const recordMap = new Set(financeRecords.map((r) => r.originId));
   const today = new Date();
@@ -88,7 +78,6 @@ export async function getFixedExpenses(opts?: { cursor?: number; take?: number }
     }
 
     let iterations = 0;
-    // Look ahead up to 50 cycles or until we find the next due date in the future
     while (iterations < 100) {
       const yStr = checkDate.getFullYear();
       const mStr = checkDate.getMonth() + 1;
@@ -98,49 +87,20 @@ export async function getFixedExpenses(opts?: { cursor?: number; take?: number }
       const exists = recordMap.has(originId);
 
       if (exists) {
-        if (checkDate > today) {
-          paidFutureCount++;
-        }
+        if (checkDate > today) paidFutureCount++;
         lastPaidDate = new Date(checkDate);
       } else {
-        // This record is missing
-        if (!nextPaymentDate) {
-          nextPaymentDate = new Date(checkDate);
-        }
-
-        if (checkDate <= today) {
-          pendingCount++;
-        } else {
-          // Future gap found - we can stop looking for "Paid Future" usually,
-          // assuming contiguous payments. But let's continue a bit to be safe?
-          // Actually, usually we stop counting "Paid Ahead" once we find a gap?
-          // No, let's just count all Paid Future found in the loop range.
-          // But we should stop the loop eventually.
-          // If we found nextPaymentDate AND we are in the future, we can probably stop shortly.
-        }
+        if (!nextPaymentDate) nextPaymentDate = new Date(checkDate);
+        if (checkDate <= today) pendingCount++;
       }
 
-      // Stop condition: We are in the future AND we found the next payment date AND we haven't found a paid record for a while?
-      // Simpler: Just run for a fixed horizon from 'today' if we enter future?
-      // Or just run 100 iterations from start.
-      // If we are far in the future (e.g. > today + 2 years) and haven't found a paid record, break.
-      if (
-        checkDate > today &&
-        !exists &&
-        (!nextPaymentDate || checkDate.getTime() > nextPaymentDate.getTime())
-      ) {
-        // If we passed the next payment date and still valid, break relative early
-        if (checkDate.getFullYear() > today.getFullYear() + 2) break;
-      }
+      if (frequency === "ONE_TIME") break;
+      // Only stop when we're in the future AND this date is unpaid (gap found)
+      if (checkDate > today && !exists && nextPaymentDate) break;
 
-      // Advance
       if (frequency === "MONTHLY") month++;
       else if (frequency === "QUARTERLY") month += 3;
       else if (frequency === "YEARLY") year++;
-      else if (frequency === "ONE_TIME") {
-        // One time check
-        break;
-      }
 
       checkDate = getValidDate(year, month, payDay);
       iterations++;
@@ -172,112 +132,105 @@ export async function markFixedExpensePaid(expenseId: number, count: number) {
   if (!Number.isInteger(expenseId) || expenseId <= 0) throw new Error("Invalid expense ID");
   if (!Number.isInteger(count) || count < 1 || count > 100) throw new Error("Invalid count");
 
-  const expense = await prisma.fixedExpense.findFirst({
-    where: { id: expenseId, companyId: user.companyId },
-  });
-
-  if (!expense) throw new Error("Expense not found");
-
   // P1: Resolve FIXED_EXPENSES sync rule so @@unique([syncRuleId, originId]) prevents duplicates
   const { ensureDefaultSyncRules } = await import("@/lib/finance-sync-internal");
   await ensureDefaultSyncRules(user.companyId);
-  const fixedExpenseRule = await prisma.financeSyncRule.findFirst({
+  const fixedExpenseRule = await withRetry(() => prisma.financeSyncRule.findFirst({
     where: { companyId: user.companyId, sourceType: "FIXED_EXPENSES", isActive: true },
     select: { id: true },
-  });
+  }));
 
-  const today = new Date();
-  const startDate = (expense as any).startDate || expense.createdAt;
-  const frequency = expense.frequency;
-  const payDay = expense.payDay || startDate.getDate();
-  const baseOriginId = `fixed_${expense.id}`;
+  // D-2: Wrap expense lookup + record fetch + createMany in a transaction to prevent race conditions
+  await withRetry(() => prisma.$transaction(async (tx) => {
+    const expense = await tx.fixedExpense.findFirst({
+      where: { id: expenseId, companyId: user.companyId },
+    });
+    if (!expense) throw new Error("Expense not found");
 
-  let year = startDate.getFullYear();
-  let month = startDate.getMonth();
+    const today = new Date();
+    const startDate = (expense as any).startDate || expense.createdAt;
+    const frequency = expense.frequency;
+    const payDay = expense.payDay || startDate.getDate();
+    const baseOriginId = `fixed_${expense.id}`;
 
-  let checkDate = getValidDate(year, month, payDay);
-  if (checkDate < startDate) {
-    if (frequency === "MONTHLY") month++;
-    else if (frequency === "QUARTERLY") month += 3;
-    else if (frequency === "YEARLY") year++;
-    checkDate = getValidDate(year, month, payDay);
-  }
+    let year = startDate.getFullYear();
+    let month = startDate.getMonth();
 
-  // Pre-fetch all existing originIds for this expense to avoid N+1
-  const existingRecords = await prisma.financeRecord.findMany({
-    where: {
-      companyId: user.companyId,
-      deletedAt: null,
-      originId: { startsWith: baseOriginId },
-    },
-    select: { originId: true },
-  });
-  const existingOriginIds = new Set(existingRecords.map((r) => r.originId));
-
-  const toCreate: Date[] = [];
-
-  // Identify all missing dates and continue for future payments needed
-  while (toCreate.length < count) {
-    // Logic Change: Keep going until we match the count
-    const yStr = checkDate.getFullYear();
-    const mStr = checkDate.getMonth() + 1;
-    const dStr = checkDate.getDate();
-    const originId = `${baseOriginId}_${yStr}_${mStr}_${dStr}`;
-
-    const exists = existingOriginIds.has(originId);
-
-    if (!exists) {
-      toCreate.push(new Date(checkDate));
+    let checkDate = getValidDate(year, month, payDay);
+    if (checkDate < startDate) {
+      if (frequency === "MONTHLY") month++;
+      else if (frequency === "QUARTERLY") month += 3;
+      else if (frequency === "YEARLY") year++;
+      checkDate = getValidDate(year, month, payDay);
     }
 
-    if (frequency === "MONTHLY") month++;
-    else if (frequency === "QUARTERLY") month += 3;
-    else if (frequency === "YEARLY") year++;
-    else if (frequency === "ONE_TIME") {
-      if (toCreate.length < count && !exists) {
-        // If one time and we already processed it (or added it), stop.
-        // Actually for one time, we should probably stop after 1.
-        checkDate = new Date(
-          checkDate.setFullYear(checkDate.getFullYear() + 100),
-        ); // Force exit
+    // Pre-fetch all existing originIds for this expense to avoid N+1
+    const existingRecords = await tx.financeRecord.findMany({
+      where: {
+        companyId: user.companyId,
+        deletedAt: null,
+        originId: { startsWith: baseOriginId },
+      },
+      select: { originId: true },
+    });
+    const existingOriginIds = new Set(existingRecords.map((r) => r.originId));
+
+    const toCreate: Date[] = [];
+
+    // Identify all missing dates and continue for future payments needed
+    while (toCreate.length < count) {
+      const yStr = checkDate.getFullYear();
+      const mStr = checkDate.getMonth() + 1;
+      const dStr = checkDate.getDate();
+      const originId = `${baseOriginId}_${yStr}_${mStr}_${dStr}`;
+
+      const exists = existingOriginIds.has(originId);
+
+      if (!exists) {
+        toCreate.push(new Date(checkDate));
+      }
+
+      if (frequency === "MONTHLY") month++;
+      else if (frequency === "QUARTERLY") month += 3;
+      else if (frequency === "YEARLY") year++;
+      else if (frequency === "ONE_TIME") {
         break;
       }
-      break;
+
+      checkDate = getValidDate(year, month, payDay);
     }
 
-    checkDate = getValidDate(year, month, payDay);
-  }
+    // Create the first N records (oldest first)
+    const recordsToCreate = toCreate.slice(0, count);
 
-  // Create the first N records (oldest first)
-  const recordsToCreate = toCreate.slice(0, count);
+    const now = new Date();
+    const recordsData = recordsToCreate.map((date) => {
+      const yStr = date.getFullYear();
+      const mStr = date.getMonth() + 1;
+      const dStr = date.getDate();
+      const originId = `${baseOriginId}_${yStr}_${mStr}_${dStr}`;
+      return {
+        companyId: user.companyId,
+        title: expense.title,
+        amount: expense.amount,
+        type: "EXPENSE" as const,
+        category: expense.category || "Fixed Expense",
+        date: date,
+        status: "COMPLETED" as const,
+        description:
+          (expense.description || `Fixed Expense: ${frequency}`) +
+          (date > now ? " (תשלום עתידי)" : ""),
+        originId: originId,
+        syncRuleId: fixedExpenseRule?.id ?? null,
+      };
+    });
 
-  const now = new Date();
-  const recordsData = recordsToCreate.map((date) => {
-    const yStr = date.getFullYear();
-    const mStr = date.getMonth() + 1;
-    const dStr = date.getDate();
-    const originId = `${baseOriginId}_${yStr}_${mStr}_${dStr}`;
-    return {
-      companyId: user.companyId,
-      title: expense.title,
-      amount: expense.amount,
-      type: "EXPENSE" as const,
-      category: expense.category || "Fixed Expense",
-      date: date,
-      status: "COMPLETED" as const,
-      description:
-        (expense.description || `Fixed Expense: ${frequency}`) +
-        (date > now ? " (תשלום עתידי)" : ""),
-      originId: originId,
-      syncRuleId: fixedExpenseRule?.id ?? null,
-    };
-  });
+    if (recordsData.length > 0) {
+      await tx.financeRecord.createMany({ data: recordsData, skipDuplicates: true });
+    }
+  }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 10000 }));
 
-  if (recordsData.length > 0) {
-    await prisma.financeRecord.createMany({ data: recordsData, skipDuplicates: true });
-  }
-
-  // Trigger Auto-Sync
+  // Trigger Auto-Sync (outside transaction to avoid holding locks)
   const { triggerSyncByType } = await import("@/lib/finance-sync-internal");
   await triggerSyncByType(user.companyId, "FIXED_EXPENSES");
 
@@ -326,7 +279,7 @@ export async function createFixedExpense(data: {
     throw new Error("Invalid start date");
   }
 
-  await prisma.fixedExpense.create({
+  await withRetry(() => prisma.fixedExpense.create({
     data: {
       companyId: user.companyId,
       title: data.title,
@@ -338,7 +291,7 @@ export async function createFixedExpense(data: {
       startDate: data.startDate, // Added Start Date
       status: "ACTIVE",
     },
-  });
+  }));
 
   // Trigger Auto-Sync
   const { triggerSyncByType } = await import("@/lib/finance-sync-internal");
@@ -409,13 +362,13 @@ export async function updateFixedExpense(
   }
   if (data.status !== undefined) updateData.status = data.status;
 
-  await prisma.fixedExpense.update({
+  await withRetry(() => prisma.fixedExpense.update({
     where: {
       id,
       companyId: user.companyId,
     },
     data: updateData,
-  });
+  }));
 
   // Trigger Auto-Sync
   const { triggerSyncByType } = await import("@/lib/finance-sync-internal");
@@ -437,12 +390,12 @@ export async function deleteFixedExpense(id: number) {
 
   if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid expense ID");
 
-  await prisma.fixedExpense.delete({
+  await withRetry(() => prisma.fixedExpense.delete({
     where: {
       id,
       companyId: user.companyId,
     },
-  });
+  }));
 
   // Trigger Auto-Sync
   const { triggerSyncByType } = await import("@/lib/finance-sync-internal");

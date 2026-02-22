@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { withRetry } from "@/lib/db-retry";
 import { inngest } from "@/lib/inngest/client";
 import { createLogger } from "@/lib/logger";
+import { GOALS_DEDUP_WINDOW_MS } from "@/lib/constants/dedup";
 
 const log = createLogger("GoalComputation");
 import { startOfDay, endOfDay } from "date-fns";
@@ -415,27 +416,32 @@ export async function enrichGoalsWithProgress(
     }
   }
 
+  // S4: Run both shared-group and individual goal queries concurrently
   const CONCURRENCY_LIMIT = 5;
-  for (let i = 0; i < sharedGroupQueries.length; i += CONCURRENCY_LIMIT) {
-    await Promise.all(sharedGroupQueries.slice(i, i + CONCURRENCY_LIMIT).map(async ({ groupGoals, first, filters }) => {
+
+  const runChunked = async (items: any[], handler: (item: any) => Promise<void>) => {
+    for (let i = 0; i < items.length; i += CONCURRENCY_LIMIT) {
+      await Promise.all(items.slice(i, i + CONCURRENCY_LIMIT).map(handler));
+    }
+  };
+
+  await Promise.all([
+    runChunked(sharedGroupQueries, async ({ groupGoals, first, filters }) => {
       const tt = (first as any).targetType || "COUNT";
       const val = await calculateMetricValue(
         first.metricType, tt, companyId, first.startDate, first.endDate, filters,
       );
       for (const goal of groupGoals) valueMap.set(goal.id, val);
-    }));
-  }
-
-  for (let i = 0; i < individualGoals.length; i += CONCURRENCY_LIMIT) {
-    await Promise.all(individualGoals.slice(i, i + CONCURRENCY_LIMIT).map(async (goal) => {
+    }),
+    runChunked(individualGoals, async (goal) => {
       const f = ((goal as any).filters as GoalFilters) || {};
       const tt = (goal as any).targetType || "COUNT";
       const val = await calculateMetricValue(
         goal.metricType, tt, companyId, goal.startDate, goal.endDate, f,
       );
       valueMap.set(goal.id, val);
-    }));
-  }
+    }),
+  ]);
 
   return goals.map((goal) => {
     const filters = ((goal as any).filters as GoalFilters) || {};
@@ -543,7 +549,7 @@ export async function getGoalsForCompanyInternal(
       if (cached) {
         if (cached.stale) {
           inngest.send({
-            id: `goals-refresh-${companyId}-${Math.floor(Date.now() / 10000)}`,
+            id: `goals-refresh-${companyId}-${Math.floor(Date.now() / GOALS_DEDUP_WINDOW_MS)}`,
             name: "dashboard/refresh-goals",
             data: { companyId },
           }).catch((e) => log.error("Stale refresh trigger failed", { error: String(e) }));

@@ -96,9 +96,12 @@ export async function getCustomTableDataInternal(
       },
     }));
   } else {
-    // Guard: if table has >5000 rows, JSON field sort causes a sequential scan — fall back to createdAt
-    const rowCount = await withRetry(() => prisma.record.count({ where: { tableId, companyId } }));
-    if (rowCount > 5000) {
+    // S6: Guard: if table has >5000 rows, JSON field sort causes a sequential scan — fall back to createdAt
+    // Use EXISTS with OFFSET instead of COUNT(*) — stops scanning at 5001 rows instead of full table
+    const overThreshold = await withRetry(() => prisma.$queryRaw<[{ exists: boolean }]>`
+      SELECT EXISTS(SELECT 1 FROM "Record" WHERE "tableId" = ${tableId} AND "companyId" = ${companyId} OFFSET 5000) as exists
+    `);
+    if (overThreshold[0].exists) {
       rawRecords = await withRetry(() => prisma.record.findMany({
         where: { tableId, companyId },
         orderBy: { createdAt: sort },

@@ -112,12 +112,16 @@ export async function PATCH(
 
     const { name, email, password, role, allowedWriteTableIds, permissions, tablePermissions } = parsed.data;
 
+    // Start bcrypt early so it runs in parallel with DB checks
+    const hashPromise = password ? bcrypt.hash(password, 12) : null;
+
     // Check if user exists and belongs to company
     const existingUser = await withRetry(() => prisma.user.findFirst({
       where: {
         id: targetUserId,
         companyId: user.companyId,
       },
+      select: { id: true, email: true, role: true },
     }));
 
     if (!existingUser) {
@@ -158,6 +162,7 @@ export async function PATCH(
     if (email && email !== existingUser.email) {
       const emailTaken = await withRetry(() => prisma.user.findUnique({
         where: { email },
+        select: { id: true },
       }));
       if (emailTaken) {
         return NextResponse.json(
@@ -174,8 +179,8 @@ export async function PATCH(
     if (role) updateData.role = role;
     if (allowedWriteTableIds !== undefined)
       updateData.allowedWriteTableIds = allowedWriteTableIds;
-    if (password) {
-      updateData.passwordHash = await bcrypt.hash(password, 12);
+    if (hashPromise) {
+      updateData.passwordHash = await hashPromise;
     }
     if (permissions) updateData.permissions = permissions;
     if (tablePermissions) updateData.tablePermissions = tablePermissions;
@@ -197,7 +202,8 @@ export async function PATCH(
       },
     }));
 
-    await createAuditLog(
+    // Fire-and-forget audit log (catches its own errors)
+    createAuditLog(
       null,
       user.id,
       "USER_UPDATED",
@@ -206,7 +212,7 @@ export async function PATCH(
       user.companyId,
     );
 
-    // Security events for sensitive changes
+    // Security events for sensitive changes (already fire-and-forget)
     if (password) {
       logSecurityEvent({ action: SEC_PASSWORD_CHANGED, companyId: user.companyId, userId: user.id, details: { targetUserId, changedBy: user.id } });
     }
@@ -217,13 +223,10 @@ export async function PATCH(
       logSecurityEvent({ action: SEC_PERMISSIONS_CHANGED, companyId: user.companyId, userId: user.id, details: { targetUserId } });
     }
 
-    // Invalidate cached session so permission changes take effect immediately
-    await invalidateUserCache(targetUserId);
-
-    // If password was changed, revoke all existing sessions for that user
-    if (password) {
-      await revokeUserSessions(targetUserId);
-    }
+    // Must-await operations in parallel
+    const postOps: Promise<void>[] = [invalidateUserCache(targetUserId)];
+    if (password) postOps.push(revokeUserSessions(targetUserId));
+    await Promise.all(postOps);
 
     return NextResponse.json(updatedUser);
   } catch (error) {
@@ -273,6 +276,7 @@ export async function DELETE(
         id: targetUserId,
         companyId: user.companyId,
       },
+      select: { id: true, email: true },
     }));
 
     if (!existingUser) {
@@ -295,7 +299,8 @@ export async function DELETE(
     // Invalidate cached session so deleted user loses access immediately
     await invalidateUserCache(targetUserId);
 
-    await createAuditLog(
+    // Fire-and-forget audit log (catches its own errors)
+    createAuditLog(
       null,
       user.id,
       "USER_DELETED",

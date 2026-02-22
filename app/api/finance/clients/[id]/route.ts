@@ -202,22 +202,24 @@ export async function DELETE(
       const companyId = existingClient.companyId;
       const now = new Date();
 
-      await tx.transaction.updateMany({
-        where: { clientId, companyId, deletedAt: null },
-        data: { deletedAt: now },
-      });
-      await tx.retainer.updateMany({
-        where: { clientId, companyId, deletedAt: null },
-        data: { deletedAt: now },
-      });
-      await tx.oneTimePayment.updateMany({
-        where: { clientId, companyId, deletedAt: null },
-        data: { deletedAt: now },
-      });
-      await tx.financeRecord.updateMany({
-        where: { clientId, companyId, deletedAt: null },
-        data: { deletedAt: now },
-      });
+      await Promise.all([
+        tx.transaction.updateMany({
+          where: { clientId, companyId, deletedAt: null },
+          data: { deletedAt: now },
+        }),
+        tx.retainer.updateMany({
+          where: { clientId, companyId, deletedAt: null },
+          data: { deletedAt: now },
+        }),
+        tx.oneTimePayment.updateMany({
+          where: { clientId, companyId, deletedAt: null },
+          data: { deletedAt: now },
+        }),
+        tx.financeRecord.updateMany({
+          where: { clientId, companyId, deletedAt: null },
+          data: { deletedAt: now },
+        }),
+      ]);
       await tx.client.update({
         where: { id: clientId, companyId },
         data: { deletedAt: now },

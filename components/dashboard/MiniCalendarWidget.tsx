@@ -3,7 +3,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Trash2, Eye, EyeOff, Settings2 } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, memo } from "react";
 import { useRouter } from "next/navigation";
 import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
 import { getMiniCalendarData } from "@/app/actions/dashboard-mini-widgets";
@@ -19,9 +19,9 @@ interface CalendarEvent {
 
 interface MiniCalendarWidgetProps {
   id: string;
-  onRemove: () => void;
+  onRemove: (id: string) => void;
   settings?: any;
-  onOpenSettings?: () => void;
+  onOpenSettings?: (id: string) => void;
 }
 
 const PRESET_LABELS: Record<string, string> = {
@@ -33,7 +33,7 @@ const PRESET_LABELS: Record<string, string> = {
   custom: "טווח מותאם",
 };
 
-export default function MiniCalendarWidget({
+function MiniCalendarWidget({
   id,
   onRemove,
   settings,
@@ -153,7 +153,7 @@ export default function MiniCalendarWidget({
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onOpenSettings();
+                  onOpenSettings(id);
                 }}
                 title="הגדרות"
               >
@@ -171,7 +171,7 @@ export default function MiniCalendarWidget({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onRemove();
+                onRemove(id);
               }}
               onPointerDown={(e) => e.stopPropagation()}
               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
@@ -244,3 +244,5 @@ export default function MiniCalendarWidget({
     </div>
   );
 }
+
+export default memo(MiniCalendarWidget);

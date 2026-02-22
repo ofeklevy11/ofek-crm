@@ -125,19 +125,23 @@ export function EventAutomationBuilder({
     "minutes" | "hours"
   >("hours");
 
-  // Load Users
+  // Lazy-load users when reaching step 3 (only if needed for selected action)
   useEffect(() => {
-    getUsers().then((res) => {
-      if (res.success && res.data) {
-        setUsers(res.data);
-      }
-    });
-    getTables().then((res) => {
-      if (res.success && res.data) {
-        setTables(res.data);
-      }
-    });
-  }, []);
+    if (step !== 3) return;
+    const needsUsers =
+      actionType === "CREATE_TASK" || actionType === "SEND_NOTIFICATION";
+    if (needsUsers && users.length === 0) {
+      getUsers().then((res) => {
+        if (res.success && res.data) setUsers(res.data);
+      });
+    }
+    const needsTables = actionType === "CREATE_RECORD";
+    if (needsTables && tables.length === 0) {
+      getTables().then((res) => {
+        if (res.success && res.data) setTables(res.data);
+      });
+    }
+  }, [step, actionType]);
 
   // Update schema when table changes
   useEffect(() => {

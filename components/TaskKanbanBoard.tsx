@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
@@ -126,8 +126,8 @@ export default function TaskKanbanBoard({
       const { updateTask } = await import("@/app/actions");
       const result = await updateTask(taskId, { status: newStatus });
       if (result.success) {
-        setTasks(
-          tasks.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)),
+        setTasks((prev) =>
+          prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)),
         );
         toast.success("המשימה עודכנה בהצלחה");
       }
@@ -152,7 +152,7 @@ export default function TaskKanbanBoard({
   };
 
   const handleTaskUpdate = (updatedTask: Task) => {
-    setTasks(tasks.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
+    setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
   };
 
   const handleTaskDelete = async (taskId: string) => {
@@ -160,7 +160,7 @@ export default function TaskKanbanBoard({
       const { deleteTask } = await import("@/app/actions");
       const result = await deleteTask(taskId);
       if (result.success) {
-        setTasks(tasks.filter((t) => t.id !== taskId));
+        setTasks((prev) => prev.filter((t) => t.id !== taskId));
         toast.success("המשימה נמחקה בהצלחה");
       } else {
         console.error("Failed to delete task");
@@ -176,35 +176,41 @@ export default function TaskKanbanBoard({
     }
   };
 
-  const filteredTasks = tasks.filter((t) => {
-    // Text search
-    const matchesSearch =
-      t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.description?.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      const matchesSearch =
+        t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.description?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    if (!matchesSearch) return false;
+      if (!matchesSearch) return false;
 
-    // Sidebar Filters
-    if (filters.assigneeId && t.assigneeId !== filters.assigneeId) return false;
-    if (filters.priority && t.priority !== filters.priority) return false;
+      if (filters.assigneeId && t.assigneeId !== filters.assigneeId) return false;
+      if (filters.priority && t.priority !== filters.priority) return false;
 
-    if (filters.dueDate) {
-      if (!t.dueDate) return false;
-      const taskDue = new Date(t.dueDate).toISOString().split("T")[0];
-      if (taskDue !== filters.dueDate) return false;
+      if (filters.dueDate) {
+        if (!t.dueDate) return false;
+        const taskDue = new Date(t.dueDate).toISOString().split("T")[0];
+        if (taskDue !== filters.dueDate) return false;
+      }
+
+      if (filters.startDate) {
+        const taskStart = new Date(t.createdAt).toISOString().split("T")[0];
+        if (taskStart !== filters.startDate) return false;
+      }
+
+      return true;
+    });
+  }, [tasks, searchQuery, filters]);
+
+  const tasksByStatus = useMemo(() => {
+    const grouped: Record<string, Task[]> = Object.fromEntries(
+      COLUMNS.map((c) => [c.id, [] as Task[]])
+    );
+    for (const task of filteredTasks) {
+      grouped[task.status]?.push(task);
     }
-
-    if (filters.startDate) {
-      // Assuming startDate maps to createdAt
-      const taskStart = new Date(t.createdAt).toISOString().split("T")[0];
-      if (taskStart !== filters.startDate) return false;
-    }
-
-    return true;
-  });
-
-  const getTasksByStatus = (status: TaskStatus) =>
-    filteredTasks.filter((t) => t.status === status);
+    return grouped;
+  }, [filteredTasks]);
 
   return (
     <div className="space-y-6">
@@ -228,7 +234,7 @@ export default function TaskKanbanBoard({
         </div>
 
         <button
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          onClick={() => setIsSidebarOpen((prev) => !prev)}
           className={`flex items-center justify-center md:justify-start gap-2 px-6 py-2 rounded-lg transition-all font-medium border ${
             isSidebarOpen
               ? "bg-slate-700/50 text-slate-200 border-slate-600 hover:bg-slate-700"
@@ -277,7 +283,7 @@ export default function TaskKanbanBoard({
                   key={col.id}
                   title={col.title}
                   color={col.color}
-                  tasks={getTasksByStatus(col.id)}
+                  tasks={tasksByStatus[col.id] || []}
                   onTaskMove={handleTaskMove}
                   onTaskCreate={() => handleTaskCreate(col.id)}
                   onTaskDelete={handleTaskDelete}
@@ -300,7 +306,7 @@ export default function TaskKanbanBoard({
             setModalOpen(false);
             setEditingTask(null);
           }}
-          onCreated={(newTask) => setTasks([...tasks, newTask])}
+          onCreated={(newTask) => setTasks((prev) => [...prev, newTask])}
           onUpdated={handleTaskUpdate}
         />
       )}

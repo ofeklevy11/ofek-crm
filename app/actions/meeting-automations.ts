@@ -75,25 +75,24 @@ export async function getMeetingAutomationUsage(meetingId?: string) {
     const userPlan = currentUser.isPremium || "basic";
     const limit = MEETING_AUTOMATION_LIMITS[userPlan] ?? 2;
 
-    const globalCount = await prisma.automationRule.count({
-      where: {
-        companyId: currentUser.companyId,
-        triggerType: { in: ["MEETING_BOOKED", "MEETING_CANCELLED", "MEETING_REMINDER"] },
-        meetingId: null,
-      },
-    });
-
-    // When meetingId is provided, count only THAT meeting's per-meeting automations
-    // When not provided (global modal), perMeetingCount = 0
-    const perMeetingCount = meetingId
-      ? await prisma.automationRule.count({
-          where: {
-            companyId: currentUser.companyId,
-            triggerType: { in: ["MEETING_BOOKED", "MEETING_CANCELLED", "MEETING_REMINDER"] },
-            meetingId,
-          },
-        })
-      : 0;
+    const [globalCount, perMeetingCount] = await Promise.all([
+      prisma.automationRule.count({
+        where: {
+          companyId: currentUser.companyId,
+          triggerType: { in: ["MEETING_BOOKED", "MEETING_CANCELLED", "MEETING_REMINDER"] },
+          meetingId: null,
+        },
+      }),
+      meetingId
+        ? prisma.automationRule.count({
+            where: {
+              companyId: currentUser.companyId,
+              triggerType: { in: ["MEETING_BOOKED", "MEETING_CANCELLED", "MEETING_REMINDER"] },
+              meetingId,
+            },
+          })
+        : Promise.resolve(0),
+    ]);
 
     const total = globalCount + perMeetingCount;
 
@@ -502,11 +501,19 @@ export async function fireMeetingAutomations(
       meetingEnd: `${formatDateHe(meeting.endTime)} ${formatTimeHe(meeting.endTime)}`,
     };
 
-    for (const rule of rules) {
-      try {
-        await executeRuleActions(rule, meetingContext);
-      } catch (err) {
-        log.error("Error executing meeting automation rule", { ruleId: rule.id, error: String(err) });
+    const RULE_CONCURRENCY = 5;
+    for (let i = 0; i < rules.length; i += RULE_CONCURRENCY) {
+      const batch = rules.slice(i, i + RULE_CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map((rule) => executeRuleActions(rule, meetingContext))
+      );
+      for (let j = 0; j < results.length; j++) {
+        if (results[j].status === "rejected") {
+          log.error("Error executing meeting automation rule", {
+            ruleId: batch[j].id,
+            error: String((results[j] as PromiseRejectedResult).reason),
+          });
+        }
       }
     }
   } catch (error) {
@@ -538,70 +545,131 @@ export async function processMeetingReminders() {
     const { executeRuleActions } = await import("@/app/actions/automations-core");
     const now = new Date();
 
+    // Group rules by companyId to batch meeting queries
+    const rulesByCompany = new Map<number, typeof rules>();
     for (const rule of rules) {
-      try {
-        const minutesBefore = (rule.triggerConfig as any)?.minutesBefore ?? 30;
-        const reminderThreshold = new Date(now.getTime() + minutesBefore * 60_000);
+      const list = rulesByCompany.get(rule.companyId) || [];
+      list.push(rule);
+      rulesByCompany.set(rule.companyId, list);
+    }
 
-        // Find upcoming meetings within the reminder window that haven't been reminded yet
-        const meetings = await prisma.meeting.findMany({
-          where: {
-            companyId: rule.companyId,
-            status: { in: ["PENDING", "CONFIRMED"] },
-            startTime: { gt: now, lte: reminderThreshold },
-            ...(rule.meetingTypeId ? { meetingTypeId: rule.meetingTypeId } : {}),
-            ...((rule as any).meetingId ? { id: (rule as any).meetingId } : {}),
-          },
-          include: { meetingType: { select: { name: true } } },
-          take: 100,
-        });
+    const logsToCreate: { automationRuleId: number; companyId: number; calendarEventId: string }[] = [];
+    let totalFailures = 0;
+    let totalProcessed = 0;
 
-        for (const meeting of meetings) {
-          // Dedup: check if we already logged a reminder for this rule + this meeting's calendar event
-          if (meeting.calendarEventId) {
-            const existing = await prisma.automationLog.findUnique({
-              where: {
-                automationRuleId_calendarEventId: {
-                  automationRuleId: rule.id,
-                  calendarEventId: meeting.calendarEventId,
-                },
-              },
-              select: { id: true },
+    for (const [companyId, companyRules] of rulesByCompany) {
+      // Find the widest reminder window for this company's rules
+      const maxMinutesBefore = Math.max(
+        ...companyRules.map((r) => (r.triggerConfig as any)?.minutesBefore ?? 30)
+      );
+      const widestThreshold = new Date(now.getTime() + maxMinutesBefore * 60_000);
+
+      // BATCH: Single query for ALL meetings in this company's window
+      const meetings = await prisma.meeting.findMany({
+        where: {
+          companyId,
+          status: { in: ["PENDING", "CONFIRMED"] },
+          startTime: { gt: now, lte: widestThreshold },
+        },
+        include: { meetingType: { select: { name: true } } },
+        take: 500,
+      });
+      if (meetings.length === 0) continue;
+
+      // BATCH: Single query for ALL existing dedup logs for these rules
+      const ruleIds = companyRules.map((r) => r.id);
+      const calendarEventIds = meetings
+        .map((m) => m.calendarEventId)
+        .filter((id): id is string => !!id);
+
+      const existingLogs = calendarEventIds.length > 0
+        ? await prisma.automationLog.findMany({
+            where: {
+              automationRuleId: { in: ruleIds },
+              calendarEventId: { in: calendarEventIds },
+            },
+            select: { automationRuleId: true, calendarEventId: true },
+          })
+        : [];
+      const dedupSet = new Set(
+        existingLogs.map((l) => `${l.automationRuleId}-${l.calendarEventId}`)
+      );
+
+      // Process rules in parallel batches
+      const RULE_CONCURRENCY = 5;
+      for (let i = 0; i < companyRules.length; i += RULE_CONCURRENCY) {
+        const batch = companyRules.slice(i, i + RULE_CONCURRENCY);
+        const results = await Promise.allSettled(
+          batch.map(async (rule) => {
+            const minutesBefore = (rule.triggerConfig as any)?.minutesBefore ?? 30;
+            const ruleThreshold = new Date(now.getTime() + minutesBefore * 60_000);
+
+            // Filter meetings for this specific rule's window + meetingType
+            const ruleMeetings = meetings.filter((m) => {
+              if (m.startTime > ruleThreshold) return false;
+              if (rule.meetingTypeId && m.meetingTypeId !== rule.meetingTypeId) return false;
+              if ((rule as any).meetingId && m.id !== (rule as any).meetingId) return false;
+              // Dedup check via Set (O(1)) instead of DB query
+              if (m.calendarEventId && dedupSet.has(`${rule.id}-${m.calendarEventId}`)) return false;
+              return true;
             });
-            if (existing) continue;
-          }
 
-          // Execute the automation
-          try {
-            await executeRuleActions(rule, {
-              meetingId: meeting.id,
-              participantName: meeting.participantName,
-              participantEmail: meeting.participantEmail || undefined,
-              participantPhone: meeting.participantPhone || undefined,
-              meetingType: meeting.meetingType.name,
-              meetingStart: `${formatDateHe(meeting.startTime)} ${formatTimeHe(meeting.startTime)}`,
-              meetingEnd: `${formatDateHe(meeting.endTime)} ${formatTimeHe(meeting.endTime)}`,
-            });
+            for (const meeting of ruleMeetings) {
+              totalProcessed++;
+              try {
+                await executeRuleActions(rule, {
+                  meetingId: meeting.id,
+                  participantName: meeting.participantName,
+                  participantEmail: meeting.participantEmail || undefined,
+                  participantPhone: meeting.participantPhone || undefined,
+                  meetingType: meeting.meetingType.name,
+                  meetingStart: `${formatDateHe(meeting.startTime)} ${formatTimeHe(meeting.startTime)}`,
+                  meetingEnd: `${formatDateHe(meeting.endTime)} ${formatTimeHe(meeting.endTime)}`,
+                });
 
-            // Log for dedup using the meeting's linked calendarEventId
-            if (meeting.calendarEventId) {
-              await prisma.automationLog.create({
-                data: {
-                  automationRuleId: rule.id,
-                  companyId: rule.companyId,
-                  calendarEventId: meeting.calendarEventId,
-                },
-              });
+                if (meeting.calendarEventId) {
+                  logsToCreate.push({
+                    automationRuleId: rule.id,
+                    companyId: rule.companyId,
+                    calendarEventId: meeting.calendarEventId,
+                  });
+                  dedupSet.add(`${rule.id}-${meeting.calendarEventId}`);
+                }
+              } catch (execErr) {
+                totalFailures++;
+                log.error("Error executing meeting reminder", {
+                  ruleId: rule.id, meetingId: meeting.id, error: String(execErr),
+                });
+              }
             }
-          } catch (execErr) {
-            log.error("Error executing meeting reminder", { ruleId: rule.id, meetingId: meeting.id, error: String(execErr) });
+          })
+        );
+
+        for (const result of results) {
+          if (result.status === "rejected") {
+            totalFailures++;
+            log.error("Error processing meeting reminder batch", { error: String(result.reason) });
           }
         }
-      } catch (ruleErr) {
-        log.error("Error processing meeting reminder rule", { ruleId: rule.id, error: String(ruleErr) });
       }
+    }
+
+    // BATCH: createMany for all dedup logs (chunked to avoid large INSERT limits)
+    if (logsToCreate.length > 0) {
+      const LOG_BATCH_SIZE = 1000;
+      for (let i = 0; i < logsToCreate.length; i += LOG_BATCH_SIZE) {
+        await prisma.automationLog.createMany({
+          data: logsToCreate.slice(i, i + LOG_BATCH_SIZE),
+          skipDuplicates: true,
+        });
+      }
+    }
+
+    if (totalProcessed > 0 && totalFailures >= totalProcessed * 0.5) {
+      throw new Error(`[MeetingReminders] ${totalFailures}/${totalProcessed} failed — triggering retry`);
     }
   } catch (error) {
     log.error("Error in processMeetingReminders", { error: String(error) });
+    throw error;
   }
 }

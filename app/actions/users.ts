@@ -9,6 +9,7 @@ import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { patchUserSchema } from "@/lib/validations/user";
 import { isPrismaError } from "@/lib/prisma-error";
 import { createLogger } from "@/lib/logger";
+import bcrypt from "bcryptjs";
 
 const log = createLogger("Users");
 
@@ -97,21 +98,29 @@ export async function updateUser(
       return { success: false, error: "Invalid user ID" };
     }
 
-    const validatedData = parsed.data;
+    const { password, ...restData } = parsed.data;
+    // Start bcrypt early so it runs in parallel with DB checks
+    const hashPromise = password ? bcrypt.hash(password, 12) : null;
+    const updatePayload: Record<string, unknown> = { ...restData };
 
     const result = await withRetry(() =>
       prisma.$transaction(async (tx) => {
         const existingUser = await tx.user.findFirst({
           where: { id, companyId: currentUser.companyId },
+          select: { id: true, email: true },
         });
 
         if (!existingUser) {
           return { success: false as const, error: "User not found or access denied" };
         }
 
+        if (hashPromise) {
+          updatePayload.passwordHash = await hashPromise;
+        }
+
         const user = await tx.user.update({
           where: { id, companyId: currentUser.companyId },
-          data: validatedData,
+          data: updatePayload,
           select: { id: true, name: true, email: true, role: true },
         });
 
@@ -121,7 +130,7 @@ export async function updateUser(
           `USER_UPDATE: ${existingUser.email}`,
           {
             updatedUserId: id,
-            changes: Object.keys(validatedData),
+            changes: Object.keys(updatePayload),
           },
           tx,
           currentUser.companyId,
@@ -181,6 +190,7 @@ export async function deleteUser(id: number) {
       prisma.$transaction(async (tx) => {
         const user = await tx.user.findFirst({
           where: { id, companyId: currentUser.companyId },
+          select: { id: true, email: true },
         });
 
         if (!user) {

@@ -89,7 +89,8 @@ export async function POST(
 
     // Verify table exists and belongs to user's company
     const table = await prisma.tableMeta.findFirst({
-      where: { id: tableId, companyId: user.companyId },
+      where: { id: tableId, companyId: user.companyId, deletedAt: null },
+      select: { id: true },
     });
 
     if (!table) {

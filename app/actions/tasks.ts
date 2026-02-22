@@ -13,20 +13,22 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("Tasks");
 
-export async function getTasks() {
+async function fetchTasksInternal(options?: {
+  statusFilter?: string;
+  orderBy?: "createdAt" | "updatedAt";
+  take?: number;
+}) {
   try {
     const user = await getCurrentUser();
     if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
-    // Permission check
     const canView = user.role === "admin" || hasUserFlag(user, "canViewTasks");
     if (!canView) {
       return { success: false, error: "Forbidden" };
     }
 
-    // Rate limit (fail open)
     const rateLimited = await checkActionRateLimit(String(user.id), RATE_LIMITS.taskRead).catch(() => false);
     if (rateLimited) {
       return { success: false, error: "Rate limit exceeded. Please try again later." };
@@ -34,10 +36,11 @@ export async function getTasks() {
 
     const canViewAll =
       user.role === "admin" || hasUserFlag(user, "canViewAllTasks");
-    // CRITICAL: Always filter by companyId for multi-tenancy
-    const whereClause = canViewAll
-      ? { companyId: user.companyId }
-      : { companyId: user.companyId, assigneeId: user.id };
+    const whereClause = {
+      companyId: user.companyId,
+      ...(!canViewAll && { assigneeId: user.id }),
+      ...(options?.statusFilter && { status: options.statusFilter as any }),
+    };
 
     const tasks = await withRetry(() => prisma.task.findMany({
       where: whereClause,
@@ -54,20 +57,14 @@ export async function getTasks() {
         createdAt: true,
         updatedAt: true,
         assignee: {
-          select: {
-            id: true,
-            name: true,
-          },
+          select: { id: true, name: true },
         },
         creator: {
-          select: {
-            id: true,
-            name: true,
-          },
+          select: { id: true, name: true },
         },
       },
-      orderBy: { createdAt: "desc" },
-      take: 5000,
+      orderBy: { [options?.orderBy || "createdAt"]: "desc" },
+      take: options?.take ?? 5000,
     }));
     return { success: true, data: tasks };
   } catch (error) {
@@ -76,58 +73,12 @@ export async function getTasks() {
   }
 }
 
+export async function getTasks() {
+  return fetchTasksInternal({ take: 5000 });
+}
+
 export async function getDoneTasks() {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const canView = user.role === "admin" || hasUserFlag(user, "canViewTasks");
-    if (!canView) {
-      return { success: false, error: "Forbidden" };
-    }
-
-    const rateLimited = await checkActionRateLimit(String(user.id), RATE_LIMITS.taskRead).catch(() => false);
-    if (rateLimited) {
-      return { success: false, error: "Rate limit exceeded. Please try again later." };
-    }
-
-    const canViewAll =
-      user.role === "admin" || hasUserFlag(user, "canViewAllTasks");
-    const whereClause = canViewAll
-      ? { companyId: user.companyId, status: "done" as const }
-      : { companyId: user.companyId, assigneeId: user.id, status: "done" as const };
-
-    const tasks = await withRetry(() => prisma.task.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        status: true,
-        assigneeId: true,
-        priority: true,
-        dueDate: true,
-        tags: true,
-        creatorId: true,
-        createdAt: true,
-        updatedAt: true,
-        assignee: {
-          select: { id: true, name: true },
-        },
-        creator: {
-          select: { id: true, name: true },
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-      take: 500,
-    }));
-    return { success: true, data: tasks };
-  } catch (error) {
-    log.error("Error fetching done tasks", { error: String(error) });
-    return { success: false, error: "Failed to fetch done tasks" };
-  }
+  return fetchTasksInternal({ statusFilter: "done", orderBy: "updatedAt", take: 500 });
 }
 
 export async function getTaskById(id: string) {
@@ -293,6 +244,12 @@ export async function updateTask(
       return { success: false, error: "Unauthorized" };
     }
 
+    // Base permission check (consistent with API route)
+    const canView = user.role === "admin" || hasUserFlag(user, "canViewTasks");
+    if (!canView) {
+      return { success: false, error: "Forbidden" };
+    }
+
     // Rate limit (fail open)
     const rateLimited = await checkActionRateLimit(String(user.id), RATE_LIMITS.taskMutation).catch(() => false);
     if (rateLimited) {
@@ -430,6 +387,12 @@ export async function deleteTask(id: string) {
     const user = await getCurrentUser();
     if (!user) {
       return { success: false, error: "Unauthorized" };
+    }
+
+    // Base permission check (consistent with updateTask and API route)
+    const canView = user.role === "admin" || hasUserFlag(user, "canViewTasks");
+    if (!canView) {
+      return { success: false, error: "Forbidden" };
     }
 
     // Only allow deletion if user can create tasks (Manager logic) or is Admin

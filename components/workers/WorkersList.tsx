@@ -22,7 +22,7 @@ import {
   Eye,
   Plus,
 } from "lucide-react";
-import { deleteWorker } from "@/app/actions/workers";
+import { deleteWorker, getWorkerStepProgress } from "@/app/actions/workers";
 import { toast } from "sonner";
 import { showDestructiveConfirm } from "@/hooks/use-modal";
 import { getUserFriendlyError } from "@/lib/errors";
@@ -54,7 +54,8 @@ interface Worker {
       name: string;
       _count?: { steps: number };
     };
-    stepProgress: { stepId: number; status: string }[];
+    _count?: { stepProgress: number };
+    stepProgress: { stepId: number; status?: string }[];
   }[];
   _count: { assignedTasks: number };
 }
@@ -89,6 +90,8 @@ export default function WorkersList({
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
+  const [loadedSteps, setLoadedSteps] = useState<Record<number, { stepId: number; status: string }[]>>({});
+  const [loadingSteps, setLoadingSteps] = useState<number | null>(null);
 
   // Filter workers
   const filteredWorkers = workers.filter((worker) => {
@@ -165,7 +168,6 @@ export default function WorkersList({
   };
 
   const getOnboardingProgress = (worker: Worker) => {
-    // Check if onboardingProgress exists
     if (!worker.onboardingProgress || worker.onboardingProgress.length === 0) {
       return null;
     }
@@ -175,14 +177,10 @@ export default function WorkersList({
     );
     if (!activeOnboarding) return null;
 
-    // Check if stepProgress exists
-    const stepProgress = activeOnboarding.stepProgress ?? [];
-    // Use path._count.steps for accurate total, fallback to stepProgress.length
     const totalSteps =
-      activeOnboarding.path._count?.steps ?? stepProgress.length;
-    const completedSteps = stepProgress.filter(
-      (sp) => sp.status === "COMPLETED",
-    ).length;
+      activeOnboarding.path._count?.steps ?? activeOnboarding._count?.stepProgress ?? 0;
+    // stepProgress now only contains COMPLETED entries from the server
+    const completedSteps = activeOnboarding.stepProgress.length;
     const progress =
       totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
 
@@ -191,7 +189,6 @@ export default function WorkersList({
       progress,
       completedSteps,
       totalSteps,
-      stepProgress,
     };
   };
 
@@ -201,17 +198,12 @@ export default function WorkersList({
       return [];
     }
     return worker.onboardingProgress.map((op) => {
-      const stepProgress = op.stepProgress ?? [];
-      // Use path._count.steps for accurate total, fallback to stepProgress.length
-      const totalSteps = op.path._count?.steps ?? stepProgress.length;
-      const completedSteps = stepProgress.filter(
-        (sp) => sp.status === "COMPLETED",
-      ).length;
+      const totalSteps = op.path._count?.steps ?? op._count?.stepProgress ?? 0;
+      // stepProgress now only contains COMPLETED entries from the server
+      const completedSteps = op.stepProgress.length;
       const progress =
         totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
 
-      // isCompleted should be based on actual progress, not just status
-      // Status might not be updated correctly, so we check both
       const isCompleted =
         op.status === "COMPLETED" ||
         (totalSteps > 0 && completedSteps === totalSteps);
@@ -221,7 +213,6 @@ export default function WorkersList({
         progress,
         completedSteps,
         totalSteps,
-        stepProgress,
         isCompleted,
       };
     });
@@ -358,7 +349,34 @@ export default function WorkersList({
               {/* Actions */}
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setExpandedId(isExpanded ? null : worker.id)}
+                  onClick={async () => {
+                    if (isExpanded) {
+                      setExpandedId(null);
+                    } else {
+                      setExpandedId(worker.id);
+                      // Always fetch fresh step progress on expand
+                      const onboardingIds = worker.onboardingProgress.map((op) => op.id);
+                      if (onboardingIds.length > 0) {
+                        setLoadingSteps(worker.id);
+                        try {
+                          const results = await Promise.all(
+                            onboardingIds.map((oid) => getWorkerStepProgress(oid).then((steps) => [oid, steps] as const))
+                          );
+                          setLoadedSteps((prev) => {
+                            const next = { ...prev };
+                            for (const [oid, steps] of results) {
+                              next[oid] = steps;
+                            }
+                            return next;
+                          });
+                        } catch {
+                          // Non-critical — expanded view just won't show checklist
+                        } finally {
+                          setLoadingSteps(null);
+                        }
+                      }
+                    }
+                  }}
                   className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
                 >
                   {isExpanded ? (
@@ -568,9 +586,12 @@ export default function WorkersList({
                               />
                             </div>
 
-                            {/* Steps Checklist */}
+                            {/* Steps Checklist — lazy-loaded */}
+                            {loadingSteps === worker.id && !loadedSteps[path.id] ? (
+                              <div className="text-xs text-gray-400 py-2">טוען שלבים...</div>
+                            ) : loadedSteps[path.id] ? (
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                              {path.stepProgress.map((sp, idx) => {
+                              {loadedSteps[path.id].map((sp, idx) => {
                                 const isCompleted = sp.status === "COMPLETED";
                                 const isSkipped = sp.status === "SKIPPED";
                                 return (
@@ -598,6 +619,7 @@ export default function WorkersList({
                                 );
                               })}
                             </div>
+                            ) : null}
 
                             <p className="text-xs text-gray-500 mt-2">
                               הושלמו {path.completedSteps} מתוך{" "}

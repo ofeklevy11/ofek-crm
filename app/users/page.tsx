@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import UserModal from "@/components/UserModal";
 import { showConfirm } from "@/hooks/use-modal";
 import { apiFetch } from "@/lib/api-fetch";
@@ -27,47 +26,55 @@ interface Table {
   slug: string;
 }
 
+const FLAG_LABELS: Record<string, { icon: string; className: string }> = {
+  canViewAutomations: { icon: "⚡", className: "bg-purple-50 text-purple-700 border-purple-200" },
+  canViewAnalytics: { icon: "📊", className: "bg-blue-50 text-blue-700 border-blue-200" },
+  canViewCalendar: { icon: "📅", className: "bg-red-50 text-red-700 border-red-200" },
+  canViewFinance: { icon: "💰", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  canViewTasks: { icon: "✅", className: "bg-teal-50 text-teal-700 border-teal-200" },
+  canViewNurtureHub: { icon: "🌱", className: "bg-green-50 text-green-700 border-green-200" },
+  canViewWorkflows: { icon: "🔀", className: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  canViewServices: { icon: "🏷️", className: "bg-orange-50 text-orange-700 border-orange-200" },
+  canViewServiceCalls: { icon: "🎧", className: "bg-rose-50 text-rose-700 border-rose-200" },
+  canViewQuotes: { icon: "📜", className: "bg-yellow-50 text-yellow-700 border-yellow-200" },
+  canViewFiles: { icon: "📁", className: "bg-gray-50 text-gray-700 border-gray-200" },
+  canViewChat: { icon: "💬", className: "bg-cyan-50 text-cyan-700 border-cyan-200" },
+  canViewWorkers: { icon: "👷", className: "bg-blue-50 text-blue-700 border-blue-200" },
+  canViewUsers: { icon: "👥", className: "bg-purple-50 text-purple-700 border-purple-200" },
+  canViewDashboard: { icon: "🏠", className: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  canViewTables: { icon: "🗃️", className: "bg-pink-50 text-pink-700 border-pink-200" },
+  canCreateTasks: { icon: "✓", className: "bg-green-50 text-green-700 border-green-200" },
+  canViewAllTasks: { icon: "👁", className: "bg-cyan-50 text-cyan-700 border-cyan-200" },
+  canManageTables: { icon: "🗂", className: "bg-orange-50 text-orange-700 border-orange-200" },
+  canManageAnalytics: { icon: "📈", className: "bg-pink-50 text-pink-700 border-pink-200" },
+  canSearchTables: { icon: "🔍", className: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  canFilterTables: { icon: "🔎", className: "bg-teal-50 text-teal-700 border-teal-200" },
+  canExportTables: { icon: "⬇", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  canViewGoals: { icon: "🎯", className: "bg-green-50 text-green-700 border-green-200" },
+  canViewDashboardData: { icon: "📋", className: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+};
+
 export default function UsersPage() {
-  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [isAuthorized, setIsAuthorized] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 30;
 
   useEffect(() => {
-    checkPermissions();
+    const loadData = async () => {
+      setIsLoading(true);
+      await Promise.all([fetchUsers(), fetchTables()]);
+      setIsLoading(false);
+    };
+    loadData();
   }, []);
-
-  const checkPermissions = async () => {
-    try {
-      const response = await fetch("/api/auth/me");
-      if (response.status === 429) { setRateLimited(true); return; }
-      if (response.ok) {
-        const user = await response.json();
-        if (user.role === "admin") {
-          setIsAuthorized(true);
-          fetchUsers();
-          fetchTables();
-        } else {
-          router.push("/");
-        }
-      } else {
-        router.push("/");
-      }
-    } catch (error) {
-      console.error("Error checking permissions:", error);
-      router.push("/");
-    }
-  };
 
   const fetchUsers = async () => {
     try {
-      setIsLoading(true);
       const response = await fetch("/api/users");
       if (response.status === 429) { setRateLimited(true); return; }
       if (response.ok) {
@@ -77,8 +84,6 @@ export default function UsersPage() {
     } catch (error) {
       console.error("Error fetching users:", error);
       toast.error(getUserFriendlyError(error));
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -116,7 +121,7 @@ export default function UsersPage() {
 
       if (response.status === 429) { setRateLimited(true); return; }
       if (response.ok) {
-        setUsers(users.filter((u) => u.id !== userId));
+        setUsers(prev => prev.filter((u) => u.id !== userId));
         toast.success("המשתמש נמחק בהצלחה");
       } else {
         toast.error("שגיאה במחיקת המשתמש");
@@ -160,14 +165,6 @@ export default function UsersPage() {
 
   if (rateLimited) {
     return <RateLimitFallback />;
-  }
-
-  if (!isAuthorized) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
-      </div>
-    );
   }
 
   // Calculate pagination
@@ -302,123 +299,17 @@ export default function UsersPage() {
                               {user.permissions &&
                                 Object.entries(user.permissions)
                                   .filter(([_, value]) => value)
+                                  .slice(0, 3)
                                   .map(([key]) => {
-                                    // Get label from USER_FLAGS
-                                    const flagLabels: Record<
-                                      string,
-                                      { icon: string; color: string }
-                                    > = {
-                                      canViewAutomations: {
-                                        icon: "⚡",
-                                        color: "purple",
-                                      },
-                                      canViewAnalytics: {
-                                        icon: "📊",
-                                        color: "blue",
-                                      },
-                                      canViewCalendar: {
-                                        icon: "📅",
-                                        color: "red",
-                                      },
-                                      canViewFinance: {
-                                        icon: "💰",
-                                        color: "emerald",
-                                      },
-                                      canViewTasks: {
-                                        icon: "✅",
-                                        color: "teal",
-                                      },
-                                      canViewNurtureHub: {
-                                        icon: "🌱",
-                                        color: "green",
-                                      },
-                                      canViewWorkflows: {
-                                        icon: "🔀",
-                                        color: "indigo",
-                                      },
-                                      canViewServices: {
-                                        icon: "🏷️",
-                                        color: "orange",
-                                      },
-                                      canViewServiceCalls: {
-                                        icon: "🎧",
-                                        color: "rose",
-                                      },
-                                      canViewQuotes: {
-                                        icon: "📜",
-                                        color: "yellow",
-                                      },
-                                      canViewFiles: {
-                                        icon: "📁",
-                                        color: "gray",
-                                      },
-                                      canViewChat: {
-                                        icon: "💬",
-                                        color: "cyan",
-                                      },
-                                      canViewWorkers: {
-                                        icon: "👷",
-                                        color: "blue",
-                                      },
-                                      canViewUsers: {
-                                        icon: "👥",
-                                        color: "purple",
-                                      },
-                                      canViewDashboard: {
-                                        icon: "🏠",
-                                        color: "indigo",
-                                      },
-                                      canViewTables: {
-                                        icon: "🗃️",
-                                        color: "pink",
-                                      },
-                                      canCreateTasks: {
-                                        icon: "✓",
-                                        color: "green",
-                                      },
-                                      canViewAllTasks: {
-                                        icon: "👁",
-                                        color: "cyan",
-                                      },
-                                      canManageTables: {
-                                        icon: "🗂",
-                                        color: "orange",
-                                      },
-                                      canManageAnalytics: {
-                                        icon: "📈",
-                                        color: "pink",
-                                      },
-                                      canSearchTables: {
-                                        icon: "🔍",
-                                        color: "indigo",
-                                      },
-                                      canFilterTables: {
-                                        icon: "🔎",
-                                        color: "teal",
-                                      },
-                                      canExportTables: {
-                                        icon: "⬇",
-                                        color: "amber",
-                                      },
-                                      canViewGoals: {
-                                        icon: "🎯",
-                                        color: "green",
-                                      },
-                                      canViewDashboardData: {
-                                        icon: "📋",
-                                        color: "indigo",
-                                      },
-                                    };
-
-                                    const flag = flagLabels[key] || {
+                                    const flag = FLAG_LABELS[key] || {
                                       icon: "•",
-                                      color: "gray",
+                                      className: "bg-gray-50 text-gray-700 border-gray-200",
                                     };
 
                                     return (
                                       <span
                                         key={key}
-                                        className={`inline-flex items-center gap-1 px-2 py-0.5 bg-${flag.color}-50 text-${flag.color}-700 rounded text-xs border border-${flag.color}-200`}
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs border ${flag.className}`}
                                         title={key}
                                       >
                                         <span>{flag.icon}</span>

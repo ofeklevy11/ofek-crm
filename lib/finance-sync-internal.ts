@@ -12,6 +12,7 @@ import { inngest } from "@/lib/inngest/client";
 import { PAID_STATUS_VARIANTS } from "@/lib/finance-constants";
 import { withRetry } from "@/lib/db-retry";
 import { createLogger } from "@/lib/logger";
+import { getValidDate } from "@/lib/date-utils";
 
 const log = createLogger("FinanceSyncInternal");
 
@@ -27,8 +28,94 @@ export interface SyncMapping {
 const _defaultRulesCache = new Map<number, number>();
 const DEFAULT_RULES_TTL = 60 * 60 * 1000; // 1 hour
 
+// Throttle sync triggers to avoid re-running on every page load
+const _syncTriggerCache = new Map<string, number>();
+const SYNC_TRIGGER_TTL = 5 * 60 * 1000; // 5 minutes
+
+export function shouldTriggerSync(companyId: number, sourceType: string): boolean {
+  const key = `${companyId}-${sourceType}`;
+  const last = _syncTriggerCache.get(key);
+  if (last && Date.now() - last < SYNC_TRIGGER_TTL) return false;
+  _syncTriggerCache.set(key, Date.now());
+  return true;
+}
+
 export function clearDefaultRulesCache(companyId: number) {
   _defaultRulesCache.delete(companyId);
+}
+
+/** Shared helper to process sync items (transactions or payments) into create/update arrays. */
+function processSyncItems<T>(
+  items: T[],
+  config: {
+    getAmount: (item: T) => number;
+    getDate: (item: T) => Date;
+    getTitle: (item: T) => string;
+    getOriginId: (item: T) => string;
+    getClientId: (item: T) => number | null;
+    getLabel: (item: T) => string;
+    targetType: string;
+    category: string;
+  },
+  existingMap: Map<string | null, any>,
+  companyId: number,
+  syncRuleId: number,
+  stats: { skippedError: number; skippedExists: number; errors: string[] },
+  toCreate: any[],
+  toUpdate: { id: number; data: any }[],
+) {
+  for (const item of items) {
+    try {
+      const date = config.getDate(item);
+      const title = config.getTitle(item);
+      const amount = Math.round((config.getAmount(item) + Number.EPSILON) * 100) / 100;
+
+      if (isNaN(amount) || amount <= 0) {
+        stats.skippedError++;
+        continue;
+      }
+
+      const originId = config.getOriginId(item);
+      const clientId = config.getClientId(item);
+      const existing = existingMap.get(originId);
+
+      if (!existing) {
+        toCreate.push({
+          companyId,
+          title,
+          amount,
+          type: config.targetType,
+          category: config.category,
+          date,
+          status: "COMPLETED",
+          syncRuleId,
+          originId,
+          clientId,
+        });
+      } else {
+        const isDifferent =
+          Number(existing.amount) !== amount ||
+          existing.title !== title ||
+          existing.type !== config.targetType ||
+          existing.category !== config.category ||
+          existing.date.getTime() !== date.getTime() ||
+          (clientId && existing.clientId !== clientId);
+
+        if (isDifferent) {
+          toUpdate.push({
+            id: existing.id,
+            data: { title, amount, type: config.targetType, category: config.category, date, clientId },
+          });
+        } else {
+          stats.skippedExists++;
+        }
+      }
+    } catch (err) {
+      stats.skippedError++;
+      if (stats.errors.length < 5)
+        stats.errors.push(`${config.getLabel(item)}: ${err}`);
+    }
+  }
 }
 
 /**
@@ -58,23 +145,24 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
 
   if (rule.sourceType === "TABLE" && rule.sourceId) {
     // --- TABLE SOURCE ---
-    const records = await withRetry(() => prisma.record.findMany({
-      where: { tableId: rule.sourceId!, companyId },
-      select: { id: true, data: true, createdAt: true },
-      take: 5000,
-    }));
+    const [records, existingRecords] = await Promise.all([
+      withRetry(() => prisma.record.findMany({
+        where: { tableId: rule.sourceId!, companyId },
+        select: { id: true, data: true, createdAt: true },
+        take: 5000,
+      })),
+      withRetry(() => prisma.financeRecord.findMany({
+        where: { syncRuleId: rule.id, companyId, deletedAt: null },
+        select: { id: true, originId: true, amount: true, title: true, type: true, category: true, date: true, clientId: true },
+        take: 5000,
+      })),
+    ]);
 
     stats.scanned = records.length;
     if (records.length >= 5000) hitSourceLimit = true;
     const mapping = rule.fieldMapping as any as SyncMapping;
 
     records.forEach((r) => currentOriginIds.push(r.id.toString()));
-
-    const existingRecords = await withRetry(() => prisma.financeRecord.findMany({
-      where: { syncRuleId: rule.id, companyId, deletedAt: null },
-      select: { id: true, originId: true, amount: true, title: true, type: true, category: true, date: true, clientId: true },
-      take: 5000,
-    }));
     const existingMap = new Map(existingRecords.map((r) => [r.originId, r]));
 
     const toCreate: any[] = [];
@@ -130,17 +218,21 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
     }
 
     if (toCreate.length > 0) {
-      const result = await prisma.financeRecord.createMany({ data: toCreate, skipDuplicates: true });
+      const result = await withRetry(() => prisma.financeRecord.createMany({ data: toCreate, skipDuplicates: true }));
       stats.created = result.count;
     }
 
     if (toUpdate.length > 0) {
-      await withRetry(() => prisma.$transaction(
-        toUpdate.map((u) =>
-          prisma.financeRecord.update({ where: { id: u.id, companyId }, data: u.data }),
-        ) as any,
-        { maxWait: 5000, timeout: 10000 },
-      ));
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
+        const batch = toUpdate.slice(i, i + BATCH_SIZE);
+        await withRetry(() => prisma.$transaction(
+          batch.map((u) =>
+            prisma.financeRecord.update({ where: { id: u.id, companyId }, data: u.data }),
+          ) as any,
+          { maxWait: 5000, timeout: 10000 },
+        ));
+      }
       stats.updated = toUpdate.length;
     }
   } else if (
@@ -148,161 +240,80 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
     rule.sourceType === "PAYMENTS_RETAINERS"
   ) {
     // --- SYSTEM PAYMENTS SOURCE ---
-    const transactions = await withRetry(() => prisma.transaction.findMany({
-      where: {
-        companyId,
-        deletedAt: null,
-        status: { in: PAID_STATUS_VARIANTS as any },
-      },
-      select: { id: true, clientId: true, amount: true, paidDate: true, attemptDate: true, createdAt: true, notes: true },
-      take: 5000,
-    }));
-
-    const payments = await withRetry(() => prisma.oneTimePayment.findMany({
-      where: {
-        companyId,
-        deletedAt: null,
-        status: { in: PAID_STATUS_VARIANTS as any },
-      },
-      select: { id: true, clientId: true, amount: true, paidDate: true, dueDate: true, createdAt: true, title: true },
-      take: 5000,
-    }));
+    const [transactions, payments, existingRecords] = await Promise.all([
+      withRetry(() => prisma.transaction.findMany({
+        where: {
+          companyId,
+          deletedAt: null,
+          status: { in: PAID_STATUS_VARIANTS as any },
+        },
+        select: { id: true, clientId: true, amount: true, paidDate: true, attemptDate: true, createdAt: true, notes: true },
+        take: 5000,
+      })),
+      withRetry(() => prisma.oneTimePayment.findMany({
+        where: {
+          companyId,
+          deletedAt: null,
+          status: { in: PAID_STATUS_VARIANTS as any },
+        },
+        select: { id: true, clientId: true, amount: true, paidDate: true, dueDate: true, createdAt: true, title: true },
+        take: 5000,
+      })),
+      withRetry(() => prisma.financeRecord.findMany({
+        where: { syncRuleId: rule.id, companyId, deletedAt: null },
+        select: { id: true, originId: true, amount: true, title: true, type: true, category: true, date: true, clientId: true },
+        take: 5000,
+      })),
+    ]);
 
     stats.scanned = transactions.length + payments.length;
     if (transactions.length >= 5000 || payments.length >= 5000) hitSourceLimit = true;
 
     transactions.forEach((t) => currentOriginIds.push(`trans_${t.id}`));
     payments.forEach((p) => currentOriginIds.push(`payment_${p.id}`));
-
-    const existingRecords = await withRetry(() => prisma.financeRecord.findMany({
-      where: { syncRuleId: rule.id, companyId, deletedAt: null },
-      select: { id: true, originId: true, amount: true, title: true, type: true, category: true, date: true, clientId: true },
-      take: 5000,
-    }));
     const existingMap = new Map(existingRecords.map((r) => [r.originId, r]));
 
     const toCreate: any[] = [];
     const toUpdate: { id: number; data: any }[] = [];
 
-    for (const t of transactions) {
-      try {
-        const date = t.paidDate || t.attemptDate || t.createdAt;
-        const title = t.notes || `System Transaction #${t.id}`;
-        const amount =
-          Math.round((Number(t.amount) + Number.EPSILON) * 100) / 100;
+    processSyncItems(transactions, {
+      getAmount: (t) => Number(t.amount),
+      getDate: (t) => t.paidDate || t.attemptDate || t.createdAt,
+      getTitle: (t) => t.notes || `System Transaction #${t.id}`,
+      getOriginId: (t) => `trans_${t.id}`,
+      getClientId: (t) => t.clientId,
+      getLabel: (t) => `Transaction #${t.id}`,
+      targetType: rule.targetType,
+      category: "System Transaction",
+    }, existingMap, companyId, rule.id, stats, toCreate, toUpdate);
 
-        if (amount <= 0) {
-          stats.skippedError++;
-          continue;
-        }
-
-        const originId = `trans_${t.id}`;
-        const targetType = rule.targetType;
-        const existing = existingMap.get(originId);
-
-        if (!existing) {
-          toCreate.push({
-            companyId,
-            title,
-            amount,
-            type: targetType,
-            category: "System Transaction",
-            date,
-            status: "COMPLETED",
-            syncRuleId: rule.id,
-            originId,
-            clientId: t.clientId,
-          });
-        } else {
-          const isDifferent =
-            Number(existing.amount) !== amount ||
-            existing.title !== title ||
-            existing.type !== targetType ||
-            existing.category !== "System Transaction" ||
-            existing.date.getTime() !== date.getTime() ||
-            (t.clientId && existing.clientId !== t.clientId);
-
-          if (isDifferent) {
-            toUpdate.push({
-              id: existing.id,
-              data: { title, amount, type: targetType, category: "System Transaction", date, clientId: t.clientId },
-            });
-          } else {
-            stats.skippedExists++;
-          }
-        }
-      } catch (err) {
-        stats.skippedError++;
-        if (stats.errors.length < 5)
-          stats.errors.push(`Transaction #${t.id}: ${err}`);
-      }
-    }
-
-    for (const p of payments) {
-      try {
-        const date = p.paidDate || p.dueDate || p.createdAt;
-        const title = p.title || `Payment #${p.id}`;
-        const amount =
-          Math.round((Number(p.amount) + Number.EPSILON) * 100) / 100;
-
-        if (amount <= 0) {
-          stats.skippedError++;
-          continue;
-        }
-
-        const originId = `payment_${p.id}`;
-        const existing = existingMap.get(originId);
-
-        if (!existing) {
-          toCreate.push({
-            companyId,
-            title,
-            amount,
-            type: "INCOME",
-            category: "Payment System",
-            date,
-            status: "COMPLETED",
-            syncRuleId: rule.id,
-            originId,
-            clientId: p.clientId,
-          });
-        } else {
-          const isDifferent =
-            Number(existing.amount) !== amount ||
-            existing.title !== title ||
-            existing.type !== "INCOME" ||
-            existing.category !== "Payment System" ||
-            existing.date.getTime() !== date.getTime() ||
-            (p.clientId && existing.clientId !== p.clientId);
-
-          if (isDifferent) {
-            toUpdate.push({
-              id: existing.id,
-              data: { title, amount, type: "INCOME", category: "Payment System", date, clientId: p.clientId },
-            });
-          } else {
-            stats.skippedExists++;
-          }
-        }
-      } catch (err) {
-        stats.skippedError++;
-        if (stats.errors.length < 5)
-          stats.errors.push(`Payment #${p.id}: ${err}`);
-      }
-    }
+    processSyncItems(payments, {
+      getAmount: (p) => Number(p.amount),
+      getDate: (p) => p.paidDate || p.dueDate || p.createdAt,
+      getTitle: (p) => p.title || `Payment #${p.id}`,
+      getOriginId: (p) => `payment_${p.id}`,
+      getClientId: (p) => p.clientId,
+      getLabel: (p) => `Payment #${p.id}`,
+      targetType: "INCOME",
+      category: "Payment System",
+    }, existingMap, companyId, rule.id, stats, toCreate, toUpdate);
 
     if (toCreate.length > 0) {
-      const result = await prisma.financeRecord.createMany({ data: toCreate, skipDuplicates: true });
+      const result = await withRetry(() => prisma.financeRecord.createMany({ data: toCreate, skipDuplicates: true }));
       stats.created = result.count;
     }
 
     if (toUpdate.length > 0) {
-      await withRetry(() => prisma.$transaction(
-        toUpdate.map((u) =>
-          prisma.financeRecord.update({ where: { id: u.id, companyId }, data: u.data }),
-        ) as any,
-        { maxWait: 5000, timeout: 10000 },
-      ));
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
+        const batch = toUpdate.slice(i, i + BATCH_SIZE);
+        await withRetry(() => prisma.$transaction(
+          batch.map((u) =>
+            prisma.financeRecord.update({ where: { id: u.id, companyId }, data: u.data }),
+          ) as any,
+          { maxWait: 5000, timeout: 10000 },
+        ));
+      }
       stats.updated = toUpdate.length;
     }
   } else if (rule.sourceType === "FIXED_EXPENSES") {
@@ -322,7 +333,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
     stats.scanned = unlinkedRecords.length;
 
     if (unlinkedRecords.length > 0) {
-      await prisma.financeRecord.updateMany({
+      await withRetry(() => prisma.financeRecord.updateMany({
         where: {
           id: { in: unlinkedRecords.map((r) => r.id) },
           companyId,
@@ -330,7 +341,7 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
         data: {
           syncRuleId: rule.id,
         },
-      });
+      }));
       stats.created = generatedCount;
       stats.updated = unlinkedRecords.length;
     } else {
@@ -344,23 +355,23 @@ export async function executeSyncRule(ruleId: number, companyId: number) {
     !hitSourceLimit &&
     rule.sourceType !== "FIXED_EXPENSES"
   ) {
-    await prisma.$executeRaw`
+    await withRetry(() => prisma.$executeRaw`
       DELETE FROM "FinanceRecord"
       WHERE "syncRuleId" = ${rule.id}
         AND "companyId" = ${companyId}
         AND "deletedAt" IS NULL
         AND "originId" IS NOT NULL
         AND "originId" NOT IN (SELECT unnest(${currentOriginIds}::text[]))
-    `;
+    `);
   } else if (
     currentOriginIds.length === 0 &&
     (rule.sourceType === "TRANSACTIONS" ||
       rule.sourceType === "PAYMENTS_RETAINERS" ||
       rule.sourceType === "TABLE")
   ) {
-    await prisma.financeRecord.deleteMany({
+    await withRetry(() => prisma.financeRecord.deleteMany({
       where: { syncRuleId: rule.id, companyId, deletedAt: null },
-    });
+    }));
   }
 
   log.info("Sync rule finished", { ruleId, stats });
@@ -483,31 +494,37 @@ export async function ensureDefaultSyncRules(companyId: number) {
  * Internal processFixedExpenses — accepts companyId directly.
  * Safe for Inngest background jobs. NOT client-callable (no "use server").
  */
-export async function processFixedExpensesInternal(companyId: number) {
+export async function processFixedExpensesInternal(
+  companyId: number,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  externalPrisma?: any,
+) {
+  const db = (externalPrisma ?? prisma) as typeof prisma;
+
   // P1: Resolve FIXED_EXPENSES sync rule so @@unique([syncRuleId, originId]) prevents duplicates
-  const fixedExpenseRule = await prisma.financeSyncRule.findFirst({
-    where: { companyId, sourceType: "FIXED_EXPENSES", isActive: true },
-    select: { id: true },
-  });
-
-  const expenses = await prisma.fixedExpense.findMany({
-    where: {
-      companyId,
-      status: "ACTIVE",
-    },
-    take: 500,
-  });
-
-  // P123: Pre-fetch all existing originIds to avoid N+1 queries
-  const existingRecords = await prisma.financeRecord.findMany({
-    where: {
-      companyId,
-      deletedAt: null,
-      originId: { startsWith: "fixed_" },
-    },
-    select: { originId: true },
-    take: 5000,
-  });
+  // All 3 queries are independent reads — run in parallel to save 2 RTTs
+  const [fixedExpenseRule, expenses, existingRecords] = await Promise.all([
+    withRetry(() => db.financeSyncRule.findFirst({
+      where: { companyId, sourceType: "FIXED_EXPENSES", isActive: true },
+      select: { id: true },
+    })),
+    withRetry(() => db.fixedExpense.findMany({
+      where: {
+        companyId,
+        status: "ACTIVE",
+      },
+      take: 500,
+    })),
+    // P123: Pre-fetch all existing originIds to avoid N+1 queries
+    withRetry(() => db.financeRecord.findMany({
+      where: {
+        companyId,
+        deletedAt: null,
+        originId: { startsWith: "fixed_" },
+      },
+      select: { originId: true },
+    })),
+  ]);
   const existingOriginIds = new Set(existingRecords.map((r) => r.originId));
 
   const today = new Date();
@@ -523,15 +540,6 @@ export async function processFixedExpensesInternal(companyId: number) {
     originId: string;
     syncRuleId: number | null;
   }[] = [];
-
-  // Helper to get clamped date
-  const getValidDate = (y: number, m: number, d: number) => {
-    const date = new Date(y, m, d);
-    if (date.getMonth() !== ((m % 12) + 12) % 12) {
-      return new Date(y, m + 1, 0);
-    }
-    return date;
-  };
 
   for (const expense of expenses) {
     const startDate = expense.startDate || expense.createdAt;
@@ -583,7 +591,7 @@ export async function processFixedExpensesInternal(companyId: number) {
   }
 
   if (toCreate.length > 0) {
-    await prisma.financeRecord.createMany({ data: toCreate as any, skipDuplicates: true });
+    await withRetry(() => db.financeRecord.createMany({ data: toCreate as any, skipDuplicates: true }));
   }
 
   return toCreate.length;

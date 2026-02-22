@@ -383,8 +383,7 @@ async function executeSendWebhook(
         },
       },
     });
-    const logHost = (() => { try { return new URL(url).hostname; } catch { return "invalid"; } })();
-    log.info("Webhook job enqueued", { hostname: logHost });
+    log.info("Webhook job enqueued", { hostname: urlHost });
   } catch (err) {
     log.error("Failed to enqueue webhook job", { error: String(err) });
   }

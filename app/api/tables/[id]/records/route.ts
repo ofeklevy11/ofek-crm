@@ -4,6 +4,8 @@ import { createAuditLog } from "@/lib/audit";
 import { inngest } from "@/lib/inngest/client";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { canReadTable, canWriteTable } from "@/lib/permissions";
 
 const log = createLogger("TableRecords");
 
@@ -24,8 +26,6 @@ export async function GET(
       return NextResponse.json({ error: "Invalid table ID" }, { status: 400 });
     }
 
-    const { getCurrentUser } = await import("@/lib/permissions-server");
-    const { canReadTable } = await import("@/lib/permissions");
     const currentUser = await getCurrentUser();
 
     if (!currentUser) {
@@ -42,6 +42,7 @@ export async function GET(
     // Verify table belongs to this company and is not soft-deleted
     const table = await prisma.tableMeta.findFirst({
       where: { id: tableId, companyId: currentUser.companyId, deletedAt: null },
+      select: { id: true },
     });
 
     if (!table) {
@@ -156,8 +157,6 @@ export async function POST(
     }
 
     // Get the current authenticated user from session
-    const { getCurrentUser } = await import("@/lib/permissions-server");
-    const { canWriteTable } = await import("@/lib/permissions");
     const currentUser = await getCurrentUser();
 
     if (!currentUser) {

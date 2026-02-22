@@ -67,27 +67,41 @@ export function extractNumericValue(record: any, key: string): number {
 }
 
 /**
- * Helper for flexible matching (case-insensitive, trimmed, string conversion)
+ * Pre-parse a filter object into an array of { key, values: Set } for O(1) lookups.
+ * Returns null if the filter is empty or has no active keys.
+ */
+export function prepareFilter(filter: any): Array<{ key: string; values: Set<string> }> | null {
+  if (!filter || Object.keys(filter).length === 0) return null;
+  const parsed = Object.entries(filter)
+    .filter(([, value]) => !!value)
+    .map(([key, value]) => ({
+      key,
+      values: new Set(String(value).split(",").map((v) => v.trim().toLowerCase())),
+    }));
+  return parsed.length > 0 ? parsed : null;
+}
+
+/**
+ * Check if a single record matches a pre-parsed filter.
+ * Returns true if filter is null (no filter).
+ */
+export function matchesFilter(record: any, prepared: Array<{ key: string; values: Set<string> }> | null): boolean {
+  if (!prepared) return true;
+  return prepared.every(({ key, values }) => {
+    const dataVal = extractValue(record, key);
+    if (dataVal === undefined || dataVal === null) return false;
+    return values.has(String(dataVal).trim().toLowerCase());
+  });
+}
+
+/**
+ * Helper for flexible matching (case-insensitive, trimmed, string conversion).
+ * Uses prepareFilter + matchesFilter internally for O(1) Set lookups.
  */
 export function filterRecords(records: any[], filter: any) {
-  if (!filter || Object.keys(filter).length === 0) return records;
-  return records.filter((r) => {
-    return Object.entries(filter).every(([key, value]) => {
-      if (!value) return true;
-
-      const dataVal = extractValue(r, key);
-
-      if (dataVal === undefined || dataVal === null) return false;
-
-      const strDataVal = String(dataVal).trim().toLowerCase();
-
-      const filterValues = String(value)
-        .split(",")
-        .map((v) => v.trim().toLowerCase());
-
-      return filterValues.includes(strDataVal);
-    });
-  });
+  const prepared = prepareFilter(filter);
+  if (!prepared) return records;
+  return records.filter((r) => matchesFilter(r, prepared));
 }
 
 export function getDateFilter(config: any) {
@@ -261,33 +275,44 @@ export async function calculateViewStats(
   let tableName: string;
   let rawData: any[];
 
-  // Fast path: table-based COUNT/GRAPH without filter or groupBy → use DB count instead of loading 1000 records
+  // Fast path: COUNT without filter or groupBy → use DB count instead of loading 1000 records
   const hasFilter = config.filter && Object.keys(config.filter).length > 0;
-  if (
-    !prefetched &&
-    config.tableId &&
-    view.type === "COUNT" &&
-    !config.groupByField &&
-    !hasFilter
-  ) {
+  if (!prefetched && view.type === "COUNT" && !config.groupByField && !hasFilter) {
     const dateRange = getDateFilter(config);
-    const dateFilter = dateRange ? { createdAt: dateRange } : {};
-    const [count, tblName] = await Promise.all([
-      prisma.record.count({
-        where: { tableId: Number(config.tableId), companyId, ...dateFilter },
-      }),
-      getTableName(Number(config.tableId), companyId),
-    ]);
-    return {
-      stats: {
-        mainMetric: String(count),
-        subMetric: "רשומות",
-        label: "כמות",
-        rawMetric: count,
-      },
-      items: [],
-      tableName: tblName,
+    const dateField = config.model === "CalendarEvent" ? "startTime" : "createdAt";
+    const dateFilter = dateRange ? { [dateField]: dateRange } : {};
+
+    if (config.tableId) {
+      const [count, tblName] = await Promise.all([
+        prisma.record.count({
+          where: { tableId: Number(config.tableId), companyId, ...dateFilter },
+        }),
+        getTableName(Number(config.tableId), companyId),
+      ]);
+      return {
+        stats: { mainMetric: String(count), subMetric: "רשומות", label: "כמות", rawMetric: count },
+        items: [],
+        tableName: tblName,
+      };
+    }
+
+    const modelCountMap: Record<string, { counter: () => Promise<number>; name: string }> = {
+      Task: { counter: () => prisma.task.count({ where: { companyId, ...dateFilter } }), name: "משימות מערכת" },
+      Retainer: { counter: () => prisma.retainer.count({ where: { companyId, ...dateFilter } }), name: "פיננסים: ריטיינרים" },
+      OneTimePayment: { counter: () => prisma.oneTimePayment.count({ where: { companyId, ...dateFilter } }), name: "פיננסים: תשלומים" },
+      Transaction: { counter: () => prisma.transaction.count({ where: { companyId, ...dateFilter } }), name: "פיננסים: תנועות" },
+      CalendarEvent: { counter: () => prisma.calendarEvent.count({ where: { companyId, ...dateFilter } }), name: "יומן: אירועים" },
     };
+
+    const modelEntry = modelCountMap[config.model];
+    if (modelEntry) {
+      const count = await modelEntry.counter();
+      return {
+        stats: { mainMetric: String(count), subMetric: "רשומות", label: "כמות", rawMetric: count },
+        items: [],
+        tableName: modelEntry.name,
+      };
+    }
   }
 
   if (prefetched) {
@@ -318,14 +343,16 @@ export async function calculateViewStats(
 
     if (config.groupByField) {
       const groups: Record<string, { total: number; success: number }> = {};
+      const totalFilterParsed = prepareFilter(enhancedTotalFilter);
+      const successFilterParsed = prepareFilter(config.successFilter);
       rawData.forEach((r) => {
-        if (filterRecords([r], enhancedTotalFilter).length > 0) {
+        if (matchesFilter(r, totalFilterParsed)) {
           let rawKey = extractValue(r, config.groupByField);
           const key = rawKey ? String(rawKey) : "ללא";
           if (!groups[key]) groups[key] = { total: 0, success: 0 };
           groups[key].total++;
 
-          if (filterRecords([r], config.successFilter).length > 0) {
+          if (matchesFilter(r, successFilterParsed)) {
             groups[key].success++;
           }
         }
@@ -344,7 +371,8 @@ export async function calculateViewStats(
             rawRate: rate,
           };
         })
-        .sort((a, b) => b.count - a.count);
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 50);
 
       const totalAll = Object.values(groups).reduce(
         (acc, g) => acc + g.total,
@@ -405,7 +433,8 @@ export async function calculateViewStats(
           value: String(count),
           type: "count-group",
         }))
-        .sort((a, b) => Number(b.value) - Number(a.value));
+        .sort((a, b) => Number(b.value) - Number(a.value))
+        .slice(0, 50);
 
       stats = {
         mainMetric: String(filtered.length),
@@ -468,6 +497,7 @@ export async function calculateViewStats(
       .sort((a, b) => b.value - a.value);
 
     const totalValue = items.reduce((acc, i) => acc + i.value, 0);
+    items = items.slice(0, 50);
     stats = {
       mainMetric: totalValue.toLocaleString(),
       subMetric:
@@ -482,6 +512,25 @@ export async function calculateViewStats(
   }
 
   return { stats, items, tableName };
+}
+
+/**
+ * Resolve a display title from a duration record's task or record data.
+ */
+function resolveDurationTitle(d: any): string {
+  if (d.task) return d.task.title;
+  if (d.record) {
+    const data = d.record.data as any;
+    const titleField =
+      Object.keys(data).find(
+        (k) =>
+          k.toLowerCase().includes("name") ||
+          k.toLowerCase().includes("title") ||
+          (typeof data[k] === "string" && data[k].length < 50),
+      ) || "Record";
+    return data[titleField] ? String(data[titleField]) : `Record #${d.record.id}`;
+  }
+  return "Unknown";
 }
 
 /**
@@ -513,12 +562,11 @@ export async function calculateRuleStats(
   if (effectiveActionType === "CALCULATE_MULTI_EVENT_DURATION") {
     const eventTableMap = new Map<string, string>();
     if (triggerConfig.eventChain && Array.isArray(triggerConfig.eventChain)) {
-      for (const event of triggerConfig.eventChain) {
-        const tId = event.tableId ? Number(event.tableId) : mainTableId;
-        if (tId) {
-          eventTableMap.set(event.eventName, await getTableName(tId, companyId));
-        }
-      }
+      const chainEntries = triggerConfig.eventChain
+        .map((event: any) => ({ name: event.eventName, tId: event.tableId ? Number(event.tableId) : mainTableId }))
+        .filter((e: any) => e.tId > 0);
+      const chainNames = await Promise.all(chainEntries.map((e: any) => getTableName(e.tId, companyId)));
+      chainEntries.forEach((e: any, i: number) => eventTableMap.set(e.name, chainNames[i]));
     }
 
     // P122: take: 1000 already present — verified
@@ -537,21 +585,7 @@ export async function calculateRuleStats(
     });
 
     items = multiEventDurations.map((d: any) => {
-      let title = "Unknown";
-      if (d.task) title = d.task.title;
-      else if (d.record) {
-        const data = d.record.data as any;
-        const titleField =
-          Object.keys(data).find(
-            (k) =>
-              k.toLowerCase().includes("name") ||
-              k.toLowerCase().includes("title") ||
-              (typeof data[k] === "string" && data[k].length < 50),
-          ) || "Record";
-        title = data[titleField]
-          ? String(data[titleField])
-          : `Record #${d.record.id}`;
-      }
+      const title = resolveDurationTitle(d);
 
       const eventChain = d.eventChain as any[];
       const eventNames = eventChain
@@ -605,21 +639,7 @@ export async function calculateRuleStats(
     });
 
     items = durations.map((d: any) => {
-      let title = "Unknown";
-      if (d.task) title = d.task.title;
-      else if (d.record) {
-        const data = d.record.data as any;
-        const titleField =
-          Object.keys(data).find(
-            (k) =>
-              k.toLowerCase().includes("name") ||
-              k.toLowerCase().includes("title") ||
-              (typeof data[k] === "string" && data[k].length < 50),
-          ) || "Record";
-        title = data[titleField]
-          ? String(data[titleField])
-          : `Record #${d.record.id}`;
-      }
+      const title = resolveDurationTitle(d);
 
       let statusDisplay = d.toValue || "N/A";
       if (d.fromValue && d.toValue)

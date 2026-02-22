@@ -7,6 +7,14 @@ import { getCachedMetric } from "@/lib/services/cache-service";
 // Rejects any field name that could break out of a SQL identifier or JSON accessor.
 const SAFE_FIELD_NAME = /^[\w\u0590-\u05FF\s\-\.]+$/;
 
+function stableKey(obj: any): string {
+  if (obj === null || typeof obj !== 'object') return JSON.stringify(obj);
+  if (Array.isArray(obj)) return '[' + obj.map(stableKey).join(',') + ']';
+  return '{' + Object.keys(obj).sort().map(
+    k => JSON.stringify(k) + ':' + stableKey(obj[k])
+  ).join(',') + '}';
+}
+
 interface ViewProcessParams {
   tableId: number;
   companyId: number;
@@ -84,11 +92,13 @@ function buildWhereClause(
         case "neq":
           conditions.push(Prisma.sql`${columnRef} != ${String(filter.value)}`);
           break;
-        case "contains":
+        case "contains": {
+          const escaped = String(filter.value).replace(/[%_\\]/g, '\\$&');
           conditions.push(
-            Prisma.sql`${columnRef} ILIKE ${"%" + filter.value + "%"}`,
+            Prisma.sql`${columnRef} ILIKE ${"%" + escaped + "%"}`,
           );
           break;
+        }
         case "includes":
           // For array fields in JSON: data->'field' @> '["value"]'
           // Or strict text match if it's not actually an array in DB but treated as one
@@ -191,7 +201,7 @@ async function processStatsServer(
 ) {
   // Stats view usually shows "New this week/month" or total count
 
-  const cacheKey = `view_stats:${companyId}:${tableId}:${JSON.stringify(config)}`;
+  const cacheKey = `view_stats:${companyId}:${tableId}:${stableKey(config)}`;
   const ttl = forceRefresh ? 0 : 4 * 60 * 60; // 0 seconds vs 4 hours
 
   return await getCachedMetric(
@@ -265,7 +275,7 @@ async function processAggregationServer(
   // Generate a unique key for this specific view configuration
   // We use JSON.stringify(config) to capture all filters, fields, and settings.
   // This ensures that if the user changes ANY filter, they get a fresh result.
-  const cacheKey = `view_agg:${companyId}:${tableId}:${JSON.stringify(config)}`;
+  const cacheKey = `view_agg:${companyId}:${tableId}:${stableKey(config)}`;
 
   // Redis TTL controls cache lifetime. ttl=0 bypasses cache (forces recalculation).
   // Normal ttl=4h means Redis will auto-expire the key after 4 hours.
@@ -430,12 +440,9 @@ async function processLegendServer(
   const totalCount = groups.reduce((acc, g) => acc + Number(g.count), 0);
 
   const items = config.legendItems || [];
+  const groupsByLabel = new Map(groups.map((g: any) => [String(g.label), g]));
   const itemsWithCounts = items.map((item) => {
-    // Find matching group
-    // If the group label matches item label
-    // Note: Client side logic handles multi-select arrays for legend too.
-    // Here we do simple string matching.
-    const match = groups.find((g) => String(g.label) === item.label);
+    const match = groupsByLabel.get(item.label);
     return {
       ...item,
       count: match ? Number(match.count) : 0,

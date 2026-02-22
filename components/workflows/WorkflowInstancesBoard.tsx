@@ -1,14 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Workflow, WorkflowStage } from "@prisma/client";
 import {
-  Plus,
   CheckCircle2,
   Circle,
-  Clock,
   User as UserIcon,
-  MoreVertical,
   Trash2,
   PlayCircle,
   FileText,
@@ -18,10 +15,9 @@ import {
   Zap,
   X,
   Edit2,
-  Trash,
   RotateCcw,
 } from "lucide-react";
-import * as LucideIcons from "lucide-react";
+import { WorkflowIconMap } from "@/lib/workflows/icon-map";
 import {
   createWorkflowInstance,
   updateWorkflowInstanceStage,
@@ -48,6 +44,15 @@ interface Props {
   })[];
   workflows: (Workflow & { stages: WorkflowStage[] })[]; // For creating new instances
   users: LeanUser[]; // For assignment
+}
+
+function formatDate(date: Date | string) {
+  if (!date) return "";
+  return new Date(date).toLocaleDateString("he-IL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
 export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
@@ -90,19 +95,20 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
     assigneeId: "",
   });
 
-  const calculateProgress = (instance: any) => {
-    const stages = instance.workflow.stages || [];
-    if (stages.length === 0) return 0;
-
-    // Filter completed stages to only include those that actually exist in the workflow description
-    // This handles "phantom" completed stages (e.g. if a stage was deleted from the workflow)
-    const stageIds = new Set(stages.map((s: any) => s.id));
-    const validCompletedCount = instance.completedStages.filter((id: number) =>
-      stageIds.has(id),
-    ).length;
-
-    return Math.round((validCompletedCount / stages.length) * 100);
-  };
+  const progressMap = useMemo(() => {
+    const map = new Map<number, number>();
+    const all = selectedInstance
+      ? [...instances.filter(i => i.id !== selectedInstance.id), selectedInstance]
+      : instances;
+    for (const inst of all) {
+      const stages = inst.workflow?.stages || [];
+      if (stages.length === 0) { map.set(inst.id, 0); continue; }
+      const stageIds = new Set(stages.map((s: any) => s.id));
+      const valid = (inst.completedStages as number[]).filter((id: number) => stageIds.has(id)).length;
+      map.set(inst.id, Math.round((valid / stages.length) * 100));
+    }
+    return map;
+  }, [instances, selectedInstance]);
 
   const handleCreate = async () => {
     if (!newForm.workflowId || !newForm.name) return;
@@ -187,15 +193,6 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
     } catch (error) {
       toast.error(getUserFriendlyError(error));
     }
-  };
-
-  const formatDate = (date: Date | string) => {
-    if (!date) return "";
-    return new Date(date).toLocaleDateString("he-IL", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
   };
 
   const handleReset = async () => {
@@ -288,7 +285,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
               {/* Progress Ring or Bar could go here */}
               <div className="text-right">
                 <div className="text-2xl font-bold text-indigo-600">
-                  {calculateProgress(selectedInstance)}%
+                  {progressMap.get(selectedInstance.id) ?? 0}%
                 </div>
                 <div className="text-xs text-gray-400">הושלם</div>
               </div>
@@ -312,7 +309,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                       ));
 
                   // @ts-ignore
-                  const Icon = LucideIcons[stage.icon] || Circle;
+                  const Icon = WorkflowIconMap[stage.icon] || Circle;
 
                   return (
                     <div
@@ -484,7 +481,9 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
               )}
             </div>
           ) : (
-            instances.map((inst) => (
+            instances.map((inst) => {
+              const progress = progressMap.get(inst.id) ?? 0;
+              return (
               <div
                 key={inst.id}
                 onClick={() => setSelectedInstance(inst)}
@@ -532,13 +531,13 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                 <div className="mb-4">
                   <div className="flex justify-between text-xs text-gray-500 mb-1">
                     <span>התקדמות</span>
-                    <span>{calculateProgress(inst)}%</span>
+                    <span>{progress}%</span>
                   </div>
                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-indigo-500 rounded-full transition-all duration-500"
                       style={{
-                        width: `${calculateProgress(inst)}%`,
+                        width: `${progress}%`,
                       }}
                     />
                   </div>
@@ -555,7 +554,8 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                   </div>
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       )}

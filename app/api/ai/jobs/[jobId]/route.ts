@@ -51,7 +51,7 @@ export async function GET(
     return NextResponse.json({
       status: data.status,
       result: data.result,
-      error: data.status === "failed" ? "AI generation failed" : undefined,
+      error: data.status === "failed" ? (data.error || "AI generation failed") : undefined,
     });
   } catch (err) {
     log.error("Corrupted job data", { jobId, error: String(err) });

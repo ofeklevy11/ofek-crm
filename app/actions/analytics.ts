@@ -456,9 +456,11 @@ export async function deleteAnalyticsView(id: number) {
 
     await withRetry(() => prisma.analyticsView.delete({ where: { id, companyId: user.companyId } }));
     logSecurityEvent({ action: SEC_ANALYTICS_VIEW_DELETED, companyId: user.companyId, userId: user.id, details: { viewId: id } });
-    await invalidateFullCache(user.companyId);
+    await Promise.all([
+      invalidateFullCache(user.companyId),
+      invalidateItemCache(user.companyId, "view", id),
+    ]);
     inngest.send({ name: "analytics/refresh-company", data: { companyId: user.companyId } }).catch(() => {});
-    await invalidateItemCache(user.companyId, "view", id);
     return { success: true };
   } catch (error) {
     log.error("Error deleting analytics view", { error: String(error) });
@@ -531,9 +533,11 @@ export async function updateAnalyticsView(
         color: data.color,
       },
     }));
-    await invalidateFullCache(user.companyId);
+    await Promise.all([
+      invalidateFullCache(user.companyId),
+      invalidateItemCache(user.companyId, "view", id),
+    ]);
     inngest.send({ name: "analytics/refresh-company", data: { companyId: user.companyId } }).catch(() => {});
-    await invalidateItemCache(user.companyId, "view", id);
 
     // Recalculate stats inline if config or type changed
     if (data.config !== undefined || data.type !== undefined) {
@@ -596,16 +600,22 @@ async function getAnalyticsDataForCompany(companyId: number) {
     }
 
     // 2. Redis miss — build views from DB cached data (no inline calculation)
-    const rules = await withRetry(() => prisma.automationRule.findMany({
-      where: {
-        companyId,
-        isActive: true,
-        actionType: {
-          in: ["CALCULATE_DURATION", "CALCULATE_MULTI_EVENT_DURATION", "MULTI_ACTION"],
+    const [rules, customViews] = await Promise.all([
+      withRetry(() => prisma.automationRule.findMany({
+        where: {
+          companyId,
+          isActive: true,
+          actionType: {
+            in: ["CALCULATE_DURATION", "CALCULATE_MULTI_EVENT_DURATION", "MULTI_ACTION"],
+          },
         },
-      },
-      take: 500, // P85: Bound rules query
-    }));
+        take: 500, // P85: Bound rules query
+      })),
+      withRetry(() => prisma.analyticsView.findMany({
+        where: { companyId },
+        take: 500, // P85: Bound views query
+      })),
+    ]);
 
     // Filter MULTI_ACTION rules to only those containing a duration action
     const filteredRules = rules.filter((r: any) => {
@@ -613,11 +623,6 @@ async function getAnalyticsDataForCompany(companyId: number) {
       const actions = (r.actionConfig as any)?.actions || [];
       return actions.some((a: any) => a.type === "CALCULATE_DURATION" || a.type === "CALCULATE_MULTI_EVENT_DURATION");
     });
-
-    const customViews = await withRetry(() => prisma.analyticsView.findMany({
-      where: { companyId },
-      take: 500, // P85: Bound views query
-    }));
 
     const views: any[] = [];
 
@@ -639,20 +644,40 @@ async function getAnalyticsDataForCompany(companyId: number) {
     const tableMap = new Map(tables.map((t: any) => [t.id, t.name]));
 
     // Build views from DB cachedStats — with inline fallback for uncached items
-    // Bound inline rule calculations to prevent resource exhaustion
+    // S2: Collect uncached items first, then calculate ALL in parallel (bounded to 10+10 max)
     const MAX_INLINE_RULE_CALC = 10;
-    let inlineRuleCalcCount = 0;
+    const MAX_INLINE_CALC = 10;
 
+    // Separate rules into cached and uncached
+    const uncachedRules: typeof filteredRules = [];
+    const ruleDataMap = new Map<number, any>();
     for (const rule of filteredRules) {
-      let cachedData = rule.cachedStats as any;
-      const ruleTableId = parseInt((rule.triggerConfig as any).tableId || "0");
+      if (rule.cachedStats) {
+        ruleDataMap.set(rule.id, rule.cachedStats);
+      } else if (uncachedRules.length < MAX_INLINE_RULE_CALC) {
+        uncachedRules.push(rule);
+      }
+    }
 
-      // Fallback: calculate inline if never cached (bounded)
-      if (!cachedData && inlineRuleCalcCount < MAX_INLINE_RULE_CALC) {
-        inlineRuleCalcCount++;
+    // Separate views into cached and uncached
+    const uncachedViews: typeof customViews = [];
+    const viewDataMap = new Map<number, any>();
+    for (const view of customViews) {
+      if (view.cachedStats) {
+        viewDataMap.set(view.id, view.cachedStats);
+      } else if (uncachedViews.length < MAX_INLINE_CALC) {
+        uncachedViews.push(view);
+      }
+    }
+
+    // Calculate ALL uncached rules + views in parallel
+    const inlineDbUpdates: Promise<any>[] = [];
+    await Promise.all([
+      ...uncachedRules.map(async (rule) => {
         try {
           const result = await calculateRuleStats(rule, companyId);
-          cachedData = { stats: result.stats, items: result.items };
+          const cachedData = { stats: result.stats, items: result.items };
+          ruleDataMap.set(rule.id, cachedData);
           // Persist to DB (fire-and-forget)
           prisma.automationRule.update({
             where: { id: rule.id, companyId },
@@ -661,7 +686,29 @@ async function getAnalyticsDataForCompany(companyId: number) {
         } catch (e) {
           log.error("Inline calc failed for rule", { ruleId: rule.id, error: String(e) });
         }
-      }
+      }),
+      ...uncachedViews.map(async (view) => {
+        try {
+          const result = await calculateViewStats(view, companyId);
+          const cachedData = { stats: result.stats, items: result.items, tableName: result.tableName };
+          viewDataMap.set(view.id, cachedData);
+          // Persist to DB so next load is instant (fire-and-forget)
+          inlineDbUpdates.push(
+            prisma.analyticsView.update({
+              where: { id: view.id, companyId },
+              data: { cachedStats: cachedData, lastCachedAt: new Date() },
+            }).catch((e) => log.error("DB update failed for view", { viewId: view.id, error: String(e) })),
+          );
+        } catch (e) {
+          log.error("Inline calc failed for view", { viewId: view.id, error: String(e) });
+        }
+      }),
+    ]);
+
+    // Build rule views
+    for (const rule of filteredRules) {
+      const cachedData = ruleDataMap.get(rule.id) as any;
+      const ruleTableId = parseInt((rule.triggerConfig as any).tableId || "0");
       // Determine the effective duration action type for MULTI_ACTION rules
       const effectiveActionType = rule.actionType === "MULTI_ACTION"
         ? ((rule.actionConfig as any)?.actions || []).find((a: any) => a.type === "CALCULATE_MULTI_EVENT_DURATION")
@@ -690,41 +737,18 @@ async function getAnalyticsDataForCompany(companyId: number) {
       });
     }
 
-    // Inline calculation fallback: if cachedStats is null, calculate on-the-fly (max 10 to limit latency)
-    const MAX_INLINE_CALC = 10;
-    let inlineCalcCount = 0;
-    const inlineDbUpdates: Promise<any>[] = [];
-
+    // Build custom views
     for (const view of customViews) {
-      let cachedData = view.cachedStats as any;
+      const cachedData = viewDataMap.get(view.id) as any;
       const viewConfig = view.config as any;
-
-      // Fallback: calculate inline if never cached
-      if (!cachedData && inlineCalcCount < MAX_INLINE_CALC) {
-        inlineCalcCount++;
-        try {
-          const result = await calculateViewStats(view, companyId);
-          cachedData = { stats: result.stats, items: result.items, tableName: result.tableName };
-          // Persist to DB so next load is instant (fire-and-forget)
-          inlineDbUpdates.push(
-            prisma.analyticsView.update({
-              where: { id: view.id, companyId },
-              data: { cachedStats: cachedData, lastCachedAt: new Date() },
-            }).catch((e) => log.error("DB update failed for view", { viewId: view.id, error: String(e) })),
-          );
-        } catch (e) {
-          log.error("Inline calc failed for view", { viewId: view.id, error: String(e) });
-        }
-      }
-
       const viewTableId = Number(viewConfig?.tableId || 0);
       // Resolve table name: use cached name → batch-fetched map → static model name → fallback
-      // Avoids N+1: tableMap already has all live tables; deleted tables get a fallback string
-      const resolvedTableName =
-        cachedData?.tableName ||
-        (viewTableId > 0
+      let resolvedTableName = cachedData?.tableName;
+      if (!resolvedTableName) {
+        resolvedTableName = viewTableId > 0
           ? (tableMap.get(viewTableId) ?? "טבלה לא ידועה")
-          : resolveTableNameFromConfig(viewConfig, companyId));
+          : await resolveTableNameFromConfig(viewConfig, companyId);
+      }
       views.push({
         id: `view_${view.id}`,
         viewId: view.id,
@@ -781,6 +805,14 @@ export async function getAnalyticsDataAuthed(companyId: number) {
   }
   const rl = await checkActionRateLimit(String(user.id), ANALYTICS_RATE_LIMITS.read);
   if (rl) return { success: false, error: rl.error };
+  return getAnalyticsDataForCompany(companyId);
+}
+
+/**
+ * Internal: fetch analytics data for a company without auth/rate-limit checks.
+ * ONLY called from getDashboardInitialData which already verified auth + rate limit.
+ */
+export async function getAnalyticsDataForDashboard(companyId: number) {
   return getAnalyticsDataForCompany(companyId);
 }
 
@@ -908,7 +940,16 @@ export async function refreshAnalyticsItemWithChecks(
     const rl = await checkActionRateLimit(String(user.id), ANALYTICS_RATE_LIMITS.mutation);
     if (rl) return { success: false, error: rl.error };
 
-    // 1. Check eligibility + log atomically to prevent race conditions
+    // 1. Validate itemId belongs to user's company BEFORE consuming a refresh credit
+    if (itemType === "CUSTOM") {
+      const exists = await prisma.analyticsView.count({ where: { id: itemId, companyId: user.companyId } });
+      if (!exists) return { success: false, error: "Item not found" };
+    } else {
+      const exists = await prisma.automationRule.count({ where: { id: itemId, companyId: user.companyId } });
+      if (!exists) return { success: false, error: "Item not found" };
+    }
+
+    // 2. Check eligibility + log atomically to prevent race conditions
     const plan = (user.isPremium || "basic") as string;
     const maxRefreshes = plan === "super" ? 9999 : plan === "premium" ? 10 : 3;
     const windowStart = new Date(Date.now() - 4 * 60 * 60 * 1000);
@@ -931,15 +972,6 @@ export async function refreshAnalyticsItemWithChecks(
         success: false,
         error: `הגעת למגבלת הרענונים בחבילה שלך (${maxRefreshes}). שדרג ל-Premium כדי לקבל יותר.`,
       };
-    }
-
-    // 2. Validate itemId belongs to user's company
-    if (itemType === "CUSTOM") {
-      const exists = await prisma.analyticsView.count({ where: { id: itemId, companyId: user.companyId } });
-      if (!exists) return { success: false, error: "Item not found" };
-    } else {
-      const exists = await prisma.automationRule.count({ where: { id: itemId, companyId: user.companyId } });
-      if (!exists) return { success: false, error: "Item not found" };
     }
 
     // 3. Trigger background job

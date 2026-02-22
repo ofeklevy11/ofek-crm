@@ -1,11 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   getStartOfWeek,
   addDays,
   daysOfWeek,
   isSameDay,
-  getTimeSlots,
+  TIME_SLOTS,
 } from "@/lib/dateUtils";
+import { getEventLayout } from "@/lib/calendar-layout";
 import { CalendarEvent } from "@/lib/types";
 import { EventCard, DraggableEventCard } from "./EventCard";
 import { CalendarDroppableSlot } from "./CalendarDroppableSlot";
@@ -32,9 +33,6 @@ interface WeekViewProps {
     newMinutes: number,
     duration: number,
   ) => void;
-  draggingEventId?: string | null;
-  onDragStart?: (event: CalendarEvent) => void;
-  onDragEnd?: () => void;
   onCreateEvent?: () => void;
 }
 
@@ -44,8 +42,6 @@ export function WeekView({
   onEventClick,
   onTimeSlotClick,
   onEventDrop,
-  onDragStart,
-  onDragEnd,
   onCreateEvent,
 }: WeekViewProps) {
   const [activeEvent, setActiveEvent] = useState<CalendarEvent | null>(null);
@@ -64,134 +60,35 @@ export function WeekView({
     }),
   );
 
-  const startOfWeek = getStartOfWeek(currentDate);
-  const weekDates = Array.from({ length: 7 }, (_, i) =>
-    addDays(startOfWeek, i),
-  );
-  const timeSlots = getTimeSlots();
+  const weekDates = useMemo(() => {
+    const start = getStartOfWeek(currentDate);
+    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  }, [currentDate]);
+  const timeSlots = TIME_SLOTS;
   const today = new Date();
 
-  // Group events by day
-  const eventsByDay = weekDates.map((date) =>
-    events.filter((event) => isSameDay(event.startTime, date)),
-  );
-
-  // Helper function to check if two events overlap
-  const eventsOverlap = (a: CalendarEvent, b: CalendarEvent): boolean => {
-    return a.startTime < b.endTime && b.startTime < a.endTime;
-  };
-
-  // Calculate layout columns for overlapping events
-  const getEventLayout = (
-    dayEvents: CalendarEvent[],
-  ): Map<string, { columnIndex: number; totalColumns: number }> => {
-    const layout = new Map<
-      string,
-      { columnIndex: number; totalColumns: number }
-    >();
-
-    if (dayEvents.length === 0) return layout;
-
-    // Sort events by start time, then by duration (longer first)
-    const sortedEvents = [...dayEvents].sort((a, b) => {
-      const startDiff = a.startTime.getTime() - b.startTime.getTime();
-      if (startDiff !== 0) return startDiff;
-      // If same start time, longer events first
-      const aDuration = a.endTime.getTime() - a.startTime.getTime();
-      const bDuration = b.endTime.getTime() - b.startTime.getTime();
-      return bDuration - aDuration;
+  // Group events by day using Map-based single-pass grouping
+  const eventsByDay = useMemo(() => {
+    const byDayKey = new Map<string, CalendarEvent[]>();
+    for (const event of events) {
+      const key = `${event.startTime.getFullYear()}-${event.startTime.getMonth()}-${event.startTime.getDate()}`;
+      const arr = byDayKey.get(key) || [];
+      arr.push(event);
+      byDayKey.set(key, arr);
+    }
+    return weekDates.map((date) => {
+      const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+      return byDayKey.get(key) || [];
     });
+  }, [events, weekDates]);
 
-    // Group overlapping events into collision groups
-    const groups: CalendarEvent[][] = [];
-
-    for (const event of sortedEvents) {
-      let addedToGroup = false;
-
-      for (const group of groups) {
-        // Check if this event overlaps with any event in the group
-        const overlapsWithGroup = group.some((e) => eventsOverlap(e, event));
-        if (overlapsWithGroup) {
-          group.push(event);
-          addedToGroup = true;
-          break;
-        }
-      }
-
-      if (!addedToGroup) {
-        groups.push([event]);
-      }
-    }
-
-    // Merge groups that share events (transitively connected)
-    let merged = true;
-    while (merged) {
-      merged = false;
-      for (let i = 0; i < groups.length; i++) {
-        for (let j = i + 1; j < groups.length; j++) {
-          // Check if any event in group i overlaps with any event in group j
-          const shouldMerge = groups[i].some((ei) =>
-            groups[j].some((ej) => eventsOverlap(ei, ej)),
-          );
-          if (shouldMerge) {
-            groups[i].push(...groups[j]);
-            groups.splice(j, 1);
-            merged = true;
-            break;
-          }
-        }
-        if (merged) break;
-      }
-    }
-
-    // Assign columns within each group
-    for (const group of groups) {
-      const columns: CalendarEvent[][] = [];
-
-      // Sort group by start time
-      group.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
-
-      for (const event of group) {
-        // Find the first column where this event can fit
-        let placed = false;
-        for (let colIdx = 0; colIdx < columns.length; colIdx++) {
-          const column = columns[colIdx];
-          // Check if event overlaps with any event in this column
-          const overlapsWithColumn = column.some((e) =>
-            eventsOverlap(e, event),
-          );
-          if (!overlapsWithColumn) {
-            column.push(event);
-            layout.set(event.id, { columnIndex: colIdx, totalColumns: 0 }); // totalColumns set later
-            placed = true;
-            break;
-          }
-        }
-
-        if (!placed) {
-          // Create new column
-          columns.push([event]);
-          layout.set(event.id, {
-            columnIndex: columns.length - 1,
-            totalColumns: 0,
-          });
-        }
-      }
-
-      // Update totalColumns for all events in this group
-      const totalColumns = columns.length;
-      for (const event of group) {
-        const info = layout.get(event.id)!;
-        info.totalColumns = totalColumns;
-      }
-    }
-
-    return layout;
-  };
+  // Pre-compute all layouts (avoids recalculating inside JSX per day)
+  const eventLayouts = useMemo(() => {
+    return eventsByDay.map((dayEvents) => getEventLayout(dayEvents));
+  }, [eventsByDay]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveEvent(event.active.data.current?.event);
-    onDragStart?.(event.active.data.current?.event);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -210,7 +107,6 @@ export function WeekView({
     }
 
     setActiveEvent(null);
-    onDragEnd?.();
   };
 
   return (
@@ -300,10 +196,8 @@ export function WeekView({
                 >
                   {/* Clickable Time Slots background - split into halves */}
                   {timeSlots.map((_, hourIndex) => {
-                    const startHourFull = hourIndex;
-                    const endHourFull = (hourIndex + 1) % 24;
-                    const startHourHalf = hourIndex;
-                    const endHourHalfActual = (hourIndex + 1) % 24;
+                    const startHour = hourIndex;
+                    const endHour = (hourIndex + 1) % 24;
 
                     return (
                       <div
@@ -323,8 +217,8 @@ export function WeekView({
                         >
                           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                             <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-md shadow-sm font-medium whitespace-nowrap">
-                              {startHourFull.toString().padStart(2, "0")}:00 עד{" "}
-                              {endHourFull.toString().padStart(2, "0")}:00
+                              {startHour.toString().padStart(2, "0")}:00 עד{" "}
+                              {endHour.toString().padStart(2, "0")}:00
                             </span>
                           </div>
                         </CalendarDroppableSlot>
@@ -342,8 +236,8 @@ export function WeekView({
                         >
                           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                             <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-md shadow-sm font-medium whitespace-nowrap">
-                              {startHourHalf.toString().padStart(2, "0")}:30 עד{" "}
-                              {endHourHalfActual.toString().padStart(2, "0")}:30
+                              {startHour.toString().padStart(2, "0")}:30 עד{" "}
+                              {endHour.toString().padStart(2, "0")}:30
                             </span>
                           </div>
                         </CalendarDroppableSlot>
@@ -352,25 +246,21 @@ export function WeekView({
                   })}
 
                   {/* Events overlay - positioned absolutely on top */}
-                  {(() => {
-                    const dayEvents = eventsByDay[dayIndex];
-                    const layoutMap = getEventLayout(dayEvents);
-                    return dayEvents.map((event) => {
-                      const layoutInfo = layoutMap.get(event.id) || {
-                        columnIndex: 0,
-                        totalColumns: 1,
-                      };
-                      return (
-                        <DraggableEventCard
-                          key={event.id}
-                          event={event}
-                          onClick={() => onEventClick?.(event)}
-                          columnIndex={layoutInfo.columnIndex}
-                          totalColumns={layoutInfo.totalColumns}
-                        />
-                      );
-                    });
-                  })()}
+                  {eventsByDay[dayIndex].map((event) => {
+                    const layoutInfo = eventLayouts[dayIndex].get(event.id) || {
+                      columnIndex: 0,
+                      totalColumns: 1,
+                    };
+                    return (
+                      <DraggableEventCard
+                        key={event.id}
+                        event={event}
+                        onClick={() => onEventClick?.(event)}
+                        columnIndex={layoutInfo.columnIndex}
+                        totalColumns={layoutInfo.totalColumns}
+                      />
+                    );
+                  })}
                 </div>
               ))}
             </div>

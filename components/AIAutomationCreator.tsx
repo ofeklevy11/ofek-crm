@@ -148,7 +148,7 @@ export default function AIAutomationCreator({
         ...prev,
         { role: "model", content: isRateLimited
           ? "הגעת למגבלת הבקשות. אנא המתן דקה ונסה שוב."
-          : "מצטער, משהו השתבש. אנא נסה שוב." },
+          : `מצטער, משהו השתבש: ${error?.message || "שגיאה לא ידועה"}` },
       ]);
       setLoading(false);
     }

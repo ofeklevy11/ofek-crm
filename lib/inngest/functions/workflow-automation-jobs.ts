@@ -317,19 +317,14 @@ export const processWorkflowStageAutomations = inngest.createFunction(
 
           case "webhook":
             if (config.url) {
+              let urlHost: string;
+              try { urlHost = new URL(config.url).hostname; } catch { urlHost = "invalid-url"; }
+
               // SSRF protection: block requests to private/internal addresses
               if (isPrivateUrl(config.url)) {
-                const blockedHost = (() => { try { return new URL(config.url).hostname; } catch { return "invalid-url"; } })();
-                log.warn("Webhook blocked — private URL", { hostname: blockedHost });
+                log.warn("Webhook blocked — private URL", { hostname: urlHost });
                 break;
               }
-              const urlHost = (() => {
-                try {
-                  return new URL(config.url).hostname;
-                } catch {
-                  return "invalid";
-                }
-              })();
               await inngest.send({
                 id: `webhook-workflow-${companyId}-${stageId}-${urlHost}-${Math.floor(Date.now() / 5000)}`,
                 name: "automation/send-webhook",
@@ -350,8 +345,7 @@ export const processWorkflowStageAutomations = inngest.createFunction(
                   },
                 },
               });
-              const webhookHost = (() => { try { return new URL(config.url).hostname; } catch { return "invalid-url"; } })();
-              log.info("Webhook job enqueued", { hostname: webhookHost });
+              log.info("Webhook job enqueued", { hostname: urlHost });
             }
             break;
         }

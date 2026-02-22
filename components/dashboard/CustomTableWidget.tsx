@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, memo } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
@@ -31,15 +31,15 @@ interface CustomTableWidgetProps {
   title: string;
   tableName: string;
   data: any; // ProcessedViewData
-  onRemove: () => void;
-  onEdit: () => void;
+  onRemove: (id: string) => void;
+  onEdit: (id: string) => void;
   isLoading?: boolean;
-  onSettingsChange?: (newSettings: any) => void;
+  onSettingsChange?: (id: string, newSettings: any) => void;
   settings?: any;
   tableId?: number;
 }
 
-export default function CustomTableWidget({
+function CustomTableWidget({
   id,
   title,
   tableName,
@@ -109,7 +109,7 @@ export default function CustomTableWidget({
       await updateDashboardWidgetSettings(id, newSettings);
 
       if (onSettingsChange) {
-        onSettingsChange(newSettings);
+        onSettingsChange(id, newSettings);
       }
     } catch (err) {
       console.error("Failed to update collapsed state", err);
@@ -136,7 +136,7 @@ export default function CustomTableWidget({
 
       // Notify parent to update local state and re-fetch
       if (onSettingsChange) {
-        onSettingsChange(newSettings);
+        onSettingsChange(id, newSettings);
       }
 
       router.refresh();
@@ -309,7 +309,7 @@ export default function CustomTableWidget({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onEdit();
+                    onEdit(id);
                   }}
                   className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-white rounded-md transition shadow-sm"
                   onPointerDown={(e) => e.stopPropagation()}
@@ -334,7 +334,7 @@ export default function CustomTableWidget({
             className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors opacity-0 group-hover:opacity-100"
             onPointerDown={(e) => {
               e.stopPropagation();
-              onRemove();
+              onRemove(id);
             }}
             title="הסר מהדאשבורד"
           >
@@ -366,3 +366,5 @@ export default function CustomTableWidget({
     </div>
   );
 }
+
+export default memo(CustomTableWidget);

@@ -7,7 +7,6 @@ import {
   calculateRuleStats,
   calculateViewStats,
   getTableName,
-  resolveTableNameFromConfig,
   buildSourceKey,
   fetchViewSourceData,
 } from "@/lib/analytics/calculate";
@@ -38,27 +37,39 @@ export const cleanupOldDurationRecords = inngest.createFunction(
 
     const statusDeleted = await step.run("delete-old-status-durations", async () => {
       let total = 0;
-      let deletedCount: number;
-      do {
-        const result = await prisma.statusDuration.deleteMany({
+      let done = false;
+      while (!done) {
+        const stale = await prisma.statusDuration.findMany({
           where: { createdAt: { lt: cutoff } },
+          select: { id: true },
+          take: BATCH_SIZE,
         });
-        deletedCount = result.count;
-        total += deletedCount;
-      } while (deletedCount >= BATCH_SIZE);
+        if (stale.length === 0) break;
+        await prisma.statusDuration.deleteMany({
+          where: { id: { in: stale.map((s) => s.id) } },
+        });
+        total += stale.length;
+        if (stale.length < BATCH_SIZE) done = true;
+      }
       return total;
     });
 
     const multiDeleted = await step.run("delete-old-multi-event-durations", async () => {
       let total = 0;
-      let deletedCount: number;
-      do {
-        const result = await prisma.multiEventDuration.deleteMany({
+      let done = false;
+      while (!done) {
+        const stale = await prisma.multiEventDuration.findMany({
           where: { createdAt: { lt: cutoff } },
+          select: { id: true },
+          take: BATCH_SIZE,
         });
-        deletedCount = result.count;
-        total += deletedCount;
-      } while (deletedCount >= BATCH_SIZE);
+        if (stale.length === 0) break;
+        await prisma.multiEventDuration.deleteMany({
+          where: { id: { in: stale.map((s) => s.id) } },
+        });
+        total += stale.length;
+        if (stale.length < BATCH_SIZE) done = true;
+      }
       return total;
     });
 
@@ -150,66 +161,44 @@ export const refreshCompanyAnalytics = inngest.createFunction(
           const redisWrites: Array<() => Promise<void>> = [];
           const now = new Date();
 
-          for (const rule of batch) {
-            try {
-              const { stats, items, tableName } = await calculateRuleStats(rule, companyId);
-
-              dbUpdates.push(
-                prisma.automationRule.update({
-                  where: { id: rule.id, companyId },
-                  data: { cachedStats: { stats, items }, lastCachedAt: now },
-                }),
-              );
-
-              redisWrites.push(() => setSingleItemCache(companyId, "rule", rule.id, { stats, items, tableName }));
-
-              // Determine effective action type for MULTI_ACTION rules
+          const calcResults = await Promise.all(
+            batch.map(async (rule) => {
               const effectiveActionType = rule.actionType === "MULTI_ACTION"
                 ? ((rule.actionConfig as any)?.actions || []).find((a: any) => a.type === "CALCULATE_MULTI_EVENT_DURATION")
                   ? "CALCULATE_MULTI_EVENT_DURATION"
                   : "CALCULATE_DURATION"
                 : rule.actionType;
-              results.push({
-                id: `rule_${rule.id}`,
-                ruleId: rule.id,
-                ruleName: rule.name,
-                tableName,
-                type:
-                  effectiveActionType === "CALCULATE_MULTI_EVENT_DURATION"
-                    ? "multi-event"
-                    : "single-event",
-                data: items,
-                stats,
-                order: rule.analyticsOrder ?? 0,
-                color: rule.analyticsColor ?? "bg-white",
-                source: "AUTOMATION",
-                folderId: rule.folderId,
-                lastRefreshed: now.toISOString(),
-              });
-            } catch (e) {
-              log.error("Failed to calculate rule", { ruleId: rule.id, error: String(e) });
-              // Include the rule with empty data so it isn't silently dropped from the cache
-              const effectiveActionType = rule.actionType === "MULTI_ACTION"
-                ? ((rule.actionConfig as any)?.actions || []).find((a: any) => a.type === "CALCULATE_MULTI_EVENT_DURATION")
-                  ? "CALCULATE_MULTI_EVENT_DURATION"
-                  : "CALCULATE_DURATION"
-                : rule.actionType;
-              results.push({
-                id: `rule_${rule.id}`,
-                ruleId: rule.id,
-                ruleName: rule.name,
-                tableName: "...",
-                type: effectiveActionType === "CALCULATE_MULTI_EVENT_DURATION" ? "multi-event" : "single-event",
-                data: [],
-                stats: null,
-                order: rule.analyticsOrder ?? 0,
-                color: rule.analyticsColor ?? "bg-white",
-                source: "AUTOMATION",
-                folderId: rule.folderId,
-                lastRefreshed: null,
-              });
-            }
-          }
+              const viewType = effectiveActionType === "CALCULATE_MULTI_EVENT_DURATION" ? "multi-event" : "single-event";
+
+              try {
+                const { stats, items, tableName } = await calculateRuleStats(rule, companyId);
+
+                dbUpdates.push(
+                  prisma.automationRule.update({
+                    where: { id: rule.id, companyId },
+                    data: { cachedStats: { stats, items }, lastCachedAt: now },
+                  }),
+                );
+                redisWrites.push(() => setSingleItemCache(companyId, "rule", rule.id, { stats, items, tableName }));
+
+                return {
+                  id: `rule_${rule.id}`, ruleId: rule.id, ruleName: rule.name, tableName,
+                  type: viewType, data: items, stats,
+                  order: rule.analyticsOrder ?? 0, color: rule.analyticsColor ?? "bg-white",
+                  source: "AUTOMATION", folderId: rule.folderId, lastRefreshed: now.toISOString(),
+                };
+              } catch (e) {
+                log.error("Failed to calculate rule", { ruleId: rule.id, error: String(e) });
+                return {
+                  id: `rule_${rule.id}`, ruleId: rule.id, ruleName: rule.name, tableName: "...",
+                  type: viewType, data: [], stats: null,
+                  order: rule.analyticsOrder ?? 0, color: rule.analyticsColor ?? "bg-white",
+                  source: "AUTOMATION", folderId: rule.folderId, lastRefreshed: null,
+                };
+              }
+            }),
+          );
+          results.push(...calcResults);
 
           // Batch DB writes in a transaction for atomicity, then update Redis cache
           if (dbUpdates.length > 0) await prisma.$transaction(dbUpdates as any);
@@ -274,55 +263,36 @@ export const refreshCompanyAnalytics = inngest.createFunction(
                 const dbUpdates: Promise<any>[] = [];
                 const redisWrites: Array<() => Promise<void>> = [];
 
-                for (const { view, key } of batch) {
-                  try {
-                    const prefetched = sourceCache.get(key) || undefined;
-                    const { stats, items, tableName } = await calculateViewStats(view, companyId, prefetched);
+                const viewCalcResults = await Promise.all(
+                  batch.map(async ({ view, key }) => {
+                    try {
+                      const prefetched = sourceCache.get(key) || undefined;
+                      const { stats, items, tableName } = await calculateViewStats(view, companyId, prefetched);
 
-                    dbUpdates.push(
-                      prisma.analyticsView.update({
-                        where: { id: view.id, companyId },
-                        data: { cachedStats: { stats, items, tableName }, lastCachedAt: now },
-                      }),
-                    );
+                      dbUpdates.push(
+                        prisma.analyticsView.update({
+                          where: { id: view.id, companyId },
+                          data: { cachedStats: { stats, items, tableName }, lastCachedAt: now },
+                        }),
+                      );
+                      redisWrites.push(() => setSingleItemCache(companyId, "view", view.id, { stats, items, tableName }));
 
-                    redisWrites.push(() => setSingleItemCache(companyId, "view", view.id, { stats, items, tableName }));
-
-                    results.push({
-                      id: `view_${view.id}`,
-                      viewId: view.id,
-                      ruleName: view.title,
-                      tableName,
-                      type: view.type,
-                      data: items,
-                      stats,
-                      order: view.order,
-                      color: view.color,
-                      source: "CUSTOM",
-                      config: view.config,
-                      folderId: view.folderId,
-                      lastRefreshed: now.toISOString(),
-                    });
-                  } catch (e) {
-                    log.error("Failed to calculate view", { viewId: view.id, error: String(e) });
-                    // Include the view with empty data so it isn't silently dropped from the cache
-                    results.push({
-                      id: `view_${view.id}`,
-                      viewId: view.id,
-                      ruleName: view.title,
-                      tableName: "...",
-                      type: view.type,
-                      data: [],
-                      stats: null,
-                      order: view.order,
-                      color: view.color,
-                      source: "CUSTOM",
-                      config: view.config,
-                      folderId: view.folderId,
-                      lastRefreshed: null,
-                    });
-                  }
-                }
+                      return {
+                        id: `view_${view.id}`, viewId: view.id, ruleName: view.title, tableName,
+                        type: view.type, data: items, stats, order: view.order, color: view.color,
+                        source: "CUSTOM", config: view.config, folderId: view.folderId, lastRefreshed: now.toISOString(),
+                      };
+                    } catch (e) {
+                      log.error("Failed to calculate view", { viewId: view.id, error: String(e) });
+                      return {
+                        id: `view_${view.id}`, viewId: view.id, ruleName: view.title, tableName: "...",
+                        type: view.type, data: [], stats: null, order: view.order, color: view.color,
+                        source: "CUSTOM", config: view.config, folderId: view.folderId, lastRefreshed: null,
+                      };
+                    }
+                  }),
+                );
+                results.push(...viewCalcResults);
 
                 // Batch DB writes in a transaction, then update Redis cache
                 if (dbUpdates.length > 0) await prisma.$transaction(dbUpdates as any);

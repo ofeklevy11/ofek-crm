@@ -2335,7 +2335,13 @@ export const processAIGeneration = inngest.createFunction(
           throw new Error(`Unknown AI job type: ${type}`);
       }
 
-      const cleanedText = await callOpenRouter(systemPrompt, maxTokens, modelOverride);
+      let cleanedText: string;
+      try {
+        cleanedText = await callOpenRouter(systemPrompt, maxTokens, modelOverride);
+      } catch (err) {
+        log.error("callOpenRouter failed", { jobId, type, error: String(err) });
+        throw err;
+      }
 
       switch (type) {
         case "schema": {

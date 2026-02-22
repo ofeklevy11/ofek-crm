@@ -77,7 +77,7 @@ export async function createSyncRule(data: {
     }
   }
 
-  const rule = await prisma.financeSyncRule.create({
+  const rule = await withRetry(() => prisma.financeSyncRule.create({
     data: {
       companyId: user.companyId,
       name: data.name.slice(0, 200),
@@ -86,7 +86,7 @@ export async function createSyncRule(data: {
       sourceId: data.sourceId,
       fieldMapping: data.fieldMapping as any,
     },
-  });
+  }));
 
   clearDefaultRulesCache(user.companyId);
   return rule;
@@ -114,7 +114,7 @@ export async function updateSyncRule(
     throw new Error("Invalid target type");
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await withRetry(() => prisma.$transaction(async (tx) => {
     const existing = await tx.financeSyncRule.findFirst({
       where: { id, companyId: user.companyId },
       select: { id: true },
@@ -128,7 +128,7 @@ export async function updateSyncRule(
         targetType: data.targetType as any,
       },
     });
-  });
+  }));
 
   if (!updated) throw new Error("Sync rule not found");
 
@@ -213,14 +213,14 @@ export async function deleteSyncRule(id: number) {
   if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid rule ID");
 
   // Delete records + rule atomically to prevent partial cleanup
-  await withRetry(() => prisma.$transaction([
-    prisma.financeRecord.deleteMany({
+  await withRetry(() => prisma.$transaction(async (tx) => {
+    await tx.financeRecord.deleteMany({
       where: { syncRuleId: id, companyId: user.companyId },
-    }),
-    prisma.financeSyncRule.delete({
+    });
+    await tx.financeSyncRule.delete({
       where: { id, companyId: user.companyId },
-    }),
-  ]));
+    });
+  }));
 
   clearDefaultRulesCache(user.companyId);
   revalidatePath("/finance/collect");

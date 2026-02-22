@@ -12,6 +12,7 @@ import {
   HandCoins,
 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { withRetry } from "@/lib/db-retry";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getSyncRules } from "@/app/actions/finance-sync";
@@ -23,33 +24,37 @@ export default async function IncomeExpensesPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  // Ensure data is synced and up to date
+  // Ensure data is synced — throttled to avoid re-running on every page load
   try {
-    const { triggerSyncByType } = await import("@/lib/finance-sync-internal");
-    await Promise.all([
-      triggerSyncByType(user.companyId, "FIXED_EXPENSES"),
-      triggerSyncByType(user.companyId, "PAYMENTS_RETAINERS"),
-    ]);
+    const { shouldTriggerSync, triggerSyncByType } = await import("@/lib/finance-sync-internal");
+    const syncs: Promise<void>[] = [];
+    if (shouldTriggerSync(user.companyId, "FIXED_EXPENSES")) {
+      syncs.push(triggerSyncByType(user.companyId, "FIXED_EXPENSES"));
+    }
+    if (shouldTriggerSync(user.companyId, "PAYMENTS_RETAINERS")) {
+      syncs.push(triggerSyncByType(user.companyId, "PAYMENTS_RETAINERS"));
+    }
+    if (syncs.length > 0) await Promise.all(syncs);
   } catch (e) {
     console.error("Auto-sync on page load failed", e);
   }
 
   // Single parallel fetch: DB-level aggregation for stats + paginated records + rules
   const [totals, rawRecords, rules] = await Promise.all([
-    prisma.financeRecord.groupBy({
+    withRetry(() => prisma.financeRecord.groupBy({
       by: ["type"],
       where: { companyId: user.companyId, deletedAt: null },
       _sum: { amount: true },
-    }),
-    prisma.financeRecord.findMany({
+    })),
+    withRetry(() => prisma.financeRecord.findMany({
       where: { companyId: user.companyId, deletedAt: null },
       orderBy: { date: "desc" },
-      take: 500,
+      take: 50,
       include: {
         syncRule: { select: { sourceType: true, name: true } },
         client: { select: { name: true } },
       },
-    }),
+    })),
     getSyncRules(),
   ]);
 

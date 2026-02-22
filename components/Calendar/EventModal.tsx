@@ -191,18 +191,21 @@ export function EventModal({
     try {
       const result = await onSave(newEvent);
       if (result) {
-        // If we have pending automations and this was a new event, save them
+        // If we have pending automations and this was a new event, save them in parallel
         if (!event && pendingAutomations.length > 0) {
-          for (const auto of pendingAutomations) {
-            try {
-              await createEventAutomation({
+          const results = await Promise.allSettled(
+            pendingAutomations.map((auto) =>
+              createEventAutomation({
                 eventId: result,
                 minutesBefore: auto.minutesBefore,
                 actionType: auto.actionType,
                 actionConfig: auto.actionConfig,
-              });
-            } catch (err) {
-              console.error("Failed to create pending automation", err);
+              })
+            )
+          );
+          for (const r of results) {
+            if (r.status === "rejected") {
+              console.error("Failed to create pending automation", r.reason);
             }
           }
         }

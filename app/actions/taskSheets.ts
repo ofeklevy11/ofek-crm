@@ -12,6 +12,23 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("TaskSheets");
 
+const TASK_SHEET_ITEM_SELECT = {
+  id: true, sheetId: true, title: true, description: true,
+  priority: true, category: true, order: true, dueTime: true,
+  isCompleted: true, completedAt: true, notes: true,
+  linkedTaskId: true, onCompleteActions: true,
+  createdAt: true, updatedAt: true,
+} as const;
+
+const TASK_SHEET_BASE_SELECT = {
+  id: true, title: true, description: true, type: true,
+  assigneeId: true, createdById: true, isActive: true,
+  validFrom: true, validUntil: true,
+  createdAt: true, updatedAt: true,
+} as const;
+
+const USER_NAME_SELECT = { id: true, name: true } as const;
+
 // Types
 export interface TaskSheetItemInput {
   title: string;
@@ -63,25 +80,16 @@ export async function getTaskSheets() {
         isActive: true,
       },
       select: {
-        id: true, title: true, description: true, type: true,
-        assigneeId: true, createdById: true, isActive: true,
-        validFrom: true, validUntil: true,
-        createdAt: true, updatedAt: true,
+        ...TASK_SHEET_BASE_SELECT,
         assignee: {
-          select: { id: true, name: true, email: true },
+          select: USER_NAME_SELECT,
         },
         createdBy: {
-          select: { id: true, name: true },
+          select: USER_NAME_SELECT,
         },
         items: {
           orderBy: { order: "asc" },
-          select: {
-            id: true, sheetId: true, title: true, description: true,
-            priority: true, category: true, order: true, dueTime: true,
-            isCompleted: true, completedAt: true, notes: true,
-            linkedTaskId: true, onCompleteActions: true,
-            createdAt: true, updatedAt: true,
-          },
+          select: TASK_SHEET_ITEM_SELECT,
         },
       },
       orderBy: { createdAt: "desc" },
@@ -110,24 +118,17 @@ export async function getTaskSheetById(id: number) {
         ...(user.role !== "admin" ? { assigneeId: user.id } : {}),
       },
       select: {
-        id: true, title: true, description: true, type: true,
-        assigneeId: true, createdById: true, isActive: true,
-        validFrom: true, validUntil: true,
-        createdAt: true, updatedAt: true,
+        ...TASK_SHEET_BASE_SELECT,
         assignee: {
-          select: { id: true, name: true, email: true },
+          select: USER_NAME_SELECT,
         },
         createdBy: {
-          select: { id: true, name: true },
+          select: USER_NAME_SELECT,
         },
         items: {
           orderBy: [{ order: "asc" }, { priority: "asc" }],
           select: {
-            id: true, sheetId: true, title: true, description: true,
-            priority: true, category: true, order: true, dueTime: true,
-            isCompleted: true, completedAt: true, notes: true,
-            linkedTaskId: true, onCompleteActions: true,
-            createdAt: true, updatedAt: true,
+            ...TASK_SHEET_ITEM_SELECT,
             linkedTask: {
               select: { id: true, title: true, status: true, priority: true },
             },
@@ -185,29 +186,18 @@ export async function createTaskSheet(data: TaskSheetInput) {
                 order: item.order ?? index,
                 dueTime: item.dueTime,
                 linkedTaskId: item.linkedTaskId,
-                onCompleteActions: JSON.parse(
-                  JSON.stringify(item.onCompleteActions || []),
-                ),
+                onCompleteActions: item.onCompleteActions || [],
               })),
             }
           : undefined,
       },
       select: {
-        id: true, title: true, description: true, type: true,
-        assigneeId: true, createdById: true, isActive: true,
-        validFrom: true, validUntil: true,
-        createdAt: true, updatedAt: true,
+        ...TASK_SHEET_BASE_SELECT,
         assignee: {
-          select: { id: true, name: true, email: true },
+          select: USER_NAME_SELECT,
         },
         items: {
-          select: {
-            id: true, sheetId: true, title: true, description: true,
-            priority: true, category: true, order: true, dueTime: true,
-            isCompleted: true, completedAt: true, notes: true,
-            linkedTaskId: true, onCompleteActions: true,
-            createdAt: true, updatedAt: true,
-          },
+          select: TASK_SHEET_ITEM_SELECT,
         },
       },
     });
@@ -259,21 +249,12 @@ export async function updateTaskSheet(
         }),
       },
       select: {
-        id: true, title: true, description: true, type: true,
-        assigneeId: true, createdById: true, isActive: true,
-        validFrom: true, validUntil: true,
-        createdAt: true, updatedAt: true,
+        ...TASK_SHEET_BASE_SELECT,
         assignee: {
-          select: { id: true, name: true, email: true },
+          select: USER_NAME_SELECT,
         },
         items: {
-          select: {
-            id: true, sheetId: true, title: true, description: true,
-            priority: true, category: true, order: true, dueTime: true,
-            isCompleted: true, completedAt: true, notes: true,
-            linkedTaskId: true, onCompleteActions: true,
-            createdAt: true, updatedAt: true,
-          },
+          select: TASK_SHEET_ITEM_SELECT,
         },
       },
     });
@@ -367,17 +348,9 @@ export async function addTaskSheetItem(
           order: item.order ?? (maxOrder._max.order ?? 0) + 1,
           dueTime: item.dueTime,
           linkedTaskId: item.linkedTaskId,
-          onCompleteActions: JSON.parse(
-            JSON.stringify(item.onCompleteActions || []),
-          ),
+          onCompleteActions: item.onCompleteActions || [],
         },
-        select: {
-          id: true, sheetId: true, title: true, description: true,
-          priority: true, category: true, order: true, dueTime: true,
-          isCompleted: true, completedAt: true, notes: true,
-          linkedTaskId: true, onCompleteActions: true,
-          createdAt: true, updatedAt: true,
-        },
+        select: TASK_SHEET_ITEM_SELECT,
       });
     }, { isolationLevel: "Serializable", maxWait: 5000, timeout: 10000 }));
 
@@ -405,7 +378,8 @@ export async function updateTaskSheetItem(
     // Get the item and check access
     const existingItem = await withRetry(() => prisma.taskSheetItem.findUnique({
       where: { id: itemId },
-      include: {
+      select: {
+        ...TASK_SHEET_ITEM_SELECT,
         sheet: {
           select: { assigneeId: true, companyId: true, title: true },
         },
@@ -435,8 +409,18 @@ export async function updateTaskSheetItem(
       if (data.category !== undefined) updateData.category = data.category;
       if (data.order !== undefined) updateData.order = data.order;
       if (data.dueTime !== undefined) updateData.dueTime = data.dueTime;
-      if (data.linkedTaskId !== undefined)
+      if (data.linkedTaskId !== undefined) {
+        if (data.linkedTaskId) {
+          const linkedTask = await withRetry(() => prisma.task.findFirst({
+            where: { id: data.linkedTaskId, companyId: user.companyId },
+            select: { id: true },
+          }));
+          if (!linkedTask) {
+            return { success: false, error: "Invalid linked task" };
+          }
+        }
         updateData.linkedTaskId = data.linkedTaskId;
+      }
       if (data.onCompleteActions !== undefined)
         updateData.onCompleteActions = data.onCompleteActions;
     }
@@ -555,7 +539,8 @@ export async function toggleTaskSheetItemCompletion(itemId: number) {
 
     const item = await withRetry(() => prisma.taskSheetItem.findUnique({
       where: { id: itemId },
-      include: {
+      select: {
+        ...TASK_SHEET_ITEM_SELECT,
         sheet: {
           select: { assigneeId: true, companyId: true, title: true },
         },
@@ -664,10 +649,7 @@ export async function getMyTaskSheets() {
         OR: [{ validUntil: null }, { validUntil: { gte: now } }],
       },
       select: {
-        id: true, title: true, description: true, type: true,
-        assigneeId: true, createdById: true, isActive: true,
-        validFrom: true, validUntil: true,
-        createdAt: true, updatedAt: true,
+        ...TASK_SHEET_BASE_SELECT,
         items: {
           orderBy: [
             { isCompleted: "asc" },
@@ -675,18 +657,14 @@ export async function getMyTaskSheets() {
             { order: "asc" },
           ],
           select: {
-            id: true, sheetId: true, title: true, description: true,
-            priority: true, category: true, order: true, dueTime: true,
-            isCompleted: true, completedAt: true, notes: true,
-            linkedTaskId: true, onCompleteActions: true,
-            createdAt: true, updatedAt: true,
+            ...TASK_SHEET_ITEM_SELECT,
             linkedTask: {
               select: { id: true, title: true, status: true, priority: true },
             },
           },
         },
         createdBy: {
-          select: { id: true, name: true },
+          select: USER_NAME_SELECT,
         },
       },
       orderBy: [{ type: "asc" }, { createdAt: "desc" }],

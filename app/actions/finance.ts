@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { PAID_STATUS_VARIANTS, normalizePaymentStatus, VALID_PAYMENT_STATUSES } from "@/lib/finance-constants";
 import { withRetry } from "@/lib/db-retry";
 import { hasUserFlag } from "@/lib/permissions";
+import { getCurrentUser } from "@/lib/permissions-server";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("Finance");
@@ -15,7 +16,6 @@ const log = createLogger("Finance");
 
 export async function getRetainers(opts?: { cursor?: number; take?: number }) {
   try {
-    const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
     if (!hasUserFlag(user, "canViewFinance")) {
@@ -57,7 +57,6 @@ export async function getRetainers(opts?: { cursor?: number; take?: number }) {
 
 export async function getRetainerById(id: number) {
   try {
-    const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
     if (!hasUserFlag(user, "canViewFinance")) {
@@ -99,7 +98,6 @@ export async function createRetainer(data: {
   notes?: string;
 }) {
   try {
-    const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
     if (!hasUserFlag(user, "canViewFinance")) {
@@ -163,7 +161,7 @@ export async function createRetainer(data: {
     // H1: Wrap client verify + create in transaction to prevent TOCTOU race
     const retainer = await withRetry(() => prisma.$transaction(async (tx) => {
       const client = await tx.client.findFirst({
-        where: { id: Number(clientId), companyId: user.companyId, deletedAt: null },
+        where: { id: clientId, companyId: user.companyId, deletedAt: null },
       });
       if (!client) {
         throw new Error("Invalid client");
@@ -172,7 +170,7 @@ export async function createRetainer(data: {
       return tx.retainer.create({
         data: {
           title,
-          clientId: parseInt(String(clientId)),
+          clientId,
           companyId: user.companyId,
           amount,
           frequency: frequency as "monthly" | "quarterly" | "annually",
@@ -215,7 +213,6 @@ export async function updateRetainer(
   },
 ) {
   try {
-    const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
     if (!hasUserFlag(user, "canViewFinance")) {
@@ -297,7 +294,6 @@ export async function updateRetainer(
 
 export async function deleteRetainer(id: number) {
   try {
-    const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
     if (!hasUserFlag(user, "canViewFinance")) {
@@ -354,7 +350,6 @@ export async function deleteRetainer(id: number) {
 
 export async function getPayments(opts?: { cursor?: number; take?: number }) {
   try {
-    const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
     if (!hasUserFlag(user, "canViewFinance")) {
@@ -395,7 +390,6 @@ export async function getPayments(opts?: { cursor?: number; take?: number }) {
 
 export async function getPaymentById(id: number) {
   try {
-    const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
     if (!hasUserFlag(user, "canViewFinance")) {
@@ -434,7 +428,6 @@ export async function createPayment(data: {
   notes?: string;
 }) {
   try {
-    const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
     if (!hasUserFlag(user, "canViewFinance")) {
@@ -469,7 +462,7 @@ export async function createPayment(data: {
     // H2: Wrap client verify + create in transaction to prevent TOCTOU race
     const payment = await withRetry(() => prisma.$transaction(async (tx) => {
       const client = await tx.client.findFirst({
-        where: { id: Number(clientId), companyId: user.companyId, deletedAt: null },
+        where: { id: clientId, companyId: user.companyId, deletedAt: null },
       });
       if (!client) {
         throw new Error("Invalid client");
@@ -478,7 +471,7 @@ export async function createPayment(data: {
       return tx.oneTimePayment.create({
         data: {
           title,
-          clientId: parseInt(String(clientId)),
+          clientId,
           companyId: user.companyId,
           amount,
           dueDate: parsedDueDate,
@@ -517,7 +510,6 @@ export async function updatePayment(
   },
 ) {
   try {
-    const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
     if (!hasUserFlag(user, "canViewFinance")) {
@@ -611,7 +603,6 @@ export async function updatePayment(
 
 export async function deletePayment(id: number) {
   try {
-    const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
     if (!hasUserFlag(user, "canViewFinance")) {
@@ -658,7 +649,6 @@ export async function searchClients(searchTerm: string) {
       return { success: false, error: "Invalid search term" };
     }
 
-    const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
     if (!hasUserFlag(user, "canViewFinance")) {
@@ -689,7 +679,6 @@ export async function searchClients(searchTerm: string) {
 
 export async function getFinanceClients(opts?: { cursor?: number; take?: number }) {
   try {
-    const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
     if (!hasUserFlag(user, "canViewFinance")) {

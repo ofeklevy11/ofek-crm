@@ -48,7 +48,6 @@ interface TaskSheet {
   assignee: {
     id: number;
     name: string;
-    email: string;
   };
   createdBy: {
     id: number;
@@ -66,7 +65,6 @@ interface TaskSheet {
 interface UserOption {
   id: number;
   name: string;
-  email: string;
 }
 
 interface TaskSheetsManagerProps {
@@ -444,20 +442,29 @@ export default function TaskSheetsManager({
         // Also add any new items
         if (result.success && newItems.length > 0) {
           const newItemsToAdd = newItems.filter((item) => item.title.trim());
+          const itemResults = await Promise.allSettled(
+            newItemsToAdd.map((item) =>
+              addTaskSheetItem(editingSheet.id, {
+                title: item.title,
+                description: item.description || undefined,
+                priority: item.priority as any,
+                category: item.category || undefined,
+                dueTime: item.dueTime || undefined,
+                onCompleteActions: item.onCompleteActions as any,
+              })
+            )
+          );
           const addedItems: TaskSheetItem[] = [];
-          for (const item of newItemsToAdd) {
-            const itemResult = await addTaskSheetItem(editingSheet.id, {
-              title: item.title,
-              description: item.description || undefined,
-              priority: item.priority as any,
-              category: item.category || undefined,
-              dueTime: item.dueTime || undefined,
-              onCompleteActions: item.onCompleteActions as any,
-            });
-            if (itemResult.success && itemResult.data) {
-              const newItem = itemResult.data as unknown as TaskSheetItem;
-              addedItems.push(newItem);
+          let failedCount = 0;
+          for (const result of itemResults) {
+            if (result.status === "fulfilled" && result.value.success && result.value.data) {
+              addedItems.push(result.value.data as unknown as TaskSheetItem);
+            } else {
+              failedCount++;
             }
+          }
+          if (failedCount > 0) {
+            toast.error(`${failedCount} פריטים נכשלו בהוספה`);
           }
           // Update local state with new items
           setSheets((prev) =>
@@ -505,7 +512,6 @@ export default function TaskSheetsManager({
             assignee: assignee || {
               id: formData.assigneeId,
               name: "Unknown",
-              email: "",
             },
             createdBy: { id: 0, name: "You" },
             validFrom:

@@ -20,22 +20,21 @@ export function AllEventsModal({
 }: AllEventsModalProps) {
   const [view, setView] = useState<"upcoming" | "past" | "all">("upcoming");
 
-  const sortedEvents = useMemo(() => {
-    const now = new Date();
+  const now = useMemo(() => new Date(), [view]);
 
+  const sortedEvents = useMemo(() => {
     // Filter events
     const filtered = events.filter((event) => {
       if (view === "all") return true;
 
-      const eventTime = new Date(event.startTime);
       const isUpcoming = view === "upcoming";
-      return isUpcoming ? eventTime >= now : eventTime < now;
+      return isUpcoming ? event.startTime >= now : event.startTime < now;
     });
 
     // Sort events
     return filtered.sort((a, b) => {
-      const dateA = new Date(a.startTime).getTime();
-      const dateB = new Date(b.startTime).getTime();
+      const dateA = a.startTime.getTime();
+      const dateB = b.startTime.getTime();
 
       if (view === "upcoming") {
         // "from the most current to the most future" -> Ascending for upcoming
@@ -46,7 +45,7 @@ export function AllEventsModal({
         return dateB - dateA;
       }
     });
-  }, [events, view]);
+  }, [events, view, now]);
 
   if (!isOpen) return null;
 
@@ -142,8 +141,7 @@ export function AllEventsModal({
             <p className="text-center text-gray-500 py-4">אין אירועים להצגה</p>
           ) : (
             sortedEvents.map((event) => {
-              const now = new Date();
-              const isPast = new Date(event.startTime) < now;
+              const isPast = event.startTime < now;
 
               return (
                 <div
@@ -162,7 +160,7 @@ export function AllEventsModal({
                         {event.title}
                       </h3>
                       <p className="text-sm text-gray-500">
-                        {new Date(event.startTime).toLocaleString("he-IL", {
+                        {event.startTime.toLocaleString("he-IL", {
                           dateStyle: "medium",
                           timeStyle: "short",
                         })}

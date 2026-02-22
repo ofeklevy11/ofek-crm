@@ -3,7 +3,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Trash2, Eye, EyeOff } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { useRouter } from "next/navigation";
 import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
 import Link from "next/link";
@@ -19,11 +19,11 @@ interface MeetingItem {
 
 interface MiniMeetingsWidgetProps {
   id: string;
-  onRemove: () => void;
+  onRemove: (id: string) => void;
   settings?: any;
 }
 
-export default function MiniMeetingsWidget({
+function MiniMeetingsWidget({
   id,
   onRemove,
   settings,
@@ -132,7 +132,7 @@ export default function MiniMeetingsWidget({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onRemove();
+                onRemove(id);
               }}
               onPointerDown={(e) => e.stopPropagation()}
               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
@@ -213,3 +213,5 @@ export default function MiniMeetingsWidget({
     </div>
   );
 }
+
+export default memo(MiniMeetingsWidget);

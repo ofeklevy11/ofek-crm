@@ -4,8 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { canReadTable, hasUserFlag } from "@/lib/permissions";
 import { getGoalsForCompanyInternal } from "@/lib/services/goal-computation";
-import { getAnalyticsDataAuthed } from "@/app/actions/analytics";
-import { getTablesForDashboard } from "@/app/actions/tables";
+import { getAnalyticsDataForDashboard } from "@/app/actions/analytics";
+import { getTablesForDashboardInternal } from "@/app/actions/tables";
+import { GOALS_DEDUP_WINDOW_MS } from "@/lib/constants/dedup";
 import {
   getCachedGoals,
   getCachedTableWidget,
@@ -47,7 +48,7 @@ export async function getDashboardInitialData() {
     import("@/lib/inngest/client")
       .then(({ inngest }) =>
         inngest.send({
-          id: `goals-refresh-${user.companyId}-${Math.floor(Date.now() / 60000)}`,
+          id: `goals-refresh-${user.companyId}-${Math.floor(Date.now() / GOALS_DEDUP_WINDOW_MS)}`,
           name: "dashboard/refresh-goals",
           data: { companyId: user.companyId },
         }),
@@ -55,13 +56,28 @@ export async function getDashboardInitialData() {
       .catch(() => {});
   }
 
-  // Fetch analytics, tables, goals, AND views all in parallel (eliminates views waterfall)
+  // S5: For non-admin users, pre-compute allowedTableIds to filter views at DB level
+  const isFullAccess = user.role === "admin" || user.role === "manager";
+  const allowedTableIds = !isFullAccess && user.tablePermissions
+    ? Object.entries(user.tablePermissions as Record<string, string>)
+        .filter(([, perm]) => perm === "read" || perm === "write")
+        .map(([id]) => Number(id))
+    : undefined;
+
+  // Fetch analytics, tables, goals, AND views all in parallel
+  // S1: Use internal variants — auth + rate limit already checked above
   const results = await Promise.allSettled([
-    getAnalyticsDataAuthed(user.companyId),
-    getTablesForDashboard(),
-    cachedGoals ? Promise.resolve(cachedGoals.data) : getGoalsForCompanyInternal(user.companyId),
+    getAnalyticsDataForDashboard(user.companyId),
+    getTablesForDashboardInternal(user.companyId, user.role, user.tablePermissions),
+    // S3: Pass skipCache since we already checked cache above
+    cachedGoals ? Promise.resolve(cachedGoals.data) : getGoalsForCompanyInternal(user.companyId, { skipCache: true }),
     withRetry(() => prisma.view.findMany({
-      where: { companyId: user.companyId, isEnabled: true },
+      where: {
+        companyId: user.companyId,
+        isEnabled: true,
+        // S5: Filter at DB level for non-admin users
+        ...(allowedTableIds ? { tableId: { in: allowedTableIds } } : {}),
+      },
       select: { id: true, tableId: true, name: true, config: true },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
       take: 500,
@@ -77,7 +93,7 @@ export async function getDashboardInitialData() {
     analyticsRes.success && analyticsRes.data ? analyticsRes.data : [];
   const tables = tablesRes.success && tablesRes.data ? tablesRes.data : [];
 
-  // Filter views to only those belonging to accessible tables (permission filtering in-memory)
+  // Group views by table (views are already permission-filtered from DB query)
   const tableIdSet = new Set(tables.map((t) => t.id));
   const viewsByTable = new Map<number, typeof allViews>();
   for (const view of allViews) {

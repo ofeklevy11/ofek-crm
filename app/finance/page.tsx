@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { withRetry } from "@/lib/db-retry";
 import FinancialStats from "@/components/finance/FinancialStats";
 import ActiveRetainersTable from "@/components/finance/ActiveRetainersTable";
 import PendingPaymentsTable from "@/components/finance/PendingPaymentsTable";
@@ -16,7 +17,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cn } from "@/lib/utils";
+
 
 export default async function FinancePage() {
   const user = await getCurrentUser();
@@ -32,40 +33,40 @@ export default async function FinancePage() {
   // P5: Use Promise.allSettled so one failed query doesn't crash the whole dashboard
   const results = await Promise.allSettled([
     // Recent transactions for display (already bounded)
-    prisma.transaction.findMany({
+    withRetry(() => prisma.transaction.findMany({
       where: { companyId: user.companyId, deletedAt: null }, // P6+P3
       include: { client: { select: { id: true, name: true } } },
       orderBy: { createdAt: "desc" },
       take: 5,
-    }),
+    })),
     // Top 5 active retainers for display (with client name)
-    prisma.retainer.findMany({
+    withRetry(() => prisma.retainer.findMany({
       where: { status: "active", companyId: user.companyId, deletedAt: null }, // P6+P3
       include: { client: { select: { id: true, name: true } } },
       orderBy: { nextDueDate: "asc" },
       take: 5,
-    }),
+    })),
     // All active retainers — minimal fields for MRR/growth stats (no client join)
-    prisma.retainer.findMany({
+    withRetry(() => prisma.retainer.findMany({
       where: { status: "active", companyId: user.companyId, deletedAt: null }, // P6+P3
       select: { amount: true, frequency: true, createdAt: true },
       take: 500,
-    }),
+    })),
     // Top 5 pending payments for display (with client name)
-    prisma.oneTimePayment.findMany({
+    withRetry(() => prisma.oneTimePayment.findMany({
       where: { status: { in: ["pending", "overdue"] }, companyId: user.companyId, deletedAt: null }, // P6+P3
       include: { client: { select: { id: true, name: true } } },
       orderBy: { dueDate: "asc" },
       take: 5,
-    }),
+    })),
     // DB-level aggregate for outstanding debt + count
-    prisma.oneTimePayment.aggregate({
+    withRetry(() => prisma.oneTimePayment.aggregate({
       where: { status: { in: ["pending", "overdue"] }, companyId: user.companyId, deletedAt: null }, // P6+P3
       _sum: { amount: true },
       _count: { id: true },
-    }),
+    })),
     // Overdue count at DB level
-    prisma.oneTimePayment.count({
+    withRetry(() => prisma.oneTimePayment.count({
       where: {
         companyId: user.companyId, deletedAt: null, // P6+P3
         OR: [
@@ -73,19 +74,19 @@ export default async function FinancePage() {
           { status: "pending", dueDate: { lt: now } },
         ],
       },
-    }),
+    })),
     // Paid revenue stats for collection rate
-    prisma.oneTimePayment.aggregate({
+    withRetry(() => prisma.oneTimePayment.aggregate({
       _sum: { amount: true },
       _count: { id: true },
       where: {
         companyId: user.companyId, deletedAt: null, // P6+P3
         status: { in: PAID_STATUS_VARIANTS as any },
       },
-    }),
-    prisma.retainer.count({
+    })),
+    withRetry(() => prisma.retainer.count({
       where: { status: "cancelled", companyId: user.companyId, deletedAt: null }, // P6+P3
-    }),
+    })),
   ]);
 
   // P5: Extract values with safe defaults for failed queries
@@ -105,29 +106,27 @@ export default async function FinancePage() {
   const totalPaidAmount = Number(transactionStats?._sum?.amount || 0);
   const paidCount = Number(transactionStats?._count?.id || 0);
 
-  // New retainers this month
-  const newRetainersThisMonth = retainerStatsData.filter(
-    (r) => new Date(r.createdAt) >= firstDayOfMonth,
-  ).length;
+  // Single-pass retainer stats calculation
+  let mrr = 0;
+  let newRetainersThisMonth = 0;
+  let newMrrThisMonth = 0;
+  let newRetainersLast30Days = 0;
 
-  // New MRR added this month
-  const newMrrThisMonth = retainerStatsData
-    .filter((r) => new Date(r.createdAt) >= firstDayOfMonth)
-    .reduce((sum, r) => {
-      const amount = Number(r.amount);
-      const freq = r.frequency ? r.frequency.toLowerCase() : "monthly";
-      if (freq === "yearly") return sum + amount / 12;
-      return sum + amount;
-    }, 0);
-
-  // MRR Calculation
-  const mrr = retainerStatsData.reduce((sum, r) => {
+  for (const r of retainerStatsData) {
     const amount = Number(r.amount);
     const freq = r.frequency ? r.frequency.toLowerCase() : "monthly";
-    if (freq === "yearly") return sum + amount / 12;
-    if (freq === "weekly") return sum + amount * 4.33;
-    return sum + amount;
-  }, 0);
+    const mrrContribution = freq === "yearly" ? amount / 12 : freq === "weekly" ? amount * 4.33 : amount;
+    mrr += mrrContribution;
+
+    const createdAt = new Date(r.createdAt);
+    if (createdAt >= firstDayOfMonth) {
+      newRetainersThisMonth++;
+      newMrrThisMonth += mrrContribution;
+    }
+    if (createdAt >= thirtyDaysAgo) {
+      newRetainersLast30Days++;
+    }
+  }
 
   const outstandingDebt = Number(outstandingStats?._sum?.amount || 0);
   const outstandingCount = Number(outstandingStats?._count?.id || 0);
@@ -144,10 +143,6 @@ export default async function FinancePage() {
     totalRetainersForChurn > 0
       ? Math.round((cancelledRetainersCount / totalRetainersForChurn) * 100)
       : 0;
-
-  const newRetainersLast30Days = retainerStatsData.filter(
-    (r) => new Date(r.createdAt) >= thirtyDaysAgo,
-  ).length;
 
   // Serialize for Client Components
   const serializedActiveRetainers = displayRetainers.map((r) => ({

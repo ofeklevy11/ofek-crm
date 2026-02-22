@@ -116,10 +116,14 @@ export async function POST(request: Request) {
       safeAllowedWriteTableIds = safeAllowedWriteTableIds.filter((id) => managerWriteIds.has(id));
     }
 
-    // Check if email already exists — generic error to prevent enumeration
-    const existingUser = await withRetry(() => prisma.user.findUnique({
-      where: { email },
-    }));
+    // Check email uniqueness + hash password in parallel
+    const [existingUser, passwordHash] = await Promise.all([
+      withRetry(() => prisma.user.findUnique({
+        where: { email },
+        select: { id: true },
+      })),
+      bcrypt.hash(password, 12),
+    ]);
 
     if (existingUser) {
       return NextResponse.json(
@@ -127,8 +131,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
-    const passwordHash = await bcrypt.hash(password, 12);
 
     const user = await withRetry(() => prisma.user.create({
       data: {
@@ -154,7 +156,7 @@ export async function POST(request: Request) {
       },
     }));
 
-    await createAuditLog(
+    createAuditLog(
       null,
       currentUser.id,
       "USER_CREATED",

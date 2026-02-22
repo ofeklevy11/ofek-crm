@@ -1,29 +1,8 @@
 "use client";
 
 import { WorkflowStage } from "@prisma/client";
-import { icons } from "lucide-react";
-import {
-  LucideIcon,
-  Circle,
-  CheckCircle,
-  Clock,
-  AlertCircle,
-  FileText,
-  Send,
-  User,
-  GitBranch,
-} from "lucide-react";
-
-const IconMap: Record<string, LucideIcon> = {
-  Circle,
-  CheckCircle,
-  Clock,
-  AlertCircle,
-  FileText,
-  Send,
-  User,
-  GitBranch,
-};
+import { Circle } from "lucide-react";
+import { WorkflowIconMap } from "@/lib/workflows/icon-map";
 
 interface StageCardProps {
   stage: WorkflowStage;
@@ -34,7 +13,7 @@ interface StageCardProps {
 
 export function StageCard({ stage, onClick, index }: StageCardProps) {
   // @ts-ignore
-  const IconComponent = IconMap[stage.icon] || Circle;
+  const IconComponent = WorkflowIconMap[stage.icon] || Circle;
   // @ts-ignore
   const stageColor = stage.color || "blue";
 

@@ -197,3 +197,23 @@ export const processEventAutomationJob = inngest.createFunction(
     return { success: true, companyId };
   },
 );
+
+/**
+ * Background job for processing meeting reminder automations.
+ * Offloaded from cron route to avoid Vercel timeout on inline execution.
+ */
+export const processMeetingReminderJob = inngest.createFunction(
+  {
+    id: "process-meeting-reminders",
+    name: "Process Meeting Reminders",
+    retries: 2,
+    timeouts: { finish: "120s" },
+    concurrency: { limit: 1 },
+  },
+  { event: "automation/meeting-reminders" },
+  async () => {
+    const { processMeetingReminders } = await import("@/app/actions/meeting-automations");
+    await processMeetingReminders();
+    return { success: true };
+  },
+);

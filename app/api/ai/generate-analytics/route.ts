@@ -143,14 +143,14 @@ export async function POST(req: Request) {
       }),
     ]);
 
-    const validTableIds = new Set(userTables.map((t: any) => t.id));
+    const userTableMap = new Map(userTables.map((t: any) => [t.id, t]));
     const recordCountMap = new Map(recordCounts.map((r: any) => [r.tableId, r._count]));
 
     // Build structured formattedTables with columns, recordCount
     const formattedTables = tables
-      .filter((t: any) => validTableIds.has(t.id))
+      .filter((t: any) => userTableMap.has(t.id))
       .map((t: any) => {
-        const dbTable = userTables.find((ut: any) => ut.id === t.id);
+        const dbTable = userTableMap.get(t.id);
         let rawColumns: any[] = [];
         const schemaSource = dbTable?.schemaJson || t.schemaJson;
         if (schemaSource) {

@@ -57,7 +57,9 @@ export async function GET(
       where: {
         id: tableId,
         companyId: user.companyId,
+        deletedAt: null,
       },
+      select: { id: true, schemaJson: true },
     });
 
     if (!table) {
@@ -90,9 +92,9 @@ export async function GET(
     // Build SQL query that searches in specified JSON fields
     // Using @> for JSONB containment or casting to text for ILIKE
     const rawRecords = await prisma.$queryRaw<
-      { id: number; data: any; createdAt: Date }[]
+      { id: number; data: any }[]
     >`
-      SELECT id, data, "createdAt" FROM "Record"
+      SELECT id, data FROM "Record"
       WHERE "tableId" = ${tableId}
       AND "companyId" = ${user.companyId}
       AND "data"::text ILIKE ${searchPattern}
@@ -100,34 +102,34 @@ export async function GET(
       LIMIT ${limit * 2}
     `;
 
+    // Parse record data once upfront to avoid re-parsing in multiple loops
+    const parsedRecords = rawRecords.map((record) => {
+      let data = record.data as any;
+      if (typeof data === "string") {
+        try { data = JSON.parse(data); } catch { data = {}; }
+      }
+      return { id: record.id, data };
+    });
+
     // Filter to ensure we only match specified search fields
     // (the raw query is broader, so we refine here with minimal data)
-    const filteredRecords = rawRecords.filter((record) => {
-      let data = record.data as any;
-
-      if (typeof data === "string") {
-        try {
-          data = JSON.parse(data);
-        } catch (e) {
-          return false;
-        }
-      }
-
+    const lowerQuery = searchQuery.toLowerCase();
+    const filteredRecords = parsedRecords.filter((record) => {
       // Search only in specified fields
       return searchFields.some((fieldName) => {
-        const fieldValue = data?.[fieldName];
+        const fieldValue = record.data?.[fieldName];
         if (!fieldValue) return false;
 
         // Handle different field types
         if (Array.isArray(fieldValue)) {
           return fieldValue.some((v) =>
-            String(v).toLowerCase().includes(searchQuery.toLowerCase())
+            String(v).toLowerCase().includes(lowerQuery)
           );
         }
 
         return String(fieldValue)
           .toLowerCase()
-          .includes(searchQuery.toLowerCase());
+          .includes(lowerQuery);
       });
     });
 
@@ -144,11 +146,7 @@ export async function GET(
       if (!field.relationTableId) continue;
       const idSet = new Set<number>();
       for (const record of limitedRecords) {
-        let data = record.data as any;
-        if (typeof data === "string") {
-          try { data = JSON.parse(data); } catch { continue; }
-        }
-        const val = data?.[field.name];
+        const val = record.data?.[field.name];
         if (val == null) continue;
         if (Array.isArray(val)) {
           val.forEach((v: any) => { const n = Number(v); if (!isNaN(n)) idSet.add(n); });
@@ -158,9 +156,11 @@ export async function GET(
         }
       }
       if (idSet.size > 0) {
-        neededIdsByTable[field.relationTableId] = neededIdsByTable[field.relationTableId]
-          ? new Set([...neededIdsByTable[field.relationTableId], ...idSet])
-          : idSet;
+        if (!neededIdsByTable[field.relationTableId]) {
+          neededIdsByTable[field.relationTableId] = idSet;
+        } else {
+          idSet.forEach(id => neededIdsByTable[field.relationTableId].add(id));
+        }
       }
     }
 
@@ -175,6 +175,7 @@ export async function GET(
               tableId: relTableId,
               companyId: user.companyId,
             },
+            select: { id: true, data: true },
             take: 5000, // P227: Cap related records to prevent unbounded query
           });
 
@@ -194,9 +195,12 @@ export async function GET(
       })
     );
 
+    // Build schema lookup map for O(1) field access instead of O(n) per lookup
+    const schemaByName = new Map(schema.map((f: any) => [f.name, f]));
+
     // Helper function to resolve relation value
     const resolveRelationValue = (fieldName: string, value: any): string => {
-      const field = schema.find((f) => f.name === fieldName);
+      const field = schemaByName.get(fieldName);
       if (!field || field.type !== "relation" || !field.relationTableId) {
         return String(value);
       }
@@ -226,45 +230,34 @@ export async function GET(
     };
 
     // Format records for response with resolved relations
+    const firstField = displayFields.length > 0 ? displayFields[0] : null;
     const formattedRecords = limitedRecords.map((record) => {
-      let data = record.data as any;
-
-      if (typeof data === "string") {
-        try {
-          data = JSON.parse(data);
-        } catch (e) {
-          data = {};
-        }
-      }
-
-      // Create a display title from first display field (with relation resolution)
-      let displayTitle = `#${record.id}`;
-      if (displayFields.length > 0) {
-        const firstField = displayFields[0];
-        if (data[firstField]) {
-          displayTitle = resolveRelationValue(
-            firstField,
-            data[firstField]
-          ).substring(0, 60);
-        }
-      }
+      const data = record.data;
 
       // Filter data to include only display fields with resolved relations
       const filteredData: Record<string, any> = {};
+      let firstFieldResolved: string | null = null;
       displayFields.forEach((fieldName) => {
         if (data[fieldName] !== undefined) {
-          const field = schema.find((f) => f.name === fieldName);
+          const field = schemaByName.get(fieldName);
           if (field && field.type === "relation") {
-            // For relation fields, provide both ID and resolved name
+            const resolved = resolveRelationValue(fieldName, data[fieldName]);
             filteredData[fieldName] = {
               _id: data[fieldName],
-              _displayValue: resolveRelationValue(fieldName, data[fieldName]),
+              _displayValue: resolved,
             };
+            if (fieldName === firstField) firstFieldResolved = resolved;
           } else {
             filteredData[fieldName] = data[fieldName];
           }
         }
       });
+
+      // Create a display title from first display field
+      let displayTitle = `#${record.id}`;
+      if (firstField && data[firstField]) {
+        displayTitle = (firstFieldResolved ?? String(data[firstField])).substring(0, 60);
+      }
 
       return {
         id: record.id,

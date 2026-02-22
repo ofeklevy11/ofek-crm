@@ -1,7 +1,15 @@
-import React from "react";
+import React, { memo } from "react";
 import { CalendarEvent } from "@/lib/types";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+
+function formatTime(date: Date): string {
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const ampm = hours >= 12 ? "PM" : "AM";
+  const displayHours = hours % 12 || 12;
+  return `${displayHours}:${minutes.toString().padStart(2, "0")} ${ampm}`;
+}
 
 interface EventCardProps {
   event: CalendarEvent;
@@ -19,7 +27,7 @@ interface EventCardProps {
   style?: React.CSSProperties;
 }
 
-export function EventCard({
+export const EventCard = memo(function EventCard({
   event,
   onClick,
   columnIndex = 0,
@@ -36,14 +44,6 @@ export function EventCard({
     event.startTime.getHours() + event.startTime.getMinutes() / 60;
   const endHour = event.endTime.getHours() + event.endTime.getMinutes() / 60;
   const duration = endHour - startHour;
-
-  const formatTime = (date: Date) => {
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? "PM" : "AM";
-    const displayHours = hours % 12 || 12;
-    return `${displayHours}:${minutes.toString().padStart(2, "0")} ${ampm}`;
-  };
 
   // Calculate width and left position for overlapping events
   const widthPercent = 100 / totalColumns;
@@ -90,7 +90,7 @@ export function EventCard({
       )}
     </div>
   );
-}
+});
 
 export function DraggableEventCard(props: EventCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =

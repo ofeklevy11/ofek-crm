@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { canReadTable } from "@/lib/permissions";
+import { getCurrentUser } from "@/lib/permissions-server";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
 
@@ -28,7 +29,6 @@ const log = createLogger("TablesBatch");
  */
 export async function POST(request: Request) {
   try {
-    const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
 
     if (!currentUser) {
@@ -59,6 +59,7 @@ export async function POST(request: Request) {
       where: {
         id: { in: tableIds },
         companyId: currentUser.companyId,
+        deletedAt: null,
       },
       select: { id: true },
     });

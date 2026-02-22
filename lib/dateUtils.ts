@@ -51,10 +51,11 @@ export function isSameDay(d1: Date, d2: Date): boolean {
   );
 }
 
+export const TIME_SLOTS: string[] = Array.from({ length: 24 }, (_, i) =>
+  `${i.toString().padStart(2, "0")}:00`
+);
+
+/** @deprecated Use TIME_SLOTS constant instead */
 export function getTimeSlots(): string[] {
-  const slots: string[] = [];
-  for (let i = 0; i < 24; i++) {
-    slots.push(`${i.toString().padStart(2, "0")}:00`);
-  }
-  return slots;
+  return TIME_SLOTS;
 }

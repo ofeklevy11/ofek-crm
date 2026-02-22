@@ -11,7 +11,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import { useRouter } from "next/navigation";
 import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
 import { getTableViewData } from "@/app/actions/dashboard";
@@ -43,10 +43,10 @@ interface TableViewsDashboardWidgetProps {
   title?: string;
   views: ViewItem[];
   availableTables: any[];
-  onRemove: () => void;
-  onEdit?: () => void;
+  onRemove: (id: string) => void;
+  onEdit?: (id: string) => void;
   settings?: any;
-  onSettingsChange?: (newSettings: any) => void;
+  onSettingsChange?: (id: string, newSettings: any) => void;
 }
 
 interface ViewData {
@@ -56,7 +56,7 @@ interface ViewData {
   error?: string;
 }
 
-export default function TableViewsDashboardWidget({
+function TableViewsDashboardWidget({
   id,
   title = "מיני דאשבורד",
   views,
@@ -185,7 +185,7 @@ export default function TableViewsDashboardWidget({
       await updateDashboardWidgetSettings(id, newSettings);
 
       if (onSettingsChange) {
-        onSettingsChange(newSettings);
+        onSettingsChange(id, newSettings);
       }
       router.refresh();
     } catch (err) {
@@ -247,7 +247,7 @@ export default function TableViewsDashboardWidget({
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onEdit();
+                  onEdit(id);
                 }}
                 title="עריכה"
               >
@@ -259,7 +259,7 @@ export default function TableViewsDashboardWidget({
               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
               onPointerDown={(e) => {
                 e.stopPropagation();
-                onRemove();
+                onRemove(id);
               }}
               title="הסר מהדאשבורד"
             >
@@ -347,3 +347,5 @@ export default function TableViewsDashboardWidget({
     </div>
   );
 }
+
+export default memo(TableViewsDashboardWidget);

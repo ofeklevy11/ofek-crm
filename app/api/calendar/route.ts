@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
-import { getCalendarEvents, createCalendarEvent } from "@/app/actions/calendar";
+import { createCalendarEvent } from "@/app/actions/calendar";
 import { validateCalendarEventInput } from "@/lib/calendar-validation";
 import { createLogger } from "@/lib/logger";
+import { prisma } from "@/lib/prisma";
 
 const log = createLogger("CalendarAPI");
 
@@ -34,16 +35,37 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Invalid rangeEnd date" }, { status: 400 });
     }
 
-    const result = await getCalendarEvents(
-      rangeStart ?? undefined,
-      rangeEnd ?? undefined,
-    );
+    // Query DB directly — auth already validated above, avoids double auth/rate-limit
+    const where: { companyId: number; startTime?: { lte: Date }; endTime?: { gte: Date } } = {
+      companyId: user.companyId,
+    };
 
-    if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+    if (rangeStart && rangeEnd) {
+      const rangeStartDate = new Date(rangeStart);
+      const rangeEndDate = new Date(rangeEnd);
+      const MAX_RANGE_MS = 365 * 24 * 60 * 60 * 1000;
+      if (rangeEndDate.getTime() - rangeStartDate.getTime() > MAX_RANGE_MS) {
+        return NextResponse.json({ error: "Date range cannot exceed 1 year" }, { status: 400 });
+      }
+      where.startTime = { lte: rangeEndDate };
+      where.endTime = { gte: rangeStartDate };
     }
 
-    return NextResponse.json(result.data);
+    const events = await prisma.calendarEvent.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        startTime: true,
+        endTime: true,
+        color: true,
+      },
+      orderBy: { startTime: "asc" },
+      take: (rangeStart && rangeEnd) ? 500 : 2000,
+    });
+
+    return NextResponse.json(events);
   } catch (error) {
     log.error("Failed to fetch calendar events", { error: String(error) });
     return NextResponse.json(

@@ -3,7 +3,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Trash2, Eye, EyeOff, Settings2 } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, memo } from "react";
 import { useRouter } from "next/navigation";
 import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
 import { getMiniQuotesData } from "@/app/actions/dashboard-mini-widgets";
@@ -23,9 +23,9 @@ interface QuoteItem {
 
 interface MiniQuotesWidgetProps {
   id: string;
-  onRemove: () => void;
+  onRemove: (id: string) => void;
   settings?: any;
-  onOpenSettings?: () => void;
+  onOpenSettings?: (id: string) => void;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -50,7 +50,7 @@ const PRESET_LABELS: Record<string, string> = {
   custom: "מותאם אישית",
 };
 
-export default function MiniQuotesWidget({
+function MiniQuotesWidget({
   id,
   onRemove,
   settings,
@@ -180,7 +180,7 @@ export default function MiniQuotesWidget({
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onOpenSettings();
+                  onOpenSettings(id);
                 }}
                 title="הגדרות"
               >
@@ -198,7 +198,7 @@ export default function MiniQuotesWidget({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onRemove();
+                onRemove(id);
               }}
               onPointerDown={(e) => e.stopPropagation()}
               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
@@ -320,3 +320,5 @@ export default function MiniQuotesWidget({
     </div>
   );
 }
+
+export default memo(MiniQuotesWidget);

@@ -44,7 +44,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
 import { showAlert, showConfirm } from "@/hooks/use-modal";
-import * as LucideIcons from "lucide-react";
+import { WorkflowIconMap } from "@/lib/workflows/icon-map";
 
 interface StageDetailModalProps {
   stage: WorkflowStage | null;
@@ -1967,7 +1967,7 @@ export function StageDetailModal({
               >
                 {(() => {
                   const IconComp =
-                    (LucideIcons as any)[formData.icon] || LucideIcons.Circle;
+                    WorkflowIconMap[formData.icon] || WorkflowIconMap.Circle;
                   return <IconComp size={20} />;
                 })()}
               </div>

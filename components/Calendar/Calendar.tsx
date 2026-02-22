@@ -14,6 +14,12 @@ import { showConfirm } from "@/hooks/use-modal";
 import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import {
+  getCalendarEvents,
+  updateCalendarEvent,
+  createCalendarEvent,
+  deleteCalendarEvent,
+} from "@/app/actions";
 
 export function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -34,7 +40,6 @@ export function Calendar() {
   const [initialEventMinutes, setInitialEventMinutes] = useState<
     number | undefined
   >();
-  const [draggingEventId, setDraggingEventId] = useState<string | null>(null);
   const [initialEventTab, setInitialEventTab] = useState<
     "details" | "automations"
   >("details");
@@ -48,7 +53,6 @@ export function Calendar() {
 
     fetchTimerRef.current = setTimeout(async () => {
       try {
-        const { getCalendarEvents } = await import("@/app/actions");
         let rangeStart: Date;
         let rangeEnd: Date;
         if (view === "week") {
@@ -101,17 +105,7 @@ export function Calendar() {
     if (eventId && openEdit === "true") {
       const event = events.find((e) => e.id === eventId);
       if (event) {
-        if (tab === "automations") {
-          setInitialEventTab("automations");
-        } else {
-          setInitialEventTab("details");
-        }
-        handleEventClick(event);
-        // Important: handleEventClick resets things, so we need to set tab AFTER or modify handleEventClick
-        // Actually handleEventClick sets selectedEvent and opens modal.
-        // But handleEventClick resets initial* vars.
-        // Let's modify handleEventClick to accept a tab or just setter here.
-        // Since I can't easily change handleEventClick signature everywhere, I will set it directly here.
+        handleEventClick(event, tab === "automations" ? "automations" : "details");
       }
     }
   }, [searchParams, events]);
@@ -153,11 +147,11 @@ export function Calendar() {
   };
 
   const handleSaveEvent = async (eventData: Omit<CalendarEvent, "id">): Promise<string | false> => {
+    const eventToSave = selectedEvent;
     try {
-      if (selectedEvent) {
+      if (eventToSave) {
         // Update existing event
-        const { updateCalendarEvent } = await import("@/app/actions");
-        const result = await updateCalendarEvent(selectedEvent.id, {
+        const result = await updateCalendarEvent(eventToSave.id, {
           title: eventData.title,
           description: eventData.description ?? undefined,
           startTime: eventData.startTime.toISOString(),
@@ -170,7 +164,7 @@ export function Calendar() {
         const updatedEvent = result.data!;
         setEvents((prev) =>
           prev.map((e) =>
-            e.id === selectedEvent.id
+            e.id === eventToSave.id
               ? {
                   ...updatedEvent,
                   startTime: new Date(updatedEvent.startTime),
@@ -185,10 +179,9 @@ export function Calendar() {
         setInitialEventDate(undefined);
         setInitialEventHour(undefined);
         setInitialEventMinutes(undefined);
-        return selectedEvent.id;
+        return eventToSave.id;
       } else {
         // Create new event
-        const { createCalendarEvent } = await import("@/app/actions");
         const result = await createCalendarEvent({
           title: eventData.title,
           description: eventData.description ?? undefined,
@@ -223,40 +216,22 @@ export function Calendar() {
     }
   };
 
-  const handleEventClick = (event: CalendarEvent) => {
+  const handleEventClick = (event: CalendarEvent, tab: "details" | "automations" = "details") => {
     setSelectedEvent(event);
     setInitialEventDate(undefined);
     setInitialEventHour(undefined);
     setInitialEventMinutes(undefined);
-    // Don't reset tab here if called from effect with a specific intent?
-    // But handleEventClick is called from UI too.
-    // If called from UI, we want "details".
-    // If called from URL, we might want "automations".
-    // I can assume UI calls won't set tab state before calling this.
-    // But wait, the Effect calls handleEventClick.
-    // If I reset it here, it overrides the Effect.
-    // I should checking if I am in the effect... No.
-    // I will remove the reset here and rely on the value being set before or defaulting.
-    // But if I click from UI, I need it to be "details".
-    // So I will set it to "details" here unless I see a way to pass it.
-    // I'll assume standard click is details.
-    // For the param case, I'll set it AFTER calling this in the effect?
-    // React state updates are batched, so setting it after might work if handleEventClick sets it.
-    // But handleEventClick is just setting state.
-    // Let's default to "details" here, BUT check if I can modify the Effect to set it AFTER.
-    // Yes.
-    setInitialEventTab("details");
+    setInitialEventTab(tab);
     setIsModalOpen(true);
   };
 
   const handleDeleteEvent = async () => {
-    if (selectedEvent) {
+    const eventToDelete = selectedEvent;
+    if (eventToDelete) {
       try {
-        const { deleteCalendarEvent } = await import("@/app/actions");
-        const result = await deleteCalendarEvent(selectedEvent.id);
-
+        const result = await deleteCalendarEvent(eventToDelete.id);
         if (result.success) {
-          setEvents(events.filter((e) => e.id !== selectedEvent.id));
+          setEvents(prev => prev.filter((e) => e.id !== eventToDelete.id));
           setSelectedEvent(undefined);
           setIsModalOpen(false);
           toast.success("האירוע נמחק בהצלחה");
@@ -272,11 +247,10 @@ export function Calendar() {
   const handleDeleteById = async (event: CalendarEvent) => {
     if (await showConfirm("האם אתה בטוח שברצונך למחוק אירוע זה?")) {
       try {
-        const { deleteCalendarEvent } = await import("@/app/actions");
         const result = await deleteCalendarEvent(event.id);
 
         if (result.success) {
-          setEvents(events.filter((e) => e.id !== event.id));
+          setEvents(prev => prev.filter((e) => e.id !== event.id));
           setAllEventsForModal((prev) => prev.filter((e) => e.id !== event.id));
           if (selectedEvent?.id === event.id) {
             setSelectedEvent(undefined);
@@ -295,7 +269,6 @@ export function Calendar() {
   const handleShowAllEvents = async () => {
     setIsAllEventsModalOpen(true);
     try {
-      const { getCalendarEvents } = await import("@/app/actions");
       // Default to 6 months back / 6 months forward to avoid unbounded fetch
       const now = new Date();
       const rangeStart = new Date(now);
@@ -359,15 +332,6 @@ export function Calendar() {
     setIsModalOpen(true);
   };
 
-  // Drag and drop handlers
-  const handleDragStart = (event: CalendarEvent) => {
-    setDraggingEventId(event.id);
-  };
-
-  const handleDragEnd = () => {
-    setDraggingEventId(null);
-  };
-
   const handleEventDrop = async (
     eventId: string,
     newDate: Date,
@@ -382,24 +346,16 @@ export function Calendar() {
 
       const newEndTime = new Date(newStartTime.getTime() + duration);
 
-      // Find the event to get its current data
-      const eventToUpdate = events.find((e) => e.id === eventId);
-      if (!eventToUpdate) return;
-
       // Update via API
-      const { updateCalendarEvent } = await import("@/app/actions");
       const result = await updateCalendarEvent(eventId, {
-        title: eventToUpdate.title,
-        description: eventToUpdate.description ?? undefined,
         startTime: newStartTime.toISOString(),
         endTime: newEndTime.toISOString(),
-        color: eventToUpdate.color ?? undefined,
       });
 
       if (result.success) {
         const updatedEvent = result.data!;
-        setEvents(
-          events.map((e) =>
+        setEvents(prev =>
+          prev.map((e) =>
             e.id === eventId
               ? {
                   ...updatedEvent,
@@ -415,8 +371,6 @@ export function Calendar() {
       console.error("Failed to move event:", error);
       if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
       else toast.error(getUserFriendlyError(error));
-    } finally {
-      setDraggingEventId(null);
     }
   };
 
@@ -464,9 +418,6 @@ export function Calendar() {
             onEventClick={handleEventClick}
             onTimeSlotClick={handleTimeSlotClick}
             onEventDrop={handleEventDrop}
-            draggingEventId={draggingEventId}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
             onCreateEvent={handleCreateEvent}
           />
         ) : (
@@ -476,9 +427,6 @@ export function Calendar() {
             onEventClick={handleEventClick}
             onTimeSlotClick={handleTimeSlotClick}
             onEventDrop={handleEventDrop}
-            draggingEventId={draggingEventId}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
             onCreateEvent={handleCreateEvent}
           />
         )}

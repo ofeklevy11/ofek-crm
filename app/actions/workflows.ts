@@ -2,12 +2,9 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/permissions-server";
-import { hasUserFlag } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import { validateUserInCompany } from "@/lib/company-validation";
 import { withRetry } from "@/lib/db-retry";
-import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import {
   createWorkflowSchema,
   updateWorkflowSchema,
@@ -16,40 +13,12 @@ import {
   reorderStagesSchema,
   updateWorkflowInstanceSchema,
 } from "@/lib/workflows/validation";
+import { requireWorkflowUser, sanitizeError } from "@/lib/workflows/helpers";
 import { logSecurityEvent, SEC_WORKFLOW_DELETED } from "@/lib/security/audit-security";
-import { createLogger } from "@/lib/logger";
-
-const log = createLogger("Workflows");
 
 // ── Resource caps ──────────────────────────────────────────────────────
 const MAX_WORKFLOWS_PER_COMPANY = 100;
 const MAX_STAGES_PER_WORKFLOW = 50;
-
-// ── Helpers ────────────────────────────────────────────────────────────
-
-/** Authenticate + authorize + rate-limit (returns user or throws) */
-async function requireWorkflowUser(rateLimitKey: "workflowRead" | "workflowMutation") {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
-  if (!hasUserFlag(user, "canViewWorkflows")) throw new Error("Forbidden");
-
-  const limited = await checkActionRateLimit(
-    String(user.id),
-    RATE_LIMITS[rateLimitKey],
-  ).catch(() => false); // Redis down → allow
-  if (limited) throw new Error("Rate limit exceeded");
-
-  return user;
-}
-
-/** Sanitize Prisma errors so internals never leak to the client */
-function sanitizeError(e: unknown): never {
-  const err = e as any;
-  if (err?.code === "P2025") throw new Error("Not found");
-  if (err?.code === "P2002") throw new Error("Duplicate entry");
-  log.error("Unexpected workflow error", { error: String(e) });
-  throw new Error("An unexpected error occurred");
-}
 
 // ── Queries ────────────────────────────────────────────────────────────
 

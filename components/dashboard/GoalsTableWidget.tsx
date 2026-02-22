@@ -6,7 +6,7 @@ import { Trash2, Settings, Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { GoalWithProgress } from "@/app/actions/goals";
 import { Progress } from "@/components/ui/progress";
-import { useState } from "react";
+import { useState, memo } from "react";
 import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
 import { format } from "date-fns";
 import GoalContextExplanation from "@/components/finance/GoalContextExplanation";
@@ -15,13 +15,13 @@ interface GoalsTableWidgetProps {
   id: string; // The DND id
   title?: string;
   goals: GoalWithProgress[];
-  onRemove: () => void;
-  onEdit: () => void;
+  onRemove: (id: string) => void;
+  onEdit: (id: string) => void;
   settings?: any;
   tables?: any[];
 }
 
-export default function GoalsTableWidget({
+function GoalsTableWidget({
   id,
   title = "טבלת יעדים",
   goals,
@@ -146,7 +146,7 @@ export default function GoalsTableWidget({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onEdit();
+                onEdit(id);
               }}
               onPointerDown={(e) => e.stopPropagation()}
               className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition"
@@ -157,7 +157,7 @@ export default function GoalsTableWidget({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onRemove();
+                onRemove(id);
               }}
               onPointerDown={(e) => e.stopPropagation()}
               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
@@ -257,3 +257,5 @@ export default function GoalsTableWidget({
     </div>
   );
 }
+
+export default memo(GoalsTableWidget);

@@ -1,6 +1,5 @@
 "use server";
 
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/permissions-server";
@@ -9,6 +8,7 @@ import { validateCategoryInCompany } from "@/lib/company-validation";
 import { withRetry } from "@/lib/db-retry";
 import { checkActionRateLimit, TABLE_RATE_LIMITS } from "@/lib/rate-limit-action";
 import { createLogger } from "@/lib/logger";
+import { buildTablePermissionWhere } from "@/lib/table-permissions";
 import {
   MAX_TABS,
   MAX_VISIBLE_COLUMNS,
@@ -42,24 +42,18 @@ export async function getTablesForUser() {
   const rl = await checkActionRateLimit(String(user.id), TABLE_RATE_LIMITS.read);
   if (rl) return { success: false, error: rl.error };
 
-  // Build WHERE clause: admin/manager see all; basic users only see permitted tables
-  const isFullAccess = user.role === "admin" || user.role === "manager";
-  const allowedIds = !isFullAccess && user.tablePermissions
-    ? Object.entries(user.tablePermissions as Record<string, string>)
-        .filter(([, perm]) => perm === "read" || perm === "write")
-        .map(([id]) => Number(id))
-    : [];
+  const where = buildTablePermissionWhere(user);
 
   // If basic user has no permissions, return empty immediately
-  if (!isFullAccess && allowedIds.length === 0) {
-    return { success: true, data: [] };
+  if (user.role !== "admin" && user.role !== "manager") {
+    const idFilter = where.id as { in: number[] } | undefined;
+    if (idFilter && idFilter.in.length === 0) {
+      return { success: true, data: [] };
+    }
   }
 
   const tables = await withRetry(() => prisma.tableMeta.findMany({
-    where: {
-      companyId: user.companyId,
-      ...(!isFullAccess ? { id: { in: allowedIds } } : {}),
-    },
+    where,
     orderBy: { createdAt: "desc" },
     take: 500,
     // Note: schemaJson included because consumers (analytics, forms) rely on it
@@ -96,22 +90,29 @@ export async function getTablesForDashboard() {
   const rl = await checkActionRateLimit(String(user.id), TABLE_RATE_LIMITS.read);
   if (rl) return { success: true, data: [] };
 
-  const isFullAccess = user.role === "admin" || user.role === "manager";
-  const allowedIds = !isFullAccess && user.tablePermissions
-    ? Object.entries(user.tablePermissions as Record<string, string>)
-        .filter(([, perm]) => perm === "read" || perm === "write")
-        .map(([id]) => Number(id))
-    : [];
+  return getTablesForDashboardInternal(user.companyId, user.role, user.tablePermissions);
+}
 
-  if (!isFullAccess && allowedIds.length === 0) {
-    return { success: true, data: [] };
+/**
+ * Internal: fetch lightweight tables for the dashboard without auth/rate-limit checks.
+ * ONLY called from getDashboardInitialData which already verified auth + rate limit.
+ */
+export async function getTablesForDashboardInternal(
+  companyId: number,
+  role: string,
+  tablePermissions?: any,
+) {
+  const where = buildTablePermissionWhere({ companyId, role, tablePermissions });
+
+  if (role !== "admin" && role !== "manager") {
+    const idFilter = where.id as { in: number[] } | undefined;
+    if (idFilter && idFilter.in.length === 0) {
+      return { success: true, data: [] };
+    }
   }
 
   const tables = await withRetry(() => prisma.tableMeta.findMany({
-    where: {
-      companyId: user.companyId,
-      ...(!isFullAccess ? { id: { in: allowedIds } } : {}),
-    },
+    where,
     orderBy: { createdAt: "desc" },
     take: 500,
     select: {
@@ -142,6 +143,7 @@ export async function getTableById(id: number) {
       where: {
         id,
         companyId: user.companyId,
+        deletedAt: null,
       },
       select: {
         id: true, name: true, slug: true, schemaJson: true,
@@ -228,7 +230,8 @@ export async function createTable(data: {
     let counter = 0;
     while (true) {
       const existing = await withRetry(() => prisma.tableMeta.findFirst({
-        where: { slug: finalSlug, companyId: user.companyId },
+        where: { slug: finalSlug, companyId: user.companyId, deletedAt: null },
+        select: { id: true },
       }));
       if (!existing) break;
       finalSlug = `${slug}-${Math.random().toString(36).substring(2, 7)}`;
@@ -347,10 +350,16 @@ export async function updateTable(
       }
     }
 
-    // P112: Add companyId to prevent cross-tenant table updates
-    const table = await withRetry(() => prisma.tableMeta.update({
-      where: { id, companyId: user.companyId },
+    // R19: Atomic soft-delete guard via updateMany + follow-up findFirst
+    const result = await withRetry(() => prisma.tableMeta.updateMany({
+      where: { id, companyId: user.companyId, deletedAt: null },
       data: updateData,
+    }));
+    if (result.count === 0) {
+      return { success: false, error: "Table not found" };
+    }
+    const table = await withRetry(() => prisma.tableMeta.findFirst({
+      where: { id, companyId: user.companyId, deletedAt: null },
       select: {
         id: true, name: true, slug: true, schemaJson: true,
         tabsConfig: true, displayConfig: true,
@@ -394,7 +403,7 @@ export async function deleteTable(id: number) {
 
 export async function exportTableData(tableId: number) {
   try {
-    // AAA: Auth check BEFORE loading data to prevent memory waste on unauthorized access
+    // Auth check — the streaming API endpoint handles the actual export
     const user = await getCurrentUser();
     if (!user || !canReadTable(user, tableId)) {
       return { success: false, error: "אין לך הרשאה לייצא טבלה זו" };
@@ -404,42 +413,18 @@ export async function exportTableData(tableId: number) {
       return { success: false, error: "אין לך הרשאה לייצא נתונים" };
     }
 
-    // AAA: Use findFirst with companyId filter instead of findUnique
+    // Verify table exists and belongs to user's company
     const table = await withRetry(() => prisma.tableMeta.findFirst({
-      where: { id: tableId, companyId: user.companyId },
-      select: { id: true, name: true, slug: true, schemaJson: true, companyId: true, createdAt: true, updatedAt: true },
+      where: { id: tableId, companyId: user.companyId, deletedAt: null },
+      select: { id: true },
     }));
 
     if (!table) {
       return { success: false, error: "Table not found" };
     }
 
-    // Paginated export: fetch records in batches of 500 to avoid OOM
-    const BATCH_SIZE = 500;
-    const MAX_RECORDS = 5000;
-    const allRecords: any[] = [];
-    let cursor: number | undefined;
-
-    while (allRecords.length < MAX_RECORDS) {
-      const batch = await withRetry(() => prisma.record.findMany({
-        where: { tableId, companyId: user.companyId },
-        orderBy: { createdAt: "desc" },
-        take: BATCH_SIZE,
-        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-        select: {
-          id: true, tableId: true, data: true, createdBy: true, updatedBy: true,
-          createdAt: true, updatedAt: true,
-        },
-      }));
-
-      if (batch.length === 0) break;
-      allRecords.push(...batch);
-      cursor = batch[batch.length - 1].id;
-
-      if (batch.length < BATCH_SIZE) break;
-    }
-
-    return { success: true, data: { ...table, records: allRecords.slice(0, MAX_RECORDS) } };
+    // Redirect to the streaming API endpoint instead of accumulating in memory
+    return { success: true, redirectUrl: `/api/tables/${tableId}/export` };
   } catch (error) {
     log.error("Error exporting table", { error: String(error) });
     return { success: false, error: "Failed to export table" };
@@ -455,7 +440,7 @@ export async function searchInTable(tableId: number, searchTerm: string) {
 
     // P109: Add companyId filter to table lookup
     const table = await withRetry(() => prisma.tableMeta.findFirst({
-      where: { id: tableId, companyId: user.companyId },
+      where: { id: tableId, companyId: user.companyId, deletedAt: null },
       select: { id: true },
     }));
 
@@ -470,7 +455,7 @@ export async function searchInTable(tableId: number, searchTerm: string) {
     // DB-side ILIKE search instead of loading all records into memory
     const escaped = searchTerm.replace(/[%_\\]/g, "\\$&");
     const records = await withRetry(() => prisma.$queryRaw<any[]>`
-      SELECT id, data, "createdAt", "updatedAt", "createdBy", "updatedBy", "tableId"
+      SELECT id, data
       FROM "Record"
       WHERE "tableId" = ${tableId}
         AND "companyId" = ${user.companyId}
@@ -544,6 +529,7 @@ export async function duplicateTable(id: number) {
       where: {
         id,
         companyId: user.companyId,
+        deletedAt: null,
       },
       select: {
         id: true, name: true, slug: true, schemaJson: true,
@@ -563,7 +549,8 @@ export async function duplicateTable(id: number) {
 
     while (true) {
       const existing = await withRetry(() => prisma.tableMeta.findFirst({
-        where: { slug: finalSlug, companyId: user.companyId },
+        where: { slug: finalSlug, companyId: user.companyId, deletedAt: null },
+        select: { id: true },
       }));
       if (!existing) break;
       counter++;

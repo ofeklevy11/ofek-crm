@@ -46,7 +46,8 @@
       "WebFetch(domain:neon.com)",
       "Bash(git log:*)",
       "Bash(git show:*)",
-      "Bash(cd:)"
+      "Bash(cd:)",
+      "mcp__ide__executeCode"
     ]
   }
 }

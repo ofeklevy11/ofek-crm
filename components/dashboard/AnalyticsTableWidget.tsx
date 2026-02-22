@@ -4,7 +4,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Trash2, Settings, Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, memo } from "react";
 import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
 
 const KEY_MAPPING: Record<string, string> = {
@@ -171,12 +171,12 @@ interface AnalyticsTableWidgetProps {
   id: string; // The DND id
   title?: string;
   analytics: any[]; // The selected analytics with their data
-  onRemove: () => void;
-  onEdit: () => void;
+  onRemove: (id: string) => void;
+  onEdit: (id: string) => void;
   settings?: any;
 }
 
-export default function AnalyticsTableWidget({
+function AnalyticsTableWidget({
   id,
   title = "טבלת אנליטיקות",
   analytics,
@@ -260,7 +260,7 @@ export default function AnalyticsTableWidget({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onEdit();
+                onEdit(id);
               }}
               onPointerDown={(e) => e.stopPropagation()}
               className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition"
@@ -271,7 +271,7 @@ export default function AnalyticsTableWidget({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onRemove();
+                onRemove(id);
               }}
               onPointerDown={(e) => e.stopPropagation()}
               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
@@ -371,3 +371,5 @@ export default function AnalyticsTableWidget({
     </div>
   );
 }
+
+export default memo(AnalyticsTableWidget);

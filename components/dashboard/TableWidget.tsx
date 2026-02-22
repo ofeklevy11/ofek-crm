@@ -11,7 +11,7 @@ import {
   Settings,
 } from "lucide-react";
 import DynamicViewRenderer from "@/components/DynamicViewRenderer";
-import { useState } from "react";
+import { useState, memo } from "react";
 import { useRouter } from "next/navigation";
 import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
 
@@ -20,14 +20,14 @@ interface TableWidgetProps {
   title: string;
   tableName: string;
   data: any; // ProcessedViewData
-  onRemove: () => void;
+  onRemove: (id: string) => void;
   isLoading?: boolean;
-  onEdit?: () => void;
+  onEdit?: (id: string) => void;
   settings?: any;
-  onSettingsChange?: (newSettings: any) => void;
+  onSettingsChange?: (id: string, newSettings: any) => void;
 }
 
-export default function TableWidget({
+function TableWidget({
   id,
   title,
   tableName,
@@ -73,7 +73,7 @@ export default function TableWidget({
       await updateDashboardWidgetSettings(id, newSettings);
 
       if (onSettingsChange) {
-        onSettingsChange(newSettings);
+        onSettingsChange(id, newSettings);
       }
       router.refresh();
     } catch (err) {
@@ -140,7 +140,7 @@ export default function TableWidget({
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
-                onEdit();
+                onEdit(id);
               }}
               title="הגדרות"
             >
@@ -152,7 +152,7 @@ export default function TableWidget({
             className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-black/5 rounded-full transition-colors"
             onPointerDown={(e) => {
               e.stopPropagation();
-              onRemove();
+              onRemove(id);
             }}
             title="הסר מהדאשבורד"
           >
@@ -181,3 +181,5 @@ export default function TableWidget({
     </div>
   );
 }
+
+export default memo(TableWidget);

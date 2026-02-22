@@ -68,20 +68,22 @@ export default async function TableDetailsPage({
   });
 
   if (q) {
+    // Escape ILIKE metacharacters to prevent pattern injection
+    const escapedQ = q.replace(/[%_\\]/g, '\\$&');
     // Search case: count + paginated IDs + views all run in parallel
     const [countResult, rawRecords, viewsData] = await Promise.all([
       prisma.$queryRaw<{ count: bigint }[]>`
         SELECT COUNT(*) as count FROM "Record"
         WHERE "tableId" = ${tableId}
         AND "companyId" = ${user.companyId}
-        AND "data"::text ILIKE ${`%${q}%`}
+        AND "data"::text ILIKE ${`%${escapedQ}%`}
         LIMIT 1000
       `,
       prisma.$queryRaw<{ id: number }[]>`
         SELECT id FROM "Record"
         WHERE "tableId" = ${tableId}
         AND "companyId" = ${user.companyId}
-        AND "data"::text ILIKE ${`%${q}%`}
+        AND "data"::text ILIKE ${`%${escapedQ}%`}
         ORDER BY "createdAt" DESC
         LIMIT ${pageSize}
         OFFSET ${(currentPage - 1) * pageSize}
@@ -97,8 +99,12 @@ export default async function TableDetailsPage({
       where: { id: { in: ids } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       include: {
-        attachments: true,
-        files: true,
+        attachments: {
+          select: { id: true, filename: true, displayName: true, url: true, size: true, uploadedAt: true },
+        },
+        files: {
+          select: { id: true, name: true, displayName: true, url: true, size: true, type: true },
+        },
       },
     });
   } else {
@@ -119,8 +125,12 @@ export default async function TableDetailsPage({
         skip: (currentPage - 1) * pageSize,
         take: pageSize,
         include: {
-          attachments: true,
-          files: true,
+          attachments: {
+            select: { id: true, filename: true, displayName: true, url: true, size: true, uploadedAt: true },
+          },
+          files: {
+            select: { id: true, name: true, displayName: true, url: true, size: true, type: true },
+          },
         },
       }),
       viewsPromise,

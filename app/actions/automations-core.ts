@@ -90,6 +90,46 @@ export async function executeRuleActions(
 
   const executeSingle = async (type: string, config: any) => {
     log.info("Executing action", { type, ruleId });
+
+    // Shared replaceText helper — used by CREATE_TASK, CREATE_RECORD, CREATE_CALENDAR_EVENT
+    const replaceText = (text: string) => {
+      if (!text) return text;
+      let res = text;
+      if (context.tableName) {
+        res = res.split("{tableName}").join(context.tableName);
+      }
+      if (context.recordData) {
+        for (const key in context.recordData) {
+          res = res.split(`{${key}}`).join(String(context.recordData[key] || ""));
+        }
+      }
+      if (context.taskTitle) {
+        res = res
+          .split("{taskTitle}").join(context.taskTitle)
+          .split("{fromStatus}").join(context.fromStatus || "")
+          .split("{toStatus}").join(context.toStatus || "");
+      }
+      if (context.oldRecordData && rule.triggerType === "RECORD_FIELD_CHANGE") {
+        const colId = rule.triggerConfig?.columnId;
+        if (colId) {
+          res = res
+            .split("{fieldName}").join(colId)
+            .split("{fromValue}").join(String(context.oldRecordData[colId]))
+            .split("{toValue}").join(String(context.recordData?.[colId] ?? ""));
+        }
+      }
+      if (context.meetingId) {
+        res = res
+          .split("{participantName}").join(context.participantName || "")
+          .split("{participantEmail}").join(context.participantEmail || "")
+          .split("{participantPhone}").join(context.participantPhone || "")
+          .split("{meetingType}").join(context.meetingType || "")
+          .split("{meetingStart}").join(context.meetingStart || "")
+          .split("{meetingEnd}").join(context.meetingEnd || "");
+      }
+      return res;
+    };
+
     try {
       if (type === "SEND_NOTIFICATION") {
         if (config.recipientId) {
@@ -99,8 +139,8 @@ export async function executeRuleActions(
 
           // Dynamic Replacements
           if (context.tableName) {
-            message = message.replace("{tableName}", context.tableName);
-            title = title.replace("{tableName}", context.tableName);
+            message = message.split("{tableName}").join(context.tableName);
+            title = title.split("{tableName}").join(context.tableName);
             if (context.tableName === "Calendar") {
               link = "/calendar";
             } else {
@@ -114,9 +154,9 @@ export async function executeRuleActions(
           }
           if (context.taskTitle) {
             message = message
-              .replace("{taskTitle}", context.taskTitle)
-              .replace("{fromStatus}", context.fromStatus || "")
-              .replace("{toStatus}", context.toStatus || "");
+              .split("{taskTitle}").join(context.taskTitle)
+              .split("{fromStatus}").join(context.fromStatus || "")
+              .split("{toStatus}").join(context.toStatus || "");
             link = "/tasks";
           }
           // Meeting Replacements
@@ -141,9 +181,9 @@ export async function executeRuleActions(
             const colId = rule.triggerConfig?.columnId;
             if (colId) {
               message = message
-                .replace(`{fieldName}`, colId)
-                .replace(`{fromValue}`, String(context.oldRecordData[colId]))
-                .replace(`{toValue}`, String(context.recordData[colId]));
+                .split(`{fieldName}`).join(colId)
+                .split(`{fromValue}`).join(String(context.oldRecordData[colId]))
+                .split(`{toValue}`).join(String(context.recordData[colId]));
             }
           }
 
@@ -490,48 +530,6 @@ export async function executeRuleActions(
         let finalTitle = title || "משימה חדשה";
         let finalDesc = description || "";
 
-        // Dynamic Replacements Helper (uses split/join to avoid ReDoS)
-        const replaceText = (text: string) => {
-          let res = text;
-          if (context.tableName) {
-            res = res.split("{tableName}").join(context.tableName);
-          }
-          if (context.recordData) {
-            for (const key in context.recordData) {
-              const val = context.recordData[key];
-              res = res.split(`{${key}}`).join(String(val || ""));
-            }
-          }
-          if (context.taskTitle) {
-            res = res
-              .split("{taskTitle}").join(context.taskTitle)
-              .split("{fromStatus}").join(context.fromStatus || "")
-              .split("{toStatus}").join(context.toStatus || "");
-          }
-          if (
-            context.oldRecordData &&
-            rule.triggerType === "RECORD_FIELD_CHANGE"
-          ) {
-            const colId = rule.triggerConfig?.columnId;
-            if (colId) {
-              res = res
-                .split("{fieldName}").join(colId)
-                .split("{fromValue}").join(String(context.oldRecordData[colId]))
-                .split("{toValue}").join(String(context.recordData[colId]));
-            }
-          }
-          if (context.meetingId) {
-            res = res
-              .split("{participantName}").join(context.participantName || "")
-              .split("{participantEmail}").join(context.participantEmail || "")
-              .split("{participantPhone}").join(context.participantPhone || "")
-              .split("{meetingType}").join(context.meetingType || "")
-              .split("{meetingStart}").join(context.meetingStart || "")
-              .split("{meetingEnd}").join(context.meetingEnd || "");
-          }
-          return res;
-        };
-
         finalTitle = replaceText(finalTitle);
         finalDesc = replaceText(finalDesc);
 
@@ -592,28 +590,6 @@ export async function executeRuleActions(
           return;
         }
 
-        // Dynamic Replacements Helper (uses split/join to avoid ReDoS)
-        const replaceText = (text: string) => {
-          if (!text) return text;
-          let res = text;
-          if (context.tableName) {
-            res = res.split("{tableName}").join(context.tableName);
-          }
-          if (context.recordData) {
-            for (const key in context.recordData) {
-              const val = context.recordData[key];
-              res = res.split(`{${key}}`).join(String(val || ""));
-            }
-          }
-          if (context.taskTitle) {
-            res = res
-              .split("{taskTitle}").join(context.taskTitle)
-              .split("{fromStatus}").join(context.fromStatus || "")
-              .split("{toStatus}").join(context.toStatus || "");
-          }
-          return res;
-        };
-
         try {
           // Build record data from field mappings
           const recordData: Record<string, unknown> = {};
@@ -662,28 +638,6 @@ export async function executeRuleActions(
       } else if (type === "CREATE_CALENDAR_EVENT") {
         // Create a new calendar event
         const { title, description, startOffset, endOffset, color } = config;
-
-        // Dynamic Replacements Helper (uses split/join to avoid ReDoS)
-        const replaceText = (text: string) => {
-          if (!text) return text;
-          let res = text;
-          if (context.tableName) {
-            res = res.split("{tableName}").join(context.tableName);
-          }
-          if (context.recordData) {
-            for (const key in context.recordData) {
-              const val = context.recordData[key];
-              res = res.split(`{${key}}`).join(String(val || ""));
-            }
-          }
-          if (context.taskTitle) {
-            res = res
-              .split("{taskTitle}").join(context.taskTitle)
-              .split("{fromStatus}").join(context.fromStatus || "")
-              .split("{toStatus}").join(context.toStatus || "");
-          }
-          return res;
-        };
 
         try {
           const finalTitle = replaceText(title || "אירוע אוטומטי");
@@ -1444,31 +1398,47 @@ export async function toggleAutomationRule(id: number, isActive: boolean) {
 
 // --- Processor Logic ---
 
-// Helper to check Business Hours
-function checkBusinessHours(config: any): boolean {
-  if (!config.businessHours) return true; // No restriction
+// Helper: compare a numeric value against a threshold using an operator string
+function matchesOperator(val: number, operator: string, target: number): boolean {
+  switch (operator) {
+    case "gt": return val > target;
+    case "lt": return val < target;
+    case "gte": return val >= target;
+    case "lte": return val <= target;
+    case "eq": return val === target;
+    case "neq": return val !== target;
+    default: return false;
+  }
+}
 
-  const { days, start, end } = config.businessHours;
-  const tz = "Asia/Jerusalem";
-  const now = new Date();
+// Pre-computed business hours state (compute once, reuse across all rules in a batch)
+interface BusinessHoursState { day: number; timeInMinutes: number }
 
+function computeBusinessHoursState(): BusinessHoursState {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
+    timeZone: "Asia/Jerusalem",
     weekday: "short",
     hour: "numeric",
     minute: "numeric",
     hour12: false,
-  }).formatToParts(now);
-
+  }).formatToParts(new Date());
   const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  const currentDay = dayMap[parts.find((p) => p.type === "weekday")!.value];
-  const currentHour = Number(parts.find((p) => p.type === "hour")!.value);
-  const currentMinute = Number(parts.find((p) => p.type === "minute")!.value);
+  const day = dayMap[parts.find((p) => p.type === "weekday")!.value];
+  const hour = Number(parts.find((p) => p.type === "hour")!.value);
+  const minute = Number(parts.find((p) => p.type === "minute")!.value);
+  return { day, timeInMinutes: hour * 60 + minute };
+}
+
+// Helper to check Business Hours (accepts optional pre-computed state to avoid repeated Intl calls)
+function checkBusinessHours(config: any, state?: BusinessHoursState): boolean {
+  if (!config.businessHours) return true; // No restriction
+
+  const { days, start, end } = config.businessHours;
+  const s = state ?? computeBusinessHoursState();
 
   // 1. Day Check
   if (Array.isArray(days) && days.length > 0) {
-    if (!days.includes(currentDay)) {
-      log.debug("Skipping rule (business hours - day mismatch)", { currentDay, allowedDays: days });
+    if (!days.includes(s.day)) {
       return false;
     }
   }
@@ -1477,15 +1447,7 @@ function checkBusinessHours(config: any): boolean {
   const [startH, startM] = (start || "00:00").split(":").map(Number);
   const [endH, endM] = (end || "23:59").split(":").map(Number);
 
-  const currentTimeInMinutes = currentHour * 60 + currentMinute;
-  const startTimeInMinutes = startH * 60 + startM;
-  const endTimeInMinutes = endH * 60 + endM;
-
-  if (
-    currentTimeInMinutes < startTimeInMinutes ||
-    currentTimeInMinutes > endTimeInMinutes
-  ) {
-    log.debug("Skipping rule (business hours - time mismatch)", { currentHour, currentMinute, start, end });
+  if (s.timeInMinutes < startH * 60 + startM || s.timeInMinutes > endH * 60 + endM) {
     return false;
   }
 
@@ -1529,10 +1491,13 @@ export async function processViewAutomations(
       : [];
     const viewMap = new Map(views.map((v) => [v.id, v]));
 
+    // Pre-compute business hours state ONCE for all rules
+    const bizState = computeBusinessHoursState();
+
     // Pre-filter rules synchronously (business hours, viewId, context matching)
     const eligibleRules = rules.filter((rule) => {
       const triggerConfig = rule.triggerConfig as TriggerConfig;
-      if (!checkBusinessHours(triggerConfig)) return false;
+      if (!checkBusinessHours(triggerConfig, bizState)) return false;
       if (!triggerConfig || !triggerConfig.viewId) {
         log.debug("Rule missing viewId in config", { ruleId: rule.id });
         return false;
@@ -1596,15 +1561,9 @@ export async function processViewAutomations(
           const currentSnapshot = JSON.stringify(stats);
           const threshold = parseFloat(String(triggerConfig.threshold));
 
-          let triggered = false;
-          switch (triggerConfig.operator) {
-            case "lt": triggered = currentVal < threshold; break;
-            case "lte": triggered = currentVal <= threshold; break;
-            case "gt": triggered = currentVal > threshold; break;
-            case "gte": triggered = currentVal >= threshold; break;
-            case "eq": triggered = currentVal === threshold; break;
-            case "neq": triggered = currentVal !== threshold; break;
-          }
+          const triggered = triggerConfig.operator
+            ? matchesOperator(currentVal, triggerConfig.operator, threshold)
+            : false;
 
           log.debug("Metric check result", { currentVal, operator: triggerConfig.operator, threshold, triggered });
 
@@ -1724,33 +1683,37 @@ export async function processTaskStatusChange(
       take: 200,
     }));
 
-    // Issue V fix: Track failures and signal to Inngest if majority fail
+    // Pre-compute business hours state ONCE for all rules
+    const bizState = computeBusinessHoursState();
+
+    // Filter matching rules first (cheap CPU work)
+    const matchingRules = rules.filter((rule) => {
+      const triggerConfig = rule.triggerConfig as TriggerConfig;
+      if (!checkBusinessHours(triggerConfig, bizState)) return false;
+      if (triggerConfig.fromStatus && triggerConfig.fromStatus !== fromStatus) return false;
+      if (triggerConfig.toStatus && triggerConfig.toStatus !== toStatus) return false;
+      return true;
+    });
+
+    const totalProcessed = matchingRules.length;
     let totalFailures = 0;
-    let totalProcessed = 0;
-    for (const rule of rules) {
-      try {
-        const triggerConfig = rule.triggerConfig as TriggerConfig;
 
-        // --- Business Hours Check ---
-        if (!checkBusinessHours(triggerConfig)) continue;
-
-        if (triggerConfig.fromStatus && triggerConfig.fromStatus !== fromStatus)
-          continue;
-        if (triggerConfig.toStatus && triggerConfig.toStatus !== toStatus)
-          continue;
-
-        totalProcessed++;
-        const context = {
-          taskId,
-          taskTitle,
-          fromStatus,
-          toStatus,
-          companyId,
-        };
-        await executeRuleActions(rule, context);
-      } catch (ruleError) {
-        totalFailures++;
-        log.error("Error executing rule in processTaskStatusChange", { ruleId: rule.id, error: String(ruleError) });
+    // Bounded concurrency to avoid DB pool exhaustion
+    const CONCURRENCY = 5;
+    for (let i = 0; i < matchingRules.length; i += CONCURRENCY) {
+      const batch = matchingRules.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map((rule) => {
+          const context = { taskId, taskTitle, fromStatus, toStatus, companyId };
+          return executeRuleActions(rule, context);
+        })
+      );
+      for (let j = 0; j < results.length; j++) {
+        const r = results[j];
+        if (r.status === "rejected") {
+          totalFailures++;
+          log.error("Error executing rule in processTaskStatusChange", { ruleId: batch[j].id, error: String(r.reason) });
+        }
       }
     }
 
@@ -1832,82 +1795,51 @@ export async function processNewRecordTrigger(
 
     const recordData = record.data as any;
 
-    // Issue V fix: Track failures and signal to Inngest if majority fail
-    let totalFailures = 0;
-    let totalProcessed = 0;
-    for (const rule of rules) {
-      try {
-        const triggerConfig = rule.triggerConfig as TriggerConfig;
+    // Pre-compute business hours state ONCE for all rules
+    const bizState = computeBusinessHoursState();
 
-        // --- Business Hours Check ---
-        if (!checkBusinessHours(triggerConfig)) continue;
+    // Pre-filter rules synchronously (cheap CPU checks)
+    const eligibleRules = rules.filter((rule) => {
+      const triggerConfig = rule.triggerConfig as TriggerConfig;
+      if (!checkBusinessHours(triggerConfig, bizState)) return false;
+      if (triggerConfig.tableId && parseInt(String(triggerConfig.tableId)) !== tableId) return false;
 
-        if (
-          triggerConfig.tableId &&
-          parseInt(String(triggerConfig.tableId)) !== tableId
-        )
-          continue;
+      // Condition Check (Optional)
+      if (triggerConfig.conditionColumnId) {
+        const colId = triggerConfig.conditionColumnId;
+        const recordVal = recordData[colId];
+        const targetVal = triggerConfig.conditionValue;
 
-        // --- NEW Condition Check (Optional) ---
-        if (triggerConfig.conditionColumnId) {
-          const colId = triggerConfig.conditionColumnId;
-          const recordVal = recordData[colId];
-          const targetVal = triggerConfig.conditionValue;
+        if (recordVal === undefined || recordVal === null) return false;
 
-          // If condition requires a value but record has none
-          if (recordVal === undefined || recordVal === null) continue;
-
-          if (triggerConfig.operator) {
-            // Numeric Comparison
-            const valNum = Number(recordVal);
-            const targetNum = Number(targetVal);
-
-            if (isNaN(valNum) || isNaN(targetNum)) continue;
-
-            let match = false;
-            switch (triggerConfig.operator) {
-              case "gt":
-                match = valNum > targetNum;
-                break;
-              case "lt":
-                match = valNum < targetNum;
-                break;
-              case "gte":
-                match = valNum >= targetNum;
-                break;
-              case "lte":
-                match = valNum <= targetNum;
-                break;
-              case "eq":
-                match = valNum === targetNum;
-                break;
-              case "neq":
-                match = valNum !== targetNum;
-                break;
-            }
-            if (!match) continue;
-          } else {
-            // String Comparison (Select/Text)
-            // If conditionValue is provided, it must match
-            if (
-              targetVal !== undefined &&
-              String(recordVal) !== String(targetVal)
-            ) {
-              continue;
-            }
-          }
+        if (triggerConfig.operator) {
+          const valNum = Number(recordVal);
+          const targetNum = Number(targetVal);
+          if (isNaN(valNum) || isNaN(targetNum)) return false;
+          if (!matchesOperator(valNum, triggerConfig.operator, targetNum)) return false;
+        } else {
+          if (targetVal !== undefined && String(recordVal) !== String(targetVal)) return false;
         }
+      }
+      return true;
+    });
 
-        totalProcessed++;
-        await executeRuleActions(rule, {
-          recordData,
-          tableId,
-          tableName,
-          recordId,
-        });
-      } catch (ruleError) {
-        totalFailures++;
-        log.error("Error executing rule in processNewRecordTrigger", { ruleId: rule.id, error: String(ruleError) });
+    // Execute in parallel batches
+    let totalFailures = 0;
+    const totalProcessed = eligibleRules.length;
+    const RULE_CONCURRENCY = 5;
+    for (let i = 0; i < eligibleRules.length; i += RULE_CONCURRENCY) {
+      const batch = eligibleRules.slice(i, i + RULE_CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map((rule) => executeRuleActions(rule, { recordData, tableId, tableName, recordId }))
+      );
+      for (let j = 0; j < results.length; j++) {
+        if (results[j].status === "rejected") {
+          totalFailures++;
+          log.error("Error executing rule in processNewRecordTrigger", {
+            ruleId: batch[j].id, error: String((results[j] as PromiseRejectedResult).reason),
+          });
+        }
       }
     }
 
@@ -1955,83 +1887,53 @@ export async function processRecordUpdate(
       select: { name: true },
     })))?.name ?? "Unknown Table";
 
-    // Issue Z1 fix: Track failures and signal to Inngest if majority fail
+    // Pre-compute business hours state ONCE for all rules
+    const bizState = computeBusinessHoursState();
+
+    // Pre-filter rules synchronously (cheap CPU checks)
+    const eligibleRules = rules.filter((rule) => {
+      const triggerConfig = rule.triggerConfig as TriggerConfig;
+      if (!checkBusinessHours(triggerConfig, bizState)) return false;
+      if (triggerConfig.tableId && Number(triggerConfig.tableId) !== tableId) return false;
+
+      const columnId = triggerConfig.columnId;
+      if (!columnId) return false;
+
+      const oldValue = oldData[columnId];
+      const newValue = newData[columnId];
+      if (newValue === undefined || oldValue === newValue) return false;
+
+      // Numeric/Score Operator Check
+      if (triggerConfig.operator && triggerConfig.toValue !== undefined) {
+        const val = Number(newValue);
+        const target = Number(triggerConfig.toValue);
+        if (isNaN(val) || isNaN(target)) return false;
+        if (!matchesOperator(val, triggerConfig.operator, target)) return false;
+      } else {
+        if (triggerConfig.fromValue && String(oldValue) !== String(triggerConfig.fromValue)) return false;
+        if (triggerConfig.toValue && String(newValue) !== String(triggerConfig.toValue)) return false;
+      }
+      return true;
+    });
+
+    // Execute in parallel batches
     let totalFailures = 0;
-    let totalProcessed = 0;
-    for (const rule of rules) {
-      try {
-        const triggerConfig = rule.triggerConfig as TriggerConfig;
-
-        // --- Business Hours Check ---
-        if (!checkBusinessHours(triggerConfig)) continue;
-
-        if (triggerConfig.tableId && Number(triggerConfig.tableId) !== tableId)
-          continue;
-
-        const columnId = triggerConfig.columnId;
-        if (!columnId) continue;
-
-        const oldValue = oldData[columnId];
-        const newValue = newData[columnId];
-
-        if (newValue === undefined || oldValue === newValue) continue;
-
-        // Numeric/Score Operator Check
-        if (triggerConfig.operator && triggerConfig.toValue !== undefined) {
-          const val = Number(newValue);
-          const target = Number(triggerConfig.toValue);
-
-          // If not a valid number, skip or treat as false?
-          // Let's assume strict number requirement for these operators
-          if (isNaN(val) || isNaN(target)) continue;
-
-          let match = false;
-          switch (triggerConfig.operator) {
-            case "gt":
-              match = val > target;
-              break;
-            case "lt":
-              match = val < target;
-              break;
-            case "gte":
-              match = val >= target;
-              break;
-            case "lte":
-              match = val <= target;
-              break;
-            case "eq":
-              match = val === target;
-              break; // Note: strict number equality
-            case "neq":
-              match = val !== target;
-              break;
-          }
-          if (!match) continue;
-        } else {
-          // Default String Equality Check
-          if (
-            triggerConfig.fromValue &&
-            String(oldValue) !== String(triggerConfig.fromValue)
-          )
-            continue;
-          if (
-            triggerConfig.toValue &&
-            String(newValue) !== String(triggerConfig.toValue)
-          )
-            continue;
+    const totalProcessed = eligibleRules.length;
+    const RULE_CONCURRENCY = 5;
+    for (let i = 0; i < eligibleRules.length; i += RULE_CONCURRENCY) {
+      const batch = eligibleRules.slice(i, i + RULE_CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map((rule) => executeRuleActions(rule, {
+          recordData: newData, oldRecordData: oldData, tableId, tableName, recordId,
+        }))
+      );
+      for (let j = 0; j < results.length; j++) {
+        if (results[j].status === "rejected") {
+          totalFailures++;
+          log.error("Error executing rule in processRecordUpdate", {
+            ruleId: batch[j].id, error: String((results[j] as PromiseRejectedResult).reason),
+          });
         }
-
-        totalProcessed++;
-        await executeRuleActions(rule, {
-          recordData: newData,
-          oldRecordData: oldData,
-          tableId,
-          tableName,
-          recordId,
-        });
-      } catch (ruleError) {
-        totalFailures++;
-        log.error("Error executing rule in processRecordUpdate", { ruleId: rule.id, error: String(ruleError) });
       }
     }
 
@@ -2286,10 +2188,11 @@ export async function processTimeBasedAutomations(companyId: number) {
     log.info("Found active time-based rules", { count: rules.length, companyId });
 
     // Filter rules that pass basic config validation and business hours check upfront
+    const bizState = computeBusinessHoursState();
     const validRules = rules.filter((rule) => {
       const config = rule.triggerConfig as any;
       if (!config.tableId || !config.timeValue || !config.timeUnit) return false;
-      if (!checkBusinessHours(config)) return false;
+      if (!checkBusinessHours(config, bizState)) return false;
       return true;
     });
 
@@ -2459,46 +2362,45 @@ export async function processDirectDialTrigger(
       return;
     }
 
-    // Get the record data
-    const record = await withRetry(() => prisma.record.findFirst({
-      where: { id: recordId, companyId },
-      select: { data: true, createdAt: true },
-    }));
+    // Fetch record and table name in parallel (independent queries)
+    const [record, table] = await Promise.all([
+      withRetry(() => prisma.record.findFirst({
+        where: { id: recordId, companyId },
+        select: { data: true, createdAt: true },
+      })),
+      withRetry(() => prisma.tableMeta.findFirst({
+        where: { id: tableId, companyId },
+        select: { name: true },
+      })),
+    ]);
 
     if (!record) {
       log.info("Record not found", { recordId });
       return;
     }
 
-    // Get table name for notifications — scoped by companyId (Issue K)
-    const table = await withRetry(() => prisma.tableMeta.findFirst({
-      where: { id: tableId, companyId },
-      select: { name: true },
-    }));
-
     const recordData = record.data as Record<string, unknown>;
 
-    // Issue Z2 fix: Track failures and signal to Inngest if majority fail
+    // Execute in parallel batches
     let totalFailures = 0;
-    let totalProcessed = 0;
-
-    // Execute each matching rule
-    for (const rule of matchingRules) {
-      try {
-        log.info("Executing DIRECT_DIAL rule", { ruleName: rule.name, ruleId: rule.id });
-
-        totalProcessed++;
-        await executeRuleActions(rule, {
-          recordData,
-          tableId,
-          recordId,
-          tableName: table?.name,
-          previousDialedAt,
-          recordCreatedAt: record.createdAt.toISOString(),
-        });
-      } catch (ruleError) {
-        totalFailures++;
-        log.error("Error executing DIRECT_DIAL rule", { ruleId: rule.id, ruleName: rule.name, error: String(ruleError) });
+    const totalProcessed = matchingRules.length;
+    const RULE_CONCURRENCY = 5;
+    for (let i = 0; i < matchingRules.length; i += RULE_CONCURRENCY) {
+      const batch = matchingRules.slice(i, i + RULE_CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map((rule) => executeRuleActions(rule, {
+          recordData, tableId, recordId, tableName: table?.name,
+          previousDialedAt, recordCreatedAt: record.createdAt.toISOString(),
+        }))
+      );
+      for (let j = 0; j < results.length; j++) {
+        if (results[j].status === "rejected") {
+          totalFailures++;
+          log.error("Error executing DIRECT_DIAL rule", {
+            ruleId: batch[j].id, ruleName: batch[j].name,
+            error: String((results[j] as PromiseRejectedResult).reason),
+          });
+        }
       }
     }
 

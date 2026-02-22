@@ -10,6 +10,7 @@ import {
   CheckCircle,
   Clock,
 } from "lucide-react";
+import { memo } from "react";
 import { useRouter } from "next/navigation";
 import { GoalWithProgress } from "@/app/actions/goals";
 import { Progress } from "@/components/ui/progress";
@@ -22,10 +23,10 @@ interface GoalWidgetProps {
   goal: GoalWithProgress;
   metrics: any[];
   tables: any[];
-  onRemove: () => void;
+  onRemove: (id: string) => void;
 }
 
-export default function GoalWidget({
+function GoalWidget({
   id,
   goal,
   metrics,
@@ -178,7 +179,7 @@ export default function GoalWidget({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onRemove();
+                onRemove(id);
               }}
               onPointerDown={(e) => e.stopPropagation()}
               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
@@ -216,3 +217,5 @@ export default function GoalWidget({
     </div>
   );
 }
+
+export default memo(GoalWidget);
