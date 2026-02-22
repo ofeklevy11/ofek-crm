@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import UserMenu from "./UserMenu";
@@ -8,6 +9,10 @@ import NotificationBell from "./NotificationBell";
 import MobileMenu from "./MobileMenu";
 
 export default async function Navbar() {
+  const headersList = await headers();
+  const pathname = headersList.get("x-pathname") || "";
+  if (pathname.startsWith("/p/")) return null;
+
   const user = await getCurrentUser();
 
   const linkClass =
@@ -61,6 +66,15 @@ export default async function Navbar() {
                       className={linkClass}
                     >
                       יומן
+                    </Link>
+                  )}
+                  {hasUserFlag(user, "canViewMeetings") && (
+                    <Link
+                      href="/meetings"
+                      prefetch={false}
+                      className={linkClass}
+                    >
+                      פגישות
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewTasks") && (

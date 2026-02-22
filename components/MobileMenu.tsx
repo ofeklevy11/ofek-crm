@@ -79,6 +79,10 @@ export default function MobileMenu({ user }: MobileMenuProps) {
             <LinkItem href="/calendar">יומן</LinkItem>
           )}
 
+          {hasUserFlag(user, "canViewMeetings") && (
+            <LinkItem href="/meetings">פגישות</LinkItem>
+          )}
+
           {hasUserFlag(user, "canViewTasks") && (
             <LinkItem href="/tasks">משימות</LinkItem>
           )}

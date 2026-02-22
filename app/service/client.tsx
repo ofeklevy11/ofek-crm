@@ -98,7 +98,20 @@ export default function ServicePageClient({
   const [slaModalOpen, setSlaModalOpen] = useState(false);
 
   useEffect(() => {
-    setTickets(initialTickets);
+    setTickets((prev) =>
+      initialTickets.map((incoming) => {
+        const existing = prev.find((t) => t.id === incoming.id);
+        // Preserve comments/activityLogs from enriched state if incoming doesn't have them
+        if (existing && (existing.comments || existing.activityLogs)) {
+          return {
+            ...incoming,
+            comments: incoming.comments ?? existing.comments,
+            activityLogs: incoming.activityLogs ?? existing.activityLogs,
+          };
+        }
+        return incoming;
+      })
+    );
   }, [initialTickets]);
 
   // Handle ticket updates from TicketDetails - instant UI update

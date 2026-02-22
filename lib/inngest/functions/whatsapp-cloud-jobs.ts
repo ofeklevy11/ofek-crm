@@ -1,6 +1,7 @@
 import { inngest } from "../client";
 import { NonRetriableError } from "inngest";
 import { createLogger } from "@/lib/logger";
+import { env } from "@/lib/env";
 import {
   mapMessageType,
   mapMessageStatus,
@@ -412,7 +413,7 @@ export const sendWaOutboundMessage = inngest.createFunction(
         "@/lib/services/whatsapp-cloud-api"
       );
 
-      const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || decrypt({
+      const accessToken = env.WHATSAPP_ACCESS_TOKEN || decrypt({
         ciphertext: context.accessTokenEnc,
         iv: context.accessTokenIv,
         authTag: context.accessTokenTag,
@@ -535,7 +536,7 @@ export const downloadWaMedia = inngest.createFunction(
         throw new NonRetriableError("WhatsApp account not found");
       }
 
-      return process.env.WHATSAPP_ACCESS_TOKEN || decrypt({
+      return env.WHATSAPP_ACCESS_TOKEN || decrypt({
         ciphertext: account.accessTokenEnc,
         iv: account.accessTokenIv,
         authTag: account.accessTokenTag,

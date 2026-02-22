@@ -40,6 +40,7 @@ import AnalyticsTableWidget from "./dashboard/AnalyticsTableWidget";
 import MiniCalendarWidget from "./dashboard/MiniCalendarWidget";
 import MiniTasksWidget from "./dashboard/MiniTasksWidget";
 import MiniQuotesWidget from "./dashboard/MiniQuotesWidget";
+import MiniMeetingsWidget from "./dashboard/MiniMeetingsWidget";
 import MiniWidgetConfigModal from "./dashboard/MiniWidgetConfigModal";
 import AnalyticsDetailsModal from "./AnalyticsDetailsModal";
 import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
@@ -69,7 +70,8 @@ type WidgetType =
   | "ANALYTICS_TABLE"
   | "MINI_CALENDAR"
   | "MINI_TASKS"
-  | "MINI_QUOTES";
+  | "MINI_QUOTES"
+  | "MINI_MEETINGS";
 
 interface DashboardWidget {
   id: string; // Unique ID for this instance on dashboard
@@ -359,6 +361,27 @@ export default function DashboardClient({
 
   const handleAddMiniQuotes = () => {
     setMiniConfigModal({ open: true, widgetType: "MINI_QUOTES" });
+  };
+
+  const handleAddMiniMeetings = async () => {
+    if (!canAddWidget) return;
+    try {
+      const result = await addDashboardWidget({ widgetType: "MINI_MEETINGS" as any, referenceId: "meetings" });
+      if (result.success && result.data) {
+        setWidgets((prev) => [
+          ...prev,
+          {
+            id: result.data!.id,
+            type: "MINI_MEETINGS",
+            referenceId: "meetings",
+            settings: result.data!.settings,
+          },
+        ]);
+        toast.success("מיני פגישות נוסף לדאשבורד");
+      }
+    } catch {
+      toast.error("שגיאה בהוספת וידג'ט");
+    }
   };
 
   const handleMiniConfigConfirm = async (settings: any) => {
@@ -738,6 +761,8 @@ export default function DashboardClient({
       title = "מיני משימות";
     } else if (widget.type === "MINI_QUOTES") {
       title = "מיני הצעות מחיר";
+    } else if (widget.type === "MINI_MEETINGS") {
+      title = "מיני פגישות";
     } else {
       const { view } = content as any;
       title = view?.name || "טבלה";
@@ -787,7 +812,7 @@ export default function DashboardClient({
       return widget.settings;
     } else if (widget.type === "ANALYTICS_TABLE") {
       return widget.settings;
-    } else if (widget.type === "MINI_CALENDAR" || widget.type === "MINI_TASKS" || widget.type === "MINI_QUOTES") {
+    } else if (widget.type === "MINI_CALENDAR" || widget.type === "MINI_TASKS" || widget.type === "MINI_QUOTES" || widget.type === "MINI_MEETINGS") {
       return null;
     } else {
       // TABLE
@@ -1005,6 +1030,20 @@ export default function DashboardClient({
                 מיני הצעות מחיר
               </button>
             )}
+            {hasUserFlag(user, "canViewMeetings") && (
+              <button
+                onClick={handleAddMiniMeetings}
+                disabled={!canAddWidget}
+                className={`flex items-center justify-center gap-2 px-4 py-2 bg-linear-to-r from-violet-50 to-purple-50 text-violet-700 border border-violet-100 rounded-lg transition shadow-sm font-medium text-sm ${
+                  !canAddWidget
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:shadow-md"
+                }`}
+              >
+                <Calendar size={16} />
+                מיני פגישות
+              </button>
+            )}
             <button
               onClick={handleOpenAddModal}
               disabled={!canAddWidget}
@@ -1165,6 +1204,16 @@ export default function DashboardClient({
                       onOpenSettings={() =>
                         handleOpenMiniWidgetSettings(widget.id, "MINI_QUOTES", (widget as any).settings)
                       }
+                    />
+                  </div>
+                );
+              } else if (widget.type === "MINI_MEETINGS") {
+                return (
+                  <div key={widget.id} className="break-inside-avoid">
+                    <MiniMeetingsWidget
+                      id={widget.id}
+                      onRemove={() => handleRemoveWidget(widget)}
+                      settings={(widget as any).settings}
                     />
                   </div>
                 );

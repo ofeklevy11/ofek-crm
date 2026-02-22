@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -52,12 +52,14 @@ import {
   deleteTicket,
   updateTicketComment,
   deleteTicketComment,
+  getTicketDetails,
 } from "@/app/actions/tickets";
 import { deleteTicketActivityLog } from "@/app/actions/ticket-activity-logs";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { showConfirm } from "@/hooks/use-modal";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Combines comments and activity logs into a single sorted timeline
 function getCombinedActivity(ticket: any) {
@@ -113,7 +115,27 @@ export default function TicketDetails({
 }: TicketDetailsProps) {
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [loadingDetails, setLoadingDetails] = useState(false);
   const router = useRouter();
+
+  // Fetch full ticket details (comments + activityLogs) when ticket changes
+  useEffect(() => {
+    if (!ticket?.id) return;
+    // Skip fetch if this ticket already has comments/activityLogs loaded
+    if (ticket.comments && ticket.activityLogs) return;
+
+    let cancelled = false;
+    setLoadingDetails(true);
+    getTicketDetails(ticket.id).then((full) => {
+      if (cancelled || !full) return;
+      onTicketUpdate?.({ ...ticket, ...full });
+    }).catch(() => {
+      // silently ignore — the ticket still renders with basic data
+    }).finally(() => {
+      setLoadingDetails(false);
+    });
+    return () => { cancelled = true; };
+  }, [ticket?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isAdmin = currentUser?.role === "admin";
 
@@ -194,7 +216,6 @@ export default function TicketDetails({
         status: newStatus,
         activityLogs: [newLog, ...(ticket.activityLogs || [])],
       });
-      router.refresh();
     } catch (error) {
       toast.error(getUserFriendlyError(error));
     }
@@ -218,7 +239,6 @@ export default function TicketDetails({
         priority: newPriority,
         activityLogs: [newLog, ...(ticket.activityLogs || [])],
       });
-      router.refresh();
     } catch (error) {
       toast.error(getUserFriendlyError(error));
     }
@@ -246,7 +266,6 @@ export default function TicketDetails({
         assignee: newAssignee,
         activityLogs: [newLog, ...(ticket.activityLogs || [])],
       });
-      router.refresh();
     } catch (error) {
       toast.error(getUserFriendlyError(error));
     }
@@ -272,7 +291,6 @@ export default function TicketDetails({
         ...ticket,
         comments: [newCommentWithUser, ...(ticket.comments || [])],
       });
-      router.refresh();
     } catch (error) {
       toast.error(getUserFriendlyError(error));
     } finally {
@@ -292,7 +310,6 @@ export default function TicketDetails({
           (log: any) => log.id !== logId
         ),
       });
-      router.refresh();
     } catch (error: any) {
       toast.error(getUserFriendlyError(error));
     }
@@ -318,7 +335,6 @@ export default function TicketDetails({
         description: descriptionValue,
         activityLogs: [newLog, ...(ticket.activityLogs || [])],
       });
-      router.refresh();
     } catch (error) {
       toast.error(getUserFriendlyError(error));
     }
@@ -345,7 +361,6 @@ export default function TicketDetails({
         title: titleValue,
         activityLogs: [newLog, ...(ticket.activityLogs || [])],
       });
-      router.refresh();
     } catch (error) {
       toast.error(getUserFriendlyError(error));
     }
@@ -379,7 +394,6 @@ export default function TicketDetails({
         client: newClient,
         activityLogs: [newLog, ...(ticket.activityLogs || [])],
       });
-      router.refresh();
     } catch (error) {
       toast.error(getUserFriendlyError(error));
     }
@@ -409,7 +423,6 @@ export default function TicketDetails({
       onTicketUpdate?.({ ...ticket, comments: updatedComments });
       setEditingCommentId(null);
       setEditingCommentValue("");
-      router.refresh();
     } catch (error: any) {
       toast.error(getUserFriendlyError(error));
     }
@@ -427,7 +440,6 @@ export default function TicketDetails({
           (c: any) => c.id !== commentId
         ),
       });
-      router.refresh();
     } catch (error: any) {
       toast.error(getUserFriendlyError(error));
     }
@@ -715,6 +727,20 @@ export default function TicketDetails({
                 פעילות
               </h3>
               <div className="space-y-4">
+                {loadingDetails ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex gap-3">
+                        <Skeleton className="w-8 h-8 rounded-full shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-24" />
+                          <Skeleton className="h-16 w-full rounded-lg" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                <>
                 {/* Combined activity stream: comments + activity logs */}
                 {getCombinedActivity(ticket).map((item: any) => (
                   <div key={`${item.type}-${item.id}`}>
@@ -868,6 +894,8 @@ export default function TicketDetails({
                   <div className="text-center py-8 text-slate-500 text-sm">
                     אין פעילות עדיין. התחל את השיחה.
                   </div>
+                )}
+                </>
                 )}
               </div>
             </div>

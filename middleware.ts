@@ -7,7 +7,9 @@ import {
   validateCustomHeader,
 } from "@/lib/security/csrf";
 
-function buildCspHeader(nonce: string): string {
+function buildCspHeader(nonce: string, path?: string): string {
+  // Allow embedding for public meeting booking pages
+  const frameAncestors = path?.startsWith("/p/meetings/") ? "*" : "'none'";
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://connect.facebook.net`,
@@ -16,7 +18,7 @@ function buildCspHeader(nonce: string): string {
     "font-src 'self' data:",
     "connect-src 'self' https://utfs.io https://*.ufs.sh https://*.uploadthing.com https://*.inngest.com https://graph.facebook.com https://www.facebook.com https://connect.facebook.net",
     "frame-src https://www.facebook.com",
-    "frame-ancestors 'none'",
+    `frame-ancestors ${frameAncestors}`,
     "base-uri 'self'",
     "form-action 'self'",
   ].join("; ");
@@ -82,7 +84,8 @@ export function middleware(request: NextRequest) {
     const reqHeaders = new Headers(request.headers);
     reqHeaders.set("x-nonce", nonce);
     const res = addCacheControl(path, NextResponse.next({ request: { headers: reqHeaders } }));
-    res.headers.set("Content-Security-Policy", buildCspHeader(nonce));
+    res.headers.set("Content-Security-Policy", buildCspHeader(nonce, path));
+    res.headers.set("x-pathname", path);
     return res;
   }
 
@@ -111,7 +114,7 @@ export function middleware(request: NextRequest) {
   const reqHeaders = new Headers(request.headers);
   reqHeaders.set("x-nonce", nonce);
   const response = addCacheControl(path, NextResponse.next({ request: { headers: reqHeaders } }));
-  response.headers.set("Content-Security-Policy", buildCspHeader(nonce));
+  response.headers.set("Content-Security-Policy", buildCspHeader(nonce, path));
   response.cookies.set("auth_token", authToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

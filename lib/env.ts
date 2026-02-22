@@ -28,6 +28,7 @@ export const env = {
   PDFMONKEY_API_KEY: optionalEnv("PDFMONKEY_API_KEY"),
   INNGEST_EVENT_KEY: optionalEnv("INNGEST_EVENT_KEY"),
   INNGEST_SIGNING_KEY: optionalEnv("INNGEST_SIGNING_KEY"),
+  WHATSAPP_ACCESS_TOKEN: optionalEnv("WHATSAPP_ACCESS_TOKEN"),
   NEXT_PUBLIC_APP_URL:
     process.env.NODE_ENV === "production"
       ? requireEnv("NEXT_PUBLIC_APP_URL")

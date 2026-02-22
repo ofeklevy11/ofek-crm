@@ -1,5 +1,6 @@
 import { inngest } from "../client";
 import { createLogger } from "@/lib/logger";
+import { env } from "@/lib/env";
 
 const log = createLogger("AutomationJobs");
 
@@ -192,7 +193,7 @@ export const processEventAutomationJob = inngest.createFunction(
     const { processEventAutomations } = await import(
       "@/app/actions/event-automations-core"
     );
-    await processEventAutomations(companyId, process.env.CRON_SECRET);
+    await processEventAutomations(companyId, env.CRON_SECRET);
     return { success: true, companyId };
   },
 );

@@ -900,16 +900,22 @@ async function callOpenRouter(
   maxTokens: number,
   model = "google/gemini-2.0-flash-001"
 ): Promise<string> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new NonRetriableError("OPENROUTER_API_KEY is not configured");
+  const apiKey = env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    log.error("OPENROUTER_API_KEY is missing at runtime", {
+      envKeysContainingOpenrouter: Object.keys(process.env)
+        .filter((k) => k.toLowerCase().includes("openrouter")),
+    });
+    throw new NonRetriableError("OPENROUTER_API_KEY is not configured");
+  }
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
-      ...(process.env.NEXT_PUBLIC_APP_URL
-        ? { "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL }
+      ...(env.NEXT_PUBLIC_APP_URL
+        ? { "HTTP-Referer": env.NEXT_PUBLIC_APP_URL }
         : {}),
       "X-Title": "CRM AI Generator",
     },

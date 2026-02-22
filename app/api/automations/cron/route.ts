@@ -24,6 +24,14 @@ export async function GET(request: Request) {
 
     log.info("Starting main automation job");
 
+    // Process meeting reminders (runs across all companies in a single pass)
+    try {
+      const { processMeetingReminders } = await import("@/app/actions/meeting-automations");
+      await processMeetingReminders();
+    } catch (err) {
+      log.error("Meeting reminders processing failed", { error: String(err) });
+    }
+
     // Only fetch companies that have active time-based or event-based automation rules.
     // This avoids dispatching Inngest events for companies with no automations at all.
     const companies = await prisma.$queryRaw<{ id: number }[]>`

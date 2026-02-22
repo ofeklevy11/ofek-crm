@@ -77,10 +77,12 @@ export async function GET(
     const downloadFilename = file.displayName || file.name;
     const encodedFilename = encodeURIComponent(downloadFilename);
 
+    const disposition = `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`;
+
     // Stream the response body directly instead of buffering into memory
     const headers: Record<string, string> = {
       "Content-Type": file.type || "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`,
+      "Content-Disposition": disposition,
       "Cache-Control": "private, max-age=3600",
       "X-Content-Type-Options": "nosniff",
     };

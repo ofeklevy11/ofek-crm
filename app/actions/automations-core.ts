@@ -76,6 +76,14 @@ export async function executeRuleActions(
     recordId?: number;
     previousDialedAt?: string | null;
     recordCreatedAt?: string;
+    // Meeting context
+    meetingId?: string;
+    participantName?: string;
+    participantEmail?: string;
+    participantPhone?: string;
+    meetingType?: string;
+    meetingStart?: string;
+    meetingEnd?: string;
   },
 ) {
   const { companyId, id: ruleId, createdBy } = rule;
@@ -111,6 +119,20 @@ export async function executeRuleActions(
               .replace("{toStatus}", context.toStatus || "");
             link = "/tasks";
           }
+          // Meeting Replacements
+          if (context.meetingId) {
+            message = message
+              .split("{participantName}").join(context.participantName || "")
+              .split("{participantEmail}").join(context.participantEmail || "")
+              .split("{participantPhone}").join(context.participantPhone || "")
+              .split("{meetingType}").join(context.meetingType || "")
+              .split("{meetingStart}").join(context.meetingStart || "")
+              .split("{meetingEnd}").join(context.meetingEnd || "");
+            title = title
+              .split("{participantName}").join(context.participantName || "")
+              .split("{meetingType}").join(context.meetingType || "");
+            link = "/meetings";
+          }
           // Field Change Replacements
           if (
             context.oldRecordData &&
@@ -145,19 +167,31 @@ export async function executeRuleActions(
           waData.toStatus = context.toStatus;
         }
 
-        // Resolve phone number
+        // Resolve phone number — for meetings, use participant phone directly
         const phoneColumnId = config.phoneColumnId;
         let phone = "";
-        if (phoneColumnId?.startsWith("manual:")) {
+        if (context.meetingId && context.participantPhone) {
+          phone = context.participantPhone;
+        } else if (phoneColumnId?.startsWith("manual:")) {
           phone = phoneColumnId.replace("manual:", "");
         } else if (phoneColumnId) {
           phone = waData[phoneColumnId] || "";
         }
 
         // Resolve content with dynamic placeholders
-        let waContent = config.content || "";
+        let waContent = config.content || config.message || "";
         for (const key in waData) {
           waContent = waContent.split(`{${key}}`).join(String(waData[key] || ""));
+        }
+        // Meeting-specific replacements
+        if (context.meetingId) {
+          waContent = waContent
+            .split("{participantName}").join(context.participantName || "")
+            .split("{participantEmail}").join(context.participantEmail || "")
+            .split("{participantPhone}").join(context.participantPhone || "")
+            .split("{meetingType}").join(context.meetingType || "")
+            .split("{meetingStart}").join(context.meetingStart || "")
+            .split("{meetingEnd}").join(context.meetingEnd || "");
         }
 
         if (!phone) {
@@ -208,12 +242,22 @@ export async function executeRuleActions(
           }
         }
       } else if (type === "WEBHOOK") {
-        const webhookData = {
+        const webhookData: Record<string, unknown> = {
           ...context.recordData,
           tableId: context.tableId,
           recordId: context.recordId,
           tableName: context.tableName,
         };
+        // Enrich webhook payload with meeting data
+        if (context.meetingId) {
+          webhookData.meetingId = context.meetingId;
+          webhookData.participantName = context.participantName;
+          webhookData.participantEmail = context.participantEmail;
+          webhookData.participantPhone = context.participantPhone;
+          webhookData.meetingType = context.meetingType;
+          webhookData.meetingStart = context.meetingStart;
+          webhookData.meetingEnd = context.meetingEnd;
+        }
         const webhookUrl = config.webhookUrl || config.url;
 
         if (!webhookUrl) {
@@ -475,6 +519,15 @@ export async function executeRuleActions(
                 .split("{fromValue}").join(String(context.oldRecordData[colId]))
                 .split("{toValue}").join(String(context.recordData[colId]));
             }
+          }
+          if (context.meetingId) {
+            res = res
+              .split("{participantName}").join(context.participantName || "")
+              .split("{participantEmail}").join(context.participantEmail || "")
+              .split("{participantPhone}").join(context.participantPhone || "")
+              .split("{meetingType}").join(context.meetingType || "")
+              .split("{meetingStart}").join(context.meetingStart || "")
+              .split("{meetingEnd}").join(context.meetingEnd || "");
           }
           return res;
         };

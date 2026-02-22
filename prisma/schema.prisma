@@ -35,6 +35,9 @@ enum AutomationTriggerType {
   TICKET_STATUS_CHANGE
   SLA_BREACH
   EVENT_TIME
+  MEETING_BOOKED
+  MEETING_CANCELLED
+  MEETING_REMINDER
 }
 
 enum AutomationActionType {
@@ -240,6 +243,15 @@ enum DashboardWidgetType {
   MINI_CALENDAR
   MINI_TASKS
   MINI_QUOTES
+  MINI_MEETINGS
+}
+
+enum MeetingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
 }
 
 enum ImportJobStatus {
@@ -388,6 +400,12 @@ model Company {
   waContacts           WaContact[]
   waConversations      WaConversation[]
   waMessages           WaMessage[]
+
+  // Meetings Module
+  meetingTypes        MeetingType[]
+  meetings            Meeting[]
+  availabilityBlocks  AvailabilityBlock[]
+  companyAvailability CompanyAvailability?
 }
 
 model User {
@@ -548,10 +566,18 @@ model AutomationRule {
   calendarEventId String?
   calendarEvent   CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
 
+  meetingTypeId Int?
+  meetingType   MeetingType? @relation(fields: [meetingTypeId], references: [id], onDelete: Cascade)
+
+  meetingId String?
+  meeting   Meeting? @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
   @@index([companyId, isActive, triggerType]) // Covers companyId-only prefix queries + active rules by trigger type
   @@index([companyId, isActive, actionType]) // Covers analytics data fetch (filter by actionType)
   @@index([calendarEventId])
   @@index([companyId, triggerType, calendarEventId])
+  @@index([meetingTypeId])
+  @@index([meetingId])
 }
 
 model Notification {
@@ -740,6 +766,7 @@ model CalendarEvent {
 
   automationRules AutomationRule[]
   automationLogs  AutomationLog[]
+  meeting         Meeting?
 
   @@index([companyId, startTime, endTime])
 }
@@ -764,6 +791,7 @@ model Client {
   tickets         Ticket[]
   financeRecords  FinanceRecord[]
   waContacts      WaContact[]
+  meetings        Meeting[]
 
   @@index([companyId])
   @@index([companyId, createdAt]) // For CUSTOMERS goal date-range queries
@@ -1878,6 +1906,105 @@ model ImportJob {
 
   @@index([companyId])
   @@index([tableId])
+}
+
+// ============================================
+// MEETINGS MODULE - Calendly-style booking
+// ============================================
+
+model MeetingType {
+  id        Int     @id @default(autoincrement())
+  companyId Int
+  name      String // "שיחת היכרות", "ייעוץ", "דמו"
+  slug      String // URL-safe: "intro-call"
+  description    String?
+  duration       Int // Minutes (15/30/45/60/custom)
+  color          String?
+  bufferBefore   Int     @default(0) // Buffer minutes before
+  bufferAfter    Int     @default(0) // Buffer minutes after
+  dailyLimit     Int? // Max per day (null=unlimited)
+  minAdvanceHours Int    @default(24) // Min hours before booking
+  maxAdvanceDays  Int    @default(30) // Max days ahead
+  customFields   Json    @default("[]") // Custom form fields schema
+  availabilityOverride Json? // Per-type schedule override
+  isActive       Boolean @default(true)
+  order          Int     @default(0)
+  shareToken     String  @unique @default(cuid())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  meetings        Meeting[]
+  automationRules AutomationRule[]
+
+  @@unique([companyId, slug])
+  @@index([companyId, isActive])
+}
+
+model Meeting {
+  id             String        @id @default(cuid())
+  companyId      Int
+  meetingTypeId  Int
+  participantName  String
+  participantEmail String?
+  participantPhone String?
+  customFieldData  Json?
+  startTime      DateTime
+  endTime        DateTime
+  timezone       String        @default("Asia/Jerusalem")
+  status         MeetingStatus @default(PENDING)
+  notesBefore    String?
+  notesAfter     String?
+  tags           String[]
+  clientId       Int?
+  calendarEventId String?      @unique
+  manageToken    String        @unique @default(cuid())
+  cancelledAt    DateTime?
+  cancelledBy    String? // "owner" or "participant"
+  cancelReason   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  meetingType   MeetingType    @relation(fields: [meetingTypeId], references: [id])
+  client        Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  calendarEvent CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: SetNull)
+
+  automationRules AutomationRule[]
+
+  @@index([companyId, status, startTime(sort: Desc)])
+  @@index([companyId, meetingTypeId, startTime])
+  @@index([companyId, startTime, endTime])
+}
+
+model AvailabilityBlock {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  title     String? // "חופשת חנוכה"
+  startDate DateTime
+  endDate   DateTime
+  allDay    Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, startDate, endDate])
+}
+
+model CompanyAvailability {
+  id             Int    @id @default(autoincrement())
+  companyId      Int    @unique
+  weeklySchedule Json // { "0": [{"start":"09:00","end":"17:00"}], ... } (0=Sun)
+  timezone       String @default("Asia/Jerusalem")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 // ============================================

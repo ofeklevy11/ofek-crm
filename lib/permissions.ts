@@ -33,6 +33,8 @@ export const USER_FLAGS = [
   { key: "canViewChat", label: "גישה לצ׳אט" },
   { key: "canViewWhatsApp", label: "גישה לוואטסאפ עסקי" },
   { key: "canManageWhatsApp", label: "ניהול חיבור וואטסאפ" },
+  { key: "canViewMeetings", label: "גישה לפגישות" },
+  { key: "canManageMeetings", label: "ניהול פגישות (יצירה/עריכה/מחיקה)" },
   { key: "canViewWorkers", label: "גישה לניהול עובדים" },
   { key: "canManageWorkers", label: "ניהול עובדים (יצירה/עריכה/מחיקה)" },
   { key: "canViewUsers", label: "גישה לניהול משתמשים" },

@@ -167,6 +167,12 @@ export const RATE_LIMITS = {
   whatsappMutate: { prefix: "wa-mut", max: 30, windowSeconds: 60 } satisfies RateLimitConfig,
   /** WhatsApp mark-read: 60 per user per minute */
   whatsappMark: { prefix: "wa-mark", max: 60, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** Meeting reads: 60 per user per minute */
+  meetingRead: { prefix: "mtg-read", max: 60, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** Meeting mutations: 30 per user per minute */
+  meetingMutation: { prefix: "mtg-mut", max: 30, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** Public booking: 10 per IP per minute */
+  publicBooking: { prefix: "pub-book", max: 10, windowSeconds: 60 } satisfies RateLimitConfig,
   /** AI job polling: 60 per user per minute (lightweight Redis GET, separate from general API) */
   aiJobPoll: { prefix: "ai-poll", max: 60, windowSeconds: 60 } satisfies RateLimitConfig,
 } as const;
