@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import {
@@ -97,11 +97,12 @@ export default function ServicePageClient({
   const [selectedTicket, setSelectedTicket] = useState<any>(null);
   const [slaModalOpen, setSlaModalOpen] = useState(false);
 
+  // P1-4: O(n+m) merge using Map instead of O(n*m) .find() inside .map()
   useEffect(() => {
-    setTickets((prev) =>
-      initialTickets.map((incoming) => {
-        const existing = prev.find((t) => t.id === incoming.id);
-        // Preserve comments/activityLogs from enriched state if incoming doesn't have them
+    setTickets((prev) => {
+      const prevMap = new Map(prev.map((t) => [t.id, t]));
+      return initialTickets.map((incoming) => {
+        const existing = prevMap.get(incoming.id);
         if (existing && (existing.comments || existing.activityLogs)) {
           return {
             ...incoming,
@@ -110,8 +111,8 @@ export default function ServicePageClient({
           };
         }
         return incoming;
-      })
-    );
+      });
+    });
   }, [initialTickets]);
 
   // Handle ticket updates from TicketDetails - instant UI update
@@ -125,20 +126,26 @@ export default function ServicePageClient({
   };
 
   // Computed tickets
-  const filteredTickets = tickets.filter(
-    (ticket) =>
-      ticket.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.client?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.id.toString().includes(searchQuery)
-  );
+  const filteredTickets = useMemo(() => {
+    const query = searchQuery.toLowerCase();
+    return tickets.filter(
+      (ticket) =>
+        ticket.title.toLowerCase().includes(query) ||
+        ticket.client?.name.toLowerCase().includes(query) ||
+        ticket.id.toString().includes(searchQuery)
+    );
+  }, [tickets, searchQuery]);
 
-  const stats = {
-    open: tickets.filter((t) => t.status === "OPEN").length,
-    inProgress: tickets.filter((t) => t.status === "IN_PROGRESS").length,
-    urgent: tickets.filter(
-      (t) => t.priority === "HIGH" || t.priority === "CRITICAL"
-    ).length,
-  };
+  // P2-2: Single-pass reduce instead of 3 separate filter passes
+  const stats = useMemo(() => tickets.reduce(
+    (acc, t) => {
+      if (t.status === "OPEN") acc.open++;
+      if (t.status === "IN_PROGRESS") acc.inProgress++;
+      if (t.priority === "HIGH" || t.priority === "CRITICAL") acc.urgent++;
+      return acc;
+    },
+    { open: 0, inProgress: 0, urgent: 0 },
+  ), [tickets]);
 
   const [activeDragTicket, setActiveDragTicket] = useState<any>(null);
 
@@ -444,6 +451,14 @@ function TicketKanban({
     { id: "RESOLVED", label: "טופל", color: "bg-green-500" },
   ];
 
+  // P1-5: Pre-group tickets by status in O(n) instead of 4x .filter() = O(4n)
+  const grouped = new Map<string, any[]>();
+  for (const t of tickets) {
+    const arr = grouped.get(t.status);
+    if (arr) arr.push(t);
+    else grouped.set(t.status, [t]);
+  }
+
   return (
     <DndContext
       sensors={sensors}
@@ -457,7 +472,7 @@ function TicketKanban({
             <DroppableColumn
               key={col.id}
               column={col}
-              tickets={tickets.filter((t) => t.status === col.id)}
+              tickets={grouped.get(col.id) || []}
               onSelect={onSelect}
             />
           ))}

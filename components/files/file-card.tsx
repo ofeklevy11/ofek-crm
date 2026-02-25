@@ -16,7 +16,7 @@ import {
   Check,
   X,
 } from "lucide-react";
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+import { cn, formatFileSize } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { showConfirm } from "@/hooks/use-modal";
@@ -116,14 +116,6 @@ export function FileCard({
     if (file.type.includes("audio"))
       return <Music className={cn(className, "text-[#4f95ff]")} />;
     return <FileIcon className={cn(className, "text-gray-500")} />;
-  };
-
-  const formatSize = (bytes: number) => {
-    if (bytes === 0) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   };
 
   const formatDate = (date: string | Date) => {
@@ -268,7 +260,7 @@ export function FileCard({
                 {(file as any).displayName || file.name}
               </h3>
               <p className="text-xs text-muted-foreground mt-1">
-                {formatSize(file.size)}
+                {formatFileSize(file.size)}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {formatDate(file.createdAt)}
@@ -366,7 +358,7 @@ export function FileCard({
         </div>
 
         <div className="text-sm text-muted-foreground w-20 text-left shrink-0">
-          {formatSize(file.size)}
+          {formatFileSize(file.size)}
         </div>
 
         <div className="text-sm text-muted-foreground w-28 shrink-0 text-left">
@@ -445,7 +437,7 @@ export function FileCard({
         </div>
 
         <div className="col-span-2 text-sm text-muted-foreground text-left">
-          {formatSize(file.size)}
+          {formatFileSize(file.size)}
         </div>
 
         <div className="col-span-3 text-sm text-muted-foreground text-left">

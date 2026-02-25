@@ -75,60 +75,56 @@ export async function POST(
       newStart.getTime() + meeting.meetingType.duration * 60_000,
     );
 
-    // Verify slot availability (exclude current meeting from conflict check)
-    const [existingMeetings, existingEvents] = await Promise.all([
-      prisma.meeting.findMany({
-        where: {
-          companyId: meeting.companyId,
-          id: { not: meeting.id },
-          status: { not: "CANCELLED" },
-          startTime: { lt: newEnd },
-          endTime: { gt: newStart },
-        },
-        select: { startTime: true, endTime: true },
-      }),
-      prisma.calendarEvent.findMany({
-        where: {
-          companyId: meeting.companyId,
-          id: meeting.calendarEventId
-            ? { not: meeting.calendarEventId }
-            : undefined,
-          startTime: { lt: newEnd },
-          endTime: { gt: newStart },
-        },
-        select: { startTime: true, endTime: true },
-      }),
-    ]);
+    // Verify slot + update atomically inside interactive transaction to prevent TOCTOU double-booking
+    await prisma.$transaction(async (tx) => {
+      const [txMeetings, txEvents] = await Promise.all([
+        tx.meeting.findMany({
+          where: {
+            companyId: meeting.companyId,
+            id: { not: meeting.id },
+            status: { not: "CANCELLED" },
+            startTime: { lt: newEnd },
+            endTime: { gt: newStart },
+          },
+          select: { startTime: true, endTime: true },
+        }),
+        tx.calendarEvent.findMany({
+          where: {
+            companyId: meeting.companyId,
+            id: meeting.calendarEventId
+              ? { not: meeting.calendarEventId }
+              : undefined,
+            startTime: { lt: newEnd },
+            endTime: { gt: newStart },
+          },
+          select: { startTime: true, endTime: true },
+        }),
+      ]);
 
-    const slotOpen = isSlotAvailable({
-      slotStart: newStart,
-      slotEnd: newEnd,
-      bufferBefore: meeting.meetingType.bufferBefore,
-      bufferAfter: meeting.meetingType.bufferAfter,
-      existingMeetings,
-      existingEvents,
-    });
+      if (
+        !isSlotAvailable({
+          slotStart: newStart,
+          slotEnd: newEnd,
+          bufferBefore: meeting.meetingType.bufferBefore,
+          bufferAfter: meeting.meetingType.bufferAfter,
+          existingMeetings: txMeetings,
+          existingEvents: txEvents,
+        })
+      ) {
+        throw new Error("SLOT_TAKEN");
+      }
 
-    if (!slotOpen) {
-      return NextResponse.json(
-        { error: "Slot is no longer available" },
-        { status: 400 },
-      );
-    }
-
-    // Update meeting times
-    await prisma.meeting.update({
-      where: { id: meeting.id },
-      data: { startTime: newStart, endTime: newEnd },
-    });
-
-    // Update linked calendar event if exists
-    if (meeting.calendarEventId) {
-      await prisma.calendarEvent.update({
-        where: { id: meeting.calendarEventId },
+      await tx.meeting.update({
+        where: { id: meeting.id },
         data: { startTime: newStart, endTime: newEnd },
       });
-    }
+      if (meeting.calendarEventId) {
+        await tx.calendarEvent.update({
+          where: { id: meeting.calendarEventId },
+          data: { startTime: newStart, endTime: newEnd },
+        });
+      }
+    });
 
     // Notify admins (fire-and-forget)
     const dateStr = newStart.toLocaleDateString("he-IL", {
@@ -161,7 +157,13 @@ export async function POST(
       .catch(() => {});
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message === "SLOT_TAKEN") {
+      return NextResponse.json(
+        { error: "Slot is no longer available" },
+        { status: 400 },
+      );
+    }
     console.error("[PublicMeetingReschedule] Error:", error);
     return NextResponse.json(
       { error: "Internal server error" },

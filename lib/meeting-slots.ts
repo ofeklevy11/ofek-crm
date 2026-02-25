@@ -50,6 +50,25 @@ export interface SlotsByDate {
 }
 
 /**
+ * Binary search to check if any interval in a sorted, non-overlapping array overlaps [start, end).
+ * IMPORTANT: intervals must be sorted by start AND merged (no overlaps) before calling this.
+ */
+function hasOverlap(
+  sorted: { start: number; end: number }[],
+  start: number,
+  end: number,
+): boolean {
+  let lo = 0, hi = sorted.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (sorted[mid].end <= start) lo = mid + 1;
+    else if (sorted[mid].start >= end) hi = mid - 1;
+    else return true;
+  }
+  return false;
+}
+
+/**
  * Generate available slots for a meeting type within a date range.
  */
 export function getAvailableSlots(params: {
@@ -118,12 +137,28 @@ export function getAvailableSlots(params: {
   }
 
   busyIntervals.sort((a, b) => a.start - b.start);
+  // Merge overlapping busy intervals so binary search is correct
+  for (let i = 1; i < busyIntervals.length; i++) {
+    if (busyIntervals[i].start <= busyIntervals[i - 1].end) {
+      busyIntervals[i - 1].end = Math.max(busyIntervals[i - 1].end, busyIntervals[i].end);
+      busyIntervals.splice(i, 1);
+      i--;
+    }
+  }
 
-  // Build blocked intervals
+  // Build blocked intervals (sorted + merged for binary search)
   const blockedIntervals: { start: number; end: number }[] = blocks.map(b => ({
     start: b.startDate.getTime(),
     end: b.endDate.getTime(),
   }));
+  blockedIntervals.sort((a, b) => a.start - b.start);
+  for (let i = 1; i < blockedIntervals.length; i++) {
+    if (blockedIntervals[i].start <= blockedIntervals[i - 1].end) {
+      blockedIntervals[i - 1].end = Math.max(blockedIntervals[i - 1].end, blockedIntervals[i].end);
+      blockedIntervals.splice(i, 1);
+      i--;
+    }
+  }
 
   const result: SlotsByDate = {};
 
@@ -155,6 +190,7 @@ export function getAvailableSlots(params: {
     // Check if entire day is blocked
     const dayStart = currentDay.getTime();
     const dayEnd = dayStart + 24 * 60 * 60 * 1000;
+    // Check if a single block entirely covers the day (not just partial overlap)
     const isDayBlocked = blockedIntervals.some(b => b.start <= dayStart && b.end >= dayEnd);
     if (isDayBlocked) {
       currentDay.setDate(currentDay.getDate() + 1);
@@ -184,15 +220,11 @@ export function getAvailableSlots(params: {
 
         // Check if slot is in the future (past earliestBookable)
         if (slotStart >= earliestBookable) {
-          // Check no overlap with busy intervals
-          const hasConflict = busyIntervals.some(
-            b => b.start < occupiedEnd && b.end > occupiedStart,
-          );
+          // Check no overlap with busy intervals (binary search)
+          const hasConflict = hasOverlap(busyIntervals, occupiedStart, occupiedEnd);
 
-          // Check no overlap with blocked intervals
-          const isBlocked = blockedIntervals.some(
-            b => b.start < slotEnd.getTime() && b.end > slotStart.getTime(),
-          );
+          // Check no overlap with blocked intervals (binary search)
+          const isBlocked = hasOverlap(blockedIntervals, slotStart.getTime(), slotEnd.getTime());
 
           if (!hasConflict && !isBlocked) {
             daySlots.push({ start: new Date(slotStart), end: new Date(slotEnd) });

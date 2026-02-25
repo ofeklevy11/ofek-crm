@@ -56,21 +56,24 @@ async function requireFilesUser(rateLimitKey: "fileRead" | "fileMutation") {
   return user;
 }
 
-/** Compute folder depth by walking up parentId chain */
+/** Compute folder depth by walking up parentId chain (single query, in-memory walk) */
 async function getFolderDepth(
   folderId: number,
   companyId: number,
+  prefetchedFolders?: { id: number; parentId: number | null }[],
 ): Promise<number> {
+  const allFolders = prefetchedFolders ?? await prisma.folder.findMany({
+    where: { companyId },
+    select: { id: true, parentId: true },
+  });
+  const parentMap = new Map(allFolders.map((f) => [f.id, f.parentId]));
+
   let depth = 0;
   let currentId: number | null = folderId;
   while (currentId && depth < MAX_FOLDER_DEPTH + 1) {
-    const folder = await prisma.folder.findFirst({
-      where: { id: currentId, companyId },
-      select: { parentId: true },
-    });
-    if (!folder) break;
+    if (!parentMap.has(currentId)) break;
     depth++;
-    currentId = folder.parentId;
+    currentId = parentMap.get(currentId) ?? null;
   }
   return depth;
 }
@@ -103,20 +106,22 @@ export async function moveFileToFolder(
 
   const user = await requireFilesUser("fileMutation");
 
-  // Verify file belongs to user's company
-  const file = await prisma.file.findFirst({
-    where: { id: parsedFileId.data, companyId: user.companyId },
-  });
+  // Verify file + folder belong to user's company in parallel
+  const [file, folder] = await Promise.all([
+    prisma.file.findFirst({
+      where: { id: parsedFileId.data, companyId: user.companyId },
+      select: { id: true },
+    }),
+    parsedFolderId.data !== null
+      ? prisma.folder.findFirst({
+          where: { id: parsedFolderId.data, companyId: user.companyId },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+  ]);
 
   if (!file) throw new Error("File not found");
-
-  // If moving to a folder, verify folder belongs to user's company
-  if (parsedFolderId.data !== null) {
-    const folder = await prisma.folder.findFirst({
-      where: { id: parsedFolderId.data, companyId: user.companyId },
-    });
-    if (!folder) throw new Error("Folder not found");
-  }
+  if (parsedFolderId.data !== null && !folder) throw new Error("Folder not found");
 
   await prisma.file.update({
     where: { id: parsedFileId.data, companyId: user.companyId },
@@ -135,7 +140,7 @@ export async function getStorageData(folderId: number | null) {
 
   const user = await requireFilesUser("fileRead");
 
-  const [folders, files, allFilesStats, currentFolder] = await Promise.all([
+  const [folders, files, allFilesStats, folderSizes, allCompanyFolders] = await Promise.all([
     prisma.folder.findMany({
       where: {
         companyId: user.companyId,
@@ -144,7 +149,6 @@ export async function getStorageData(folderId: number | null) {
       select: {
         id: true, name: true, parentId: true, createdAt: true, updatedAt: true,
         _count: { select: { files: true } },
-        files: { select: { size: true } },
       },
       orderBy: { name: "asc" },
       take: 500,
@@ -172,42 +176,48 @@ export async function getStorageData(folderId: number | null) {
       where: { companyId: user.companyId },
       _sum: { size: true },
     }),
+    prisma.file.groupBy({
+      by: ["folderId"],
+      where: { companyId: user.companyId, folder: { parentId: folderId } },
+      _sum: { size: true },
+    }),
     folderId
-      ? prisma.folder.findFirst({ where: { id: folderId, companyId: user.companyId } })
-      : Promise.resolve(null),
+      ? prisma.folder.findMany({
+          where: { companyId: user.companyId },
+          select: { id: true, name: true, parentId: true },
+        })
+      : Promise.resolve([]),
   ]);
 
-  // Build breadcrumbs with depth guard
+  // Build folder size lookup from groupBy result
+  const sizeMap = new Map(folderSizes.map((g) => [g.folderId, g._sum.size ?? 0]));
+
+  // Build breadcrumbs in-memory with depth guard
   let breadcrumbs: { id: number; name: string }[] = [];
-  let current = currentFolder;
-  if (current) {
+  if (folderId) {
+    const folderMap = new Map(
+      allCompanyFolders.map((f) => [f.id, f] as const),
+    );
     const crumbs: { id: number; name: string }[] = [];
+    let currentId: number | null = folderId;
     let depth = 0;
-    while (current && depth < MAX_FOLDER_DEPTH) {
-      crumbs.unshift({ id: current.id, name: current.name });
-      if (current.parentId) {
-        current = await prisma.folder.findFirst({
-          where: { id: current.parentId, companyId: user.companyId },
-        });
-      } else {
-        current = null;
-      }
+    while (currentId && depth < MAX_FOLDER_DEPTH) {
+      const folder = folderMap.get(currentId);
+      if (!folder) break;
+      crumbs.unshift({ id: folder.id, name: folder.name });
+      currentId = folder.parentId;
       depth++;
     }
     breadcrumbs = crumbs;
   }
 
   // Serialize dates and calculate folder sizes
-  const serializedFolders = folders.map((f) => {
-    const totalSize = f.files.reduce((sum, file) => sum + file.size, 0);
-    const { files: _files, ...folderWithoutFiles } = f;
-    return {
-      ...folderWithoutFiles,
-      createdAt: f.createdAt.toISOString(),
-      updatedAt: f.updatedAt.toISOString(),
-      totalSize,
-    };
-  });
+  const serializedFolders = folders.map((f) => ({
+    ...f,
+    createdAt: f.createdAt.toISOString(),
+    updatedAt: f.updatedAt.toISOString(),
+    totalSize: sizeMap.get(f.id) ?? 0,
+  }));
 
   const serializedFiles = files.map((f) => ({
     ...f,
@@ -242,23 +252,32 @@ export async function createFolder(name: string, parentId: number | null) {
 
   const user = await requireFilesUser("fileMutation");
 
-  // Resource cap: folder count
-  const folderCount = await prisma.folder.count({
-    where: { companyId: user.companyId },
-  });
+  // Resource cap + parent validation + folder list (for depth check) in parallel
+  const [folderCount, parent, allFolders] = await Promise.all([
+    prisma.folder.count({ where: { companyId: user.companyId } }),
+    parentId
+      ? prisma.folder.findFirst({
+          where: { id: parentId, companyId: user.companyId },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+    parentId
+      ? prisma.folder.findMany({
+          where: { companyId: user.companyId },
+          select: { id: true, parentId: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
   if (folderCount >= MAX_FOLDERS_PER_COMPANY) {
     throw new Error("Folder limit reached");
   }
 
   // SECURITY: Validate parentId belongs to same company + check depth
   if (parentId) {
-    const parent = await prisma.folder.findFirst({
-      where: { id: parentId, companyId: user.companyId },
-      select: { id: true },
-    });
     if (!parent) throw new Error("Parent folder not found");
 
-    const depth = await getFolderDepth(parentId, user.companyId);
+    const depth = await getFolderDepth(parentId, user.companyId, allFolders);
     if (depth >= MAX_FOLDER_DEPTH) {
       throw new Error("Maximum folder depth reached");
     }
@@ -283,17 +302,12 @@ export async function renameFolder(folderId: number, newName: string) {
 
   const user = await requireFilesUser("fileMutation");
 
-  // Verify folder belongs to user's company
-  const folder = await prisma.folder.findFirst({
-    where: { id: parsedId.data, companyId: user.companyId },
-  });
-
-  if (!folder) throw new Error("Folder not found");
-
-  await prisma.folder.update({
+  const result = await prisma.folder.updateMany({
     where: { id: parsedId.data, companyId: user.companyId },
     data: { name: parsedName.data },
   });
+
+  if (result.count === 0) throw new Error("Folder not found");
 
   revalidatePath("/files");
 }
@@ -324,38 +338,35 @@ export async function saveFileMetadata(
 
   const user = await requireFilesUser("fileMutation");
 
-  // Resource cap: file count
-  const fileCount = await prisma.file.count({
-    where: { companyId: user.companyId },
-  });
+  // Run all validation queries in parallel
+  const [fileCount, folder, record, existing] = await Promise.all([
+    prisma.file.count({ where: { companyId: user.companyId } }),
+    folderId
+      ? prisma.folder.findFirst({
+          where: { id: folderId, companyId: user.companyId },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+    recordId
+      ? prisma.record.findFirst({
+          where: { id: recordId, companyId: user.companyId },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+    prisma.file.findFirst({
+      where: { key: parsed.data.key, companyId: user.companyId },
+      select: { id: true },
+    }),
+  ]);
+
   if (fileCount >= MAX_FILES_PER_COMPANY) {
     throw new Error("File limit reached");
   }
-
-  // SECURITY: Validate folderId belongs to user's company
-  if (folderId) {
-    const folder = await prisma.folder.findFirst({
-      where: { id: folderId, companyId: user.companyId },
-      select: { id: true },
-    });
-    if (!folder) throw new Error("Invalid folder");
-  }
-
-  // SECURITY: Validate recordId belongs to user's company
-  if (recordId) {
-    const record = await prisma.record.findFirst({
-      where: { id: recordId, companyId: user.companyId },
-      select: { id: true },
-    });
-    if (!record) throw new Error("Invalid record");
-  }
-
-  // Check if file with same key already exists for this company (avoid duplicates)
-  const existing = await prisma.file.findFirst({ where: { key: parsed.data.key, companyId: user.companyId } });
+  if (folderId && !folder) throw new Error("Invalid folder");
+  if (recordId && !record) throw new Error("Invalid record");
   if (existing) {
     revalidatePath("/files");
-    const { url: _u, key: _k, ...safeExisting } = existing as any;
-    return { ...safeExisting, downloadUrl: `/api/files/${existing.id}/download` };
+    return { id: existing.id, downloadUrl: `/api/files/${existing.id}/download`, duplicate: true };
   }
 
   const newFile = await prisma.file.create({
@@ -378,8 +389,7 @@ export async function saveFileMetadata(
     },
   });
   revalidatePath("/files");
-  const safeFile = newFile;
-  return { ...safeFile, downloadUrl: `/api/files/${newFile.id}/download` };
+  return { ...newFile, downloadUrl: `/api/files/${newFile.id}/download` };
 }
 
 export async function updateFile(
@@ -393,19 +403,14 @@ export async function updateFile(
 
   const user = await requireFilesUser("fileMutation");
 
-  // Verify file belongs to user's company
-  const file = await prisma.file.findFirst({
-    where: { id: parsedId.data, companyId: user.companyId },
-  });
-
-  if (!file) throw new Error("File not found");
-
-  await prisma.file.update({
+  const result = await prisma.file.updateMany({
     where: { id: parsedId.data, companyId: user.companyId },
     data: {
       displayName: parsedDisplayName.data?.trim() || null,
     },
   });
+
+  if (result.count === 0) throw new Error("File not found");
 
   revalidatePath("/files");
 }
@@ -418,42 +423,41 @@ export async function deleteFolder(id: number) {
 
   const folderId = parsedId.data;
 
-  // Checking files and subfolders
-  const hasChildren = await prisma.folder.findFirst({
-    where: { parentId: folderId, companyId: user.companyId },
-  });
-  const hasFiles = await prisma.file.findFirst({
-    where: { folderId: folderId, companyId: user.companyId },
-  });
+  // Check subfolders and get files to delete in parallel
+  const [hasChildren, filesToDelete] = await Promise.all([
+    prisma.folder.findFirst({
+      where: { parentId: folderId, companyId: user.companyId },
+      select: { id: true },
+    }),
+    prisma.file.findMany({
+      where: { folderId: folderId, companyId: user.companyId },
+      select: { key: true },
+    }),
+  ]);
 
-  // Check subfolders FIRST to avoid deleting files when folder can't be removed
   if (hasChildren) {
     throw new Error("Folder must be empty of subfolders to delete.");
   }
 
-  if (hasFiles) {
-    // Safe to delete files since no subfolders exist
-    const filesToDelete = await prisma.file.findMany({
+  // Delete files + folder atomically in a transaction
+  await prisma.$transaction([
+    prisma.file.deleteMany({
       where: { folderId: folderId, companyId: user.companyId },
-      select: { key: true },
-    });
-    await prisma.file.deleteMany({
-      where: { folderId: folderId, companyId: user.companyId },
-    });
-    // Clean up from UploadThing storage (best-effort)
-    const keys = filesToDelete.map((f) => f.key).filter(Boolean);
-    if (keys.length > 0) {
-      try {
-        await getUtapi().deleteFiles(keys);
-      } catch (e) {
-        log.error("Failed to delete files from UploadThing", { error: String(e) });
-      }
+    }),
+    prisma.folder.delete({
+      where: { id: folderId, companyId: user.companyId },
+    }),
+  ]);
+
+  // Clean up from UploadThing storage (best-effort, outside transaction)
+  const keys = filesToDelete.map((f) => f.key).filter(Boolean);
+  if (keys.length > 0) {
+    try {
+      await getUtapi().deleteFiles(keys);
+    } catch (e) {
+      log.error("Failed to delete files from UploadThing", { error: String(e) });
     }
   }
-
-  await prisma.folder.delete({
-    where: { id: folderId, companyId: user.companyId },
-  });
 
   revalidatePath("/files");
 }
@@ -466,6 +470,7 @@ export async function deleteFile(id: number) {
 
   const file = await prisma.file.findFirst({
     where: { id: parsedId.data, companyId: user.companyId },
+    select: { id: true, key: true },
   });
 
   if (file) {

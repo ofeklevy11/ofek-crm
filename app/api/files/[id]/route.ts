@@ -53,32 +53,27 @@ export async function PUT(
       }
     }
 
-    // Verify the file exists and belongs to user's company
-    const file = await prisma.file.findFirst({
-      where: {
-        id: fileId,
-        companyId: currentUser.companyId,
-      },
-    });
-
-    if (!file) {
-      return NextResponse.json({ error: "File not found" }, { status: 404 });
-    }
-
     // SECURITY: Atomic companyId check in update WHERE clause + explicit select
-    const updatedFile = await prisma.file.update({
-      where: { id: fileId, companyId: currentUser.companyId },
-      data: {
-        displayName: displayName?.trim() || null,
-      },
-      select: {
-        id: true, name: true, displayName: true, size: true, type: true,
-        folderId: true, recordId: true,
-        createdAt: true, updatedAt: true,
-      },
-    });
+    try {
+      const updatedFile = await prisma.file.update({
+        where: { id: fileId, companyId: currentUser.companyId },
+        data: {
+          displayName: displayName?.trim() || null,
+        },
+        select: {
+          id: true, name: true, displayName: true, size: true, type: true,
+          folderId: true, recordId: true,
+          createdAt: true, updatedAt: true,
+        },
+      });
 
-    return NextResponse.json({ ...updatedFile, downloadUrl: `/api/files/${fileId}/download` });
+      return NextResponse.json({ ...updatedFile, downloadUrl: `/api/files/${fileId}/download` });
+    } catch (e: any) {
+      if (e?.code === "P2025") {
+        return NextResponse.json({ error: "File not found" }, { status: 404 });
+      }
+      throw e;
+    }
   } catch (error) {
     log.error("Failed to update file", { error: String(error) });
     return NextResponse.json(

@@ -435,7 +435,7 @@ export async function updateTicket(
     await inngest.send(events);
   } catch (error) {
     log.error("Inngest send failed, falling back to direct execution", { error: String(error) });
-    // Direct fallback: process ticket status change automations inline
+    // P1-3: Direct fallback — parallel notifications, single dynamic import
     try {
       if (data.status && data.status !== currentTicket.status) {
         const statusMap: Record<string, string> = {
@@ -444,10 +444,13 @@ export async function updateTicket(
         const fromStatusHebrew = statusMap[currentTicket.status] || currentTicket.status;
         const toStatusHebrew = statusMap[data.status] || data.status;
 
-        const rules = await prisma.automationRule.findMany({
+        const rules = await withRetry(() => prisma.automationRule.findMany({
           where: { companyId: user.companyId, isActive: true, triggerType: "TICKET_STATUS_CHANGE" },
           take: 200,
-        });
+        }));
+
+        const { createNotificationForCompany } = await import("@/lib/notifications-internal");
+        const notificationPromises: Promise<any>[] = [];
 
         for (const rule of rules) {
           const tc = rule.triggerConfig as any;
@@ -462,17 +465,18 @@ export async function updateTicket(
                 .replace("{ticketId}", String(ticket.id))
                 .replace("{fromStatus}", fromStatusHebrew)
                 .replace("{toStatus}", toStatusHebrew);
-              const { createNotificationForCompany } = await import("@/lib/notifications-internal");
-              await createNotificationForCompany({
+              notificationPromises.push(createNotificationForCompany({
                 companyId: user.companyId,
                 userId: ac.recipientId,
                 title: ac.titleTemplate || "עדכון בקריאת שירות",
                 message,
                 link: "/service",
-              });
+              }));
             }
           }
         }
+
+        await Promise.all(notificationPromises);
       }
     } catch (directErr) {
       log.error("Direct automation execution also failed", { error: String(directErr) });
@@ -566,10 +570,10 @@ export async function updateTicketComment(commentId: number, content: string) {
   }
 
   // SECURITY: Scope update via ticket companyId join to prevent TOCTOU
-  await prisma.ticketComment.updateMany({
+  await withRetry(() => prisma.ticketComment.updateMany({
     where: { id: commentId, ticket: { companyId: user.companyId } },
     data: { content },
-  });
+  }));
 
   revalidatePath("/service");
 }
@@ -601,9 +605,9 @@ export async function deleteTicketComment(commentId: number) {
   }
 
   // SECURITY: Scope delete via ticket companyId join to prevent TOCTOU
-  await prisma.ticketComment.deleteMany({
+  await withRetry(() => prisma.ticketComment.deleteMany({
     where: { id: commentId, ticket: { companyId: user.companyId } },
-  });
+  }));
 
   revalidatePath("/service");
 }
@@ -655,7 +659,7 @@ export async function updateSlaPolicy(data: {
     throw new Error("Invalid resolve time");
   }
 
-  const policy = await prisma.slaPolicy.upsert({
+  const policy = await withRetry(() => prisma.slaPolicy.upsert({
     where: {
       companyId_priority: {
         companyId: user.companyId,
@@ -677,11 +681,52 @@ export async function updateSlaPolicy(data: {
       id: true, name: true, description: true, priority: true,
       responseTimeMinutes: true, resolveTimeMinutes: true,
     },
-  });
+  }));
 
   await invalidateServiceCache(user.companyId);
   revalidatePath("/service");
   return policy;
+}
+
+// P0-3: Batch SLA policy update — single auth, rate-limit, transaction, cache invalidation
+export async function updateSlaPolicies(configs: Array<{
+  priority: string;
+  responseTimeMinutes: number;
+  resolveTimeMinutes: number;
+}>) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+  assertServiceAccess(user);
+  if (await checkActionRateLimit(String(user.id), RATE_LIMITS.serviceMutation)) {
+    throw new Error("Rate limit exceeded");
+  }
+
+  for (const data of configs) {
+    if (!VALID_PRIORITIES.has(data.priority)) throw new Error("Invalid priority");
+    if (!Number.isInteger(data.responseTimeMinutes) || data.responseTimeMinutes < MIN_SLA_MINUTES || data.responseTimeMinutes > MAX_SLA_MINUTES)
+      throw new Error("Invalid response time");
+    if (!Number.isInteger(data.resolveTimeMinutes) || data.resolveTimeMinutes < MIN_SLA_MINUTES || data.resolveTimeMinutes > MAX_SLA_MINUTES)
+      throw new Error("Invalid resolve time");
+  }
+
+  await withRetry(() => prisma.$transaction(
+    configs.map((data) =>
+      prisma.slaPolicy.upsert({
+        where: { companyId_priority: { companyId: user.companyId, priority: data.priority as TicketPriority } },
+        update: { responseTimeMinutes: data.responseTimeMinutes, resolveTimeMinutes: data.resolveTimeMinutes },
+        create: {
+          companyId: user.companyId,
+          priority: data.priority as TicketPriority,
+          name: `${data.priority} Policy`,
+          responseTimeMinutes: data.responseTimeMinutes,
+          resolveTimeMinutes: data.resolveTimeMinutes,
+        },
+      })
+    )
+  ));
+
+  await invalidateServiceCache(user.companyId);
+  revalidatePath("/service");
 }
 
 // P6: Atomic delete — no TOCTOU gap, cascade handled by DB foreign key constraints
@@ -693,9 +738,9 @@ export async function deleteTicket(id: number) {
     throw new Error("Rate limit exceeded");
   }
 
-  const { count } = await prisma.ticket.deleteMany({
+  const { count } = await withRetry(() => prisma.ticket.deleteMany({
     where: { id, companyId: user.companyId },
-  });
+  }));
 
   if (count === 0) throw new Error("Ticket not found");
 

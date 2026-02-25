@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -138,6 +138,12 @@ export default function TicketDetails({
   }, [ticket?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isAdmin = currentUser?.role === "admin";
+
+  // P2-3: Memoize combined activity to avoid recomputation on every render
+  const combinedActivity = useMemo(
+    () => getCombinedActivity(ticket),
+    [ticket.comments, ticket.activityLogs]
+  );
 
   // Description & Title editing state
   const [editingDescription, setEditingDescription] = useState(false);
@@ -399,12 +405,15 @@ export default function TicketDetails({
     }
   };
 
-  const filteredClients = clients.filter(
-    (c) =>
-      c.name?.toLowerCase().includes(clientSearch.toLowerCase()) ||
-      c.email?.toLowerCase().includes(clientSearch.toLowerCase()) ||
-      c.businessName?.toLowerCase().includes(clientSearch.toLowerCase())
-  );
+  const filteredClients = useMemo(() => {
+    const q = clientSearch.toLowerCase();
+    return clients.filter(
+      (c) =>
+        c.name?.toLowerCase().includes(q) ||
+        c.email?.toLowerCase().includes(q) ||
+        c.businessName?.toLowerCase().includes(q)
+    );
+  }, [clients, clientSearch]);
 
   // Comment handlers
   const handleEditComment = (commentItem: any) => {
@@ -742,7 +751,7 @@ export default function TicketDetails({
                 ) : (
                 <>
                 {/* Combined activity stream: comments + activity logs */}
-                {getCombinedActivity(ticket).map((item: any) => (
+                {combinedActivity.map((item: any) => (
                   <div key={`${item.type}-${item.id}`}>
                     {item.type === "comment" ? (
                       /* Comment Item */
@@ -890,7 +899,7 @@ export default function TicketDetails({
                   </div>
                 ))}
 
-                {getCombinedActivity(ticket).length === 0 && (
+                {combinedActivity.length === 0 && (
                   <div className="text-center py-8 text-slate-500 text-sm">
                     אין פעילות עדיין. התחל את השיחה.
                   </div>

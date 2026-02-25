@@ -522,13 +522,14 @@ export async function getUnreadCounts() {
   if (groupIds.length > 0) {
     const unreadGroupCounts = await Promise.all(
       userGroups.map(async (membership) => {
-        const count = await withRetry(() => prisma.message.count({
-          where: {
-            groupId: membership.groupId,
-            createdAt: { gt: membership.lastReadAt },
-            senderId: { not: currentUser.id },
-          },
-        }));
+        const where: Record<string, unknown> = {
+          groupId: membership.groupId,
+          senderId: { not: currentUser.id },
+        };
+        if (membership.lastReadAt) {
+          where.createdAt = { gt: membership.lastReadAt };
+        }
+        const count = await withRetry(() => prisma.message.count({ where }));
         return { type: "group" as const, id: membership.groupId, count };
       }),
     );

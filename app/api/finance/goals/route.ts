@@ -127,21 +127,25 @@ export async function POST(request: NextRequest) {
         throw new Error(`MAX_GOALS`);
       }
 
-      // SECURITY: Validate tableId and productId belong to user's company
+      // SECURITY: Validate tableId and productId belong to user's company (parallel)
+      const validations: Promise<void>[] = [];
       if (body.tableId) {
-        const table = await tx.tableMeta.findFirst({
-          where: { id: body.tableId, companyId: user.companyId },
-          select: { id: true },
-        });
-        if (!table) throw new Error("INVALID_TABLE");
+        validations.push(
+          tx.tableMeta.findFirst({
+            where: { id: body.tableId, companyId: user.companyId },
+            select: { id: true },
+          }).then(table => { if (!table) throw new Error("INVALID_TABLE"); })
+        );
       }
       if (body.productId) {
-        const product = await tx.product.findFirst({
-          where: { id: body.productId, companyId: user.companyId },
-          select: { id: true },
-        });
-        if (!product) throw new Error("INVALID_PRODUCT");
+        validations.push(
+          tx.product.findFirst({
+            where: { id: body.productId, companyId: user.companyId },
+            select: { id: true },
+          }).then(product => { if (!product) throw new Error("INVALID_PRODUCT"); })
+        );
       }
+      if (validations.length > 0) await Promise.all(validations);
 
       return tx.goal.create({
         data: {

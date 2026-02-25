@@ -43,6 +43,7 @@ export async function GET(
         id: fileId,
         companyId: user.companyId,
       },
+      select: { url: true, type: true, name: true, displayName: true },
     });
 
     if (!file) {

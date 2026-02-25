@@ -26,7 +26,13 @@ export async function GET(
       maxAdvanceDays: true,
       availabilityOverride: true,
       companyId: true,
-      company: { select: { name: true, logoUrl: true } },
+      company: {
+        select: {
+          name: true,
+          logoUrl: true,
+          companyAvailability: { select: { weeklySchedule: true } },
+        },
+      },
     },
   });
 
@@ -40,11 +46,8 @@ export async function GET(
   if (meetingType.availabilityOverride) {
     schedule = meetingType.availabilityOverride as Record<string, { start: string; end: string }[]>;
   } else {
-    const companyAvail = await prisma.companyAvailability.findUnique({
-      where: { companyId: meetingType.companyId },
-      select: { weeklySchedule: true },
-    });
-    schedule = (companyAvail?.weeklySchedule ?? {
+    const weeklySchedule = meetingType.company.companyAvailability?.weeklySchedule;
+    schedule = (weeklySchedule ?? {
       "0": [{ start: "09:00", end: "17:00" }],
       "1": [{ start: "09:00", end: "17:00" }],
       "2": [{ start: "09:00", end: "17:00" }],

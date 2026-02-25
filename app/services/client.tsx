@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ProductModal } from "./product-modal";
 import {
   Plus,
@@ -12,16 +12,87 @@ import {
   Box,
 } from "lucide-react";
 
-const formatMoney = (amount: number) => {
-  return new Intl.NumberFormat("he-IL", {
-    style: "currency",
-    currency: "ILS",
-  }).format(amount);
-};
+const moneyFormatter = new Intl.NumberFormat("he-IL", {
+  style: "currency",
+  currency: "ILS",
+});
+
+const formatMoney = (amount: number) => moneyFormatter.format(amount);
+
+function getMarginAnalysis(price: number, cost: number) {
+  const margin = price - cost;
+  const marginPercent = price > 0 ? (margin / price) * 100 : 0;
+
+  let color = "text-emerald-600";
+
+  if (marginPercent < 10) {
+    color = "text-rose-600";
+  } else if (marginPercent < 30) {
+    color = "text-amber-600";
+  }
+
+  return { margin, marginPercent, color };
+}
+
+function getTypeIcon(type: string) {
+  switch (type) {
+    case "SERVICE":
+      return <Layers className="w-4 h-4" />;
+    case "PRODUCT":
+      return <Box className="w-4 h-4" />;
+    case "PACKAGE":
+      return <Package className="w-4 h-4" />;
+    default:
+      return <Layers className="w-4 h-4" />;
+  }
+}
+
+function getTypeLabel(type: string) {
+  switch (type) {
+    case "SERVICE":
+      return "שירות";
+    case "PRODUCT":
+      return "מוצר";
+    case "PACKAGE":
+      return "חבילה";
+    default:
+      return type;
+  }
+}
 
 export default function ServicesPageClient({ products }: { products: any[] }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
+
+  const stats = useMemo(() => {
+    if (products.length === 0) {
+      return { avgMargin: "0%", mostProfitable: "-" };
+    }
+
+    let totalMarginRatio = 0;
+    let bestProduct = products[0];
+    let bestProfit = products[0].price - (products[0].cost || 0);
+
+    for (const p of products) {
+      const price = p.price;
+      const cost = p.cost || 0;
+      const profit = price - cost;
+
+      if (price > 0) {
+        totalMarginRatio += profit / price;
+      }
+
+      if (profit > bestProfit) {
+        bestProfit = profit;
+        bestProduct = p;
+      }
+    }
+
+    return {
+      avgMargin: Math.round((totalMarginRatio / products.length) * 100) + "%",
+      mostProfitable: bestProduct.name,
+    };
+  }, [products]);
 
   const handleEdit = (product: any) => {
     setEditingProduct(product);
@@ -31,47 +102,6 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
   const handleAddNew = () => {
     setEditingProduct(null);
     setIsModalOpen(true);
-  };
-
-  const getMarginAnalysis = (price: number, cost: number) => {
-    const margin = price - cost;
-    const marginPercent = price > 0 ? (margin / price) * 100 : 0;
-
-    let color = "text-emerald-600";
-
-    if (marginPercent < 10) {
-      color = "text-rose-600";
-    } else if (marginPercent < 30) {
-      color = "text-amber-600";
-    }
-
-    return { margin, marginPercent, color };
-  };
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case "SERVICE":
-        return <Layers className="w-4 h-4" />;
-      case "PRODUCT":
-        return <Box className="w-4 h-4" />;
-      case "PACKAGE":
-        return <Package className="w-4 h-4" />;
-      default:
-        return <Layers className="w-4 h-4" />;
-    }
-  };
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case "SERVICE":
-        return "שירות";
-      case "PRODUCT":
-        return "מוצר";
-      case "PACKAGE":
-        return "חבילה";
-      default:
-        return type;
-    }
   };
 
   return (
@@ -108,16 +138,7 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
             ממוצע רווח גולמי
           </h3>
           <div className="text-4xl font-bold text-[#a24ec1]">
-            {(() => {
-              if (products.length === 0) return "0%";
-              const totalMargin = products.reduce((acc, p) => {
-                const price = Number(p.price);
-                const cost = Number(p.cost || 0);
-                if (price === 0) return acc;
-                return acc + (price - cost) / price;
-              }, 0);
-              return Math.round((totalMargin / products.length) * 100) + "%";
-            })()}
+            {stats.avgMargin}
           </div>
         </div>
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
@@ -125,14 +146,7 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
             הפריט הרווחי ביותר
           </h3>
           <div className="text-xl font-bold text-gray-900 truncate" dir="rtl">
-            {products.length > 0
-              ? products.reduce((prev, current) =>
-                  Number(current.price) - Number(current.cost || 0) >
-                  Number(prev.price) - Number(prev.cost || 0)
-                    ? current
-                    : prev
-                ).name
-              : "-"}
+            {stats.mostProfitable}
           </div>
         </div>
       </div>
@@ -163,8 +177,8 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {products.map((product) => {
-                const price = Number(product.price);
-                const cost = Number(product.cost || 0);
+                const price = product.price;
+                const cost = product.cost || 0;
                 const { margin, marginPercent, color } = getMarginAnalysis(
                   price,
                   cost

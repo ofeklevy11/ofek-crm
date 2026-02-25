@@ -92,8 +92,40 @@ export async function POST(
       );
     }
 
-    // Transaction: create meeting, find/create client, create calendar event, link them
+    // Transaction: re-verify slot + create meeting, find/create client, create calendar event
     const meeting = await prisma.$transaction(async (tx) => {
+      // Re-verify slot availability INSIDE transaction to prevent double-booking
+      const [txMeetings, txEvents] = await Promise.all([
+        tx.meeting.findMany({
+          where: {
+            companyId: meetingType.companyId,
+            status: { not: "CANCELLED" },
+            startTime: { lt: endTime },
+            endTime: { gt: startTime },
+          },
+          select: { startTime: true, endTime: true },
+        }),
+        tx.calendarEvent.findMany({
+          where: {
+            companyId: meetingType.companyId,
+            startTime: { lt: endTime },
+            endTime: { gt: startTime },
+          },
+          select: { startTime: true, endTime: true },
+        }),
+      ]);
+
+      if (!isSlotAvailable({
+        slotStart: startTime,
+        slotEnd: endTime,
+        bufferBefore: meetingType.bufferBefore,
+        bufferAfter: meetingType.bufferAfter,
+        existingMeetings: txMeetings,
+        existingEvents: txEvents,
+      })) {
+        throw new Error("SLOT_TAKEN");
+      }
+
       // 1. Create the calendar event
       const calendarEvent = await tx.calendarEvent.create({
         data: {
@@ -207,7 +239,13 @@ export async function POST(
       success: true,
       manageToken: meeting.manageToken,
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message === "SLOT_TAKEN") {
+      return NextResponse.json(
+        { error: "Slot is no longer available" },
+        { status: 400 },
+      );
+    }
     console.error("[PublicBooking] Error:", error);
     return NextResponse.json(
       { error: "Internal server error" },

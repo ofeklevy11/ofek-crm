@@ -1,0 +1,1529 @@
+{
+  "metadata": {
+    "review_date": "2026-02-23",
+    "reviewer": "Senior QA / Claude",
+    "original_test_count": 408,
+    "original_features": 11,
+    "target_test_count": "700-750",
+    "target_features": 15,
+    "scoring_rubric": {
+      "specificity": {
+        "max": 3,
+        "description": "Steps reference exact API paths, field names, status codes"
+      },
+      "verifiability": {
+        "max": 3,
+        "description": "Expected results are measurable and unambiguous"
+      },
+      "completeness": {
+        "max": 2,
+        "description": "Covers the full workflow including setup and cleanup"
+      },
+      "accuracy": {
+        "max": 2,
+        "description": "Matches actual codebase behavior and constraints"
+      }
+    },
+    "categories_required": [
+      "happy_path",
+      "edge_case",
+      "error",
+      "security",
+      "performance",
+      "concurrency",
+      "integration",
+      "data_integrity",
+      "ux",
+      "regression"
+    ]
+  },
+  "cycle_1": {
+    "status": "completed",
+    "agents": {
+      "A": {
+        "features": [
+          "Authentication & Sessions",
+          "User & Permission Management",
+          "Security Cross-Cutting"
+        ],
+        "id_range": "TC-409 to TC-459"
+      },
+      "B": {
+        "features": [
+          "Ticket/Service Management",
+          "Quotes & Products"
+        ],
+        "id_range": "TC-460 to TC-509"
+      },
+      "C": {
+        "features": [
+          "Finance Module",
+          "Financial Goals",
+          "Dynamic Tables & Records"
+        ],
+        "id_range": "TC-510 to TC-569"
+      },
+      "D": {
+        "features": [
+          "Meetings & Scheduling",
+          "Automations",
+          "File Storage"
+        ],
+        "id_range": "TC-570 to TC-619"
+      },
+      "E": {
+        "features": [
+          "WhatsApp Integration",
+          "Workers & Onboarding",
+          "External Integrations",
+          "Cross-Feature Integration"
+        ],
+        "id_range": "TC-620 to TC-749"
+      }
+    }
+  },
+  "cycle_2": {
+    "status": "completed"
+  },
+  "feature_reviews": {
+    "Authentication & Sessions": {
+      "original_count": 42,
+      "rewrites": [
+        {
+          "id": "TC-009",
+          "old_score": 5,
+          "new_score": 9,
+          "reason": "Vague expected_result said 'handles consistently' without specifying exact behavior. Codebase uses Date.now() > LEGACY_TOKEN_CUTOFF where LEGACY_TOKEN_CUTOFF = new Date('2026-03-18T00:00:00Z').getTime(), so exact cutoff is exclusive (> means 2026-03-18T00:00:00Z is accepted). Rewritten with exact boundary logic."
+        },
+        {
+          "id": "TC-010",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "Missing detail that verifyUserIdWithMeta only handles parts.length===2 or parts.length===3, returning null for other lengths. Added specific code path."
+        },
+        {
+          "id": "TC-012",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "Missing detail on the exact check: parseInt('abc',10) returns NaN, Number.isFinite(NaN) is false, so returns null. Rewritten with exact validation path."
+        },
+        {
+          "id": "TC-013",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "Token expiration check is now - issuedAt > TOKEN_MAX_AGE_SECONDS. A future issuedAt makes now - issuedAt negative, which is < 604800, so it actually passes the age check. The real rejection is issuedAt <= 0 check since future timestamps are > 0. Rewritten for accuracy."
+        },
+        {
+          "id": "TC-024",
+          "old_score": 5,
+          "new_score": 9,
+          "reason": "Vague 'handled consistently' expected result. Code uses `now - issuedAt > TOKEN_MAX_AGE_SECONDS` (strict greater than), so exactly 604800 is NOT greater than 604800, meaning the token is accepted. Rewritten with exact boundary."
+        },
+        {
+          "id": "TC-040",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "Added detail that parts.length would be 1, which matches neither the 2-part nor 3-part branch, so verifyUserIdWithMeta returns null at line 87."
+        }
+      ],
+      "new_tests": [
+        "TC-409",
+        "TC-410",
+        "TC-411",
+        "TC-412",
+        "TC-413",
+        "TC-414",
+        "TC-415",
+        "TC-416"
+      ],
+      "category_coverage": {
+        "happy_path": 8,
+        "edge_case": 10,
+        "error": 6,
+        "security": 10,
+        "performance": 1,
+        "concurrency": 1,
+        "integration": 1,
+        "data_integrity": 1,
+        "ux": 1,
+        "regression": 1
+      }
+    },
+    "User & Permission Management": {
+      "original_count": 30,
+      "rewrites": [],
+      "new_tests": [
+        "TC-417",
+        "TC-418",
+        "TC-419",
+        "TC-420",
+        "TC-421",
+        "TC-422",
+        "TC-423",
+        "TC-424",
+        "TC-425",
+        "TC-426"
+      ],
+      "category_coverage": {
+        "happy_path": 12,
+        "edge_case": 7,
+        "error": 5,
+        "security": 4,
+        "performance": 1,
+        "concurrency": 1,
+        "integration": 1,
+        "data_integrity": 1,
+        "ux": 1,
+        "regression": 1
+      }
+    },
+    "Security Cross-Cutting": {
+      "original_count": 30,
+      "rewrites": [],
+      "new_tests": [
+        "TC-427",
+        "TC-428",
+        "TC-429",
+        "TC-430",
+        "TC-431",
+        "TC-432",
+        "TC-433",
+        "TC-434",
+        "TC-435",
+        "TC-436",
+        "TC-437",
+        "TC-438",
+        "TC-439",
+        "TC-440",
+        "TC-441"
+      ],
+      "category_coverage": {
+        "happy_path": 10,
+        "edge_case": 4,
+        "error": 4,
+        "security": 7,
+        "performance": 2,
+        "concurrency": 1,
+        "integration": 1,
+        "data_integrity": 1,
+        "ux": 1,
+        "regression": 1
+      }
+    },
+    "Ticket/Service Management": {
+      "original_count": 52,
+      "rewrites": [
+        {
+          "id": "TC-073",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original said 'canViewServices permission' but the actual code uses hasUserFlag(user, 'canViewServiceCalls'). Also lacked specifics on SLA auto-calculation flow (prisma.slaPolicy.findUnique with companyId_priority compound key). Rewritten with exact field names, function calls, and Inngest event details."
+        },
+        {
+          "id": "TC-074",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Good structure but needed explicit mention of the tx.$queryRawUnsafe SELECT FOR UPDATE SQL, the Inngest event name 'ticket/activity-log', and the serviceMutation rate limit prefix 'svc-mut'. Rewritten for precision."
+        },
+        {
+          "id": "TC-075",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original referenced 'canViewServices' but actual permission is 'canViewServiceCalls'. Also lacked the Inngest 'ticket/notification' event type='comment' detail. Added rate limit reference and isInternal parameter."
+        },
+        {
+          "id": "TC-076",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original was vague about automation triggering. Rewritten to include Inngest event array construction with both 'ticket/activity-log' and 'ticket/status-change' events, and the direct fallback path for automation execution."
+        },
+        {
+          "id": "TC-077",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Added explicit validateUserInCompany call, Inngest notification event with type='assignee' and isNew=false, and the condition assigneeId !== currentUser.id for notification."
+        },
+        {
+          "id": "TC-078",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Added reference to getClosedTickets query (where status='CLOSED') and getTickets filtering (status IN ['OPEN','IN_PROGRESS','WAITING','RESOLVED']). Made verification steps more measurable."
+        },
+        {
+          "id": "TC-079",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Added exact details: validRestoreStatuses Set, SELECT FOR UPDATE SQL, slaResponseDueDate only recalculated when newStatus='OPEN', TicketActivityLog fieldName='status' with Hebrew labels."
+        },
+        {
+          "id": "TC-085",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original said 'atomic deleteMany removes ticket and all associated records in a single transaction' but permanentlyDeleteTicket uses prisma.ticket.deleteMany (not a transaction). Cascade is handled by PostgreSQL FK constraints. Added Redis cache invalidation detail."
+        },
+        {
+          "id": "TC-087",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Original was too vague about how Kanban drag-and-drop connects to server logic. Added that it invokes the same updateTicket server action with row-level locking, not a separate endpoint."
+        },
+        {
+          "id": "TC-095",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "Original said 'required fields (title, priority)' but createTicket also requires status and type. Added note about no Inngest notification when assigneeId is null."
+        },
+        {
+          "id": "TC-102",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original described 'OPEN to CLOSED' as invalid transition, but the codebase does NOT enforce a state machine for ticket transitions (only enum validation). Rewritten to test enum validation instead (invalid string not in TicketStatus)."
+        },
+        {
+          "id": "TC-103",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Same issue as TC-102: the code validates enum values, not transition graphs. Rewritten to test invalid priority enum value instead."
+        },
+        {
+          "id": "TC-107",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Added the exact Hebrew error message 'רק מי ששלח את ההודעה או מנהל יכול לערוך' and the admin bypass condition (user.role !== 'admin')."
+        },
+        {
+          "id": "TC-108",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Added the exact Hebrew error message 'רק מי ששלח את ההודעה או מנהל יכול למחוק' and the admin bypass condition."
+        },
+        {
+          "id": "TC-111",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Original said 'canViewServices' but the actual permission flag is 'canViewServiceCalls'. Added explicit reference to the WHERE clause and companyId scoping."
+        },
+        {
+          "id": "TC-112",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Corrected from 'canViewServices' to 'canViewServiceCalls'. Added reference to assertServiceAccess and hasUserFlag function."
+        },
+        {
+          "id": "TC-113",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Original said '30 per user per minute' which is correct (RATE_LIMITS.serviceMutation.max=30) but lacked Redis key format and prefix. Added 'svc-mut' prefix and checkActionRateLimit details."
+        },
+        {
+          "id": "TC-114",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Added 'svc-read' prefix and Redis key format for rate limiting."
+        },
+        {
+          "id": "TC-118",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "Added Hebrew label mapping details (statusMap in updateTicket fallback) and Inngest event structure."
+        },
+        {
+          "id": "TC-120",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "Original was vague about how SLA breach is detected. Added specifics about SlaBreach model fields (breachType, status=PENDING) and getTicketStats counting PENDING breaches."
+        },
+        {
+          "id": "TC-142",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Original said 'empty items array' is OK, but createQuoteSchema requires min(1, 'At least one item is required'). Rewritten to test this as an error case instead."
+        }
+      ],
+      "new_tests": [
+        "TC-460",
+        "TC-461",
+        "TC-462",
+        "TC-463",
+        "TC-464",
+        "TC-465",
+        "TC-466",
+        "TC-467",
+        "TC-468",
+        "TC-469",
+        "TC-470",
+        "TC-471",
+        "TC-472"
+      ],
+      "category_coverage": {
+        "happy_path": 17,
+        "edge_case": 10,
+        "error": 14,
+        "security": 4,
+        "performance": 2,
+        "concurrency": 3,
+        "integration": 3,
+        "data_integrity": 4,
+        "ux": 2,
+        "regression": 3
+      }
+    },
+    "Quotes & Products": {
+      "original_count": 48,
+      "rewrites": [
+        {
+          "id": "TC-125",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Added exact details: requireProductUser function, createProductSchema.parse, Serializable transaction with count+create, price Number conversion, and revalidatePath('/services')."
+        },
+        {
+          "id": "TC-128",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Added explicit reference to getProductsForDropdown query filter (where: { isActive: true }) and how the deactivated product is excluded."
+        },
+        {
+          "id": "TC-129",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Added exact transaction logic: findFirst with max quoteNumber, nextQuoteNumber calculation, crypto.randomUUID() for shareToken, Inngest event dedup ID format."
+        },
+        {
+          "id": "TC-130",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original said 'Send the quote' generically. Rewritten with updateQuote details: pdfUrl reset to null, items delete-all-recreate strategy, Inngest with oldPdfUrl."
+        },
+        {
+          "id": "TC-133",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Added total calculation logic (reduce), getQuoteById product join details, and QuoteItem FK relationship."
+        },
+        {
+          "id": "TC-135",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Added explicit note that getProductsForDropdown only calls getCurrentUser(), does NOT call hasUserFlag. This is the key differentiator."
+        },
+        {
+          "id": "TC-142",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "CRITICAL FIX: Original test said 'create quote with no line items succeeds' but createQuoteSchema has items.min(1). Rewritten as error case testing the min(1) validation."
+        },
+        {
+          "id": "TC-147",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Added exact sanitizeError mapping and the full error message: 'Cannot delete product: it is referenced by quote items. Deactivate it instead.'"
+        },
+        {
+          "id": "TC-149",
+          "old_score": 6,
+          "new_score": 7,
+          "reason": "Added note that the Prisma schema does NOT have a unique constraint on [companyId, sku] - only @@index([companyId, name]). The P2002 test may not be applicable unless there's a DB-level constraint."
+        },
+        {
+          "id": "TC-150",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "CRITICAL FIX: Original said 'DRAFT to ACCEPTED is invalid transition' but there's NO state machine in the codebase. Only Zod enum validation. Rewritten to test invalid enum value instead."
+        },
+        {
+          "id": "TC-151",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "CRITICAL FIX: Same issue - no state machine. The codebase allows any valid QuoteStatus on update. Rewritten to document this as expected behavior (no transition enforcement)."
+        },
+        {
+          "id": "TC-153",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Corrected from 'canViewServices' to the exact code path: requireProductUser which calls hasUserFlag(user, 'canViewServices') and throws 'Forbidden'."
+        },
+        {
+          "id": "TC-156",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Added tokensMatch function, CUID_RE regex validation, 404 response on invalid token (anti-enumeration), and publicDownload rate limit details."
+        },
+        {
+          "id": "TC-171",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "CRITICAL FIX: Original said 'REJECTED to SENT is rejected' but there's no state machine. Rewritten to test canViewQuotes permission check instead."
+        }
+      ],
+      "new_tests": [
+        "TC-473",
+        "TC-474",
+        "TC-475",
+        "TC-476",
+        "TC-477",
+        "TC-478",
+        "TC-479",
+        "TC-480",
+        "TC-481",
+        "TC-482",
+        "TC-483",
+        "TC-484",
+        "TC-485",
+        "TC-486",
+        "TC-487",
+        "TC-488"
+      ],
+      "category_coverage": {
+        "happy_path": 14,
+        "edge_case": 11,
+        "error": 12,
+        "security": 6,
+        "performance": 3,
+        "concurrency": 5,
+        "integration": 2,
+        "data_integrity": 3,
+        "ux": 3,
+        "regression": 3
+      }
+    },
+    "Finance Module": {
+      "original_count": 38,
+      "rewrites": [
+        {
+          "id": "TC-173",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Original lacked exact server action name, field validations, nextDueDate calculation, and paymentMode behavior. Rewritten with specific createRetainer call, expected fields in response, and postpaid default nextDueDate logic."
+        },
+        {
+          "id": "TC-174",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Original was vague about which endpoint to call and what transaction behavior to expect. Rewritten with specific updateRetainer server action, atomic transaction with companyId guard, and whitelisted fields mention."
+        },
+        {
+          "id": "TC-175",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "Original was unclear about whether cancel means status change or soft-delete. Rewritten to clarify that status='cancelled' is distinct from soft-delete (deletedAt), and that the record still appears in getRetainers() since it filters by deletedAt=null not status."
+        },
+        {
+          "id": "TC-176",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Original lacked specific API call and expected response structure. Rewritten with getFinanceRecords() call, stats object structure {income, expenses, profit}, and groupBy aggregation details."
+        },
+        {
+          "id": "TC-177",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original was good but lacked the specific OR conditions for date range fallback (paidDate null + updatedAt). Rewritten with exact parallel aggregate queries and OR condition details."
+        },
+        {
+          "id": "TC-178",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "Added specific prisma.retainer.count call and where clause details including companyId and status='active'."
+        },
+        {
+          "id": "TC-181",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "Added specific code path (filters.source='FINANCE_RECORD' branch), the hardcoded type='INCOME' assignment, and the startOfDay/endOfDay normalization."
+        },
+        {
+          "id": "TC-190",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Original expected 2 matches but should match 2 (Client Meeting by title, Planning by description). Added safeQuery truncation to 200 chars detail and mode:'insensitive' specifics."
+        },
+        {
+          "id": "TC-199",
+          "old_score": 4,
+          "new_score": 8,
+          "reason": "Original had incorrect formula using referenceBase for targetValue=0 case. Actually with targetValue=0 and currentValue=10 > 0, it enters the else branch using Math.round((targetValue/currentValue)*100). Corrected the expected result."
+        },
+        {
+          "id": "TC-200",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "Added code-level detail: const startDate = startOfDay(startDateRaw) and const endDate = endOfDay(endDateRaw) using date-fns functions."
+        },
+        {
+          "id": "TC-207",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Original didn't mention the cascade soft-delete of associated retainer payments. Rewritten to include tx.oneTimePayment.updateMany with notes containing Hebrew retainer reference."
+        },
+        {
+          "id": "TC-208",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Added specific deleteFinanceRecord behavior (sets deletedAt=new Date()), the where clause filter (deletedAt: null), and that stats are also computed with the same filter."
+        }
+      ],
+      "new_tests": [
+        "TC-510",
+        "TC-511",
+        "TC-512",
+        "TC-513",
+        "TC-514",
+        "TC-515",
+        "TC-516",
+        "TC-517",
+        "TC-518",
+        "TC-519",
+        "TC-520",
+        "TC-521",
+        "TC-522",
+        "TC-523",
+        "TC-524",
+        "TC-525",
+        "TC-526",
+        "TC-527",
+        "TC-528",
+        "TC-529",
+        "TC-530",
+        "TC-531",
+        "TC-532",
+        "TC-533",
+        "TC-534",
+        "TC-535",
+        "TC-536",
+        "TC-537"
+      ],
+      "category_coverage": {
+        "happy_path": 21,
+        "edge_case": 8,
+        "error": 18,
+        "security": 4,
+        "performance": 2,
+        "concurrency": 1,
+        "integration": 2,
+        "data_integrity": 2,
+        "ux": 2,
+        "regression": 2
+      }
+    },
+    "Financial Goals": {
+      "original_count": 34,
+      "rewrites": [
+        {
+          "id": "TC-211",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Added exact JSON body example, Serializable isolation level reference, cache invalidation step, and all selected fields in the response."
+        },
+        {
+          "id": "TC-214",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original lacked detail on the two-step archive process (compute + transaction). Rewritten with prisma.$transaction wrapping fresh goal read and _archivedSnapshot structure."
+        },
+        {
+          "id": "TC-216",
+          "old_score": 5,
+          "new_score": 9,
+          "reason": "Original had unclear expected status determination. Rewritten with exact math: progressPercent=60, 60 < warningThreshold=70 so status=WARNING (not ON_TRACK as originally implied), plus dailyRate and projectedValue calculation."
+        },
+        {
+          "id": "TC-222",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Added exact status logic code path showing the if/else chain: EXCEEDED -> ON_TRACK -> WARNING -> CRITICAL."
+        },
+        {
+          "id": "TC-229",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Added detail about Error('MAX_GOALS') being thrown inside the transaction and caught by the outer handler which checks msg === 'MAX_GOALS'."
+        },
+        {
+          "id": "TC-231",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original didn't clearly distinguish between API route (z.number().positive()) and server action (z.number().min(0)). Rewritten to highlight this inconsistency."
+        },
+        {
+          "id": "TC-241",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "Added detail that GET route checks canViewFinance FIRST then canViewGoals, and the exact permission check functions used."
+        }
+      ],
+      "new_tests": [
+        "TC-538",
+        "TC-539",
+        "TC-540",
+        "TC-541",
+        "TC-542",
+        "TC-543",
+        "TC-544"
+      ],
+      "category_coverage": {
+        "happy_path": 18,
+        "edge_case": 4,
+        "error": 8,
+        "security": 5,
+        "performance": 2,
+        "concurrency": 1,
+        "integration": 1,
+        "data_integrity": 1,
+        "ux": 1,
+        "regression": 1
+      }
+    },
+    "Dynamic Tables & Records": {
+      "original_count": 20,
+      "rewrites": [
+        {
+          "id": "TC-389",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Original lacked exact schema fields (slug, createdBy, deletedAt). Rewritten with specific model fields from prisma schema."
+        },
+        {
+          "id": "TC-391",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Added specific prisma.record.create call, data JSON column structure, and retrieval verification."
+        },
+        {
+          "id": "TC-393",
+          "old_score": 5,
+          "new_score": 9,
+          "reason": "Original was vague about cleanup. Rewritten with exact deleteRecordWithCleanup steps: file unlinking, attachment deletion, audit log unlinking, finance cascade, and new audit log creation."
+        },
+        {
+          "id": "TC-395",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Added take+1 pattern for hasMore detection, skip=1 for cursor pagination, and explicit hasMore/nextCursor expectations."
+        },
+        {
+          "id": "TC-399",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Original was vague about import mechanics. Rewritten with processImportFile parameters, csv-parse options (bom, delimiter, columns), and summary structure."
+        },
+        {
+          "id": "TC-400",
+          "old_score": 4,
+          "new_score": 8,
+          "reason": "Original title said 'missing headers' but actual validation is per-field type. Rewritten to focus on date format validation with exact regex and Hebrew error messages."
+        },
+        {
+          "id": "TC-401",
+          "old_score": 5,
+          "new_score": 9,
+          "reason": "Original was vague about bulk delete flow. Rewritten with exact API endpoint, validation steps (array check, integer filter, 5000 cap, same-table check, permission check), and Inngest event dispatch."
+        }
+      ],
+      "new_tests": [
+        "TC-545",
+        "TC-546",
+        "TC-547",
+        "TC-548",
+        "TC-549",
+        "TC-550",
+        "TC-551",
+        "TC-552",
+        "TC-553",
+        "TC-554",
+        "TC-555",
+        "TC-556",
+        "TC-557",
+        "TC-558",
+        "TC-559",
+        "TC-560",
+        "TC-561"
+      ],
+      "category_coverage": {
+        "happy_path": 10,
+        "edge_case": 4,
+        "error": 6,
+        "security": 4,
+        "performance": 1,
+        "concurrency": 1,
+        "integration": 3,
+        "data_integrity": 2,
+        "ux": 2,
+        "regression": 2
+      }
+    },
+    "Meetings & Scheduling": {
+      "original_count": 46,
+      "rewrites": [
+        {
+          "id": "TC-245",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original lacked specific API path (server action name), exact field defaults (minAdvanceHours=24, maxAdvanceDays=30), shareToken mention, and return format { success: true, data }. Rewritten with exact createMeetingType call, all input fields, and expected response structure."
+        },
+        {
+          "id": "TC-246",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original was vague about the booking flow. Rewritten to reference exact POST /api/p/meetings/{token}/book endpoint, request body fields, transaction atomicity (prisma.$transaction), and specific entities created (Meeting, CalendarEvent, Client)."
+        },
+        {
+          "id": "TC-247",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "Original lacked server action name and notification verification. Added updateMeetingStatus call, Hebrew notification label 'מאושר', and exact response format."
+        },
+        {
+          "id": "TC-249",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original missed cancelMeeting specific behavior: cancelledAt/cancelledBy/cancelReason fields, fireMeetingAutomations call, and MAX_CANCEL_REASON_LENGTH truncation."
+        },
+        {
+          "id": "TC-251",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Original was acceptable but lacked exact function params and SlotsByDate return type. Enhanced with specific getAvailableSlots params and result format."
+        },
+        {
+          "id": "TC-252",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "Original had incorrect date reference (2026-03-15 as Sunday). Rewritten to be date-agnostic and reference actual AvailabilityBlock model fields (startDate, endDate, allDay)."
+        },
+        {
+          "id": "TC-253",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original missed the occupiedStart/occupiedEnd calculation detail and hasOverlap mechanism. Rewritten with exact buffer math and overlap detection logic."
+        },
+        {
+          "id": "TC-254",
+          "old_score": 6,
+          "new_score": 8,
+          "reason": "Original described booking attempts but the actual dailyLimit check is in getAvailableSlots via meetingsPerDay param. Rewritten to match actual codebase behavior."
+        },
+        {
+          "id": "TC-272",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original was vague. Rewritten with exact POST endpoint, $transaction atomicity, TOCTOU protection via isSlotAvailable inside transaction, and response format."
+        },
+        {
+          "id": "TC-281",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Original claimed PENDING->COMPLETED transition is rejected, but the actual code does NOT enforce state machine transitions (updateMeetingStatus only validates the status string is in validStatuses). Rewritten to document actual behavior accurately."
+        },
+        {
+          "id": "TC-282",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Original claimed COMPLETED->CONFIRMED is rejected as backward transition, but actual code has no transition validation. Rewritten to test invalid status string rejection instead, which is what the code actually does."
+        },
+        {
+          "id": "TC-291",
+          "old_score": 5,
+          "new_score": 9,
+          "reason": "Original referenced wrong function name and fields (type='EMAIL' doesn't exist). Rewritten with exact createGlobalMeetingAutomation call, VALID_TRIGGER_TYPES/VALID_ACTION_TYPES, tier check, and actual response format."
+        },
+        {
+          "id": "TC-294",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original lacked specifics about the OR query for rule matching and Hebrew date formatting. Rewritten with exact fireMeetingAutomations signature, rule matching query, and RULE_CONCURRENCY=5 batch processing."
+        },
+        {
+          "id": "TC-295",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original was vague about deduplication mechanism. Rewritten with exact processMeetingReminders flow: dedupSet construction, calendarEventId-based dedup, AutomationLog.createMany with skipDuplicates."
+        },
+        {
+          "id": "TC-326",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Original said 20/min limit but actual RATE_LIMITS.automationMutate is 30/min. Corrected to match codebase: { prefix: 'auto-mut', max: 30, windowSeconds: 60 }."
+        },
+        {
+          "id": "TC-327",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Enhanced with exact nameSchema validation details, the skip of depth check for null parentId, and exact prisma.folder.create call signature."
+        },
+        {
+          "id": "TC-329",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Enhanced with exact saveFileMetadataSchema validation fields and constraints, duplicate detection by key, and response format including downloadUrl pattern."
+        },
+        {
+          "id": "TC-334",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Enhanced with isSafeStorageUrl check, exact response header values, fetch timeout of 15000ms, and redirect:'error' option."
+        }
+      ],
+      "new_tests": [
+        "TC-570",
+        "TC-571",
+        "TC-572",
+        "TC-573",
+        "TC-574",
+        "TC-575",
+        "TC-576",
+        "TC-577"
+      ],
+      "category_coverage": {
+        "happy_path": 16,
+        "edge_case": 7,
+        "error": 9,
+        "security": 4,
+        "performance": 1,
+        "concurrency": 3,
+        "integration": 1,
+        "data_integrity": 3,
+        "ux": 2,
+        "regression": 2
+      }
+    },
+    "Automations": {
+      "original_count": 36,
+      "rewrites": [
+        {
+          "id": "TC-291",
+          "old_score": 5,
+          "new_score": 9,
+          "reason": "Original used wrong function name and non-existent type='EMAIL'. Corrected to createGlobalMeetingAutomation with actual VALID_TRIGGER_TYPES and VALID_ACTION_TYPES from codebase."
+        },
+        {
+          "id": "TC-294",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original lacked OR query details and Hebrew date formatting. Added exact fireMeetingAutomations query structure and meetingContext with formatDateHe/formatTimeHe."
+        },
+        {
+          "id": "TC-295",
+          "old_score": 6,
+          "new_score": 9,
+          "reason": "Original missed details about calendarEventId-based deduplication, dedupSet construction, and createMany with skipDuplicates:true."
+        },
+        {
+          "id": "TC-326",
+          "old_score": 5,
+          "new_score": 8,
+          "reason": "Original stated 20/min but actual limit is 30/min (RATE_LIMITS.automationMutate.max=30). Corrected to match codebase."
+        }
+      ],
+      "new_tests": [
+        "TC-578",
+        "TC-579",
+        "TC-580",
+        "TC-581",
+        "TC-582",
+        "TC-583",
+        "TC-584",
+        "TC-585"
+      ],
+      "category_coverage": {
+        "happy_path": 7,
+        "edge_case": 5,
+        "error": 7,
+        "security": 17,
+        "performance": 1,
+        "concurrency": 2,
+        "integration": 1,
+        "data_integrity": 1,
+        "ux": 1,
+        "regression": 2
+      }
+    },
+    "File Storage": {
+      "original_count": 32,
+      "rewrites": [
+        {
+          "id": "TC-327",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Enhanced with nameSchema validation details, parentId=null behavior (skip depth check), and exact prisma.folder.create call."
+        },
+        {
+          "id": "TC-329",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Enhanced with full saveFileMetadataSchema field constraints, duplicate detection mechanism, and response format."
+        },
+        {
+          "id": "TC-334",
+          "old_score": 7,
+          "new_score": 9,
+          "reason": "Enhanced with isSafeStorageUrl check, exact header values, fetch timeout, and Content-Length > 50MB guard."
+        }
+      ],
+      "new_tests": [
+        "TC-586",
+        "TC-587",
+        "TC-588",
+        "TC-589",
+        "TC-590",
+        "TC-591"
+      ],
+      "category_coverage": {
+        "happy_path": 10,
+        "edge_case": 7,
+        "error": 5,
+        "security": 4,
+        "performance": 1,
+        "concurrency": 1,
+        "integration": 1,
+        "data_integrity": 1,
+        "ux": 1,
+        "regression": 2
+      }
+    },
+    "WhatsApp Integration": {
+      "original_count": 0,
+      "new_tests": [
+        "TC-620",
+        "TC-621",
+        "TC-622",
+        "TC-623",
+        "TC-624",
+        "TC-625",
+        "TC-626",
+        "TC-627",
+        "TC-628",
+        "TC-629",
+        "TC-630",
+        "TC-631",
+        "TC-632",
+        "TC-633",
+        "TC-634",
+        "TC-635",
+        "TC-636",
+        "TC-637",
+        "TC-638",
+        "TC-639",
+        "TC-640",
+        "TC-641",
+        "TC-642",
+        "TC-643",
+        "TC-644",
+        "TC-645",
+        "TC-646",
+        "TC-647",
+        "TC-648",
+        "TC-649"
+      ],
+      "category_coverage": {
+        "happy_path": 4,
+        "edge_case": 5,
+        "error": 6,
+        "security": 4,
+        "performance": 2,
+        "concurrency": 2,
+        "integration": 2,
+        "data_integrity": 2,
+        "ux": 1,
+        "regression": 2
+      }
+    },
+    "Workers & Onboarding": {
+      "original_count": 0,
+      "new_tests": [
+        "TC-650",
+        "TC-651",
+        "TC-652",
+        "TC-653",
+        "TC-654",
+        "TC-655",
+        "TC-656",
+        "TC-657",
+        "TC-658",
+        "TC-659",
+        "TC-660",
+        "TC-661",
+        "TC-662",
+        "TC-663",
+        "TC-664",
+        "TC-665",
+        "TC-666",
+        "TC-667",
+        "TC-668",
+        "TC-669",
+        "TC-670",
+        "TC-671",
+        "TC-672",
+        "TC-673",
+        "TC-674"
+      ],
+      "category_coverage": {
+        "happy_path": 5,
+        "edge_case": 6,
+        "error": 0,
+        "security": 2,
+        "performance": 1,
+        "concurrency": 1,
+        "integration": 3,
+        "data_integrity": 4,
+        "ux": 2,
+        "regression": 1
+      }
+    },
+    "External Integrations": {
+      "original_count": 0,
+      "new_tests": [
+        "TC-675",
+        "TC-676",
+        "TC-677",
+        "TC-678",
+        "TC-679",
+        "TC-680",
+        "TC-681",
+        "TC-682",
+        "TC-683",
+        "TC-684",
+        "TC-685",
+        "TC-686",
+        "TC-687",
+        "TC-688",
+        "TC-689",
+        "TC-690",
+        "TC-691",
+        "TC-692",
+        "TC-693",
+        "TC-694",
+        "TC-695",
+        "TC-696",
+        "TC-697",
+        "TC-698",
+        "TC-699",
+        "TC-700",
+        "TC-701",
+        "TC-702",
+        "TC-703",
+        "TC-704"
+      ],
+      "category_coverage": {
+        "happy_path": 9,
+        "edge_case": 7,
+        "error": 7,
+        "security": 4,
+        "performance": 2,
+        "concurrency": 0,
+        "integration": 0,
+        "data_integrity": 0,
+        "ux": 0,
+        "regression": 1
+      }
+    },
+    "Cross-Feature Integration": {
+      "original_count": 0,
+      "new_tests": [
+        "TC-705",
+        "TC-706",
+        "TC-707",
+        "TC-708",
+        "TC-709",
+        "TC-710",
+        "TC-711",
+        "TC-712",
+        "TC-713",
+        "TC-714",
+        "TC-715",
+        "TC-716",
+        "TC-717",
+        "TC-718",
+        "TC-719",
+        "TC-720",
+        "TC-721",
+        "TC-722",
+        "TC-723",
+        "TC-724",
+        "TC-725",
+        "TC-726",
+        "TC-727",
+        "TC-728",
+        "TC-729",
+        "TC-730",
+        "TC-731",
+        "TC-732",
+        "TC-733",
+        "TC-734",
+        "TC-735",
+        "TC-736",
+        "TC-737",
+        "TC-738",
+        "TC-739",
+        "TC-740",
+        "TC-741",
+        "TC-742",
+        "TC-743",
+        "TC-744",
+        "TC-745",
+        "TC-746",
+        "TC-747",
+        "TC-748",
+        "TC-749"
+      ],
+      "category_coverage": {
+        "happy_path": 8,
+        "edge_case": 8,
+        "error": 2,
+        "security": 3,
+        "performance": 2,
+        "concurrency": 2,
+        "integration": 5,
+        "data_integrity": 9,
+        "ux": 2,
+        "regression": 4
+      }
+    }
+  },
+  "coverage_matrix": {
+    "Authentication & Sessions": {
+      "total": 50,
+      "categories": {
+        "happy_path": 9,
+        "edge_case": 13,
+        "error": 8,
+        "security": 14,
+        "performance": 1,
+        "concurrency": 1,
+        "integration": 1,
+        "data_integrity": 1,
+        "ux": 1,
+        "regression": 1
+      },
+      "priorities": {
+        "critical": 18,
+        "high": 23,
+        "medium": 9
+      },
+      "coverage_pct": 100
+    },
+    "User & Permission Management": {
+      "total": 40,
+      "categories": {
+        "happy_path": 16,
+        "error": 6,
+        "security": 5,
+        "edge_case": 7,
+        "concurrency": 1,
+        "performance": 1,
+        "integration": 1,
+        "data_integrity": 1,
+        "ux": 1,
+        "regression": 1
+      },
+      "priorities": {
+        "critical": 11,
+        "high": 20,
+        "medium": 9
+      },
+      "coverage_pct": 100
+    },
+    "Ticket/Service Management": {
+      "total": 65,
+      "categories": {
+        "happy_path": 19,
+        "edge_case": 11,
+        "error": 14,
+        "security": 4,
+        "concurrency": 3,
+        "performance": 2,
+        "integration": 3,
+        "data_integrity": 4,
+        "ux": 2,
+        "regression": 3
+      },
+      "priorities": {
+        "critical": 10,
+        "high": 29,
+        "medium": 24,
+        "low": 2
+      },
+      "coverage_pct": 100
+    },
+    "Quotes & Products": {
+      "total": 64,
+      "categories": {
+        "happy_path": 14,
+        "edge_case": 12,
+        "error": 12,
+        "security": 7,
+        "concurrency": 5,
+        "performance": 3,
+        "data_integrity": 3,
+        "integration": 2,
+        "ux": 3,
+        "regression": 3
+      },
+      "priorities": {
+        "critical": 13,
+        "high": 28,
+        "medium": 19,
+        "low": 4
+      },
+      "coverage_pct": 100
+    },
+    "Finance Module": {
+      "total": 66,
+      "categories": {
+        "happy_path": 24,
+        "edge_case": 9,
+        "security": 4,
+        "concurrency": 1,
+        "error": 18,
+        "integration": 2,
+        "data_integrity": 2,
+        "performance": 2,
+        "ux": 2,
+        "regression": 2
+      },
+      "priorities": {
+        "critical": 12,
+        "high": 28,
+        "medium": 22,
+        "low": 4
+      },
+      "coverage_pct": 100
+    },
+    "Financial Goals": {
+      "total": 41,
+      "categories": {
+        "happy_path": 17,
+        "concurrency": 1,
+        "error": 8,
+        "edge_case": 4,
+        "security": 5,
+        "integration": 1,
+        "performance": 2,
+        "data_integrity": 1,
+        "ux": 1,
+        "regression": 1
+      },
+      "priorities": {
+        "critical": 11,
+        "high": 16,
+        "medium": 13,
+        "low": 1
+      },
+      "coverage_pct": 100
+    },
+    "Meetings & Scheduling": {
+      "total": 54,
+      "categories": {
+        "happy_path": 19,
+        "performance": 1,
+        "edge_case": 7,
+        "concurrency": 3,
+        "security": 5,
+        "error": 11,
+        "data_integrity": 3,
+        "integration": 1,
+        "ux": 2,
+        "regression": 2
+      },
+      "priorities": {
+        "critical": 11,
+        "high": 26,
+        "medium": 15,
+        "low": 2
+      },
+      "coverage_pct": 100
+    },
+    "Automations": {
+      "total": 44,
+      "categories": {
+        "happy_path": 7,
+        "error": 6,
+        "edge_case": 5,
+        "security": 18,
+        "concurrency": 2,
+        "integration": 1,
+        "performance": 1,
+        "data_integrity": 1,
+        "ux": 1,
+        "regression": 2
+      },
+      "priorities": {
+        "critical": 18,
+        "high": 13,
+        "medium": 12,
+        "low": 1
+      },
+      "coverage_pct": 100
+    },
+    "File Storage": {
+      "total": 38,
+      "categories": {
+        "happy_path": 11,
+        "edge_case": 9,
+        "error": 7,
+        "security": 4,
+        "performance": 1,
+        "concurrency": 1,
+        "data_integrity": 1,
+        "integration": 1,
+        "ux": 1,
+        "regression": 2
+      },
+      "priorities": {
+        "critical": 14,
+        "high": 16,
+        "medium": 8
+      },
+      "coverage_pct": 100
+    },
+    "Security Cross-Cutting": {
+      "total": 45,
+      "categories": {
+        "happy_path": 12,
+        "error": 6,
+        "edge_case": 5,
+        "security": 13,
+        "performance": 2,
+        "concurrency": 1,
+        "integration": 1,
+        "data_integrity": 2,
+        "ux": 1,
+        "regression": 2
+      },
+      "priorities": {
+        "critical": 16,
+        "high": 19,
+        "medium": 10
+      },
+      "coverage_pct": 100
+    },
+    "Dynamic Tables & Records": {
+      "total": 37,
+      "categories": {
+        "happy_path": 10,
+        "edge_case": 5,
+        "error": 7,
+        "security": 4,
+        "performance": 1,
+        "concurrency": 1,
+        "data_integrity": 2,
+        "integration": 3,
+        "ux": 2,
+        "regression": 2
+      },
+      "priorities": {
+        "critical": 9,
+        "high": 15,
+        "medium": 12,
+        "low": 1
+      },
+      "coverage_pct": 100
+    },
+    "WhatsApp Integration": {
+      "total": 30,
+      "categories": {
+        "happy_path": 4,
+        "error": 6,
+        "security": 4,
+        "edge_case": 5,
+        "performance": 2,
+        "concurrency": 2,
+        "integration": 2,
+        "data_integrity": 2,
+        "ux": 1,
+        "regression": 2
+      },
+      "priorities": {
+        "critical": 7,
+        "high": 14,
+        "medium": 7,
+        "low": 2
+      },
+      "coverage_pct": 100
+    },
+    "Workers & Onboarding": {
+      "total": 28,
+      "categories": {
+        "happy_path": 5,
+        "data_integrity": 4,
+        "edge_case": 6,
+        "security": 2,
+        "performance": 1,
+        "integration": 3,
+        "ux": 2,
+        "regression": 1,
+        "concurrency": 1,
+        "error": 3
+      },
+      "priorities": {
+        "critical": 6,
+        "high": 13,
+        "medium": 7,
+        "low": 2
+      },
+      "coverage_pct": 100
+    },
+    "External Integrations": {
+      "total": 38,
+      "categories": {
+        "happy_path": 9,
+        "error": 7,
+        "security": 4,
+        "edge_case": 7,
+        "performance": 2,
+        "regression": 1,
+        "concurrency": 2,
+        "integration": 2,
+        "data_integrity": 2,
+        "ux": 2
+      },
+      "priorities": {
+        "critical": 12,
+        "high": 16,
+        "medium": 10
+      },
+      "coverage_pct": 100
+    },
+    "Cross-Feature Integration": {
+      "total": 45,
+      "categories": {
+        "happy_path": 8,
+        "data_integrity": 9,
+        "edge_case": 8,
+        "security": 3,
+        "performance": 2,
+        "concurrency": 2,
+        "integration": 5,
+        "regression": 4,
+        "ux": 2,
+        "error": 2
+      },
+      "priorities": {
+        "critical": 10,
+        "high": 20,
+        "medium": 13,
+        "low": 2
+      },
+      "coverage_pct": 100
+    }
+  },
+  "final_stats": {
+    "total_tests": 685,
+    "total_features": 15,
+    "unique_ids": 685,
+    "category_distribution": {
+      "happy_path": 184,
+      "edge_case": 113,
+      "error": 121,
+      "security": 96,
+      "performance": 24,
+      "concurrency": 27,
+      "integration": 29,
+      "data_integrity": 38,
+      "ux": 24,
+      "regression": 29
+    },
+    "validation_errors": 0,
+    "id_gaps": 75
+  }
+}

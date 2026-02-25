@@ -5,6 +5,7 @@ import { hasUserFlag } from "@/lib/permissions";
 import { inngest } from "@/lib/inngest/client";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { isSafeStorageUrl } from "@/lib/security/safe-hosts";
+import { withRetry } from "@/lib/db-retry";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("QuoteDownload");
@@ -35,10 +36,29 @@ export async function GET(
   const rateLimited = await checkRateLimit(String(user.id), RATE_LIMITS.quoteRead);
   if (rateLimited) return rateLimited;
 
-  const quote = await prisma.quote.findUnique({
+  const quote = await withRetry(() => prisma.quote.findUnique({
     where: { id: resolvedParams.id, companyId: user.companyId },
-    select: { id: true, pdfUrl: true, quoteNumber: true, updatedAt: true, companyId: true },
-  });
+    include: {
+      items: {
+        include: {
+          product: {
+            select: { id: true, name: true, price: true, cost: true, sku: true },
+          },
+        },
+      },
+      company: {
+        select: {
+          name: true,
+          businessType: true,
+          taxId: true,
+          businessAddress: true,
+          businessEmail: true,
+          businessWebsite: true,
+          logoUrl: true,
+        },
+      },
+    },
+  }));
 
   if (!quote) {
     return new NextResponse("Quote not found", { status: 404 });
@@ -116,19 +136,7 @@ export async function GET(
 
   // No cached PDF — render inline so the user gets it immediately
   try {
-    const fullQuote = await prisma.quote.findFirst({
-      where: { id: quote.id, companyId: user.companyId },
-      include: {
-        items: { include: { product: true } },
-        company: true,
-      },
-    });
-
-    if (!fullQuote) {
-      return new NextResponse("Quote not found", { status: 404 });
-    }
-
-    const serializedQuote = JSON.parse(JSON.stringify(fullQuote));
+    const serializedQuote = JSON.parse(JSON.stringify(quote));
 
     const { registerFonts } = await import("@/lib/pdf-fonts");
     const { renderToStream } = await import("@react-pdf/renderer");

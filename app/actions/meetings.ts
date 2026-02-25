@@ -180,7 +180,7 @@ export async function getMeetings(filters?: {
     if (limited) return { success: false, error: "Rate limit exceeded. Please try again later." };
 
     const page = Math.max(1, filters?.page || 1);
-    const limit = Math.min(100, Math.max(1, filters?.limit || 20));
+    const limit = Math.min(500, Math.max(1, filters?.limit || 20));
 
     const where: any = { companyId: user.companyId };
 
@@ -228,7 +228,9 @@ export async function getMeetingById(id: string) {
     const meeting = await prisma.meeting.findFirst({
       where: { id, companyId: user.companyId },
       include: {
-        meetingType: true,
+        meetingType: {
+          select: { id: true, name: true, color: true, duration: true, bufferBefore: true, bufferAfter: true },
+        },
         client: { select: { id: true, name: true, email: true, phone: true } },
         calendarEvent: { select: { id: true, title: true } },
       },
@@ -279,14 +281,16 @@ export async function updateMeetingStatus(id: string, status: string) {
       const statusLabels: Record<string, string> = {
         PENDING: "ממתין", CONFIRMED: "מאושר", COMPLETED: "הושלם", CANCELLED: "בוטל", NO_SHOW: "לא הגיע",
       };
-      for (const admin of admins) {
-        await createNotificationForCompany({
-          companyId: user.companyId,
-          userId: admin.id,
-          title: `סטטוס פגישה שונה: ${meeting.participantName} - ${statusLabels[status] || status}`,
-          link: "/meetings",
-        });
-      }
+      await Promise.all(
+        admins.map(admin =>
+          createNotificationForCompany({
+            companyId: user.companyId,
+            userId: admin.id,
+            title: `סטטוס פגישה שונה: ${meeting.participantName} - ${statusLabels[status] || status}`,
+            link: "/meetings",
+          })
+        )
+      );
     } catch (err) {
       log.error("Failed to send status change notification", { error: String(err) });
     }
@@ -368,14 +372,16 @@ export async function cancelMeeting(id: string, reason?: string) {
         select: { id: true },
         take: 10,
       });
-      for (const admin of admins) {
-        await createNotificationForCompany({
-          companyId: user.companyId,
-          userId: admin.id,
-          title: `פגישה בוטלה: ${meeting.participantName} - ${meeting.meetingType.name}`,
-          link: "/meetings",
-        });
-      }
+      await Promise.all(
+        admins.map(admin =>
+          createNotificationForCompany({
+            companyId: user.companyId,
+            userId: admin.id,
+            title: `פגישה בוטלה: ${meeting.participantName} - ${meeting.meetingType.name}`,
+            link: "/meetings",
+          })
+        )
+      );
     } catch (err) {
       log.error("Failed to send cancellation notification", { error: String(err) });
     }
@@ -431,7 +437,6 @@ export async function rescheduleMeeting(id: string, newStart: string, newEnd: st
       include: { meetingType: { select: { name: true } } },
     });
 
-    // Update linked calendar event if exists
     if (meeting.calendarEventId) {
       await prisma.calendarEvent.update({
         where: { id: meeting.calendarEventId },
@@ -448,14 +453,16 @@ export async function rescheduleMeeting(id: string, newStart: string, newEnd: st
         take: 10,
       });
       const timeStr = startTime.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" });
-      for (const admin of admins) {
-        await createNotificationForCompany({
-          companyId: user.companyId,
-          userId: admin.id,
-          title: `פגישה נדחתה: ${meeting.participantName} - ${meeting.meetingType.name} ל-${timeStr}`,
-          link: "/meetings",
-        });
-      }
+      await Promise.all(
+        admins.map(admin =>
+          createNotificationForCompany({
+            companyId: user.companyId,
+            userId: admin.id,
+            title: `פגישה נדחתה: ${meeting.participantName} - ${meeting.meetingType.name} ל-${timeStr}`,
+            link: "/meetings",
+          })
+        )
+      );
     } catch (err) {
       log.error("Failed to send reschedule notification", { error: String(err) });
     }
@@ -593,21 +600,15 @@ export async function getMeetingStats(period?: "week" | "month") {
     });
 
     const total = meetings.length;
-    const cancelled = meetings.filter(m => m.status === "CANCELLED").length;
-    const noShow = meetings.filter(m => m.status === "NO_SHOW").length;
-    const completed = meetings.filter(m => m.status === "COMPLETED").length;
-
-    // Meetings by type
+    const byStatus: Record<string, number> = {};
     const byType: Record<number, number> = {};
     for (const m of meetings) {
+      byStatus[m.status] = (byStatus[m.status] || 0) + 1;
       byType[m.meetingTypeId] = (byType[m.meetingTypeId] || 0) + 1;
     }
-
-    // Status breakdown
-    const byStatus: Record<string, number> = {};
-    for (const m of meetings) {
-      byStatus[m.status] = (byStatus[m.status] || 0) + 1;
-    }
+    const cancelled = byStatus["CANCELLED"] || 0;
+    const noShow = byStatus["NO_SHOW"] || 0;
+    const completed = byStatus["COMPLETED"] || 0;
 
     return {
       success: true,

@@ -82,8 +82,8 @@ export async function restoreTicket(id: number, newStatus: string) {
     CLOSED: "סגור",
   };
 
-  // Transaction: status update + activity log atomically
-  await prisma.$transaction(async (tx) => {
+  // P0-1: Transaction with withRetry for transient DB errors
+  await withRetry(() => prisma.$transaction(async (tx) => {
     // P1: Acquire row-level lock to prevent concurrent modifications
     const locked: { id: number }[] = await tx.$queryRawUnsafe(
       `SELECT id FROM "Ticket" WHERE id = $1 AND "companyId" = $2 FOR UPDATE`,
@@ -103,54 +103,50 @@ export async function restoreTicket(id: number, newStatus: string) {
 
     const oldStatus = ticket.status;
 
-    // Build status update data — clear assignee if they no longer exist
-    const statusUpdateData: Record<string, any> = { status: newStatus as TicketStatus };
+    // P1-1: Build all update data upfront, then do a single tx.ticket.update()
+    const updateData: Record<string, any> = { status: newStatus as TicketStatus };
 
-    if (ticket.assigneeId) {
-      const assigneeExists = await tx.user.findFirst({
-        where: { id: ticket.assigneeId, companyId: user.companyId },
-        select: { id: true },
-      });
-      if (!assigneeExists) {
-        statusUpdateData.assigneeId = null;
-      }
+    // Parallelize independent reads: assignee check + SLA policy lookup
+    const [assigneeExists, slaPolicy] = await Promise.all([
+      ticket.assigneeId
+        ? tx.user.findFirst({
+            where: { id: ticket.assigneeId, companyId: user.companyId },
+            select: { id: true },
+          })
+        : null,
+      ticket.priority
+        ? tx.slaPolicy.findUnique({
+            where: {
+              companyId_priority: {
+                companyId: user.companyId,
+                priority: ticket.priority,
+              },
+            },
+          })
+        : null,
+    ]);
+
+    // Clear assignee if they no longer exist
+    if (ticket.assigneeId && !assigneeExists) {
+      updateData.assigneeId = null;
     }
-
-    await tx.ticket.update({
-      where: { id, companyId: user.companyId },
-      data: statusUpdateData,
-    });
 
     // Recalculate SLA dates from policy for the restored ticket
-    if (ticket.priority) {
-      const slaPolicy = await tx.slaPolicy.findUnique({
-        where: {
-          companyId_priority: {
-            companyId: user.companyId,
-            priority: ticket.priority,
-          },
-        },
-      });
-
-      if (slaPolicy) {
-        const now = Date.now();
-        const slaUpdate: { slaDueDate?: Date; slaResponseDueDate?: Date } = {};
-
-        if (slaPolicy.resolveTimeMinutes) {
-          slaUpdate.slaDueDate = new Date(now + slaPolicy.resolveTimeMinutes * 60 * 1000);
-        }
-        if (newStatus === "OPEN" && slaPolicy.responseTimeMinutes) {
-          slaUpdate.slaResponseDueDate = new Date(now + slaPolicy.responseTimeMinutes * 60 * 1000);
-        }
-
-        if (Object.keys(slaUpdate).length > 0) {
-          await tx.ticket.update({
-            where: { id, companyId: user.companyId },
-            data: slaUpdate,
-          });
-        }
+    if (slaPolicy) {
+      const now = Date.now();
+      if (slaPolicy.resolveTimeMinutes) {
+        updateData.slaDueDate = new Date(now + slaPolicy.resolveTimeMinutes * 60 * 1000);
+      }
+      if (newStatus === "OPEN" && slaPolicy.responseTimeMinutes) {
+        updateData.slaResponseDueDate = new Date(now + slaPolicy.responseTimeMinutes * 60 * 1000);
       }
     }
+
+    // Single update with all fields merged
+    await tx.ticket.update({
+      where: { id, companyId: user.companyId },
+      data: updateData,
+    });
 
     // Log the restore action
     await tx.ticketActivityLog.create({
@@ -165,7 +161,7 @@ export async function restoreTicket(id: number, newStatus: string) {
         newLabel: statusLabels[newStatus] || newStatus,
       },
     });
-  }, { maxWait: 5000, timeout: 10000 });
+  }, { maxWait: 5000, timeout: 10000 }));
 
   await invalidateServiceStatsCache(user.companyId);
   revalidatePath("/service");

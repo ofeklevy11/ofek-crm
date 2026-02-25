@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Trash, Plus, Printer, Save, ArrowRight } from "lucide-react";
 import { addWeeks, addMonths, format } from "date-fns";
 import { createQuote, updateQuote } from "@/app/actions/quotes";
@@ -86,8 +86,8 @@ export default function QuoteEditor({
           unitCost: Math.round(converter(Number(item.unitCost || 0)) * 100) / 100,
         })),
       );
-      if (discountType === "fixed" && discountValue > 0) {
-        setDiscountValue(Math.round(converter(discountValue) * 100) / 100);
+      if (discountTypeRef.current === "fixed" && discountValueRef.current > 0) {
+        setDiscountValue(Math.round(converter(discountValueRef.current) * 100) / 100);
       }
     };
 
@@ -150,6 +150,11 @@ export default function QuoteEditor({
   const [discountValue, setDiscountValue] = useState<number>(
     initialQuote?.discountValue ? Number(initialQuote.discountValue) : 0,
   );
+
+  const discountTypeRef = useRef(discountType);
+  const discountValueRef = useRef(discountValue);
+  useEffect(() => { discountTypeRef.current = discountType; }, [discountType]);
+  useEffect(() => { discountValueRef.current = discountValue; }, [discountValue]);
 
   const [customDuration, setCustomDuration] = useState(1);
   const [customUnit, setCustomUnit] = useState<"weeks" | "months">("months");
@@ -266,69 +271,25 @@ export default function QuoteEditor({
     router.push("/quotes");
   };
 
-  const calculateTotal = () => {
-    return items.reduce(
-      (acc, item) => acc + Number(item.quantity) * Number(item.unitPrice),
-      0,
-    );
-  };
+  const total = useMemo(
+    () => items.reduce((acc, item) => acc + Number(item.quantity) * Number(item.unitPrice), 0),
+    [items],
+  );
 
-  const calculateTotalCost = () => {
-    return items.reduce(
-      (acc, item) => acc + Number(item.quantity) * Number(item.unitCost || 0),
-      0,
-    );
-  };
+  const totalCost = useMemo(
+    () => items.reduce((acc, item) => acc + Number(item.quantity) * Number(item.unitCost || 0), 0),
+    [items],
+  );
 
-  const total = calculateTotal();
-  const totalCost = calculateTotalCost();
-
-  // Discount calculation (in display currency, before VAT)
-  const calculateDiscount = () => {
+  const discount = useMemo(() => {
     if (discountType === "none" || discountValue <= 0) return 0;
-    if (discountType === "percent") {
-      return total * (discountValue / 100);
-    }
+    if (discountType === "percent") return total * (discountValue / 100);
     return discountValue;
-  };
+  }, [discountType, discountValue, total]);
 
-  const discount = calculateDiscount();
   const totalAfterDiscount = total - discount;
 
-  // VAT Calculations
   const vatRate = 0.18;
-  const calculateVatDisplay = () => {
-    if (isVatExempt) {
-      return {
-        subtotalBeforeDiscount: total,
-        discount: discount,
-        subtotal: totalAfterDiscount,
-        vat: 0,
-        finalTotal: totalAfterDiscount,
-      };
-    }
-
-    if (formData.isPriceWithVat) {
-      const net = totalAfterDiscount / (1 + vatRate);
-      const vat = totalAfterDiscount - net;
-      return {
-        subtotalBeforeDiscount: total,
-        discount: discount,
-        subtotal: net,
-        vat: vat,
-        finalTotal: totalAfterDiscount,
-      };
-    } else {
-      const vat = totalAfterDiscount * vatRate;
-      return {
-        subtotalBeforeDiscount: total,
-        discount: discount,
-        subtotal: totalAfterDiscount,
-        vat: vat,
-        finalTotal: totalAfterDiscount + vat,
-      };
-    }
-  };
 
   const {
     subtotalBeforeDiscount: displaySubtotalBeforeDiscount,
@@ -336,7 +297,24 @@ export default function QuoteEditor({
     subtotal: displaySubtotal,
     vat: displayVat,
     finalTotal: displayTotal,
-  } = calculateVatDisplay();
+  } = useMemo(() => {
+    if (isVatExempt) {
+      return {
+        subtotalBeforeDiscount: total,
+        discount,
+        subtotal: totalAfterDiscount,
+        vat: 0,
+        finalTotal: totalAfterDiscount,
+      };
+    }
+    if (formData.isPriceWithVat) {
+      const net = totalAfterDiscount / (1 + vatRate);
+      const vat = totalAfterDiscount - net;
+      return { subtotalBeforeDiscount: total, discount, subtotal: net, vat, finalTotal: totalAfterDiscount };
+    }
+    const vat = totalAfterDiscount * vatRate;
+    return { subtotalBeforeDiscount: total, discount, subtotal: totalAfterDiscount, vat, finalTotal: totalAfterDiscount + vat };
+  }, [total, discount, totalAfterDiscount, isVatExempt, formData.isPriceWithVat]);
 
   // Margin always calculated from Net Income vs Cost
   const revenue = isVatExempt

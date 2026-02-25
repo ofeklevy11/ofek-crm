@@ -51,16 +51,21 @@ export const ourFileRouter = {
     })
     .onUploadComplete(async ({ metadata, file }) => {
       try {
-        // Enforce file count cap — file exists in UploadThing but won't be tracked in our DB
-        const fileCount = await prisma.file.count({
-          where: { companyId: metadata.companyId },
-        });
+        // Enforce file count cap + dedup check in parallel
+        const [fileCount, existing] = await Promise.all([
+          prisma.file.count({
+            where: { companyId: metadata.companyId },
+          }),
+          prisma.file.findFirst({
+            where: { key: file.key, companyId: metadata.companyId },
+            select: { id: true },
+          }),
+        ]);
         if (fileCount >= MAX_FILES_PER_COMPANY) {
           log.warn("File limit reached for company", { companyId: metadata.companyId });
           return { uploadedBy: metadata.userId };
         }
 
-        const existing = await prisma.file.findFirst({ where: { key: file.key, companyId: metadata.companyId } });
         if (!existing) {
           await prisma.file.create({
             data: {

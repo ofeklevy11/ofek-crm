@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma as db } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
@@ -10,9 +11,16 @@ import {
   updateProductSchema,
   MAX_PRODUCTS_PER_COMPANY,
 } from "@/lib/security/product-validation";
+import { withRetry } from "@/lib/db-retry";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("Products");
+
+class ProductLimitError extends Error {
+  constructor(max: number) {
+    super(`Maximum of ${max} products reached`);
+  }
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -46,10 +54,10 @@ function sanitizeError(e: unknown): never {
 export async function getProducts() {
   const user = await requireProductUser("productRead");
 
-  const products = await db.product.findMany({
+  const products = await withRetry(() => db.product.findMany({
     where: { companyId: user.companyId },
     orderBy: { name: "asc" },
-    take: 1000,
+    take: MAX_PRODUCTS_PER_COMPANY,
     select: {
       id: true,
       name: true,
@@ -60,7 +68,7 @@ export async function getProducts() {
       cost: true,
       isActive: true,
     },
-  });
+  }));
 
   return products.map((p) => ({
     ...p,
@@ -80,12 +88,12 @@ export async function getProductsForDropdown() {
   ).catch(() => false);
   if (limited) throw new Error("Rate limit exceeded");
 
-  const products = await db.product.findMany({
+  const products = await withRetry(() => db.product.findMany({
     where: { companyId: user.companyId, isActive: true },
-    select: { id: true, name: true, description: true, price: true, cost: true, type: true },
+    select: { id: true, name: true, description: true, price: true, cost: true },
     orderBy: { name: "asc" },
-    take: 1000,
-  });
+    take: MAX_PRODUCTS_PER_COMPANY,
+  }));
 
   return products.map((p) => ({
     ...p,
@@ -107,34 +115,35 @@ export async function createProduct(data: {
   const user = await requireProductUser("productMutation");
   const parsed = createProductSchema.parse(data);
 
-  // Resource cap
-  const count = await db.product.count({ where: { companyId: user.companyId } });
-  if (count >= MAX_PRODUCTS_PER_COMPANY) {
-    throw new Error(`Maximum of ${MAX_PRODUCTS_PER_COMPANY} products reached`);
-  }
-
   try {
-    const product = await db.product.create({
-      data: {
-        companyId: user.companyId,
-        name: parsed.name.trim(),
-        description: parsed.description?.trim(),
-        sku: parsed.sku?.trim(),
-        type: parsed.type,
-        price: parsed.price,
-        cost: parsed.cost,
-      },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        sku: true,
-        type: true,
-        price: true,
-        cost: true,
-        isActive: true,
-      },
-    });
+    const product = await withRetry(() => db.$transaction(async (tx) => {
+      const count = await tx.product.count({ where: { companyId: user.companyId } });
+      if (count >= MAX_PRODUCTS_PER_COMPANY) {
+        throw new ProductLimitError(MAX_PRODUCTS_PER_COMPANY);
+      }
+
+      return tx.product.create({
+        data: {
+          companyId: user.companyId,
+          name: parsed.name,
+          description: parsed.description,
+          sku: parsed.sku,
+          type: parsed.type,
+          price: parsed.price,
+          cost: parsed.cost,
+        },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          sku: true,
+          type: true,
+          price: true,
+          cost: true,
+          isActive: true,
+        },
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 
     revalidatePath("/services");
     return {
@@ -143,6 +152,7 @@ export async function createProduct(data: {
       cost: product.cost ? Number(product.cost) : null,
     };
   } catch (e) {
+    if (e instanceof ProductLimitError) throw e;
     sanitizeError(e);
   }
 }
@@ -164,12 +174,12 @@ export async function updateProduct(
   const parsed = updateProductSchema.parse(data);
 
   try {
-    const product = await db.product.update({
+    const product = await withRetry(() => db.product.update({
       where: { id, companyId: user.companyId },
       data: {
-        name: parsed.name.trim(),
-        description: parsed.description?.trim(),
-        sku: parsed.sku?.trim(),
+        name: parsed.name,
+        description: parsed.description,
+        sku: parsed.sku,
         type: parsed.type,
         price: parsed.price,
         cost: parsed.cost,
@@ -185,7 +195,7 @@ export async function updateProduct(
         cost: true,
         isActive: true,
       },
-    });
+    }));
 
     revalidatePath("/services");
     return {
@@ -198,17 +208,3 @@ export async function updateProduct(
   }
 }
 
-export async function deleteProduct(id: number) {
-  const user = await requireProductUser("productMutation");
-  if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid id");
-
-  try {
-    await db.product.delete({
-      where: { id, companyId: user.companyId },
-    });
-  } catch (e) {
-    sanitizeError(e);
-  }
-
-  revalidatePath("/services");
-}

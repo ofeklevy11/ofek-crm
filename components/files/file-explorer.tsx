@@ -23,7 +23,7 @@ import Link from "next/link";
 import { Progress } from "@/components/ui/progress";
 import { moveFileToFolder } from "@/app/actions/storage";
 import { useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { cn, formatFileSize } from "@/lib/utils";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
 
@@ -152,37 +152,31 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
   const showFolders = fileFilter === "all" || fileFilter === "folders";
   const filteredFolders = showFolders ? folders : [];
 
-  // Count files by type for badges
+  // Count files by type for badges — single-pass with first-match to avoid double-counting
   const fileCounts = useMemo(() => {
+    const matchable = FILE_FILTERS.filter(
+      (f) => f.match && f.id !== "all" && f.id !== "folders" && f.id !== "other",
+    );
     const counts: Record<string, number> = {
       all: files.length + folders.length,
       folders: folders.length,
     };
+    for (const f of matchable) counts[f.id] = 0;
 
-    FILE_FILTERS.forEach((filter) => {
-      if (filter.match && filter.id !== "other") {
-        counts[filter.id] = files.filter((file: any) =>
-          filter.match!(file.type),
-        ).length;
+    let categorized = 0;
+    for (const file of files) {
+      for (const filter of matchable) {
+        if (filter.match!(file.type)) {
+          counts[filter.id]++;
+          categorized++;
+          break;
+        }
       }
-    });
-
-    // Calculate "other" count
-    const knownTypesCount = Object.entries(counts)
-      .filter(([key]) => key !== "all" && key !== "folders" && key !== "other")
-      .reduce((sum, [, count]) => sum + count, 0);
-    counts.other = files.length - knownTypesCount;
+    }
+    counts.other = files.length - categorized;
 
     return counts;
   }, [files, folders]);
-
-  const formatSize = (bytes: number) => {
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB"];
-    if (bytes === 0) return "0 B";
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-  };
 
   const handleDragStart = (fileId: number) => {
     setDraggedFileId(fileId);
@@ -356,7 +350,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
               <span
                 className={usagePercent > 90 ? "text-red-500 font-bold" : ""}
               >
-                {formatSize(totalUsage)} / 100 MB
+                {formatFileSize(totalUsage)} / 100 MB
               </span>
             </div>
             <Progress

@@ -1324,6 +1324,7 @@ model File {
   @@index([companyId])
   @@index([folderId])
   @@index([recordId])
+  @@index([key, companyId])
 }
 
 // Goal Planning Module

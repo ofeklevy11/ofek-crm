@@ -21,6 +21,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { toast } from "sonner";
 
 interface GoalListProps {
   goals: GoalWithProgress[];
@@ -105,16 +106,18 @@ export default function GoalList({ goals, metrics, tables, clients }: GoalListPr
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      setItems((prev) => {
-        const oldIndex = prev.findIndex((i) => i.id === active.id);
-        const newIndex = prev.findIndex((i) => i.id === over.id);
-        const newItems = arrayMove(prev, oldIndex, newIndex);
+      const oldIndex = items.findIndex((i) => i.id === active.id);
+      const newIndex = items.findIndex((i) => i.id === over.id);
+      const newItems = arrayMove(items, oldIndex, newIndex);
+      const previousItems = items;
+      setItems(newItems);
 
-        // Optimistic update done, iterate and send to server
-        updateGoalOrder(newItems.map((g) => g.id));
-
-        return newItems;
-      });
+      try {
+        await updateGoalOrder(newItems.map((g) => g.id));
+      } catch {
+        setItems(previousItems);
+        toast.error("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E2\u05D3\u05DB\u05D5\u05DF \u05D4\u05E1\u05D3\u05E8");
+      }
     }
   };
 

@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
 import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { hasUserFlag } from "@/lib/permissions";
+import { withRetry } from "@/lib/db-retry";
 
 // Get activity logs for a ticket
 export async function getTicketActivityLogs(ticketId: number) {
@@ -17,18 +18,9 @@ export async function getTicketActivityLogs(ticketId: number) {
     throw new Error("Rate limit exceeded");
   }
 
-  // First verify the ticket belongs to the user's company
-  const ticket = await prisma.ticket.findFirst({
-    where: { id: ticketId, companyId: user.companyId },
-    select: { id: true },
-  });
-
-  if (!ticket) {
-    return [];
-  }
-
-  return await prisma.ticketActivityLog.findMany({
-    where: { ticketId },
+  // P1-2: Single query with relation filter (verifies company ownership inline)
+  return await withRetry(() => prisma.ticketActivityLog.findMany({
+    where: { ticketId, ticket: { companyId: user.companyId } },
     select: {
       id: true,
       ticketId: true,
@@ -43,7 +35,7 @@ export async function getTicketActivityLogs(ticketId: number) {
     },
     orderBy: { createdAt: "desc" },
     take: 500,
-  });
+  }));
 }
 
 // Delete an activity log (admin only)
@@ -62,20 +54,12 @@ export async function deleteTicketActivityLog(logId: number) {
     throw new Error("רק מנהל יכול למחוק לוגים");
   }
 
-  // Find the log to verify it belongs to the user's company
-  const log = await prisma.ticketActivityLog.findFirst({
+  // P2-1: Single atomic deleteMany — no TOCTOU gap, no redundant findFirst
+  const { count } = await withRetry(() => prisma.ticketActivityLog.deleteMany({
     where: { id: logId, ticket: { companyId: user.companyId } },
-    select: { id: true },
-  });
+  }));
 
-  if (!log) {
-    throw new Error("Unauthorized");
-  }
-
-  // SECURITY: Scope delete via ticket companyId join to prevent TOCTOU
-  await prisma.ticketActivityLog.deleteMany({
-    where: { id: logId, ticket: { companyId: user.companyId } },
-  });
+  if (count === 0) throw new Error("Unauthorized");
 
   revalidatePath("/service");
   revalidatePath("/service/archive");

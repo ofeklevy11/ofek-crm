@@ -40,6 +40,9 @@ import { apiFetch, throwResponseError } from "@/lib/api-fetch";
 import { showDestructiveConfirm } from "@/hooks/use-modal";
 import { getUserFriendlyError } from "@/lib/errors";
 
+const currencyFmt = new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 0 });
+const decimalFmt = new Intl.NumberFormat("he-IL", { style: "decimal", maximumFractionDigits: 0 });
+
 interface GoalCardProps {
   goal: GoalWithProgress;
   metrics: any[];
@@ -133,38 +136,16 @@ export default function GoalCard({
     }
   };
 
-  const formattedTarget = new Intl.NumberFormat("he-IL", {
-    style:
-      goal.metricType.includes("REVENUE") ||
-      goal.metricType.includes("SALES") ||
-      goal.targetType?.toUpperCase() === "SUM"
-        ? "currency"
-        : "decimal",
-    currency: "ILS",
-    maximumFractionDigits: 0,
-  }).format(goal.targetValue);
+  const isMoney =
+    goal.metricType.includes("REVENUE") ||
+    goal.metricType.includes("SALES") ||
+    goal.targetType?.toUpperCase() === "SUM";
 
-  const formattedCurrent = new Intl.NumberFormat("he-IL", {
-    style:
-      goal.metricType.includes("REVENUE") ||
-      goal.metricType.includes("SALES") ||
-      goal.targetType?.toUpperCase() === "SUM"
-        ? "currency"
-        : "decimal",
-    currency: "ILS",
-    maximumFractionDigits: 0,
-  }).format(goal.currentValue);
+  const fmt = isMoney ? currencyFmt : decimalFmt;
 
-  const formattedProjected = new Intl.NumberFormat("he-IL", {
-    style:
-      goal.metricType.includes("REVENUE") ||
-      goal.metricType.includes("SALES") ||
-      goal.targetType?.toUpperCase() === "SUM"
-        ? "currency"
-        : "decimal",
-    currency: "ILS",
-    maximumFractionDigits: 0,
-  }).format(goal.projectedValue);
+  const formattedTarget = fmt.format(goal.targetValue);
+  const formattedCurrent = fmt.format(goal.currentValue);
+  const formattedProjected = fmt.format(goal.projectedValue);
 
   return (
     <Card

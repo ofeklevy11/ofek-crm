@@ -39,6 +39,11 @@ import { useState } from "react";
 import { apiFetch, throwResponseError } from "@/lib/api-fetch";
 import { getUserFriendlyError } from "@/lib/errors";
 
+const currencyCompactFmt = new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 0, notation: "compact" });
+const decimalCompactFmt = new Intl.NumberFormat("he-IL", { style: "decimal", maximumFractionDigits: 0, notation: "compact" });
+const currencyFullFmt = new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const decimalFullFmt = new Intl.NumberFormat("he-IL", { style: "decimal", minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
 interface ArchivedGoalRowProps {
   goal: GoalWithProgress;
   tables: { id: number; name: string }[];
@@ -111,27 +116,12 @@ export default function ArchivedGoalRow({
   const isMoney =
     ["REVENUE", "SALES"].includes(goal.metricType) || goal.targetType === "SUM";
 
-  const formattedTarget = new Intl.NumberFormat("he-IL", {
-    style: isMoney ? "currency" : "decimal",
-    currency: "ILS",
-    maximumFractionDigits: 0,
-    notation: "compact",
-  }).format(goal.targetValue);
+  const compactFmt = isMoney ? currencyCompactFmt : decimalCompactFmt;
+  const fullFmt = isMoney ? currencyFullFmt : decimalFullFmt;
 
-  const formattedCurrent = new Intl.NumberFormat("he-IL", {
-    style: isMoney ? "currency" : "decimal",
-    currency: "ILS",
-    maximumFractionDigits: 0,
-    notation: "compact",
-  }).format(goal.currentValue);
-
-  const formatFullMoney = (val: number) =>
-    new Intl.NumberFormat("he-IL", {
-      style: isMoney ? "currency" : "decimal",
-      currency: "ILS",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(val);
+  const formattedTarget = compactFmt.format(goal.targetValue);
+  const formattedCurrent = compactFmt.format(goal.currentValue);
+  const formatFullMoney = (val: number) => fullFmt.format(val);
 
   // Translate period
   const periodMap: Record<string, string> = {

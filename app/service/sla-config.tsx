@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
-import { updateSlaPolicy } from "@/app/actions/tickets";
+import { updateSlaPolicies } from "@/app/actions/tickets";
 import { Loader2, Timer, AlertCircle, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
@@ -98,11 +98,11 @@ export default function SlaConfigModal({
 
     setLoading(true);
     try {
-      await Promise.all([
-        updateSlaPolicy({ priority: "CRITICAL", ...configs.CRITICAL }),
-        updateSlaPolicy({ priority: "HIGH", ...configs.HIGH }),
-        updateSlaPolicy({ priority: "MEDIUM", ...configs.MEDIUM }),
-        updateSlaPolicy({ priority: "LOW", ...configs.LOW }),
+      await updateSlaPolicies([
+        { priority: "CRITICAL", ...configs.CRITICAL },
+        { priority: "HIGH", ...configs.HIGH },
+        { priority: "MEDIUM", ...configs.MEDIUM },
+        { priority: "LOW", ...configs.LOW },
       ]);
       toast.success("מדיניות SLA עודכנה בהצלחה");
       onOpenChange(false);

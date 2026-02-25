@@ -4,12 +4,13 @@ import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import MeetingsList from "@/components/Meetings/MeetingsList";
+import MeetingsCalendar from "@/components/Meetings/MeetingsCalendar";
 import MeetingTypesList from "@/components/Meetings/MeetingTypesList";
 import AvailabilityEditor from "@/components/Meetings/AvailabilityEditor";
 import AvailabilityBlocksList from "@/components/Meetings/AvailabilityBlocksList";
 import GlobalMeetingAutomationsModal from "@/components/Meetings/GlobalMeetingAutomationsModal";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CalendarDays, Layers, Clock, Zap } from "lucide-react";
+import { CalendarDays, List, Layers, Clock, Zap } from "lucide-react";
 
 interface MeetingsPageClientProps {
   canManage: boolean;
@@ -28,36 +29,33 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
     (async () => {
       try {
         const [
-          { getMeetingTypes },
+          { getMeetingTypes, getMeetingStats },
           { getCompanyAvailability, getAvailabilityBlocks },
         ] = await Promise.all([
           import("@/app/actions/meetings"),
           import("@/app/actions/availability"),
         ]);
 
-        const [typesRes, availRes, blocksRes] = await Promise.all([
+        const [typesRes, availRes, blocksRes, statsRes] = await Promise.all([
           getMeetingTypes(),
           getCompanyAvailability(),
           getAvailabilityBlocks(),
+          getMeetingStats("month").catch(() => null),
         ]);
 
         if (typesRes.success) setMeetingTypes(typesRes.data || []);
         if (availRes.success) setAvailability(availRes.data);
         if (blocksRes.success) setBlocks(blocksRes.data || []);
 
-        try {
-          const { getMeetingStats } = await import("@/app/actions/meetings");
-          const statsRes = await getMeetingStats("month");
-          if (statsRes.success && statsRes.data) {
-            const d = statsRes.data;
-            setStats({
-              total: d.total,
-              pending: d.byStatus?.["PENDING"] || 0,
-              confirmed: d.byStatus?.["CONFIRMED"] || 0,
-              completed: d.byStatus?.["COMPLETED"] || 0,
-            });
-          }
-        } catch { /* getMeetingStats may not exist yet */ }
+        if (statsRes?.success && statsRes.data) {
+          const d = statsRes.data;
+          setStats({
+            total: d.total,
+            pending: d.byStatus?.["PENDING"] || 0,
+            confirmed: d.byStatus?.["CONFIRMED"] || 0,
+            completed: d.byStatus?.["COMPLETED"] || 0,
+          });
+        }
       } catch {
         // Errors handled by individual components
       }
@@ -129,8 +127,12 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
         <div className="flex items-center gap-3 mb-4 flex-wrap">
           <TabsList className="bg-gray-100/80 p-1 rounded-xl">
             <TabsTrigger value="meetings" className="gap-1.5 text-gray-500 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900">
-              <CalendarDays className="size-4" />
+              <List className="size-4" />
               פגישות
+            </TabsTrigger>
+            <TabsTrigger value="calendar" className="gap-1.5 text-gray-500 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900">
+              <CalendarDays className="size-4" />
+              יומן פגישות
             </TabsTrigger>
             {canManage && (
               <TabsTrigger value="types" className="gap-1.5 text-gray-500 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900">
@@ -166,6 +168,10 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
 
         <TabsContent value="meetings" className="animate-fade-in-up">
           <MeetingsList meetingTypes={meetingTypes} userPlan={userPlan} />
+        </TabsContent>
+
+        <TabsContent value="calendar" className="animate-fade-in-up">
+          <MeetingsCalendar meetingTypes={meetingTypes} userPlan={userPlan} />
         </TabsContent>
 
         {canManage && (

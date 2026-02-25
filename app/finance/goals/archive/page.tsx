@@ -2,10 +2,9 @@ import { getArchivedGoals, getGoalCreationData } from "@/app/actions/goals";
 import ArchivedGoalRow from "@/components/finance/ArchivedGoalRow";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
-import { Archive, ArrowRight, LayoutList, Search } from "lucide-react";
+import { Archive, ArrowRight } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Input } from "@/components/ui/input";
 import { isRateLimitError } from "@/lib/rate-limit-utils";
 import RateLimitFallback from "@/components/RateLimitFallback";
 
@@ -18,7 +17,7 @@ export default async function ArchivedGoalsPage() {
     redirect("/");
   }
 
-  // Fetch data
+  // Fetch data (rate-limit enforced inside getArchivedGoals/getGoalCreationData via requireGoalUser)
   let goals, creationData;
   try {
     [goals, creationData] = await Promise.all([
@@ -57,12 +56,6 @@ export default async function ArchivedGoalsPage() {
               היסטוריית היעדים שהסתיימו, נמחקו או הועברו לארכיון.
             </p>
           </div>
-
-          {/* Placeholder for search/filter if needed later */}
-          {/* <div className="relative w-64">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input placeholder="חיפוש בארכיון..." className="pr-10 bg-white" />
-           </div> */}
         </div>
       </div>
 

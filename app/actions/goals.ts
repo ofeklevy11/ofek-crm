@@ -18,6 +18,7 @@ import {
   calculateMetricValue,
   enrichGoalsWithProgress,
   getGoalsForCompanyInternal,
+  getGoalCreationDataInternal,
   VALID_METRIC_TYPES,
   VALID_TARGET_TYPES,
   VALID_PERIOD_TYPES,
@@ -248,13 +249,7 @@ export async function getArchivedGoals() {
       const targetValue = Number(goal.targetValue);
       const currentValue = snapshot.currentValue ?? 0;
       const progressPercent = snapshot.progressPercent ?? (targetValue > 0 ? Math.round((currentValue / targetValue) * 100) : 0);
-
-      const endDate = new Date(goal.endDate);
-      const startDate = new Date(goal.startDate);
-      const now = new Date();
-      const daysRemaining = Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-      const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
-      const daysElapsed = Math.max(1, Math.ceil((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const daysRemaining = snapshot.daysRemaining ?? 0;
 
       goalsWithSnapshot.push({
         id: goal.id,
@@ -275,7 +270,7 @@ export async function getArchivedGoals() {
         isArchived: true,
         notes: goal.notes,
         daysRemaining,
-        projectedValue: snapshot.projectedValue ?? Math.round((currentValue / daysElapsed) * totalDays),
+        projectedValue: snapshot.projectedValue ?? 0,
         recommendation: snapshot.recommendation ?? null,
       });
     } else {
@@ -355,56 +350,5 @@ export async function updateGoalOrder(goalIds: number[]) {
 
 export async function getGoalCreationData() {
   const user = await requireGoalUser("goalRead");
-
-  const [clients, tables] = await Promise.all([
-    withRetry(() => prisma.client.findMany({
-      where: { companyId: user.companyId },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-      take: 500,
-    })),
-    withRetry(() => prisma.tableMeta.findMany({
-      where: { companyId: user.companyId },
-      select: {
-        id: true,
-        name: true,
-        schemaJson: true,
-      },
-      take: 100,
-    })),
-  ]);
-
-  const formattedTables = tables.map((table) => {
-    let columns: any[] = [];
-    try {
-      let rawColumns: any[] = [];
-      const schema = table.schemaJson as any;
-
-      if (Array.isArray(schema)) {
-        rawColumns = schema;
-      } else if (schema && typeof schema === "object") {
-        if (Array.isArray(schema.columns)) {
-          rawColumns = schema.columns;
-        } else if (Array.isArray(schema.fields)) {
-          rawColumns = schema.fields;
-        }
-      }
-
-      columns = rawColumns.map((c: any) => ({
-        id: c.id || c.name,
-        key: c.key || c.name || c.id,
-        name: c.label || c.displayName || c.name,
-        type: c.type,
-      }));
-    } catch (e) {
-      log.error("Failed to parse table schema", { tableId: table.id });
-    }
-    return {
-      id: table.id,
-      name: table.name,
-      columns,
-    };
-  });
-
-  return { clients, tables: formattedTables };
+  return getGoalCreationDataInternal(user.companyId);
 }

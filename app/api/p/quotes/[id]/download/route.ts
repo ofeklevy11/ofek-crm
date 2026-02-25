@@ -4,21 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { inngest } from "@/lib/inngest/client";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { isSafeStorageUrl } from "@/lib/security/safe-hosts";
-import crypto from "crypto";
+import { tokensMatch } from "@/lib/security/tokens";
+import { withRetry } from "@/lib/db-retry";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("PublicQuoteDownload");
 
 const CUID_RE = /^c[a-z0-9]{24,}$/;
-
-function tokensMatch(a: string | null, b: string | null): boolean {
-  if (!a || !b) return false;
-  try {
-    return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
-  } catch {
-    return false; // Different lengths throw RangeError
-  }
-}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,10 +32,10 @@ export async function GET(
   const { searchParams } = new URL(req.url);
   const token = searchParams.get("token");
 
-  const quote = await prisma.quote.findFirst({
+  const quote = await withRetry(() => prisma.quote.findFirst({
     where: { id: resolvedParams.id, isTrashed: false },
     select: { id: true, pdfUrl: true, shareToken: true, companyId: true, updatedAt: true },
-  });
+  }));
 
   // Merge missing + wrong-token into a single 404 to prevent quote existence enumeration
   if (!quote || !tokensMatch(token, quote.shareToken)) {

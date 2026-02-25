@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import {
   Plus,
   Search,
@@ -108,12 +108,16 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
     });
   };
 
-  const filteredQuotes = quotes.filter(
-    (q) =>
-      q.clientName.toLowerCase().includes(search.toLowerCase()) ||
-      (q.quoteNumber && String(q.quoteNumber).includes(search)) ||
-      (q.id && q.id.includes(search))
-  );
+  const filteredQuotes = useMemo(() => {
+    if (!search) return quotes;
+    const term = search.toLowerCase();
+    return quotes.filter(
+      (q) =>
+        q.clientName.toLowerCase().includes(term) ||
+        (q.quoteNumber && String(q.quoteNumber).includes(search)) ||
+        (q.id && q.id.includes(search))
+    );
+  }, [quotes, search]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {

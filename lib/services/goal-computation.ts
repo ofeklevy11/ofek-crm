@@ -3,10 +3,68 @@ import { withRetry } from "@/lib/db-retry";
 import { inngest } from "@/lib/inngest/client";
 import { createLogger } from "@/lib/logger";
 import { GOALS_DEDUP_WINDOW_MS } from "@/lib/constants/dedup";
-
-const log = createLogger("GoalComputation");
 import { startOfDay, endOfDay } from "date-fns";
 import type { GoalFilters, GoalWithProgress } from "@/lib/validations/goal";
+
+const log = createLogger("GoalComputation");
+
+/**
+ * Internal helper: fetch goal creation data (clients + tables) for a company.
+ * NOT a server action — safe to call from server components without auth bypass risk.
+ */
+export async function getGoalCreationDataInternal(companyId: number) {
+  const [clients, tables] = await Promise.all([
+    withRetry(() => prisma.client.findMany({
+      where: { companyId },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+      take: 500,
+    })),
+    withRetry(() => prisma.tableMeta.findMany({
+      where: { companyId },
+      select: {
+        id: true,
+        name: true,
+        schemaJson: true,
+      },
+      take: 100,
+    })),
+  ]);
+
+  const formattedTables = tables.map((table) => {
+    let columns: any[] = [];
+    try {
+      let rawColumns: any[] = [];
+      const schema = table.schemaJson as any;
+
+      if (Array.isArray(schema)) {
+        rawColumns = schema;
+      } else if (schema && typeof schema === "object") {
+        if (Array.isArray(schema.columns)) {
+          rawColumns = schema.columns;
+        } else if (Array.isArray(schema.fields)) {
+          rawColumns = schema.fields;
+        }
+      }
+
+      columns = rawColumns.map((c: any) => ({
+        id: c.id || c.name,
+        key: c.key || c.name || c.id,
+        name: c.label || c.displayName || c.name,
+        type: c.type,
+      }));
+    } catch (e) {
+      log.error("Failed to parse table schema", { tableId: table.id });
+    }
+    return {
+      id: table.id,
+      name: table.name,
+      columns,
+    };
+  });
+
+  return { clients, tables: formattedTables };
+}
 
 // Validates field names used in raw SQL JSON accessors — prevents data probing via arbitrary keys
 const SAFE_FIELD_NAME = /^[a-zA-Z0-9_\u0590-\u05FF]+$/;
@@ -174,30 +232,26 @@ export async function calculateMetricValue(
         ];
       }
 
-      let totalAmount = 0;
-      let totalCount = 0;
+      const needsSum = targetType?.toUpperCase() === "SUM" || metricType === "REVENUE";
 
-      const [transSum, transCount, paySum, payCount] = await Promise.all([
-        withRetry(() => prisma.transaction.aggregate({
-          where: transactionWhere,
-          _sum: { amount: true },
-        })),
-        withRetry(() => prisma.transaction.count({ where: transactionWhere })),
-        withRetry(() => prisma.oneTimePayment.aggregate({
-          where: paymentWhere,
-          _sum: { amount: true },
-        })),
-        withRetry(() => prisma.oneTimePayment.count({ where: paymentWhere })),
-      ]);
-
-      totalAmount =
-        Number(transSum._sum.amount ?? 0) + Number(paySum._sum.amount ?? 0);
-      totalCount = transCount + payCount;
-
-      if (targetType?.toUpperCase() === "SUM" || metricType === "REVENUE") {
-        return totalAmount;
+      if (needsSum) {
+        const [transSum, paySum] = await Promise.all([
+          withRetry(() => prisma.transaction.aggregate({
+            where: transactionWhere,
+            _sum: { amount: true },
+          })),
+          withRetry(() => prisma.oneTimePayment.aggregate({
+            where: paymentWhere,
+            _sum: { amount: true },
+          })),
+        ]);
+        return Number(transSum._sum.amount ?? 0) + Number(paySum._sum.amount ?? 0);
       } else {
-        return totalCount;
+        const [transCount, payCount] = await Promise.all([
+          withRetry(() => prisma.transaction.count({ where: transactionWhere })),
+          withRetry(() => prisma.oneTimePayment.count({ where: paymentWhere })),
+        ]);
+        return transCount + payCount;
       }
     }
 
@@ -372,7 +426,7 @@ function goalBatchKey(goal: any): string {
       if (f.source === "TABLE") return `TBL_REV|${f.tableId}|${f.columnKey}`;
       return `TRANS|${f.source || "default"}|${f.clientId || 0}`;
     }
-    case "RETAINERS": return `RET|${f.clientId || 0}|${f.frequency || "all"}`;
+    case "RETAINERS": return `RET|${f.clientId || 0}|${f.frequency || "all"}|${(goal as any).targetType || "COUNT"}`;
     case "CUSTOMERS": return f.tableId ? `CUST_TBL|${f.tableId}` : "CUST";
     case "QUOTES": return `QUOTES|${f.status || "all"}|${f.clientId || 0}`;
     case "CALENDAR": return `CAL|${f.searchQuery || ""}`;
@@ -443,6 +497,8 @@ export async function enrichGoalsWithProgress(
     }),
   ]);
 
+  const now = new Date();
+
   return goals.map((goal) => {
     const filters = ((goal as any).filters as GoalFilters) || {};
     const targetType = (goal as any).targetType || "COUNT";
@@ -472,7 +528,6 @@ export async function enrichGoalsWithProgress(
         targetValue > 0 ? Math.round((currentValue / targetValue) * 100) : 0;
     }
 
-    const now = new Date();
     const endDate = new Date(goal.endDate);
     const startDate = new Date(goal.startDate);
     const daysRemaining = Math.max(
@@ -567,6 +622,13 @@ export async function getGoalsForCompanyInternal(
     where,
     orderBy: [{ order: "asc" }, { createdAt: "desc" }],
     take: 200,
+    select: {
+      id: true, name: true, metricType: true, targetValue: true,
+      targetType: true, periodType: true, startDate: true, endDate: true,
+      warningThreshold: true, criticalThreshold: true, notes: true,
+      isActive: true, isArchived: true, filters: true,
+      order: true, createdAt: true, updatedAt: true,
+    },
   }));
 
   const result = await enrichGoalsWithProgress(goals, companyId);

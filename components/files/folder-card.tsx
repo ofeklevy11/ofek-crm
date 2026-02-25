@@ -26,7 +26,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
+import { cn, formatFileSize } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { showConfirm } from "@/hooks/use-modal";
@@ -131,10 +131,7 @@ export function FolderCard({
 
   const formatSize = (bytes?: number) => {
     if (!bytes || bytes === 0) return "ריק";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+    return formatFileSize(bytes);
   };
 
   const formatDate = (date?: string) => {

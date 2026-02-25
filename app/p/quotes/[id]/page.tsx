@@ -1,16 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { Download, FileText } from "lucide-react";
 import { Metadata } from "next";
-import crypto from "crypto";
-
-function tokensMatch(a: string | null, b: string | null): boolean {
-  if (!a || !b) return false;
-  try {
-    return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
-  } catch {
-    return false; // Different lengths throw RangeError
-  }
-}
+import { headers } from "next/headers";
+import { tokensMatch } from "@/lib/security/tokens";
+import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +27,20 @@ export default async function PublicQuoteDownloadPage({
 }) {
   const resolvedParams = await params;
   const resolvedSearchParams = await searchParams;
+
+  const headersList = await headers();
+  const ip = headersList.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const rateLimited = await checkActionRateLimit(ip, RATE_LIMITS.publicDownload);
+  if (rateLimited) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f4f8f8] text-gray-500 font-sans" dir="rtl">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">שגיאה</h2>
+          <p>יותר מדי בקשות. נסו שוב בעוד מספר דקות.</p>
+        </div>
+      </div>
+    );
+  }
 
   const quote = await prisma.quote.findFirst({
     where: { id: resolvedParams.id, isTrashed: false },

@@ -7,12 +7,14 @@ import { he } from "date-fns/locale";
 import {
   ArrowRight,
   Clock,
-  Sun,
-  CloudSun,
-  Moon,
   CalendarDays,
-  FileText,
-  Pencil,
+  Globe,
+  Plus,
+  X,
+  RefreshCw,
+  XCircle,
+  Link2,
+  Sparkles,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -25,7 +27,7 @@ interface MeetingTypeInfo {
   customFields: CustomField[];
   minAdvanceHours: number;
   maxAdvanceDays: number;
-  availableDays: number[]; // days of week (0=Sun..6=Sat) that have schedule windows
+  availableDays: number[];
   company: { name: string; logoUrl: string | null };
 }
 
@@ -59,6 +61,14 @@ function formatDate(d: Date) {
   });
 }
 
+function formatDateShort(d: Date) {
+  return d.toLocaleDateString("he-IL", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("he-IL", {
     hour: "2-digit",
@@ -74,34 +84,15 @@ function toDateKey(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
-function getSlotHour(iso: string) {
-  return new Date(iso).getHours();
-}
+const HEBREW_DAYS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
+
+// ─── Dark input classes (shared) ─────────────────────────────────────
+const DARK_INPUT =
+  "w-full px-3 py-2.5 bg-white/[0.08] border border-white/[0.15] rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent transition-shadow duration-200";
 
 // ─── Skeleton components ─────────────────────────────────────────────
-function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`mtg-skeleton-shimmer ${className}`} />;
-}
-
-function SlotsSkeleton() {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <Skeleton key={i} className="h-10 rounded-xl" />
-      ))}
-    </div>
-  );
-}
-
-function InfoSkeleton() {
-  return (
-    <div className="space-y-4 p-6">
-      <Skeleton className="h-12 w-12 rounded-full mx-auto" />
-      <Skeleton className="h-6 w-48 mx-auto" />
-      <Skeleton className="h-4 w-64 mx-auto" />
-      <Skeleton className="h-4 w-32 mx-auto" />
-    </div>
-  );
+function DarkSkeleton({ className = "" }: { className?: string }) {
+  return <div className={`mtg-dark-skeleton ${className}`} />;
 }
 
 // ─── Confetti ────────────────────────────────────────────────────────
@@ -145,48 +136,132 @@ function Confetti() {
   );
 }
 
-// ─── Step Indicator ──────────────────────────────────────────────────
-function StepBar({ current, color, onStepClick }: { current: 1|2|3; color: string; onStepClick: (step: 1|2|3) => void }) {
-  const labels = ["\u05EA\u05D0\u05E8\u05D9\u05DA", "\u05E9\u05E2\u05D4", "\u05E4\u05E8\u05D8\u05D9\u05DD"];
-  const progress = ((current - 1) / 2) * 100;
+// ─── Background style constant ──────────────────────────────────────
+const BG_STYLE: React.CSSProperties = {
+  background: "radial-gradient(ellipse at center, #1a3a2a 0%, #0d1f15 100%)",
+};
+
+const CARD_CLASSES =
+  "w-full max-w-[1100px] bg-[#162e22]/90 backdrop-blur-sm rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.3)] border border-white/10 overflow-hidden";
+
+// ─── BackgroundDecor ─────────────────────────────────────────────────
+function BackgroundDecor() {
   return (
-    <div className="py-4 px-6">
-      <div className="flex items-center justify-between mb-2">
-        {labels.map((label, idx) => {
-          const stepNum = (idx + 1) as 1|2|3;
-          const isCompleted = current > stepNum;
-          const isActive = current === stepNum;
-          return (
-            <button
-              key={stepNum}
-              type="button"
-              disabled={!isCompleted}
-              onClick={() => isCompleted && onStepClick(stepNum)}
-              className={`text-xs font-medium transition-colors duration-200 ${
-                isActive ? "text-gray-900" : isCompleted ? "text-gray-600 cursor-pointer hover:text-gray-900" : "text-gray-400"
-              }`}
-            >
-              {label}
-            </button>
-          );
-        })}
+    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+      {/* Top-right circle */}
+      <div
+        className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full"
+        style={{
+          background: "radial-gradient(circle, rgba(45,212,191,0.15) 0%, transparent 70%)",
+        }}
+      />
+      {/* Bottom-left circle */}
+      <div
+        className="absolute -bottom-60 -left-60 w-[600px] h-[600px] rounded-full"
+        style={{
+          background: "radial-gradient(circle, rgba(6,182,212,0.10) 0%, transparent 70%)",
+        }}
+      />
+      {/* Mid-left circle */}
+      <div
+        className="absolute top-1/3 -left-20 w-[350px] h-[350px] rounded-full"
+        style={{
+          background: "radial-gradient(circle, rgba(45,212,191,0.08) 0%, transparent 70%)",
+        }}
+      />
+    </div>
+  );
+}
+
+// ─── TopBar ──────────────────────────────────────────────────────────
+function TopBar({ name, color }: { name: string; color: string }) {
+  return (
+    <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
+      <div className="flex items-center gap-2">
+        <div className="w-1 h-5 rounded-full" style={{ backgroundColor: color }} />
+        <span className="text-sm font-medium text-white/80">{name}</span>
       </div>
-      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-400 ease-out"
-          style={{ width: `${progress}%`, backgroundColor: color }}
-        />
+      <div className="flex items-center gap-1">
+        <div className="w-6 h-6 rounded flex items-center justify-center text-white/20">
+          <Plus className="w-3.5 h-3.5" />
+        </div>
+        <div className="w-6 h-6 rounded flex items-center justify-center text-white/20">
+          <X className="w-3.5 h-3.5" />
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── Background style constant ──────────────────────────────────────
-const BG_STYLE: React.CSSProperties = {
-  background: "radial-gradient(ellipse at top, #e0e7ff22 0%, transparent 50%), #F8FAFC",
-};
+// ─── LeftPanel ───────────────────────────────────────────────────────
+function LeftPanel({
+  info,
+  themeColor,
+  selectedDate,
+  selectedSlot,
+}: {
+  info: MeetingTypeInfo;
+  themeColor: string;
+  selectedDate?: Date;
+  selectedSlot?: TimeSlot | null;
+}) {
+  return (
+    <div className="w-full md:w-[280px] shrink-0 p-5 space-y-4">
+      {/* Meeting title */}
+      <h1 className="text-lg font-bold text-white">{info.name}</h1>
 
-const CARD_CLASSES = "w-full max-w-[520px] bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] border border-gray-100/80 overflow-hidden";
+      {/* Organizer */}
+      <div className="flex items-center gap-2.5">
+        {info.company.logoUrl ? (
+          <img
+            src={info.company.logoUrl}
+            alt={info.company.name}
+            className="w-9 h-9 rounded-lg object-cover"
+          />
+        ) : (
+          <div
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-sm"
+            style={{ backgroundColor: themeColor }}
+          >
+            {info.company.name.charAt(0)}
+          </div>
+        )}
+        <span className="text-sm text-white/60">{info.company.name}</span>
+      </div>
+
+      {/* Duration */}
+      <div className="flex items-center gap-2 text-sm text-white/50">
+        <Clock className="w-4 h-4" />
+        <span>{info.duration} {"\u05D3\u05E7\u05D5\u05EA"}</span>
+      </div>
+
+      {/* Description */}
+      {info.description && (
+        <p className="text-sm text-white/40 leading-relaxed">{info.description}</p>
+      )}
+
+      {/* Timezone */}
+      <div className="flex items-center gap-2 text-xs text-white/40">
+        <Globe className="w-3.5 h-3.5" />
+        <span>{"\u05E9\u05E2\u05D5\u05DF \u05D9\u05E9\u05E8\u05D0\u05DC"} (Asia/Jerusalem)</span>
+      </div>
+
+      {/* Selected date/time (step 3) */}
+      {selectedDate && selectedSlot && (
+        <div className="pt-3 mt-2 border-t border-white/10 space-y-2">
+          <div className="flex items-center gap-2 text-sm text-white/70">
+            <CalendarDays className="w-3.5 h-3.5" />
+            <span>{formatDate(selectedDate)}</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-white/70">
+            <Clock className="w-3.5 h-3.5" />
+            <span>{formatTime(selectedSlot.start)} - {formatTime(selectedSlot.end)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Main page component ─────────────────────────────────────────────
 export default function MeetingBookingPage({
@@ -223,6 +298,20 @@ export default function MeetingBookingPage({
   const [formError, setFormError] = useState<string | null>(null);
 
   const [booking, setBooking] = useState<BookingResult | null>(null);
+
+  // Management states
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelled, setCancelled] = useState(false);
+  const [showReschedule, setShowReschedule] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState<string | null>(null);
+  const [rescheduleSlots, setRescheduleSlots] = useState<TimeSlot[]>([]);
+  const [rescheduleSlotsLoading, setRescheduleSlotsLoading] = useState(false);
+  const [rescheduleSlot, setRescheduleSlot] = useState<TimeSlot | null>(null);
+  const [rescheduling, setRescheduling] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [manageError, setManageError] = useState<string | null>(null);
 
   const themeColor = info?.color || "#3b82f6";
 
@@ -340,7 +429,11 @@ export default function MeetingBookingPage({
         }
 
         const result = await res.json();
-        setBooking(result);
+        setBooking({
+          ...result,
+          startTime: selectedSlot.start,
+          endTime: selectedSlot.end,
+        });
       } catch (err: any) {
         setFormError(err.message);
       } finally {
@@ -350,35 +443,133 @@ export default function MeetingBookingPage({
     [selectedSlot, token, formData]
   );
 
-  // ── Group slots by time of day ──
-  const groupedSlots = useMemo(() => {
-    const morning: TimeSlot[] = [];
-    const afternoon: TimeSlot[] = [];
-    const evening: TimeSlot[] = [];
-
-    for (const slot of slots) {
-      const hour = getSlotHour(slot.start);
-      if (hour < 12) morning.push(slot);
-      else if (hour < 17) afternoon.push(slot);
-      else evening.push(slot);
+  // ── Reschedule date range (14 days from today) ──
+  const dateRange = useMemo(() => {
+    const days: Date[] = [];
+    const now = new Date();
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(now);
+      d.setDate(now.getDate() + i);
+      days.push(d);
     }
+    return days;
+  }, []);
 
-    const groups: { key: string; label: string; icon: React.ReactNode; slots: TimeSlot[] }[] = [];
-    if (morning.length > 0) groups.push({ key: "morning", label: "\u05D1\u05D5\u05E7\u05E8", icon: <Sun className="w-4 h-4" />, slots: morning });
-    if (afternoon.length > 0) groups.push({ key: "afternoon", label: "\u05E6\u05D4\u05E8\u05D9\u05D9\u05DD", icon: <CloudSun className="w-4 h-4" />, slots: afternoon });
-    if (evening.length > 0) groups.push({ key: "evening", label: "\u05E2\u05E8\u05D1", icon: <Moon className="w-4 h-4" />, slots: evening });
+  // ── Fetch slots when reschedule date changes ──
+  useEffect(() => {
+    if (!rescheduleDate || !token) return;
+    setRescheduleSlotsLoading(true);
+    setRescheduleSlots([]);
+    setRescheduleSlot(null);
+    fetch(`/api/p/meetings/${token}/slots?start=${rescheduleDate}&end=${rescheduleDate}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("שגיאה בטעינת המשבצות");
+        return res.json();
+      })
+      .then((data) => setRescheduleSlots(data.slots || []))
+      .catch(() => setRescheduleSlots([]))
+      .finally(() => setRescheduleSlotsLoading(false));
+  }, [rescheduleDate, token]);
 
-    return groups;
-  }, [slots]);
+  // ── Cancel handler ──
+  const handleCancel = useCallback(async () => {
+    if (!booking?.manageToken) return;
+    setCancelling(true);
+    setManageError(null);
+    try {
+      const res = await fetch(`/api/p/meetings/manage/${booking.manageToken}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: cancelReason.trim() || undefined }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "שגיאה בביטול הפגישה");
+      }
+      setCancelled(true);
+    } catch (err: any) {
+      setManageError(err.message);
+    } finally {
+      setCancelling(false);
+    }
+  }, [booking?.manageToken, cancelReason]);
+
+  // ── Reschedule handler ──
+  const handleReschedule = useCallback(async () => {
+    if (!booking?.manageToken || !rescheduleSlot) return;
+    setRescheduling(true);
+    setManageError(null);
+    try {
+      const res = await fetch(`/api/p/meetings/manage/${booking.manageToken}/reschedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startTime: rescheduleSlot.start, endTime: rescheduleSlot.end }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "שגיאה בשינוי המועד");
+      }
+      const updated = await res.json();
+      setBooking((prev) =>
+        prev
+          ? { ...prev, startTime: updated.startTime || rescheduleSlot.start, endTime: updated.endTime || rescheduleSlot.end }
+          : prev
+      );
+      setShowReschedule(false);
+      setRescheduleDate(null);
+      setRescheduleSlot(null);
+    } catch (err: any) {
+      setManageError(err.message);
+    } finally {
+      setRescheduling(false);
+    }
+  }, [booking?.manageToken, rescheduleSlot]);
 
   const slideClass = stepDirection === "forward" ? "animate-slide-in-right" : "animate-slide-in-left";
+
+  // ── Calendar component (reused in steps 1 & 2) ──
+  const calendarElement = (
+    <div className="mtg-dark-calendar mtg-fade-in shrink-0">
+      <Calendar
+        locale={he}
+        mode="single"
+        selected={selectedDate}
+        onSelect={handleDateSelect}
+        fromDate={calendarBounds.fromDate}
+        toDate={calendarBounds.toDate}
+        disabled={disabledDaysMatcher
+          ? [{ before: calendarBounds.fromDate, after: calendarBounds.toDate }, disabledDaysMatcher]
+          : { before: calendarBounds.fromDate, after: calendarBounds.toDate }
+        }
+        dir="rtl"
+        className="[--cell-size:3rem] sm:[--cell-size:3.5rem]"
+        classNames={{
+          month_caption: "text-white text-base font-semibold",
+          weekday: "text-white/40 text-sm font-medium",
+          day: "text-white/80",
+        }}
+      />
+    </div>
+  );
 
   // ─── Render: Loading ──────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-[#F8FAFC]" style={BG_STYLE}>
-        <div className={CARD_CLASSES}>
-          <InfoSkeleton />
+      <div className="min-h-screen flex items-center justify-center p-4" style={BG_STYLE}>
+        <BackgroundDecor />
+        <div className={`${CARD_CLASSES} relative z-10`}>
+          <div className="p-6 space-y-4">
+            <DarkSkeleton className="h-6 w-48" />
+            <div className="flex items-center gap-3">
+              <DarkSkeleton className="h-9 w-9 rounded-lg" />
+              <DarkSkeleton className="h-4 w-32" />
+            </div>
+            <DarkSkeleton className="h-4 w-24" />
+            <div className="flex flex-col md:flex-row gap-6 mt-4">
+              <DarkSkeleton className="h-[280px] w-full md:w-[280px] rounded-xl" />
+              <DarkSkeleton className="h-[280px] flex-1 rounded-xl" />
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -387,15 +578,16 @@ export default function MeetingBookingPage({
   // ─── Render: Error ────────────────────────────────────────────────
   if (error || !info) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-[#F8FAFC]" style={BG_STYLE}>
-        <div className={`${CARD_CLASSES} p-8 text-center`}>
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center">
-            <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="min-h-screen flex items-center justify-center p-4" style={BG_STYLE}>
+        <BackgroundDecor />
+        <div className={`${CARD_CLASSES} p-8 text-center relative z-10`}>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/15 flex items-center justify-center">
+            <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">{"\u05E9\u05D2\u05D9\u05D0\u05D4"}</h2>
-          <p className="text-gray-500">{error || "\u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05D0\u05D9\u05E0\u05D5 \u05EA\u05E7\u05D9\u05DF \u05D0\u05D5 \u05E9\u05D4\u05E4\u05D2\u05D9\u05E9\u05D4 \u05D0\u05D9\u05E0\u05D4 \u05D6\u05DE\u05D9\u05E0\u05D4"}</p>
+          <h2 className="text-xl font-bold text-white mb-2">{"\u05E9\u05D2\u05D9\u05D0\u05D4"}</h2>
+          <p className="text-white/50">{error || "\u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05D0\u05D9\u05E0\u05D5 \u05EA\u05E7\u05D9\u05DF \u05D0\u05D5 \u05E9\u05D4\u05E4\u05D2\u05D9\u05E9\u05D4 \u05D0\u05D9\u05E0\u05D4 \u05D6\u05DE\u05D9\u05E0\u05D4"}</p>
         </div>
       </div>
     );
@@ -403,97 +595,365 @@ export default function MeetingBookingPage({
 
   // ─── Render: Success / Confirmation ────────────────────────────────
   if (booking) {
+    // Post-cancel view
+    if (cancelled) {
+      return (
+        <div dir="rtl" className="min-h-screen flex items-center justify-center p-4" style={BG_STYLE}>
+          <BackgroundDecor />
+          <div className={`${CARD_CLASSES} p-8 text-center relative z-10`}>
+            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-red-500/15 flex items-center justify-center">
+              <svg className="w-10 h-10 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">הפגישה בוטלה</h2>
+            <p className="text-white/50 text-sm">הפגישה בוטלה בהצלחה.</p>
+            <div className="mt-6 bg-white/[0.08] rounded-xl p-4 space-y-2 text-sm text-white/70">
+              <p><span className="font-medium text-white/90">סוג פגישה:</span> {info.name}</p>
+              <p><span className="font-medium text-white/90">תאריך מקורי:</span> {formatDate(new Date(booking.startTime))}</p>
+            </div>
+            <a
+              href={`/p/meetings/${token}`}
+              className="mt-6 inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold transition-colors"
+            >
+              קבעו פגישה חדשה
+            </a>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-[#F8FAFC]" style={BG_STYLE}>
-        <div className={`${CARD_CLASSES} p-8 text-center relative`}>
-          <Confetti />
+      <div dir="rtl" className="min-h-screen flex items-center justify-center p-4" style={BG_STYLE}>
+        <BackgroundDecor />
+        <div className={`${CARD_CLASSES} p-8 text-center relative z-10`}>
+          {!showCancel && !showReschedule && <Confetti />}
 
-          {/* Animated checkmark */}
-          <div className="relative w-20 h-20 mx-auto mb-6 mtg-check-scale">
-            <svg className="w-20 h-20" viewBox="0 0 60 60">
-              <circle
-                cx="30" cy="30" r="26"
-                fill="none"
-                stroke="#22c55e"
-                strokeWidth="3"
-                strokeDasharray="166"
-                strokeDashoffset="0"
-                style={{ animation: "drawCircle 0.6s ease-out both" }}
-              />
-              <path
-                d="M18 30 L26 38 L42 22"
-                fill="none"
-                stroke="#22c55e"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeDasharray="48"
-                strokeDashoffset="0"
-                style={{ animation: "drawCheck 0.4s ease-out 0.4s both" }}
-              />
-            </svg>
-          </div>
+          {/* ── Default success view ── */}
+          {!showCancel && !showReschedule && (
+            <>
+              {/* Animated checkmark */}
+              <div className="relative w-20 h-20 mx-auto mb-6 mtg-check-scale">
+                <svg className="w-20 h-20" viewBox="0 0 60 60">
+                  <circle
+                    cx="30" cy="30" r="26"
+                    fill="none"
+                    stroke="#22c55e"
+                    strokeWidth="3"
+                    strokeDasharray="166"
+                    strokeDashoffset="0"
+                    style={{ animation: "drawCircle 0.6s ease-out both" }}
+                  />
+                  <path
+                    d="M18 30 L26 38 L42 22"
+                    fill="none"
+                    stroke="#22c55e"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="48"
+                    strokeDashoffset="0"
+                    style={{ animation: "drawCheck 0.4s ease-out 0.4s both" }}
+                  />
+                </svg>
+              </div>
 
-          <h2
-            className="text-2xl font-bold text-gray-900 mb-2 animate-fade-in-up"
-            style={{ animationDelay: "0.3s" }}
-          >
-            !{"\u05D4\u05E4\u05D2\u05D9\u05E9\u05D4 \u05E0\u05E7\u05D1\u05E2\u05D4 \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4"}
-          </h2>
+              <h2
+                className="text-2xl font-bold text-white mb-2 animate-fade-in-up"
+                style={{ animationDelay: "0.3s" }}
+              >
+                !הפגישה נקבעה בהצלחה
+              </h2>
 
-          <div
-            className="mt-6 bg-[#F8FAFC] rounded-xl p-4 space-y-2 text-sm text-gray-700 animate-fade-in-up"
-            style={{ animationDelay: "0.5s" }}
-          >
-            <p>
-              <span className="font-medium">{"\u05E1\u05D5\u05D2 \u05E4\u05D2\u05D9\u05E9\u05D4"}:</span> {info.name}
-            </p>
-            <p>
-              <span className="font-medium">{"\u05EA\u05D0\u05E8\u05D9\u05DA"}:</span>{" "}
-              {formatDate(new Date(booking.startTime))}
-            </p>
-            <p>
-              <span className="font-medium">{"\u05E9\u05E2\u05D4"}:</span>{" "}
-              {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
-            </p>
-            <p>
-              <span className="font-medium">{"\u05DE\u05E9\u05DA"}:</span> {info.duration} {"\u05D3\u05E7\u05D5\u05EA"}
-            </p>
-          </div>
+              <div
+                className="mt-6 bg-white/[0.08] rounded-xl p-4 space-y-2 text-sm text-white/70 animate-fade-in-up"
+                style={{ animationDelay: "0.5s" }}
+              >
+                <p><span className="font-medium text-white/90">סוג פגישה:</span> {info.name}</p>
+                <p><span className="font-medium text-white/90">תאריך:</span> {formatDate(new Date(booking.startTime))}</p>
+                <p><span className="font-medium text-white/90">שעה:</span> {formatTime(booking.startTime)} - {formatTime(booking.endTime)}</p>
+                <p><span className="font-medium text-white/90">משך:</span> {info.duration} דקות</p>
+              </div>
 
-          <a
-            href={`/p/meetings/manage/${booking.manageToken}`}
-            className="mt-6 inline-flex items-center justify-center gap-2 w-full py-3 px-4 text-white rounded-xl font-semibold transition-colors animate-fade-in-up"
-            style={{ backgroundColor: themeColor, animationDelay: "0.7s" }}
-          >
-            {"\u05E0\u05D9\u05D4\u05D5\u05DC \u05D4\u05E4\u05D2\u05D9\u05E9\u05D4"}
-          </a>
+              {/* Google Calendar */}
+              {(() => {
+                const startDt = new Date(booking.startTime);
+                const endDt = new Date(booking.endTime);
+                const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+                const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(info.name)}&dates=${fmt(startDt)}/${fmt(endDt)}&details=${encodeURIComponent(info.description || "")}`;
+                return (
+                  <a
+                    href={gcalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-transparent border border-white/20 text-white/80 rounded-xl font-medium text-sm hover:bg-white/[0.05] transition-colors animate-fade-in-up"
+                    style={{ animationDelay: "0.7s" }}
+                  >
+                    <CalendarDays className="w-4 h-4" />
+                    הוסף ליומן Google
+                  </a>
+                );
+              })()}
 
-          {(() => {
-            const startDt = new Date(booking.startTime);
-            const endDt = new Date(booking.endTime);
-            const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-            const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(info.name)}&dates=${fmt(startDt)}/${fmt(endDt)}&details=${encodeURIComponent(info.description || "")}`;
-            return (
-              <a
-                href={gcalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-white border border-gray-200 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-50 transition-colors animate-fade-in-up"
+              {/* Action buttons */}
+              <div
+                className="mt-4 flex gap-3 animate-fade-in-up"
                 style={{ animationDelay: "0.9s" }}
               >
-                <CalendarDays className="w-4 h-4" />
-                {"\u05D4\u05D5\u05E1\u05E3 \u05DC\u05D9\u05D5\u05DE\u05DF Google"}
-              </a>
-            );
-          })()}
+                <button
+                  onClick={() => { setShowReschedule(true); setManageError(null); }}
+                  className="flex-1 py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold text-sm transition-colors"
+                >
+                  שנה מועד
+                </button>
+                <button
+                  onClick={() => { setShowCancel(true); setManageError(null); }}
+                  className="flex-1 py-3 px-4 bg-white/[0.08] hover:bg-red-500/20 text-red-300 border border-red-500/30 rounded-xl font-semibold text-sm transition-colors"
+                >
+                  בטל פגישה
+                </button>
+              </div>
 
-          <p
-            className="mt-3 text-xs text-gray-400 animate-fade-in-up"
-            style={{ animationDelay: "1.0s" }}
-          >
-            {"\u05E9\u05DE\u05E8\u05D5 \u05D0\u05EA \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05DC\u05E0\u05D9\u05D4\u05D5\u05DC \u05D4\u05E4\u05D2\u05D9\u05E9\u05D4 - \u05D1\u05D9\u05D8\u05D5\u05DC \u05D5\u05E9\u05D9\u05E0\u05D5\u05D9 \u05DE\u05D5\u05E2\u05D3"}
-          </p>
+              {/* Management guide */}
+              <div
+                className="mt-5 animate-fade-in-up"
+                style={{ animationDelay: "1.0s" }}
+              >
+                <div className="bg-gradient-to-b from-white/[0.07] to-white/[0.03] border border-white/10 rounded-2xl overflow-hidden">
+                  {/* Header */}
+                  <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.07]">
+                    <Sparkles className="w-4 h-4 text-purple-400" />
+                    <span className="text-[13px] font-semibold text-white/80">מה הלאה? הפגישה שלכם — השליטה שלכם</span>
+                  </div>
+
+                  <div className="p-3 space-y-2">
+                    {/* Reschedule card */}
+                    <button
+                      onClick={() => { setShowReschedule(true); setManageError(null); }}
+                      className="w-full group flex items-start gap-3 p-3 rounded-xl bg-white/[0.04] hover:bg-purple-500/10 border border-transparent hover:border-purple-500/20 transition-all duration-200 text-right"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-purple-500/15 flex items-center justify-center shrink-0 group-hover:bg-purple-500/25 transition-colors">
+                        <RefreshCw className="w-4 h-4 text-purple-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-white/90 group-hover:text-purple-300 transition-colors">שנה מועד</p>
+                        <p className="text-[11px] text-white/40 mt-0.5 leading-relaxed">נוצר לכם שינוי בלוח הזמנים? בחרו תאריך ושעה חדשים בלחיצה</p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-white/20 group-hover:text-purple-400 mt-1 shrink-0 transition-colors rotate-180" />
+                    </button>
+
+                    {/* Cancel card */}
+                    <button
+                      onClick={() => { setShowCancel(true); setManageError(null); }}
+                      className="w-full group flex items-start gap-3 p-3 rounded-xl bg-white/[0.04] hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all duration-200 text-right"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-red-500/15 flex items-center justify-center shrink-0 group-hover:bg-red-500/25 transition-colors">
+                        <XCircle className="w-4 h-4 text-red-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-white/90 group-hover:text-red-300 transition-colors">בטל פגישה</p>
+                        <p className="text-[11px] text-white/40 mt-0.5 leading-relaxed">לא מתאים? בטלו בקלות ותוכלו לקבוע מחדש בכל עת</p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-white/20 group-hover:text-red-400 mt-1 shrink-0 transition-colors rotate-180" />
+                    </button>
+
+                    {/* Copy link card */}
+                    <button
+                      onClick={() => {
+                        const manageUrl = `${window.location.origin}/p/meetings/manage/${booking.manageToken}`;
+                        navigator.clipboard.writeText(manageUrl);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="w-full group flex items-start gap-3 p-3 rounded-xl bg-white/[0.04] hover:bg-cyan-500/10 border border-transparent hover:border-cyan-500/20 transition-all duration-200 text-right"
+                    >
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${copied ? "bg-green-500/20" : "bg-cyan-500/15 group-hover:bg-cyan-500/25"}`}>
+                        {copied ? (
+                          <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <Link2 className="w-4 h-4 text-cyan-400" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-semibold transition-colors ${copied ? "text-green-400" : "text-white/90 group-hover:text-cyan-300"}`}>
+                          {copied ? "הקישור הועתק!" : "העתק קישור לניהול"}
+                        </p>
+                        <p className="text-[11px] text-white/40 mt-0.5 leading-relaxed">שמרו את הקישור — דרכו תוכלו לנהל את הפגישה מכל מקום</p>
+                      </div>
+                      <ArrowRight className={`w-4 h-4 mt-1 shrink-0 transition-colors rotate-180 ${copied ? "text-green-400/50" : "text-white/20 group-hover:text-cyan-400"}`} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── Cancel sub-flow ── */}
+          {showCancel && (
+            <div className="space-y-3 text-right">
+              <h3 className="text-lg font-semibold text-white">ביטול פגישה</h3>
+              <p className="text-sm text-white/50">
+                האם ברצונכם לבטל את הפגישה? ניתן לציין סיבה.
+              </p>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                rows={3}
+                className={`${DARK_INPUT} resize-none`}
+                placeholder="סיבת הביטול (אופציונלי)..."
+              />
+              {manageError && (
+                <p className="text-sm text-red-300 bg-red-500/15 border border-red-500/20 rounded-lg px-3 py-2">
+                  {manageError}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCancel}
+                  disabled={cancelling}
+                  className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  {cancelling ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      מבטל...
+                    </>
+                  ) : (
+                    "אישור ביטול"
+                  )}
+                </button>
+                <button
+                  onClick={() => { setShowCancel(false); setCancelReason(""); setManageError(null); }}
+                  className="py-2.5 px-4 bg-white/[0.08] hover:bg-white/[0.12] text-white/70 border border-white/15 rounded-xl font-medium text-sm transition-colors"
+                >
+                  חזרה
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Reschedule sub-flow ── */}
+          {showReschedule && (
+            <div className="space-y-4 text-right">
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => { setShowReschedule(false); setRescheduleDate(null); setRescheduleSlot(null); setManageError(null); }}
+                  className="text-xs text-white/40 hover:text-white/70 transition-colors"
+                >
+                  ביטול
+                </button>
+                <h3 className="text-lg font-semibold text-white">שינוי מועד</h3>
+              </div>
+
+              {/* Date grid */}
+              <div>
+                <p className="text-xs text-white/50 mb-2">בחרו תאריך חדש</p>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {dateRange.map((d) => {
+                    const key = toDateKey(d);
+                    const isSelected = rescheduleDate === key;
+                    const dayOfWeek = d.getDay();
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setRescheduleDate(key)}
+                        className={`flex flex-col items-center py-2 px-1 rounded-lg text-xs transition-colors ${
+                          isSelected
+                            ? "bg-purple-600 text-white shadow-sm"
+                            : "bg-white/[0.08] hover:bg-white/[0.15] text-white/70 border border-white/10"
+                        }`}
+                      >
+                        <span className="text-[10px] leading-none mb-1 opacity-70">
+                          {HEBREW_DAYS[dayOfWeek]}
+                        </span>
+                        <span className="font-semibold text-sm leading-none">
+                          {d.getDate()}
+                        </span>
+                        <span className="text-[10px] leading-none mt-0.5 opacity-60">
+                          {d.toLocaleDateString("he-IL", { month: "short" })}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Slots */}
+              {rescheduleDate && (
+                <div>
+                  <p className="text-xs text-white/50 mb-2">בחרו שעה</p>
+                  {rescheduleSlotsLoading ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <DarkSkeleton key={i} className="h-10 rounded-xl" />
+                      ))}
+                    </div>
+                  ) : rescheduleSlots.length === 0 ? (
+                    <p className="text-center py-4 text-sm text-white/30">
+                      אין משבצות פנויות בתאריך זה
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {rescheduleSlots.map((slot) => {
+                        const isSelected = rescheduleSlot?.start === slot.start;
+                        return (
+                          <button
+                            key={slot.start}
+                            onClick={() => setRescheduleSlot(slot)}
+                            className={`py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-200 border ${
+                              isSelected
+                                ? "bg-purple-600 text-white shadow-sm border-purple-600"
+                                : "bg-white/[0.08] text-white/70 border-white/10 hover:bg-white/[0.15] hover:border-white/20"
+                            }`}
+                          >
+                            {formatTime(slot.start)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Error */}
+              {manageError && (
+                <p className="text-sm text-red-300 bg-red-500/15 border border-red-500/20 rounded-lg px-3 py-2">
+                  {manageError}
+                </p>
+              )}
+
+              {/* Confirm reschedule */}
+              {rescheduleSlot && (
+                <button
+                  onClick={handleReschedule}
+                  disabled={rescheduling}
+                  className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  {rescheduling ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      מעדכן מועד...
+                    </>
+                  ) : (
+                    `עדכן ל-${formatTime(rescheduleSlot.start)}, ${new Date(
+                      rescheduleDate + "T00:00:00"
+                    ).toLocaleDateString("he-IL", {
+                      day: "numeric",
+                      month: "short",
+                    })}`
+                  )}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -501,398 +961,316 @@ export default function MeetingBookingPage({
 
   // ─── Render: Booking flow ─────────────────────────────────────────
   return (
-    <div dir="rtl" className="min-h-screen flex items-center justify-start flex-col p-4 pt-8 sm:pt-16 bg-[#F8FAFC]" style={BG_STYLE}>
-      <div className={CARD_CLASSES}>
-        {/* ── Color accent bar ── */}
-        <div className="h-1" style={{ backgroundColor: themeColor }} />
+    <div dir="rtl" className="min-h-screen flex items-center justify-start flex-col p-4 pt-8 sm:pt-16 relative" style={BG_STYLE}>
+      <BackgroundDecor />
 
-        {/* ── Header / Branding ── */}
-        <div className="p-6 pb-4">
-          <div className="flex items-center gap-3 mb-3">
-            {info.company.logoUrl ? (
-              <img
-                src={info.company.logoUrl}
-                alt={info.company.name}
-                className="w-12 h-12 rounded-lg object-cover"
-              />
-            ) : (
-              <div
-                className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold text-lg"
-                style={{ backgroundColor: themeColor }}
-              >
-                {info.company.name.charAt(0)}
+      <div className={`${CARD_CLASSES} relative z-10`}>
+        {/* ── TopBar ── */}
+        <TopBar name={info.name} color={themeColor} />
+
+        <div className="flex flex-col md:flex-row">
+          {/* ── Left Panel ── */}
+          <LeftPanel
+            info={info}
+            themeColor={themeColor}
+            selectedDate={currentStep === 3 ? selectedDate : undefined}
+            selectedSlot={currentStep === 3 ? selectedSlot : undefined}
+          />
+
+          {/* ── Dividers ── */}
+          <div className="hidden md:block w-px bg-white/10 self-stretch" />
+          <div className="md:hidden h-px bg-white/10" />
+
+          {/* ── Right Panel ── */}
+          <div className="flex-1 p-5 overflow-y-auto min-h-[400px]">
+            {/* ── Step 1: Calendar + Prompt ── */}
+            {currentStep === 1 && (
+              <div key="step1" className={slideClass}>
+                <div className="flex flex-col lg:flex-row gap-6 items-start">
+                  {calendarElement}
+                  <div className="hidden lg:flex flex-1 items-center justify-center min-h-[280px]">
+                    <p className="text-white/30 text-sm text-center">
+                      {"\u05D1\u05D7\u05E8 \u05D9\u05D5\u05DD \u05DB\u05D3\u05D9 \u05DC\u05E8\u05D0\u05D5\u05EA \u05D6\u05DE\u05E0\u05D9\u05DD \u05D6\u05DE\u05D9\u05E0\u05D9\u05DD"}
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
-            <span className="text-sm text-gray-500">{info.company.name}</span>
-          </div>
 
-          <h1 className="text-xl font-bold text-gray-900">{info.name}</h1>
-          {info.description && (
-            <p className="text-sm text-gray-500 mt-1">{info.description}</p>
-          )}
+            {/* ── Step 2: Calendar + Time Slots ── */}
+            {currentStep === 2 && (
+              <div key="step2" className={slideClass}>
+                <div className="flex flex-col lg:flex-row gap-6 items-start">
+                  {calendarElement}
 
-          {/* Info chips row */}
-          <div className="flex items-center gap-2 mt-3">
-            <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 rounded-full px-2.5 py-1 text-xs font-medium">
-              <Clock className="w-3.5 h-3.5" />
-              {info.duration} {"\u05D3\u05E7\u05D5\u05EA"}
-            </span>
-          </div>
-        </div>
+                  <div className="flex-1 w-full lg:w-auto lg:min-w-[180px]">
+                    {/* Header: date */}
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-white/80">
+                        {selectedDate && formatDateShort(selectedDate)}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => goToStep(1)}
+                        className="flex items-center gap-1 text-xs text-white/40 hover:text-white/70 transition-colors"
+                      >
+                        {"\u05E9\u05D9\u05E0\u05D5\u05D9 \u05EA\u05D0\u05E8\u05D9\u05DA"}
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
 
-        {/* ── Step Progress Bar ── */}
-        <StepBar current={currentStep} color={themeColor} onStepClick={goToStep} />
-
-        <div className="px-6 pb-6">
-          {/* ── Step 1: Calendar ── */}
-          {currentStep === 1 && (
-            <div key="step1" className={slideClass}>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                <CalendarDays className="w-4 h-4" />
-                {"\u05D1\u05D7\u05E8\u05D5 \u05EA\u05D0\u05E8\u05D9\u05DA"}
-              </h3>
-              <div key={selectedDate?.getMonth()} className="flex justify-center mtg-fade-in">
-                <Calendar
-                  locale={he}
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={handleDateSelect}
-                  fromDate={calendarBounds.fromDate}
-                  toDate={calendarBounds.toDate}
-                  disabled={disabledDaysMatcher
-                    ? [{ before: calendarBounds.fromDate, after: calendarBounds.toDate }, disabledDaysMatcher]
-                    : { before: calendarBounds.fromDate, after: calendarBounds.toDate }
-                  }
-                  dir="rtl"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* ── Step 2: Time Slots ── */}
-          {currentStep === 2 && (
-            <div key="step2" className={slideClass}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <Clock className="w-4 h-4" />
-                  {selectedDate && formatDate(selectedDate)}
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => goToStep(1)}
-                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
-                >
-                  {"\u05E9\u05D9\u05E0\u05D5\u05D9 \u05EA\u05D0\u05E8\u05D9\u05DA"}
-                  <ArrowRight className="w-3 h-3" />
-                </button>
-              </div>
-
-              {slotsLoading ? (
-                <SlotsSkeleton />
-              ) : slots.length === 0 ? (
-                <div className="text-center py-8 text-sm text-gray-400">
-                  <CalendarDays className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                  {"\u05D0\u05D9\u05DF \u05DE\u05E9\u05D1\u05E6\u05D5\u05EA \u05E4\u05E0\u05D5\u05D9\u05D5\u05EA \u05D1\u05EA\u05D0\u05E8\u05D9\u05DA \u05D6\u05D4"}
-                  <br />
-                  <button
-                    type="button"
-                    onClick={() => goToStep(1)}
-                    className="mt-2 text-xs underline hover:no-underline"
-                    style={{ color: themeColor }}
-                  >
-                    {"\u05D1\u05D7\u05E8\u05D5 \u05EA\u05D0\u05E8\u05D9\u05DA \u05D0\u05D7\u05E8"}
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {groupedSlots.map((group) => (
-                    <div key={group.key}>
-                      <div className="flex items-center gap-2 mb-2 text-xs font-medium text-gray-500">
-                        {group.icon}
-                        {group.label}
+                    {slotsLoading ? (
+                      <div className="space-y-2">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <DarkSkeleton key={i} className="h-10 rounded-xl" />
+                        ))}
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {group.slots.map((slot, slotIdx) => {
+                    ) : slots.length === 0 ? (
+                      <div className="text-center py-8 text-sm text-white/30">
+                        <CalendarDays className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                        {"\u05D0\u05D9\u05DF \u05DE\u05E9\u05D1\u05E6\u05D5\u05EA \u05E4\u05E0\u05D5\u05D9\u05D5\u05EA \u05D1\u05EA\u05D0\u05E8\u05D9\u05DA \u05D6\u05D4"}
+                        <br />
+                        <button
+                          type="button"
+                          onClick={() => goToStep(1)}
+                          className="mt-2 text-xs text-purple-400 underline hover:no-underline"
+                        >
+                          {"\u05D1\u05D7\u05E8\u05D5 \u05EA\u05D0\u05E8\u05D9\u05DA \u05D0\u05D7\u05E8"}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2 max-h-[360px] overflow-y-auto mtg-dark-scrollbar pr-1">
+                        {slots.map((slot, slotIdx) => {
                           const isSelected = selectedSlot?.start === slot.start;
                           return (
                             <button
                               key={slot.start}
                               onClick={() => handleSlotSelect(slot)}
-                              className={`mtg-slide-up py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-200 border ${
+                              className={`mtg-slide-up py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200 border text-center ${
                                 isSelected
-                                  ? "text-white shadow-sm"
-                                  : "border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 hover:shadow-sm"
+                                  ? "bg-purple-600 border-purple-600 text-white shadow-sm"
+                                  : "bg-[#1a3a2a]/80 border-white/10 text-white/80 hover:bg-white/[0.08] hover:border-white/20"
                               }`}
-                              style={{
-                                animationDelay: `${slotIdx * 40}ms`,
-                                ...(isSelected ? { backgroundColor: themeColor, borderColor: themeColor } : {}),
-                              }}
+                              style={{ animationDelay: `${slotIdx * 40}ms` }}
                             >
                               {formatTime(slot.start)}
                             </button>
                           );
                         })}
                       </div>
-                    </div>
-                  ))}
-                  <p className="text-xs text-gray-400 mt-3 text-center">{"\u05E9\u05E2\u05D5\u05DF \u05D9\u05E9\u05E8\u05D0\u05DC (Asia/Jerusalem)"}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Step 3: Booking Form + Summary ── */}
-          {currentStep === 3 && (
-            <div key="step3" className={slideClass}>
-              {/* Summary card */}
-              <div
-                className="rounded-xl p-4 mb-5 border-2"
-                style={{ borderColor: `${themeColor}40`, backgroundColor: `${themeColor}08` }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: themeColor }}
-                    />
-                    <span className="text-sm font-semibold text-gray-800">{info.name}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => goToStep(1)}
-                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <Pencil className="w-3 h-3" />
-                    {"\u05E9\u05D9\u05E0\u05D5\u05D9"}
-                  </button>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
-                  <span className="flex items-center gap-1">
-                    <CalendarDays className="w-3.5 h-3.5" />
-                    {selectedDate && formatDate(selectedDate)}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    {selectedSlot && `${formatTime(selectedSlot.start)} - ${formatTime(selectedSlot.end)}`}
-                  </span>
-                  <span
-                    className="px-2 py-0.5 rounded-full text-xs font-medium"
-                    style={{ backgroundColor: `${themeColor}20`, color: themeColor }}
-                  >
-                    {info.duration} {"\u05D3\u05E7\u05D5\u05EA"}
-                  </span>
-                </div>
-              </div>
-
-              {/* Back button */}
-              <button
-                type="button"
-                onClick={() => goToStep(2)}
-                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors mb-3"
-              >
-                {"\u05E9\u05D9\u05E0\u05D5\u05D9 \u05E9\u05E2\u05D4"}
-                <ArrowRight className="w-3 h-3" />
-              </button>
-
-              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                {"\u05E4\u05E8\u05D8\u05D9 \u05D4\u05DE\u05E9\u05EA\u05EA\u05E3"}
-              </h3>
-
-              <form onSubmit={handleSubmit} className="space-y-3">
-                {/* Name */}
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    {"\u05E9\u05DD \u05DE\u05DC\u05D0"} <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData((p) => ({ ...p, name: e.target.value }))
-                    }
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent transition-shadow duration-200"
-                    style={{ "--tw-ring-color": themeColor } as React.CSSProperties}
-                    placeholder={"\u05D9\u05E9\u05E8\u05D0\u05DC \u05D9\u05E9\u05E8\u05D0\u05DC\u05D9"}
-                  />
-                </div>
-
-                {/* Email */}
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    {"\u05D0\u05D9\u05DE\u05D9\u05D9\u05DC"}
-                  </label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) =>
-                      setFormData((p) => ({ ...p, email: e.target.value }))
-                    }
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent transition-shadow duration-200"
-                    style={{ "--tw-ring-color": themeColor } as React.CSSProperties}
-                    placeholder="email@example.com"
-                    dir="ltr"
-                  />
-                </div>
-
-                {/* Phone */}
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    {"\u05D8\u05DC\u05E4\u05D5\u05DF"}
-                  </label>
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) =>
-                      setFormData((p) => ({ ...p, phone: e.target.value }))
-                    }
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent transition-shadow duration-200"
-                    style={{ "--tw-ring-color": themeColor } as React.CSSProperties}
-                    placeholder="050-1234567"
-                    dir="ltr"
-                  />
-                </div>
-
-                {/* Custom fields */}
-                {info.customFields.map((field) => (
-                  <div key={field.id}>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      {field.label}
-                      {field.required && (
-                        <span className="text-red-500"> *</span>
-                      )}
-                    </label>
-                    {field.type === "textarea" ? (
-                      <textarea
-                        required={field.required}
-                        value={formData.customFields[field.id] || ""}
-                        onChange={(e) =>
-                          setFormData((p) => ({
-                            ...p,
-                            customFields: {
-                              ...p.customFields,
-                              [field.id]: e.target.value,
-                            },
-                          }))
-                        }
-                        rows={3}
-                        className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent resize-none transition-shadow duration-200"
-                        placeholder={field.placeholder || ""}
-                      />
-                    ) : field.type === "select" ? (
-                      <select
-                        required={field.required}
-                        value={formData.customFields[field.id] || ""}
-                        onChange={(e) =>
-                          setFormData((p) => ({
-                            ...p,
-                            customFields: {
-                              ...p.customFields,
-                              [field.id]: e.target.value,
-                            },
-                          }))
-                        }
-                        className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent bg-white transition-shadow duration-200"
-                      >
-                        <option value="">{"\u05D1\u05D7\u05E8\u05D5"}...</option>
-                        {field.options?.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type={field.type}
-                        required={field.required}
-                        value={formData.customFields[field.id] || ""}
-                        onChange={(e) =>
-                          setFormData((p) => ({
-                            ...p,
-                            customFields: {
-                              ...p.customFields,
-                              [field.id]: e.target.value,
-                            },
-                          }))
-                        }
-                        className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent transition-shadow duration-200"
-                        placeholder={field.placeholder || ""}
-                        dir={
-                          field.type === "email" || field.type === "phone"
-                            ? "ltr"
-                            : undefined
-                        }
-                      />
                     )}
                   </div>
-                ))}
-
-                {/* Notes */}
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    {"\u05D4\u05E2\u05E8\u05D5\u05EA (\u05D0\u05D5\u05E4\u05E6\u05D9\u05D5\u05E0\u05DC\u05D9)"}
-                  </label>
-                  <textarea
-                    value={formData.notes}
-                    onChange={(e) =>
-                      setFormData((p) => ({ ...p, notes: e.target.value }))
-                    }
-                    rows={3}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent resize-none transition-shadow duration-200"
-                    placeholder={"\u05D4\u05D5\u05E1\u05D9\u05E4\u05D5 \u05D4\u05E2\u05E8\u05D4 \u05D0\u05D5 \u05D1\u05E7\u05E9\u05D4 \u05DE\u05D9\u05D5\u05D7\u05D3\u05EA..."}
-                  />
                 </div>
+              </div>
+            )}
 
-                {/* Error */}
-                {formError && (
-                  <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">
-                    {formError}
-                  </p>
-                )}
+            {/* ── Step 3: Booking Form ── */}
+            {currentStep === 3 && (
+              <div key="step3" className={slideClass}>
+                <h3 className="text-base font-semibold text-white mb-4">
+                  {"\u05D4\u05DE\u05D9\u05D3\u05E2 \u05E9\u05DC\u05DA"}
+                </h3>
 
-                {/* Submit */}
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full py-3 px-4 text-white rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 hover:shadow-lg disabled:opacity-50 active:scale-[0.98]"
-                  style={{ backgroundColor: themeColor }}
-                >
-                  {submitting ? (
-                    <>
-                      <svg
-                        className="animate-spin h-4 w-4"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
+                <form onSubmit={handleSubmit} className="space-y-3">
+                  {/* Name */}
+                  <div>
+                    <label className="block text-xs text-white/50 mb-1">
+                      {"\u05E9\u05DD \u05DE\u05DC\u05D0"} <span className="text-red-300">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={(e) =>
+                        setFormData((p) => ({ ...p, name: e.target.value }))
+                      }
+                      className={DARK_INPUT}
+                      placeholder={"\u05D9\u05E9\u05E8\u05D0\u05DC \u05D9\u05E9\u05E8\u05D0\u05DC\u05D9"}
+                    />
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="block text-xs text-white/50 mb-1">
+                      {"\u05D0\u05D9\u05DE\u05D9\u05D9\u05DC"}
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) =>
+                        setFormData((p) => ({ ...p, email: e.target.value }))
+                      }
+                      className={DARK_INPUT}
+                      placeholder="email@example.com"
+                      dir="ltr"
+                    />
+                  </div>
+
+                  {/* Phone */}
+                  <div>
+                    <label className="block text-xs text-white/50 mb-1">
+                      {"\u05D8\u05DC\u05E4\u05D5\u05DF"}
+                    </label>
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) =>
+                        setFormData((p) => ({ ...p, phone: e.target.value }))
+                      }
+                      className={DARK_INPUT}
+                      placeholder="050-1234567"
+                      dir="ltr"
+                    />
+                  </div>
+
+                  {/* Custom fields */}
+                  {info.customFields.map((field) => (
+                    <div key={field.id}>
+                      <label className="block text-xs text-white/50 mb-1">
+                        {field.label}
+                        {field.required && (
+                          <span className="text-red-300"> *</span>
+                        )}
+                      </label>
+                      {field.type === "textarea" ? (
+                        <textarea
+                          required={field.required}
+                          value={formData.customFields[field.id] || ""}
+                          onChange={(e) =>
+                            setFormData((p) => ({
+                              ...p,
+                              customFields: {
+                                ...p.customFields,
+                                [field.id]: e.target.value,
+                              },
+                            }))
+                          }
+                          rows={3}
+                          className={`${DARK_INPUT} resize-none`}
+                          placeholder={field.placeholder || ""}
                         />
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                      ) : field.type === "select" ? (
+                        <select
+                          required={field.required}
+                          value={formData.customFields[field.id] || ""}
+                          onChange={(e) =>
+                            setFormData((p) => ({
+                              ...p,
+                              customFields: {
+                                ...p.customFields,
+                                [field.id]: e.target.value,
+                              },
+                            }))
+                          }
+                          className={DARK_INPUT}
+                        >
+                          <option value="">{"\u05D1\u05D7\u05E8\u05D5"}...</option>
+                          {field.options?.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type={field.type}
+                          required={field.required}
+                          value={formData.customFields[field.id] || ""}
+                          onChange={(e) =>
+                            setFormData((p) => ({
+                              ...p,
+                              customFields: {
+                                ...p.customFields,
+                                [field.id]: e.target.value,
+                              },
+                            }))
+                          }
+                          className={DARK_INPUT}
+                          placeholder={field.placeholder || ""}
+                          dir={
+                            field.type === "email" || field.type === "phone"
+                              ? "ltr"
+                              : undefined
+                          }
                         />
-                      </svg>
-                      {"\u05E7\u05D5\u05D1\u05E2 \u05E4\u05D2\u05D9\u05E9\u05D4..."}
-                    </>
-                  ) : (
-                    "\u05E7\u05D1\u05E2 \u05E4\u05D2\u05D9\u05E9\u05D4"
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Notes */}
+                  <div>
+                    <label className="block text-xs text-white/50 mb-1">
+                      {"\u05D4\u05E2\u05E8\u05D5\u05EA (\u05D0\u05D5\u05E4\u05E6\u05D9\u05D5\u05E0\u05DC\u05D9)"}
+                    </label>
+                    <textarea
+                      value={formData.notes}
+                      onChange={(e) =>
+                        setFormData((p) => ({ ...p, notes: e.target.value }))
+                      }
+                      rows={3}
+                      className={`${DARK_INPUT} resize-none`}
+                      placeholder={"\u05D4\u05D5\u05E1\u05D9\u05E4\u05D5 \u05D4\u05E2\u05E8\u05D4 \u05D0\u05D5 \u05D1\u05E7\u05E9\u05D4 \u05DE\u05D9\u05D5\u05D7\u05D3\u05EA..."}
+                    />
+                  </div>
+
+                  {/* Error */}
+                  {formError && (
+                    <p className="text-sm text-red-300 bg-red-500/15 border border-red-500/20 rounded-lg px-3 py-2">
+                      {formError}
+                    </p>
                   )}
-                </button>
-              </form>
-            </div>
-          )}
+
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => goToStep(2)}
+                      className="py-2.5 px-4 border border-white/20 text-white/60 rounded-xl font-medium text-sm hover:bg-white/[0.05] transition-colors"
+                    >
+                      {"\u05D7\u05D6\u05E8\u05D4"}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="flex-1 py-2.5 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98]"
+                    >
+                      {submitting ? (
+                        <>
+                          <svg
+                            className="animate-spin h-4 w-4"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                            />
+                          </svg>
+                          {"\u05E7\u05D5\u05D1\u05E2 \u05E4\u05D2\u05D9\u05E9\u05D4..."}
+                        </>
+                      ) : (
+                        "\u05E7\u05D1\u05D9\u05E2\u05EA \u05D0\u05D9\u05E8\u05D5\u05E2"
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 text-center">
-          <p className="text-xs text-gray-400">
+        <div className="px-6 py-3 border-t border-white/10 text-center">
+          <p className="text-xs text-white/20">
             {"\u05DE\u05D5\u05D2\u05E9 \u05D1\u05D0\u05DE\u05E6\u05E2\u05D5\u05EA \u05DE\u05E2\u05E8\u05DB\u05EA COOL CRM"}
           </p>
         </div>

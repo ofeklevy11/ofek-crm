@@ -1,8 +1,9 @@
-import { getGoalsWithProgress, getGoalCreationData } from "@/app/actions/goals";
+import { getGoalsForCompanyInternal, getGoalCreationDataInternal } from "@/lib/services/goal-computation";
 import GoalList from "@/components/finance/GoalList";
 import GoalModal from "@/components/finance/GoalModal";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
+import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { Target, TrendingUp, ArrowRight, Archive, Plus } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -19,12 +20,16 @@ export default async function GoalsPage() {
     redirect("/");
   }
 
+  // Rate-limit check (Redis down → allow)
+  const limited = await checkActionRateLimit(String(user.id), RATE_LIMITS.goalRead).catch(() => false);
+  if (limited) return <RateLimitFallback />;
+
   // Fetch data
   let goals, creationData;
   try {
     [goals, creationData] = await Promise.all([
-      getGoalsWithProgress(),
-      getGoalCreationData(),
+      getGoalsForCompanyInternal(user.companyId),
+      getGoalCreationDataInternal(user.companyId),
     ]);
   } catch (e) {
     if (isRateLimitError(e)) return <RateLimitFallback />;
@@ -32,6 +37,14 @@ export default async function GoalsPage() {
   }
 
   const { clients, tables } = creationData;
+
+  // Single-pass stat counts
+  let activeCount = 0;
+  let onTrackCount = 0;
+  for (const g of goals) {
+    if (g.isActive) activeCount++;
+    if (g.status === "ON_TRACK" || g.status === "EXCEEDED") onTrackCount++;
+  }
 
   // Static metrics definition
   const metrics = [
@@ -147,7 +160,7 @@ export default async function GoalsPage() {
             <h3 className="font-medium text-gray-600">יעדים פעילים</h3>
           </div>
           <p className="text-3xl font-bold text-gray-900">
-            {goals.filter((g) => g.isActive).length}
+            {activeCount}
           </p>
         </div>
 
@@ -159,11 +172,7 @@ export default async function GoalsPage() {
             <h3 className="font-medium text-gray-600">במסלול להצלחה</h3>
           </div>
           <p className="text-3xl font-bold text-gray-900">
-            {
-              goals.filter(
-                (g: any) => g.status === "ON_TRACK" || g.status === "EXCEEDED",
-              ).length
-            }
+            {onTrackCount}
           </p>
         </div>
       </div>

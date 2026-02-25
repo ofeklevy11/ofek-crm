@@ -343,18 +343,19 @@ export async function createPerMeetingAutomation(data: {
     const validationError = validateAutomationInput(data);
     if (validationError) return { success: false, error: validationError };
 
-    const meeting = await prisma.meeting.findFirst({
-      where: { id: data.meetingId, companyId: currentUser.companyId },
-      select: { id: true, status: true },
-    });
+    const [meeting, count] = await Promise.all([
+      prisma.meeting.findFirst({
+        where: { id: data.meetingId, companyId: currentUser.companyId },
+        select: { id: true, status: true },
+      }),
+      prisma.automationRule.count({
+        where: { meetingId: data.meetingId, companyId: currentUser.companyId },
+      }),
+    ]);
     if (!meeting) return { success: false, error: "פגישה לא נמצאה" };
     if (meeting.status === "CANCELLED" || meeting.status === "COMPLETED") {
       return { success: false, error: "לא ניתן להוסיף אוטומציה לפגישה שהושלמה או בוטלה" };
     }
-
-    const count = await prisma.automationRule.count({
-      where: { meetingId: data.meetingId, companyId: currentUser.companyId },
-    });
     if (count >= MAX_PER_MEETING_AUTOMATIONS) {
       return { success: false, error: `מותר עד ${MAX_PER_MEETING_AUTOMATIONS} אוטומציות לפגישה` };
     }
@@ -434,14 +435,11 @@ export async function deletePerMeetingAutomation(id: number) {
     const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationMutate);
     if (limited) return { success: false, error: "Rate limit exceeded. Please try again later." };
 
-    // Verify it's a per-meeting rule belonging to this company
-    const rule = await prisma.automationRule.findFirst({
+    // Single query: delete only if it's a per-meeting rule belonging to this company
+    const { count } = await prisma.automationRule.deleteMany({
       where: { id, companyId: currentUser.companyId, meetingId: { not: null } },
-      select: { id: true },
     });
-    if (!rule) return { success: false, error: "אוטומציה לא נמצאה" };
-
-    await prisma.automationRule.delete({ where: { id } });
+    if (count === 0) return { success: false, error: "אוטומציה לא נמצאה" };
 
     return { success: true };
   } catch (error) {
@@ -557,14 +555,15 @@ export async function processMeetingReminders() {
     let totalFailures = 0;
     let totalProcessed = 0;
 
-    for (const [companyId, companyRules] of rulesByCompany) {
-      // Find the widest reminder window for this company's rules
+    async function processCompanyReminders(companyId: number, companyRules: typeof rules) {
       const maxMinutesBefore = Math.max(
         ...companyRules.map((r) => (r.triggerConfig as any)?.minutesBefore ?? 30)
       );
       const widestThreshold = new Date(now.getTime() + maxMinutesBefore * 60_000);
 
-      // BATCH: Single query for ALL meetings in this company's window
+      const ruleIds = companyRules.map((r) => r.id);
+
+      // Fetch meetings first (need calendarEventIds for the logs filter)
       const meetings = await prisma.meeting.findMany({
         where: {
           companyId,
@@ -574,15 +573,14 @@ export async function processMeetingReminders() {
         include: { meetingType: { select: { name: true } } },
         take: 500,
       });
-      if (meetings.length === 0) continue;
+      if (meetings.length === 0) return;
 
-      // BATCH: Single query for ALL existing dedup logs for these rules
-      const ruleIds = companyRules.map((r) => r.id);
+      // Fetch dedup logs only for relevant calendarEventIds
       const calendarEventIds = meetings
         .map((m) => m.calendarEventId)
         .filter((id): id is string => !!id);
 
-      const existingLogs = calendarEventIds.length > 0
+      const existingLogsRaw = calendarEventIds.length > 0
         ? await prisma.automationLog.findMany({
             where: {
               automationRuleId: { in: ruleIds },
@@ -591,11 +589,11 @@ export async function processMeetingReminders() {
             select: { automationRuleId: true, calendarEventId: true },
           })
         : [];
+
       const dedupSet = new Set(
-        existingLogs.map((l) => `${l.automationRuleId}-${l.calendarEventId}`)
+        existingLogsRaw.map((l) => `${l.automationRuleId}-${l.calendarEventId}`)
       );
 
-      // Process rules in parallel batches
       const RULE_CONCURRENCY = 5;
       for (let i = 0; i < companyRules.length; i += RULE_CONCURRENCY) {
         const batch = companyRules.slice(i, i + RULE_CONCURRENCY);
@@ -604,12 +602,10 @@ export async function processMeetingReminders() {
             const minutesBefore = (rule.triggerConfig as any)?.minutesBefore ?? 30;
             const ruleThreshold = new Date(now.getTime() + minutesBefore * 60_000);
 
-            // Filter meetings for this specific rule's window + meetingType
             const ruleMeetings = meetings.filter((m) => {
               if (m.startTime > ruleThreshold) return false;
               if (rule.meetingTypeId && m.meetingTypeId !== rule.meetingTypeId) return false;
               if ((rule as any).meetingId && m.id !== (rule as any).meetingId) return false;
-              // Dedup check via Set (O(1)) instead of DB query
               if (m.calendarEventId && dedupSet.has(`${rule.id}-${m.calendarEventId}`)) return false;
               return true;
             });
@@ -652,6 +648,16 @@ export async function processMeetingReminders() {
           }
         }
       }
+    }
+
+    // Process companies in parallel with bounded concurrency
+    const COMPANY_CONCURRENCY = 5;
+    const entries = Array.from(rulesByCompany.entries());
+    for (let i = 0; i < entries.length; i += COMPANY_CONCURRENCY) {
+      const batch = entries.slice(i, i + COMPANY_CONCURRENCY);
+      await Promise.allSettled(
+        batch.map(([companyId, companyRules]) => processCompanyReminders(companyId, companyRules))
+      );
     }
 
     // BATCH: createMany for all dedup logs (chunked to avoid large INSERT limits)

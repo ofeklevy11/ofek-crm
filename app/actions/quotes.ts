@@ -417,10 +417,10 @@ export async function restoreQuote(id: string) {
   const idResult = cuidSchema.safeParse(id);
   if (!idResult.success) throw new Error("Invalid quote ID format");
 
-  await db.quote.update({
+  await withRetry(() => db.quote.update({
     where: { id, companyId: user.companyId },
     data: { isTrashed: false },
-  });
+  }));
 
   // Regenerate PDF since it was deleted on trash
   inngest.send({
@@ -437,8 +437,8 @@ export async function getClientsForDropdown() {
 
   // EEE: Add take limit to prevent massive payloads for companies with thousands of clients
   return withRetry(() => db.client.findMany({
-    where: { companyId: user.companyId },
-    select: { id: true, name: true, email: true, phone: true, businessName: true },
+    where: { companyId: user.companyId, deletedAt: null },
+    select: { id: true, name: true, email: true, phone: true },
     orderBy: { name: "asc" },
     take: 500,
   }));
