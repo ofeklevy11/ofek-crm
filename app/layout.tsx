@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Rubik } from "next/font/google";
 import "./globals.css";
+import { Suspense } from "react";
 import Navbar from "@/components/Navbar";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import MobileFeatureDisclaimer from "@/components/MobileFeatureDisclaimer";
@@ -16,6 +17,16 @@ export const metadata: Metadata = {
   description: "מערכת ניהול לעסקים",
 };
 
+function NavbarSkeleton() {
+  return (
+    <nav className="bg-background/95 border-b border-border/40 sticky top-0 z-50">
+      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="h-16" />
+      </div>
+    </nav>
+  );
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,7 +39,9 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <MobileFeatureDisclaimer />
-        <Navbar />
+        <Suspense fallback={<NavbarSkeleton />}>
+          <Navbar />
+        </Suspense>
         <main>{children}</main>
         <SonnerToaster />
         <ModalProvider />
