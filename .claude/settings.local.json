@@ -105,7 +105,13 @@
       "Bash(cd /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app && npx vitest run tests/unit/routes/analytics.test.ts 2>&1)",
       "Bash(cd /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app && npx vitest run tests/unit/routes/analytics-ai-generate.test.ts 2>&1)",
       "Bash(cd /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app && npx vitest run tests/unit/routes/automations-event-crud.test.ts tests/unit/routes/automations-core.test.ts 2>&1)",
-      "Bash(cd /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app && npx vitest run tests/unit/routes/automations-event-crud.test.ts 2>&1)"
+      "Bash(cd /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app && npx vitest run tests/unit/routes/automations-event-crud.test.ts 2>&1)",
+      "Bash(cd C:/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app && npx dotenv -e .env.test -- vitest run tests/integration/routes/dashboard.integration.test.ts 2>&1)",
+      "Bash(npx dotenv:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(npx vitest:*)",
+      "Bash(echo No postgres ports found:*)",
+      "Bash(docker ps:*)"
     ]
   }
 }
