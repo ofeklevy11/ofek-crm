@@ -118,10 +118,11 @@ export default function EditClientPage({
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
               שם מלא <span className="text-red-500">*</span>
             </label>
             <input
+              id="name"
               type="text"
               value={formData.name}
               onChange={(e) =>
@@ -133,10 +134,11 @@ export default function EditClientPage({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
               אימייל
             </label>
             <input
+              id="email"
               type="email"
               value={formData.email}
               onChange={(e) =>
@@ -147,10 +149,11 @@ export default function EditClientPage({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
               טלפון
             </label>
             <input
+              id="phone"
               type="tel"
               value={formData.phone}
               onChange={(e) =>
@@ -161,10 +164,11 @@ export default function EditClientPage({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="businessName" className="block text-sm font-medium text-gray-700 mb-2">
               חברה
             </label>
             <input
+              id="businessName"
               type="text"
               value={formData.businessName}
               onChange={(e) =>
@@ -175,10 +179,11 @@ export default function EditClientPage({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
               הערות
             </label>
             <textarea
+              id="notes"
               value={formData.notes}
               onChange={(e) =>
                 setFormData({ ...formData, notes: e.target.value })

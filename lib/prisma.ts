@@ -13,7 +13,7 @@ const pool =
   new Pool({
     connectionString: process.env.DATABASE_URL,
     statement_timeout: 15000,       // 15s — abort runaway queries
-    max: 5,                          // low ceiling — each serverless instance has its own pool
+    max: 10,                         // VPS runs single process, higher pool is appropriate
     idleTimeoutMillis: 30000,        // release idle connections after 30s
   });
 

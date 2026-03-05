@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    paths-ignore: ["*.md", "scripts/**"]
+  pull_request:
+    branches: [main]
+    paths-ignore: ["*.md", "scripts/**"]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.5.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: TypeScript check
+        run: pnpm tsc --noEmit
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          REDIS_URL: "redis://localhost:6379"
+          SESSION_SECRET: "ci-dummy-secret-not-used-at-runtime-00000000000"
+          NEXT_PUBLIC_APP_URL: "https://bizlycrm.com"
+          CRON_SECRET: "ci-dummy"
+          INNGEST_DEV: "true"
+          UPLOADTHING_TOKEN: "eyBidWlsZFRpbWVEdW1teSA9IHRydWUgfQ=="
+          OPENROUTER_API_KEY: "sk-ci-dummy"
+          PDFMONKEY_TEMPLATE_ID: "00000000-0000-0000-0000-000000000000"
+          PDFMONKEY_API_KEY: "ci-dummy"
+          WHATSAPP_APP_ID: "0"
+          NEXT_PUBLIC_WHATSAPP_APP_ID: "0"
+          WHATSAPP_APP_SECRET: "ci-dummy"
+          WHATSAPP_TOKEN_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+          NEXT_PUBLIC_WHATSAPP_CONFIG_ID: "0"
+          WHATSAPP_VERIFY_TOKEN: "ci-dummy"
+          WHATSAPP_ACCESS_TOKEN: "ci-dummy"
+
+      - name: Unit tests
+        run: pnpm test
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          REDIS_URL: "redis://localhost:6379"
+          SESSION_SECRET: "ci-dummy-secret-not-used-at-runtime-00000000000"
+          NEXT_PUBLIC_APP_URL: "https://bizlycrm.com"
+          CRON_SECRET: "ci-dummy"
+          INNGEST_DEV: "true"
+          UPLOADTHING_TOKEN: "eyBidWlsZFRpbWVEdW1teSA9IHRydWUgfQ=="
+          OPENROUTER_API_KEY: "sk-ci-dummy"
+          PDFMONKEY_TEMPLATE_ID: "00000000-0000-0000-0000-000000000000"
+          PDFMONKEY_API_KEY: "ci-dummy"
+          WHATSAPP_APP_ID: "0"
+          NEXT_PUBLIC_WHATSAPP_APP_ID: "0"
+          WHATSAPP_APP_SECRET: "ci-dummy"
+          WHATSAPP_TOKEN_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+          NEXT_PUBLIC_WHATSAPP_CONFIG_ID: "0"
+          WHATSAPP_VERIFY_TOKEN: "ci-dummy"
+          WHATSAPP_ACCESS_TOKEN: "ci-dummy"

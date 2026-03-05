@@ -1120,7 +1120,7 @@ export default function DashboardClient({
                 if (!content) return null;
                 const view = content as any;
                 return (
-                  <div key={widget.id} className="break-inside-avoid">
+                  <div key={widget.id} className="break-inside-avoid" data-testid="dashboard-widget">
                     <AnalyticsWidget
                       id={widget.id}
                       view={view}
@@ -1136,7 +1136,7 @@ export default function DashboardClient({
                 if (!content) return null;
                 const goal = content as GoalWithProgress;
                 return (
-                  <div key={widget.id} className="break-inside-avoid">
+                  <div key={widget.id} className="break-inside-avoid" data-testid="dashboard-widget">
                     <GoalWidget
                       id={widget.id}
                       goal={goal}
@@ -1149,7 +1149,7 @@ export default function DashboardClient({
               } else if (widget.type === "TABLE_VIEWS_DASHBOARD") {
                 const settings = (widget as any).settings || {};
                 return (
-                  <div key={widget.id} className="break-inside-avoid">
+                  <div key={widget.id} className="break-inside-avoid" data-testid="dashboard-widget">
                     <TableViewsDashboardWidget
                       id={widget.id}
                       title={settings.title}
@@ -1170,7 +1170,7 @@ export default function DashboardClient({
                   goalIdSet.has(String(g.id)),
                 );
                 return (
-                  <div key={widget.id} className="break-inside-avoid">
+                  <div key={widget.id} className="break-inside-avoid" data-testid="dashboard-widget">
                     <GoalsTableWidget
                       id={widget.id}
                       title={settings.title}
@@ -1192,7 +1192,7 @@ export default function DashboardClient({
                     a.type !== "GRAPH",
                 );
                 return (
-                  <div key={widget.id} className="break-inside-avoid">
+                  <div key={widget.id} className="break-inside-avoid" data-testid="dashboard-widget">
                     <AnalyticsTableWidget
                       id={widget.id}
                       title={settings.title}
@@ -1205,7 +1205,7 @@ export default function DashboardClient({
                 );
               } else if (widget.type === "MINI_CALENDAR") {
                 return (
-                  <div key={widget.id} className="break-inside-avoid">
+                  <div key={widget.id} className="break-inside-avoid" data-testid="dashboard-widget">
                     <MiniCalendarWidget
                       id={widget.id}
                       onRemove={handleRemoveWidget}
@@ -1216,7 +1216,7 @@ export default function DashboardClient({
                 );
               } else if (widget.type === "MINI_TASKS") {
                 return (
-                  <div key={widget.id} className="break-inside-avoid">
+                  <div key={widget.id} className="break-inside-avoid" data-testid="dashboard-widget">
                     <MiniTasksWidget
                       id={widget.id}
                       onRemove={handleRemoveWidget}
@@ -1227,7 +1227,7 @@ export default function DashboardClient({
                 );
               } else if (widget.type === "MINI_QUOTES") {
                 return (
-                  <div key={widget.id} className="break-inside-avoid">
+                  <div key={widget.id} className="break-inside-avoid" data-testid="dashboard-widget">
                     <MiniQuotesWidget
                       id={widget.id}
                       onRemove={handleRemoveWidget}
@@ -1238,7 +1238,7 @@ export default function DashboardClient({
                 );
               } else if (widget.type === "MINI_MEETINGS") {
                 return (
-                  <div key={widget.id} className="break-inside-avoid">
+                  <div key={widget.id} className="break-inside-avoid" data-testid="dashboard-widget">
                     <MiniMeetingsWidget
                       id={widget.id}
                       onRemove={handleRemoveWidget}
@@ -1258,6 +1258,7 @@ export default function DashboardClient({
                     <div
                       key={widget.id}
                       className={`break-inside-avoid ${(widget as any).settings?.collapsed ? "" : "min-h-[400px]"}`}
+                      data-testid="dashboard-widget"
                     >
                       <CustomTableWidget
                         id={widget.id}
@@ -1276,7 +1277,7 @@ export default function DashboardClient({
                 }
 
                 return (
-                  <div key={widget.id} className="break-inside-avoid">
+                  <div key={widget.id} className="break-inside-avoid" data-testid="dashboard-widget">
                     <TableWidget
                       id={widget.id}
                       title={view.name}

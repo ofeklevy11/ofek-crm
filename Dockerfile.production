@@ -1,0 +1,67 @@
+# Stage 1: Install dependencies
+FROM node:24-alpine AS deps
+RUN corepack enable && corepack prepare pnpm@10.5.2 --activate
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+# Stage 2: Build the application
+FROM node:24-alpine AS builder
+RUN corepack enable && corepack prepare pnpm@10.5.2 --activate
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Build-time env vars (dummy values - overridden at runtime by docker-compose)
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" \
+    REDIS_URL="redis://localhost:6379" \
+    SESSION_SECRET="build-time-dummy-secret-not-used-at-runtime-0000000000" \
+    NEXT_PUBLIC_APP_URL="https://bizlycrm.com" \
+    CRON_SECRET="build-dummy" \
+    INNGEST_DEV="true" \
+    UPLOADTHING_TOKEN="eyBidWlsZFRpbWVEdW1teSA9IHRydWUgfQ==" \
+    OPENROUTER_API_KEY="sk-build-dummy" \
+    PDFMONKEY_TEMPLATE_ID="00000000-0000-0000-0000-000000000000" \
+    PDFMONKEY_API_KEY="build-dummy" \
+    WHATSAPP_APP_ID="0" \
+    NEXT_PUBLIC_WHATSAPP_APP_ID="0" \
+    WHATSAPP_APP_SECRET="build-dummy" \
+    WHATSAPP_TOKEN_ENCRYPTION_KEY="0000000000000000000000000000000000000000000000000000000000000000" \
+    NEXT_PUBLIC_WHATSAPP_CONFIG_ID="0" \
+    WHATSAPP_VERIFY_TOKEN="build-dummy" \
+    WHATSAPP_ACCESS_TOKEN="build-dummy"
+
+RUN pnpm run build
+
+# Stage 3: Production runner
+FROM node:24-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Copy standalone build output
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
+# Copy PDF fonts required by Inngest jobs
+COPY --from=builder /app/pdf/static ./pdf/static
+
+# Copy Prisma schema + migrations for runtime migrate
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/.pnpm/@prisma+client*/node_modules/.prisma ./.prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+USER nextjs
+
+EXPOSE 3000
+
+CMD ["node", "server.js"]

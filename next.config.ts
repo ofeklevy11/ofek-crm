@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   poweredByHeader: false,
+  serverExternalPackages: ["ioredis", "pg"],
   typescript: {
     ignoreBuildErrors: false,
   },

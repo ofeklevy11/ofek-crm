@@ -47,7 +47,7 @@ export default function MobileMenu({ user }: MobileMenuProps) {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="md:hidden">
+        <Button variant="ghost" size="icon" className="md:hidden" aria-label="תפריט">
           <Menu className="h-6 w-6" />
         </Button>
       </SheetTrigger>

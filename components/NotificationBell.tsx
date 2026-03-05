@@ -194,6 +194,7 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
         <Button
           variant="ghost"
           size="icon"
+          aria-label="התראות"
           className="relative text-muted-foreground hover:text-foreground rounded-full h-8 w-8 lg:h-9 lg:w-9"
         >
           <Bell className="h-5 w-5" />

@@ -1,0 +1,91 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["*.md", "scripts/**"]
+
+concurrency:
+  group: vps-deploy
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 20m
+          script: |
+            set -euo pipefail
+            cd /opt/crm
+
+            echo "=== Pulling latest code ==="
+            git pull origin main
+
+            echo "=== Tagging current image for rollback ==="
+            docker tag crm-app:latest crm-app:rollback 2>/dev/null || true
+
+            echo "=== Building new Docker image ==="
+            docker compose --env-file .env.production -f docker-compose.production.yml build app
+
+            echo "=== Ensuring DB + Redis are up ==="
+            docker compose --env-file .env.production -f docker-compose.production.yml up -d postgres redis
+            echo "Waiting for PostgreSQL..."
+            for i in $(seq 1 30); do
+              if docker compose --env-file .env.production -f docker-compose.production.yml exec -T postgres pg_isready -U crm_user -q 2>/dev/null; then
+                echo "PostgreSQL ready (attempt $i)"
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                echo "ERROR: PostgreSQL not ready after 60s"
+                exit 1
+              fi
+              sleep 2
+            done
+
+            echo "=== Running database migrations ==="
+            docker compose --env-file .env.production -f docker-compose.production.yml run --rm app npx prisma migrate deploy
+
+            echo "=== Starting all services ==="
+            docker compose --env-file .env.production -f docker-compose.production.yml up -d
+
+            echo "=== Health check ==="
+            HEALTHY=false
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+              sleep 3
+              if curl -sf -o /dev/null -w '' https://bizlycrm.com; then
+                echo "Health check PASSED (attempt $i)"
+                HEALTHY=true
+                break
+              fi
+              echo "Health check attempt $i failed, retrying..."
+            done
+
+            if [ "$HEALTHY" = false ]; then
+              echo ""
+              echo "!!! HEALTH CHECK FAILED — ROLLING BACK !!!"
+              echo ""
+              docker tag crm-app:rollback crm-app:latest 2>/dev/null || true
+              docker compose --env-file .env.production -f docker-compose.production.yml up -d app
+              sleep 5
+              echo "Rollback status:"
+              docker compose --env-file .env.production -f docker-compose.production.yml ps
+              exit 1
+            fi
+
+            echo "=== Cleaning up old images ==="
+            docker image prune -f
+
+            echo ""
+            echo "=== Deployment successful ==="
+            docker compose --env-file .env.production -f docker-compose.production.yml ps

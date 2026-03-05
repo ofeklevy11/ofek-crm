@@ -12,7 +12,9 @@
     "seed": "npx tsx scripts/seed-data.ts",
     "test": "dotenv -e .env.test -- prisma db push && vitest run",
     "test:watch": "dotenv -e .env.test -- vitest",
-    "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest"
+    "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "prisma": {
     "seed": "npx tsx scripts/seed-data.ts"
@@ -89,6 +91,7 @@
     }
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.16.0",

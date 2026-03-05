@@ -24,6 +24,7 @@ export const redis =
     connectTimeout: 3000,          // 3s instead of default 10s
     maxRetriesPerRequest: 1,       // 1 retry instead of 20
     enableOfflineQueue: false,     // fail immediately when disconnected
+    lazyConnect: true,             // don't connect until first command (needed for Docker build)
     // Do not panic if connection fails, just log
     retryStrategy: (times) => {
       // Reconnect with exponential backoff
@@ -45,6 +46,7 @@ export const redisPublisher =
     connectTimeout: 3000,
     maxRetriesPerRequest: 1,
     enableOfflineQueue: false,
+    lazyConnect: true,
   });
 
 globalPublisher.redisPublisher = redisPublisher;

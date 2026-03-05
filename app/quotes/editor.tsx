@@ -392,7 +392,7 @@ export default function QuoteEditor({
     <div className="p-6 max-w-[1200px] mx-auto space-y-6" dir="rtl">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <button onClick={handleBack} className="p-2 hover:bg-gray-100 rounded-full text-gray-600">
+          <button onClick={handleBack} data-testid="back-button" className="p-2 hover:bg-gray-100 rounded-full text-gray-600">
             <ArrowRight className="w-5 h-5" />
           </button>
           <div>

@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+pgdata
+.env
+.env.*
+!.env.production.template
+tests
+playwright-report
+test-results
+coverage
+*.md
+.github
