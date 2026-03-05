@@ -97,12 +97,12 @@ jobs:
           DATABASE_URL: "postgresql://test:test@localhost:5432/testdb"
 
       - name: Push database schema
-        run: pnpm prisma db push
+        run: pnpm prisma db push --url "$DATABASE_URL"
         env:
           DATABASE_URL: "postgresql://test:test@localhost:5432/testdb"
 
       - name: Integration tests
-        run: pnpm vitest run tests/integration
+        run: pnpm vitest run tests/integration --no-file-parallelism
         env:
           DATABASE_URL: "postgresql://test:test@localhost:5432/testdb"
           SESSION_SECRET: "ci-test-secret-for-integration-tests-minimum-len"
