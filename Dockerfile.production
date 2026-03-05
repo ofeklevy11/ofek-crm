@@ -54,11 +54,9 @@ COPY --from=builder /app/public ./public
 # Copy PDF fonts required by Inngest jobs
 COPY --from=builder /app/pdf/static ./pdf/static
 
-# Copy Prisma schema + migrations for runtime migrate
+# Copy Prisma client runtime (migrations run via migrator service)
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.pnpm/@prisma+client*/node_modules/.prisma ./.prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 USER nextjs
 

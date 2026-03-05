@@ -99,6 +99,23 @@ services:
         limits:
           memory: 3G
 
+  migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      target: builder
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env.production
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+    networks:
+      - internal
+    profiles:
+      - migration
+
 networks:
   internal:
     driver: bridge
