@@ -11,6 +11,7 @@
     "init-views": "npx tsx scripts/init-view-orders.ts",
     "seed": "npx tsx scripts/seed-data.ts",
     "test": "dotenv -e .env.test -- prisma db push && vitest run",
+    "test:ci": "vitest run",
     "test:watch": "dotenv -e .env.test -- vitest",
     "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest",
     "test:e2e": "playwright test",

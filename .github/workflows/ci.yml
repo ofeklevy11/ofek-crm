@@ -6,6 +6,7 @@ on:
   pull_request:
     branches: [main]
     paths-ignore: ["*.md", "scripts/**"]
+  workflow_call:
 
 jobs:
   quality:
@@ -36,7 +37,7 @@ jobs:
         run: pnpm lint
 
       - name: Unit tests
-        run: pnpm test
+        run: pnpm test:ci
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
           REDIS_URL: "redis://localhost:6379"
