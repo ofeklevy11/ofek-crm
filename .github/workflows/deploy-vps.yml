@@ -55,7 +55,7 @@ jobs:
             done
 
             echo "=== Running database migrations ==="
-            docker compose --env-file .env.production -f docker-compose.production.yml run --rm app npx prisma migrate deploy
+            docker compose --env-file .env.production -f docker-compose.production.yml run --rm app node node_modules/prisma/build/index.js migrate deploy
 
             echo "=== Starting all services ==="
             docker compose --env-file .env.production -f docker-compose.production.yml up -d
