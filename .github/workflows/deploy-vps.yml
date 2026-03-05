@@ -30,7 +30,8 @@ jobs:
             cd /opt/crm
 
             echo "=== Pulling latest code ==="
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
 
             echo "=== Tagging current image for rollback ==="
             docker tag crm-app:latest crm-app:rollback 2>/dev/null || true
