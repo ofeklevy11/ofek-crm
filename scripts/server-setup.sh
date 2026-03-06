@@ -28,13 +28,16 @@ fi
 echo "=== Hardening SSH ==="
 sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-systemctl restart sshd
+# Override cloud-init SSH defaults (cloud-init drops configs in sshd_config.d/ that override main config)
+echo "PasswordAuthentication no" > /etc/ssh/sshd_config.d/50-cloud-init.conf
+systemctl restart ssh
 
 echo "=== Configuring UFW firewall ==="
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp
 ufw allow 80/tcp
+ufw allow 443/tcp
 ufw --force enable
 
 echo "=== Setting up swap ==="
@@ -69,6 +72,13 @@ chown -R deploy:deploy /opt/crm-backups
 echo "=== Configuring Nginx ==="
 rm -f /etc/nginx/sites-enabled/default
 
+# Upstream config for blue-green deployments (deploy script switches between ports)
+cat > /etc/nginx/conf.d/crm-upstream.conf << 'UPSTREAM'
+upstream crm_backend {
+    server 127.0.0.1:3000;
+}
+UPSTREAM
+
 cat > /etc/nginx/sites-available/crm << 'NGINX'
 server {
     listen 80;
@@ -77,7 +87,7 @@ server {
     client_max_body_size 50M;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://crm_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -98,6 +108,10 @@ NGINX
 
 ln -sf /etc/nginx/sites-available/crm /etc/nginx/sites-enabled/crm
 nginx -t && systemctl reload nginx
+
+echo "=== Setting up blue-green deployment state ==="
+echo "blue" > /opt/crm/active-slot
+chown deploy:deploy /opt/crm/active-slot
 
 echo "=== Configuring fail2ban ==="
 systemctl enable fail2ban

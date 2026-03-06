@@ -22,28 +22,42 @@ jobs:
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_IP }}
-          username: root
+          username: deploy
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 20m
           script: |
             set -euo pipefail
             cd /opt/crm
 
+            COMPOSE="docker compose --env-file .env.production -f docker-compose.production.yml"
+            STATE_FILE="/opt/crm/active-slot"
+
             echo "=== Pulling latest code ==="
             git fetch origin main
             git reset --hard origin/main
+
+            # Determine current and target slots
+            CURRENT=$(cat "$STATE_FILE" 2>/dev/null || echo "none")
+            if [ "$CURRENT" = "blue" ]; then
+              TARGET="green"; TARGET_PORT=3002
+            elif [ "$CURRENT" = "green" ]; then
+              TARGET="blue"; TARGET_PORT=3000
+            else
+              TARGET="blue"; TARGET_PORT=3000
+            fi
+            echo "=== Current: $CURRENT | Target: $TARGET (port $TARGET_PORT) ==="
 
             echo "=== Tagging current image for rollback ==="
             docker tag crm-app:latest crm-app:rollback 2>/dev/null || true
 
             echo "=== Building new Docker image ==="
-            docker compose --env-file .env.production -f docker-compose.production.yml build app
+            docker build -t crm-app:latest -f Dockerfile.production .
 
             echo "=== Ensuring DB + Redis are up ==="
-            docker compose --env-file .env.production -f docker-compose.production.yml up -d postgres redis
+            $COMPOSE up -d postgres redis inngest autoheal
             echo "Waiting for PostgreSQL..."
             for i in $(seq 1 30); do
-              if docker compose --env-file .env.production -f docker-compose.production.yml exec -T postgres pg_isready -U crm_user -q 2>/dev/null; then
+              if $COMPOSE exec -T postgres pg_isready -U crm_user -q 2>/dev/null; then
                 echo "PostgreSQL ready (attempt $i)"
                 break
               fi
@@ -58,7 +72,7 @@ jobs:
             set -a; source .env.production; set +a
             BACKUP_FILE="/opt/crm/backups/pre-deploy-$(date +%Y%m%d-%H%M%S).sql.gz"
             mkdir -p /opt/crm/backups
-            docker compose --env-file .env.production -f docker-compose.production.yml exec -T postgres \
+            $COMPOSE exec -T postgres \
               pg_dump -U "${POSTGRES_USER}" "${POSTGRES_DB}" --no-owner --no-privileges | gzip > "$BACKUP_FILE"
             BACKUP_SIZE=$(stat -c%s "$BACKUP_FILE" 2>/dev/null || echo 0)
             if [ "$BACKUP_SIZE" -lt 1024 ]; then
@@ -66,20 +80,19 @@ jobs:
               exit 1
             fi
             echo "Backup saved: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
-            # Keep only last 5 pre-deploy backups
             ls -t /opt/crm/backups/pre-deploy-*.sql.gz 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
 
             echo "=== Running database migrations ==="
-            docker compose --env-file .env.production -f docker-compose.production.yml --profile migration run --rm migrator pnpm prisma migrate deploy
+            $COMPOSE --profile migration run --rm migrator pnpm prisma migrate deploy
 
-            echo "=== Starting all services ==="
-            docker compose --env-file .env.production -f docker-compose.production.yml up -d
+            echo "=== Starting app-$TARGET ==="
+            $COMPOSE --profile $TARGET up -d app-$TARGET
 
-            echo "=== Health check ==="
+            echo "=== Health checking app-$TARGET on port $TARGET_PORT ==="
             HEALTHY=false
-            for i in 1 2 3 4 5 6 7 8 9 10; do
+            for i in $(seq 1 20); do
               sleep 3
-              if curl -sf -o /dev/null -w '' https://bizlycrm.com; then
+              if curl -sf -o /dev/null http://localhost:$TARGET_PORT/api/health/ready; then
                 echo "Health check PASSED (attempt $i)"
                 HEALTHY=true
                 break
@@ -89,19 +102,27 @@ jobs:
 
             if [ "$HEALTHY" = false ]; then
               echo ""
-              echo "!!! HEALTH CHECK FAILED — ROLLING BACK !!!"
+              echo "!!! HEALTH CHECK FAILED — aborting deploy !!!"
               echo ""
-              docker tag crm-app:rollback crm-app:latest 2>/dev/null || true
-              docker compose --env-file .env.production -f docker-compose.production.yml up -d app
-              sleep 5
-              echo "Rollback status:"
-              docker compose --env-file .env.production -f docker-compose.production.yml ps
+              $COMPOSE --profile $TARGET rm -sf app-$TARGET
+              echo "Old slot ($CURRENT) still serving traffic. No user impact."
               exit 1
             fi
+
+            echo "=== Switching nginx to port $TARGET_PORT ==="
+            echo "upstream crm_backend { server 127.0.0.1:$TARGET_PORT; }" | sudo tee /etc/nginx/conf.d/crm-upstream.conf > /dev/null
+            sudo nginx -t && sudo nginx -s reload
+
+            if [ "$CURRENT" != "none" ]; then
+              echo "=== Stopping old slot: app-$CURRENT ==="
+              $COMPOSE --profile $CURRENT rm -sf app-$CURRENT
+            fi
+
+            echo "$TARGET" > "$STATE_FILE"
 
             echo "=== Cleaning up old images ==="
             docker image prune -f
 
             echo ""
-            echo "=== Deployment successful ==="
-            docker compose --env-file .env.production -f docker-compose.production.yml ps
+            echo "=== Deployment successful: app-$TARGET is active ==="
+            $COMPOSE --profile $TARGET ps

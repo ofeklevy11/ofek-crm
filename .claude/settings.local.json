@@ -114,7 +114,24 @@
       "Bash(docker ps:*)",
       "Bash(gh:*)",
       "Bash(npx:*)",
-      "mcp__github__list_issues"
+      "mcp__github__list_issues",
+      "Bash(ssh -o ConnectTimeout=10 root@46.225.53.137 'ls -la /etc/nginx/sites-enabled/ 2>/dev/null; echo \"\"===\"\"; cat /etc/nginx/sites-enabled/crm 2>/dev/null; echo \"\"===\"\"; docker network ls 2>/dev/null')",
+      "Bash(ssh -o ConnectTimeout=10 deploy@46.225.53.137 'whoami && echo \"\"SSH as deploy: OK\"\" && sudo whoami && echo \"\"Sudo: OK\"\" && docker ps --format \"\"table {{.Names}}\\\\t{{.Status}}\"\" && echo \"\"Docker: OK\"\"')",
+      "Bash(ssh -o ConnectTimeout=10 root@46.225.53.137 'echo \"\"PasswordAuthentication no\"\" > /etc/ssh/sshd_config.d/50-cloud-init.conf && sed -i \"\"s/^PermitRootLogin yes/PermitRootLogin no/\"\" /etc/ssh/sshd_config && echo \"\"Config updated. Verifying before restart:\"\" && grep -E \"\"\\(PermitRootLogin|PasswordAuthentication\\)\"\" /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf && systemctl restart sshd && echo \"\"SSHD restarted successfully\"\"')",
+      "Bash(ssh -o ConnectTimeout=10 root@46.225.53.137 'systemctl restart ssh && echo \"\"SSH service restarted successfully\"\"')",
+      "Bash(ssh -o ConnectTimeout=5 root@46.225.53.137 'echo \"\"ROOT ACCESS STILL WORKS - BAD\"\"')",
+      "Bash(ssh -o ConnectTimeout=5 -o PubkeyAuthentication=no deploy@46.225.53.137 'echo \"\"PASSWORD AUTH WORKS - BAD\"\"')",
+      "Bash(ssh -o ConnectTimeout=5 deploy@46.225.53.137 'echo \"\"DEPLOY SSH WORKS - GOOD\"\"')",
+      "Bash(ssh -o:*)",
+      "Bash(ssh -o ConnectTimeout=10 deploy@46.225.53.137 'sudo sed -i \"\"/add_header Referrer-Policy/a\\\\\\\\    add_header Strict-Transport-Security \\\\\"\"max-age=31536000; includeSubDomains\\\\\"\" always;\"\" /etc/nginx/sites-available/crm && sudo nginx -t && sudo systemctl reload nginx && echo \"\"HSTS added and nginx reloaded\"\"')",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Read(//c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/**)",
+      "Bash(ssh deploy@46.225.53.137 \"sudo cat /etc/nginx/sites-enabled/crm\")",
+      "Bash(ssh deploy@46.225.53.137 \"sudo grep -n ''limit_req_zone'' /etc/nginx/sites-enabled/crm /etc/nginx/nginx.conf /etc/nginx/conf.d/*.conf 2>/dev/null || echo ''not found in checked files''\")",
+      "Bash(ssh:*)",
+      "Bash(rsync -avz --include='docker-compose.production.yml' --include='nginx/' --include='nginx/default.conf' --exclude='*' \"c:/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/\" deploy@46.225.53.137:/opt/crm/)",
+      "Bash(scp \"c:/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/docker-compose.production.yml\" deploy@46.225.53.137:/opt/crm/docker-compose.production.yml)"
     ]
   }
 }

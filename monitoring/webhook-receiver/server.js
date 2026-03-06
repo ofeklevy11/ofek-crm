@@ -1,6 +1,6 @@
 const http = require("http");
 const https = require("https");
-const { execFile } = require("child_process");
+const { execFile, spawn } = require("child_process");
 const { promisify } = require("util");
 
 const execFileAsync = promisify(execFile);
@@ -13,6 +13,9 @@ const {
   GRAFANA_URL = "https://monitoring.bizlycrm.com",
   ENABLE_AUTO_REMEDIATION = "false",
 } = process.env;
+
+const restartCooldowns = new Map();
+const RESTART_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 
 const SEVERITY_EMOJI = { critical: "\u{1F534}", warning: "\u{1F7E1}", info: "\u{1F535}" };
 const RESOLVED_EMOJI = "\u{1F7E2}";
@@ -209,7 +212,82 @@ const server = http.createServer(async (req, res) => {
   res.end("Not Found");
 });
 
+async function handleDockerRestartEvent(jsonLine) {
+  try {
+    const event = JSON.parse(jsonLine);
+    const name = (event.Actor && event.Actor.Attributes && event.Actor.Attributes.name) || event.id || "unknown";
+    const image = (event.Actor && event.Actor.Attributes && event.Actor.Attributes.image) || "unknown";
+    const time = event.time ? new Date(event.time * 1000).toISOString() : new Date().toISOString();
+
+    if (name === "autoheal") return;
+
+    const now = Date.now();
+    const lastNotified = restartCooldowns.get(name);
+    if (lastNotified && now - lastNotified < RESTART_COOLDOWN_MS) {
+      console.log(`[docker-events] Suppressed duplicate restart notification for ${name} (cooldown)`);
+      return;
+    }
+    restartCooldowns.set(name, now);
+
+    const msg = `\u{1F504} <b>Container Restarted</b>\nContainer: ${name}\nImage: ${image}\nTime: ${time}\nServer: bizlycrm.com`;
+
+    await sendTelegram(msg);
+
+    console.log(JSON.stringify({
+      ts: new Date().toISOString(),
+      event: "container_restart_notified",
+      container: name,
+      image,
+      restartTime: time,
+    }));
+  } catch (err) {
+    console.error("[docker-events] Failed to handle restart event:", err.message);
+  }
+}
+
+function startDockerEventWatcher() {
+  console.log("[docker-events] Starting Docker event watcher");
+
+  const proc = spawn("docker", ["events", "--filter", "event=restart", "--format", "{{json .}}"], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let buffer = "";
+
+  proc.stdout.on("data", (chunk) => {
+    buffer += chunk.toString();
+    const lines = buffer.split("\n");
+    buffer = lines.pop(); // keep incomplete line in buffer
+    for (const line of lines) {
+      if (line.trim()) handleDockerRestartEvent(line.trim());
+    }
+  });
+
+  proc.stderr.on("data", (chunk) => {
+    console.error("[docker-events] stderr:", chunk.toString().trim());
+  });
+
+  proc.on("close", (code) => {
+    console.warn(`[docker-events] Docker events stream closed (code ${code}), reconnecting in 5s...`);
+    setTimeout(startDockerEventWatcher, 5000);
+  });
+
+  proc.on("error", (err) => {
+    console.error("[docker-events] Spawn error:", err.message, "— retrying in 10s...");
+    setTimeout(startDockerEventWatcher, 10000);
+  });
+}
+
+// Cleanup stale cooldown entries every hour
+setInterval(() => {
+  const now = Date.now();
+  for (const [name, ts] of restartCooldowns) {
+    if (now - ts > RESTART_COOLDOWN_MS) restartCooldowns.delete(name);
+  }
+}, 60 * 60 * 1000);
+
 server.listen(PORT, () => {
   console.log(`[webhook-receiver] Listening on port ${PORT}`);
   console.log(`[webhook-receiver] Auto-remediation: ${ENABLE_AUTO_REMEDIATION}`);
+  startDockerEventWatcher();
 });
