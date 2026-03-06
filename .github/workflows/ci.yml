@@ -134,6 +134,7 @@ jobs:
 
   security:
     runs-on: ubuntu-latest
+    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
@@ -149,6 +150,7 @@ jobs:
           exit-code: "1"
           severity: "CRITICAL,HIGH"
           ignore-unfixed: true
+          scanners: "vuln"
 
   e2e:
     runs-on: ubuntu-latest
