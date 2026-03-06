@@ -22,6 +22,3 @@ receivers:
     webhook_configs:
       - url: "http://webhook-receiver:9095/alert"
         send_resolved: true
-        http_config:
-          headers:
-            X-Webhook-Secret: WEBHOOK_SECRET_PLACEHOLDER

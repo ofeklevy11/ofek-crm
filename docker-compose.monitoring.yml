@@ -184,7 +184,6 @@ services:
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
-      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
       GRAFANA_URL: "https://monitoring.bizlycrm.com"
       ENABLE_AUTO_REMEDIATION: "true"
     volumes:
