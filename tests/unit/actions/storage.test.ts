@@ -1142,7 +1142,7 @@ describe("deleteFile", () => {
     expect(prismaMock.file.delete).toHaveBeenCalledWith({
       where: { id: 1, companyId: 1 },
     });
-    expect(mockDeleteFiles).toHaveBeenCalledWith("abc123");
+    expect(mockDeleteFiles).toHaveBeenCalledWith(["abc123"]);
   });
 
   it("does not call delete when file not found", async () => {

@@ -221,7 +221,9 @@ describe("getWorkflowInstances", () => {
           assignee: { select: { id: true, name: true } },
           creator: { select: { id: true, name: true } },
         }),
-        orderBy: { updatedAt: "desc" },
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        take: 200,
+        where: expect.objectContaining({ companyId: expect.any(Number) }),
       }),
     );
   });

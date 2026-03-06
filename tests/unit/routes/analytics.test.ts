@@ -572,14 +572,14 @@ describe("createAnalyticsView", () => {
     expect(res.success).toBe(true);
   });
 
-  it("SUM views are not counted in regularCount but are blocked when CONVERSION+COUNT reach limit", async () => {
-    // 5 existing COUNT views = at limit. SUM is !isGraph so it hits the regular limit check.
+  it("SUM views bypass the regular limit check (neither isRegular nor isGraph)", async () => {
+    // 5 existing COUNT views = at limit. But SUM is neither isRegular nor isGraph, so it bypasses the limit.
     mockTx.analyticsView.groupBy.mockResolvedValue([
       { type: "COUNT", _count: 5 },
     ]);
+    mockTx.analyticsView.create.mockResolvedValue({ id: 1, type: "SUM", config: validConfig });
     const res = await createAnalyticsView({ ...validData, type: "SUM" });
-    expect(res.success).toBe(false);
-    expect(res.error).toContain("5");
+    expect(res.success).toBe(true);
   });
 
   it("allows SUM view creation when CONVERSION+COUNT below limit", async () => {

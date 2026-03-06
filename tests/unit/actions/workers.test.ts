@@ -1625,9 +1625,17 @@ describe("updateStepProgress", () => {
     vi.mocked(prisma.onboardingStep.findFirst).mockResolvedValue({
       id: 1, title: "S", onCompleteActions: null, path: { name: "P", companyId: 100 },
     } as any);
-    vi.mocked(prisma.workerOnboarding.findFirst).mockResolvedValue({ id: 1, workerId: 10 } as any);
+    vi.mocked(prisma.workerOnboarding.findFirst)
+      .mockResolvedValueOnce({ id: 1, workerId: 10 } as any) // ownership check
+      .mockResolvedValueOnce({
+        id: 1, status: "COMPLETED",
+        worker: { id: 10, firstName: "J", lastName: "D", email: null, phone: null, position: null, status: "ACTIVE", departmentId: null },
+        path: { id: 1, name: "P", companyId: 100, steps: [] },
+      } as any); // onboarding fetch after lock
     mockTx.workerOnboardingStep.findUnique.mockResolvedValue({ status: "COMPLETED" });
     mockTx.workerOnboardingStep.upsert.mockResolvedValue({ id: 1 });
+    mockTx.workerOnboardingStep.findMany.mockResolvedValue([]);
+    mockTx.workerOnboarding.findFirst.mockResolvedValue({ status: "COMPLETED" });
 
     await updateStepProgress(1, 1, { status: "IN_PROGRESS" });
     expect(mockTx.workerOnboardingStep.upsert).toHaveBeenCalledWith(

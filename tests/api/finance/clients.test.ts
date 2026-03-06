@@ -121,7 +121,7 @@ describe("GET /api/finance/clients", () => {
     const body = await res.json();
     expect(body.data).toHaveLength(3);
     expect(body.hasMore).toBe(false);
-    expect(body.nextCursor).toBeUndefined();
+    expect(body.nextCursor).toBeNull();
   });
 
   it("returns hasMore and nextCursor when more data exists", async () => {

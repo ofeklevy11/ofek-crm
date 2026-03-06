@@ -210,7 +210,9 @@ describe("getWorkflows", () => {
             orderBy: { order: "asc" },
           }),
         }),
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: 200,
+        where: expect.objectContaining({ companyId: expect.any(Number) }),
       }),
     );
   });
@@ -885,7 +887,7 @@ describe("reorderStages", () => {
     mockTx.$executeRaw.mockResolvedValue(2);
 
     await reorderStages(1, [11, 10]);
-    expect(mockTx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(mockTx.$executeRaw).toHaveBeenCalledTimes(2);
     expect(revalidatePath).toHaveBeenCalledWith("/workflows");
   });
 
