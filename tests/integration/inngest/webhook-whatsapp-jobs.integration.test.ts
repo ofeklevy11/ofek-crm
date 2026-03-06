@@ -10,7 +10,7 @@ import { createMockStep, createMockEvent } from "../helpers/inngest-test-utils";
 import { prisma } from "@/lib/prisma";
 
 // ── Handler capture ───────────────────────────────────────────────
-const handlers: Record<string, Function> = {};
+const handlers: Record<string, (...args: any[]) => any> = {};
 vi.mock("@/lib/inngest/client", () => ({
   inngest: {
     send: vi.fn(),

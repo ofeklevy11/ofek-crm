@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vites
 import { createMockStep, createMockEvent } from "../helpers/inngest-test-utils";
 
 // ── Handler capture ───────────────────────────────────────────────
-const handlers: Record<string, Function> = {};
+const handlers: Record<string, (...args: any[]) => any> = {};
 vi.mock("@/lib/inngest/client", () => ({
   inngest: {
     send: vi.fn(),

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { createMockStep, createMockEvent } from "../helpers/inngest-test-utils";
 
 // ── Capture Inngest handlers ───────────────────────────────────────
-const handlers: Record<string, Function> = {};
+const handlers: Record<string, (...args: any[]) => any> = {};
 const mockSend = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("@/lib/inngest/client", () => ({
