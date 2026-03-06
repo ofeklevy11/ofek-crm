@@ -111,7 +111,10 @@
       "Bash(docker-compose ps:*)",
       "Bash(npx vitest:*)",
       "Bash(echo No postgres ports found:*)",
-      "Bash(docker ps:*)"
+      "Bash(docker ps:*)",
+      "Bash(gh:*)",
+      "Bash(npx:*)",
+      "mcp__github__list_issues"
     ]
   }
 }
