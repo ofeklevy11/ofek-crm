@@ -16,12 +16,16 @@ scrape_configs:
       - source_labels: ["__meta_docker_container_name"]
         regex: "/(.*)"
         target_label: container
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/crm-([a-z]+(?:-[a-z]+)*)-\\d+"
+        target_label: service_name
       - source_labels: ["__meta_docker_container_log_stream"]
         target_label: stream
     pipeline_stages:
-      # Parse JSON logs from the Next.js app container
+
+      # ── Next.js App (JSON structured logs + plain text fallback) ──
       - match:
-          selector: '{container=~".*app.*"}'
+          selector: '{container=~"crm-app.*"}'
           stages:
             - json:
                 expressions:
@@ -39,11 +43,109 @@ scrape_configs:
                 source: ts
                 format: RFC3339Nano
 
-      # Parse PostgreSQL logs
+      # ── PostgreSQL (regex: TIMESTAMP [PID] LEVEL: message) ──
       - match:
-          selector: '{container=~".*postgres.*"}'
+          selector: '{container=~"crm-postgres.*"}'
           stages:
             - regex:
-                expression: '(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d+ \w+) \[\d+\] (?P<level>\w+):'
+                expression: '\[\d+\] (?P<pg_level>\w+):'
+            - template:
+                source: level
+                template: '{{ if or (eq .pg_level "FATAL") (eq .pg_level "ERROR") (eq .pg_level "PANIC") }}error{{ else if eq .pg_level "WARNING" }}warn{{ else }}info{{ end }}'
+            - labels:
+                level:
+
+      # ── Redis (regex: PID:ROLE DD Mon YYYY HH:MM:SS.mmm CHAR message) ──
+      - match:
+          selector: '{container=~"crm-redis.*"}'
+          stages:
+            - regex:
+                expression: '\d+:\w \d+ \w+ \d+ [\d:.]+ (?P<redis_char>[*#\-])'
+            - template:
+                source: level
+                template: '{{ if eq .redis_char "#" }}warn{{ else }}info{{ end }}'
+            - labels:
+                level:
+
+      # ── Inngest (JSON: {"time":"...","level":"INFO","msg":"..."}) ──
+      - match:
+          selector: '{container=~"crm-inngest.*"}'
+          stages:
+            - json:
+                expressions:
+                  level: level
+                  msg: msg
+            - template:
+                source: level
+                template: '{{ .level | ToLower }}'
+            - labels:
+                level:
+
+      # ── Loki (logfmt: level=info ts=... msg=...) ──
+      - match:
+          selector: '{container=~"crm-loki.*"}'
+          stages:
+            - logfmt:
+                mapping:
+                  level:
+            - labels:
+                level:
+
+      # ── Prometheus (logfmt: time=... level=INFO msg=...) ──
+      - match:
+          selector: '{container=~"crm-prometheus.*"}'
+          stages:
+            - logfmt:
+                mapping:
+                  level:
+            - template:
+                source: level
+                template: '{{ .level | ToLower }}'
+            - labels:
+                level:
+
+      # ── Alertmanager (logfmt: time=... level=INFO msg=...) ──
+      - match:
+          selector: '{container=~"crm-alertmanager.*"}'
+          stages:
+            - logfmt:
+                mapping:
+                  level:
+            - template:
+                source: level
+                template: '{{ .level | ToLower }}'
+            - labels:
+                level:
+
+      # ── Grafana (logfmt: logger=... t=... level=info msg=...) ──
+      - match:
+          selector: '{container=~"crm-grafana.*"}'
+          stages:
+            - logfmt:
+                mapping:
+                  level:
+            - labels:
+                level:
+
+      # ── Webhook Receiver (JSON + plain text) ──
+      - match:
+          selector: '{container=~"crm-webhook.*"}'
+          stages:
+            - json:
+                expressions:
+                  event: event
+            - template:
+                source: level
+                template: 'info'
+            - labels:
+                level:
+
+      # ── Exporters (logfmt) ──
+      - match:
+          selector: '{container=~"crm-(node|postgres|redis)-exporter.*"}'
+          stages:
+            - logfmt:
+                mapping:
+                  level:
             - labels:
                 level:
