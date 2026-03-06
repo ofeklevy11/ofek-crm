@@ -21,6 +21,7 @@ const CSRF_EXEMPT_PREFIXES = [
 const CSRF_EXEMPT_EXACT = [
   "/api/auth/login",
   "/api/auth/register",
+  "/api/auth/verify-email",
   "/api/automations/cron", // Bearer CRON_SECRET
 ];
 

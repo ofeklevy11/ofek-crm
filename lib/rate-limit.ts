@@ -105,6 +105,8 @@ export const RATE_LIMITS = {
   loginAccount: { prefix: "login-acct", max: 10, windowSeconds: 1800 } satisfies RateLimitConfig,
   /** Registration: 3 per IP per 15 minutes */
   register: { prefix: "register", max: 3, windowSeconds: 900 } satisfies RateLimitConfig,
+  /** Email verification: 5 attempts per IP per 15 minutes */
+  verifyEmail: { prefix: "verify-email", max: 5, windowSeconds: 900 } satisfies RateLimitConfig,
   /** Calendar mutations: 30 per user per minute */
   calendarMutation: { prefix: "cal-mut", max: 30, windowSeconds: 60 } satisfies RateLimitConfig,
   /** Calendar reads: 60 per user per minute */

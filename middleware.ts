@@ -30,6 +30,9 @@ export function middleware(request: NextRequest) {
   // Generate a per-request nonce for CSP
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
 
+  // Generate a unique request ID for tracing across logs
+  const requestId = crypto.randomUUID();
+
   // ── CSRF protection for state-changing API requests ──
   if (
     path.startsWith("/api/") &&
@@ -67,6 +70,7 @@ export function middleware(request: NextRequest) {
     "/api/auth/login",
     "/api/auth/logout",
     "/api/auth/register",
+    "/api/auth/verify-email",
   ];
 
   // Check if the path is strictly one of the public paths
@@ -78,14 +82,18 @@ export function middleware(request: NextRequest) {
     path.startsWith("/api/webhooks/") || // WhatsApp webhooks (signature-verified in route)
     path.startsWith("/api/cron/") || // Allow Cron jobs to bypass cookie auth (secured in route)
     path === "/api/automations/cron" || // Allow automation cron endpoint to bypass cookie auth
+    path.startsWith("/api/health") || // Health checks (no cookie auth — Bearer secured in route)
+    path === "/api/metrics" || // Prometheus scrape endpoint (Bearer secured in route)
     path.startsWith("/p/") || // Allow Public Pages
     path.startsWith("/api/p/") // Allow Public APIs
   ) {
     const reqHeaders = new Headers(request.headers);
     reqHeaders.set("x-nonce", nonce);
+    reqHeaders.set("x-request-id", requestId);
     const res = addCacheControl(path, NextResponse.next({ request: { headers: reqHeaders } }));
     res.headers.set("Content-Security-Policy", buildCspHeader(nonce, path));
     res.headers.set("x-pathname", path);
+    res.headers.set("x-request-id", requestId);
     return res;
   }
 
@@ -113,8 +121,10 @@ export function middleware(request: NextRequest) {
   // up to 7 days, idle users expire in 1 day
   const reqHeaders = new Headers(request.headers);
   reqHeaders.set("x-nonce", nonce);
+  reqHeaders.set("x-request-id", requestId);
   const response = addCacheControl(path, NextResponse.next({ request: { headers: reqHeaders } }));
   response.headers.set("Content-Security-Policy", buildCspHeader(nonce, path));
+  response.headers.set("x-request-id", requestId);
   response.cookies.set("auth_token", authToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

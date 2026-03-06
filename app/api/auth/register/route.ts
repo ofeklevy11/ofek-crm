@@ -1,25 +1,19 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { signUserId } from "@/lib/auth";
-import { cookies } from "next/headers";
+import crypto from "crypto";
+import { redis } from "@/lib/redis";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 import { registerSchema } from "@/lib/validations/user";
 import { createLogger } from "@/lib/logger";
-import { logSecurityEvent, SEC_REGISTER } from "@/lib/security/audit-security";
+import { sendVerificationEmail } from "@/lib/email";
 
 const log = createLogger("AuthRegister");
 
 const BCRYPT_ROUNDS = 12;
 const MAX_BODY_SIZE = 4096; // 4KB
-
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^\u0590-\u05FFa-z0-9]+/g, "-") // Support Hebrew characters
-    .replace(/^-+|-+$/g, "");
-}
+const PENDING_REG_TTL = 3600; // 1 hour
 
 export async function POST(req: Request) {
   try {
@@ -86,63 +80,24 @@ export async function POST(req: Request) {
     // Hash password
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
-    // Use a transaction to ensure atomicity - both company and user are created together
-    const result = await prisma.$transaction(async (tx) => {
-      // Create new company
-      const slug = generateSlug(companyName);
+    // Generate 6-digit OTP code
+    const code = String(crypto.randomInt(100000, 999999));
 
-      // Check if slug already exists and make it unique if needed
-      let finalSlug = slug;
-      let counter = 1;
-      while (await tx.company.findUnique({ where: { slug: finalSlug } })) {
-        finalSlug = `${slug}-${counter}`;
-        counter++;
-      }
+    // Store pending registration in Redis with 1h TTL
+    const redisKey = `pending-reg:${email.toLowerCase()}`;
+    await redis.set(
+      redisKey,
+      JSON.stringify({ code, name, passwordHash, companyName, isNewCompany }),
+      "EX",
+      PENDING_REG_TTL
+    );
 
-      const company = await tx.company.create({
-        data: {
-          name: companyName,
-          slug: finalSlug,
-        },
-      });
+    // Send verification email
+    await sendVerificationEmail(email, code);
 
-      // Create user with the new company ID
-      const user = await tx.user.create({
-        data: {
-          name,
-          email,
-          passwordHash,
-          companyId: company.id,
-          role: "admin", // First user in a new company is always admin
-        },
-      });
+    log.info("Verification code sent", { email });
 
-      return { user, company };
-    });
-
-    // Create session cookie
-    const token = signUserId(result.user.id);
-    const cookieStore = await cookies();
-    cookieStore.set("auth_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 86_400, // 1 day sliding window (refreshed by middleware)
-      path: "/",
-      sameSite: "lax",
-    });
-
-    log.info("Company and user created", { companyId: result.company.id, userId: result.user.id });
-    logSecurityEvent({ action: SEC_REGISTER, companyId: result.company.id, userId: result.user.id, ip, userAgent: req.headers.get("user-agent") ?? undefined });
-
-    return NextResponse.json({
-      success: true,
-      user: {
-        id: result.user.id,
-        name: result.user.name,
-        role: result.user.role,
-      },
-      company: { id: result.company.id, name: result.company.name },
-    });
+    return NextResponse.json({ success: true, requiresVerification: true });
   } catch (error) {
     log.error("Registration error", { error: String(error) });
     return NextResponse.json({ error: "שגיאה פנימית בשרת" }, { status: 500 });

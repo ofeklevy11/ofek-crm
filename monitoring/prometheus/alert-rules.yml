@@ -1,0 +1,198 @@
+groups:
+  # ── Infrastructure alerts ──
+  - name: infrastructure
+    rules:
+      - alert: HighCpuUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 10m
+        labels:
+          severity: warning
+          category: infra
+        annotations:
+          summary: "CPU usage above 85% for 10 minutes"
+          description: "CPU usage is {{ $value | printf \"%.1f\" }}%"
+          dashboard: "/d/system-overview"
+          action: "Check for runaway processes or increased load"
+
+      - alert: CriticalCpuUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+          category: infra
+        annotations:
+          summary: "CPU usage above 95% for 2 minutes"
+          description: "CPU usage is {{ $value | printf \"%.1f\" }}%"
+          dashboard: "/d/system-overview"
+          action: "Immediate investigation required — possible runaway process"
+
+      - alert: HighMemoryUsage
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          category: infra
+        annotations:
+          summary: "Memory usage above 90% for 5 minutes"
+          description: "Memory usage is {{ $value | printf \"%.1f\" }}%"
+          dashboard: "/d/system-overview"
+          action: "Check per-container memory usage, look for memory leaks"
+
+      - alert: CriticalMemoryUsage
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          category: infra
+        annotations:
+          summary: "Memory usage above 95% for 2 minutes"
+          description: "Memory usage is {{ $value | printf \"%.1f\" }}%"
+          dashboard: "/d/system-overview"
+          action: "OOM risk — consider restarting heavy containers"
+
+      - alert: DiskSpaceLow
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: infra
+        annotations:
+          summary: "Disk usage above 85%"
+          description: "Disk usage is {{ $value | printf \"%.1f\" }}%"
+          dashboard: "/d/system-overview"
+          action: "Clean Docker images, old logs, old backups"
+
+      - alert: DiskSpaceCritical
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 > 90
+        for: 2m
+        labels:
+          severity: critical
+          category: infra
+        annotations:
+          summary: "Disk usage above 90%"
+          description: "Disk usage is {{ $value | printf \"%.1f\" }}%"
+          dashboard: "/d/system-overview"
+          action: "Immediate cleanup required — service may become unavailable"
+
+  # ── Application alerts ──
+  - name: application
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status_code=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          category: application
+        annotations:
+          summary: "Error rate above 5% for 5 minutes"
+          description: "Error rate is {{ $value | printf \"%.2f\" }}%"
+          dashboard: "/d/app-performance"
+          action: "Check recent deployments, external API failures, DB connectivity"
+
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 2
+        for: 5m
+        labels:
+          severity: warning
+          category: application
+        annotations:
+          summary: "p95 response time above 2 seconds for 5 minutes"
+          description: "p95 latency is {{ $value | printf \"%.2f\" }}s"
+          dashboard: "/d/app-performance"
+          action: "Check slow DB queries, external API latency, queue backlog"
+
+      - alert: AppDown
+        expr: up{job="nextjs-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: application
+        annotations:
+          summary: "CRM application is down"
+          description: "Prometheus cannot scrape the app metrics endpoint"
+          dashboard: "/d/app-performance"
+          action: "Check container status, recent logs, restart if needed"
+
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: application
+        annotations:
+          summary: "PostgreSQL is unreachable"
+          description: "postgres_exporter cannot connect to PostgreSQL"
+          dashboard: "/d/crm-business"
+          action: "Check PostgreSQL container status and logs"
+
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: application
+        annotations:
+          summary: "Redis is unreachable"
+          description: "redis_exporter cannot connect to Redis"
+          dashboard: "/d/crm-business"
+          action: "Check Redis container status and logs"
+
+      - alert: HighDBConnections
+        expr: pg_stat_activity_count > 8
+        for: 5m
+        labels:
+          severity: warning
+          category: application
+        annotations:
+          summary: "PostgreSQL connections above 8 (pool max is 10)"
+          description: "Active connections: {{ $value }}"
+          dashboard: "/d/crm-business"
+          action: "Check for connection leaks or long-running queries"
+
+  # ── Business / CRM alerts ──
+  - name: business
+    rules:
+      - alert: InngestJobFailures
+        expr: rate(crm_inngest_jobs_total{status="error"}[15m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Inngest job failures detected"
+          description: "Job error rate: {{ $value | printf \"%.2f\" }}/min"
+          dashboard: "/d/crm-business"
+          action: "Check Inngest dashboard and recent error logs"
+
+      - alert: HighLoginFailures
+        expr: |
+          sum(rate(http_requests_total{route="/api/auth/login", status_code=~"4.."}[10m]))
+          /
+          sum(rate(http_requests_total{route="/api/auth/login"}[10m]))
+          > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Unusually high login failure rate"
+          description: "Login failure rate: {{ $value | printf \"%.0f\" }}%"
+          dashboard: "/d/app-performance"
+          action: "Possible brute-force attack — check source IPs in logs"
+
+      - alert: SlowDBQueries
+        expr: histogram_quantile(0.95, sum(rate(crm_db_query_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Database p95 query time above 1 second"
+          description: "p95 query duration: {{ $value | printf \"%.2f\" }}s"
+          dashboard: "/d/crm-business"
+          action: "Check for missing indexes or complex queries"

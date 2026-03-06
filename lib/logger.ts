@@ -56,7 +56,14 @@ function redact(obj: unknown): unknown {
   return out;
 }
 
-function emit(level: LogLevel, module: string, message: string, data?: unknown) {
+export interface LogContext {
+  requestId?: string;
+  route?: string;
+  statusCode?: number;
+  durationMs?: number;
+}
+
+function emit(level: LogLevel, module: string, message: string, data?: unknown, ctx?: LogContext) {
   if (LEVEL_ORDER[level] < LEVEL_ORDER[configuredLevel]) return;
 
   const safeMsg = sanitize(message);
@@ -69,6 +76,10 @@ function emit(level: LogLevel, module: string, message: string, data?: unknown) 
       msg: safeMsg,
       ts: new Date().toISOString(),
     };
+    if (ctx?.requestId) entry.requestId = ctx.requestId;
+    if (ctx?.route) entry.route = ctx.route;
+    if (ctx?.statusCode !== undefined) entry.statusCode = ctx.statusCode;
+    if (ctx?.durationMs !== undefined) entry.durationMs = ctx.durationMs;
     if (safeData !== undefined) entry.data = safeData;
     const fn = level === "error" ? console.error : level === "warn" ? console.warn : console.log;
     fn(JSON.stringify(entry));
@@ -89,5 +100,14 @@ export function createLogger(module: string) {
     info: (message: string, data?: unknown) => emit("info", module, message, data),
     warn: (message: string, data?: unknown) => emit("warn", module, message, data),
     error: (message: string, data?: unknown) => emit("error", module, message, data),
+    /** Returns a child logger with pre-bound context (requestId, route, etc.) */
+    withContext(ctx: LogContext) {
+      return {
+        debug: (message: string, data?: unknown) => emit("debug", module, message, data, ctx),
+        info: (message: string, data?: unknown) => emit("info", module, message, data, ctx),
+        warn: (message: string, data?: unknown) => emit("warn", module, message, data, ctx),
+        error: (message: string, data?: unknown) => emit("error", module, message, data, ctx),
+      };
+    },
   };
 }
