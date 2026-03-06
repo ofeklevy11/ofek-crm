@@ -20,14 +20,24 @@ jobs:
     steps:
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1
+        env:
+          GH_DEPLOY_KEY: ${{ secrets.GH_DEPLOY_KEY }}
         with:
           host: ${{ secrets.VPS_IP }}
           username: deploy
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: GH_DEPLOY_KEY
           command_timeout: 20m
           script: |
             set -euo pipefail
             cd /opt/crm
+
+            # Set up GitHub deploy key for git fetch
+            mkdir -p ~/.ssh
+            echo "$GH_DEPLOY_KEY" > ~/.ssh/github_deploy_key
+            chmod 600 ~/.ssh/github_deploy_key
+            ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+            export GIT_SSH_COMMAND="ssh -i ~/.ssh/github_deploy_key -o StrictHostKeyChecking=no"
 
             COMPOSE="docker compose --env-file .env.production -f docker-compose.production.yml"
             STATE_FILE="/opt/crm/active-slot"
@@ -35,6 +45,7 @@ jobs:
             echo "=== Pulling latest code ==="
             git fetch origin main
             git reset --hard origin/main
+            rm -f ~/.ssh/github_deploy_key
 
             # Determine current and target slots
             CURRENT=$(cat "$STATE_FILE" 2>/dev/null || echo "none")
