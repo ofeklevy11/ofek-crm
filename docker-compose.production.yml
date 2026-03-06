@@ -93,7 +93,7 @@ services:
     restart: unless-stopped
     command: inngest dev -u http://app:3000/api/inngest
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8288"]
+      test: ["CMD", "curl", "-f", "http://localhost:8288"]
       interval: 30s
       timeout: 5s
       retries: 3
