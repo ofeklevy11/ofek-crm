@@ -208,10 +208,10 @@ networks:
     driver: bridge
   internal:
     external: true
-    name: my-app_internal
+    name: crm_internal
   app:
     external: true
-    name: my-app_app
+    name: crm_app
 
 volumes:
   grafana_data:
