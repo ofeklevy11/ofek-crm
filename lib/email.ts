@@ -1,9 +1,13 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let _resend: Resend | null = null;
+function getResend() {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+  return _resend;
+}
 
 export async function sendVerificationEmail(to: string, code: string) {
-  const { error } = await resend.emails.send({
+  const { error } = await getResend().emails.send({
     from: "Bizly CRM <noreply@bizlycrm.com>",
     to,
     subject: "קוד אימות להרשמה",
