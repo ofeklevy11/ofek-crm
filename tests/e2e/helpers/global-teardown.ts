@@ -17,7 +17,7 @@ async function globalTeardown() {
 
   const { companyId } = JSON.parse(fs.readFileSync(metaPath, "utf-8"));
 
-  const { prisma } = await import("@/lib/prisma");
+  const { prisma } = await import("../../../lib/prisma");
 
   // Delete in order respecting foreign keys
   // Workflows

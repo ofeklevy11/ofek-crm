@@ -228,6 +228,11 @@ jobs:
           WHATSAPP_VERIFY_TOKEN: "ci-dummy"
           WHATSAPP_ACCESS_TOKEN: "ci-dummy"
 
+      - name: Prepare standalone server
+        run: |
+          cp -r public .next/standalone/public
+          cp -r .next/static .next/standalone/.next/static
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
@@ -235,6 +240,8 @@ jobs:
         run: pnpm test:e2e
         env:
           CI: "true"
+          PORT: "3000"
+          HOSTNAME: "0.0.0.0"
           DATABASE_URL: "postgresql://test:test@localhost:5432/testdb"
           SESSION_SECRET: "ci-test-secret-for-integration-tests-minimum-len"
           REDIS_URL: "redis://localhost:6379"
