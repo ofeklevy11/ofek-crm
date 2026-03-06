@@ -75,6 +75,16 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -121,3 +131,130 @@ jobs:
           NEXT_PUBLIC_WHATSAPP_CONFIG_ID: "0"
           WHATSAPP_VERIFY_TOKEN: "ci-dummy"
           WHATSAPP_ACCESS_TOKEN: "ci-dummy"
+
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image for scanning
+        run: docker build -f Dockerfile.production -t crm-app:scan .
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "crm-app:scan"
+          format: "table"
+          exit-code: "1"
+          severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [quality]
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.5.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+        env:
+          DATABASE_URL: "postgresql://test:test@localhost:5432/testdb"
+
+      - name: Push database schema
+        run: pnpm prisma db push --url "$DATABASE_URL"
+        env:
+          DATABASE_URL: "postgresql://test:test@localhost:5432/testdb"
+
+      - name: Build application
+        run: pnpm build
+        env:
+          DATABASE_URL: "postgresql://test:test@localhost:5432/testdb"
+          SESSION_SECRET: "ci-test-secret-for-integration-tests-minimum-len"
+          REDIS_URL: "redis://localhost:6379"
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+          CRON_SECRET: "ci-dummy"
+          INNGEST_DEV: "true"
+          UPLOADTHING_TOKEN: "eyBidWlsZFRpbWVEdW1teSA9IHRydWUgfQ=="
+          OPENROUTER_API_KEY: "sk-ci-dummy"
+          PDFMONKEY_TEMPLATE_ID: "00000000-0000-0000-0000-000000000000"
+          PDFMONKEY_API_KEY: "ci-dummy"
+          WHATSAPP_APP_ID: "0"
+          NEXT_PUBLIC_WHATSAPP_APP_ID: "0"
+          WHATSAPP_APP_SECRET: "ci-dummy"
+          WHATSAPP_TOKEN_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+          NEXT_PUBLIC_WHATSAPP_CONFIG_ID: "0"
+          WHATSAPP_VERIFY_TOKEN: "ci-dummy"
+          WHATSAPP_ACCESS_TOKEN: "ci-dummy"
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: pnpm test:e2e
+        env:
+          CI: "true"
+          DATABASE_URL: "postgresql://test:test@localhost:5432/testdb"
+          SESSION_SECRET: "ci-test-secret-for-integration-tests-minimum-len"
+          REDIS_URL: "redis://localhost:6379"
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+          CRON_SECRET: "ci-dummy"
+          INNGEST_DEV: "true"
+          UPLOADTHING_TOKEN: "eyBidWlsZFRpbWVEdW1teSA9IHRydWUgfQ=="
+          OPENROUTER_API_KEY: "sk-ci-dummy"
+          PDFMONKEY_TEMPLATE_ID: "00000000-0000-0000-0000-000000000000"
+          PDFMONKEY_API_KEY: "ci-dummy"
+          WHATSAPP_APP_ID: "0"
+          NEXT_PUBLIC_WHATSAPP_APP_ID: "0"
+          WHATSAPP_APP_SECRET: "ci-dummy"
+          WHATSAPP_TOKEN_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+          NEXT_PUBLIC_WHATSAPP_CONFIG_ID: "0"
+          WHATSAPP_VERIFY_TOKEN: "ci-dummy"
+          WHATSAPP_ACCESS_TOKEN: "ci-dummy"
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
