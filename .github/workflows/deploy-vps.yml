@@ -54,6 +54,21 @@ jobs:
               sleep 2
             done
 
+            echo "=== Pre-deploy database backup ==="
+            set -a; source .env.production; set +a
+            BACKUP_FILE="/opt/crm/backups/pre-deploy-$(date +%Y%m%d-%H%M%S).sql.gz"
+            mkdir -p /opt/crm/backups
+            docker compose --env-file .env.production -f docker-compose.production.yml exec -T postgres \
+              pg_dump -U "${POSTGRES_USER}" "${POSTGRES_DB}" --no-owner --no-privileges | gzip > "$BACKUP_FILE"
+            BACKUP_SIZE=$(stat -c%s "$BACKUP_FILE" 2>/dev/null || echo 0)
+            if [ "$BACKUP_SIZE" -lt 1024 ]; then
+              echo "ERROR: Backup file too small (${BACKUP_SIZE} bytes) — aborting deploy"
+              exit 1
+            fi
+            echo "Backup saved: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
+            # Keep only last 5 pre-deploy backups
+            ls -t /opt/crm/backups/pre-deploy-*.sql.gz 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+
             echo "=== Running database migrations ==="
             docker compose --env-file .env.production -f docker-compose.production.yml --profile migration run --rm migrator pnpm prisma migrate deploy
 

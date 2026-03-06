@@ -196,3 +196,28 @@ groups:
           description: "p95 query duration: {{ $value | printf \"%.2f\" }}s"
           dashboard: "/d/crm-business"
           action: "Check for missing indexes or complex queries"
+
+  # ── Backup alerts ──
+  - name: backup
+    rules:
+      - alert: BackupStale
+        expr: (time() - crm_backup_last_success_timestamp) > 50400
+        for: 5m
+        labels:
+          severity: critical
+          category: infra
+        annotations:
+          summary: "No successful backup in 14 hours"
+          description: "Last backup was {{ $value | humanizeDuration }} ago"
+          action: "Check journalctl -u crm-backup and /var/log/crm-backup/backup.log"
+
+      - alert: BackupRestoreTestStale
+        expr: (time() - crm_restore_test_last_success_timestamp) > 864000
+        for: 5m
+        labels:
+          severity: warning
+          category: infra
+        annotations:
+          summary: "No successful restore test in 10 days"
+          description: "Last restore test was {{ $value | humanizeDuration }} ago"
+          action: "Check journalctl -u crm-restore-test and /var/log/crm-backup/backup.log"
