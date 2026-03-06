@@ -236,6 +236,8 @@ services:
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
       GRAFANA_URL: "https://monitoring.bizlycrm.com"
       ENABLE_AUTO_REMEDIATION: "true"
+    group_add:
+      - "988"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./scripts/playbooks:/playbooks:ro
