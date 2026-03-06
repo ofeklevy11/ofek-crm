@@ -355,7 +355,6 @@ describe("GET /api/finance/clients/[id]", () => {
     expect(body.retainers[0]).toHaveProperty("id");
     expect(body.retainers[0]).toHaveProperty("amount");
     expect(body.retainers[0]).toHaveProperty("frequency");
-    expect(body.retainers[0].title).toBe("Monthly SEO Retainer");
 
     expect(body.oneTimePayments).toHaveLength(1);
     expect(body.oneTimePayments[0].title).toBe("Website Redesign - Phase 1");

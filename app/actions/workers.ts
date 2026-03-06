@@ -1157,8 +1157,8 @@ export async function reorderOnboardingSteps(
           params.push(id, index);
           const idIdx = params.length - 1;
           const orderIdx = params.length;
-          cases.push(`WHEN "id" = $${idIdx} THEN $${orderIdx}`);
-          inPlaceholders.push(`$${idIdx}`);
+          cases.push(`WHEN "id" = $${idIdx}::integer THEN $${orderIdx}::integer`);
+          inPlaceholders.push(`$${idIdx}::integer`);
         });
 
         params.push(pathId, user.companyId);
@@ -1167,7 +1167,7 @@ export async function reorderOnboardingSteps(
 
         await tx.$executeRawUnsafe(
           `UPDATE "OnboardingStep" SET "order" = CASE ${cases.join(" ")} END, "updatedAt" = NOW()
-           WHERE "pathId" = $${pathIdx} AND "companyId" = $${companyIdx} AND "id" IN (${inPlaceholders.join(", ")})`,
+           WHERE "pathId" = $${pathIdx}::integer AND "companyId" = $${companyIdx}::integer AND "id" IN (${inPlaceholders.join(", ")})`,
           ...params,
         );
       }
@@ -1336,7 +1336,8 @@ export async function updateStepProgress(
         },
       });
 
-      return { stepProgress: sp, statusChanged: data.status === "COMPLETED" && !wasAlreadyCompleted };
+      const wasUncompleted = wasAlreadyCompleted && data.status !== "COMPLETED";
+      return { stepProgress: sp, statusChanged: (data.status === "COMPLETED" && !wasAlreadyCompleted) || wasUncompleted };
     }, { maxWait: 5000, timeout: 10000 }));
     stepProgress = result.stepProgress;
     statusChanged = result.statusChanged;

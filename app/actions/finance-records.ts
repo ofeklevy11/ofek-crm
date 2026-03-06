@@ -55,7 +55,7 @@ export async function getFinanceRecords(filters?: {
   const [records, totals] = await Promise.all([
     withRetry(() => prisma.financeRecord.findMany({
       where,
-      orderBy: { date: "desc" },
+      orderBy: [{ date: "desc" }, { id: "desc" }],
       take: take + 1,
       ...(filters?.cursor && { cursor: { id: filters.cursor }, skip: 1 }),
       select: {
@@ -75,7 +75,7 @@ export async function getFinanceRecords(filters?: {
 
   const hasMore = records.length > take;
   const pageRecords = records.slice(0, take);
-  const nextCursor = hasMore ? pageRecords[pageRecords.length - 1]?.id : undefined;
+  const nextCursor = hasMore ? pageRecords[pageRecords.length - 1]?.id ?? null : null;
 
   const income = Number(
     totals.find((t) => t.type === "INCOME")?._sum.amount || 0

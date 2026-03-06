@@ -19,7 +19,9 @@ vi.mock("next/cache", () => ({
 }));
 
 // ── UTApi mock — expose `mockDeleteFiles` so tests can assert calls ─────────
-const mockDeleteFiles = vi.fn().mockResolvedValue(undefined);
+const { mockDeleteFiles } = vi.hoisted(() => ({
+  mockDeleteFiles: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("uploadthing/server", () => {
   return { UTApi: vi.fn().mockImplementation(() => ({ deleteFiles: mockDeleteFiles })) };
 });
@@ -42,6 +44,7 @@ import {
   updateFile,
   deleteFolder,
   deleteFile,
+  _setUtapi,
 } from "@/app/actions/storage";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -229,6 +232,7 @@ afterAll(async () => {
 
 beforeEach(() => {
   mockUser(adminA);
+  _setUtapi({ deleteFiles: mockDeleteFiles });
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1496,7 +1500,7 @@ describe("Server Actions — storage.ts", () => {
       await deleteFile(file.id);
       const dbFile = await prisma.file.findUnique({ where: { id: file.id } });
       expect(dbFile).toBeNull();
-      expect(mockDeleteFiles).toHaveBeenCalledWith("ut-delete-key-abc");
+      expect(mockDeleteFiles).toHaveBeenCalledWith(["ut-delete-key-abc"]);
     });
 
     it("calls revalidatePath after delete", async () => {
@@ -1536,7 +1540,7 @@ describe("Server Actions — storage.ts", () => {
 
       const dbFile = await prisma.file.findUnique({ where: { id: file.id } });
       expect(dbFile).toBeNull();
-      expect(mockDeleteFiles).toHaveBeenCalledWith("ut-fail-key-file");
+      expect(mockDeleteFiles).toHaveBeenCalledWith(["ut-fail-key-file"]);
     });
   });
 

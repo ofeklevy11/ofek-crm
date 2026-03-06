@@ -147,7 +147,7 @@ async function seedGlobalRule(companyId: number, overrides?: Record<string, unkn
 
 function mockUserForCompany(compId: number, overrides?: Record<string, unknown>) {
   vi.mocked(getCurrentUser).mockResolvedValue({
-    id: 1,
+    id: userId,
     companyId: compId,
     name: "Test Admin",
     email: "admin@test.com",
@@ -161,6 +161,7 @@ function mockUserForCompany(compId: number, overrides?: Record<string, unknown>)
 // ── State ───────────────────────────────────────────────────────────────────
 let companyId: number;
 let companyId2: number;
+let userId: number;
 const suffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 // ── Setup / Teardown ────────────────────────────────────────────────────────
@@ -175,6 +176,17 @@ beforeAll(async () => {
     data: { name: "Test Co B", slug: `test-co-b-${suffix}` },
   });
   companyId2 = coB.id;
+
+  const user = await prisma.user.create({
+    data: {
+      companyId: coA.id,
+      name: "Test Admin",
+      email: `cal-admin-${suffix}@test.com`,
+      passwordHash: "hashed",
+      role: "admin",
+    },
+  });
+  userId = user.id;
 });
 
 beforeEach(async () => {
@@ -193,7 +205,7 @@ beforeEach(async () => {
   vi.mocked(checkActionRateLimit).mockResolvedValue(false as any);
   vi.mocked(validateMakeApiKey).mockResolvedValue({
     success: true,
-    keyRecord: { companyId, isActive: true, createdBy: 1 },
+    keyRecord: { companyId, isActive: true, createdBy: userId },
   } as any);
   vi.mocked(checkIdempotencyKey).mockResolvedValue({ key: null, cachedResponse: null });
 });
@@ -317,14 +329,15 @@ describe("GET /api/calendar", () => {
   });
 
   it("returns 500 when DB throws", async () => {
-    const spy = vi.spyOn(prisma.calendarEvent, "findMany").mockRejectedValueOnce(new Error("DB down"));
+    const original = prisma.calendarEvent.findMany;
+    (prisma.calendarEvent as any).findMany = () => Promise.reject(new Error("DB down"));
 
     const res = await GET(makeGetRequest());
     expect(res.status).toBe(500);
     const body = await res.json();
     expect(body.error).toContain("Failed to fetch");
 
-    spy.mockRestore();
+    (prisma.calendarEvent as any).findMany = original;
   });
 
   it("returns 401 for unauthenticated user", async () => {
@@ -643,16 +656,15 @@ describe("POST /api/calendar", () => {
   });
 
   it("returns 400 when event limit is reached", async () => {
-    const countSpy = vi
-      .spyOn(prisma.calendarEvent, "count")
-      .mockResolvedValueOnce(10_000);
+    const original = prisma.calendarEvent.count;
+    (prisma.calendarEvent as any).count = () => Promise.resolve(10_000);
 
     const res = await POST(makePostRequest(validEventBody()));
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toContain("limit");
 
-    countSpy.mockRestore();
+    (prisma.calendarEvent as any).count = original;
   });
 
   it("copies global automation rules to new event in transaction", async () => {
@@ -752,8 +764,8 @@ describe("PUT /api/calendar/[id]", () => {
     expect(res.status).toBe(200);
 
     const dbEvent = await prisma.calendarEvent.findUnique({ where: { id: ev.id } });
-    expect(dbEvent!.startTime.toISOString()).toBe(newStart);
-    expect(dbEvent!.endTime.toISOString()).toBe(newEnd);
+    expect(dbEvent!.startTime.toISOString()).toBe(new Date(newStart).toISOString());
+    expect(dbEvent!.endTime.toISOString()).toBe(new Date(newEnd).toISOString());
   });
 
   it("updates color", async () => {
@@ -1180,14 +1192,15 @@ describe("POST /api/make/calendar — webhook", () => {
   });
 
   it("returns 429 when MAX_EVENTS_PER_COMPANY reached", async () => {
-    const countSpy = vi.spyOn(prisma.calendarEvent, "count").mockResolvedValueOnce(10_000);
+    const original = prisma.calendarEvent.count;
+    (prisma.calendarEvent as any).count = () => Promise.resolve(10_000);
 
     const res = await WEBHOOK_POST(makeWebhookRequest(validWebhookBody()));
     expect(res.status).toBe(429);
     const body = await res.json();
     expect(body.error).toContain("limit");
 
-    countSpy.mockRestore();
+    (prisma.calendarEvent as any).count = original;
   });
 
   it("returns 400 for non-string start_time/end_time", async () => {
@@ -1273,14 +1286,15 @@ describe("POST /api/make/calendar — webhook", () => {
   });
 
   it("returns 500 when DB throws", async () => {
-    const spy = vi.spyOn(prisma.calendarEvent, "count").mockRejectedValueOnce(new Error("DB down"));
+    const original = prisma.calendarEvent.count;
+    (prisma.calendarEvent as any).count = () => Promise.reject(new Error("DB down"));
 
     const res = await WEBHOOK_POST(makeWebhookRequest(validWebhookBody()));
     expect(res.status).toBe(500);
     const body = await res.json();
     expect(body.error).toContain("Internal Server Error");
 
-    spy.mockRestore();
+    (prisma.calendarEvent as any).count = original;
   });
 
   it("returns 400 for whitespace-only title", async () => {

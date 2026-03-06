@@ -19,9 +19,7 @@ export async function getFixedExpenses(opts?: { cursor?: number; take?: number }
       where: {
         companyId: user.companyId,
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: take + 1,
       ...(opts?.cursor && { cursor: { id: opts.cursor }, skip: 1 }),
       select: {
@@ -51,7 +49,7 @@ export async function getFixedExpenses(opts?: { cursor?: number; take?: number }
   const recordMap = new Set(financeRecords.map((r) => r.originId));
   const today = new Date();
 
-  const nextCursor = hasMore ? pageExpenses[pageExpenses.length - 1]?.id : undefined;
+  const nextCursor = hasMore ? pageExpenses[pageExpenses.length - 1]?.id ?? null : null;
 
   // Enhance expenses with status
   const data = pageExpenses.map((expense: any) => {

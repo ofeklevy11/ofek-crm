@@ -46,7 +46,7 @@ export async function getWorkflows(cursor?: number) {
         orderBy: { order: "asc" },
       },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 200,
     ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
   }));
@@ -264,11 +264,11 @@ export async function deleteStage(id: number) {
         SET "completedStages" = (
           SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb)
           FROM jsonb_array_elements("completedStages") AS elem
-          WHERE elem != to_jsonb(${id})
+          WHERE elem != to_jsonb(${id}::integer)
         ),
         "updatedAt" = NOW()
-        WHERE "workflowId" = ${stage.workflowId}
-          AND "completedStages" @> jsonb_build_array(${id})
+        WHERE "workflowId" = ${stage.workflowId}::integer
+          AND "completedStages" @> jsonb_build_array(${id}::integer)
       `;
 
       // Advance instances stuck at the deleted stage (currentStageId set to NULL by FK cascade)
@@ -324,16 +324,25 @@ export async function reorderStages(workflowId: number, orderedIds: number[]) {
         throw new Error("orderedIds must include every stage in the workflow");
       }
 
-      // Single UPDATE with CASE — parameterized via Prisma.sql
-      const cases = sanitizedIds.map(
-        (id, index) => Prisma.sql`WHEN ${id} THEN ${index}`,
+      // Two-phase UPDATE to avoid unique constraint violation on (workflowId, order).
+      // Phase 1: Set all orders to negative temporaries (guaranteed unique).
+      const tempCases = sanitizedIds.map(
+        (id, index) => Prisma.sql`WHEN ${id}::integer THEN ${(-index - 1)}::integer`,
       );
-
       await tx.$executeRaw`
         UPDATE "WorkflowStage"
-        SET "order" = CASE "id" ${Prisma.join(cases, ` `)} END,
+        SET "order" = CASE "id" ${Prisma.join(tempCases, ` `)} END,
             "updatedAt" = NOW()
-        WHERE "workflowId" = ${parsed.workflowId}
+        WHERE "workflowId" = ${parsed.workflowId}::integer
+          AND "id" IN (${Prisma.join(sanitizedIds)})`;
+      // Phase 2: Set final non-negative orders.
+      const finalCases = sanitizedIds.map(
+        (id, index) => Prisma.sql`WHEN ${id}::integer THEN ${index}::integer`,
+      );
+      await tx.$executeRaw`
+        UPDATE "WorkflowStage"
+        SET "order" = CASE "id" ${Prisma.join(finalCases, ` `)} END
+        WHERE "workflowId" = ${parsed.workflowId}::integer
           AND "id" IN (${Prisma.join(sanitizedIds)})`;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 10000 }));
 

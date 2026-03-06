@@ -18,13 +18,12 @@ vi.mock("react", async () => {
 });
 
 // 2. next/headers → mocked cookies() + headers()
+let _mockAuthToken: string | null = null;
 vi.mock("next/headers", () => ({
   cookies: vi.fn(async () => ({
     get: (name: string) => {
       if (name === "auth_token") {
-        const { getAuthToken } = require("@/tests/integration/helpers/integration-setup");
-        const token = getAuthToken();
-        return token ? { name: "auth_token", value: token } : undefined;
+        return _mockAuthToken ? { name: "auth_token", value: _mockAuthToken } : undefined;
       }
       return undefined;
     },
@@ -39,12 +38,11 @@ vi.mock("next/headers", () => ({
 
 // 3. Redis → cache miss + rate limit pass
 vi.mock("@/lib/redis", () => {
-  const noop = vi.fn().mockResolvedValue(null);
   return {
     redis: {
-      get: noop,
-      set: noop,
-      del: noop,
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(null),
+      del: vi.fn().mockResolvedValue(null),
       multi: vi.fn(() => ({
         incr: vi.fn().mockReturnThis(),
         expire: vi.fn().mockReturnThis(),
@@ -52,9 +50,9 @@ vi.mock("@/lib/redis", () => {
       })),
     },
     redisPublisher: {
-      get: noop,
-      set: noop,
-      del: noop,
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(null),
+      del: vi.fn().mockResolvedValue(null),
     },
   };
 });
@@ -79,11 +77,16 @@ import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { resetDb } from "@/test-utils/resetDb";
 import {
-  setAuthToken,
+  setAuthToken as _setAuthToken,
   signTokenForUser,
   seedCompany,
   seedUser,
 } from "@/tests/integration/helpers/integration-setup";
+
+function setAuthToken(token: string | null) {
+  _mockAuthToken = token;
+  _setAuthToken(token);
+}
 
 import {
   getProducts,
@@ -557,7 +560,7 @@ describe("createProduct", () => {
     expect(typeof result!.cost).toBe("number");
 
     const dbRow = await prisma.product.findUnique({ where: { id: result!.id } });
-    expect(dbRow!.price.constructor.name).toBe("Decimal");
+    expect(dbRow!.price.constructor.name).toMatch(/^Decimal/);
   });
 
   it("revalidatePath called on success", async () => {

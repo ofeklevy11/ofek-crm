@@ -864,7 +864,7 @@ export async function getAutomationRules(opts?: { cursor?: number; limit?: numbe
     // Only select fields used by the AutomationsList component — no JOINs needed
     const rules = await withRetry(() => prisma.automationRule.findMany({
       where: { companyId: currentUser.companyId },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: {
         id: true,
         name: true,
@@ -883,7 +883,7 @@ export async function getAutomationRules(opts?: { cursor?: number; limit?: numbe
 
     const hasMore = rules.length > limit;
     const data = hasMore ? rules.slice(0, limit) : rules;
-    const nextCursor = hasMore ? data[data.length - 1].id : undefined;
+    const nextCursor = hasMore ? data[data.length - 1].id ?? null : null;
 
     return { success: true, data, hasMore, nextCursor };
   } catch (error) {

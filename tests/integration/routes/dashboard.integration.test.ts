@@ -64,33 +64,30 @@ vi.mock("@/lib/viewProcessorServer", () => ({
   processViewServer: mockProcessViewServer,
 }));
 
-vi.mock("@/lib/redis", () => {
-  const noop = vi.fn().mockResolvedValue(null);
-  return {
-    redis: {
-      get: noop,
-      set: noop,
-      del: noop,
-      mget: noop.mockResolvedValue([null, null]),
-      multi: vi.fn(() => ({
-        incr: vi.fn().mockReturnThis(),
-        expire: vi.fn().mockReturnThis(),
-        exec: vi.fn().mockResolvedValue([[null, 1]]),
-      })),
-      pipeline: vi.fn(() => ({
-        set: vi.fn().mockReturnThis(),
-        exec: vi.fn().mockResolvedValue([]),
-      })),
-      scan: noop.mockResolvedValue(["0", []]),
-      options: { keyPrefix: "" },
-    },
-    redisPublisher: {
-      get: noop,
-      set: noop,
-      del: noop,
-    },
-  };
-});
+vi.mock("@/lib/redis", () => ({
+  redis: {
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue(null),
+    del: vi.fn().mockResolvedValue(null),
+    mget: vi.fn().mockResolvedValue([null, null]),
+    multi: vi.fn(() => ({
+      incr: vi.fn().mockReturnThis(),
+      expire: vi.fn().mockReturnThis(),
+      exec: vi.fn().mockResolvedValue([[null, 1]]),
+    })),
+    pipeline: vi.fn(() => ({
+      set: vi.fn().mockReturnThis(),
+      exec: vi.fn().mockResolvedValue([]),
+    })),
+    scan: vi.fn().mockResolvedValue(["0", []]),
+    options: { keyPrefix: "" },
+  },
+  redisPublisher: {
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue(null),
+    del: vi.fn().mockResolvedValue(null),
+  },
+}));
 
 // ── Import server actions AFTER mocks ────────────────────────────────
 import {

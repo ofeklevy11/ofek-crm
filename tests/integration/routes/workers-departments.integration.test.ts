@@ -18,22 +18,19 @@ vi.mock("@/lib/server-action-utils", async (importOriginal) => {
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-vi.mock("@/lib/redis", () => {
-  const noop = vi.fn().mockResolvedValue(null);
-  return {
-    redis: {
-      get: noop,
-      set: noop,
-      del: noop,
-      scan: noop.mockResolvedValue(["0", []]),
-      pipeline: vi.fn(() => ({
-        del: vi.fn().mockReturnThis(),
-        exec: vi.fn().mockResolvedValue([]),
-      })),
-      options: { keyPrefix: "" },
-    },
-  };
-});
+vi.mock("@/lib/redis", () => ({
+  redis: {
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue(null),
+    del: vi.fn().mockResolvedValue(null),
+    scan: vi.fn().mockResolvedValue(["0", []]),
+    pipeline: vi.fn(() => ({
+      del: vi.fn().mockReturnThis(),
+      exec: vi.fn().mockResolvedValue([]),
+    })),
+    options: { keyPrefix: "" },
+  },
+}));
 
 vi.mock("@/lib/inngest/client", () => ({
   inngest: { send: vi.fn().mockResolvedValue({ ids: [] }) },

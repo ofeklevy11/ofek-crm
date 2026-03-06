@@ -52,7 +52,7 @@ export async function getQuotes(showTrashed: boolean = false, cursor?: string) {
       validUntil: true,
       _count: { select: { items: true } },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: pageSize + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   }));

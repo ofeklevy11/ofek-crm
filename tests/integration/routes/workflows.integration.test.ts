@@ -590,14 +590,14 @@ describe("Workflows Integration", () => {
         await waitFor(async () => {
           const log = await prisma.auditLog.findFirst({
             where: { companyId: companyA.id, action: "SEC_WORKFLOW_DELETED" },
-            orderBy: { createdAt: "desc" },
+            orderBy: { timestamp: "desc" },
           });
           return log !== null && (log.diffJson as any)?.workflowId === wf!.id;
         });
 
         const log = await prisma.auditLog.findFirst({
           where: { companyId: companyA.id, action: "SEC_WORKFLOW_DELETED" },
-          orderBy: { createdAt: "desc" },
+          orderBy: { timestamp: "desc" },
         });
         expect(log).not.toBeNull();
         expect((log!.diffJson as any).workflowId).toBe(wf!.id);
@@ -685,7 +685,7 @@ describe("Workflows Integration", () => {
 
         mockUser(adminA);
         await expect(
-          createStage(wf!.id, { name: "Malicious", details: { __proto__: "evil" } }),
+          createStage(wf!.id, { name: "Malicious", details: JSON.parse('{"__proto__":"evil"}') }),
         ).rejects.toThrow();
       });
 
@@ -765,7 +765,7 @@ describe("Workflows Integration", () => {
         const wf = await createWorkflow({ name: "Stage Name Validation" });
 
         mockUser(adminA);
-        await expect(createStage(wf!.id, { name: "" })).rejects.toThrow(/at least 1 character/i);
+        await expect(createStage(wf!.id, { name: "" })).rejects.toThrow(/too small/i);
       });
 
       it("rejects stage name > 200 chars (Zod max 200)", async () => {
@@ -773,7 +773,7 @@ describe("Workflows Integration", () => {
         const wf = await createWorkflow({ name: "Stage Name Max" });
 
         mockUser(adminA);
-        await expect(createStage(wf!.id, { name: "x".repeat(201) })).rejects.toThrow(/at most 200/i);
+        await expect(createStage(wf!.id, { name: "x".repeat(201) })).rejects.toThrow(/too big/i);
       });
 
       it("stage without color/icon gets null (no @default unlike Workflow)", async () => {
@@ -1529,14 +1529,14 @@ describe("Workflows Integration", () => {
         mockUser(adminA);
         await expect(
           createWorkflowInstance({ workflowId: wf!.id, name: "" }),
-        ).rejects.toThrow(/at least 1 character/i);
+        ).rejects.toThrow(/too small/i);
       });
 
       it("rejects non-integer workflowId (Zod positiveInt)", async () => {
         mockUser(adminA);
         await expect(
           createWorkflowInstance({ workflowId: 1.5, name: "Float WF ID" }),
-        ).rejects.toThrow(/integer/i);
+        ).rejects.toThrow(/expected int/i);
       });
 
       it("rejects name > 200 chars (Zod max 200)", async () => {
@@ -2100,7 +2100,7 @@ describe("Workflows Integration", () => {
         mockUser(adminA);
         await expect(
           updateWorkflowInstance(inst!.id, { name: "" }),
-        ).rejects.toThrow(/at least 1 character/i);
+        ).rejects.toThrow(/too small/i);
       });
 
       it("name-only update preserves assigneeId", async () => {
@@ -2335,33 +2335,33 @@ describe("Workflows Integration", () => {
   describe("Validation edge cases", () => {
     it("empty name → Zod error", async () => {
       mockUser(adminA);
-      await expect(createWorkflow({ name: "" })).rejects.toThrow(/at least 1 character/i);
+      await expect(createWorkflow({ name: "" })).rejects.toThrow(/too small/i);
     });
 
     it("name > 200 chars → Zod error", async () => {
       mockUser(adminA);
-      await expect(createWorkflow({ name: "x".repeat(201) })).rejects.toThrow(/at most 200/i);
+      await expect(createWorkflow({ name: "x".repeat(201) })).rejects.toThrow(/too big/i);
     });
 
     it("description > 2000 chars → Zod error", async () => {
       mockUser(adminA);
       await expect(
         createWorkflow({ name: "Valid Name", description: "d".repeat(2001) }),
-      ).rejects.toThrow(/at most 2000/i);
+      ).rejects.toThrow(/too big/i);
     });
 
     it("color > 30 chars → Zod error", async () => {
       mockUser(adminA);
       await expect(
         createWorkflow({ name: "Valid Name", color: "c".repeat(31) }),
-      ).rejects.toThrow(/at most 30/i);
+      ).rejects.toThrow(/too big/i);
     });
 
     it("icon > 50 chars → Zod error", async () => {
       mockUser(adminA);
       await expect(
         createWorkflow({ name: "Valid Name", icon: "i".repeat(51) }),
-      ).rejects.toThrow(/at most 50/i);
+      ).rejects.toThrow(/too big/i);
     });
 
     it("invalid cursor (0) → throws", async () => {
@@ -2384,7 +2384,7 @@ describe("Workflows Integration", () => {
       const wf = await createWorkflow({ name: "Proto Edge Case" });
       mockUser(adminA);
       await expect(
-        createStage(wf!.id, { name: "Bad Stage", details: { __proto__: {} } }),
+        createStage(wf!.id, { name: "Bad Stage", details: JSON.parse('{"__proto__":{}}') }),
       ).rejects.toThrow(/forbidden keys/i);
     });
 

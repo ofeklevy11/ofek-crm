@@ -17,22 +17,19 @@ vi.mock("@/lib/server-action-utils", async (importOriginal) => {
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-vi.mock("@/lib/redis", () => {
-  const noop = vi.fn().mockResolvedValue(null);
-  return {
-    redis: {
-      get: noop,
-      set: noop,
-      del: noop,
-      scan: noop.mockResolvedValue(["0", []]),
-      pipeline: vi.fn(() => ({
-        del: vi.fn().mockReturnThis(),
-        exec: vi.fn().mockResolvedValue([]),
-      })),
-      options: { keyPrefix: "" },
-    },
-  };
-});
+vi.mock("@/lib/redis", () => ({
+  redis: {
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue(null),
+    del: vi.fn().mockResolvedValue(null),
+    scan: vi.fn().mockResolvedValue(["0", []]),
+    pipeline: vi.fn(() => ({
+      del: vi.fn().mockReturnThis(),
+      exec: vi.fn().mockResolvedValue([]),
+    })),
+    options: { keyPrefix: "" },
+  },
+}));
 
 vi.mock("@/lib/inngest/client", () => ({
   inngest: { send: vi.fn().mockResolvedValue({ ids: [] }) },
@@ -374,6 +371,8 @@ describe("createWorker", () => {
     expect(onboarding!.status).toBe("IN_PROGRESS");
 
     await prisma.workerOnboarding.deleteMany({ where: { workerId: worker!.id } });
+    await prisma.worker.delete({ where: { id: worker!.id } });
+    createdIds.splice(createdIds.indexOf(worker!.id), 1);
     await prisma.onboardingPath.delete({ where: { id: path.id } });
     await prisma.department.delete({ where: { id: dept.id } });
   });
@@ -407,6 +406,8 @@ describe("createWorker", () => {
 
     await prisma.workerOnboardingStep.deleteMany({ where: { onboardingId: onboarding!.id } });
     await prisma.workerOnboarding.deleteMany({ where: { workerId: worker!.id } });
+    await prisma.worker.delete({ where: { id: worker!.id } });
+    createdIds.splice(createdIds.indexOf(worker!.id), 1);
     await prisma.onboardingStep.delete({ where: { id: step.id } });
     await prisma.onboardingPath.delete({ where: { id: path.id } });
     await prisma.department.delete({ where: { id: dept.id } });

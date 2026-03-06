@@ -138,6 +138,7 @@ export async function seedTableMeta(
       name: `טבלה ${uniq()}`,
       slug: `table-${uniq()}`,
       createdBy,
+      schemaJson: {},
       ...overrides,
     },
   });

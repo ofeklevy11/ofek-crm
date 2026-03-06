@@ -49,14 +49,14 @@ export async function GET(request: NextRequest) {
         createdAt: true,
         updatedAt: true,
       },
-      orderBy: { name: "asc" },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
       take: take + 1,
       ...(cursor && { cursor: { id: cursor }, skip: 1 }),
     }));
 
     const hasMore = clients.length > take;
     const data = clients.slice(0, take);
-    const nextCursor = hasMore ? data[data.length - 1]?.id : undefined;
+    const nextCursor = hasMore ? data[data.length - 1]?.id ?? null : null;
 
     return NextResponse.json({ data, nextCursor, hasMore });
   } catch (error) {

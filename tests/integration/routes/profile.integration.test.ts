@@ -23,13 +23,12 @@ vi.mock("react", async () => {
 });
 
 // 2. next/headers → mocked cookies()
+let _mockAuthToken: string | null = null;
 vi.mock("next/headers", () => ({
   cookies: vi.fn(async () => ({
     get: (name: string) => {
       if (name === "auth_token") {
-        const { getAuthToken } = require("@/tests/integration/helpers/integration-setup");
-        const token = getAuthToken();
-        return token ? { name: "auth_token", value: token } : undefined;
+        return _mockAuthToken ? { name: "auth_token", value: _mockAuthToken } : undefined;
       }
       return undefined;
     },
@@ -38,12 +37,11 @@ vi.mock("next/headers", () => ({
 
 // 3. Redis → cache miss + rate limit pass
 vi.mock("@/lib/redis", () => {
-  const noop = vi.fn().mockResolvedValue(null);
   return {
     redis: {
-      get: noop,
-      set: noop,
-      del: noop,
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(null),
+      del: vi.fn().mockResolvedValue(null),
       multi: vi.fn(() => ({
         incr: vi.fn().mockReturnThis(),
         expire: vi.fn().mockReturnThis(),
@@ -51,9 +49,9 @@ vi.mock("@/lib/redis", () => {
       })),
     },
     redisPublisher: {
-      get: noop,
-      set: noop,
-      del: noop,
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(null),
+      del: vi.fn().mockResolvedValue(null),
     },
   };
 });
@@ -88,11 +86,17 @@ vi.mock("@/lib/security/audit-security", () => ({
 import { prisma } from "@/lib/prisma";
 import { resetDb } from "@/test-utils/resetDb";
 import {
-  setAuthToken,
+  setAuthToken as _setAuthToken,
   signTokenForUser,
   seedCompany,
   seedUser,
 } from "@/tests/integration/helpers/integration-setup";
+
+/** Wrapper that keeps the hoisted mock variable in sync */
+function setAuthToken(token: string | null) {
+  _mockAuthToken = token;
+  _setAuthToken(token);
+}
 
 import { GET } from "@/app/api/auth/me/route";
 import { getApiKeys, createApiKey, deleteApiKey } from "@/app/actions/api-keys";
@@ -521,12 +525,13 @@ describe("API Key CRUD", () => {
 
     it("Prisma error returns failure message", async () => {
       setAuthToken(adminAToken);
-      const spy = vi.spyOn(prisma.apiKey, "findMany").mockRejectedValueOnce(new Error("DB down"));
+      const original = prisma.apiKey.findMany;
+      (prisma.apiKey as any).findMany = () => Promise.reject(new Error("DB down"));
 
       const result = await getApiKeys();
       expect(result).toEqual({ success: false, error: "Failed to fetch API keys" });
 
-      spy.mockRestore();
+      (prisma.apiKey as any).findMany = original;
     });
 
     it("cross-tenant: adminA cannot see companyB keys", async () => {
@@ -704,12 +709,13 @@ describe("API Key CRUD", () => {
 
     it("Prisma error returns failure message", async () => {
       setAuthToken(adminAToken);
-      const spy = vi.spyOn(prisma.apiKey, "create").mockRejectedValueOnce(new Error("DB down"));
+      const original = prisma.apiKey.create;
+      (prisma.apiKey as any).create = () => Promise.reject(new Error("DB down"));
 
       const result = await createApiKey("Should Fail DB");
       expect(result).toEqual({ success: false, error: "Failed to create API key" });
 
-      spy.mockRestore();
+      (prisma.apiKey as any).create = original;
 
       const dbCount = await prisma.apiKey.count({ where: { companyId: companyA.id } });
       expect(dbCount).toBe(0);
@@ -876,12 +882,13 @@ describe("API Key CRUD", () => {
       });
 
       setAuthToken(adminAToken);
-      const spy = vi.spyOn(prisma.apiKey, "delete").mockRejectedValueOnce(new Error("DB down"));
+      const original = prisma.apiKey.delete;
+      (prisma.apiKey as any).delete = () => Promise.reject(new Error("DB down"));
 
       const result = await deleteApiKey(seededKey.id);
       expect(result).toEqual({ success: false, error: "Failed to delete API key" });
 
-      spy.mockRestore();
+      (prisma.apiKey as any).delete = original;
 
       const dbKey = await prisma.apiKey.findUnique({ where: { id: seededKey.id } });
       expect(dbKey).not.toBeNull();
@@ -975,9 +982,14 @@ describe("updateCompanyName", () => {
     });
 
     setAuthToken(adminAToken);
-    const spy = vi.spyOn(prisma.user, "findUnique")
-      .mockResolvedValueOnce(authUser as any)   // 1st call: getCurrentUser auth succeeds
-      .mockResolvedValueOnce(null);              // 2nd call: password lookup returns null
+    const original = prisma.user.findUnique;
+    let callCount = 0;
+    (prisma.user as any).findUnique = (...args: any[]) => {
+      callCount++;
+      if (callCount === 1) return Promise.resolve(authUser); // getCurrentUser auth succeeds
+      if (callCount === 2) return Promise.resolve(null);     // password lookup returns null
+      return original.apply(prisma.user, args);
+    };
 
     const result = await updateCompanyName({
       newCompanyName: "Ghost User Co",
@@ -986,7 +998,7 @@ describe("updateCompanyName", () => {
 
     expect(result).toEqual({ success: false, error: "משתמש לא נמצא" });
 
-    spy.mockRestore();
+    (prisma.user as any).findUnique = original;
 
     const company = await prisma.company.findUnique({ where: { id: companyA.id } });
     expect(company!.name).toBe("Profile Co A");
@@ -1121,7 +1133,8 @@ describe("updateCompanyName", () => {
 
   it("Prisma error in update returns generic error", async () => {
     setAuthToken(adminAToken);
-    const spy = vi.spyOn(prisma.company, "update").mockRejectedValueOnce(new Error("DB down"));
+    const original = prisma.company.update;
+    (prisma.company as any).update = () => Promise.reject(new Error("DB down"));
 
     const result = await updateCompanyName({
       newCompanyName: "DB Error Co",
@@ -1130,7 +1143,7 @@ describe("updateCompanyName", () => {
 
     expect(result).toEqual({ success: false, error: "שגיאה בעדכון שם הארגון" });
 
-    spy.mockRestore();
+    (prisma.company as any).update = original;
 
     const company = await prisma.company.findUnique({ where: { id: companyA.id } });
     expect(company!.name).toBe("Profile Co A");

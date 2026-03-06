@@ -35,11 +35,16 @@ const saveFileMetadataSchema = z.object({
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
-let _utapi: UTApi | null = null;
+let _utapi: InstanceType<typeof UTApi> | null = null;
 function getUtapi() {
   if (!_utapi) _utapi = new UTApi();
   return _utapi;
 }
+
+/** @internal Inject mock for testing */
+export async function _setUtapi(mock: any) { _utapi = mock; }
+/** @internal Reset for testing */
+export async function _resetUtapi() { _utapi = null; }
 
 /** Authenticate + authorize + rate-limit (returns user or throws) */
 async function requireFilesUser(rateLimitKey: "fileRead" | "fileMutation") {
@@ -480,7 +485,7 @@ export async function deleteFile(id: number) {
     // Clean up from UploadThing storage (best-effort, don't block on failure)
     if (file.key) {
       try {
-        await getUtapi().deleteFiles(file.key);
+        await getUtapi().deleteFiles([file.key]);
       } catch (e) {
         log.error("Failed to delete file from UploadThing", { error: String(e) });
       }

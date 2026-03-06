@@ -52,7 +52,7 @@ export async function GET(request: Request) {
     // P3: Cursor-based pagination
     const tables = await prisma.tableMeta.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit + 1,
       ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
       select: {
@@ -68,7 +68,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       data,
       hasMore,
-      nextCursor: hasMore ? data[data.length - 1]?.id : undefined,
+      nextCursor: hasMore ? data[data.length - 1]?.id ?? null : null,
     });
   } catch (error) {
     log.error("Failed to fetch tables", { error: String(error) });

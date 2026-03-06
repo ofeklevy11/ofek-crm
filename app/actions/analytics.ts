@@ -216,6 +216,7 @@ export async function createAnalyticsView(data: {
     const userPlan = ((user.isPremium || "basic") as string).toLowerCase();
     const limits = ANALYTICS_LIMITS[userPlan as keyof typeof ANALYTICS_LIMITS] || ANALYTICS_LIMITS.basic;
     const isGraph = data.type === "GRAPH";
+    const isRegular = data.type === "COUNT" || data.type === "CONVERSION";
 
     const result = await prisma.$transaction(async (tx) => {
       // Re-count inside transaction to prevent TOCTOU race
@@ -237,7 +238,7 @@ export async function createAnalyticsView(data: {
             error: `הגעת למגבלת הגרפים (${limits.graph}). שדרג את התוכנית להוספת גרפים נוספים.`,
           };
         }
-        if (!isGraph && regularCount >= limits.regular) {
+        if (isRegular && regularCount >= limits.regular) {
           return {
             success: false as const,
             error: `הגעת למגבלת האנליטיקות (${limits.regular}). שדרג את התוכנית להוספת אנליטיקות נוספות.`,

@@ -58,7 +58,7 @@ export async function getWorkflowInstances(
       assignee: { select: { id: true, name: true } },
       creator: { select: { id: true, name: true } },
     },
-    orderBy: { updatedAt: "desc" },
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
     take: 200,
     ...(opts?.cursor ? { skip: 1, cursor: { id: opts.cursor } } : {}),
   }));

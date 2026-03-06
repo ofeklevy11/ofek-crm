@@ -71,6 +71,8 @@ export async function POST(
           companyId: meetingType.companyId,
           startTime: { lt: endTime },
           endTime: { gt: startTime },
+          // Exclude calendar events linked to cancelled meetings
+          NOT: { meeting: { status: "CANCELLED" } },
         },
         select: { startTime: true, endTime: true },
       }),
@@ -110,6 +112,10 @@ export async function POST(
             companyId: meetingType.companyId,
             startTime: { lt: endTime },
             endTime: { gt: startTime },
+            OR: [
+              { meeting: null },
+              { meeting: { status: { not: "CANCELLED" } } },
+            ],
           },
           select: { startTime: true, endTime: true },
         }),

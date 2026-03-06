@@ -34,14 +34,14 @@ export async function getRetainers(opts?: { cursor?: number; take?: number }) {
         createdAt: true, updatedAt: true,
         client: { select: { id: true, name: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: take + 1, // Fetch one extra to determine hasMore
       ...(opts?.cursor && { cursor: { id: opts.cursor }, skip: 1 }),
     }));
 
     const hasMore = retainers.length > take;
     const data = retainers.slice(0, take);
-    const nextCursor = hasMore ? data[data.length - 1]?.id : undefined;
+    const nextCursor = hasMore ? data[data.length - 1]?.id ?? null : null;
 
     return {
       success: true,
@@ -367,14 +367,14 @@ export async function getPayments(opts?: { cursor?: number; take?: number }) {
         paidDate: true, status: true, notes: true, createdAt: true, updatedAt: true,
         client: { select: { id: true, name: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: take + 1,
       ...(opts?.cursor && { cursor: { id: opts.cursor }, skip: 1 }),
     }));
 
     const hasMore = payments.length > take;
     const data = payments.slice(0, take);
-    const nextCursor = hasMore ? data[data.length - 1]?.id : undefined;
+    const nextCursor = hasMore ? data[data.length - 1]?.id ?? null : null;
 
     return {
       success: true,
@@ -689,14 +689,14 @@ export async function getFinanceClients(opts?: { cursor?: number; take?: number 
     const clients = await withRetry(() => prisma.client.findMany({
       where: { companyId: user.companyId, deletedAt: null },
       select: { id: true, name: true, email: true, phone: true, businessName: true },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: take + 1,
       ...(opts?.cursor && { cursor: { id: opts.cursor }, skip: 1 }),
     }));
 
     const hasMore = clients.length > take;
     const data = clients.slice(0, take);
-    const nextCursor = hasMore ? data[data.length - 1]?.id : undefined;
+    const nextCursor = hasMore ? data[data.length - 1]?.id ?? null : null;
 
     return { success: true, data, nextCursor, hasMore };
   } catch (error) {

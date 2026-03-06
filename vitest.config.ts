@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import path from "path";
 
 // טוען את env של הטסטים
-dotenv.config({ path: ".env.test" });
+dotenv.config({ path: ".env.test", override: true });
 
 export default defineConfig({
   resolve: {

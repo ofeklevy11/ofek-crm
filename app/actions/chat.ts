@@ -139,7 +139,6 @@ export async function getUsers() {
     select: {
       id: true,
       name: true,
-      email: true,
       role: true,
     },
     take: 500,
