@@ -212,43 +212,54 @@ const server = http.createServer(async (req, res) => {
   res.end("Not Found");
 });
 
-async function handleDockerRestartEvent(jsonLine) {
+async function handleDockerEvent(jsonLine) {
   try {
     const event = JSON.parse(jsonLine);
     const name = (event.Actor && event.Actor.Attributes && event.Actor.Attributes.name) || event.id || "unknown";
     const image = (event.Actor && event.Actor.Attributes && event.Actor.Attributes.image) || "unknown";
     const time = event.time ? new Date(event.time * 1000).toISOString() : new Date().toISOString();
+    const action = event.Action || event.status || "unknown";
 
     if (name === "autoheal") return;
 
+    // For die events, only notify on non-zero exit codes (actual crashes)
+    if (action === "die") {
+      const exitCode = (event.Actor && event.Actor.Attributes && event.Actor.Attributes.exitCode) || "unknown";
+      if (exitCode === "0") return;
+    }
+
     const now = Date.now();
-    const lastNotified = restartCooldowns.get(name);
+    const cooldownKey = `${name}:${action}`;
+    const lastNotified = restartCooldowns.get(cooldownKey);
     if (lastNotified && now - lastNotified < RESTART_COOLDOWN_MS) {
-      console.log(`[docker-events] Suppressed duplicate restart notification for ${name} (cooldown)`);
+      console.log(`[docker-events] Suppressed duplicate ${action} notification for ${name} (cooldown)`);
       return;
     }
-    restartCooldowns.set(name, now);
+    restartCooldowns.set(cooldownKey, now);
 
-    const msg = `\u{1F504} <b>Container Restarted</b>\nContainer: ${name}\nImage: ${image}\nTime: ${time}\nServer: bizlycrm.com`;
+    const emoji = action === "die" ? "\u{1F4A5}" : "\u{1F504}";
+    const label = action === "die" ? "Container Crashed" : "Container Restarted";
+    const exitInfo = action === "die" ? `\nExit Code: ${(event.Actor && event.Actor.Attributes && event.Actor.Attributes.exitCode) || "unknown"}` : "";
+    const msg = `${emoji} <b>${label}</b>\nContainer: ${name}\nImage: ${image}${exitInfo}\nTime: ${time}\nServer: bizlycrm.com`;
 
     await sendTelegram(msg);
 
     console.log(JSON.stringify({
       ts: new Date().toISOString(),
-      event: "container_restart_notified",
+      event: `container_${action}_notified`,
       container: name,
       image,
-      restartTime: time,
+      eventTime: time,
     }));
   } catch (err) {
-    console.error("[docker-events] Failed to handle restart event:", err.message);
+    console.error("[docker-events] Failed to handle event:", err.message);
   }
 }
 
 function startDockerEventWatcher() {
   console.log("[docker-events] Starting Docker event watcher");
 
-  const proc = spawn("docker", ["events", "--filter", "event=restart", "--format", "{{json .}}"], {
+  const proc = spawn("docker", ["events", "--filter", "event=restart", "--filter", "event=die", "--format", "{{json .}}"], {
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -259,7 +270,7 @@ function startDockerEventWatcher() {
     const lines = buffer.split("\n");
     buffer = lines.pop(); // keep incomplete line in buffer
     for (const line of lines) {
-      if (line.trim()) handleDockerRestartEvent(line.trim());
+      if (line.trim()) handleDockerEvent(line.trim());
     }
   });
 
