@@ -38,6 +38,8 @@ RUN pnpm run build
 
 # Stage 3: Production runner
 FROM node:24-alpine AS runner
+RUN apk upgrade --no-cache && \
+    rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 WORKDIR /app
 
 ENV NODE_ENV=production

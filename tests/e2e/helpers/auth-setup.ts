@@ -41,8 +41,8 @@ async function globalSetup(config: FullConfig) {
     config.projects[0]?.use?.baseURL || "http://localhost:3000";
 
   // Dynamic imports to ensure env is loaded
-  const { prisma } = await import("../../../lib/prisma");
-  const { signUserId } = await import("../../../lib/auth");
+  const { prisma } = require("../../../lib/prisma");
+  const { signUserId } = require("../../../lib/auth");
 
   // Ensure .auth dir exists
   if (!fs.existsSync(AUTH_DIR)) {
