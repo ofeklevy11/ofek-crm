@@ -381,6 +381,7 @@ model Company {
   greenApiInstanceId   String? // Green API Instance ID
   greenApiToken        String? // Green API Token
   webhookSigningSecret String? // HMAC-SHA256 secret for signing outbound webhooks
+  notificationSettings Json?   @default("{}") // Per-company notification & behavior toggles
 
   apiKeys             ApiKey[]
   importJobs          ImportJob[]

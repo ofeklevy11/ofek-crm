@@ -26,35 +26,42 @@ export const processTicketNotificationJob = inngest.createFunction(
       "@/lib/notifications-internal"
     );
 
+    const { isNotificationEnabled } = await import("@/lib/notification-settings");
+
     if (type === "assignee") {
-      const { assigneeId, ticketId, ticketTitle } = event.data;
-      await createNotificationForCompany({
-        companyId,
-        userId: assigneeId,
-        title: event.data.isNew ? "קריאה חדשה הוקצתה לך" : "קריאה הוקצתה לך",
-        message: event.data.isNew
-          ? `הוקצית לקריאה #${ticketId}: ${ticketTitle}`
-          : `הוקצתה לך קריאה #${ticketId}: ${ticketTitle}`,
-        link: `/service`,
-      });
-    } else if (type === "comment") {
-      const { ticketId, userName } = event.data;
-      const { prisma } = await import("@/lib/prisma");
-
-      // SECURITY: Filter by companyId to prevent cross-tenant access
-      const ticket = await prisma.ticket.findFirst({
-        where: { id: ticketId, companyId },
-        select: { assigneeId: true, title: true, id: true },
-      });
-
-      if (ticket && ticket.assigneeId && ticket.assigneeId !== event.data.userId) {
+      const settingKey = event.data.isNew ? "notifyOnTicketAssigned" : "notifyOnTicketReassigned";
+      if (await isNotificationEnabled(companyId, settingKey)) {
+        const { assigneeId, ticketId, ticketTitle } = event.data;
         await createNotificationForCompany({
           companyId,
-          userId: ticket.assigneeId,
-          title: "תגובה חדשה בקריאה",
-          message: `${userName} הגיב בקריאה #${ticket.id}: ${ticket.title}`,
+          userId: assigneeId,
+          title: event.data.isNew ? "קריאה חדשה הוקצתה לך" : "קריאה הוקצתה לך",
+          message: event.data.isNew
+            ? `הוקצית לקריאה #${ticketId}: ${ticketTitle}`
+            : `הוקצתה לך קריאה #${ticketId}: ${ticketTitle}`,
           link: `/service`,
+        });
+      }
+    } else if (type === "comment") {
+      if (await isNotificationEnabled(companyId, "notifyOnTicketComment")) {
+        const { ticketId, userName } = event.data;
+        const { prisma } = await import("@/lib/prisma");
+
+        // SECURITY: Filter by companyId to prevent cross-tenant access
+        const ticket = await prisma.ticket.findFirst({
+          where: { id: ticketId, companyId },
+          select: { assigneeId: true, title: true, id: true },
+        });
+
+        if (ticket && ticket.assigneeId && ticket.assigneeId !== event.data.userId) {
+          await createNotificationForCompany({
+            companyId,
+            userId: ticket.assigneeId,
+            title: "תגובה חדשה בקריאה",
+            message: `${userName} הגיב בקריאה #${ticket.id}: ${ticket.title}`,
+            link: `/service`,
           });
+        }
       }
     }
 

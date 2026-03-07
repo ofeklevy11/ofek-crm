@@ -34,6 +34,20 @@ vi.mock("@/lib/notifications-internal", () => ({
 vi.mock("@/app/actions/meeting-automations", () => ({
   fireMeetingAutomations: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/notification-settings", () => ({
+  isNotificationEnabled: vi.fn().mockResolvedValue(true),
+  parseNotificationSettings: vi.fn().mockReturnValue({
+    notifyOnMeetingBooked: true,
+    notifyOnMeetingCancelled: true,
+    notifyOnMeetingRescheduled: true,
+    notifyOnMeetingStatusChange: true,
+    notifyOnTicketAssigned: true,
+    notifyOnTicketReassigned: true,
+    notifyOnTicketComment: true,
+    autoCreateClientOnBooking: true,
+  }),
+  invalidateNotificationSettingsCache: vi.fn().mockResolvedValue(undefined),
+}));
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
@@ -43,6 +57,7 @@ import { checkActionRateLimit } from "@/lib/rate-limit";
 import { validateMeetingTypeInput, validateNotes, validateTags } from "@/lib/meeting-validation";
 import { fireMeetingAutomations } from "@/app/actions/meeting-automations";
 import { createNotificationForCompany } from "@/lib/notifications-internal";
+import { isNotificationEnabled } from "@/lib/notification-settings";
 
 import {
   getMeetingTypes,
@@ -718,6 +733,18 @@ describe("updateMeetingStatus", () => {
     const res = await updateMeetingStatus("m1", "CONFIRMED");
     expect(res).toEqual({ success: false, error: "Failed to update meeting status" });
   });
+
+  it("does NOT send notification when notifyOnMeetingStatusChange is OFF", async () => {
+    setupAuth();
+    (isNotificationEnabled as any).mockResolvedValue(false);
+    (prisma.meeting.update as any).mockResolvedValue({ id: "m1", participantName: "J", meetingType: { name: "T" } });
+    (prisma.user.findMany as any).mockResolvedValue([{ id: 100 }]);
+    const res = await updateMeetingStatus("m1", "CONFIRMED");
+    expect(res.success).toBe(true);
+    expect(createNotificationForCompany).not.toHaveBeenCalled();
+    // Restore for other tests
+    (isNotificationEnabled as any).mockResolvedValue(true);
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════
@@ -990,6 +1017,21 @@ describe("cancelMeeting", () => {
     const res = await cancelMeeting("m1");
     expect(res).toEqual({ success: false, error: "Failed to cancel meeting" });
   });
+
+  it("does NOT send notification when notifyOnMeetingCancelled is OFF", async () => {
+    setupAuth();
+    (isNotificationEnabled as any).mockResolvedValue(false);
+    (prisma.meeting.update as any).mockResolvedValue({
+      id: "m1", meetingTypeId: 1, participantName: "J", participantEmail: "j@e.com",
+      participantPhone: "123", startTime: new Date(), endTime: new Date(),
+      meetingType: { name: "Test" },
+    });
+    (prisma.user.findMany as any).mockResolvedValue([{ id: 100 }]);
+    const res = await cancelMeeting("m1");
+    expect(res.success).toBe(true);
+    expect(createNotificationForCompany).not.toHaveBeenCalled();
+    (isNotificationEnabled as any).mockResolvedValue(true);
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════
@@ -1174,6 +1216,19 @@ describe("rescheduleMeeting", () => {
       where: { id: "ce1" },
       data: { startTime: new Date(validStart), endTime: new Date(validEnd) },
     });
+  });
+
+  it("does NOT send notification when notifyOnMeetingRescheduled is OFF", async () => {
+    setupAuth();
+    (isNotificationEnabled as any).mockResolvedValue(false);
+    (prisma.meeting.update as any).mockResolvedValue({
+      id: "m1", calendarEventId: null, participantName: "J", meetingType: { name: "T" },
+    });
+    (prisma.user.findMany as any).mockResolvedValue([{ id: 100 }]);
+    const res = await rescheduleMeeting("m1", validStart, validEnd);
+    expect(res.success).toBe(true);
+    expect(createNotificationForCompany).not.toHaveBeenCalled();
+    (isNotificationEnabled as any).mockResolvedValue(true);
   });
 });
 

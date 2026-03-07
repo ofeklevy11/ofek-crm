@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { isSlotAvailable } from "@/lib/meeting-slots";
 import { createNotificationForCompany } from "@/lib/notifications-internal";
+import { isNotificationEnabled } from "@/lib/notification-settings";
 
 const TOKEN_RE = /^[a-zA-Z0-9]{10,50}$/;
 
@@ -126,33 +127,38 @@ export async function POST(
       }
     });
 
-    // Notify admins (fire-and-forget)
-    const dateStr = newStart.toLocaleDateString("he-IL", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-    const timeStr = newStart.toLocaleTimeString("he-IL", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
+    // Notify admins (fire-and-forget) — guarded by toggle
+    isNotificationEnabled(meeting.companyId, "notifyOnMeetingRescheduled")
+      .then((enabled) => {
+        if (!enabled) return;
+        const dateStr = newStart.toLocaleDateString("he-IL", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        });
+        const timeStr = newStart.toLocaleTimeString("he-IL", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        });
 
-    prisma.user
-      .findMany({
-        where: { companyId: meeting.companyId, role: "admin" },
-        select: { id: true },
-        take: 10,
-      })
-      .then((admins) => {
-        for (const admin of admins) {
-          createNotificationForCompany({
-            companyId: meeting.companyId,
-            userId: admin.id,
-            title: `פגישה נדחתה: ${meeting.participantName} - ${meeting.meetingType.name} ל-${dateStr} ${timeStr}`,
-            link: "/meetings",
-          }).catch(() => {});
-        }
+        prisma.user
+          .findMany({
+            where: { companyId: meeting.companyId, role: "admin" },
+            select: { id: true },
+            take: 10,
+          })
+          .then((admins) => {
+            for (const admin of admins) {
+              createNotificationForCompany({
+                companyId: meeting.companyId,
+                userId: admin.id,
+                title: `פגישה נדחתה: ${meeting.participantName} - ${meeting.meetingType.name} ל-${dateStr} ${timeStr}`,
+                link: "/meetings",
+              }).catch(() => {});
+            }
+          })
+          .catch(() => {});
       })
       .catch(() => {});
 

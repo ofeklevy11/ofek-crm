@@ -28,6 +28,13 @@ vi.mock("@/lib/notifications-internal", () => ({
 vi.mock("@/app/actions/meeting-automations", () => ({
   fireMeetingAutomations: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/notification-settings", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/notification-settings")>();
+  return {
+    ...actual,
+    isNotificationEnabled: vi.fn().mockResolvedValue(false),
+  };
+});
 
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -35,6 +42,7 @@ import { validateBookingInput } from "@/lib/meeting-validation";
 import { isSlotAvailable } from "@/lib/meeting-slots";
 import { createNotificationForCompany } from "@/lib/notifications-internal";
 import { fireMeetingAutomations } from "@/app/actions/meeting-automations";
+import { isNotificationEnabled } from "@/lib/notification-settings";
 
 // Route handlers
 import { GET as getToken } from "@/app/api/p/meetings/[token]/route";
@@ -206,6 +214,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
   const meetingType = {
     id: 1, companyId: 10, name: "Consultation", duration: 30,
     color: "#blue", bufferBefore: 5, bufferAfter: 5,
+    company: { notificationSettings: { autoCreateClientOnBooking: true, notifyOnMeetingBooked: true } },
   };
 
   function setupBookingMocks() {
@@ -544,6 +553,113 @@ describe("POST /api/p/meetings/[token]/book", () => {
     expect(res.status).toBe(500);
     expect(await jsonBody(res)).toEqual({ error: "Internal server error" });
   });
+
+  // ── Toggle-specific tests ────────────────────────────────────────
+
+  it("does NOT create client when autoCreateClientOnBooking is OFF", async () => {
+    const meetingTypeNoClient = {
+      ...meetingType,
+      company: { notificationSettings: { autoCreateClientOnBooking: false } },
+    };
+    (validateBookingInput as any).mockReturnValue({
+      valid: true,
+      data: {
+        participantName: "John",
+        participantEmail: "john@test.com",
+        participantPhone: "0501234567",
+        startTime: new Date("2025-06-01T10:00:00Z"),
+        customFieldData: undefined,
+      },
+    });
+    (prisma as any).meetingType.findFirst.mockResolvedValue(meetingTypeNoClient);
+    (isSlotAvailable as any).mockReturnValue(true);
+    (prisma as any).meeting.findMany.mockResolvedValue([]);
+    (prisma as any).calendarEvent.findMany.mockResolvedValue([]);
+    (prisma as any).$transaction.mockImplementation(async (fn: any) => fn((prisma as any)));
+    (prisma as any).calendarEvent.create.mockResolvedValue({ id: "ce1" });
+    (prisma as any).meeting.create.mockResolvedValue({ id: "m1", manageToken: "mgmt123456" });
+
+    const req = makeRequest({ method: "POST", body: validBookingData });
+    const res = await postBook(req, params("validtoken1"));
+    expect(res.status).toBe(200);
+
+    // Client should NOT be looked up or created
+    expect((prisma as any).client.findFirst).not.toHaveBeenCalled();
+    expect((prisma as any).client.create).not.toHaveBeenCalled();
+
+    // Meeting should be created with clientId: null
+    const meetingArgs = (prisma as any).meeting.create.mock.calls[0][0];
+    expect(meetingArgs.data.clientId).toBeNull();
+  });
+
+  it("does NOT send notification when notifyOnMeetingBooked is OFF", async () => {
+    const meetingTypeNoNotif = {
+      ...meetingType,
+      company: { notificationSettings: { autoCreateClientOnBooking: true, notifyOnMeetingBooked: false } },
+    };
+    (validateBookingInput as any).mockReturnValue({
+      valid: true,
+      data: {
+        participantName: "John",
+        participantEmail: "john@test.com",
+        participantPhone: "0501234567",
+        startTime: new Date("2025-06-01T10:00:00Z"),
+        customFieldData: undefined,
+      },
+    });
+    (prisma as any).meetingType.findFirst.mockResolvedValue(meetingTypeNoNotif);
+    (isSlotAvailable as any).mockReturnValue(true);
+    (prisma as any).meeting.findMany.mockResolvedValue([]);
+    (prisma as any).calendarEvent.findMany.mockResolvedValue([]);
+    (prisma as any).$transaction.mockImplementation(async (fn: any) => fn((prisma as any)));
+    (prisma as any).calendarEvent.create.mockResolvedValue({ id: "ce1" });
+    (prisma as any).client.findFirst.mockResolvedValue({ id: 5 });
+    (prisma as any).meeting.create.mockResolvedValue({ id: "m1", manageToken: "mgmt123456" });
+    (prisma as any).user.findMany.mockResolvedValue([{ id: 100 }]);
+
+    const req = makeRequest({ method: "POST", body: validBookingData });
+    await postBook(req, params("validtoken1"));
+
+    await new Promise(r => setTimeout(r, 0));
+
+    // Notification should NOT be sent — admin lookup should not even happen
+    expect(createNotificationForCompany).not.toHaveBeenCalled();
+  });
+
+  it("does NOT send notification when company has no notificationSettings (default OFF)", async () => {
+    const meetingTypeEmpty = {
+      ...meetingType,
+      company: { notificationSettings: null },
+    };
+    (validateBookingInput as any).mockReturnValue({
+      valid: true,
+      data: {
+        participantName: "John",
+        participantEmail: "john@test.com",
+        participantPhone: "0501234567",
+        startTime: new Date("2025-06-01T10:00:00Z"),
+        customFieldData: undefined,
+      },
+    });
+    (prisma as any).meetingType.findFirst.mockResolvedValue(meetingTypeEmpty);
+    (isSlotAvailable as any).mockReturnValue(true);
+    (prisma as any).meeting.findMany.mockResolvedValue([]);
+    (prisma as any).calendarEvent.findMany.mockResolvedValue([]);
+    (prisma as any).$transaction.mockImplementation(async (fn: any) => fn((prisma as any)));
+    (prisma as any).calendarEvent.create.mockResolvedValue({ id: "ce1" });
+    (prisma as any).meeting.create.mockResolvedValue({ id: "m1", manageToken: "mgmt123456" });
+
+    const req = makeRequest({ method: "POST", body: validBookingData });
+    const res = await postBook(req, params("validtoken1"));
+    expect(res.status).toBe(200);
+
+    await new Promise(r => setTimeout(r, 0));
+
+    // Both client and notification should be skipped
+    expect((prisma as any).client.findFirst).not.toHaveBeenCalled();
+    expect((prisma as any).client.create).not.toHaveBeenCalled();
+    expect(createNotificationForCompany).not.toHaveBeenCalled();
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════
@@ -787,6 +903,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
   });
 
   it("dispatches admin notification after successful reschedule", async () => {
+    (isNotificationEnabled as any).mockResolvedValue(true);
     (prisma as any).meeting.findUnique.mockResolvedValue(meetingData);
     (isSlotAvailable as any).mockReturnValue(true);
     (prisma as any).$transaction.mockImplementation(async (fn: any) => fn((prisma as any)));
@@ -824,6 +941,25 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
         link: "/meetings",
       }),
     );
+  });
+
+  it("does NOT send notification when notifyOnMeetingRescheduled is OFF (default)", async () => {
+    (isNotificationEnabled as any).mockResolvedValue(false);
+    (prisma as any).meeting.findUnique.mockResolvedValue(meetingData);
+    (isSlotAvailable as any).mockReturnValue(true);
+    (prisma as any).$transaction.mockImplementation(async (fn: any) => fn((prisma as any)));
+    (prisma as any).meeting.update.mockResolvedValue({});
+    (prisma as any).calendarEvent.update.mockResolvedValue({});
+    (prisma as any).meeting.findMany.mockResolvedValue([]);
+    (prisma as any).calendarEvent.findMany.mockResolvedValue([]);
+    (prisma as any).user.findMany.mockResolvedValue([{ id: 100 }]);
+
+    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
+    await postReschedule(req, manageParams("validtoken1"));
+
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(createNotificationForCompany).not.toHaveBeenCalled();
   });
 
   it("allows rescheduling NO_SHOW meeting (not blocked like CANCELLED/COMPLETED)", async () => {
@@ -1016,6 +1152,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
   });
 
   it("dispatches admin notification after successful cancellation", async () => {
+    (isNotificationEnabled as any).mockResolvedValue(true);
     (prisma as any).meeting.findUnique.mockResolvedValue(meetingData);
     (prisma as any).meeting.update.mockResolvedValue({});
     (prisma as any).user.findMany.mockResolvedValue([{ id: 100 }, { id: 200 }]);
@@ -1081,6 +1218,19 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
     const res = await postCancel(req, manageParams("validtoken1"));
     expect(res.status).toBe(200);
     expect(await jsonBody(res)).toEqual({ success: true });
+  });
+
+  it("does NOT send notification when notifyOnMeetingCancelled is OFF (default)", async () => {
+    (isNotificationEnabled as any).mockResolvedValue(false);
+    (prisma as any).meeting.findUnique.mockResolvedValue(meetingData);
+    (prisma as any).meeting.update.mockResolvedValue({});
+    (prisma as any).user.findMany.mockResolvedValue([{ id: 100 }]);
+    const req = makeRequest({ method: "POST", body: {} });
+    await postCancel(req, manageParams("validtoken1"));
+
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(createNotificationForCompany).not.toHaveBeenCalled();
   });
 
   it("returns 500 on unexpected error", async () => {

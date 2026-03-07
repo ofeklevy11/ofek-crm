@@ -26,6 +26,14 @@ vi.mock("@/lib/ticket-activity-utils", () => ({
   createTicketActivityLogs: (...args: any[]) => mockCreateTicketActivityLogs(...args),
 }));
 
+vi.mock("@/lib/redis", () => ({
+  redis: {
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue(null),
+    del: vi.fn().mockResolvedValue(1),
+  },
+}));
+
 // ── State ──────────────────────────────────────────────────────────
 let companyId: number;
 let adminUserId: number;
@@ -39,7 +47,15 @@ beforeAll(async () => {
 
   // Seed data
   const company = await prisma.company.create({
-    data: { name: "Ticket Test Co", slug: `ticket-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` },
+    data: {
+      name: "Ticket Test Co",
+      slug: `ticket-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      notificationSettings: {
+        notifyOnTicketAssigned: true,
+        notifyOnTicketReassigned: true,
+        notifyOnTicketComment: true,
+      },
+    },
   });
   companyId = company.id;
 
@@ -221,6 +237,139 @@ describe("processTicketNotificationJob", () => {
 
     // Cleanup
     await prisma.ticket.delete({ where: { id: unassignedTicket.id } });
+  });
+
+  // ── Toggle-off tests ──────────────────────────────────────────
+
+  it("type 'assignee' with isNew=true does NOT notify when notifyOnTicketAssigned is OFF", async () => {
+    // Create a company with toggles OFF
+    const silentCompany = await prisma.company.create({
+      data: {
+        name: "Silent Co",
+        slug: `silent-co-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        notificationSettings: {},
+      },
+    });
+    const silentUser = await prisma.user.create({
+      data: {
+        companyId: silentCompany.id,
+        name: "Silent User",
+        email: `silent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.com`,
+        passwordHash: "not-a-real-hash",
+        role: "basic",
+      },
+    });
+
+    const event = createMockEvent("ticket/notification", {
+      type: "assignee",
+      companyId: silentCompany.id,
+      assigneeId: silentUser.id,
+      ticketId,
+      ticketTitle: "Test Ticket",
+      isNew: true,
+    });
+
+    const result = await handlers["process-ticket-notification"]({ event });
+
+    expect(result).toEqual({ success: true, type: "assignee" });
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+
+    // Cleanup
+    await prisma.user.delete({ where: { id: silentUser.id } });
+    await prisma.company.delete({ where: { id: silentCompany.id } });
+  });
+
+  it("type 'assignee' with isNew=false does NOT notify when notifyOnTicketReassigned is OFF", async () => {
+    const silentCompany = await prisma.company.create({
+      data: {
+        name: "Silent Co 2",
+        slug: `silent-co2-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        notificationSettings: { notifyOnTicketAssigned: true },
+      },
+    });
+    const silentUser = await prisma.user.create({
+      data: {
+        companyId: silentCompany.id,
+        name: "Silent User 2",
+        email: `silent2-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.com`,
+        passwordHash: "not-a-real-hash",
+        role: "basic",
+      },
+    });
+
+    const event = createMockEvent("ticket/notification", {
+      type: "assignee",
+      companyId: silentCompany.id,
+      assigneeId: silentUser.id,
+      ticketId,
+      ticketTitle: "Test Ticket",
+      isNew: false,
+    });
+
+    const result = await handlers["process-ticket-notification"]({ event });
+
+    expect(result).toEqual({ success: true, type: "assignee" });
+    // notifyOnTicketReassigned is OFF (default false), so no notification
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+
+    await prisma.user.delete({ where: { id: silentUser.id } });
+    await prisma.company.delete({ where: { id: silentCompany.id } });
+  });
+
+  it("type 'comment' does NOT notify when notifyOnTicketComment is OFF", async () => {
+    const silentCompany = await prisma.company.create({
+      data: {
+        name: "Silent Co 3",
+        slug: `silent-co3-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        notificationSettings: {},
+      },
+    });
+    const silentUser = await prisma.user.create({
+      data: {
+        companyId: silentCompany.id,
+        name: "Silent Assignee",
+        email: `silent3-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.com`,
+        passwordHash: "not-a-real-hash",
+        role: "basic",
+      },
+    });
+    const silentCommenter = await prisma.user.create({
+      data: {
+        companyId: silentCompany.id,
+        name: "Silent Commenter",
+        email: `silent4-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.com`,
+        passwordHash: "not-a-real-hash",
+        role: "basic",
+      },
+    });
+    const silentTicket = await prisma.ticket.create({
+      data: {
+        companyId: silentCompany.id,
+        title: "Silent Ticket",
+        status: "OPEN",
+        priority: "LOW",
+        type: "SERVICE",
+        creatorId: silentUser.id,
+        assigneeId: silentUser.id,
+      },
+    });
+
+    const event = createMockEvent("ticket/notification", {
+      type: "comment",
+      companyId: silentCompany.id,
+      ticketId: silentTicket.id,
+      userId: silentCommenter.id,
+      userName: "Silent Commenter",
+    });
+
+    const result = await handlers["process-ticket-notification"]({ event });
+
+    expect(result).toEqual({ success: true, type: "comment" });
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+
+    await prisma.ticket.delete({ where: { id: silentTicket.id } });
+    await prisma.user.deleteMany({ where: { companyId: silentCompany.id } });
+    await prisma.company.delete({ where: { id: silentCompany.id } });
   });
 });
 

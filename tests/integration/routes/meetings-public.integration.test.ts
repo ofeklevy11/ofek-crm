@@ -104,7 +104,17 @@ let adminUser: { id: number };
 
 beforeAll(async () => {
   company = await prisma.company.create({
-    data: { name: "Cohen Digital Agency", slug: `cohen-digital-${Date.now()}` },
+    data: {
+      name: "Cohen Digital Agency",
+      slug: `cohen-digital-${Date.now()}`,
+      notificationSettings: {
+        notifyOnMeetingBooked: true,
+        notifyOnMeetingCancelled: true,
+        notifyOnMeetingRescheduled: true,
+        notifyOnMeetingStatusChange: true,
+        autoCreateClientOnBooking: true,
+      },
+    },
   });
 
   // Second company with NO CompanyAvailability — for fallback testing

@@ -4,6 +4,7 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { validateBookingInput } from "@/lib/meeting-validation";
 import { isSlotAvailable } from "@/lib/meeting-slots";
 import { createNotificationForCompany } from "@/lib/notifications-internal";
+import { parseNotificationSettings } from "@/lib/notification-settings";
 
 const TOKEN_RE = /^[a-zA-Z0-9]{10,50}$/;
 
@@ -45,6 +46,7 @@ export async function POST(
         color: true,
         bufferBefore: true,
         bufferAfter: true,
+        company: { select: { notificationSettings: true } },
       },
     });
 
@@ -143,39 +145,46 @@ export async function POST(
         },
       });
 
-      // 2. Find or create client by email/phone
-      let client: { id: number } | null = null;
-      const clientWhereConditions: Array<Record<string, unknown>> = [];
-      if (participantEmail) {
-        clientWhereConditions.push({ email: participantEmail });
-      }
-      if (participantPhone) {
-        clientWhereConditions.push({ phone: participantPhone });
+      // 2. Optionally find or create client by email/phone
+      const notifSettings = parseNotificationSettings(meetingType.company?.notificationSettings);
+      let clientId: number | undefined;
+
+      if (notifSettings.autoCreateClientOnBooking) {
+        let client: { id: number } | null = null;
+        const clientWhereConditions: Array<Record<string, unknown>> = [];
+        if (participantEmail) {
+          clientWhereConditions.push({ email: participantEmail });
+        }
+        if (participantPhone) {
+          clientWhereConditions.push({ phone: participantPhone });
+        }
+
+        if (clientWhereConditions.length > 0) {
+          client = await tx.client.findFirst({
+            where: {
+              companyId: meetingType.companyId,
+              OR: clientWhereConditions,
+            },
+            select: { id: true },
+          });
+        }
+
+        if (!client) {
+          client = await tx.client.create({
+            data: {
+              companyId: meetingType.companyId,
+              name: participantName,
+              email: participantEmail || null,
+              phone: participantPhone || null,
+            },
+            select: { id: true },
+          });
+        }
+
+        clientId = client.id;
       }
 
-      if (clientWhereConditions.length > 0) {
-        client = await tx.client.findFirst({
-          where: {
-            companyId: meetingType.companyId,
-            OR: clientWhereConditions,
-          },
-          select: { id: true },
-        });
-      }
-
-      if (!client) {
-        client = await tx.client.create({
-          data: {
-            companyId: meetingType.companyId,
-            name: participantName,
-            email: participantEmail || null,
-            phone: participantPhone || null,
-          },
-          select: { id: true },
-        });
-      }
-
-      // 3. Create the meeting linked to client and calendar event
+      // 3. Create the meeting linked to client (if created) and calendar event
       const newMeeting = await tx.meeting.create({
         data: {
           companyId: meetingType.companyId,
@@ -186,7 +195,7 @@ export async function POST(
           customFieldData: customFieldData ?? undefined,
           startTime,
           endTime,
-          clientId: client.id,
+          clientId: clientId ?? null,
           calendarEventId: calendarEvent.id,
         },
         select: { id: true, manageToken: true },
@@ -196,34 +205,37 @@ export async function POST(
     });
 
     // Send notifications to company admins (fire-and-forget, outside transaction)
-    const dateStr = startTime.toLocaleDateString("he-IL", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-    const timeStr = startTime.toLocaleTimeString("he-IL", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
+    const bookingSettings = parseNotificationSettings(meetingType.company?.notificationSettings);
+    if (bookingSettings.notifyOnMeetingBooked) {
+      const dateStr = startTime.toLocaleDateString("he-IL", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+      const timeStr = startTime.toLocaleTimeString("he-IL", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
 
-    prisma.user
-      .findMany({
-        where: { companyId: meetingType.companyId, role: "admin" },
-        select: { id: true },
-        take: 10,
-      })
-      .then((admins) => {
-        for (const admin of admins) {
-          createNotificationForCompany({
-            companyId: meetingType.companyId,
-            userId: admin.id,
-            title: `פגישה חדשה: ${participantName} - ${meetingType.name} ב-${dateStr} ${timeStr}`,
-            link: "/meetings",
-          }).catch(() => {});
-        }
-      })
-      .catch(() => {});
+      prisma.user
+        .findMany({
+          where: { companyId: meetingType.companyId, role: "admin" },
+          select: { id: true },
+          take: 10,
+        })
+        .then((admins) => {
+          for (const admin of admins) {
+            createNotificationForCompany({
+              companyId: meetingType.companyId,
+              userId: admin.id,
+              title: `פגישה חדשה: ${participantName} - ${meetingType.name} ב-${dateStr} ${timeStr}`,
+              link: "/meetings",
+            }).catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }
 
     // Fire meeting automations (fire-and-forget)
     import("@/app/actions/meeting-automations")

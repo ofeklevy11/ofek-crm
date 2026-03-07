@@ -270,27 +270,30 @@ export async function updateMeetingStatus(id: string, status: string) {
       include: { meetingType: { select: { name: true } } },
     });
 
-    // Send notification for status change
+    // Send notification for status change — guarded by toggle
     try {
-      const { createNotificationForCompany } = await import("@/lib/notifications-internal");
-      const admins = await prisma.user.findMany({
-        where: { companyId: user.companyId, role: "admin" },
-        select: { id: true },
-        take: 10,
-      });
-      const statusLabels: Record<string, string> = {
-        PENDING: "ממתין", CONFIRMED: "מאושר", COMPLETED: "הושלם", CANCELLED: "בוטל", NO_SHOW: "לא הגיע",
-      };
-      await Promise.all(
-        admins.map(admin =>
-          createNotificationForCompany({
-            companyId: user.companyId,
-            userId: admin.id,
-            title: `סטטוס פגישה שונה: ${meeting.participantName} - ${statusLabels[status] || status}`,
-            link: "/meetings",
-          })
-        )
-      );
+      const { isNotificationEnabled } = await import("@/lib/notification-settings");
+      if (await isNotificationEnabled(user.companyId, "notifyOnMeetingStatusChange")) {
+        const { createNotificationForCompany } = await import("@/lib/notifications-internal");
+        const admins = await prisma.user.findMany({
+          where: { companyId: user.companyId, role: "admin" },
+          select: { id: true },
+          take: 10,
+        });
+        const statusLabels: Record<string, string> = {
+          PENDING: "ממתין", CONFIRMED: "מאושר", COMPLETED: "הושלם", CANCELLED: "בוטל", NO_SHOW: "לא הגיע",
+        };
+        await Promise.all(
+          admins.map(admin =>
+            createNotificationForCompany({
+              companyId: user.companyId,
+              userId: admin.id,
+              title: `סטטוס פגישה שונה: ${meeting.participantName} - ${statusLabels[status] || status}`,
+              link: "/meetings",
+            })
+          )
+        );
+      }
     } catch (err) {
       log.error("Failed to send status change notification", { error: String(err) });
     }
@@ -364,24 +367,27 @@ export async function cancelMeeting(id: string, reason?: string) {
       include: { meetingType: { select: { name: true } } },
     });
 
-    // Send notification
+    // Send notification — guarded by toggle
     try {
-      const { createNotificationForCompany } = await import("@/lib/notifications-internal");
-      const admins = await prisma.user.findMany({
-        where: { companyId: user.companyId, role: "admin" },
-        select: { id: true },
-        take: 10,
-      });
-      await Promise.all(
-        admins.map(admin =>
-          createNotificationForCompany({
-            companyId: user.companyId,
-            userId: admin.id,
-            title: `פגישה בוטלה: ${meeting.participantName} - ${meeting.meetingType.name}`,
-            link: "/meetings",
-          })
-        )
-      );
+      const { isNotificationEnabled } = await import("@/lib/notification-settings");
+      if (await isNotificationEnabled(user.companyId, "notifyOnMeetingCancelled")) {
+        const { createNotificationForCompany } = await import("@/lib/notifications-internal");
+        const admins = await prisma.user.findMany({
+          where: { companyId: user.companyId, role: "admin" },
+          select: { id: true },
+          take: 10,
+        });
+        await Promise.all(
+          admins.map(admin =>
+            createNotificationForCompany({
+              companyId: user.companyId,
+              userId: admin.id,
+              title: `פגישה בוטלה: ${meeting.participantName} - ${meeting.meetingType.name}`,
+              link: "/meetings",
+            })
+          )
+        );
+      }
     } catch (err) {
       log.error("Failed to send cancellation notification", { error: String(err) });
     }
@@ -444,25 +450,28 @@ export async function rescheduleMeeting(id: string, newStart: string, newEnd: st
       });
     }
 
-    // Send notification
+    // Send notification — guarded by toggle
     try {
-      const { createNotificationForCompany } = await import("@/lib/notifications-internal");
-      const admins = await prisma.user.findMany({
-        where: { companyId: user.companyId, role: "admin" },
-        select: { id: true },
-        take: 10,
-      });
-      const timeStr = startTime.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" });
-      await Promise.all(
-        admins.map(admin =>
-          createNotificationForCompany({
-            companyId: user.companyId,
-            userId: admin.id,
-            title: `פגישה נדחתה: ${meeting.participantName} - ${meeting.meetingType.name} ל-${timeStr}`,
-            link: "/meetings",
-          })
-        )
-      );
+      const { isNotificationEnabled } = await import("@/lib/notification-settings");
+      if (await isNotificationEnabled(user.companyId, "notifyOnMeetingRescheduled")) {
+        const { createNotificationForCompany } = await import("@/lib/notifications-internal");
+        const admins = await prisma.user.findMany({
+          where: { companyId: user.companyId, role: "admin" },
+          select: { id: true },
+          take: 10,
+        });
+        const timeStr = startTime.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" });
+        await Promise.all(
+          admins.map(admin =>
+            createNotificationForCompany({
+              companyId: user.companyId,
+              userId: admin.id,
+              title: `פגישה נדחתה: ${meeting.participantName} - ${meeting.meetingType.name} ל-${timeStr}`,
+              link: "/meetings",
+            })
+          )
+        );
+      }
     } catch (err) {
       log.error("Failed to send reschedule notification", { error: String(err) });
     }

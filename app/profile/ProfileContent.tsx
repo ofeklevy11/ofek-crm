@@ -55,12 +55,16 @@ import {
   Lock,
   Pencil,
   AlertTriangle,
+  Bell,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { getApiKeys, createApiKey, deleteApiKey } from "@/app/actions/api-keys";
 import { updateCompanyName } from "@/app/actions/update-company-name";
 import { getBusinessSettings, updateBusinessSettings, type BusinessSettings } from "@/app/actions/business-settings";
 import { requestEmailChange, verifyEmailChange } from "@/app/actions/change-email";
+import { getNotificationSettings, updateNotificationSettings } from "@/app/actions/notification-settings";
+import type { NotificationSettings } from "@/lib/notification-settings";
+import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -130,6 +134,10 @@ export default function ProfileContent({ user }: ProfileContentProps) {
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Notification settings states
+  const [notifSettings, setNotifSettings] = useState<NotificationSettings | null>(null);
+  const [loadingNotif, setLoadingNotif] = useState(false);
+
   const isAdmin = user.role === "admin";
   const router = useRouter();
 
@@ -137,6 +145,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
     if (isAdmin) {
       loadKeys();
       loadBusinessSettings();
+      loadNotificationSettings();
     }
   }, [isAdmin]);
 
@@ -173,6 +182,36 @@ export default function ProfileContent({ user }: ProfileContentProps) {
       toast.error(getUserFriendlyError(err));
     } finally {
       setLoadingBusiness(false);
+    }
+  }
+
+  async function loadNotificationSettings() {
+    setLoadingNotif(true);
+    try {
+      const res = await getNotificationSettings();
+      if (res.success && res.data) {
+        setNotifSettings(res.data);
+      }
+    } catch (err) {
+      toast.error(getUserFriendlyError(err));
+    } finally {
+      setLoadingNotif(false);
+    }
+  }
+
+  async function handleToggleNotifSetting(key: keyof NotificationSettings, value: boolean) {
+    if (!notifSettings) return;
+    const prev = { ...notifSettings };
+    setNotifSettings({ ...notifSettings, [key]: value });
+    try {
+      const res = await updateNotificationSettings({ [key]: value });
+      if (!res.success) {
+        setNotifSettings(prev);
+        toast.error(res.error || "שגיאה בעדכון ההגדרה");
+      }
+    } catch (err) {
+      setNotifSettings(prev);
+      toast.error(getUserFriendlyError(err));
     }
   }
 
@@ -1028,6 +1067,99 @@ export default function ProfileContent({ user }: ProfileContentProps) {
           )}
         </div>
       </div>
+
+      {/* Notification Settings (admin only) */}
+      {isAdmin && (
+        <Card className="border-slate-200 shadow-sm overflow-hidden">
+          <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Bell className="w-5 h-5 text-amber-600" />
+              הגדרות התראות
+            </CardTitle>
+            <CardDescription>שליטה בהתראות אוטומטיות והתנהגויות מערכת</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {loadingNotif || !notifSettings ? (
+              <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
+                <Loader2 className="w-6 h-6 animate-spin" />
+                <span className="text-sm">טוען הגדרות...</span>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {/* Meetings section */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-slate-900 border-b border-slate-100 pb-2">פגישות</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-slate-800 text-sm">התראה על פגישה חדשה</p>
+                        <p className="text-xs text-slate-500">כשלקוח קובע פגישה</p>
+                      </div>
+                      <Switch checked={notifSettings.notifyOnMeetingBooked} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnMeetingBooked", v)} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-slate-800 text-sm">התראה על ביטול פגישה</p>
+                        <p className="text-xs text-slate-500">כשפגישה מבוטלת</p>
+                      </div>
+                      <Switch checked={notifSettings.notifyOnMeetingCancelled} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnMeetingCancelled", v)} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-slate-800 text-sm">התראה על דחיית פגישה</p>
+                        <p className="text-xs text-slate-500">כשפגישה נדחית</p>
+                      </div>
+                      <Switch checked={notifSettings.notifyOnMeetingRescheduled} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnMeetingRescheduled", v)} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-slate-800 text-sm">התראה על שינוי סטטוס פגישה</p>
+                        <p className="text-xs text-slate-500">כששינוי סטטוס פגישה ידני</p>
+                      </div>
+                      <Switch checked={notifSettings.notifyOnMeetingStatusChange} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnMeetingStatusChange", v)} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-slate-800 text-sm">יצירת לקוח אוטומטית בקביעת פגישה</p>
+                        <p className="text-xs text-slate-500">יוצר לקוח חדש כשלקוח קובע פגישה</p>
+                      </div>
+                      <Switch checked={notifSettings.autoCreateClientOnBooking} onCheckedChange={(v) => handleToggleNotifSetting("autoCreateClientOnBooking", v)} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tickets section */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-slate-900 border-b border-slate-100 pb-2">קריאות שירות</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-slate-800 text-sm">התראה על הקצאת קריאה</p>
+                        <p className="text-xs text-slate-500">כשקריאה חדשה מוקצית</p>
+                      </div>
+                      <Switch checked={notifSettings.notifyOnTicketAssigned} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnTicketAssigned", v)} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-slate-800 text-sm">התראה על שינוי הקצאה</p>
+                        <p className="text-xs text-slate-500">כשקריאה מועברת למשתמש אחר</p>
+                      </div>
+                      <Switch checked={notifSettings.notifyOnTicketReassigned} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnTicketReassigned", v)} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-slate-800 text-sm">התראה על תגובה בקריאה</p>
+                        <p className="text-xs text-slate-500">כשמישהו מגיב בקריאה</p>
+                      </div>
+                      <Switch checked={notifSettings.notifyOnTicketComment} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnTicketComment", v)} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Account Settings (full width) */}
       <Card className="border-slate-200 shadow-sm overflow-hidden">
