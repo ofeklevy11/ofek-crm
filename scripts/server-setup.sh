@@ -59,8 +59,21 @@ curl -fsSL https://get.docker.com | sh
 usermod -aG docker deploy
 systemctl enable docker
 
+echo "=== Configuring Docker daemon ==="
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json << 'DAEMONJSON'
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+DAEMONJSON
+systemctl restart docker
+
 echo "=== Installing Nginx ==="
-apt install -y nginx
+apt install -y nginx libnginx-mod-http-headers-more-filter
 systemctl enable nginx
 
 echo "=== Creating app directories ==="
@@ -107,6 +120,39 @@ server {
 NGINX
 
 ln -sf /etc/nginx/sites-available/crm /etc/nginx/sites-enabled/crm
+
+echo "=== Installing Nginx hardening config ==="
+cp /opt/crm/nginx/crm-hardening.conf /etc/nginx/conf.d/crm-hardening.conf
+cp /opt/crm/nginx/cloudflare-realip.conf /etc/nginx/conf.d/cloudflare-realip.conf
+mkdir -p /etc/nginx/snippets
+cp /opt/crm/nginx/meta-webhook-allow.conf /etc/nginx/snippets/meta-webhook-allow.conf
+mkdir -p /etc/nginx/custom-errors
+cp /opt/crm/nginx/429.json /etc/nginx/custom-errors/429.json
+cp /opt/crm/nginx/502.json /etc/nginx/custom-errors/502.json
+cp /opt/crm/nginx/503.json /etc/nginx/custom-errors/503.json
+cp /opt/crm/nginx/504.json /etc/nginx/custom-errors/504.json
+
+# Hide Server header completely
+echo 'more_clear_headers Server;' > /etc/nginx/conf.d/crm-headers-more.conf
+
+echo "=== Patching nginx.conf ==="
+NGINX_CONF="/etc/nginx/nginx.conf"
+# Remove duplicate rate limit zones (defined in crm-hardening.conf)
+sed -i '/limit_req_zone.*zone=api/d' "$NGINX_CONF"
+sed -i '/limit_req_zone.*zone=login/d' "$NGINX_CONF"
+# Fix insecure TLS defaults
+sed -i 's/ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3;/ssl_protocols TLSv1.2 TLSv1.3;/' "$NGINX_CONF"
+# Increase worker_connections
+sed -i 's/worker_connections 768;/worker_connections 4096;/' "$NGINX_CONF"
+# Enable multi_accept
+sed -i 's/# multi_accept on;/multi_accept on;/' "$NGINX_CONF"
+
+echo "=== Installing fail2ban filters and jails ==="
+cp /opt/crm/nginx/fail2ban/nginx-ratelimit.conf /etc/fail2ban/jail.d/nginx-ratelimit.conf
+cp /opt/crm/nginx/fail2ban/nginx-badbots.conf /etc/fail2ban/jail.d/nginx-badbots.conf
+cp /opt/crm/nginx/fail2ban/filter-ratelimit.conf /etc/fail2ban/filter.d/nginx-ratelimit.conf
+cp /opt/crm/nginx/fail2ban/filter-badbots.conf /etc/fail2ban/filter.d/nginx-badbots.conf
+
 nginx -t && systemctl reload nginx
 
 echo "=== Setting up blue-green deployment state ==="

@@ -1,0 +1,6 @@
+modules:
+  tls_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      tls: true

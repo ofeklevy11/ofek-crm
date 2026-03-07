@@ -181,7 +181,13 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/alert") {
     // Auth check
     const secret = req.headers["x-webhook-secret"];
-    if (WEBHOOK_SECRET && secret !== WEBHOOK_SECRET) {
+    if (!WEBHOOK_SECRET) {
+      console.error("WEBHOOK_SECRET is not configured — rejecting request");
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Server misconfigured: WEBHOOK_SECRET not set" }));
+      return;
+    }
+    if (secret !== WEBHOOK_SECRET) {
       res.writeHead(401, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Unauthorized" }));
       return;

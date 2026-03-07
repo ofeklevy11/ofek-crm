@@ -197,6 +197,31 @@ groups:
           dashboard: "/d/crm-business"
           action: "Check for missing indexes or complex queries"
 
+  # ── TLS / Certificate alerts ──
+  - name: tls
+    rules:
+      - alert: CertExpiringWarning
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 21
+        for: 1h
+        labels:
+          severity: warning
+          category: infra
+        annotations:
+          summary: "TLS certificate expires in {{ $value | printf \"%.0f\" }} days"
+          description: "Certificate for {{ $labels.instance }} expires soon"
+          action: "Run: sudo certbot renew --nginx"
+
+      - alert: CertExpiringCritical
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 7
+        for: 10m
+        labels:
+          severity: critical
+          category: infra
+        annotations:
+          summary: "TLS certificate expires in {{ $value | printf \"%.0f\" }} days"
+          description: "Certificate for {{ $labels.instance }} is about to expire"
+          action: "Immediate action: sudo certbot renew --nginx && sudo systemctl reload nginx"
+
   # ── Backup alerts ──
   - name: backup
     rules:

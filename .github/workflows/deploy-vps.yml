@@ -47,6 +47,10 @@ jobs:
             git reset --hard origin/main
             rm -f ~/.ssh/github_deploy_key
 
+            # Fix Windows CRLF line endings on shell scripts
+            find /opt/crm/scripts -name '*.sh' -exec sed -i 's/\r$//' {} +
+            chmod +x /opt/crm/scripts/*.sh /opt/crm/scripts/playbooks/*.sh
+
             # Determine current and target slots
             CURRENT=$(cat "$STATE_FILE" 2>/dev/null || echo "none")
             if [ "$CURRENT" = "blue" ]; then
@@ -60,6 +64,19 @@ jobs:
 
             echo "=== Tagging current image for rollback ==="
             docker tag crm-app:latest crm-app:rollback 2>/dev/null || true
+
+            echo "=== Updating Nginx configs ==="
+            sudo cp /opt/crm/nginx/crm-hardening.conf /etc/nginx/conf.d/crm-hardening.conf
+            sudo cp /opt/crm/nginx/cloudflare-realip.conf /etc/nginx/conf.d/cloudflare-realip.conf
+            sudo mkdir -p /etc/nginx/snippets
+            sudo cp /opt/crm/nginx/meta-webhook-allow.conf /etc/nginx/snippets/meta-webhook-allow.conf
+            sudo cp /opt/crm/nginx/default.conf /etc/nginx/sites-available/crm
+            sudo mkdir -p /etc/nginx/custom-errors
+            sudo cp /opt/crm/nginx/429.json /etc/nginx/custom-errors/429.json
+            sudo cp /opt/crm/nginx/502.json /etc/nginx/custom-errors/502.json
+            sudo cp /opt/crm/nginx/503.json /etc/nginx/custom-errors/503.json
+            sudo cp /opt/crm/nginx/504.json /etc/nginx/custom-errors/504.json
+            sudo nginx -t || { echo "ERROR: Nginx config test failed"; exit 1; }
 
             echo "=== Building new Docker image ==="
             docker build -t crm-app:latest -f Dockerfile.production .
@@ -125,6 +142,8 @@ jobs:
             sudo nginx -t && sudo nginx -s reload
 
             if [ "$CURRENT" != "none" ]; then
+              echo "=== Draining in-flight requests (5s) ==="
+              sleep 5
               echo "=== Stopping old slot: app-$CURRENT ==="
               $COMPOSE --profile $CURRENT rm -sf app-$CURRENT
             fi
@@ -133,6 +152,11 @@ jobs:
 
             echo "=== Cleaning up old images ==="
             docker image prune -f
+
+            echo "=== Enforcing secret file permissions ==="
+            chmod 600 /opt/crm/.env.production
+            test -f /opt/crm/backup.env && chmod 600 /opt/crm/backup.env
+            echo ".env.production permissions: $(stat -c '%a' /opt/crm/.env.production)"
 
             echo ""
             echo "=== Deployment successful: app-$TARGET is active ==="

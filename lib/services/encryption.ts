@@ -1,11 +1,12 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
+import { env } from "../env";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
 const TAG_LENGTH = 16;
 
 function getEncryptionKey(): Buffer {
-  const keyHex = process.env.WHATSAPP_TOKEN_ENCRYPTION_KEY;
+  const keyHex = env.WHATSAPP_TOKEN_ENCRYPTION_KEY;
   if (!keyHex || keyHex.length !== 64) {
     throw new Error(
       "WHATSAPP_TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)",

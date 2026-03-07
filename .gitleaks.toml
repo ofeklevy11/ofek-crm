@@ -1,0 +1,15 @@
+[extend]
+useDefault = true
+
+[allowlist]
+paths = [
+  '''.env\.production\.template''',
+  '''.env\.example''',
+  '''\.github/workflows/ci\.yml''',
+  '''\.github/workflows/e2e\.yml''',
+  '''\.github/workflows/deploy-vps\.yml''',
+  '''tests/.*''',
+]
+stopwords = [
+  '''eyBidWlsZFRpbWVEdW1teSA9IHRydWUgfQ==''',
+]

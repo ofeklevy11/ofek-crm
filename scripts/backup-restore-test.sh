@@ -195,30 +195,81 @@ if [[ "$LATEST_AGE" == /tmp/* ]]; then
 fi
 TEMP_FILES=""
 
-# ── Step 7b: Check Redis backup existence ──
+# ── Step 7b: Validate Redis backup (decrypt + load into temp container) ──
 
 CURRENT_STEP="check_redis_backup"
 B2_REMOTE="${RCLONE_B2_REMOTE:-b2}"
 B2_BUCKET="${RCLONE_B2_BUCKET:-bizlycrm-backups}"
+REDIS_TEST_CONTAINER="redis-restore-test"
+REDIS_RESTORE_RDB="/tmp/restore-test.rdb"
 
 LATEST_REDIS=$(find "$BACKUP_DIR" -maxdepth 1 -name "crm_*.rdb.age" -printf '%T@ %p\n' 2>/dev/null \
     | sort -rn | head -1 | cut -d' ' -f2-)
 
+REDIS_DOWNLOADED=false
 if [[ -z "$LATEST_REDIS" ]]; then
     LATEST_REDIS_REMOTE=$(rclone lsjson "${B2_REMOTE}:${B2_BUCKET}/redis/" --no-mimetype 2>/dev/null \
         | jq -r '[.[] | select(.Name | test("^crm_.*\\.rdb\\.age$"))] | sort_by(.Name) | last | .Name // empty')
     if [[ -n "$LATEST_REDIS_REMOTE" ]]; then
-        LATEST_REDIS="(B2) ${LATEST_REDIS_REMOTE}"
+        LATEST_REDIS="/tmp/${LATEST_REDIS_REMOTE}"
+        rclone copy "${B2_REMOTE}:${B2_BUCKET}/redis/${LATEST_REDIS_REMOTE}" /tmp/
+        REDIS_DOWNLOADED=true
     fi
 fi
 
-if [[ -n "$LATEST_REDIS" ]]; then
-    RESULTS+=("PASS redis_backup_exists: $(basename "$LATEST_REDIS")")
-    ((PASS_COUNT++))
-    log_json "info" "check_pass" "Redis backup exists: $(basename "$LATEST_REDIS")"
+if [[ -n "$LATEST_REDIS" && -f "$LATEST_REDIS" ]]; then
+    log_json "info" "redis_backup_found" "Using Redis backup: $(basename "$LATEST_REDIS")"
+
+    # Decrypt
+    age -d -i "$AGE_KEY_FILE" -o "$REDIS_RESTORE_RDB" "$LATEST_REDIS" 2>/dev/null
+    if [[ $? -eq 0 && -f "$REDIS_RESTORE_RDB" ]]; then
+        RDB_SIZE=$(stat -c%s "$REDIS_RESTORE_RDB" 2>/dev/null || echo "0")
+        if [[ "$RDB_SIZE" -gt 100 ]]; then
+            # Load into ephemeral Redis container
+            docker rm -f "$REDIS_TEST_CONTAINER" 2>/dev/null || true
+            docker run --rm -d --name "$REDIS_TEST_CONTAINER" --network none redis:7-alpine > /dev/null 2>&1
+
+            # Wait for Redis to be ready
+            RETRIES=0
+            until docker exec "$REDIS_TEST_CONTAINER" redis-cli ping > /dev/null 2>&1; do
+                ((RETRIES++))
+                if [[ $RETRIES -ge 15 ]]; then break; fi
+                sleep 1
+            done
+
+            # Copy RDB and restart to load it
+            docker cp "$REDIS_RESTORE_RDB" "${REDIS_TEST_CONTAINER}:/data/dump.rdb"
+            docker restart "$REDIS_TEST_CONTAINER" > /dev/null 2>&1
+            sleep 2
+
+            DBSIZE=$(docker exec "$REDIS_TEST_CONTAINER" redis-cli DBSIZE 2>/dev/null | grep -oP '\d+' || echo "0")
+            docker rm -f "$REDIS_TEST_CONTAINER" > /dev/null 2>&1
+
+            if [[ "$DBSIZE" -gt 0 ]]; then
+                RESULTS+=("PASS redis_restore: ${DBSIZE} keys loaded from $(basename "$LATEST_REDIS")")
+                ((PASS_COUNT++))
+                log_json "info" "check_pass" "Redis restore OK: ${DBSIZE} keys"
+            else
+                RESULTS+=("FAIL redis_restore: 0 keys loaded — RDB may be empty or corrupt")
+                ((FAIL_COUNT++))
+                log_json "error" "check_fail" "Redis restore failed: 0 keys"
+            fi
+        else
+            RESULTS+=("FAIL redis_rdb_size: decrypted RDB only ${RDB_SIZE} bytes")
+            ((FAIL_COUNT++))
+            log_json "error" "check_fail" "Redis RDB too small: ${RDB_SIZE} bytes"
+        fi
+    else
+        RESULTS+=("FAIL redis_decrypt: failed to decrypt $(basename "$LATEST_REDIS")")
+        ((FAIL_COUNT++))
+        log_json "error" "check_fail" "Redis backup decryption failed"
+    fi
+
+    rm -f "$REDIS_RESTORE_RDB"
+    if [[ "$REDIS_DOWNLOADED" == "true" ]]; then rm -f "$LATEST_REDIS"; fi
 
     # Staleness check
-    REDIS_BASENAME=$(basename "$LATEST_REDIS" | sed 's/(B2) //')
+    REDIS_BASENAME=$(basename "$LATEST_REDIS")
     REDIS_DATE=$(echo "$REDIS_BASENAME" | grep -oP 'crm_\K[0-9]{8}_[0-9]{6}')
     if [[ -n "$REDIS_DATE" ]]; then
         REDIS_EPOCH=$(date -d "${REDIS_DATE:0:8} ${REDIS_DATE:9:2}:${REDIS_DATE:11:2}:${REDIS_DATE:13:2}" +%s 2>/dev/null || echo 0)
@@ -230,33 +281,74 @@ if [[ -n "$LATEST_REDIS" ]]; then
         fi
     fi
 else
-    RESULTS+=("FAIL redis_backup_exists: no Redis backup found")
+    RESULTS+=("FAIL redis_backup_exists: no Redis backup found locally or on B2")
     ((FAIL_COUNT++))
     log_json "error" "check_fail" "No Redis backup found locally or on B2"
 fi
 
-# ── Step 7c: Check Config backup existence ──
+# ── Step 7c: Validate Config backup (decrypt + verify key files) ──
 
 CURRENT_STEP="check_config_backup"
+CONFIG_RESTORE_TAR="/tmp/restore-test-config.tar.gz"
 
 LATEST_CONFIG=$(find "$BACKUP_DIR" -maxdepth 1 -name "crm_*.configs.tar.gz.age" -printf '%T@ %p\n' 2>/dev/null \
     | sort -rn | head -1 | cut -d' ' -f2-)
 
+CONFIG_DOWNLOADED=false
 if [[ -z "$LATEST_CONFIG" ]]; then
     LATEST_CONFIG_REMOTE=$(rclone lsjson "${B2_REMOTE}:${B2_BUCKET}/configs/" --no-mimetype 2>/dev/null \
         | jq -r '[.[] | select(.Name | test("^crm_.*\\.configs\\.tar\\.gz\\.age$"))] | sort_by(.Name) | last | .Name // empty')
     if [[ -n "$LATEST_CONFIG_REMOTE" ]]; then
-        LATEST_CONFIG="(B2) ${LATEST_CONFIG_REMOTE}"
+        LATEST_CONFIG="/tmp/${LATEST_CONFIG_REMOTE}"
+        rclone copy "${B2_REMOTE}:${B2_BUCKET}/configs/${LATEST_CONFIG_REMOTE}" /tmp/
+        CONFIG_DOWNLOADED=true
     fi
 fi
 
-if [[ -n "$LATEST_CONFIG" ]]; then
-    RESULTS+=("PASS config_backup_exists: $(basename "$LATEST_CONFIG")")
-    ((PASS_COUNT++))
-    log_json "info" "check_pass" "Config backup exists: $(basename "$LATEST_CONFIG")"
+if [[ -n "$LATEST_CONFIG" && -f "$LATEST_CONFIG" ]]; then
+    log_json "info" "config_backup_found" "Using config backup: $(basename "$LATEST_CONFIG")"
+
+    # Decrypt
+    age -d -i "$AGE_KEY_FILE" -o "$CONFIG_RESTORE_TAR" "$LATEST_CONFIG" 2>/dev/null
+    if [[ $? -eq 0 && -f "$CONFIG_RESTORE_TAR" ]]; then
+        # List contents and verify key files are present
+        TAR_CONTENTS=$(tar -tzf "$CONFIG_RESTORE_TAR" 2>/dev/null || echo "")
+        REQUIRED_FILES=(".env.production" "rclone.conf")
+        CONFIG_PASS=true
+
+        for req in "${REQUIRED_FILES[@]}"; do
+            if echo "$TAR_CONTENTS" | grep -q "$req"; then
+                log_json "info" "config_file_ok" "Found ${req} in config backup"
+            else
+                log_json "warn" "config_file_missing" "${req} not found in config backup"
+                CONFIG_PASS=false
+            fi
+        done
+
+        FILE_COUNT=$(echo "$TAR_CONTENTS" | wc -l)
+        if $CONFIG_PASS && [[ "$FILE_COUNT" -gt 2 ]]; then
+            RESULTS+=("PASS config_restore: ${FILE_COUNT} files in archive from $(basename "$LATEST_CONFIG")")
+            ((PASS_COUNT++))
+            log_json "info" "check_pass" "Config restore OK: ${FILE_COUNT} files"
+        elif [[ "$FILE_COUNT" -le 2 ]]; then
+            RESULTS+=("FAIL config_restore: only ${FILE_COUNT} files in archive")
+            ((FAIL_COUNT++))
+            log_json "error" "check_fail" "Config archive too small: ${FILE_COUNT} files"
+        else
+            RESULTS+=("WARN config_restore: ${FILE_COUNT} files but missing required files")
+            log_json "warn" "check_warn" "Config archive incomplete"
+        fi
+    else
+        RESULTS+=("FAIL config_decrypt: failed to decrypt $(basename "$LATEST_CONFIG")")
+        ((FAIL_COUNT++))
+        log_json "error" "check_fail" "Config backup decryption failed"
+    fi
+
+    rm -f "$CONFIG_RESTORE_TAR"
+    if [[ "$CONFIG_DOWNLOADED" == "true" ]]; then rm -f "$LATEST_CONFIG"; fi
 
     # Staleness check
-    CONFIG_BASENAME=$(basename "$LATEST_CONFIG" | sed 's/(B2) //')
+    CONFIG_BASENAME=$(basename "$LATEST_CONFIG")
     CONFIG_DATE=$(echo "$CONFIG_BASENAME" | grep -oP 'crm_\K[0-9]{8}_[0-9]{6}')
     if [[ -n "$CONFIG_DATE" ]]; then
         CONFIG_EPOCH=$(date -d "${CONFIG_DATE:0:8} ${CONFIG_DATE:9:2}:${CONFIG_DATE:11:2}:${CONFIG_DATE:13:2}" +%s 2>/dev/null || echo 0)
@@ -268,7 +360,7 @@ if [[ -n "$LATEST_CONFIG" ]]; then
         fi
     fi
 else
-    RESULTS+=("FAIL config_backup_exists: no config backup found")
+    RESULTS+=("FAIL config_backup_exists: no config backup found locally or on B2")
     ((FAIL_COUNT++))
     log_json "error" "check_fail" "No config backup found locally or on B2"
 fi

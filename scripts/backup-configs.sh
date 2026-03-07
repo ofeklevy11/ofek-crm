@@ -37,7 +37,21 @@ CONFIG_PATHS=(
     /opt/crm/backup.env
     /etc/nginx/sites-available/crm
     /etc/nginx/conf.d/crm-upstream.conf
+    /etc/nginx/conf.d/crm-hardening.conf
+    /etc/nginx/custom-errors/429.json
+    /etc/nginx/custom-errors/502.json
+    /etc/nginx/custom-errors/503.json
+    /etc/nginx/custom-errors/504.json
+    /etc/nginx/conf.d/crm-headers-more.conf
     /root/.config/rclone/rclone.conf
+    /etc/docker/daemon.json
+)
+
+# Directories to back up (included recursively)
+CONFIG_DIRS=(
+    /etc/letsencrypt/live
+    /etc/letsencrypt/renewal
+    /etc/fail2ban/jail.d
 )
 
 # Systemd units (glob patterns)
@@ -55,6 +69,17 @@ for path in "${CONFIG_PATHS[@]}"; do
         log_json "info" "config_found" "Including: ${path}"
     else
         log_json "warn" "config_missing" "Skipping missing file: ${path}"
+    fi
+done
+
+for dir in "${CONFIG_DIRS[@]}"; do
+    if [[ -d "$dir" ]]; then
+        while IFS= read -r -d '' file; do
+            FOUND_FILES+=("$file")
+        done < <(find "$dir" -type f -print0 2>/dev/null)
+        log_json "info" "config_dir_found" "Including directory: ${dir}"
+    else
+        log_json "warn" "config_dir_missing" "Skipping missing directory: ${dir}"
     fi
 done
 

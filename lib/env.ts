@@ -12,6 +12,16 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function requireEnvMinLength(name: string, minLength: number): string {
+  const value = requireEnv(name);
+  if (value.length < minLength) {
+    throw new Error(
+      `FATAL: ${name} must be at least ${minLength} characters (got ${value.length}).`,
+    );
+  }
+  return value;
+}
+
 function optionalEnv(name: string): string | undefined {
   return process.env[name] || undefined;
 }
@@ -20,15 +30,17 @@ function optionalEnv(name: string): string | undefined {
 export const env = {
   DATABASE_URL: requireEnv("DATABASE_URL"),
   REDIS_URL: requireEnv("REDIS_URL"),
-  SESSION_SECRET: requireEnv("SESSION_SECRET"),
+  SESSION_SECRET: requireEnvMinLength("SESSION_SECRET", 32),
   CRON_SECRET: requireEnv("CRON_SECRET"),
 
   UPLOADTHING_TOKEN: requireEnv("UPLOADTHING_TOKEN"),
   OPENROUTER_API_KEY: optionalEnv("OPENROUTER_API_KEY"),
   PDFMONKEY_API_KEY: optionalEnv("PDFMONKEY_API_KEY"),
+  RESEND_API_KEY: optionalEnv("RESEND_API_KEY"),
   INNGEST_EVENT_KEY: optionalEnv("INNGEST_EVENT_KEY"),
   INNGEST_SIGNING_KEY: optionalEnv("INNGEST_SIGNING_KEY"),
   WHATSAPP_ACCESS_TOKEN: optionalEnv("WHATSAPP_ACCESS_TOKEN"),
+  WHATSAPP_TOKEN_ENCRYPTION_KEY: optionalEnv("WHATSAPP_TOKEN_ENCRYPTION_KEY"),
   NEXT_PUBLIC_APP_URL:
     process.env.NODE_ENV === "production"
       ? requireEnv("NEXT_PUBLIC_APP_URL")

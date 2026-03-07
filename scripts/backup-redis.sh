@@ -63,10 +63,29 @@ if [[ $WAITED -ge $MAX_WAIT ]]; then
     exit 1
 fi
 
+# Brief pause to ensure RDB is fully flushed to disk
+sleep 1
+
 # ── Step 3: Copy RDB out of container ──
 
 CURRENT_STEP="copy_rdb"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" cp redis:/data/dump.rdb "$RDB_FILE"
+REDIS_VOLUME_PATH="/var/lib/docker/volumes/crm_redis_data/_data"
+
+if [[ -f "${REDIS_VOLUME_PATH}/dump.rdb" ]]; then
+    log_json "info" "copy_method" "Copying RDB from host volume path"
+    cp "${REDIS_VOLUME_PATH}/dump.rdb" "$RDB_FILE"
+else
+    log_json "warn" "copy_fallback" "Volume path not found, falling back to docker compose cp"
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" cp redis:/data/dump.rdb "$RDB_FILE"
+fi
+
+# Verify copied size matches in-container size
+CONTAINER_RDB_SIZE=$(docker_compose_exec redis stat -c%s /data/dump.rdb 2>/dev/null || echo "0")
+HOST_RDB_SIZE=$(stat -c%s "$RDB_FILE" 2>/dev/null || echo "0")
+if [[ "$HOST_RDB_SIZE" -ne "$CONTAINER_RDB_SIZE" ]]; then
+    log_json "error" "rdb_size_mismatch" "Size mismatch: container=${CONTAINER_RDB_SIZE}, copied=${HOST_RDB_SIZE}"
+    exit 1
+fi
 
 # ── Step 4: Validate RDB ──
 

@@ -39,6 +39,7 @@ services:
     command:
       - |
         printf '%s' "$$CRON_SECRET" > /tmp/cron_secret &&
+        chmod 400 /tmp/cron_secret &&
         exec /bin/prometheus \
           --config.file=/etc/prometheus/prometheus.yml \
           --storage.tsdb.path=/prometheus \
@@ -124,9 +125,16 @@ services:
   alertmanager:
     image: prom/alertmanager:v0.28.1
     restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      - "--config.file=/etc/alertmanager/alertmanager.yml"
-      - "--storage.path=/alertmanager"
+      - |
+        printf '%s' "$$WEBHOOK_SECRET" > /tmp/webhook_secret &&
+        chmod 400 /tmp/webhook_secret &&
+        exec /bin/alertmanager \
+          --config.file=/etc/alertmanager/alertmanager.yml \
+          --storage.path=/alertmanager
+    environment:
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
     volumes:
       - alertmanager_data:/alertmanager
       - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
@@ -234,6 +242,7 @@ services:
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
       GRAFANA_URL: "https://monitoring.bizlycrm.com"
       ENABLE_AUTO_REMEDIATION: "true"
     group_add:
@@ -259,6 +268,82 @@ services:
       resources:
         limits:
           memory: 64M
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    restart: unless-stopped
+    command: --config.file=/etc/blackbox/blackbox.yml
+    volumes:
+      - ./monitoring/blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    networks:
+      - monitoring
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:9115/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.3.0
+    restart: unless-stopped
+    command: --nginx.scrape-uri=http://host.docker.internal:8484/stub_status
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - monitoring
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:9113/metrics || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - monitoring
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
 networks:
   monitoring:

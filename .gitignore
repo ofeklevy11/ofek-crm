@@ -49,6 +49,7 @@ next-env.d.ts
 .env*.local
 
 !.env.production.template
+!.env.example
 
 # production data (VPS)
 /pgdata

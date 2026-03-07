@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#
+# Pre-commit hook: scan staged changes for leaked secrets using gitleaks.
+# Install: git config core.hooksPath .githooks
+#
+
+if command -v gitleaks &> /dev/null; then
+  gitleaks protect --staged --config .gitleaks.toml --verbose
+  if [ $? -ne 0 ]; then
+    echo ""
+    echo "ERROR: gitleaks detected secrets in staged changes."
+    echo "If this is a false positive, add an allowlist entry to .gitleaks.toml"
+    exit 1
+  fi
+else
+  echo "WARNING: gitleaks is not installed — skipping secret scan."
+  echo "Install: winget install Gitleaks  (or download from https://github.com/gitleaks/gitleaks/releases)"
+fi

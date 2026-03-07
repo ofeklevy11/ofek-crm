@@ -38,3 +38,31 @@ scrape_configs:
       - targets: ["redis-exporter:9121"]
         labels:
           service: "redis"
+
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+        labels:
+          service: "docker"
+
+  - job_name: "blackbox-tls"
+    metrics_path: /probe
+    params:
+      module: [tls_connect]
+    static_configs:
+      - targets:
+          - "bizlycrm.com:443"
+          - "monitoring.bizlycrm.com:443"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: "nginx-exporter"
+    static_configs:
+      - targets: ["nginx-exporter:9113"]
+        labels:
+          service: "nginx"
