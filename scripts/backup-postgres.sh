@@ -19,7 +19,7 @@ check_deps
 mkdir -p "$BACKUP_DIR" "$CHECKSUM_DIR" "$LOG_DIR"
 chmod 700 "$BACKUP_DIR"
 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+TIMESTAMP="${BACKUP_TIMESTAMP:-$(date +%Y%m%d_%H%M%S)}"
 DUMP_FILE="${BACKUP_DIR}/crm_${TIMESTAMP}.dump"
 CHECKSUM_FILE="${CHECKSUM_DIR}/crm_${TIMESTAMP}.dump.sha256"
 ENCRYPTED_FILE="${BACKUP_DIR}/crm_${TIMESTAMP}.dump.age"
@@ -112,11 +112,13 @@ write_prom_metric "crm_backup_duration_seconds" "$DURATION"
 # ── Step 9: Send success notification ──
 
 CURRENT_STEP="notify"
+if [[ -z "${BACKUP_QUIET:-}" ]]; then
 send_telegram "V" "Backup Complete" "Size: ${ENC_SIZE_HUMAN}
 Duration: ${DURATION}s
 File: crm_${TIMESTAMP}.dump.age
 B2: ${B2_PATH}/crm_${TIMESTAMP}.dump.age
 Host: $(hostname)"
+fi
 
 log_json "info" "backup_complete" "Backup pipeline finished successfully" \
     "duration=${DURATION}" "size_bytes=${ENC_SIZE}" "file=crm_${TIMESTAMP}.dump.age"

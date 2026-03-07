@@ -1,21 +1,38 @@
 # CRM Backup System
 
-Automated PostgreSQL backup pipeline with encryption, off-site storage (Backblaze B2), restore verification, and Telegram alerts.
+Automated full-snapshot backup pipeline: PostgreSQL + Redis + config files, with encryption, off-site storage (Backblaze B2), restore verification, and Telegram alerts.
 
 ## Architecture
 
 ```
-pg_dump -> SHA-256 checksum -> age encryption -> rclone upload to B2
-                                                        |
-                                            Telegram notification
-                                            Prometheus metrics
+backup-full.sh (orchestrator, shared BACKUP_TIMESTAMP)
+├── backup-postgres.sh   pg_dump -> SHA-256 -> age encrypt -> B2 upload
+├── backup-redis.sh      BGSAVE -> copy RDB -> SHA-256 -> age encrypt -> B2 upload
+└── backup-configs.sh    tar.gz configs -> SHA-256 -> age encrypt -> B2 upload
+                                                            |
+                                               Telegram summary notification
+                                               Prometheus metrics
 ```
+
+Each sub-script can also run standalone (generates its own timestamp if `BACKUP_TIMESTAMP` is not set).
 
 - **Schedule**: Every 12h (02:00, 14:00) via systemd timers
 - **Retention cleanup**: Daily at 04:00
 - **Restore verification**: Sundays at 05:00
 - **Encryption**: `age` (public-key, single binary)
 - **Off-site storage**: Backblaze B2 via `rclone`
+
+## B2 Storage Layout
+
+```
+b2:bizlycrm-backups/
+├── postgres/       crm_YYYYMMDD_HHMMSS.dump.age
+│   └── checksums/  crm_YYYYMMDD_HHMMSS.dump.sha256
+├── redis/          crm_YYYYMMDD_HHMMSS.rdb.age
+│   └── checksums/  crm_YYYYMMDD_HHMMSS.rdb.sha256
+└── configs/        crm_YYYYMMDD_HHMMSS.configs.tar.gz.age
+    └── checksums/  crm_YYYYMMDD_HHMMSS.configs.tar.gz.sha256
+```
 
 ## Setup
 
@@ -29,10 +46,18 @@ This installs `age`, `rclone`, `jq`, generates an encryption keypair, creates sy
 
 ## Manual Operations
 
-### Run a backup manually
+### Run a full backup (all components)
+
+```bash
+sudo /opt/crm/scripts/backup-full.sh
+```
+
+### Run individual backups
 
 ```bash
 sudo /opt/crm/scripts/backup-postgres.sh
+sudo /opt/crm/scripts/backup-redis.sh
+sudo /opt/crm/scripts/backup-configs.sh
 ```
 
 ### Run retention cleanup
@@ -64,7 +89,7 @@ systemctl list-timers --all | grep crm
 
 ## Emergency Restore
 
-To restore the database from backup on the production server:
+### PostgreSQL
 
 ```bash
 # 1. Find the latest backup
@@ -97,6 +122,51 @@ docker compose -f /opt/crm/docker-compose.production.yml --env-file /opt/crm/.en
 rm /tmp/restore.dump
 ```
 
+### Redis
+
+```bash
+# 1. Find the latest backup
+ls -lt /opt/crm-backups/crm_*.rdb.age | head -5
+# Or: rclone ls b2:bizlycrm-backups/redis/ | tail -5
+
+# 2. Download from B2 if needed
+rclone copy b2:bizlycrm-backups/redis/crm_YYYYMMDD_HHMMSS.rdb.age /tmp/
+
+# 3. Decrypt
+age -d -i /root/backup-keys/age-key.txt -o /tmp/restore.rdb crm_YYYYMMDD_HHMMSS.rdb.age
+
+# 4. Stop Redis, replace dump.rdb, restart
+docker compose -f /opt/crm/docker-compose.production.yml --env-file /opt/crm/.env.production stop redis
+docker compose -f /opt/crm/docker-compose.production.yml --env-file /opt/crm/.env.production cp /tmp/restore.rdb redis:/data/dump.rdb
+docker compose -f /opt/crm/docker-compose.production.yml --env-file /opt/crm/.env.production start redis
+
+# 5. Clean up
+rm /tmp/restore.rdb
+```
+
+### Config Files
+
+```bash
+# 1. Find the latest backup
+ls -lt /opt/crm-backups/crm_*.configs.tar.gz.age | head -5
+# Or: rclone ls b2:bizlycrm-backups/configs/ | tail -5
+
+# 2. Download from B2 if needed
+rclone copy b2:bizlycrm-backups/configs/crm_YYYYMMDD_HHMMSS.configs.tar.gz.age /tmp/
+
+# 3. Decrypt
+age -d -i /root/backup-keys/age-key.txt -o /tmp/configs.tar.gz crm_YYYYMMDD_HHMMSS.configs.tar.gz.age
+
+# 4. Inspect contents before restoring
+tar -tzf /tmp/configs.tar.gz
+
+# 5. Restore (overwrites existing files — absolute paths preserved)
+tar -xzf /tmp/configs.tar.gz -P
+
+# 6. Clean up
+rm /tmp/configs.tar.gz
+```
+
 ## Retention Policy
 
 | Period | Kept | Frequency |
@@ -106,6 +176,7 @@ rm /tmp/restore.dump
 | 29-90 days | 1/week | Weekly (~8 files) |
 | 91+ days | 1/month | Monthly |
 
+Applied separately to each backup type (postgres, redis, configs).
 Local storage: Only 7 days of encrypted `.age` files.
 
 ## Credential Rotation
@@ -149,9 +220,15 @@ All settings are in `/opt/crm/backup.env`:
 ## Monitoring
 
 - **Prometheus metrics** (via node-exporter textfile collector):
-  - `crm_backup_last_success_timestamp` - epoch of last successful backup
-  - `crm_backup_last_size_bytes` - size of last backup
-  - `crm_backup_duration_seconds` - duration of last backup
+  - `crm_backup_last_success_timestamp` - epoch of last successful Postgres backup
+  - `crm_backup_last_size_bytes` - size of last Postgres backup
+  - `crm_backup_duration_seconds` - duration of last Postgres backup
+  - `crm_backup_redis_last_success_timestamp` - epoch of last successful Redis backup
+  - `crm_backup_redis_last_size_bytes` - size of last Redis backup
+  - `crm_backup_redis_duration_seconds` - duration of last Redis backup
+  - `crm_backup_configs_last_success_timestamp` - epoch of last successful config backup
+  - `crm_backup_configs_last_size_bytes` - size of last config backup
+  - `crm_backup_full_last_success_timestamp` - epoch of last successful full backup
   - `crm_restore_test_last_success_timestamp` - epoch of last successful restore test
 - **Alerts**:
   - `BackupStale` (critical) - no backup in 14 hours
@@ -170,3 +247,5 @@ All settings are in `/opt/crm/backup.env`:
 **No Telegram notifications**: Verify `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `backup.env`. Test with: `curl -s "https://api.telegram.org/bot<TOKEN>/sendMessage" -d chat_id=<CHAT_ID> -d text=test`
 
 **Timer not firing**: Check `systemctl status crm-backup.timer` and `journalctl -u crm-backup.timer`.
+
+**Redis BGSAVE timeout**: Check Redis memory usage with `docker compose exec redis redis-cli INFO memory`. Large datasets may need longer timeout.

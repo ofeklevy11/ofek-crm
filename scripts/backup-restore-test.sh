@@ -195,6 +195,84 @@ if [[ "$LATEST_AGE" == /tmp/* ]]; then
 fi
 TEMP_FILES=""
 
+# ── Step 7b: Check Redis backup existence ──
+
+CURRENT_STEP="check_redis_backup"
+B2_REMOTE="${RCLONE_B2_REMOTE:-b2}"
+B2_BUCKET="${RCLONE_B2_BUCKET:-bizlycrm-backups}"
+
+LATEST_REDIS=$(find "$BACKUP_DIR" -maxdepth 1 -name "crm_*.rdb.age" -printf '%T@ %p\n' 2>/dev/null \
+    | sort -rn | head -1 | cut -d' ' -f2-)
+
+if [[ -z "$LATEST_REDIS" ]]; then
+    LATEST_REDIS_REMOTE=$(rclone lsjson "${B2_REMOTE}:${B2_BUCKET}/redis/" --no-mimetype 2>/dev/null \
+        | jq -r '[.[] | select(.Name | test("^crm_.*\\.rdb\\.age$"))] | sort_by(.Name) | last | .Name // empty')
+    if [[ -n "$LATEST_REDIS_REMOTE" ]]; then
+        LATEST_REDIS="(B2) ${LATEST_REDIS_REMOTE}"
+    fi
+fi
+
+if [[ -n "$LATEST_REDIS" ]]; then
+    RESULTS+=("PASS redis_backup_exists: $(basename "$LATEST_REDIS")")
+    ((PASS_COUNT++))
+    log_json "info" "check_pass" "Redis backup exists: $(basename "$LATEST_REDIS")"
+
+    # Staleness check
+    REDIS_BASENAME=$(basename "$LATEST_REDIS" | sed 's/(B2) //')
+    REDIS_DATE=$(echo "$REDIS_BASENAME" | grep -oP 'crm_\K[0-9]{8}_[0-9]{6}')
+    if [[ -n "$REDIS_DATE" ]]; then
+        REDIS_EPOCH=$(date -d "${REDIS_DATE:0:8} ${REDIS_DATE:9:2}:${REDIS_DATE:11:2}:${REDIS_DATE:13:2}" +%s 2>/dev/null || echo 0)
+        NOW_EPOCH=$(date +%s)
+        REDIS_AGE_H=$(( (NOW_EPOCH - REDIS_EPOCH) / 3600 ))
+        if [[ $REDIS_AGE_H -gt 24 ]]; then
+            RESULTS+=("WARN redis_backup_stale: ${REDIS_AGE_H}h old")
+            log_json "warn" "redis_stale" "Redis backup is ${REDIS_AGE_H}h old"
+        fi
+    fi
+else
+    RESULTS+=("FAIL redis_backup_exists: no Redis backup found")
+    ((FAIL_COUNT++))
+    log_json "error" "check_fail" "No Redis backup found locally or on B2"
+fi
+
+# ── Step 7c: Check Config backup existence ──
+
+CURRENT_STEP="check_config_backup"
+
+LATEST_CONFIG=$(find "$BACKUP_DIR" -maxdepth 1 -name "crm_*.configs.tar.gz.age" -printf '%T@ %p\n' 2>/dev/null \
+    | sort -rn | head -1 | cut -d' ' -f2-)
+
+if [[ -z "$LATEST_CONFIG" ]]; then
+    LATEST_CONFIG_REMOTE=$(rclone lsjson "${B2_REMOTE}:${B2_BUCKET}/configs/" --no-mimetype 2>/dev/null \
+        | jq -r '[.[] | select(.Name | test("^crm_.*\\.configs\\.tar\\.gz\\.age$"))] | sort_by(.Name) | last | .Name // empty')
+    if [[ -n "$LATEST_CONFIG_REMOTE" ]]; then
+        LATEST_CONFIG="(B2) ${LATEST_CONFIG_REMOTE}"
+    fi
+fi
+
+if [[ -n "$LATEST_CONFIG" ]]; then
+    RESULTS+=("PASS config_backup_exists: $(basename "$LATEST_CONFIG")")
+    ((PASS_COUNT++))
+    log_json "info" "check_pass" "Config backup exists: $(basename "$LATEST_CONFIG")"
+
+    # Staleness check
+    CONFIG_BASENAME=$(basename "$LATEST_CONFIG" | sed 's/(B2) //')
+    CONFIG_DATE=$(echo "$CONFIG_BASENAME" | grep -oP 'crm_\K[0-9]{8}_[0-9]{6}')
+    if [[ -n "$CONFIG_DATE" ]]; then
+        CONFIG_EPOCH=$(date -d "${CONFIG_DATE:0:8} ${CONFIG_DATE:9:2}:${CONFIG_DATE:11:2}:${CONFIG_DATE:13:2}" +%s 2>/dev/null || echo 0)
+        NOW_EPOCH=$(date +%s)
+        CONFIG_AGE_H=$(( (NOW_EPOCH - CONFIG_EPOCH) / 3600 ))
+        if [[ $CONFIG_AGE_H -gt 24 ]]; then
+            RESULTS+=("WARN config_backup_stale: ${CONFIG_AGE_H}h old")
+            log_json "warn" "config_stale" "Config backup is ${CONFIG_AGE_H}h old"
+        fi
+    fi
+else
+    RESULTS+=("FAIL config_backup_exists: no config backup found")
+    ((FAIL_COUNT++))
+    log_json "error" "check_fail" "No config backup found locally or on B2"
+fi
+
 # ── Step 8: Report results ──
 
 CURRENT_STEP="report"

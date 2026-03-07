@@ -131,7 +131,9 @@
       "Bash(ssh deploy@46.225.53.137 \"sudo grep -n ''limit_req_zone'' /etc/nginx/sites-enabled/crm /etc/nginx/nginx.conf /etc/nginx/conf.d/*.conf 2>/dev/null || echo ''not found in checked files''\")",
       "Bash(ssh:*)",
       "Bash(rsync -avz --include='docker-compose.production.yml' --include='nginx/' --include='nginx/default.conf' --exclude='*' \"c:/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/\" deploy@46.225.53.137:/opt/crm/)",
-      "Bash(scp \"c:/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/docker-compose.production.yml\" deploy@46.225.53.137:/opt/crm/docker-compose.production.yml)"
+      "Bash(scp \"c:/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/docker-compose.production.yml\" deploy@46.225.53.137:/opt/crm/docker-compose.production.yml)",
+      "Bash(ssh-keygen:*)",
+      "Bash(scp:*)"
     ]
   }
 }

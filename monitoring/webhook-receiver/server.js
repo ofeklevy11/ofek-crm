@@ -16,6 +16,7 @@ const {
 
 const restartCooldowns = new Map();
 const RESTART_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+const recentlyDied = new Set();
 
 const SEVERITY_EMOJI = { critical: "\u{1F534}", warning: "\u{1F7E1}", info: "\u{1F535}" };
 const RESOLVED_EMOJI = "\u{1F7E2}";
@@ -222,6 +223,12 @@ async function handleDockerEvent(jsonLine) {
 
     if (name === "autoheal") return;
 
+    // For start events, only notify if the container recently crashed/restarted
+    if (action === "start") {
+      if (!recentlyDied.has(name)) return;
+      recentlyDied.delete(name);
+    }
+
     // For die events, only notify on non-zero exit codes (actual crashes)
     if (action === "die") {
       const exitCode = (event.Actor && event.Actor.Attributes && event.Actor.Attributes.exitCode) || "unknown";
@@ -237,9 +244,23 @@ async function handleDockerEvent(jsonLine) {
     }
     restartCooldowns.set(cooldownKey, now);
 
-    const emoji = action === "die" ? "\u{1F4A5}" : "\u{1F504}";
-    const label = action === "die" ? "Container Crashed" : "Container Restarted";
-    const exitInfo = action === "die" ? `\nExit Code: ${(event.Actor && event.Actor.Attributes && event.Actor.Attributes.exitCode) || "unknown"}` : "";
+    // Track crashed/restarted containers for back-online notifications
+    if (action === "die" || action === "restart") {
+      recentlyDied.add(name);
+    }
+
+    let emoji, label, exitInfo = "";
+    if (action === "start") {
+      emoji = "\u2705";
+      label = "Container Back Online";
+    } else if (action === "die") {
+      emoji = "\u{1F4A5}";
+      label = "Container Crashed";
+      exitInfo = `\nExit Code: ${(event.Actor && event.Actor.Attributes && event.Actor.Attributes.exitCode) || "unknown"}`;
+    } else {
+      emoji = "\u{1F504}";
+      label = "Container Restarted";
+    }
     const msg = `${emoji} <b>${label}</b>\nContainer: ${name}\nImage: ${image}${exitInfo}\nTime: ${time}\nServer: bizlycrm.com`;
 
     await sendTelegram(msg);
@@ -259,7 +280,7 @@ async function handleDockerEvent(jsonLine) {
 function startDockerEventWatcher() {
   console.log("[docker-events] Starting Docker event watcher");
 
-  const proc = spawn("docker", ["events", "--filter", "event=restart", "--filter", "event=die", "--format", "{{json .}}"], {
+  const proc = spawn("docker", ["events", "--filter", "event=restart", "--filter", "event=die", "--filter", "event=start", "--format", "{{json .}}"], {
     stdio: ["ignore", "pipe", "pipe"],
   });
 

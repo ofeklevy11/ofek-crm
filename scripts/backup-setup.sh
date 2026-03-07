@@ -158,18 +158,18 @@ info "Installing systemd service and timer units..."
 # -- crm-backup (every 12h) --
 cat > /etc/systemd/system/crm-backup.service << 'EOF'
 [Unit]
-Description=CRM PostgreSQL Backup
+Description=CRM Full Backup (PostgreSQL + Redis + Configs)
 After=docker.service
 Requires=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/crm/scripts/backup-postgres.sh
+ExecStart=/opt/crm/scripts/backup-full.sh
 User=root
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 StandardOutput=journal
 StandardError=journal
-TimeoutStartSec=600
+TimeoutStartSec=900
 EOF
 
 cat > /etc/systemd/system/crm-backup.timer << 'EOF'
@@ -271,6 +271,9 @@ echo ""
 info "Making scripts executable..."
 chmod +x "${CRM_DIR}/scripts/backup-common.sh"
 chmod +x "${CRM_DIR}/scripts/backup-postgres.sh"
+chmod +x "${CRM_DIR}/scripts/backup-redis.sh"
+chmod +x "${CRM_DIR}/scripts/backup-configs.sh"
+chmod +x "${CRM_DIR}/scripts/backup-full.sh"
 chmod +x "${CRM_DIR}/scripts/backup-retention.sh"
 chmod +x "${CRM_DIR}/scripts/backup-restore-test.sh"
 
@@ -298,16 +301,16 @@ echo ""
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     info "Running test backup..."
-    "${CRM_DIR}/scripts/backup-postgres.sh"
+    "${CRM_DIR}/scripts/backup-full.sh"
     info "Test backup complete! Check Telegram for the notification."
 else
     info "Skipping test backup. Run manually with:"
-    echo "  /opt/crm/scripts/backup-postgres.sh"
+    echo "  /opt/crm/scripts/backup-full.sh"
 fi
 
 echo ""
 info "Setup complete. Summary:"
-echo "  - Backups: Every 12h (02:00, 14:00)"
+echo "  - Full backups (PG + Redis + Configs): Every 12h (02:00, 14:00)"
 echo "  - Retention cleanup: Daily at 04:00"
 echo "  - Restore tests: Sundays at 05:00"
 echo "  - Logs: ${LOG_DIR}/backup.log + journalctl -u crm-backup"

@@ -163,6 +163,13 @@ Time: $(date '+%Y-%m-%d %H:%M:%S')"
     fi
 }
 
+# ── Docker Compose helper ──
+
+docker_compose_exec() {
+    local service="$1"; shift
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T "$service" "$@"
+}
+
 # Track current step for error reporting
 CURRENT_STEP="init"
 TEMP_FILES=""
