@@ -118,7 +118,7 @@ CURRENT_STEP="wait_ready"
 RETRIES=0
 MAX_RETRIES=30
 until docker exec "$CONTAINER_NAME" pg_isready -U test -d testdb > /dev/null 2>&1; do
-    ((RETRIES++))
+    ((RETRIES++)) || true
     if [[ $RETRIES -ge $MAX_RETRIES ]]; then
         log_json "error" "container_not_ready" "Postgres not ready after ${MAX_RETRIES}s"
         docker stop "$CONTAINER_NAME" 2>/dev/null || true
@@ -159,11 +159,11 @@ run_check() {
 
     if $passed; then
         RESULTS+=("PASS ${check_name}: ${result}")
-        ((PASS_COUNT++))
+        ((PASS_COUNT++)) || true || true
         log_json "info" "check_pass" "${check_name}: ${result}"
     else
         RESULTS+=("FAIL ${check_name}: ${result} (expected ${expected_op} ${expected_val})")
-        ((FAIL_COUNT++))
+        ((FAIL_COUNT++)) || true || true
         log_json "error" "check_fail" "${check_name}: ${result} (expected ${expected_op} ${expected_val})"
     fi
 }
@@ -232,7 +232,7 @@ if [[ -n "$LATEST_REDIS" && -f "$LATEST_REDIS" ]]; then
             # Wait for Redis to be ready
             RETRIES=0
             until docker exec "$REDIS_TEST_CONTAINER" redis-cli ping > /dev/null 2>&1; do
-                ((RETRIES++))
+                ((RETRIES++)) || true
                 if [[ $RETRIES -ge 15 ]]; then break; fi
                 sleep 1
             done
@@ -247,21 +247,21 @@ if [[ -n "$LATEST_REDIS" && -f "$LATEST_REDIS" ]]; then
 
             if [[ "$DBSIZE" -gt 0 ]]; then
                 RESULTS+=("PASS redis_restore: ${DBSIZE} keys loaded from $(basename "$LATEST_REDIS")")
-                ((PASS_COUNT++))
+                ((PASS_COUNT++)) || true
                 log_json "info" "check_pass" "Redis restore OK: ${DBSIZE} keys"
             else
                 RESULTS+=("FAIL redis_restore: 0 keys loaded — RDB may be empty or corrupt")
-                ((FAIL_COUNT++))
+                ((FAIL_COUNT++)) || true
                 log_json "error" "check_fail" "Redis restore failed: 0 keys"
             fi
         else
             RESULTS+=("FAIL redis_rdb_size: decrypted RDB only ${RDB_SIZE} bytes")
-            ((FAIL_COUNT++))
+            ((FAIL_COUNT++)) || true
             log_json "error" "check_fail" "Redis RDB too small: ${RDB_SIZE} bytes"
         fi
     else
         RESULTS+=("FAIL redis_decrypt: failed to decrypt $(basename "$LATEST_REDIS")")
-        ((FAIL_COUNT++))
+        ((FAIL_COUNT++)) || true
         log_json "error" "check_fail" "Redis backup decryption failed"
     fi
 
@@ -282,7 +282,7 @@ if [[ -n "$LATEST_REDIS" && -f "$LATEST_REDIS" ]]; then
     fi
 else
     RESULTS+=("FAIL redis_backup_exists: no Redis backup found locally or on B2")
-    ((FAIL_COUNT++))
+    ((FAIL_COUNT++)) || true
     log_json "error" "check_fail" "No Redis backup found locally or on B2"
 fi
 
@@ -328,11 +328,11 @@ if [[ -n "$LATEST_CONFIG" && -f "$LATEST_CONFIG" ]]; then
         FILE_COUNT=$(echo "$TAR_CONTENTS" | wc -l)
         if $CONFIG_PASS && [[ "$FILE_COUNT" -gt 2 ]]; then
             RESULTS+=("PASS config_restore: ${FILE_COUNT} files in archive from $(basename "$LATEST_CONFIG")")
-            ((PASS_COUNT++))
+            ((PASS_COUNT++)) || true
             log_json "info" "check_pass" "Config restore OK: ${FILE_COUNT} files"
         elif [[ "$FILE_COUNT" -le 2 ]]; then
             RESULTS+=("FAIL config_restore: only ${FILE_COUNT} files in archive")
-            ((FAIL_COUNT++))
+            ((FAIL_COUNT++)) || true
             log_json "error" "check_fail" "Config archive too small: ${FILE_COUNT} files"
         else
             RESULTS+=("WARN config_restore: ${FILE_COUNT} files but missing required files")
@@ -340,7 +340,7 @@ if [[ -n "$LATEST_CONFIG" && -f "$LATEST_CONFIG" ]]; then
         fi
     else
         RESULTS+=("FAIL config_decrypt: failed to decrypt $(basename "$LATEST_CONFIG")")
-        ((FAIL_COUNT++))
+        ((FAIL_COUNT++)) || true
         log_json "error" "check_fail" "Config backup decryption failed"
     fi
 
@@ -361,7 +361,7 @@ if [[ -n "$LATEST_CONFIG" && -f "$LATEST_CONFIG" ]]; then
     fi
 else
     RESULTS+=("FAIL config_backup_exists: no config backup found locally or on B2")
-    ((FAIL_COUNT++))
+    ((FAIL_COUNT++)) || true
     log_json "error" "check_fail" "No config backup found locally or on B2"
 fi
 

@@ -796,7 +796,7 @@ run_phase_8() {
     info "Waiting for PostgreSQL to be ready..."
     local retries=0
     until $COMPOSE exec -T postgres pg_isready -U crm_user -q 2>/dev/null; do
-        ((retries++))
+        ((retries++)) || true
         if [[ $retries -ge 30 ]]; then
             error "PostgreSQL not ready after 60s"
             exit 1
@@ -809,7 +809,7 @@ run_phase_8() {
     info "Waiting for Redis to be ready..."
     retries=0
     until $COMPOSE exec -T redis redis-cli ping 2>/dev/null | grep -q PONG; do
-        ((retries++))
+        ((retries++)) || true
         if [[ $retries -ge 15 ]]; then
             error "Redis not ready after 30s"
             exit 1
@@ -950,7 +950,7 @@ run_phase_10() {
     # Wait for Redis
     local retries=0
     until $COMPOSE exec -T redis redis-cli ping 2>/dev/null | grep -q PONG; do
-        ((retries++))
+        ((retries++)) || true
         if [[ $retries -ge 15 ]]; then
             warn "Redis not responding after RDB restore"
             break
@@ -1038,7 +1038,7 @@ run_phase_12() {
     info "Waiting for Grafana..."
     local retries=0
     until curl -sf http://localhost:3001/api/health &>/dev/null; do
-        ((retries++))
+        ((retries++)) || true
         if [[ $retries -ge 30 ]]; then
             warn "Grafana not ready after 60s (monitoring may still be starting)"
             break
@@ -1053,7 +1053,7 @@ run_phase_12() {
     info "Waiting for Prometheus..."
     retries=0
     until curl -sf http://localhost:9090/-/ready &>/dev/null; do
-        ((retries++))
+        ((retries++)) || true
         if [[ $retries -ge 30 ]]; then
             warn "Prometheus not ready after 60s"
             break
@@ -1202,10 +1202,10 @@ run_phase_14() {
         local name="$1" result="$2"
         if [[ "$result" == "PASS" ]]; then
             echo -e "  ${GREEN}PASS${NC}  ${name}"
-            ((pass++))
+            ((pass++)) || true
         else
             echo -e "  ${RED}FAIL${NC}  ${name}"
-            ((fail++))
+            ((fail++)) || true
         fi
     }
 

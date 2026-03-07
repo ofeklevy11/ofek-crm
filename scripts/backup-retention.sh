@@ -43,13 +43,13 @@ run_retention_for_type() {
     while IFS= read -r -d '' file; do
         log_json "info" "local_delete" "Removing old local file: $(basename "$file")"
         rm -f "$file"
-        ((local_deleted++))
+        ((local_deleted++)) || true
     done < <(find "$BACKUP_DIR" -maxdepth 1 -name "crm_*${file_ext}" -mtime +7 -print0 2>/dev/null)
 
     while IFS= read -r -d '' file; do
         log_json "info" "local_delete" "Removing old local checksum: $(basename "$file")"
         rm -f "$file"
-        ((local_deleted++))
+        ((local_deleted++)) || true
     done < <(find "$CHECKSUM_DIR" -maxdepth 1 -name "crm_*${checksum_ext}" -mtime +7 -print0 2>/dev/null)
 
     TOTAL_LOCAL_DELETED=$((TOTAL_LOCAL_DELETED + local_deleted))

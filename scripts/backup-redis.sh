@@ -55,7 +55,7 @@ while [[ $WAITED -lt $MAX_WAIT ]]; do
         break
     fi
     sleep 1
-    ((WAITED++))
+    ((WAITED++)) || true
 done
 
 if [[ $WAITED -ge $MAX_WAIT ]]; then
