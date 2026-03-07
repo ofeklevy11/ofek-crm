@@ -105,7 +105,7 @@ export default function PrintButton({
     const text = `שלום ${clientName}
 מצורפת הצעת מחיר מאת
 אופק קונקט – שיווק דיגיטלי ובניית אתרים
-ממערכת CRM COOL CRM
+ממערכת BizlyCRM
 
 לקבלת המסמך לחצו על הלינק הבא:
 ${downloadLink}`;

@@ -4,7 +4,7 @@ import LoginForm from "./LoginForm";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "התחברות למערכת | Ofek CRM",
+  title: "התחברות למערכת | BizlyCRM",
   description: "התחבר לחשבון שלך ונהל את העסק בקלות",
 };
 
@@ -39,7 +39,7 @@ export default async function LoginPage() {
         </div>
 
         <div className="mt-8 text-center text-xs text-muted-foreground/50">
-          Ofek Business CRM &copy; {new Date().getFullYear()}
+          BizlyCRM &copy; {new Date().getFullYear()}
         </div>
       </div>
     </div>

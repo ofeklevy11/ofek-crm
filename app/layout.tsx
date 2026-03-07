@@ -13,7 +13,7 @@ const rubik = Rubik({
 });
 
 export const metadata: Metadata = {
-  title: "CRM למנהל",
+  title: "BizlyCRM",
   description: "מערכת ניהול לעסקים",
 };
 

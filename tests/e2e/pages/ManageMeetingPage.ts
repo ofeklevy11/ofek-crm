@@ -74,7 +74,7 @@ export class ManageMeetingPage {
     this.errorState = page.getByText("שגיאה");
 
     // Footer
-    this.footer = page.getByText("מוגש באמצעות מערכת COOL CRM");
+    this.footer = page.getByText("מוגש באמצעות מערכת BizlyCRM");
   }
 
   async goto(manageToken: string) {

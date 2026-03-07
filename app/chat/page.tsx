@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
 
 export const metadata = {
-  title: "צ'אט ארגוני | CRM",
+  title: "צ'אט ארגוני | BizlyCRM",
   description: "צ'אט פנימי לשיחה עם חברים בארגון",
 };
 

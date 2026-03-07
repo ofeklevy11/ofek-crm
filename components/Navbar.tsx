@@ -30,7 +30,7 @@ export default async function Navbar() {
               className="text-base font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent whitespace-nowrap"
             >
               {(() => {
-                const name = user?.company?.name || "CRM למנהל";
+                const name = user?.company?.name || "BizlyCRM";
                 return name.length > 16 ? `${name.slice(0, 16)}...` : name;
               })()}
             </Link>

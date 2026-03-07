@@ -96,7 +96,7 @@ export class PublicBookingPage {
     this.rescheduleTitle = page.getByText("שינוי מועד");
 
     // Footer
-    this.footer = page.getByText("מוגש באמצעות מערכת COOL CRM");
+    this.footer = page.getByText("מוגש באמצעות מערכת BizlyCRM");
   }
 
   async goto(token: string) {

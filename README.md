@@ -1,4 +1,4 @@
-# Simple CRM
+# BizlyCRM
 
 A lightweight, responsive CRM system built with Next.js, Prisma, and PostgreSQL.
 

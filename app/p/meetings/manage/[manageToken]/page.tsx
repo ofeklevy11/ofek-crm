@@ -733,7 +733,7 @@ export default function ManageMeetingPage({
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100 text-center">
           <p className="text-xs text-gray-400">
-            מוגש באמצעות מערכת COOL CRM
+            מוגש באמצעות מערכת BizlyCRM
           </p>
         </div>
       </div>

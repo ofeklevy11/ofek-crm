@@ -25,7 +25,7 @@ export default async function Home() {
             <div className="space-y-6">
               <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-blue-50 text-[#4f95ff] rounded-full text-sm font-semibold w-fit">
                 <Zap className="w-4 h-4" />
-                <span>מערכת CRM חכמה לניהול העסק</span>
+                <span>BizlyCRM - מערכת חכמה לניהול העסק</span>
               </div>
 
               <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight">
@@ -37,7 +37,7 @@ export default async function Home() {
               </h1>
 
               <p className="text-gray-500 text-lg leading-relaxed max-w-md">
-                מערכת CRM מתקדמת המאפשרת לך לנהל לידים, לקוחות, מכירות ומשימות
+                מערכת BizlyCRM המתקדמת מאפשרת לך לנהל לידים, לקוחות, מכירות ומשימות
                 במקום אחד - פשוט, חכם ויעיל.
               </p>
             </div>

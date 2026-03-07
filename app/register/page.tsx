@@ -4,7 +4,7 @@ import RegisterForm from "./RegisterForm";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "הרשמה למערכת | Ofek CRM",
+  title: "הרשמה למערכת | BizlyCRM",
   description: "פתח חשבון חדש והתחל לנהל את הארגון שלך בצורה חכמה",
 };
 
@@ -39,7 +39,7 @@ export default async function RegisterPage() {
         </div>
 
         <div className="mt-8 text-center text-xs text-muted-foreground/50">
-          Ofek Business CRM &copy; {new Date().getFullYear()}
+          BizlyCRM &copy; {new Date().getFullYear()}
         </div>
       </div>
     </div>

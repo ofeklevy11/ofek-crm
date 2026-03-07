@@ -105,7 +105,7 @@ export default async function PublicQuoteDownloadPage({
 
         <div className="pt-8 mt-4 border-t border-gray-100">
           <p className="text-xs text-gray-400 font-medium">
-            מוגש באמצעות מערכת COOL CRM
+            מוגש באמצעות מערכת BizlyCRM
           </p>
         </div>
       </div>

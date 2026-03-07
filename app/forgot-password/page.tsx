@@ -4,7 +4,7 @@ import ForgotPasswordForm from "./ForgotPasswordForm";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "איפוס סיסמה | Ofek CRM",
+  title: "איפוס סיסמה | BizlyCRM",
   description: "איפוס סיסמה לחשבון שלך",
 };
 
@@ -38,7 +38,7 @@ export default async function ForgotPasswordPage() {
         </div>
 
         <div className="mt-8 text-center text-xs text-muted-foreground/50">
-          Ofek Business CRM &copy; {new Date().getFullYear()}
+          BizlyCRM &copy; {new Date().getFullYear()}
         </div>
       </div>
     </div>

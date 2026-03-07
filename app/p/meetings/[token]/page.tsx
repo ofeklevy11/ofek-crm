@@ -1271,7 +1271,7 @@ export default function MeetingBookingPage({
         {/* Footer */}
         <div className="px-6 py-3 border-t border-white/10 text-center">
           <p className="text-xs text-white/20">
-            {"\u05DE\u05D5\u05D2\u05E9 \u05D1\u05D0\u05DE\u05E6\u05E2\u05D5\u05EA \u05DE\u05E2\u05E8\u05DB\u05EA COOL CRM"}
+            {"\u05DE\u05D5\u05D2\u05E9 \u05D1\u05D0\u05DE\u05E6\u05E2\u05D5\u05EA \u05DE\u05E2\u05E8\u05DB\u05EA BizlyCRM"}
           </p>
         </div>
       </div>
