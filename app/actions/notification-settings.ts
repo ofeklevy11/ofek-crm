@@ -17,15 +17,19 @@ export async function getNotificationSettings(): Promise<{
   if (!user) return { success: false, error: "Unauthorized" };
   if (user.role !== "admin") return { success: false, error: "Forbidden" };
 
-  const company = await prisma.company.findUnique({
-    where: { id: user.companyId },
-    select: { notificationSettings: true },
-  });
+  try {
+    const company = await prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: { notificationSettings: true },
+    });
 
-  return {
-    success: true,
-    data: parseNotificationSettings(company?.notificationSettings),
-  };
+    return {
+      success: true,
+      data: parseNotificationSettings(company?.notificationSettings),
+    };
+  } catch {
+    return { success: false, error: "Failed to load notification settings" };
+  }
 }
 
 export async function updateNotificationSettings(
@@ -35,26 +39,30 @@ export async function updateNotificationSettings(
   if (!user) return { success: false, error: "Unauthorized" };
   if (user.role !== "admin") return { success: false, error: "Forbidden" };
 
-  const company = await prisma.company.findUnique({
-    where: { id: user.companyId },
-    select: { notificationSettings: true },
-  });
+  try {
+    const company = await prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: { notificationSettings: true },
+    });
 
-  const current = parseNotificationSettings(company?.notificationSettings);
-  const updated: Record<string, boolean> = { ...current };
+    const current = parseNotificationSettings(company?.notificationSettings);
+    const updated: Record<string, boolean> = { ...current };
 
-  for (const [key, value] of Object.entries(data)) {
-    if (key in current && typeof value === "boolean") {
-      updated[key] = value;
+    for (const [key, value] of Object.entries(data)) {
+      if (key in current && typeof value === "boolean") {
+        updated[key] = value;
+      }
     }
+
+    await prisma.company.update({
+      where: { id: user.companyId },
+      data: { notificationSettings: updated },
+    });
+
+    await invalidateNotificationSettingsCache(user.companyId);
+
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to update notification settings" };
   }
-
-  await prisma.company.update({
-    where: { id: user.companyId },
-    data: { notificationSettings: updated },
-  });
-
-  await invalidateNotificationSettingsCache(user.companyId);
-
-  return { success: true };
 }

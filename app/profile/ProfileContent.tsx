@@ -191,6 +191,8 @@ export default function ProfileContent({ user }: ProfileContentProps) {
       const res = await getNotificationSettings();
       if (res.success && res.data) {
         setNotifSettings(res.data);
+      } else {
+        toast.error(res.error || "שגיאה בטעינת הגדרות התראות");
       }
     } catch (err) {
       toast.error(getUserFriendlyError(err));
@@ -1079,10 +1081,18 @@ export default function ProfileContent({ user }: ProfileContentProps) {
             <CardDescription>שליטה בהתראות אוטומטיות והתנהגויות מערכת</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-            {loadingNotif || !notifSettings ? (
+            {loadingNotif ? (
               <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
                 <Loader2 className="w-6 h-6 animate-spin" />
                 <span className="text-sm">טוען הגדרות...</span>
+              </div>
+            ) : !notifSettings ? (
+              <div className="flex flex-col items-center justify-center py-8 text-slate-400 gap-3">
+                <AlertTriangle className="w-6 h-6" />
+                <span className="text-sm">שגיאה בטעינת הגדרות התראות</span>
+                <Button variant="outline" size="sm" onClick={loadNotificationSettings}>
+                  נסה שוב
+                </Button>
               </div>
             ) : (
               <div className="space-y-8">
