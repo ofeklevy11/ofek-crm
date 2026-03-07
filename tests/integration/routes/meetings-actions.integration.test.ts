@@ -1036,6 +1036,11 @@ describe("cancelMeeting", () => {
   it("sets status=CANCELLED, cancelledBy=owner, stores cancelReason", async () => {
     mockGetCurrentUser.mockResolvedValue(makeAdminUser());
 
+    await prisma.company.update({
+      where: { id: company.id },
+      data: { notificationSettings: { notifyOnMeetingCancelled: true } },
+    });
+
     const meeting = await prisma.meeting.create({
       data: {
         companyId: company.id,
