@@ -133,7 +133,29 @@
       "Bash(rsync -avz --include='docker-compose.production.yml' --include='nginx/' --include='nginx/default.conf' --exclude='*' \"c:/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/\" deploy@46.225.53.137:/opt/crm/)",
       "Bash(scp \"c:/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/docker-compose.production.yml\" deploy@46.225.53.137:/opt/crm/docker-compose.production.yml)",
       "Bash(ssh-keygen:*)",
-      "Bash(scp:*)"
+      "Bash(scp:*)",
+      "Bash(nslookup:*)",
+      "Bash(git update-index:*)",
+      "Bash(git ls-files -s scripts/*.sh)",
+      "Bash(while read f)",
+      "Bash(do git update-index --chmod=+x \"$f\")",
+      "Bash(chmod +x:*)",
+      "Bash(xxd:*)",
+      "Bash(bash:*)",
+      "Bash(git config:*)",
+      "Bash(winget install:*)",
+      "Bash(export:*)",
+      "Bash(\"/c/Users/Ofek/AppData/Local/Microsoft/WinGet/Links/gitleaks.exe\" detect:*)",
+      "Read(//c/Users/Ofek/AppData/Local/Microsoft/WinGet/Packages/**)",
+      "Read(//c/Users/Ofek/AppData/Local/**)",
+      "Bash(\"/c/Users/Ofek/AppData/Local/Microsoft/WinGet/Packages/Gitleaks.Gitleaks_Microsoft.Winget.Source_8wekyb3d8bbwe/gitleaks.exe\" detect:*)",
+      "Bash(\"/c/Users/Ofek/AppData/Local/Microsoft/WinGet/Packages/Gitleaks.Gitleaks_Microsoft.Winget.Source_8wekyb3d8bbwe/gitleaks.exe\" detect --source . --config .gitleaks.toml --verbose --report-format json --report-path /tmp/gitleaks-report.json)",
+      "Read(//tmp/**)",
+      "Bash(pnpm add:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh run:*)"
     ]
   }
 }

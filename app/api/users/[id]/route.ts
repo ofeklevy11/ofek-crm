@@ -11,6 +11,7 @@ import { withRetry } from "@/lib/db-retry";
 import { revokeUserSessions } from "@/lib/session";
 import { createLogger } from "@/lib/logger";
 import { logSecurityEvent, SEC_PASSWORD_CHANGED, SEC_ROLE_CHANGED, SEC_PERMISSIONS_CHANGED } from "@/lib/security/audit-security";
+import { sendPasswordChangedEmail } from "@/lib/email";
 
 const log = createLogger("UsersAPI");
 
@@ -111,27 +112,48 @@ export async function PATCH(
       );
     }
 
-    const { name, email, password, role, allowedWriteTableIds, permissions, tablePermissions } = parsed.data;
+    const { name, email, password, currentPassword, role, allowedWriteTableIds, permissions, tablePermissions } = parsed.data;
 
     // Start bcrypt early so it runs in parallel with DB checks
     const hashPromise = password ? bcrypt.hash(password, 12) : null;
 
     // Check if user exists and belongs to company
+    const isSelfEarly = user.id === targetUserId;
+    const selectFields: Record<string, boolean> = { id: true, email: true, role: true, name: true };
+    if (isSelfEarly && password !== undefined) selectFields.passwordHash = true;
     const existingUser = await withRetry(() => prisma.user.findFirst({
       where: {
         id: targetUserId,
         companyId: user.companyId,
       },
-      select: { id: true, email: true, role: true },
-    }));
+      select: selectFields,
+    })) as { id: number; email: string; role: string; name: string; passwordHash?: string } | null;
 
     if (!existingUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Authorization: non-admins can only update their own name/password
+    // Self password change requires current password verification
     const isSelf = user.id === targetUserId;
     const isAdmin = user.role === "admin";
+
+    if (isSelf && password !== undefined) {
+      if (!currentPassword) {
+        return NextResponse.json(
+          { error: "נדרשת סיסמה נוכחית לשינוי סיסמה" },
+          { status: 400 }
+        );
+      }
+      const valid = await bcrypt.compare(currentPassword, existingUser.passwordHash!);
+      if (!valid) {
+        return NextResponse.json(
+          { error: "הסיסמה הנוכחית שגויה" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Authorization: non-admins can only update their own name/password
     const sensitiveFields = [role, permissions, tablePermissions, allowedWriteTableIds, email].some(
       (v) => v !== undefined
     );
@@ -216,6 +238,7 @@ export async function PATCH(
     // Security events for sensitive changes (already fire-and-forget)
     if (password) {
       logSecurityEvent({ action: SEC_PASSWORD_CHANGED, companyId: user.companyId, userId: user.id, details: { targetUserId, changedBy: user.id } });
+      sendPasswordChangedEmail(existingUser.email, existingUser.name).catch(() => {});
     }
     if (role && role !== existingUser.role) {
       logSecurityEvent({ action: SEC_ROLE_CHANGED, companyId: user.companyId, userId: user.id, details: { targetUserId, oldRole: existingUser.role, newRole: role } });

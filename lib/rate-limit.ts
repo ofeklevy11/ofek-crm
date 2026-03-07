@@ -177,4 +177,10 @@ export const RATE_LIMITS = {
   publicBooking: { prefix: "pub-book", max: 10, windowSeconds: 60 } satisfies RateLimitConfig,
   /** AI job polling: 60 per user per minute (lightweight Redis GET, separate from general API) */
   aiJobPoll: { prefix: "ai-poll", max: 60, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** Forgot password: 3 per IP per 15 minutes */
+  forgotPassword: { prefix: "forgot-pwd", max: 3, windowSeconds: 900 } satisfies RateLimitConfig,
+  /** Forgot password per-account: 3 per email per 30 minutes */
+  forgotPasswordAccount: { prefix: "forgot-pwd-acct", max: 3, windowSeconds: 1800 } satisfies RateLimitConfig,
+  /** Account deletion: 3 per user per hour */
+  accountDelete: { prefix: "acct-del", max: 3, windowSeconds: 3600 } satisfies RateLimitConfig,
 } as const;

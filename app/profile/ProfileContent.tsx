@@ -29,6 +29,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
+import {
   Loader2,
   Plus,
   Trash2,
@@ -41,10 +53,14 @@ import {
   User as UserIcon,
   Building2,
   Lock,
+  Pencil,
+  AlertTriangle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { getApiKeys, createApiKey, deleteApiKey } from "@/app/actions/api-keys";
 import { updateCompanyName } from "@/app/actions/update-company-name";
+import { getBusinessSettings, updateBusinessSettings, type BusinessSettings } from "@/app/actions/business-settings";
+import { requestEmailChange, verifyEmailChange } from "@/app/actions/change-email";
 import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -74,11 +90,53 @@ export default function ProfileContent({ user }: ProfileContentProps) {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updateSuccess, setUpdateSuccess] = useState(false);
 
+  // Change name states
+  const [isNameDialogOpen, setIsNameDialogOpen] = useState(false);
+  const [newName, setNewName] = useState(user.name);
+  const [updatingName, setUpdatingName] = useState(false);
+
+  // Change password states
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+
+  // Change email states
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [emailStep, setEmailStep] = useState<"form" | "verify">("form");
+  const [newEmail, setNewEmail] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [emailOtp, setEmailOtp] = useState("");
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [updatingEmail, setUpdatingEmail] = useState(false);
+
+  // Business settings states
+  const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
+  const [loadingBusiness, setLoadingBusiness] = useState(false);
+  const [savingBusiness, setSavingBusiness] = useState(false);
+  const [businessForm, setBusinessForm] = useState({
+    businessType: "",
+    taxId: "",
+    businessAddress: "",
+    businessWebsite: "",
+    businessEmail: "",
+  });
+
+  // Delete account states
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const isAdmin = user.role === "admin";
+  const router = useRouter();
 
   useEffect(() => {
     if (isAdmin) {
       loadKeys();
+      loadBusinessSettings();
     }
   }, [isAdmin]);
 
@@ -97,7 +155,26 @@ export default function ProfileContent({ user }: ProfileContentProps) {
     }
   }
 
-  const router = useRouter();
+  async function loadBusinessSettings() {
+    setLoadingBusiness(true);
+    try {
+      const settings = await getBusinessSettings();
+      if (settings) {
+        setBusinessSettings(settings);
+        setBusinessForm({
+          businessType: settings.businessType || "",
+          taxId: settings.taxId || "",
+          businessAddress: settings.businessAddress || "",
+          businessWebsite: settings.businessWebsite || "",
+          businessEmail: settings.businessEmail || "",
+        });
+      }
+    } catch (err) {
+      toast.error(getUserFriendlyError(err));
+    } finally {
+      setLoadingBusiness(false);
+    }
+  }
 
   async function handleCreateKey() {
     if (!newKeyName.trim()) return;
@@ -110,11 +187,9 @@ export default function ProfileContent({ user }: ProfileContentProps) {
         toast.success("המפתח נוצר בהצלחה");
         await loadKeys();
       } else {
-        console.error("Failed to create key:", res.error);
         toast.error(getFriendlyResultError(res.error, "שגיאה ביצירת מפתח"));
       }
     } catch (e) {
-      console.error("Exception creating key:", e);
       toast.error(getUserFriendlyError(e));
     } finally {
       setCreating(false);
@@ -170,7 +245,6 @@ export default function ProfileContent({ user }: ProfileContentProps) {
         setUpdateSuccess(true);
         setNewCompanyName("");
         setPassword("");
-        // Refresh the page immediately to show the new company name
         router.refresh();
         setTimeout(() => {
           setUpdateSuccess(false);
@@ -180,11 +254,166 @@ export default function ProfileContent({ user }: ProfileContentProps) {
         setUpdateError(res.error || "שגיאה לא ידועה");
       }
     } catch (error) {
-      console.error("Error updating company name:", error);
       setUpdateError("שגיאה בעדכון שם הארגון");
       toast.error(getUserFriendlyError(error));
     } finally {
       setUpdatingCompanyName(false);
+    }
+  }
+
+  async function handleUpdateName() {
+    if (!newName.trim() || newName.trim() === user.name) return;
+    setUpdatingName(true);
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+        body: JSON.stringify({ name: newName.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "שגיאה בעדכון השם");
+      }
+      toast.success("השם עודכן בהצלחה");
+      setIsNameDialogOpen(false);
+      router.refresh();
+    } catch (err) {
+      toast.error(getUserFriendlyError(err));
+    } finally {
+      setUpdatingName(false);
+    }
+  }
+
+  async function handleChangePassword() {
+    setPasswordError(null);
+    if (newPassword.length < 10) {
+      setPasswordError("הסיסמה חייבת להכיל לפחות 10 תווים");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError("הסיסמאות לא תואמות");
+      return;
+    }
+
+    setUpdatingPassword(true);
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+        body: JSON.stringify({ password: newPassword, currentPassword }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "שגיאה בשינוי הסיסמה");
+      }
+      toast.success("הסיסמה שונתה בהצלחה. מתנתק...");
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 1500);
+    } catch (err) {
+      setPasswordError(getUserFriendlyError(err));
+    } finally {
+      setUpdatingPassword(false);
+    }
+  }
+
+  async function handleRequestEmailChange() {
+    setEmailError(null);
+    if (!newEmail.trim() || !emailPassword) {
+      setEmailError("נא למלא את כל השדות");
+      return;
+    }
+
+    setUpdatingEmail(true);
+    try {
+      const res = await requestEmailChange(newEmail.trim(), emailPassword);
+      if (res.success) {
+        setEmailStep("verify");
+      } else {
+        setEmailError(res.error || "שגיאה");
+      }
+    } catch (err) {
+      setEmailError(getUserFriendlyError(err));
+    } finally {
+      setUpdatingEmail(false);
+    }
+  }
+
+  async function handleVerifyEmailChange() {
+    if (emailOtp.length !== 6) return;
+
+    setEmailError(null);
+    setUpdatingEmail(true);
+    try {
+      const res = await verifyEmailChange(emailOtp);
+      if (res.success) {
+        toast.success("כתובת האימייל עודכנה בהצלחה");
+        setIsEmailDialogOpen(false);
+        resetEmailDialog();
+        router.refresh();
+      } else {
+        setEmailError(res.error || "שגיאה");
+      }
+    } catch (err) {
+      setEmailError(getUserFriendlyError(err));
+    } finally {
+      setUpdatingEmail(false);
+    }
+  }
+
+  function resetEmailDialog() {
+    setEmailStep("form");
+    setNewEmail("");
+    setEmailPassword("");
+    setEmailOtp("");
+    setEmailError(null);
+  }
+
+  async function handleSaveBusinessSettings() {
+    setSavingBusiness(true);
+    try {
+      await updateBusinessSettings({
+        name: businessSettings?.name || user.company?.name || "",
+        businessType: businessForm.businessType,
+        taxId: businessForm.taxId,
+        businessAddress: businessForm.businessAddress,
+        businessWebsite: businessForm.businessWebsite || undefined,
+        businessEmail: businessForm.businessEmail || undefined,
+      });
+      toast.success("פרטי העסק עודכנו בהצלחה");
+      await loadBusinessSettings();
+    } catch (err) {
+      toast.error(getUserFriendlyError(err));
+    } finally {
+      setSavingBusiness(false);
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (!deletePassword) {
+      setDeleteError("נא להזין סיסמה");
+      return;
+    }
+
+    setDeleteError(null);
+    setDeletingAccount(true);
+    try {
+      const res = await fetch("/api/users/me", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "שגיאה במחיקת החשבון");
+
+      toast.success("החשבון נמחק בהצלחה");
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 1500);
+    } catch (err) {
+      setDeleteError(getUserFriendlyError(err));
+    } finally {
+      setDeletingAccount(false);
     }
   }
 
@@ -212,7 +441,43 @@ export default function ProfileContent({ user }: ProfileContentProps) {
           </AvatarFallback>
         </Avatar>
         <div className="text-center md:text-right space-y-2 flex-1">
-          <h1 className="text-3xl font-bold text-slate-900">{user.name}</h1>
+          <div className="flex items-center justify-center md:justify-start gap-2">
+            <h1 className="text-3xl font-bold text-slate-900">{user.name}</h1>
+            <Dialog open={isNameDialogOpen} onOpenChange={(open) => {
+              setIsNameDialogOpen(open);
+              if (open) setNewName(user.name);
+            }}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600">
+                  <Pencil className="w-4 h-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[400px]">
+                <DialogHeader>
+                  <DialogTitle>שינוי שם</DialogTitle>
+                  <DialogDescription>עדכן את השם שלך במערכת.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <Input
+                    placeholder="שם מלא"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    disabled={updatingName}
+                    className="bg-white"
+                  />
+                  <Button
+                    onClick={handleUpdateName}
+                    disabled={updatingName || !newName.trim() || newName.trim() === user.name}
+                    className="w-full"
+                  >
+                    {updatingName ? (
+                      <><Loader2 className="w-4 h-4 ml-2 animate-spin" />מעדכן...</>
+                    ) : "עדכן שם"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
           <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
             <Badge
               variant="secondary"
@@ -406,6 +671,91 @@ export default function ProfileContent({ user }: ProfileContentProps) {
               </CardContent>
             </Card>
           )}
+
+          {/* Business Details (Admin Only) */}
+          {isAdmin && (
+            <Card className="border-slate-200 shadow-sm overflow-hidden">
+              <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Briefcase className="w-5 h-5 text-blue-600" />
+                  פרטי עסק
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-4">
+                {loadingBusiness ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">סוג עסק</label>
+                      <Select
+                        value={businessForm.businessType}
+                        onValueChange={(v) => setBusinessForm((p) => ({ ...p, businessType: v }))}
+                      >
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="בחר סוג עסק" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="exempt">עוסק פטור</SelectItem>
+                          <SelectItem value="licensed">עוסק מורשה</SelectItem>
+                          <SelectItem value="ltd">חברה בע&quot;מ</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">ח.פ / מספר עוסק</label>
+                      <Input
+                        placeholder="מספר עוסק או ח.פ"
+                        value={businessForm.taxId}
+                        onChange={(e) => setBusinessForm((p) => ({ ...p, taxId: e.target.value }))}
+                        className="bg-white"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">כתובת עסק</label>
+                      <Input
+                        placeholder="כתובת העסק"
+                        value={businessForm.businessAddress}
+                        onChange={(e) => setBusinessForm((p) => ({ ...p, businessAddress: e.target.value }))}
+                        className="bg-white"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">אתר אינטרנט (אופציונלי)</label>
+                      <Input
+                        placeholder="https://example.com"
+                        value={businessForm.businessWebsite}
+                        onChange={(e) => setBusinessForm((p) => ({ ...p, businessWebsite: e.target.value }))}
+                        className="bg-white"
+                        dir="ltr"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">אימייל עסקי (אופציונלי)</label>
+                      <Input
+                        placeholder="info@example.com"
+                        value={businessForm.businessEmail}
+                        onChange={(e) => setBusinessForm((p) => ({ ...p, businessEmail: e.target.value }))}
+                        className="bg-white"
+                        dir="ltr"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleSaveBusinessSettings}
+                      disabled={savingBusiness}
+                      className="w-full"
+                    >
+                      {savingBusiness ? (
+                        <><Loader2 className="w-4 h-4 ml-2 animate-spin" />שומר...</>
+                      ) : "שמור פרטי עסק"}
+                    </Button>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Right Column: API Management & Integrations */}
@@ -415,7 +765,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
             <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Shield className="w-5 h-5 text-indigo-600" />
-                ניהול אינטגרציות   
+                ניהול אינטגרציות
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
@@ -678,6 +1028,284 @@ export default function ProfileContent({ user }: ProfileContentProps) {
           )}
         </div>
       </div>
+
+      {/* Account Settings (full width) */}
+      <Card className="border-slate-200 shadow-sm overflow-hidden">
+        <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Lock className="w-5 h-5 text-slate-600" />
+            הגדרות חשבון
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="flex flex-wrap gap-4">
+            {/* Change Password */}
+            <Dialog open={isPasswordDialogOpen} onOpenChange={(open) => {
+              setIsPasswordDialogOpen(open);
+              if (!open) {
+                setCurrentPassword("");
+                setNewPassword("");
+                setConfirmNewPassword("");
+                setPasswordError(null);
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Lock className="w-4 h-4" />
+                  שינוי סיסמה
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>שינוי סיסמה</DialogTitle>
+                  <DialogDescription>
+                    לאחר שינוי הסיסמה תתנתק מכל המכשירים.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">סיסמה נוכחית</label>
+                    <Input
+                      type="password"
+                      placeholder="הזן סיסמה נוכחית"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      disabled={updatingPassword}
+                      className="bg-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">סיסמה חדשה</label>
+                    <Input
+                      type="password"
+                      placeholder="לפחות 10 תווים"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      disabled={updatingPassword}
+                      className="bg-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">אימות סיסמה חדשה</label>
+                    <Input
+                      type="password"
+                      placeholder="הזן שוב את הסיסמה החדשה"
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      disabled={updatingPassword}
+                      className="bg-white"
+                    />
+                  </div>
+
+                  {passwordError && (
+                    <Alert className="bg-red-50 border-red-200">
+                      <AlertDescription className="text-red-800">{passwordError}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <Button
+                    onClick={handleChangePassword}
+                    disabled={updatingPassword || !currentPassword || !newPassword || !confirmNewPassword}
+                    className="w-full"
+                  >
+                    {updatingPassword ? (
+                      <><Loader2 className="w-4 h-4 ml-2 animate-spin" />מעדכן...</>
+                    ) : "שנה סיסמה"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Change Email */}
+            <Dialog open={isEmailDialogOpen} onOpenChange={(open) => {
+              setIsEmailDialogOpen(open);
+              if (!open) resetEmailDialog();
+            }}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Mail className="w-4 h-4" />
+                  שינוי אימייל
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>שינוי כתובת אימייל</DialogTitle>
+                  <DialogDescription>
+                    {emailStep === "form"
+                      ? "הזן את כתובת האימייל החדשה ואת הסיסמה שלך."
+                      : "הזן את קוד האימות שנשלח לאימייל החדש."}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  {emailStep === "form" ? (
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">אימייל נוכחי</label>
+                        <div className="p-3 bg-slate-50 rounded-md border border-slate-200 text-slate-700 text-sm" dir="ltr">
+                          {user.email}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">אימייל חדש</label>
+                        <Input
+                          type="email"
+                          placeholder="new@email.com"
+                          value={newEmail}
+                          onChange={(e) => setNewEmail(e.target.value)}
+                          disabled={updatingEmail}
+                          className="bg-white"
+                          dir="ltr"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">סיסמה לאימות</label>
+                        <Input
+                          type="password"
+                          placeholder="הזן את הסיסמה שלך"
+                          value={emailPassword}
+                          onChange={(e) => setEmailPassword(e.target.value)}
+                          disabled={updatingEmail}
+                          className="bg-white"
+                        />
+                      </div>
+
+                      {emailError && (
+                        <Alert className="bg-red-50 border-red-200">
+                          <AlertDescription className="text-red-800">{emailError}</AlertDescription>
+                        </Alert>
+                      )}
+
+                      <Button
+                        onClick={handleRequestEmailChange}
+                        disabled={updatingEmail || !newEmail.trim() || !emailPassword}
+                        className="w-full"
+                      >
+                        {updatingEmail ? (
+                          <><Loader2 className="w-4 h-4 ml-2 animate-spin" />שולח...</>
+                        ) : "שלח קוד אימות"}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-center">
+                        <p className="text-sm text-muted-foreground mb-1">קוד אימות נשלח אל</p>
+                        <p className="font-medium" dir="ltr">{newEmail}</p>
+                      </div>
+
+                      <div className="flex justify-center" dir="ltr">
+                        <InputOTP maxLength={6} value={emailOtp} onChange={setEmailOtp}>
+                          <InputOTPGroup>
+                            <InputOTPSlot index={0} />
+                            <InputOTPSlot index={1} />
+                            <InputOTPSlot index={2} />
+                            <InputOTPSlot index={3} />
+                            <InputOTPSlot index={4} />
+                            <InputOTPSlot index={5} />
+                          </InputOTPGroup>
+                        </InputOTP>
+                      </div>
+
+                      {emailError && (
+                        <Alert className="bg-red-50 border-red-200">
+                          <AlertDescription className="text-red-800">{emailError}</AlertDescription>
+                        </Alert>
+                      )}
+
+                      <Button
+                        onClick={handleVerifyEmailChange}
+                        disabled={updatingEmail || emailOtp.length !== 6}
+                        className="w-full"
+                      >
+                        {updatingEmail ? (
+                          <><Loader2 className="w-4 h-4 ml-2 animate-spin" />מאמת...</>
+                        ) : "אמת ושנה אימייל"}
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Danger Zone (full width) */}
+      <Card className="border-red-200 shadow-sm overflow-hidden">
+        <CardHeader className="bg-red-50 border-b border-red-100 pb-4">
+          <CardTitle className="text-lg flex items-center gap-2 text-red-700">
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+            אזור מסוכן
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-medium text-slate-900">מחיקת חשבון</h4>
+              <p className="text-sm text-slate-500">מחיקת החשבון היא בלתי הפיכה. כל הנתונים שלך יימחקו לצמיתות.</p>
+            </div>
+            <Button
+              variant="destructive"
+              className="shrink-0"
+              onClick={async () => {
+                const confirmed = await showDestructiveConfirm({
+                  title: "מחיקת חשבון",
+                  message: "פעולה זו בלתי הפיכה. כל הנתונים שלך יימחקו לצמיתות.",
+                  confirmationPhrase: "מחק את החשבון",
+                });
+                if (confirmed) setIsDeleteDialogOpen(true);
+              }}
+            >
+              מחק חשבון
+            </Button>
+            <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+              setIsDeleteDialogOpen(open);
+              if (!open) {
+                setDeletePassword("");
+                setDeleteError(null);
+              }
+            }}>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle className="text-red-700 flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5" />
+                    אישור מחיקת חשבון
+                  </DialogTitle>
+                  <DialogDescription>
+                    הזן את הסיסמה שלך כדי לאשר את מחיקת החשבון.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <Input
+                    type="password"
+                    placeholder="הזן את הסיסמה שלך"
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    disabled={deletingAccount}
+                    className="bg-white"
+                  />
+
+                  {deleteError && (
+                    <Alert className="bg-red-50 border-red-200">
+                      <AlertDescription className="text-red-800">{deleteError}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <Button
+                    variant="destructive"
+                    onClick={handleConfirmDelete}
+                    disabled={deletingAccount || !deletePassword}
+                    className="w-full"
+                  >
+                    {deletingAccount ? (
+                      <><Loader2 className="w-4 h-4 ml-2 animate-spin" />מוחק...</>
+                    ) : "מחק את החשבון לצמיתות"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

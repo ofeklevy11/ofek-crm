@@ -45,7 +45,8 @@ export const createUserSchema = z.object({
 export const patchUserSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   email: z.string().email("Invalid email").max(254).optional(),
-  password: z.string().min(8).max(128).optional(),
+  password: z.string().min(10).max(128).optional(),
+  currentPassword: z.string().min(1).max(128).optional(),
   role: z.enum(["basic", "manager", "admin"]).optional(),
   permissions: z
     .record(z.string(), z.boolean())

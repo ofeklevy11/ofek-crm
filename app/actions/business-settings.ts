@@ -3,6 +3,8 @@
 import { prisma as db } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
+import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { createAuditLog } from "@/lib/audit";
 
 export interface BusinessSettings {
   businessType: string | null;
@@ -47,6 +49,9 @@ export async function updateBusinessSettings(data: {
   if (!user) throw new Error("Unauthorized");
   if (user.role !== "admin") throw new Error("Only admins can update business settings");
 
+  const limited = await checkActionRateLimit(String(user.id), RATE_LIMITS.userManagement);
+  if (limited) throw new Error("יותר מדי בקשות. נסה שוב מאוחר יותר.");
+
   const company = await db.company.update({
     where: { id: user.companyId },
     data: {
@@ -63,6 +68,15 @@ export async function updateBusinessSettings(data: {
   revalidatePath("/quotes");
   revalidatePath("/quotes/new");
   revalidatePath("/settings");
+
+  createAuditLog(
+    null,
+    user.id,
+    "BUSINESS_SETTINGS_UPDATED",
+    { changes: Object.keys(data) },
+    db,
+    user.companyId,
+  );
 
   return company;
 }

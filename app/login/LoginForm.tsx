@@ -74,7 +74,7 @@ export default function LoginForm() {
             <Link
               href="/forgot-password"
               prefetch={false}
-              className="text-xs text-primary hover:text-primary/80 transition-colors hidden" // Hidden for now as requested simple login
+              className="text-xs text-primary hover:text-primary/80 transition-colors"
             >
               שכחת סיסמא?
             </Link>

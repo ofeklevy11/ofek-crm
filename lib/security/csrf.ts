@@ -18,6 +18,10 @@ const CSRF_EXEMPT_PREFIXES = [
   "/api/webhooks/",    // WhatsApp webhooks (signature-verified in route)
 ];
 
+const CSRF_EXEMPT_PREFIXES_EXTRA = [
+  "/api/auth/forgot-password", // Public forgot password flow
+];
+
 const CSRF_EXEMPT_EXACT = [
   "/api/auth/login",
   "/api/auth/register",
@@ -31,7 +35,8 @@ export function isStateChangingMethod(method: string): boolean {
 
 export function isCsrfExempt(pathname: string): boolean {
   if (CSRF_EXEMPT_EXACT.includes(pathname)) return true;
-  return CSRF_EXEMPT_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  if (CSRF_EXEMPT_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return true;
+  return CSRF_EXEMPT_PREFIXES_EXTRA.some((prefix) => pathname.startsWith(prefix));
 }
 
 /**

@@ -1,23 +1,207 @@
 {
   "uid": "crm-overview",
   "title": "CRM Overview",
-  "tags": ["bizlycrm", "overview"],
+  "tags": [
+    "bizlycrm",
+    "overview"
+  ],
   "timezone": "browser",
   "refresh": "30s",
-  "time": { "from": "now-3h", "to": "now" },
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
   "panels": [
+    {
+      "id": 200,
+      "type": "row",
+      "title": "Container Services",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "collapsed": false
+    },
+    {
+      "id": 201,
+      "title": "Service Status",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "label_replace(docker_container_running{name=~\"crm-.+\"}, \"service\", \"$1\", \"name\", \"crm-(.+)-1\")",
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "expr": "label_replace(docker_container_start_time_seconds{name=~\"crm-.+\"} * 1000, \"service\", \"$1\", \"name\", \"crm-(.+)-1\")",
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "expr": "label_replace(time() - docker_container_start_time_seconds{name=~\"crm-.+\"}, \"service\", \"$1\", \"name\", \"crm-(.+)-1\")",
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "name": true
+            },
+            "indexByName": {
+              "service": 0,
+              "Value #A": 1,
+              "Value #B": 2,
+              "Value #C": 3
+            },
+            "renameByName": {
+              "service": "Service",
+              "Value #A": "Status",
+              "Value #B": "Last Started",
+              "Value #C": "Uptime"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Service"
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "Active",
+                        "color": "green",
+                        "index": 0
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Dead",
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last Started"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsIso"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Uptime"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dtdurations"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Service",
+            "desc": false
+          }
+        ],
+        "footer": {
+          "show": false
+        }
+      }
+    },
     {
       "id": 100,
       "type": "row",
       "title": "Health Status",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
       "collapsed": false
     },
     {
       "id": 1,
       "title": "App",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 10
+      },
       "targets": [
         {
           "expr": "up{job=\"nextjs-app\"}",
@@ -27,17 +211,37 @@
       "fieldConfig": {
         "defaults": {
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
           ]
         }
       },
-      "options": { "colorMode": "background", "textMode": "value" }
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
     },
     {
       "id": 2,
       "title": "PostgreSQL",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 10
+      },
       "targets": [
         {
           "expr": "pg_up",
@@ -47,17 +251,37 @@
       "fieldConfig": {
         "defaults": {
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
           ]
         }
       },
-      "options": { "colorMode": "background", "textMode": "value" }
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
     },
     {
       "id": 3,
       "title": "Redis",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 10
+      },
       "targets": [
         {
           "expr": "redis_up",
@@ -67,17 +291,37 @@
       "fieldConfig": {
         "defaults": {
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
           ]
         }
       },
-      "options": { "colorMode": "background", "textMode": "value" }
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
     },
     {
       "id": 4,
       "title": "Requests/s",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 10
+      },
       "targets": [
         {
           "expr": "rate(nginx_http_requests_total[5m])",
@@ -89,20 +333,37 @@
           "unit": "reqps",
           "thresholds": {
             "steps": [
-              { "value": 0, "color": "green" },
-              { "value": 100, "color": "yellow" },
-              { "value": 500, "color": "red" }
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 100,
+                "color": "yellow"
+              },
+              {
+                "value": 500,
+                "color": "red"
+              }
             ]
           }
         }
       },
-      "options": { "colorMode": "background", "textMode": "value" }
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
     },
     {
       "id": 5,
       "title": "Active Alerts",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 10
+      },
       "targets": [
         {
           "expr": "count(ALERTS{alertstate=\"firing\"}) or vector(0)",
@@ -113,20 +374,37 @@
         "defaults": {
           "thresholds": {
             "steps": [
-              { "value": 0, "color": "green" },
-              { "value": 1, "color": "orange" },
-              { "value": 3, "color": "red" }
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 1,
+                "color": "orange"
+              },
+              {
+                "value": 3,
+                "color": "red"
+              }
             ]
           }
         }
       },
-      "options": { "colorMode": "background", "textMode": "value" }
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
     },
     {
       "id": 6,
       "title": "SSL Cert Expiry",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 10
+      },
       "targets": [
         {
           "expr": "(probe_ssl_earliest_cert_expiry{instance=\"bizlycrm.com:443\"} - time()) / 86400",
@@ -139,28 +417,49 @@
           "decimals": 0,
           "thresholds": {
             "steps": [
-              { "value": 0, "color": "red" },
-              { "value": 7, "color": "orange" },
-              { "value": 21, "color": "green" }
+              {
+                "value": 0,
+                "color": "red"
+              },
+              {
+                "value": 7,
+                "color": "orange"
+              },
+              {
+                "value": 21,
+                "color": "green"
+              }
             ]
           }
         }
       },
-      "options": { "colorMode": "background", "textMode": "value" }
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
     },
-
     {
       "id": 101,
       "type": "row",
       "title": "Traffic (Nginx)",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
       "collapsed": false
     },
     {
       "id": 7,
       "title": "Request Rate",
       "type": "timeseries",
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 6 },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
       "targets": [
         {
           "expr": "rate(nginx_http_requests_total[5m])",
@@ -170,7 +469,10 @@
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "custom": { "fillOpacity": 15, "lineWidth": 2 }
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
         }
       }
     },
@@ -178,7 +480,12 @@
       "id": 8,
       "title": "Nginx Connections",
       "type": "timeseries",
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 6 },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 15
+      },
       "targets": [
         {
           "expr": "nginx_connections_active",
@@ -199,23 +506,35 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "fillOpacity": 10, "lineWidth": 2 }
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
         }
       }
     },
-
     {
       "id": 102,
       "type": "row",
       "title": "Container Resources (Docker)",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
       "collapsed": false
     },
     {
       "id": 9,
       "title": "Container CPU Usage",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 23
+      },
       "targets": [
         {
           "expr": "sum(rate(container_cpu_usage_seconds_total{name=~\"crm-.+\", image!=\"\"}[5m])) by (name) * 100",
@@ -225,18 +544,31 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
-          "custom": { "fillOpacity": 10, "lineWidth": 1 }
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1
+          }
         }
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "sortBy": "Mean", "sortDesc": true }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "sortBy": "Mean",
+          "sortDesc": true
+        }
       }
     },
     {
       "id": 10,
       "title": "Container Memory Usage",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 23
+      },
       "targets": [
         {
           "expr": "container_memory_usage_bytes{name=~\"crm-.+\", image!=\"\"} - container_memory_cache{name=~\"crm-.+\", image!=\"\"}",
@@ -246,26 +578,43 @@
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
-          "custom": { "fillOpacity": 10, "lineWidth": 1 }
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1
+          }
         }
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "sortBy": "Mean", "sortDesc": true }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "sortBy": "Mean",
+          "sortDesc": true
+        }
       }
     },
-
     {
       "id": 103,
       "type": "row",
       "title": "System Resources",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
       "collapsed": false
     },
     {
       "id": 11,
       "title": "CPU",
       "type": "gauge",
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 23 },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 32
+      },
       "targets": [
         {
           "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
@@ -275,12 +624,22 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
-          "min": 0, "max": 100,
+          "min": 0,
+          "max": 100,
           "thresholds": {
             "steps": [
-              { "value": 0, "color": "green" },
-              { "value": 70, "color": "yellow" },
-              { "value": 85, "color": "red" }
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 70,
+                "color": "yellow"
+              },
+              {
+                "value": 85,
+                "color": "red"
+              }
             ]
           }
         }
@@ -290,7 +649,12 @@
       "id": 12,
       "title": "Memory",
       "type": "gauge",
-      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 23 },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 32
+      },
       "targets": [
         {
           "expr": "(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100",
@@ -300,12 +664,22 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
-          "min": 0, "max": 100,
+          "min": 0,
+          "max": 100,
           "thresholds": {
             "steps": [
-              { "value": 0, "color": "green" },
-              { "value": 80, "color": "yellow" },
-              { "value": 90, "color": "red" }
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 80,
+                "color": "yellow"
+              },
+              {
+                "value": 90,
+                "color": "red"
+              }
             ]
           }
         }
@@ -315,7 +689,12 @@
       "id": 13,
       "title": "Disk",
       "type": "gauge",
-      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 23 },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 32
+      },
       "targets": [
         {
           "expr": "(1 - node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}) * 100",
@@ -325,12 +704,22 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
-          "min": 0, "max": 100,
+          "min": 0,
+          "max": 100,
           "thresholds": {
             "steps": [
-              { "value": 0, "color": "green" },
-              { "value": 75, "color": "yellow" },
-              { "value": 85, "color": "red" }
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 75,
+                "color": "yellow"
+              },
+              {
+                "value": 85,
+                "color": "red"
+              }
             ]
           }
         }
@@ -340,7 +729,12 @@
       "id": 14,
       "title": "Uptime",
       "type": "stat",
-      "gridPos": { "h": 3, "w": 6, "x": 18, "y": 23 },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 18,
+        "y": 32
+      },
       "targets": [
         {
           "expr": "time() - node_boot_time_seconds",
@@ -348,15 +742,24 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "dtdurations" }
+        "defaults": {
+          "unit": "dtdurations"
+        }
       },
-      "options": { "textMode": "value" }
+      "options": {
+        "textMode": "value"
+      }
     },
     {
       "id": 15,
       "title": "Disk Free",
       "type": "stat",
-      "gridPos": { "h": 3, "w": 6, "x": 18, "y": 26 },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 18,
+        "y": 35
+      },
       "targets": [
         {
           "expr": "node_filesystem_avail_bytes{mountpoint=\"/\"}",
@@ -364,15 +767,24 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "bytes" }
+        "defaults": {
+          "unit": "bytes"
+        }
       },
-      "options": { "textMode": "value" }
+      "options": {
+        "textMode": "value"
+      }
     },
     {
       "id": 16,
       "title": "CPU Over Time",
       "type": "timeseries",
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 29 },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 38
+      },
       "targets": [
         {
           "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
@@ -385,8 +797,13 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent", "min": 0, "max": 100,
-          "custom": { "fillOpacity": 15, "lineWidth": 2 }
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
         }
       }
     },
@@ -394,7 +811,12 @@
       "id": 17,
       "title": "Memory Over Time",
       "type": "timeseries",
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 29 },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 38
+      },
       "targets": [
         {
           "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
@@ -408,23 +830,35 @@
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
-          "custom": { "fillOpacity": 15, "lineWidth": 2 }
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
         }
       }
     },
-
     {
       "id": 104,
       "type": "row",
       "title": "Database & Cache",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 45
+      },
       "collapsed": false
     },
     {
       "id": 18,
       "title": "DB Active Connections",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 37 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 46
+      },
       "targets": [
         {
           "expr": "pg_stat_activity_count",
@@ -435,20 +869,37 @@
         "defaults": {
           "thresholds": {
             "steps": [
-              { "value": 0, "color": "green" },
-              { "value": 7, "color": "yellow" },
-              { "value": 9, "color": "red" }
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 7,
+                "color": "yellow"
+              },
+              {
+                "value": 9,
+                "color": "red"
+              }
             ]
           }
         }
       },
-      "options": { "colorMode": "background", "textMode": "value" }
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
     },
     {
       "id": 19,
       "title": "Redis Memory",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 37 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 46
+      },
       "targets": [
         {
           "expr": "redis_memory_used_bytes",
@@ -456,15 +907,25 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "bytes" }
+        "defaults": {
+          "unit": "bytes"
+        }
       },
-      "options": { "colorMode": "background", "textMode": "value" }
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
     },
     {
       "id": 20,
       "title": "Redis Hit Rate",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 37 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 46
+      },
       "targets": [
         {
           "expr": "redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total) * 100",
@@ -477,20 +938,37 @@
           "decimals": 1,
           "thresholds": {
             "steps": [
-              { "value": 0, "color": "red" },
-              { "value": 50, "color": "yellow" },
-              { "value": 80, "color": "green" }
+              {
+                "value": 0,
+                "color": "red"
+              },
+              {
+                "value": 50,
+                "color": "yellow"
+              },
+              {
+                "value": 80,
+                "color": "green"
+              }
             ]
           }
         }
       },
-      "options": { "colorMode": "background", "textMode": "value" }
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
     },
     {
       "id": 21,
       "title": "Redis Clients",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 37 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 46
+      },
       "targets": [
         {
           "expr": "redis_connected_clients",
@@ -501,20 +979,37 @@
         "defaults": {
           "thresholds": {
             "steps": [
-              { "value": 0, "color": "green" },
-              { "value": 20, "color": "yellow" },
-              { "value": 50, "color": "red" }
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 20,
+                "color": "yellow"
+              },
+              {
+                "value": 50,
+                "color": "red"
+              }
             ]
           }
         }
       },
-      "options": { "colorMode": "background", "textMode": "value" }
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
     },
     {
       "id": 22,
       "title": "Network I/O",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 37 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 46
+      },
       "targets": [
         {
           "expr": "rate(node_network_receive_bytes_total{device!~\"lo|veth.*|br-.*|docker.*\"}[5m])",
@@ -526,15 +1021,24 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "Bps" }
+        "defaults": {
+          "unit": "Bps"
+        }
       },
-      "options": { "textMode": "value_and_name" }
+      "options": {
+        "textMode": "value_and_name"
+      }
     },
     {
       "id": 23,
       "title": "Load Avg",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 37 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 46
+      },
       "targets": [
         {
           "expr": "node_load1",
@@ -550,20 +1054,36 @@
           "decimals": 2,
           "thresholds": {
             "steps": [
-              { "value": 0, "color": "green" },
-              { "value": 2, "color": "yellow" },
-              { "value": 4, "color": "red" }
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 2,
+                "color": "yellow"
+              },
+              {
+                "value": 4,
+                "color": "red"
+              }
             ]
           }
         }
       },
-      "options": { "textMode": "value_and_name" }
+      "options": {
+        "textMode": "value_and_name"
+      }
     },
     {
       "id": 24,
       "title": "DB Connections & Transactions",
       "type": "timeseries",
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 41 },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 50
+      },
       "targets": [
         {
           "expr": "pg_stat_activity_count",
@@ -580,18 +1100,29 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "fillOpacity": 10, "lineWidth": 2 }
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
         }
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "right" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        }
       }
     },
     {
       "id": 25,
       "title": "Redis Memory & Clients",
       "type": "timeseries",
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 41 },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 50
+      },
       "targets": [
         {
           "expr": "redis_memory_used_bytes",
@@ -605,20 +1136,785 @@
       "fieldConfig": {
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Memory Used" },
-            "properties": [{ "id": "unit", "value": "bytes" }, { "id": "custom.axisPlacement", "value": "left" }]
+            "matcher": {
+              "id": "byName",
+              "options": "Memory Used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "left"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "Clients" },
-            "properties": [{ "id": "custom.axisPlacement", "value": "right" }]
+            "matcher": {
+              "id": "byName",
+              "options": "Clients"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
           }
         ],
         "defaults": {
-          "custom": { "fillOpacity": 10, "lineWidth": 2 }
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
         }
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "right" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        }
+      }
+    },
+    {
+      "id": 105,
+      "type": "row",
+      "title": "HTTP Performance",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 57
+      },
+      "collapsed": false
+    },
+    {
+      "id": 26,
+      "title": "HTTP Error Rate %",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 0,
+        "y": 58
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+          "legendFormat": "Error %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "noValue": "0",
+          "thresholds": {
+            "steps": [
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 1,
+                "color": "yellow"
+              },
+              {
+                "value": 5,
+                "color": "red"
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 27,
+      "title": "p95 Response Time",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 58
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3,
+          "thresholds": {
+            "steps": [
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 0.5,
+                "color": "yellow"
+              },
+              {
+                "value": 1,
+                "color": "red"
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 28,
+      "title": "Requests by Status Code",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 62
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[5m])) by (status_code)",
+          "legendFormat": "{{ status_code }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "sortBy": "Mean",
+          "sortDesc": true
+        }
+      }
+    },
+    {
+      "id": 29,
+      "title": "Response Time Percentiles",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 62
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        }
+      }
+    },
+    {
+      "id": 30,
+      "title": "Top Slowest Routes (p95)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 69
+      },
+      "targets": [
+        {
+          "expr": "topk(10, histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (route, le)))",
+          "legendFormat": "{{ route }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "sortBy": "Mean",
+          "sortDesc": true
+        }
+      }
+    },
+    {
+      "id": 31,
+      "title": "Request Rate by Route",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 69
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[5m])) by (route)",
+          "legendFormat": "{{ route }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "sortBy": "Mean",
+          "sortDesc": true
+        }
+      }
+    },
+    {
+      "id": 106,
+      "type": "row",
+      "title": "Logs & Errors",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 76
+      },
+      "collapsed": false
+    },
+    {
+      "id": 32,
+      "title": "Error Log Rate",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 77
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum(rate({service_name=~\".+\"} |= \"error\" [5m])) by (service_name)",
+          "legendFormat": "{{ service_name }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "sortBy": "Mean",
+          "sortDesc": true
+        }
+      }
+    },
+    {
+      "id": 33,
+      "title": "Recent Error Logs",
+      "type": "logs",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 77
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service_name=~\".+\"} | json | level=\"error\"",
+          "legendFormat": ""
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      }
+    },
+    {
+      "id": 107,
+      "type": "row",
+      "title": "Backup & Recovery Status",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 84
+      },
+      "collapsed": false
+    },
+    {
+      "id": 34,
+      "title": "Last Backup Age",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 0,
+        "y": 85
+      },
+      "targets": [
+        {
+          "expr": "(time() - crm_backup_last_success_timestamp) / 3600",
+          "legendFormat": "Hours ago"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "thresholds": {
+            "steps": [
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 14,
+                "color": "yellow"
+              },
+              {
+                "value": 25,
+                "color": "red"
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 35,
+      "title": "Last Restore Test Age",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 85
+      },
+      "targets": [
+        {
+          "expr": "(time() - crm_restore_test_last_success_timestamp) / 3600",
+          "legendFormat": "Hours ago"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "thresholds": {
+            "steps": [
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 14,
+                "color": "yellow"
+              },
+              {
+                "value": 25,
+                "color": "red"
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 108,
+      "type": "row",
+      "title": "Database Deep Dive",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 89
+      },
+      "collapsed": false
+    },
+    {
+      "id": 36,
+      "title": "DB Pool Usage",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 90
+      },
+      "targets": [
+        {
+          "expr": "crm_db_pool_active_connections",
+          "legendFormat": "Active"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 5,
+                "color": "yellow"
+              },
+              {
+                "value": 8,
+                "color": "red"
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 37,
+      "title": "DB Query p95",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 90
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(crm_db_query_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3,
+          "thresholds": {
+            "steps": [
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 0.1,
+                "color": "yellow"
+              },
+              {
+                "value": 0.5,
+                "color": "red"
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 38,
+      "title": "PG Database Size",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 90
+      },
+      "targets": [
+        {
+          "expr": "pg_database_size_bytes{datname=\"crm_db\"}",
+          "legendFormat": "Size"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 39,
+      "title": "PG Cache Hit Ratio",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 90
+      },
+      "targets": [
+        {
+          "expr": "pg_stat_database_blks_hit{datname=\"crm_db\"} / (pg_stat_database_blks_hit{datname=\"crm_db\"} + pg_stat_database_blks_read{datname=\"crm_db\"}) * 100",
+          "legendFormat": "Hit %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "thresholds": {
+            "steps": [
+              {
+                "value": 0,
+                "color": "red"
+              },
+              {
+                "value": 90,
+                "color": "yellow"
+              },
+              {
+                "value": 99,
+                "color": "green"
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 40,
+      "title": "DB Query Latency",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 94
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(crm_db_query_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(crm_db_query_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        }
+      }
+    },
+    {
+      "id": 41,
+      "title": "Inngest Jobs",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 94
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(crm_inngest_jobs_total[5m])) by (status)",
+          "legendFormat": "{{ status }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        }
+      }
+    },
+    {
+      "id": 109,
+      "type": "row",
+      "title": "Network & Disk I/O",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 101
+      },
+      "collapsed": false
+    },
+    {
+      "id": 42,
+      "title": "Network I/O",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 102
+      },
+      "targets": [
+        {
+          "expr": "rate(node_network_receive_bytes_total{device!~\"lo|veth.*|br-.*|docker.*\"}[5m])",
+          "legendFormat": "Receive"
+        },
+        {
+          "expr": "rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|br-.*|docker.*\"}[5m])",
+          "legendFormat": "Transmit"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        }
+      }
+    },
+    {
+      "id": 43,
+      "title": "Disk I/O",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 102
+      },
+      "targets": [
+        {
+          "expr": "rate(node_disk_read_bytes_total[5m])",
+          "legendFormat": "Read"
+        },
+        {
+          "expr": "rate(node_disk_written_bytes_total[5m])",
+          "legendFormat": "Write"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        }
       }
     }
   ],
