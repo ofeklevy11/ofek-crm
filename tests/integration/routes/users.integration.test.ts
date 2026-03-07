@@ -1434,7 +1434,7 @@ describe("PATCH /api/users/[id]", () => {
 
     setAuthToken(selfToken);
     const res = await PATCH_USER(
-      buildJsonRequest(`/api/users/${created.id}`, "PATCH", { password: "newSelfPassword123" }),
+      buildJsonRequest(`/api/users/${created.id}`, "PATCH", { password: "newSelfPassword123", currentPassword: "securePassword123" }),
       makeParams(created.id),
     );
 

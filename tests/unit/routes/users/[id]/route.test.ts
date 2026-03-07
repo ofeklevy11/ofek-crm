@@ -42,7 +42,7 @@ vi.mock("@/lib/security/audit-security", () => ({
   SEC_PERMISSIONS_CHANGED: "SEC_PERMISSIONS_CHANGED",
 }));
 vi.mock("bcryptjs", () => ({
-  default: { hash: vi.fn() },
+  default: { hash: vi.fn(), compare: vi.fn() },
 }));
 const { mockLogger } = vi.hoisted(() => ({
   mockLogger: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -363,7 +363,7 @@ describe("PATCH /api/users/:id", () => {
     await PATCH(makeReq("PATCH", { name: "Updated" }), buildParams(5));
     const call = vi.mocked(prisma.user.findFirst).mock.calls[0][0] as any;
     expect(call.where).toEqual({ id: 5, companyId: 100 });
-    expect(call.select).toEqual({ id: true, email: true, role: true });
+    expect(call.select).toEqual({ id: true, email: true, role: true, name: true });
   });
 
   // Authorization (non-admin)
@@ -434,10 +434,12 @@ describe("PATCH /api/users/:id", () => {
 
   it("allows non-admin to update own password", async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(basicUser as any);
-    vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 3, email: "basic@test.com", role: "basic" } as any);
+    vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 3, email: "basic@test.com", role: "basic", passwordHash: "existing_hash" } as any);
     vi.mocked(prisma.user.update).mockResolvedValue({ ...targetUserRecord, id: 3 } as any);
+    const bcrypt = await import("bcryptjs");
+    vi.mocked(bcrypt.default.compare).mockResolvedValue(true as never);
 
-    const res = await PATCH(makeReq("PATCH", { password: "newpassword123" }), buildParams(3));
+    const res = await PATCH(makeReq("PATCH", { password: "newpassword123", currentPassword: "oldpassword123" }), buildParams(3));
     expect(res.status).toBe(200);
     const call = vi.mocked(prisma.user.update).mock.calls[0][0] as any;
     expect(call.data.passwordHash).toBe("hashed_password");
@@ -819,21 +821,21 @@ describe("PATCH /api/users/:id", () => {
     expect(body.details.password).toBeDefined();
   });
 
-  it("returns 400 when password is exactly 7 chars (below boundary)", async () => {
+  it("returns 400 when password is exactly 9 chars (below boundary)", async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(adminUser as any);
-    const res = await PATCH(makeReq("PATCH", { password: "abcdefg" }), buildParams(5));
+    const res = await PATCH(makeReq("PATCH", { password: "abcdefghi" }), buildParams(5));
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe("Validation failed");
     expect(body.details.password).toBeDefined();
   });
 
-  it("accepts password with exactly 8 chars (at boundary)", async () => {
+  it("accepts password with exactly 10 chars (at boundary)", async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(adminUser as any);
     vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 5, email: "target@test.com", role: "basic" } as any);
     vi.mocked(prisma.user.update).mockResolvedValue({ ...targetUserRecord } as any);
 
-    const res = await PATCH(makeReq("PATCH", { password: "abcdefgh" }), buildParams(5));
+    const res = await PATCH(makeReq("PATCH", { password: "abcdefghij" }), buildParams(5));
     expect(res.status).toBe(200);
     expect(await res.json()).toHaveProperty("id");
   });
