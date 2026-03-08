@@ -16,6 +16,8 @@ import {
   Check,
   X,
 } from "lucide-react";
+import NextImage from "next/image";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
 import {
   DropdownMenu,
@@ -53,6 +55,52 @@ const downloadFile = async (fileId: number, fileName: string) => {
     toast.error(getUserFriendlyError(error));
   }
 };
+
+function ImageThumbnail({
+  url,
+  alt,
+  size = "md",
+}: {
+  url: string;
+  alt: string;
+  size?: "sm" | "md" | "lg";
+}) {
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+
+  if (hasError) {
+    if (size === "lg") {
+      return (
+        <div className="w-full aspect-square rounded-lg bg-muted flex items-center justify-center">
+          <ImageIcon className="w-8 h-8 text-[#a24ec1]" />
+        </div>
+      );
+    }
+    const className = size === "sm" ? "w-4 h-4" : "w-6 h-6";
+    return <ImageIcon className={cn(className, "text-[#a24ec1]")} />;
+  }
+
+  const config = {
+    sm: { container: "w-5 h-5", sizes: "20px" },
+    md: { container: "w-10 h-10", sizes: "40px" },
+    lg: { container: "w-full aspect-square", sizes: "200px" },
+  }[size];
+
+  return (
+    <div className={cn(config.container, "relative rounded-lg overflow-hidden shrink-0 bg-muted")}>
+      {isLoading && <Skeleton className="absolute inset-0" />}
+      <NextImage
+        src={url}
+        alt={alt}
+        fill
+        className="object-cover"
+        sizes={config.sizes}
+        onLoad={() => setIsLoading(false)}
+        onError={() => setHasError(true)}
+      />
+    </div>
+  );
+}
 
 interface FileCardProps {
   file: FileModel;
@@ -107,9 +155,20 @@ export function FileCard({
     }
   };
 
+  const isImage = file.type.includes("image");
+  const fileUrl = (file as any).url as string | undefined;
+
   const getIcon = (size: "sm" | "md" = "md") => {
     const className = size === "sm" ? "w-4 h-4" : "w-6 h-6";
-    if (file.type.includes("image"))
+    if (isImage && fileUrl)
+      return (
+        <ImageThumbnail
+          url={fileUrl}
+          alt={(file as any).displayName || file.name}
+          size={size}
+        />
+      );
+    if (isImage)
       return <ImageIcon className={cn(className, "text-[#a24ec1]")} />;
     if (file.type.includes("pdf"))
       return <FileText className={cn(className, "text-red-500")} />;
@@ -200,12 +259,25 @@ export function FileCard({
         )}
         dir="rtl"
       >
-        <div className="flex items-start justify-between">
-          <div className="p-2 rounded-lg bg-muted">{getIcon()}</div>
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-            <ActionsMenu align="start" />
+        {isImage && fileUrl ? (
+          <div className="relative -mx-4 -mt-4 mb-2">
+            <ImageThumbnail
+              url={fileUrl}
+              alt={(file as any).displayName || file.name}
+              size="lg"
+            />
+            <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+              <ActionsMenu align="start" />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-start justify-between">
+            <div className="p-2 rounded-lg bg-muted">{getIcon()}</div>
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+              <ActionsMenu align="start" />
+            </div>
+          </div>
+        )}
 
         {isEditing ? (
           // Edit Mode
@@ -328,7 +400,14 @@ export function FileCard({
       >
         <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
 
-        <div className="p-2 rounded-lg bg-muted shrink-0">{getIcon()}</div>
+        <div
+          className={cn(
+            "rounded-lg bg-muted shrink-0",
+            isImage && fileUrl ? "overflow-hidden" : "p-2",
+          )}
+        >
+          {getIcon()}
+        </div>
 
         <div className="flex-1 min-w-0">
           <h3
