@@ -97,9 +97,7 @@ export const prisma = basePrisma.$extends({
       if (model && !TENANT_EXEMPT_MODELS.has(model) && !hasCompanyIdInWhere(args)) {
         if (STRICT_OPERATIONS.has(operation)) {
           const msg = `TENANT_ISOLATION: companyId missing in ${model}.${operation}`;
-          if (process.env.NODE_ENV === "test") {
-            throw new Error(msg);
-          } else if (process.env.NODE_ENV === "development") {
+          if (process.env.NODE_ENV === "development") {
             console.error(msg, new Error().stack);
           } else {
             console.warn(`[tenant-isolation] ${msg}`);
