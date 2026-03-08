@@ -44,6 +44,7 @@ export const EventCard = memo(function EventCard({
     event.startTime.getHours() + event.startTime.getMinutes() / 60;
   const endHour = event.endTime.getHours() + event.endTime.getMinutes() / 60;
   const duration = endHour - startHour;
+  const isGoogle = event.source === "google";
 
   // Calculate width and left position for overlapping events
   const widthPercent = 100 / totalColumns;
@@ -56,7 +57,7 @@ export const EventCard = memo(function EventCard({
       onClick={onClick}
       {...attributes}
       {...listeners}
-      className={`absolute rounded-md px-2 py-1 text-white text-xs cursor-grab active:cursor-grabbing transition-shadow overflow-hidden shadow-sm select-none ${
+      className={`absolute rounded-md px-2 py-1 text-white text-xs ${isGoogle ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"} transition-shadow overflow-hidden shadow-sm select-none ${
         isDragging && !isOverlay ? "opacity-30" : "hover:opacity-90"
       } ${isOverlay ? "z-50 shadow-xl scale-105" : "z-10"}`}
       style={{
@@ -75,14 +76,20 @@ export const EventCard = memo(function EventCard({
     >
       {duration >= 1 ? (
         <>
-          <div className="font-semibold truncate">{event.title}</div>
+          <div className="font-semibold truncate flex items-center gap-1">
+            {isGoogle && <GoogleBadge />}
+            {event.title}
+          </div>
           <div className="text-[10px] opacity-90 mt-0.5">
             {formatTime(event.startTime)} - {formatTime(event.endTime)}
           </div>
         </>
       ) : (
         <div className="flex items-center justify-between gap-1 overflow-hidden h-full">
-          <div className="font-semibold truncate">{event.title}</div>
+          <div className="font-semibold truncate flex items-center gap-1">
+            {isGoogle && <GoogleBadge />}
+            {event.title}
+          </div>
           <div className="text-[10px] opacity-90 whitespace-nowrap">
             {formatTime(event.startTime)}
           </div>
@@ -91,6 +98,14 @@ export const EventCard = memo(function EventCard({
     </div>
   );
 });
+
+function GoogleBadge() {
+  return (
+    <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-white/30 rounded-full text-[8px] font-bold shrink-0">
+      G
+    </span>
+  );
+}
 
 export function DraggableEventCard(props: EventCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
@@ -114,4 +129,8 @@ export function DraggableEventCard(props: EventCardProps) {
       isDragging={isDragging}
     />
   );
+}
+
+export function GoogleEventCard(props: EventCardProps) {
+  return <EventCard {...props} style={{ ...props.style, cursor: "pointer" }} />;
 }

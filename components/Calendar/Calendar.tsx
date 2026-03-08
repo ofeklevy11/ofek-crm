@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { CalendarHeader } from "./CalendarHeader";
 import { WeekView } from "./WeekView";
@@ -19,7 +19,12 @@ import {
   updateCalendarEvent,
   createCalendarEvent,
   deleteCalendarEvent,
+  getGoogleCalendarStatus,
+  getGoogleCalendarEvents,
+  disconnectGoogleCalendar,
 } from "@/app/actions";
+
+type CalendarSource = "crm" | "google" | "all";
 
 export function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -44,7 +49,55 @@ export function Calendar() {
     "details" | "automations"
   >("details");
 
+  // Google Calendar state
+  const [calendarSource, setCalendarSource] = useState<CalendarSource>("crm");
+  const [googleEvents, setGoogleEvents] = useState<CalendarEvent[]>([]);
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
   const searchParams = useSearchParams();
+
+  // Check Google Calendar connection status on mount
+  useEffect(() => {
+    getGoogleCalendarStatus().then((status) => {
+      setGoogleConnected(status.connected);
+      setGoogleEmail(status.email || null);
+    });
+  }, []);
+
+  // Handle Google OAuth callback URL params
+  useEffect(() => {
+    const connected = searchParams.get("googleConnected");
+    const error = searchParams.get("googleError");
+
+    if (connected === "true") {
+      toast.success("Google Calendar חובר בהצלחה");
+      setGoogleConnected(true);
+      setCalendarSource("all");
+      // Re-fetch status for email
+      getGoogleCalendarStatus().then((status) => {
+        setGoogleEmail(status.email || null);
+      });
+      // Clean URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete("googleConnected");
+      window.history.replaceState({}, "", url.toString());
+    } else if (error) {
+      const messages: Record<string, string> = {
+        access_denied: "הגישה ל-Google Calendar נדחתה",
+        missing_params: "חסרים פרמטרים בתגובה מ-Google",
+        invalid_state: "בקשת ההתחברות פגה - נסה שוב",
+        user_mismatch: "חוסר התאמה של משתמש - נסה שוב",
+        no_refresh_token: "Google לא סיפקה הרשאת רענון - נסה שוב",
+        callback_failed: "ההתחברות ל-Google נכשלה - נסה שוב",
+      };
+      toast.error(messages[error] || "שגיאה בהתחברות ל-Google Calendar");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("googleError");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, [searchParams]);
 
   // Load events for visible date range (debounced to prevent rapid-fire on navigation)
   const fetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -64,18 +117,40 @@ export function Calendar() {
           rangeEnd = addDays(currentDate, 2);
         }
 
-        const result = await getCalendarEvents(
-          rangeStart.toISOString(),
-          rangeEnd.toISOString(),
-        );
-        if (result.success) {
-          setEvents(
-            result.data!.map((event: any) => ({
-              ...event,
-              startTime: new Date(event.startTime),
-              endTime: new Date(event.endTime),
-            })),
-          );
+        const rangeStartISO = rangeStart.toISOString();
+        const rangeEndISO = rangeEnd.toISOString();
+
+        // Fetch CRM events only when source includes CRM
+        if (calendarSource === "crm" || calendarSource === "all") {
+          const result = await getCalendarEvents(rangeStartISO, rangeEndISO);
+          if (result.success) {
+            setEvents(
+              result.data!.map((event: any) => ({
+                ...event,
+                startTime: new Date(event.startTime),
+                endTime: new Date(event.endTime),
+              })),
+            );
+          }
+        }
+
+        // Fetch Google events if connected and source includes Google
+        if (googleConnected && (calendarSource === "google" || calendarSource === "all")) {
+          const gResult = await getGoogleCalendarEvents(rangeStartISO, rangeEndISO);
+          if (gResult.success && gResult.data) {
+            setGoogleEvents(
+              gResult.data.map((event: any) => ({
+                ...event,
+                startTime: new Date(event.startTime),
+                endTime: new Date(event.endTime),
+              })),
+            );
+          }
+          if (gResult.connected === false) {
+            setGoogleConnected(false);
+            setGoogleEmail(null);
+            setGoogleEvents([]);
+          }
         }
       } catch (error) {
         console.error("Failed to fetch events:", error);
@@ -87,7 +162,14 @@ export function Calendar() {
     return () => {
       if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
     };
-  }, [currentDate, view]);
+  }, [currentDate, view, calendarSource, googleConnected]);
+
+  // Merge events based on source
+  const displayEvents = useMemo(() => {
+    if (calendarSource === "crm") return events;
+    if (calendarSource === "google") return googleEvents;
+    return [...events, ...googleEvents];
+  }, [events, googleEvents, calendarSource]);
 
   // Handle URL params for opening modals
   useEffect(() => {
@@ -339,6 +421,9 @@ export function Calendar() {
     newMinutes: number,
     duration: number,
   ) => {
+    // Don't allow dragging Google events
+    if (eventId.startsWith("gcal:")) return;
+
     try {
       // Calculate new start and end times
       const newStartTime = new Date(newDate);
@@ -373,6 +458,43 @@ export function Calendar() {
       else toast.error(getUserFriendlyError(error));
     }
   };
+
+  const handleConnectGoogle = useCallback(async () => {
+    setGoogleLoading(true);
+    try {
+      const res = await fetch("/api/integrations/google/calendar/connect");
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        toast.error(data.error || "שגיאה בהתחברות ל-Google Calendar");
+        setGoogleLoading(false);
+      }
+    } catch {
+      toast.error("שגיאה בהתחברות ל-Google Calendar");
+      setGoogleLoading(false);
+    }
+  }, []);
+
+  const handleDisconnectGoogle = useCallback(async () => {
+    if (!(await showConfirm("לנתק את Google Calendar?"))) return;
+    try {
+      const result = await disconnectGoogleCalendar();
+      if (result.success) {
+        setGoogleConnected(false);
+        setGoogleEmail(null);
+        setGoogleEvents([]);
+        setCalendarSource("crm");
+        toast.success("Google Calendar נותק בהצלחה");
+      } else {
+        toast.error(result.error || "שגיאה בניתוק Google Calendar");
+      }
+    } catch {
+      toast.error("שגיאה בניתוק Google Calendar");
+    }
+  }, []);
+
+  const isGoogleEvent = selectedEvent?.source === "google";
 
   return (
     <div className="flex flex-col min-h-screen bg-white" dir="rtl">
@@ -409,12 +531,19 @@ export function Calendar() {
         onSelectDate={handleSelectDate}
         onShowAllEvents={handleShowAllEvents}
         onGlobalAutomations={() => setIsGlobalAutomationsModalOpen(true)}
+        googleConnected={googleConnected}
+        googleEmail={googleEmail || undefined}
+        calendarSource={calendarSource}
+        onSourceChange={setCalendarSource}
+        onConnectGoogle={handleConnectGoogle}
+        onDisconnectGoogle={handleDisconnectGoogle}
+        googleLoading={googleLoading}
       />
       <div className="sticky top-16 h-[calc(100dvh-4rem)] overflow-hidden bg-white z-0">
         {view === "week" ? (
           <WeekView
             currentDate={currentDate}
-            events={events}
+            events={displayEvents}
             onEventClick={handleEventClick}
             onTimeSlotClick={handleTimeSlotClick}
             onEventDrop={handleEventDrop}
@@ -423,7 +552,7 @@ export function Calendar() {
         ) : (
           <DayView
             currentDate={currentDate}
-            events={events}
+            events={displayEvents}
             onEventClick={handleEventClick}
             onTimeSlotClick={handleTimeSlotClick}
             onEventDrop={handleEventDrop}
@@ -449,7 +578,7 @@ export function Calendar() {
           }
         }}
         onSave={handleSaveEvent}
-        onDelete={selectedEvent ? handleDeleteEvent : undefined}
+        onDelete={selectedEvent && !isGoogleEvent ? handleDeleteEvent : undefined}
         event={selectedEvent}
         initialDate={initialEventDate}
         initialHour={initialEventHour}
@@ -463,9 +592,6 @@ export function Calendar() {
         events={allEventsForModal}
         onEdit={(event) => {
           handleEventClick(event);
-          // We can optionally close the list here, but keeping it open allows for quick edits of multiple items if supported.
-          // However, handleEventClick opens a modal. Having two modals might be UI clutter.
-          // Let's not close it for now, assuming standard z-index stacking handles it.
         }}
         onDelete={handleDeleteById}
       />

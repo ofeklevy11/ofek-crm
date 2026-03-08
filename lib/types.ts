@@ -5,6 +5,8 @@ export interface CalendarEvent {
   startTime: Date;
   endTime: Date;
   color?: string | null;
+  source?: "crm" | "google";
+  googleEventUrl?: string | null;
 }
 
 export const defaultEventColors = [

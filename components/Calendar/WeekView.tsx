@@ -8,7 +8,7 @@ import {
 } from "@/lib/dateUtils";
 import { getEventLayout } from "@/lib/calendar-layout";
 import { CalendarEvent } from "@/lib/types";
-import { EventCard, DraggableEventCard } from "./EventCard";
+import { EventCard, DraggableEventCard, GoogleEventCard } from "./EventCard";
 import { CalendarDroppableSlot } from "./CalendarDroppableSlot";
 import {
   DndContext,
@@ -251,8 +251,9 @@ export function WeekView({
                       columnIndex: 0,
                       totalColumns: 1,
                     };
+                    const CardComponent = event.source === "google" ? GoogleEventCard : DraggableEventCard;
                     return (
-                      <DraggableEventCard
+                      <CardComponent
                         key={event.id}
                         event={event}
                         onClick={() => onEventClick?.(event)}

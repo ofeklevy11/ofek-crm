@@ -407,6 +407,9 @@ model Company {
   meetings            Meeting[]
   availabilityBlocks  AvailabilityBlock[]
   companyAvailability CompanyAvailability?
+
+  // Google Calendar
+  googleCalendarConnections GoogleCalendarConnection[]
 }
 
 model User {
@@ -457,6 +460,9 @@ model User {
   connectedWhatsAppAccounts WhatsAppAccount[]  @relation("WaAccountConnectedBy")
   assignedWaConversations   WaConversation[]   @relation("WaConversationAssignee")
   sentWaMessages            WaMessage[]        @relation("WaMessageSender")
+
+  // Google Calendar
+  googleCalendarConnections GoogleCalendarConnection[]
 
   @@index([companyId])
 }
@@ -2183,4 +2189,33 @@ model WaMessage {
   @@index([conversationId, timestamp(sort: Desc)]) // Message history with cursor pagination
   @@index([companyId, wamId])                      // Webhook status update lookups
   @@index([contactId, timestamp(sort: Desc)])      // Contact message history
+}
+
+// ============================================
+// GOOGLE CALENDAR INTEGRATION
+// ============================================
+
+model GoogleCalendarConnection {
+  id               Int      @id @default(autoincrement())
+  companyId        Int
+  userId           Int
+  googleEmail      String
+  accessTokenEnc   String
+  accessTokenIv    String
+  accessTokenTag   String
+  refreshTokenEnc  String
+  refreshTokenIv   String
+  refreshTokenTag  String
+  tokenExpiresAt   DateTime
+  scope            String
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId])
+  @@index([companyId])
+  @@index([userId])
 }

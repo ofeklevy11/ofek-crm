@@ -51,6 +51,8 @@ export function EventModal({
   initialMinutes = 0,
   initialTab = "details",
 }: EventModalProps) {
+  const isGoogleEvent = event?.source === "google";
+
   const [activeTab, setActiveTab] = useState<"details" | "automations">(
     initialTab,
   );
@@ -399,15 +401,18 @@ export function EventModal({
 
           <div className="flex items-center justify-between p-6 pb-0 pt-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              {event
-                ? activeTab === "details"
-                  ? "עריכת אירוע"
-                  : "אוטומציות לאירוע"
-                : "אירוע חדש"}
+              {isGoogleEvent
+                ? "אירוע Google Calendar"
+                : event
+                  ? activeTab === "details"
+                    ? "עריכת אירוע"
+                    : "אוטומציות לאירוע"
+                  : "אירוע חדש"}
             </h2>
           </div>
 
           {/* Tabs */}
+          {!isGoogleEvent && (
           <div className="flex gap-6 px-6">
             <button
               onClick={() => setActiveTab("details")}
@@ -435,10 +440,65 @@ export function EventModal({
               )}
             </button>
           </div>
+          )}
         </div>
 
         <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
-          {activeTab === "details" ? (
+          {isGoogleEvent ? (
+            <div className="space-y-5">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800">
+                אירוע זה מגוגל קלנדר - ניתן לערוך רק בגוגל קלנדר
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5">כותרת</label>
+                <p className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-800">{event?.title}</p>
+              </div>
+
+              {event?.description && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">תיאור</label>
+                  <p className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-600 text-sm whitespace-pre-wrap">{event.description}</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">התחלה</label>
+                  <p className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm">
+                    {event?.startTime.toLocaleDateString("he-IL")} {event?.startTime.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">סיום</label>
+                  <p className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm">
+                    {event?.endTime.toLocaleDateString("he-IL")} {event?.endTime.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center pt-6 mt-4 border-t border-gray-100">
+                {event?.googleEventUrl && (
+                  <a
+                    href={event.googleEventUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors text-sm font-medium"
+                  >
+                    <CalendarIcon size={16} />
+                    פתח בגוגל קלנדר
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="px-6 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium text-sm mr-auto"
+                >
+                  סגור
+                </button>
+              </div>
+            </div>
+          ) : activeTab === "details" ? (
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label

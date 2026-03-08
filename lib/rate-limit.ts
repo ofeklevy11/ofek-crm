@@ -183,4 +183,8 @@ export const RATE_LIMITS = {
   forgotPasswordAccount: { prefix: "forgot-pwd-acct", max: 3, windowSeconds: 1800 } satisfies RateLimitConfig,
   /** Account deletion: 3 per user per hour */
   accountDelete: { prefix: "acct-del", max: 3, windowSeconds: 3600 } satisfies RateLimitConfig,
+  /** Google Calendar reads: 30 per user per minute */
+  googleCalRead: { prefix: "gcal-read", max: 30, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** Google Calendar OAuth: 5 per user per 15 minutes */
+  googleCalOAuth: { prefix: "gcal-oauth", max: 5, windowSeconds: 900 } satisfies RateLimitConfig,
 } as const;

@@ -3,6 +3,8 @@ import { formatMonthYear } from "@/lib/dateUtils";
 import { DatePickerPopup } from "./DatePickerPopup";
 import { Zap } from "lucide-react";
 
+type CalendarSource = "crm" | "google" | "all";
+
 interface CalendarHeaderProps {
   currentDate: Date;
   view: "day" | "week";
@@ -15,6 +17,14 @@ interface CalendarHeaderProps {
   onSelectDate: (date: Date) => void;
   onShowAllEvents: () => void;
   onGlobalAutomations: () => void;
+  // Google Calendar props
+  googleConnected?: boolean;
+  googleEmail?: string;
+  calendarSource?: CalendarSource;
+  onSourceChange?: (source: CalendarSource) => void;
+  onConnectGoogle?: () => void;
+  onDisconnectGoogle?: () => void;
+  googleLoading?: boolean;
 }
 
 export function CalendarHeader({
@@ -29,6 +39,13 @@ export function CalendarHeader({
   onSelectDate,
   onShowAllEvents,
   onGlobalAutomations,
+  googleConnected = false,
+  googleEmail,
+  calendarSource = "crm",
+  onSourceChange,
+  onConnectGoogle,
+  onDisconnectGoogle,
+  googleLoading = false,
 }: CalendarHeaderProps) {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
@@ -43,7 +60,7 @@ export function CalendarHeader({
           {formatMonthYear(currentDate)}
         </h1>
 
-        {/* Mobile View Switcher (Visible only on mobile to save space in main controls if needed, 
+        {/* Mobile View Switcher (Visible only on mobile to save space in main controls if needed,
             but we can keep the main one valid. Let's stick to one View Switcher) */}
       </div>
 
@@ -212,7 +229,71 @@ export function CalendarHeader({
             <Zap size={14} className="fill-indigo-300" />
             <span>אוטומציות קבועות</span>
           </button>
+
+          {/* Google Calendar Button */}
+          {!googleConnected ? (
+            onConnectGoogle && (
+              <button
+                onClick={onConnectGoogle}
+                disabled={googleLoading}
+                className="flex-1 md:flex-none w-full md:w-auto px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors shadow-sm flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-50"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.5 22h-15A2.5 2.5 0 012 19.5v-15A2.5 2.5 0 014.5 2h15A2.5 2.5 0 0122 4.5v15a2.5 2.5 0 01-2.5 2.5zM9.29 7L5 12l4.29 5h2.71l-4.29-5 4.29-5H9.29zm5.42 0L10.42 12l4.29 5h2.71l-4.29-5 4.29-5h-2.71z" />
+                </svg>
+                <span>Google Calendar</span>
+              </button>
+            )
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-gray-500 hidden md:inline truncate max-w-[120px]" title={googleEmail}>
+                {googleEmail}
+              </span>
+              <button
+                onClick={onDisconnectGoogle}
+                className="px-2 py-1 text-[10px] font-medium text-red-600 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors whitespace-nowrap"
+              >
+                נתק
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Source Switcher (only when Google is connected) */}
+        {googleConnected && onSourceChange && (
+          <div className="flex w-full md:w-auto bg-gray-100 p-1 rounded-lg shrink-0">
+            <button
+              onClick={() => onSourceChange("crm")}
+              className={`flex-1 md:flex-none px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                calendarSource === "crm"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              CRM
+            </button>
+            <button
+              onClick={() => onSourceChange("google")}
+              className={`flex-1 md:flex-none px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                calendarSource === "google"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Google
+            </button>
+            <button
+              onClick={() => onSourceChange("all")}
+              className={`flex-1 md:flex-none px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                calendarSource === "all"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              הכל
+            </button>
+          </div>
+        )}
       </div>
 
       {/* View Switcher */}

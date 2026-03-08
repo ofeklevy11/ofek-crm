@@ -45,5 +45,8 @@ export const env = {
     process.env.NODE_ENV === "production"
       ? requireEnv("NEXT_PUBLIC_APP_URL")
       : optionalEnv("NEXT_PUBLIC_APP_URL"),
+  GOOGLE_CLIENT_ID: optionalEnv("GOOGLE_CLIENT_ID"),
+  GOOGLE_CLIENT_SECRET: optionalEnv("GOOGLE_CLIENT_SECRET"),
+  GOOGLE_TOKEN_ENCRYPTION_KEY: optionalEnv("GOOGLE_TOKEN_ENCRYPTION_KEY"),
   NODE_ENV: process.env.NODE_ENV || "development",
 } as const;
