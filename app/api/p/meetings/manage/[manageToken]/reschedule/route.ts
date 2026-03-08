@@ -4,10 +4,11 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { isSlotAvailable } from "@/lib/meeting-slots";
 import { createNotificationForCompany } from "@/lib/notifications-internal";
 import { isNotificationEnabled } from "@/lib/notification-settings";
+import { withMetrics } from "@/lib/with-metrics";
 
 const TOKEN_RE = /^[a-zA-Z0-9]{10,50}$/;
 
-export async function POST(
+async function handlePOST(
   request: NextRequest,
   { params }: { params: Promise<{ manageToken: string }> },
 ) {
@@ -177,3 +178,5 @@ export async function POST(
     );
   }
 }
+
+export const POST = withMetrics("/api/p/meetings/manage/[manageToken]/reschedule", handlePOST);

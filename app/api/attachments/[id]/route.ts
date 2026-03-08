@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { canWriteTable } from "@/lib/permissions";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("AttachmentsAPI");
 
@@ -12,7 +13,7 @@ function parseId(raw: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-export async function DELETE(
+async function handleDELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -61,7 +62,7 @@ export async function DELETE(
   }
 }
 
-export async function PUT(
+async function handlePUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -164,3 +165,6 @@ export async function PUT(
     );
   }
 }
+
+export const DELETE = withMetrics("/api/attachments/[id]", handleDELETE);
+export const PUT = withMetrics("/api/attachments/[id]", handlePUT);

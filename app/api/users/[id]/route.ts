@@ -12,6 +12,7 @@ import { revokeUserSessions } from "@/lib/session";
 import { createLogger } from "@/lib/logger";
 import { logSecurityEvent, SEC_PASSWORD_CHANGED, SEC_ROLE_CHANGED, SEC_PERMISSIONS_CHANGED } from "@/lib/security/audit-security";
 import { sendPasswordChangedEmail } from "@/lib/email";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("UsersAPI");
 
@@ -21,7 +22,7 @@ function parseId(raw: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-export async function GET(
+async function handleGET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -79,7 +80,7 @@ export async function GET(
   }
 }
 
-export async function PATCH(
+async function handlePATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -271,7 +272,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function handleDELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -345,3 +346,7 @@ export async function DELETE(
     );
   }
 }
+
+export const GET = withMetrics("/api/users/[id]", handleGET);
+export const PATCH = withMetrics("/api/users/[id]", handlePATCH);
+export const DELETE = withMetrics("/api/users/[id]", handleDELETE);

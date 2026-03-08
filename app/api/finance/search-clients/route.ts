@@ -5,10 +5,11 @@ import { hasUserFlag } from "@/lib/permissions";
 import { withRetry } from "@/lib/db-retry";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("FinanceSearch");
 
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -156,3 +157,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export const GET = withMetrics("/api/finance/search-clients", handleGET);

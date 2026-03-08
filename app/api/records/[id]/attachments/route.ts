@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { canReadTable, canWriteTable, hasUserFlag } from "@/lib/permissions";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("RecordAttachments");
 
@@ -12,7 +13,7 @@ function parseId(raw: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-export async function POST(
+async function handlePOST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -113,7 +114,7 @@ export async function POST(
   }
 }
 
-export async function GET(
+async function handleGET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -171,3 +172,6 @@ export async function GET(
     );
   }
 }
+
+export const POST = withMetrics("/api/records/[id]/attachments", handlePOST);
+export const GET = withMetrics("/api/records/[id]/attachments", handleGET);

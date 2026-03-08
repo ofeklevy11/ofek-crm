@@ -3,13 +3,14 @@ import { redis } from "@/lib/redis";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("AiJobs");
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(
+async function handleGET(
   _req: Request,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
@@ -58,3 +59,5 @@ export async function GET(
     return NextResponse.json({ status: "failed", error: "Corrupted job data" });
   }
 }
+
+export const GET = withMetrics("/api/ai/jobs/[jobId]", handleGET);

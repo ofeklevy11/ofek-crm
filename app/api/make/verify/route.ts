@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { findApiKeyByValue } from "@/lib/api-key-utils";
 import { extractMakeApiKey, generateRpcToken } from "@/lib/make-auth";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("MakeVerify");
 
-export async function OPTIONS() {
+async function handleOPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {
@@ -16,7 +17,7 @@ export async function OPTIONS() {
   });
 }
 
-export async function GET(req: Request) {
+async function handleGET(req: Request) {
   try {
     const apiKey = extractMakeApiKey(req);
 
@@ -50,3 +51,6 @@ export async function GET(req: Request) {
     );
   }
 }
+
+export const OPTIONS = withMetrics("/api/make/verify", handleOPTIONS);
+export const GET = withMetrics("/api/make/verify", handleGET);

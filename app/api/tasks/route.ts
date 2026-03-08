@@ -6,11 +6,12 @@ import { validateUserInCompany } from "@/lib/company-validation";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createTaskSchema } from "@/lib/validations/tasks";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("TasksAPI");
 
 // GET all tasks
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST a new task
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -139,3 +140,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const GET = withMetrics("/api/tasks", handleGET);
+export const POST = withMetrics("/api/tasks", handlePOST);

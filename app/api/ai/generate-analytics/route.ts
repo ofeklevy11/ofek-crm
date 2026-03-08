@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { canManageAnalytics } from "@/lib/permissions";
 import { checkMemoryRateLimit } from "@/lib/rate-limit-action";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("AiAnalytics");
 
@@ -17,7 +18,7 @@ const MAX_BODY_BYTES = 512 * 1024; // 512KB raw body guard
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW = 60; // seconds
 
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -271,3 +272,5 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export const POST = withMetrics("/api/ai/generate-analytics", handlePOST);

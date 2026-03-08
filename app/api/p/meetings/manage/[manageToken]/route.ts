@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withMetrics } from "@/lib/with-metrics";
 
 const TOKEN_RE = /^[a-zA-Z0-9]{10,50}$/;
 
-export async function GET(
+async function handleGET(
   _request: NextRequest,
   { params }: { params: Promise<{ manageToken: string }> },
 ) {
@@ -38,3 +39,5 @@ export async function GET(
 
   return NextResponse.json(meeting);
 }
+
+export const GET = withMetrics("/api/p/meetings/manage/[manageToken]", handleGET);

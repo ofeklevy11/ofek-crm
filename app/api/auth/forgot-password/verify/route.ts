@@ -6,6 +6,7 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 import { tokensMatch } from "@/lib/security/tokens";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("ForgotPasswordVerify");
 
@@ -14,7 +15,7 @@ const schema = z.object({
   code: z.string().length(6),
 });
 
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   try {
     const ip = getClientIp(req);
 
@@ -90,3 +91,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "שגיאה פנימית בשרת" }, { status: 500 });
   }
 }
+
+export const POST = withMetrics("/api/auth/forgot-password/verify", handlePOST);

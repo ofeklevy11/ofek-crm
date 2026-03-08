@@ -5,6 +5,7 @@ import { hasUserFlag } from "@/lib/permissions";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { isSafeStorageUrl } from "@/lib/security/safe-hosts";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("FileDownload");
 
@@ -13,7 +14,7 @@ function parseId(raw: string): number | null {
   return Number.isSafeInteger(n) && n > 0 ? n : null;
 }
 
-export async function GET(
+async function handleGET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -108,3 +109,5 @@ export async function GET(
     );
   }
 }
+
+export const GET = withMetrics("/api/files/[id]/download", handleGET);

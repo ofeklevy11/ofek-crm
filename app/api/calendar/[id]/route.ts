@@ -4,10 +4,11 @@ import { hasUserFlag } from "@/lib/permissions";
 import { updateCalendarEvent, deleteCalendarEvent } from "@/app/actions/calendar";
 import { validateCalendarEventUpdate } from "@/lib/calendar-validation";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("CalendarItemAPI");
 
-export async function PUT(
+async function handlePUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -66,7 +67,7 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
+async function handleDELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -103,3 +104,6 @@ export async function DELETE(
     );
   }
 }
+
+export const PUT = withMetrics("/api/calendar/[id]", handlePUT);
+export const DELETE = withMetrics("/api/calendar/[id]", handleDELETE);

@@ -8,6 +8,7 @@ import { getClientIp } from "@/lib/request-ip";
 import { registerSchema } from "@/lib/validations/user";
 import { createLogger } from "@/lib/logger";
 import { sendVerificationEmail } from "@/lib/email";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("AuthRegister");
 
@@ -15,7 +16,7 @@ const BCRYPT_ROUNDS = 12;
 const MAX_BODY_SIZE = 4096; // 4KB
 const PENDING_REG_TTL = 3600; // 1 hour
 
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   try {
     const ip = getClientIp(req);
 
@@ -103,3 +104,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "שגיאה פנימית בשרת" }, { status: 500 });
   }
 }
+
+export const POST = withMetrics("/api/auth/register", handlePOST);

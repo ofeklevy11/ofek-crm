@@ -6,6 +6,7 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { canReadTable, canWriteTable } from "@/lib/permissions";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("TableRecords");
 
@@ -14,7 +15,7 @@ function parseId(raw: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-export async function GET(
+async function handleGET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -144,7 +145,7 @@ export async function GET(
   }
 }
 
-export async function POST(
+async function handlePOST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -265,3 +266,6 @@ export async function POST(
     );
   }
 }
+
+export const GET = withMetrics("/api/tables/[id]/records", handleGET);
+export const POST = withMetrics("/api/tables/[id]/records", handlePOST);

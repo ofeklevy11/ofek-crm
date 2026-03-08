@@ -9,10 +9,11 @@ import { createUserSchema } from "@/lib/validations/user";
 import { isPrismaError } from "@/lib/prisma-error";
 import { withRetry } from "@/lib/db-retry";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("UsersListAPI");
 
-export async function GET() {
+async function handleGET() {
   try {
     const currentUser = await getCurrentUser();
     if (!currentUser) {
@@ -55,7 +56,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     const currentUser = await getCurrentUser();
     if (!currentUser) {
@@ -180,3 +181,6 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const GET = withMetrics("/api/users", handleGET);
+export const POST = withMetrics("/api/users", handlePOST);

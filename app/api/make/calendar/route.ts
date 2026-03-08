@@ -11,6 +11,7 @@ import {
   MAX_EVENTS_PER_COMPANY,
 } from "@/lib/calendar-validation";
 import { defaultEventColors } from "@/lib/types";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("MakeCalendar");
 
@@ -37,7 +38,7 @@ const parseIsraelDate = (dateStr: string): Date => {
   return new Date(d.getTime() - diff);
 };
 
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   try {
     // 1. Validate per-company API key
     const auth = await validateMakeApiKey(req);
@@ -167,3 +168,5 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export const POST = withMetrics("/api/make/calendar", handlePOST);

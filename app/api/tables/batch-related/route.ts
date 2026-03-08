@@ -4,6 +4,7 @@ import { canReadTable } from "@/lib/permissions";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("TablesBatch");
 
@@ -27,7 +28,7 @@ const log = createLogger("TablesBatch");
  *   }
  * }
  */
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     const currentUser = await getCurrentUser();
 
@@ -154,3 +155,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withMetrics("/api/tables/batch-related", handlePOST);

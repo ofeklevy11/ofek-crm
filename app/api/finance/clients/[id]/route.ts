@@ -6,6 +6,7 @@ import { withRetry } from "@/lib/db-retry";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { z } from "zod";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("FinanceClientAPI");
 
@@ -22,7 +23,7 @@ function parseClientId(id: string): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-export async function GET(
+async function handleGET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -91,7 +92,7 @@ export async function GET(
   }
 }
 
-export async function PATCH(
+async function handlePATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -166,7 +167,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function handleDELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -241,3 +242,7 @@ export async function DELETE(
     );
   }
 }
+
+export const GET = withMetrics("/api/finance/clients/[id]", handleGET);
+export const PATCH = withMetrics("/api/finance/clients/[id]", handlePATCH);
+export const DELETE = withMetrics("/api/finance/clients/[id]", handleDELETE);

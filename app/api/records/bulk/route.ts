@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { inngest } from "@/lib/inngest/client";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { withMetrics } from "@/lib/with-metrics";
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
@@ -100,3 +101,5 @@ export async function POST(request: Request) {
     return handlePrismaError(error, "bulk action");
   }
 }
+
+export const POST = withMetrics("/api/records/bulk", handlePOST);

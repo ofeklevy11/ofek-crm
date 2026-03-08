@@ -4,10 +4,11 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { canManageTables } from "@/lib/permissions";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("CategoriesAPI");
 
-export async function GET() {
+async function handleGET() {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -43,7 +44,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -81,3 +82,6 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const GET = withMetrics("/api/categories", handleGET);
+export const POST = withMetrics("/api/categories", handlePOST);

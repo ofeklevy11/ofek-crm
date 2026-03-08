@@ -5,6 +5,7 @@ import { canWriteTable } from "@/lib/permissions";
 import { redis } from "@/lib/redis";
 import { inngest } from "@/lib/inngest/client";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("ImportCommit");
 
@@ -18,7 +19,7 @@ const log = createLogger("ImportCommit");
  *
  * The client should poll the job status endpoint to track progress.
  */
-export async function POST(
+async function handlePOST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -137,3 +138,5 @@ export async function POST(
     );
   }
 }
+
+export const POST = withMetrics("/api/tables/[id]/import/commit", handlePOST);

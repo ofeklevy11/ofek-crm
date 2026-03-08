@@ -7,10 +7,11 @@ import { revokeUserSessions } from "@/lib/session";
 import { logSecurityEvent, SEC_ACCOUNT_DELETED } from "@/lib/security/audit-security";
 import { createLogger } from "@/lib/logger";
 import { cookies } from "next/headers";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("DeleteAccount");
 
-export async function DELETE(req: Request) {
+async function handleDELETE(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -87,3 +88,5 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "שגיאה במחיקת החשבון" }, { status: 500 });
   }
 }
+
+export const DELETE = withMetrics("/api/users/me", handleDELETE);

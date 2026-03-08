@@ -7,6 +7,7 @@ import { isSafeStorageUrl } from "@/lib/security/safe-hosts";
 import { tokensMatch } from "@/lib/security/tokens";
 import { withRetry } from "@/lib/db-retry";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("PublicQuoteDownload");
 
@@ -15,7 +16,7 @@ const CUID_RE = /^c[a-z0-9]{24,}$/;
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(
+async function handleGET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -140,3 +141,5 @@ button:hover{background:#3d7de0}</style></head>
     { status: 502 },
   );
 }
+
+export const GET = withMetrics("/api/p/quotes/[id]/download", handleGET);

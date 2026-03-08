@@ -7,10 +7,11 @@ import { buildUploadThingUrl } from "@/lib/uploadthing-utils";
 import { createLogger } from "@/lib/logger";
 
 import { redis } from "@/lib/redis";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("ImportValidate");
 
-export async function POST(
+async function handlePOST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -215,3 +216,5 @@ ${schemaFields.join(", ")}`,
     );
   }
 }
+
+export const POST = withMetrics("/api/tables/[id]/import/validate", handlePOST);

@@ -1,16 +1,14 @@
 import { httpRequestsTotal, httpRequestDuration } from "@/lib/metrics";
 
-type RouteHandler = (
-  request: Request,
-  context?: unknown,
-) => Promise<Response>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RouteHandler = (request: any, context?: any) => Promise<Response>;
 
 /**
  * Wraps a Next.js route handler to record Prometheus metrics
  * (request count and duration histogram).
  */
-export function withMetrics(route: string, handler: RouteHandler): RouteHandler {
-  return async (request, context) => {
+export function withMetrics<T extends RouteHandler>(route: string, handler: T): T {
+  return (async (request: any, context: any) => {
     const start = performance.now();
     let statusCode = 500;
     try {
@@ -27,5 +25,5 @@ export function withMetrics(route: string, handler: RouteHandler): RouteHandler 
       httpRequestsTotal.inc(labels);
       httpRequestDuration.observe(labels, duration);
     }
-  };
+  }) as T;
 }

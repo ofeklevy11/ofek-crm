@@ -8,6 +8,7 @@ import { getClientIp } from "@/lib/request-ip";
 import { tokensMatch } from "@/lib/security/tokens";
 import { createLogger } from "@/lib/logger";
 import { logSecurityEvent, SEC_REGISTER } from "@/lib/security/audit-security";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("AuthVerifyEmail");
 
@@ -18,7 +19,7 @@ function generateSlug(name: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   try {
     const ip = getClientIp(req);
 
@@ -130,3 +131,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "שגיאה פנימית בשרת" }, { status: 500 });
   }
 }
+
+export const POST = withMetrics("/api/auth/verify-email", handlePOST);

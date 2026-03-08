@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("FinanceSyncStatus");
 
@@ -13,7 +14,7 @@ const log = createLogger("FinanceSyncStatus");
  * Returns the current status and summary of a finance sync job.
  * The client polls this endpoint to track sync progress.
  */
-export async function GET(
+async function handleGET(
   req: NextRequest,
   { params }: { params: Promise<{ jobId: string }> },
 ) {
@@ -64,3 +65,5 @@ export async function GET(
     );
   }
 }
+
+export const GET = withMetrics("/api/finance-sync/status/[jobId]", handleGET);

@@ -7,8 +7,9 @@ import { prisma } from "@/lib/prisma";
 import { logSecurityEvent, SEC_LOGOUT } from "@/lib/security/audit-security";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
+import { withMetrics } from "@/lib/with-metrics";
 
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   const rl = await checkRateLimit(getClientIp(req), RATE_LIMITS.api);
   if (rl) return rl;
   const cookieStore = await cookies();
@@ -32,3 +33,5 @@ export async function POST(req: Request) {
   cookieStore.delete("auth_token");
   return NextResponse.json({ success: true });
 }
+
+export const POST = withMetrics("/api/auth/logout", handlePOST);

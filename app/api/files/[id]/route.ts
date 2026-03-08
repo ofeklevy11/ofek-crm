@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("FilesAPI");
 
@@ -14,7 +15,7 @@ function parseId(raw: string): number | null {
   return Number.isSafeInteger(n) && n > 0 ? n : null;
 }
 
-export async function PUT(
+async function handlePUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -82,3 +83,5 @@ export async function PUT(
     );
   }
 }
+
+export const PUT = withMetrics("/api/files/[id]", handlePUT);

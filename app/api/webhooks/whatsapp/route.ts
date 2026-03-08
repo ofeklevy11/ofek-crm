@@ -5,6 +5,7 @@ import { inngest } from "@/lib/inngest/client";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
 import type { WebhookPayload, WebhookChangeValue } from "@/lib/whatsapp/types";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("WhatsAppWebhook");
 
@@ -13,7 +14,7 @@ const log = createLogger("WhatsAppWebhook");
  * Meta sends hub.mode, hub.verify_token, hub.challenge.
  * We look up the verify token in WhatsAppAccount to find the tenant.
  */
-export async function GET(req: NextRequest) {
+async function handleGET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
   const mode = searchParams.get("hub.mode");
   const token = searchParams.get("hub.verify_token");
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
  * Validates signature, routes by phone_number_id, dispatches to Inngest.
  * Always returns 200 to prevent Meta retries (idempotency handled in Inngest jobs).
  */
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   const appSecret = process.env.WHATSAPP_APP_SECRET;
   if (!appSecret) {
     log.error("WHATSAPP_APP_SECRET not configured");
@@ -183,3 +184,6 @@ async function dispatchEvents(
     }
   }
 }
+
+export const GET = withMetrics("/api/webhooks/whatsapp", handleGET);
+export const POST = withMetrics("/api/webhooks/whatsapp", handlePOST);

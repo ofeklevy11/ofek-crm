@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { canWriteTable } from "@/lib/permissions";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("RecordDial");
 
@@ -16,7 +17,7 @@ function parseId(raw: string): number | null {
  * Records when a user makes a direct dial call to a customer.
  * Updates the record with dialedById and dialedAt fields.
  */
-export async function POST(
+async function handlePOST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -111,3 +112,5 @@ export async function POST(
     return handlePrismaError(error, "dial record");
   }
 }
+
+export const POST = withMetrics("/api/records/[id]/dial", handlePOST);

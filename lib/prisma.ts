@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { dbQueryDuration } from "@/lib/metrics";
 
 const globalForPrisma = global as unknown as {
   prisma: PrismaClient | undefined;
@@ -67,6 +68,7 @@ export const prisma = basePrisma.$extends({
         try {
           const result = await query(args);
           const duration = performance.now() - start;
+          dbQueryDuration.observe({ operation }, duration / 1000);
           if (duration > SLOW_QUERY_THRESHOLD_MS) {
             console.warn(
               `[slow-query] ${model ?? "prisma"}.${operation} took ${duration.toFixed(0)}ms`,

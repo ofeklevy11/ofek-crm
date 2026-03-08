@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { canManageTables } from "@/lib/permissions";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("TablesAPI");
 
@@ -13,7 +14,7 @@ const MAX_SLUG_LENGTH = 100;
 const MAX_SCHEMA_JSON_SIZE = 200_000; // 200KB max for schemaJson
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -79,7 +80,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -210,3 +211,6 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const GET = withMetrics("/api/tables", handleGET);
+export const POST = withMetrics("/api/tables", handlePOST);

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag, canReadTable } from "@/lib/permissions";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { withMetrics } from "@/lib/with-metrics";
 
 const dtFmt = new Intl.DateTimeFormat('he-IL', { dateStyle: 'short', timeStyle: 'short' });
 
@@ -33,7 +34,7 @@ function formatRow(
   ].join(sep);
 }
 
-export async function GET(
+async function handleGET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -202,3 +203,5 @@ export async function GET(
     );
   }
 }
+
+export const GET = withMetrics("/api/tables/[id]/export", handleGET);

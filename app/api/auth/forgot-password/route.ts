@@ -7,6 +7,7 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("ForgotPassword");
 
@@ -14,7 +15,7 @@ const schema = z.object({
   email: z.string().email().max(254).trim().toLowerCase(),
 });
 
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   try {
     const ip = getClientIp(req);
 
@@ -68,3 +69,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "שגיאה פנימית בשרת" }, { status: 500 });
   }
 }
+
+export const POST = withMetrics("/api/auth/forgot-password", handlePOST);

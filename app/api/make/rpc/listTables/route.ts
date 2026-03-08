@@ -3,6 +3,7 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { validateMakeApiKey, verifyRpcToken } from "@/lib/make-auth";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("MakeRpcTables");
 
@@ -60,5 +61,5 @@ async function handleListTables(req: Request) {
   }
 }
 
-export const GET = handleListTables;
-export const POST = handleListTables;
+export const GET = withMetrics("/api/make/rpc/listTables", handleListTables);
+export const POST = withMetrics("/api/make/rpc/listTables", handleListTables);

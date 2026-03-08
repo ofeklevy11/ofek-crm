@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("AuthMe");
 
-export async function GET() {
+async function handleGET() {
   try {
     const user = await getCurrentUser();
 
@@ -25,3 +26,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = withMetrics("/api/auth/me", handleGET);

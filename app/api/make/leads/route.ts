@@ -4,10 +4,11 @@ import { createLogger } from "@/lib/logger";
 import { validateMakeApiKey } from "@/lib/make-auth";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { checkIdempotencyKey, setIdempotencyResult } from "@/lib/webhook-auth";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("MakeLeads");
 
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   try {
     // 1. Validate per-company API key
     const auth = await validateMakeApiKey(req);
@@ -95,3 +96,5 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export const POST = withMetrics("/api/make/leads", handlePOST);

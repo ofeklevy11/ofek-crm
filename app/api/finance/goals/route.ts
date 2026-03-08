@@ -9,6 +9,7 @@ import { withRetry } from "@/lib/db-retry";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { goalFiltersSchema, MAX_GOALS_PER_COMPANY, MAX_GOAL_PAYLOAD_BYTES } from "@/lib/validations/goal";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("FinanceGoalsAPI");
 
@@ -38,7 +39,7 @@ const createGoalSchema = z.object({
   { message: "warningThreshold must be >= criticalThreshold", path: ["warningThreshold"] },
 );
 
-export async function GET() {
+async function handleGET() {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -78,7 +79,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -213,3 +214,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const GET = withMetrics("/api/finance/goals", handleGET);
+export const POST = withMetrics("/api/finance/goals", handlePOST);

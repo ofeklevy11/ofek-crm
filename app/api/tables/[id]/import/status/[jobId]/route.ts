@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("ImportStatus");
 
@@ -12,7 +13,7 @@ const log = createLogger("ImportStatus");
  * Returns the current status and progress of an import job.
  * The client can poll this endpoint to track import progress.
  */
-export async function GET(
+async function handleGET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; jobId: string }> },
 ) {
@@ -67,3 +68,5 @@ export async function GET(
     );
   }
 }
+
+export const GET = withMetrics("/api/tables/[id]/import/status/[jobId]", handleGET);

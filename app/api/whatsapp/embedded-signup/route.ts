@@ -7,6 +7,7 @@ import { encrypt } from "@/lib/services/encryption";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
 import { embeddedSignupSchema } from "@/lib/whatsapp/validation";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("WhatsAppEmbeddedSignup");
 
@@ -17,7 +18,7 @@ const GRAPH_API_BASE = "https://graph.facebook.com/v21.0";
  * Receives the authorization code from the frontend after Facebook Login,
  * exchanges it for a token, and stores the WABA details.
  */
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -234,3 +235,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withMetrics("/api/whatsapp/embedded-signup", handlePOST);

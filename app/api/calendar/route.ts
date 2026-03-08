@@ -6,10 +6,11 @@ import { createCalendarEvent } from "@/app/actions/calendar";
 import { validateCalendarEventInput } from "@/lib/calendar-validation";
 import { createLogger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("CalendarAPI");
 
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -114,3 +115,6 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const GET = withMetrics("/api/calendar", handleGET);
+export const POST = withMetrics("/api/calendar", handlePOST);

@@ -6,6 +6,7 @@ import { withRetry } from "@/lib/db-retry";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { z } from "zod";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("FinancePaymentsAPI");
 
@@ -17,7 +18,7 @@ const createPaymentSchema = z.object({
   notes: z.string().max(5000).nullable().optional(),
 });
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -82,3 +83,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withMetrics("/api/finance/payments", handlePOST);

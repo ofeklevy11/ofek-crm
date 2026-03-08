@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAvailableSlots } from "@/lib/meeting-slots";
+import { withMetrics } from "@/lib/with-metrics";
 
 const TOKEN_RE = /^[a-zA-Z0-9]{10,50}$/;
 
@@ -15,7 +16,7 @@ const DEFAULT_SCHEDULE: Record<string, { start: string; end: string }[]> = {
   "6": [],                                  // Sat
 };
 
-export async function GET(
+async function handleGET(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> },
 ) {
@@ -144,3 +145,5 @@ export async function GET(
   const flatSlots = Object.values(slots).flat();
   return NextResponse.json({ slots: flatSlots });
 }
+
+export const GET = withMetrics("/api/p/meetings/[token]/slots", handleGET);

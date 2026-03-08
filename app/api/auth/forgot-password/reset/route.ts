@@ -10,6 +10,7 @@ import { invalidateUserCache } from "@/lib/permissions-server";
 import { sendPasswordChangedEmail } from "@/lib/email";
 import { logSecurityEvent, SEC_PASSWORD_RESET } from "@/lib/security/audit-security";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("ForgotPasswordReset");
 
@@ -18,7 +19,7 @@ const schema = z.object({
   password: z.string().min(10).max(128),
 });
 
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   try {
     const ip = getClientIp(req);
 
@@ -85,3 +86,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "שגיאה פנימית בשרת" }, { status: 500 });
   }
 }
+
+export const POST = withMetrics("/api/auth/forgot-password/reset", handlePOST);

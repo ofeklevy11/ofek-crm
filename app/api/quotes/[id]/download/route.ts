@@ -7,6 +7,7 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { isSafeStorageUrl } from "@/lib/security/safe-hosts";
 import { withRetry } from "@/lib/db-retry";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("QuoteDownload");
 
@@ -15,7 +16,7 @@ const CUID_RE = /^c[a-z0-9]{24,}$/;
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(
+async function handleGET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -186,3 +187,5 @@ export async function GET(
     );
   }
 }
+
+export const GET = withMetrics("/api/quotes/[id]/download", handleGET);

@@ -7,11 +7,12 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { updateTaskSchema } from "@/lib/validations/tasks";
 import { inngest } from "@/lib/inngest/client";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("TaskAPI");
 
 // GET a single task
-export async function GET(
+async function handleGET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
@@ -77,7 +78,7 @@ export async function GET(
 }
 
 // PATCH (update) a task
-export async function PATCH(
+async function handlePATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
@@ -237,7 +238,7 @@ export async function PATCH(
 }
 
 // DELETE a task
-export async function DELETE(
+async function handleDELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
@@ -278,3 +279,7 @@ export async function DELETE(
     );
   }
 }
+
+export const GET = withMetrics("/api/tasks/[id]", handleGET);
+export const PATCH = withMetrics("/api/tasks/[id]", handlePATCH);
+export const DELETE = withMetrics("/api/tasks/[id]", handleDELETE);

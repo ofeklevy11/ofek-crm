@@ -4,10 +4,11 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { canReadTable, hasUserFlag } from "@/lib/permissions";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("TableSearch");
 
-export async function GET(
+async function handleGET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -276,3 +277,5 @@ export async function GET(
     );
   }
 }
+
+export const GET = withMetrics("/api/tables/[id]/search", handleGET);

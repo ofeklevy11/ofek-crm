@@ -7,6 +7,7 @@ import { hasUserFlag } from "@/lib/permissions";
 import { checkMemoryRateLimit } from "@/lib/rate-limit-action";
 import { createLogger } from "@/lib/logger";
 import { buildAutomationContext, serializeRawContext } from "@/lib/ai/automation-context";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("AiAutomation");
 
@@ -17,7 +18,7 @@ const MAX_PAYLOAD_BYTES = 600 * 1024; // 600KB
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW = 60; // seconds
 
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -115,3 +116,5 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export const POST = withMetrics("/api/ai/generate-automation", handlePOST);

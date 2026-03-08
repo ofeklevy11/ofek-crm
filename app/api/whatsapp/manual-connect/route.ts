@@ -7,6 +7,7 @@ import { encrypt } from "@/lib/services/encryption";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
 import { manualConnectSchema } from "@/lib/whatsapp/validation";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("WhatsAppManualConnect");
 
@@ -17,7 +18,7 @@ const GRAPH_API_BASE = "https://graph.facebook.com/v21.0";
  * Receives WABA ID + Access Token directly, validates them against the Graph API,
  * and stores the WABA details.
  */
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -167,3 +168,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withMetrics("/api/whatsapp/manual-connect", handlePOST);

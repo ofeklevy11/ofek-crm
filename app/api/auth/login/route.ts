@@ -7,13 +7,14 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 import { createLogger } from "@/lib/logger";
 import { logSecurityEvent, SEC_LOGIN_SUCCESS, SEC_LOGIN_FAILED } from "@/lib/security/audit-security";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("AuthLogin");
 
 const BCRYPT_ROUNDS = 12;
 const MAX_BODY_SIZE = 2048; // 2KB
 
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   try {
     const ip = getClientIp(req);
 
@@ -127,3 +128,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "שגיאה פנימית בשרת" }, { status: 500 });
   }
 }
+
+export const POST = withMetrics("/api/auth/login", handlePOST);

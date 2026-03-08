@@ -5,10 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { processViewServer } from "@/lib/viewProcessorServer";
 import { ViewConfig } from "@/app/actions/views";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("ProcessView");
 
-export async function POST(
+async function handlePOST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -112,3 +113,5 @@ export async function POST(
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 }
+
+export const POST = withMetrics("/api/tables/[id]/process-view", handlePOST);

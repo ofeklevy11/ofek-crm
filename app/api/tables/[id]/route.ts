@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { canManageTables, canReadTable } from "@/lib/permissions";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
+import { withMetrics } from "@/lib/with-metrics";
 
 const log = createLogger("TableAPI");
 
@@ -19,7 +20,7 @@ function parseId(raw: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-export async function GET(
+async function handleGET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -78,7 +79,7 @@ export async function GET(
   }
 }
 
-export async function PATCH(
+async function handlePATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -266,7 +267,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function handleDELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -362,3 +363,7 @@ export async function DELETE(
     );
   }
 }
+
+export const GET = withMetrics("/api/tables/[id]", handleGET);
+export const PATCH = withMetrics("/api/tables/[id]", handlePATCH);
+export const DELETE = withMetrics("/api/tables/[id]", handleDELETE);
