@@ -7,7 +7,8 @@ import { inngest } from "@/lib/inngest/client";
 import { calculateViewStats } from "@/lib/analytics/calculate";
 import { invalidateFullCache } from "@/lib/services/analytics-cache";
 import { isPrivateUrl } from "@/lib/security/ssrf";
-import { validateAutomationInput, validateId, MAX_RULES_PER_COMPANY } from "@/lib/security/automation-validation";
+import { validateAutomationInput, validateId } from "@/lib/security/automation-validation";
+import { checkCategoryLimitAndCreate } from "@/lib/automation-limit-check";
 import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { hasUserFlag } from "@/lib/permissions";
 import { createLogger } from "@/lib/logger";
@@ -925,14 +926,6 @@ export async function createAutomationRule(data: {
     }
     data.name = data.name.trim();
 
-    // Cap rules per company
-    const existingCount = await withRetry(() => prisma.automationRule.count({
-      where: { companyId: currentUser.companyId },
-    }));
-    if (existingCount >= MAX_RULES_PER_COMPANY) {
-      return { success: false, error: `Maximum of ${MAX_RULES_PER_COMPANY} automation rules per company reached` };
-    }
-
     // SSRF check: validate webhook URLs at storage time (top-level + nested MULTI_ACTION)
     const webhookUrls = extractWebhookUrls(data.actionType, data.actionConfig);
     for (const wUrl of webhookUrls) {
@@ -968,25 +961,29 @@ export async function createAutomationRule(data: {
       }
     }
 
-    const rule = await prisma.automationRule.create({
-      data: {
+    // Plan-based per-category limit + global safety cap (atomic transaction)
+    const userTier = (currentUser as any).isPremium || "basic";
+    const result = await checkCategoryLimitAndCreate(
+      currentUser.companyId,
+      userTier,
+      data.triggerType,
+      {
         name: data.name,
         triggerType: data.triggerType as any,
         triggerConfig: data.triggerConfig as any,
         actionType: data.actionType as any,
         actionConfig: data.actionConfig as any,
         folderId: folderId ?? null,
-
         createdBy: currentUser.id,
         companyId: currentUser.companyId,
       },
-      select: {
-        id: true, name: true, triggerType: true, triggerConfig: true,
-        actionType: true, actionConfig: true, isActive: true,
-        folderId: true, calendarEventId: true, createdBy: true,
-        createdAt: true, updatedAt: true,
-      },
-    });
+    );
+
+    if (!result.allowed) {
+      return { success: false, error: result.error };
+    }
+
+    const rule = result.rule;
 
     // DISABLED Retroactive calculation by default as per user request (2025-01-24)
     // New automations should only apply to future events.
@@ -2410,5 +2407,40 @@ export async function processDirectDialTrigger(
   } catch (error) {
     log.error("Error processing direct dial automations", { error: String(error) });
     throw error; // Re-throw so Inngest sees the failure
+  }
+}
+
+// --- Automation Category Usage Query ---
+export async function getAutomationCategoryUsage() {
+  try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return { success: false, error: "Authentication required" };
+
+    const { getAutomationCategoryLimit, getTriggerTypesForCategory } = await import("@/lib/plan-limits");
+    const { countCategoryAutomations } = await import("@/lib/automation-limit-check");
+
+    const userTier = (currentUser as any).isPremium || "basic";
+
+    const [generalCount, meetingCount, eventCount] = await Promise.all([
+      countCategoryAutomations(currentUser.companyId, "general"),
+      countCategoryAutomations(currentUser.companyId, "meeting"),
+      countCategoryAutomations(currentUser.companyId, "event"),
+    ]);
+
+    const limit = getAutomationCategoryLimit(userTier);
+
+    return {
+      success: true,
+      data: {
+        userPlan: userTier,
+        general: { count: generalCount, limit },
+        meeting: { count: meetingCount, limit },
+        event: { count: eventCount, limit },
+      },
+    };
+  } catch (error) {
+    log.error("Error fetching automation category usage", { error: String(error) });
+    return { success: false, error: "Failed to fetch usage" };
   }
 }

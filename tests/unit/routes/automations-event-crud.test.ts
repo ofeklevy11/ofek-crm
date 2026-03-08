@@ -48,6 +48,18 @@ vi.mock("@/lib/calendar-validation", () => ({
   MAX_TITLE_LENGTH: 200,
 }));
 
+// Mock the limit check to pass through to prisma.automationRule.create
+vi.mock("@/lib/automation-limit-check", async () => {
+  const { prisma } = await import("@/lib/prisma");
+  return {
+    checkCategoryLimitAndCreate: vi.fn(async (_companyId: number, _userTier: string, _triggerType: string, createData: any) => {
+      const rule = await prisma.automationRule.create({ data: createData });
+      return { allowed: true, rule };
+    }),
+    countCategoryAutomations: vi.fn().mockResolvedValue(0),
+  };
+});
+
 import {
   createGlobalEventAutomation,
   getGlobalEventAutomations,

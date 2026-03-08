@@ -289,6 +289,127 @@ export async function getMiniTasksData(filters?: TasksFilters) {
   return { success: true, data: { tasks, counts } };
 }
 
+// ── Mini Meetings ───────────────────────────────────────────────────
+
+export interface MeetingsFilters {
+  preset?: string;
+  statusFilter?: string[];
+  meetingTypeFilter?: number[];
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: string;
+  maxMeetings?: number;
+}
+
+const VALID_MEETING_STATUSES = ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED", "NO_SHOW"];
+const VALID_MEETING_SORTS = ["startTime", "createdAt"];
+
+export async function getMiniMeetingsData(filters?: MeetingsFilters) {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: "Unauthorized" };
+  if (!hasUserFlag(user, "canViewMeetings"))
+    return { success: false, error: "Forbidden" };
+
+  const rl = await checkActionRateLimit(String(user.id), DASHBOARD_RATE_LIMITS.read);
+  if (rl) return { success: false, error: rl.error };
+
+  const now = new Date();
+  let rangeStart: Date = startOfDay(now);
+  let rangeEnd: Date = endOfDay(now);
+
+  const preset = filters?.preset || "today";
+  const validPresets = ["today", "this_week", "7d", "14d", "this_month", "custom"];
+  const safePreset = validPresets.includes(preset) ? preset : "today";
+
+  switch (safePreset) {
+    case "today":
+      rangeStart = startOfDay(now);
+      rangeEnd = endOfDay(now);
+      break;
+    case "this_week":
+      rangeStart = startOfWeek(now);
+      rangeEnd = endOfWeek(now);
+      break;
+    case "7d":
+      rangeStart = startOfDay(now);
+      rangeEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      break;
+    case "14d":
+      rangeStart = startOfDay(now);
+      rangeEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+      break;
+    case "this_month":
+      rangeStart = startOfMonth(now);
+      rangeEnd = endOfMonth(now);
+      break;
+    case "custom": {
+      const from = parseDate(filters?.dateFrom);
+      const to = parseDate(filters?.dateTo);
+      if (from) rangeStart = startOfDay(from);
+      if (to) rangeEnd = endOfDay(to);
+      break;
+    }
+  }
+
+  // Status filter
+  let statusWhere: any = {};
+  if (filters?.statusFilter && Array.isArray(filters.statusFilter) && filters.statusFilter.length > 0) {
+    const valid = filters.statusFilter.filter((s) => VALID_MEETING_STATUSES.includes(s));
+    if (valid.length > 0) statusWhere = { status: { in: valid } };
+  }
+
+  // Meeting type filter
+  let typeWhere: any = {};
+  if (filters?.meetingTypeFilter && Array.isArray(filters.meetingTypeFilter) && filters.meetingTypeFilter.length > 0) {
+    typeWhere = { meetingTypeId: { in: filters.meetingTypeFilter } };
+  }
+
+  // Sort
+  const sortBy = VALID_MEETING_SORTS.includes(filters?.sortBy || "") ? filters!.sortBy! : "startTime";
+  const orderBy: any = sortBy === "createdAt" ? { createdAt: "desc" } : { startTime: "asc" };
+
+  const maxMeetings = clamp(filters?.maxMeetings ?? 15, 1, 50);
+
+  const filterWhere = {
+    companyId: user.companyId,
+    startTime: { lte: rangeEnd },
+    endTime: { gte: rangeStart },
+    ...statusWhere,
+    ...typeWhere,
+  };
+
+  const [meetings, statusCounts] = await Promise.all([
+    prisma.meeting.findMany({
+      where: filterWhere,
+      orderBy,
+      take: maxMeetings,
+      select: {
+        id: true,
+        participantName: true,
+        participantEmail: true,
+        startTime: true,
+        endTime: true,
+        status: true,
+        tags: true,
+        meetingType: { select: { name: true, color: true } },
+        client: { select: { name: true } },
+      },
+    }),
+    prisma.meeting.groupBy({
+      by: ["status"],
+      where: filterWhere,
+      _count: { status: true },
+    }),
+  ]);
+
+  const counts: Record<string, number> = {};
+  for (const g of statusCounts) {
+    counts[g.status] = g._count.status;
+  }
+
+  return { success: true, data: { meetings, counts } };
+}
+
 // ── Mini Quotes ─────────────────────────────────────────────────────
 
 export interface QuotesFilters {

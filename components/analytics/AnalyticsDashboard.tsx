@@ -940,8 +940,8 @@ export default function AnalyticsDashboard({
           </div>
 
           {!loading && canManage && (
-            <div className="flex flex-col items-stretch gap-3">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col items-stretch gap-3 mb-3">
+              <div className="flex items-center justify-center md:justify-start gap-3">
                 <Link
                   href="/analytics/graphs"
                   className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-xl shadow-sm transition-all font-medium text-sm"
@@ -961,7 +961,7 @@ export default function AnalyticsDashboard({
 
                 <button
                   onClick={() => setIsAIMode(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl shadow-lg shadow-purple-200 transition-all font-medium text-sm"
+                  className="hidden md:flex items-center gap-2 px-4 py-2.5 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl shadow-lg shadow-purple-200 transition-all font-medium text-sm"
                 >
                   <Sparkles size={16} />
                   <span>צור עם AI</span>
@@ -972,7 +972,7 @@ export default function AnalyticsDashboard({
                     setEditingView(null);
                     setIsCreateModalOpen(true);
                   }}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl shadow-lg shadow-gray-200 transition-all font-medium text-sm"
+                  className="hidden md:flex items-center gap-2 px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl shadow-lg shadow-gray-200 transition-all font-medium text-sm"
                 >
                   <Plus size={16} />
                   <span>חדש</span>
@@ -986,19 +986,19 @@ export default function AnalyticsDashboard({
         {/* Filters and Folders Bar */}
         <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-3 rounded-2xl border border-gray-100 shadow-sm mb-10 mx-1 gap-4">
           {/* Right Side: Folders */}
-          <div className="flex items-center gap-3 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 hide-scrollbar scroll-smooth">
+          <div className="flex items-center justify-center sm:justify-start gap-3 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 hide-scrollbar scroll-smooth">
             {/* Create Folder Button */}
             {canManage && (
               <button
                 onClick={() => setIsFolderModalOpen(true)}
-                className="shrink-0 p-3 text-gray-400 hover:bg-gray-50 hover:text-gray-600 rounded-xl transition-colors bg-gray-50/50 border border-gray-100"
+                className="hidden md:block shrink-0 p-3 text-gray-400 hover:bg-gray-50 hover:text-gray-600 rounded-xl transition-colors bg-gray-50/50 border border-gray-100"
                 title="צור תיקייה חדשה"
               >
                 <FolderPlus size={20} />
               </button>
             )}
 
-            <div className="h-8 w-px bg-gray-200 mx-2 shrink-0" />
+            <div className="hidden md:block h-8 w-px bg-gray-200 mx-2 shrink-0" />
 
             {/* All Analytics Button */}
             <button

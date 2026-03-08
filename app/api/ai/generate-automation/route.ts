@@ -104,7 +104,7 @@ async function handlePOST(req: Request) {
     await inngest.send({
       id: `ai-gen-${jobId}`,
       name: "ai/generation.requested",
-      data: eventData,
+      data: eventData as any,
     });
 
     return NextResponse.json({ jobId }, { status: 202 });

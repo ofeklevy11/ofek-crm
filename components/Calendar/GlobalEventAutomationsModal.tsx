@@ -28,6 +28,7 @@ import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
 import { showAlert, showConfirm } from "@/hooks/use-modal";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import { getAutomationCategoryLimit } from "@/lib/plan-limits";
 
 interface GlobalEventAutomationsModalProps {
   isOpen: boolean;
@@ -143,8 +144,7 @@ export function GlobalEventAutomationsModal({
 
   const handleOpenBuilder = () => {
     // Check global limits
-    const limit =
-      userPlan === "super" ? Infinity : userPlan === "premium" ? 6 : 2;
+    const limit = getAutomationCategoryLimit(userPlan);
 
     // Check if adding another global automation would violate the limit for ANY existing event
     // that already has specific automations

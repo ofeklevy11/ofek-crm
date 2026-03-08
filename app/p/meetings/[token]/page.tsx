@@ -680,7 +680,9 @@ export default function MeetingBookingPage({
                 const startDt = new Date(booking.startTime);
                 const endDt = new Date(booking.endTime);
                 const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-                const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(info.name)}&dates=${fmt(startDt)}/${fmt(endDt)}&details=${encodeURIComponent(info.description || "")}`;
+                const manageLink = `${window.location.origin}/p/meetings/manage/${booking.manageToken}`;
+                const gcalDetails = (info.description ? info.description + "\n\n" : "") + `ניהול הפגישה: ${manageLink}`;
+                const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(info.name)}&dates=${fmt(startDt)}/${fmt(endDt)}&details=${encodeURIComponent(gcalDetails)}`;
                 return (
                   <a
                     href={gcalUrl}
@@ -727,6 +729,34 @@ export default function MeetingBookingPage({
                   </div>
 
                   <div className="p-3 space-y-2">
+                    {/* Copy link card */}
+                    <button
+                      onClick={() => {
+                        const manageUrl = `${window.location.origin}/p/meetings/manage/${booking.manageToken}`;
+                        navigator.clipboard.writeText(manageUrl);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="w-full group flex items-start gap-3 p-3 rounded-xl bg-white/[0.04] hover:bg-cyan-500/10 border border-transparent hover:border-cyan-500/20 transition-all duration-200 text-right"
+                    >
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${copied ? "bg-green-500/20" : "bg-cyan-500/15 group-hover:bg-cyan-500/25"}`}>
+                        {copied ? (
+                          <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <Link2 className="w-4 h-4 text-cyan-400" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-semibold transition-colors ${copied ? "text-green-400" : "text-white/90 group-hover:text-cyan-300"}`}>
+                          {copied ? "הקישור הועתק!" : "העתק קישור לניהול"}
+                        </p>
+                        <p className="text-[11px] text-white/40 mt-0.5 leading-relaxed">שמרו את הקישור — דרכו תוכלו לנהל את הפגישה מכל מקום</p>
+                      </div>
+                      <ArrowRight className={`w-4 h-4 mt-1 shrink-0 transition-colors rotate-180 ${copied ? "text-green-400/50" : "text-white/20 group-hover:text-cyan-400"}`} />
+                    </button>
+
                     {/* Reschedule card */}
                     <button
                       onClick={() => { setShowReschedule(true); setManageError(null); }}
@@ -755,34 +785,6 @@ export default function MeetingBookingPage({
                         <p className="text-[11px] text-white/40 mt-0.5 leading-relaxed">לא מתאים? בטלו בקלות ותוכלו לקבוע מחדש בכל עת</p>
                       </div>
                       <ArrowRight className="w-4 h-4 text-white/20 group-hover:text-red-400 mt-1 shrink-0 transition-colors rotate-180" />
-                    </button>
-
-                    {/* Copy link card */}
-                    <button
-                      onClick={() => {
-                        const manageUrl = `${window.location.origin}/p/meetings/manage/${booking.manageToken}`;
-                        navigator.clipboard.writeText(manageUrl);
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 2000);
-                      }}
-                      className="w-full group flex items-start gap-3 p-3 rounded-xl bg-white/[0.04] hover:bg-cyan-500/10 border border-transparent hover:border-cyan-500/20 transition-all duration-200 text-right"
-                    >
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${copied ? "bg-green-500/20" : "bg-cyan-500/15 group-hover:bg-cyan-500/25"}`}>
-                        {copied ? (
-                          <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : (
-                          <Link2 className="w-4 h-4 text-cyan-400" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-semibold transition-colors ${copied ? "text-green-400" : "text-white/90 group-hover:text-cyan-300"}`}>
-                          {copied ? "הקישור הועתק!" : "העתק קישור לניהול"}
-                        </p>
-                        <p className="text-[11px] text-white/40 mt-0.5 leading-relaxed">שמרו את הקישור — דרכו תוכלו לנהל את הפגישה מכל מקום</p>
-                      </div>
-                      <ArrowRight className={`w-4 h-4 mt-1 shrink-0 transition-colors rotate-180 ${copied ? "text-green-400/50" : "text-white/20 group-hover:text-cyan-400"}`} />
                     </button>
                   </div>
                 </div>

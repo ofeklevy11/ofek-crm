@@ -7,6 +7,7 @@ import { hasUserFlag } from "@/lib/permissions";
 import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { validateActionConfigSize, MAX_TITLE_LENGTH } from "@/lib/calendar-validation";
 import { createLogger } from "@/lib/logger";
+import { checkCategoryLimitAndCreate } from "@/lib/automation-limit-check";
 
 const log = createLogger("EventAutomations");
 
@@ -84,8 +85,13 @@ export async function createGlobalEventAutomation(
       finalActionConfig = { ...finalActionConfig, recipientId: currentUser.id };
     }
 
-    const rule = await prisma.automationRule.create({
-      data: {
+    // Plan-based per-category limit (atomic transaction)
+    const userTier = (currentUser as any).isPremium || "basic";
+    const result = await checkCategoryLimitAndCreate(
+      currentUser.companyId,
+      userTier,
+      "EVENT_TIME",
+      {
         companyId: currentUser.companyId,
         name:
           data.name ||
@@ -94,14 +100,16 @@ export async function createGlobalEventAutomation(
         triggerConfig: { minutesBefore: data.minutesBefore },
         actionType: data.actionType as any,
         actionConfig: finalActionConfig,
-        calendarEventId: null, // Global
+        calendarEventId: null,
         createdBy: currentUser.id,
       },
-      select: { id: true },
-    });
+    );
 
-    // revalidatePath("/calendar");
-    return { success: true, data: rule };
+    if (!result.allowed) {
+      return { success: false, error: result.error };
+    }
+
+    return { success: true, data: result.rule };
   } catch (error) {
     log.error("Error creating global event automation", { error: String(error) });
     return { success: false, error: "Failed to create global automation" };
@@ -233,8 +241,13 @@ export async function createEventAutomation(data: EventAutomationData) {
       finalActionConfig = { ...finalActionConfig, recipientId: currentUser.id };
     }
 
-    const rule = await prisma.automationRule.create({
-      data: {
+    // Plan-based per-category limit (atomic transaction)
+    const userTier = (currentUser as any).isPremium || "basic";
+    const result = await checkCategoryLimitAndCreate(
+      currentUser.companyId,
+      userTier,
+      "EVENT_TIME",
+      {
         companyId: currentUser.companyId,
         name: data.name || `אוטומציה לאירוע (${data.minutesBefore} דקות לפני)`,
         triggerType: "EVENT_TIME",
@@ -244,11 +257,14 @@ export async function createEventAutomation(data: EventAutomationData) {
         calendarEventId: data.eventId,
         createdBy: currentUser.id,
       },
-      select: { id: true },
-    });
+    );
+
+    if (!result.allowed) {
+      return { success: false, error: result.error };
+    }
 
     revalidatePath("/calendar");
-    return { success: true, data: rule };
+    return { success: true, data: result.rule };
   } catch (error) {
     log.error("Error creating event automation", { error: String(error) });
     return { success: false, error: "Failed to create automation" };

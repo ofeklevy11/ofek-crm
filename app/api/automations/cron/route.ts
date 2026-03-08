@@ -26,6 +26,7 @@ export async function GET(request: Request) {
 
     // BB9: Add dedup IDs to prevent duplicates on cron retry
     const minuteBucket = Math.floor(Date.now() / 60000);
+    // Mixed event types dispatched in batch — individual pushes use literal names
     const events: { id?: string; name: string; data: Record<string, unknown> }[] = [];
 
     // Dispatch meeting reminders to Inngest (same pattern as time-based/event-based)
@@ -70,7 +71,7 @@ export async function GET(request: Request) {
       try {
         const INNGEST_BATCH_SIZE = 500;
         for (let i = 0; i < events.length; i += INNGEST_BATCH_SIZE) {
-          await inngest.send(events.slice(i, i + INNGEST_BATCH_SIZE));
+          await inngest.send(events.slice(i, i + INNGEST_BATCH_SIZE) as any);
         }
       } catch (sendErr) {
         // Fallback: parallel processing with timeout (max 50s to stay under Vercel 60s limit)

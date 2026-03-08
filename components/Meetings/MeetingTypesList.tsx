@@ -99,10 +99,10 @@ export default function MeetingTypesList({ initialTypes }: MeetingTypesListProps
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-gray-900">סוגי פגישות</h2>
+        <h2 className="text-base font-semibold text-white">סוגי פגישות</h2>
         <Button
           onClick={() => { setEditingType(null); setModalOpen(true); }}
-          className="bg-primary hover:bg-primary/90 rounded-lg transition-transform hover:scale-105"
+          className="bg-blue-600 hover:bg-blue-700 rounded-lg transition-transform hover:scale-105"
         >
           <Plus className="h-4 w-4 ml-1" />
           סוג חדש
@@ -113,12 +113,12 @@ export default function MeetingTypesList({ initialTypes }: MeetingTypesListProps
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">
-              <CalendarPlus className="h-6 w-6" />
+              <CalendarPlus className="h-6 w-6 text-white/60" />
             </EmptyMedia>
-            <EmptyTitle>אין סוגי פגישות עדיין</EmptyTitle>
-            <EmptyDescription>צרו סוג פגישה ראשון כדי להתחיל לקבל הזמנות</EmptyDescription>
+            <EmptyTitle className="text-white">אין סוגי פגישות עדיין</EmptyTitle>
+            <EmptyDescription className="text-white/60">צרו סוג פגישה ראשון כדי להתחיל לקבל הזמנות</EmptyDescription>
           </EmptyHeader>
-          <Button onClick={() => { setEditingType(null); setModalOpen(true); }}>
+          <Button onClick={() => { setEditingType(null); setModalOpen(true); }} className="bg-blue-600 hover:bg-blue-700">
             <Plus className="h-4 w-4 ml-1" />
             צור סוג פגישה ראשון
           </Button>

@@ -152,6 +152,13 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
     return updateMeetingTags(id, tags);
   };
 
+  const handleReschedule = async (id: string, newStart: string, newEnd: string) => {
+    const { rescheduleMeeting } = await import("@/app/actions/meetings");
+    const result = await rescheduleMeeting(id, newStart, newEnd);
+    if (result.success) fetchMeetings();
+    return result;
+  };
+
   // Compute once outside the render callback
   const defaultClassNames = useMemo(() => getDefaultClassNames(), []);
 
@@ -182,7 +189,7 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
           data-range-end={modifiers.range_end}
           data-range-middle={modifiers.range_middle}
           className={cn(
-            "data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground data-[range-middle=true]:bg-accent data-[range-middle=true]:text-accent-foreground data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-ring/50 dark:hover:text-accent-foreground flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-0.5 leading-none text-sm font-normal group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:ring-[3px] [&>span]:text-xs [&>span]:opacity-70",
+            "data-[selected-single=true]:bg-blue-600 data-[selected-single=true]:text-white data-[range-middle=true]:bg-accent data-[range-middle=true]:text-accent-foreground data-[range-start=true]:bg-blue-600 data-[range-start=true]:text-white data-[range-end=true]:bg-blue-600 data-[range-end=true]:text-white group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-ring/50 flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-0.5 leading-none text-sm font-normal text-white/80 hover:bg-white/[0.08] hover:text-white group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:ring-[3px] [&>span]:text-xs [&>span]:opacity-70",
             defaultClassNames.day,
             className
           )}
@@ -211,10 +218,10 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setSelectedDate(undefined); }}>
-          <SelectTrigger className="w-36 rounded-lg h-9">
+          <SelectTrigger className="w-36 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white">
             <SelectValue placeholder="סטטוס" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-[#1a3a2a] border-white/20 text-white/80">
             <SelectItem value="all">כל הסטטוסים</SelectItem>
             <SelectItem value="PENDING">ממתין</SelectItem>
             <SelectItem value="CONFIRMED">מאושר</SelectItem>
@@ -225,10 +232,10 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
         </Select>
 
         <Select value={typeFilter} onValueChange={v => { setTypeFilter(v); setSelectedDate(undefined); }}>
-          <SelectTrigger className="w-44 rounded-lg h-9">
+          <SelectTrigger className="w-44 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white">
             <SelectValue placeholder="סוג פגישה" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-[#1a3a2a] border-white/20 text-white/80">
             <SelectItem value="all">כל הסוגים</SelectItem>
             {meetingTypes.map(t => (
               <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
@@ -237,14 +244,14 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
         </Select>
 
         {loading && (
-          <span className="text-xs text-muted-foreground">טוען...</span>
+          <span className="text-sm text-white/60">טוען...</span>
         )}
       </div>
 
       {/* Calendar + Day Panel */}
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Calendar */}
-        <div className="bg-white rounded-xl border border-gray-100 p-4 w-full lg:w-auto shrink-0">
+        <div className="mtg-dark-calendar bg-[#162e22] backdrop-blur-sm rounded-xl border border-white/20 p-2 sm:p-4 w-full lg:w-auto shrink-0">
           <Calendar
             mode="single"
             selected={selectedDate}
@@ -255,10 +262,10 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
             modifiersClassNames={{ hasMeetings: "" }}
             locale={he}
             dir="rtl"
-            className="[--cell-size:3rem] sm:[--cell-size:3.5rem] w-full"
+            className="[--cell-size:2.5rem] sm:[--cell-size:3.5rem] w-full"
             classNames={{
-              month_caption: "flex items-center justify-center h-(--cell-size) w-full px-(--cell-size) text-base font-semibold",
-              weekday: "text-muted-foreground rounded-md flex-1 font-medium text-sm select-none",
+              month_caption: "flex items-center justify-center h-(--cell-size) w-full px-(--cell-size) text-sm sm:text-base font-semibold",
+              weekday: "text-white/60 rounded-md flex-1 font-medium text-[11px] sm:text-sm select-none",
             }}
             components={{
               DayButton: CustomDayButton,
@@ -269,23 +276,23 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
         {/* Day Panel */}
         <div className="flex-1 min-w-0">
           {!selectedDate ? (
-            <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-muted-foreground">
-              <CalendarDays className="h-10 w-10 mb-3 opacity-40" />
+            <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-white/60">
+              <CalendarDays className="h-10 w-10 mb-3 opacity-60" />
               <p className="text-sm">לחצו על יום כדי לראות את הפגישות</p>
             </div>
           ) : selectedDayMeetings.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-muted-foreground">
-              <CalendarDays className="h-10 w-10 mb-3 opacity-40" />
+            <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-white/60">
+              <CalendarDays className="h-10 w-10 mb-3 opacity-60" />
               <p className="text-sm">אין פגישות ביום זה</p>
-              <p className="text-xs mt-1">
+              <p className="text-sm mt-1">
                 {selectedDate.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" })}
               </p>
             </div>
           ) : (
             <div className="space-y-3">
-              <h3 className="font-medium text-sm text-gray-900">
+              <h3 className="font-medium text-sm text-white">
                 {selectedDate.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" })}
-                <span className="text-muted-foreground font-normal mr-2">
+                <span className="text-white/60 font-normal mr-2">
                   ({selectedDayMeetings.length} פגישות)
                 </span>
               </h3>
@@ -296,37 +303,56 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
                   return (
                     <div
                       key={m.id}
-                      className="bg-white rounded-xl border border-gray-100 p-3 cursor-pointer hover:bg-[#F8FAFC] transition-colors duration-150 mtg-slide-up"
+                      className="bg-[#162e22] backdrop-blur-sm rounded-xl border border-white/20 p-3 cursor-pointer hover:bg-white/[0.06] transition-colors duration-150 mtg-slide-up"
                       style={{ animationDelay: `${idx * 40}ms` }}
                       onClick={() => openDetail(m.id)}
                     >
-                      <div className="flex items-center gap-3">
-                        {/* Time */}
-                        <div className="text-xs text-muted-foreground shrink-0 w-24 text-left" dir="ltr">
+                      {/* Mobile: stacked layout with centered time */}
+                      <div className="flex flex-col items-center gap-2 sm:hidden">
+                        <div className="text-sm text-white/70 font-medium" dir="ltr">
                           <Clock className="inline h-3 w-3 mr-1" />
                           {start.toLocaleTimeString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" })}
                           {" - "}
                           {end.toLocaleTimeString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" })}
                         </div>
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-7 h-7 rounded-full bg-blue-500/15 text-blue-300 flex items-center justify-center text-xs font-bold shrink-0">
+                              {m.participantName?.charAt(0) || "?"}
+                            </div>
+                            <span className="text-sm font-medium truncate text-white">{m.participantName}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: m.meetingType?.color || "#3B82F6" }}
+                            />
+                            <MeetingStatusBadge status={m.status} />
+                          </div>
+                        </div>
+                      </div>
 
-                        {/* Participant */}
+                      {/* Desktop: horizontal layout */}
+                      <div className="hidden sm:flex items-center gap-3">
+                        <div className="text-sm text-white/60 shrink-0 w-24 text-left" dir="ltr">
+                          <Clock className="inline h-3 w-3 mr-1" />
+                          {start.toLocaleTimeString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" })}
+                          {" - "}
+                          {end.toLocaleTimeString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" })}
+                        </div>
                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+                          <div className="w-7 h-7 rounded-full bg-blue-500/15 text-blue-300 flex items-center justify-center text-xs font-bold shrink-0">
                             {m.participantName?.charAt(0) || "?"}
                           </div>
-                          <span className="text-sm font-medium truncate">{m.participantName}</span>
+                          <span className="text-sm font-medium truncate text-white">{m.participantName}</span>
                         </div>
-
-                        {/* Meeting type */}
                         <div className="flex items-center gap-1.5 shrink-0">
                           <span
                             className="w-2 h-2 rounded-full"
                             style={{ backgroundColor: m.meetingType?.color || "#3B82F6" }}
                           />
-                          <span className="text-xs text-muted-foreground hidden sm:inline">{m.meetingType?.name}</span>
+                          <span className="text-sm text-white/60">{m.meetingType?.name}</span>
                         </div>
-
-                        {/* Status */}
                         <div className="shrink-0">
                           <MeetingStatusBadge status={m.status} />
                         </div>
@@ -349,6 +375,7 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
         onUpdateNotes={handleUpdateNotes}
         onCancel={handleCancel}
         onUpdateTags={handleUpdateTags}
+        onReschedule={handleReschedule}
         userPlan={userPlan}
       />
     </div>

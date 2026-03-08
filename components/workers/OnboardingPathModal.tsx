@@ -34,6 +34,7 @@ import { showAlert, showConfirm } from "@/hooks/use-modal";
 import OnboardingAutomationBuilder, {
   OnCompleteAction,
 } from "./OnboardingAutomationBuilder";
+import { AUTOMATION_CATEGORY_LIMITS } from "@/lib/plan-limits";
 
 // OnCompleteAction removed as it is imported now
 
@@ -121,11 +122,7 @@ export default function OnboardingPathModal({
   }>({ isOpen: false, editingIndex: null });
 
   // Limits Logic
-  const limits: Record<string, number> = {
-    basic: 2,
-    premium: 6,
-    super: Infinity,
-  };
+  const limits = AUTOMATION_CATEGORY_LIMITS;
   const planLabels: Record<string, string> = {
     basic: "משתמש רגיל",
     premium: "משתמש פרימיום",

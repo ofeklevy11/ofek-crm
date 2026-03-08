@@ -56,6 +56,10 @@ vi.mock("@/lib/notifications-internal", () => ({
   createNotificationForCompany: vi.fn(),
 }));
 
+vi.mock("@/lib/automation-limit-check", () => ({
+  checkCategoryLimitAndCreate: vi.fn(),
+}));
+
 import {
   getAutomationRules,
   createAutomationRule,
@@ -71,6 +75,7 @@ import { checkActionRateLimit } from "@/lib/rate-limit";
 import { isPrivateUrl } from "@/lib/security/ssrf";
 import { invalidateFullCache } from "@/lib/services/analytics-cache";
 import { revalidatePath } from "next/cache";
+import { checkCategoryLimitAndCreate } from "@/lib/automation-limit-check";
 
 // --- Fixtures ---
 const adminUser = {
@@ -226,12 +231,15 @@ describe("createAutomationRule", () => {
     expect(res.error).toBe("Name is required");
   });
 
-  it("returns error when max 500 rules reached", async () => {
+  it("returns error when plan limit reached", async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(adminUser as any);
-    vi.mocked(prisma.automationRule.count).mockResolvedValue(500);
+    vi.mocked(checkCategoryLimitAndCreate).mockResolvedValue({
+      allowed: false,
+      error: "הגעת למגבלת האוטומציות",
+    });
     const res = await createAutomationRule(validRuleInput);
     expect(res.success).toBe(false);
-    expect(res.error).toContain("Maximum of 500");
+    expect(res.error).toContain("הגעת למגבלת האוטומציות");
   });
 
   it("blocks SSRF on top-level webhook URL", async () => {
@@ -276,10 +284,12 @@ describe("createAutomationRule", () => {
 
   it("auto-creates folder for TASK_STATUS_CHANGE trigger", async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(adminUser as any);
-    vi.mocked(prisma.automationRule.count).mockResolvedValue(0);
     vi.mocked(prisma.viewFolder.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.viewFolder.create).mockResolvedValue({ id: 55 } as any);
-    vi.mocked(prisma.automationRule.create).mockResolvedValue({ id: 1, ...validRuleInput } as any);
+    vi.mocked(checkCategoryLimitAndCreate).mockResolvedValue({
+      allowed: true,
+      rule: { id: 1, ...validRuleInput },
+    });
     const res = await createAutomationRule({
       ...validRuleInput,
       triggerType: "TASK_STATUS_CHANGE",
@@ -299,12 +309,14 @@ describe("createAutomationRule", () => {
 
   it("handles P2002 race on folder creation", async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(adminUser as any);
-    vi.mocked(prisma.automationRule.count).mockResolvedValue(0);
     vi.mocked(prisma.viewFolder.findFirst)
       .mockResolvedValueOnce(null)   // initial check
       .mockResolvedValueOnce({ id: 99 } as any); // after P2002 retry
     vi.mocked(prisma.viewFolder.create).mockRejectedValue(Object.assign(new Error("dup"), { code: "P2002" }));
-    vi.mocked(prisma.automationRule.create).mockResolvedValue({ id: 1, ...validRuleInput } as any);
+    vi.mocked(checkCategoryLimitAndCreate).mockResolvedValue({
+      allowed: true,
+      rule: { id: 1, ...validRuleInput },
+    });
     const res = await createAutomationRule({
       ...validRuleInput,
       triggerType: "TICKET_STATUS_CHANGE",
@@ -315,17 +327,21 @@ describe("createAutomationRule", () => {
 
   it("trims name before saving", async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(adminUser as any);
-    vi.mocked(prisma.automationRule.count).mockResolvedValue(0);
-    vi.mocked(prisma.automationRule.create).mockResolvedValue({ id: 1 } as any);
+    vi.mocked(checkCategoryLimitAndCreate).mockResolvedValue({
+      allowed: true,
+      rule: { id: 1 },
+    });
     await createAutomationRule({ ...validRuleInput, name: "  trimme  " });
-    const call = vi.mocked(prisma.automationRule.create).mock.calls[0][0] as any;
-    expect(call.data.name).toBe("trimme");
+    const call = vi.mocked(checkCategoryLimitAndCreate).mock.calls[0] as any;
+    expect(call[3].name).toBe("trimme");
   });
 
   it("invalidates cache after creation", async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(adminUser as any);
-    vi.mocked(prisma.automationRule.count).mockResolvedValue(0);
-    vi.mocked(prisma.automationRule.create).mockResolvedValue({ id: 1 } as any);
+    vi.mocked(checkCategoryLimitAndCreate).mockResolvedValue({
+      allowed: true,
+      rule: { id: 1 },
+    });
     await createAutomationRule(validRuleInput);
     expect(invalidateFullCache).toHaveBeenCalledWith(100);
     expect(revalidatePath).toHaveBeenCalledWith("/automations");
@@ -333,8 +349,7 @@ describe("createAutomationRule", () => {
 
   it("returns error on DB failure", async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(adminUser as any);
-    vi.mocked(prisma.automationRule.count).mockResolvedValue(0);
-    vi.mocked(prisma.automationRule.create).mockRejectedValue(new Error("DB fail"));
+    vi.mocked(checkCategoryLimitAndCreate).mockRejectedValue(new Error("DB fail"));
     const res = await createAutomationRule(validRuleInput);
     expect(res).toEqual({ success: false, error: "Failed to create automation rule" });
   });

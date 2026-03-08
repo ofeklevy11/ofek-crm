@@ -414,37 +414,35 @@ export default function EditTableModal({
 
             {/* Tab Layout Toggle */}
             <div className="border border-primary/20 bg-primary/5 rounded-xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <LayoutGrid className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold">טאבים</h3>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                      ארגן שדות בטאבים לניווט נוח בטפסים
-                    </p>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <LayoutGrid className="h-5 w-5 text-primary" />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !tabsEnabled;
-                    setTabsEnabled(next);
-                    if (next && tabs.length === 0) {
-                      setTabs([{ id: generateTabId(), label: "כללי", order: 0 }]);
-                    }
-                  }}
-                  className={cn(
-                    "px-4 py-2 rounded-lg text-sm font-bold transition-colors border",
-                    tabsEnabled
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
-                  )}
-                >
-                  {tabsEnabled ? "בטל טאבים" : "הפעל טאבים"}
-                </button>
+                <div>
+                  <h3 className="text-lg font-bold">טאבים</h3>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    ארגן שדות בטאבים לניווט נוח בטפסים
+                  </p>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !tabsEnabled;
+                  setTabsEnabled(next);
+                  if (next && tabs.length === 0) {
+                    setTabs([{ id: generateTabId(), label: "כללי", order: 0 }]);
+                  }
+                }}
+                className={cn(
+                  "px-4 py-2 rounded-lg text-sm font-bold transition-colors border mt-3 mb-4",
+                  tabsEnabled
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+                )}
+              >
+                {tabsEnabled ? "בטל טאבים" : "הפעל טאבים"}
+              </button>
 
               {tabsEnabled && tabs.length > 0 && (
                 <div className="space-y-3">

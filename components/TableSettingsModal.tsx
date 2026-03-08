@@ -206,36 +206,34 @@ export default function TableSettingsModal({
           {/* Tab Management Section */}
           <div className="space-y-4">
             <div className="border border-primary/20 bg-primary/5 rounded-xl p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <LayoutGrid className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold">טאבים</h3>
-                    <p className="text-sm text-muted-foreground">
-                      ארגן שדות בטאבים לניווט נוח בטפסים
-                    </p>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <LayoutGrid className="h-4 w-4 text-primary" />
                 </div>
-                {!tabsEnabled && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTabsEnabled(true);
-                      if (tabs.length === 0) {
-                        setTabs([{ id: generateTabId(), label: "כללי", order: 0 }]);
-                      }
-                    }}
-                    className={cn(
-                      "px-4 py-2 rounded-lg text-sm font-bold transition-colors border",
-                      "bg-muted text-muted-foreground border-border hover:bg-muted/80"
-                    )}
-                  >
-                    הפעל טאבים
-                  </button>
-                )}
+                <div>
+                  <h3 className="text-lg font-bold">טאבים</h3>
+                  <p className="text-sm text-muted-foreground">
+                    ארגן שדות בטאבים לניווט נוח בטפסים
+                  </p>
+                </div>
               </div>
+              {!tabsEnabled && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTabsEnabled(true);
+                    if (tabs.length === 0) {
+                      setTabs([{ id: generateTabId(), label: "כללי", order: 0 }]);
+                    }
+                  }}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-sm font-bold transition-colors border mt-3",
+                    "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+                  )}
+                >
+                  הפעל טאבים
+                </button>
+              )}
             </div>
 
             {(tabsEnabled || tabs.length > 0) && (

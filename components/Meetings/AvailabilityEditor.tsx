@@ -159,10 +159,10 @@ export default function AvailabilityEditor({
   };
 
   return (
-    <div dir="rtl" className="rounded-2xl border bg-white/80 p-6 relative overflow-hidden">
+    <div dir="rtl" className="rounded-2xl border border-white/20 bg-[#162e22] backdrop-blur-sm p-6 relative overflow-hidden">
       {/* Mini weekly overview */}
-      <div className="flex items-center gap-2 mb-5">
-        <div className="flex items-center gap-1 flex-1">
+      <div className="flex flex-col gap-2 mb-5">
+        <div className="flex items-center gap-1">
           {DAY_KEYS.map((dayKey, idx) => {
             const windows = schedule[dayKey];
             const dayMinutes = windows.reduce((sum, w) => {
@@ -177,17 +177,17 @@ export default function AvailabilityEditor({
                 key={dayKey}
                 className={`flex-1 text-center py-2 rounded-lg text-xs transition-all ${
                   isActive
-                    ? "bg-white shadow-sm border border-gray-200 text-gray-900 font-medium"
-                    : "text-gray-400"
+                    ? "bg-white/[0.08] border border-white/20 text-white font-medium"
+                    : "text-white/50"
                 }`}
               >
-                <div className="text-[10px] mb-0.5">{DAY_NAMES[idx]}</div>
-                {isActive && <div className="text-primary font-bold">{dayHours}h</div>}
+                <div className="text-xs mb-0.5">{DAY_NAMES[idx]}</div>
+                {isActive && <div className="text-blue-400 font-bold">{dayHours}h</div>}
               </div>
             );
           })}
         </div>
-        <div className="bg-primary/10 text-primary px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap">
+        <div className="self-start bg-blue-500/15 text-blue-400 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap">
           {summary.hours} שעות/שבוע
         </div>
       </div>
@@ -199,7 +199,7 @@ export default function AvailabilityEditor({
             key={preset.label}
             type="button"
             onClick={() => applyPreset(preset)}
-            className="px-3 py-1.5 rounded-full border border-gray-200 text-xs font-medium hover:border-primary/30 hover:bg-primary/5 hover:text-primary transition-all duration-200"
+            className="px-3 py-1.5 rounded-full border border-white/20 text-sm font-medium text-white/80 hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-blue-400 transition-all duration-200"
           >
             {preset.label}
           </button>
@@ -213,40 +213,34 @@ export default function AvailabilityEditor({
           return (
             <div
               key={dayKey}
-              className={`flex items-center gap-3 py-3 px-4 rounded-xl border transition-all duration-300 animate-cascade-in ${
-                enabled ? "border-r-4 border-r-primary" : ""
+              className={`flex items-start gap-3 py-3 px-4 rounded-xl border border-white/20 transition-all duration-300 animate-cascade-in ${
+                enabled ? "border-r-4 border-r-blue-500" : ""
               }`}
               style={{ animationDelay: `${idx * 60}ms` }}
             >
-              <div className="flex w-20 shrink-0 items-center gap-3">
-                <Switch
-                  checked={enabled}
-                  onCheckedChange={() => toggleDay(dayKey)}
-                />
-                <span className="text-sm font-medium">{DAY_NAMES[idx]}</span>
-              </div>
+              <span className="text-sm font-medium text-white shrink-0 w-12 text-start mt-1.5">{DAY_NAMES[idx]}</span>
 
               {enabled ? (
-                <div className="flex items-center gap-2 flex-wrap flex-1">
+                <div className="flex flex-col items-center sm:items-start sm:flex-row gap-2 flex-wrap flex-1 min-h-0">
                   {schedule[dayKey].map((window, wIdx) => (
-                    <div key={wIdx} className="inline-flex items-center gap-1 bg-primary/10 rounded-lg px-2 py-1">
+                    <div key={wIdx} className="inline-flex items-center gap-1 bg-blue-500/10 rounded-lg px-2 py-1">
                       <Input
                         type="time"
                         value={window.start}
                         onChange={(e) => updateWindow(dayKey, wIdx, "start", e.target.value)}
-                        className="w-24 h-7 text-xs border-0 bg-transparent p-0 focus:ring-0"
+                        className="w-24 h-7 text-xs border-0 bg-transparent p-0 focus:ring-0 text-white"
                       />
-                      <span className="text-xs text-gray-400">-</span>
+                      <span className="text-xs text-white/50">-</span>
                       <Input
                         type="time"
                         value={window.end}
                         onChange={(e) => updateWindow(dayKey, wIdx, "end", e.target.value)}
-                        className="w-24 h-7 text-xs border-0 bg-transparent p-0 focus:ring-0"
+                        className="w-24 h-7 text-xs border-0 bg-transparent p-0 focus:ring-0 text-white"
                       />
                       <button
                         type="button"
                         onClick={() => removeWindow(dayKey, wIdx)}
-                        className="text-gray-400 hover:text-destructive transition-colors p-0.5"
+                        className="text-white/50 hover:text-red-400 transition-colors p-0.5"
                       >
                         <Trash2 className="size-3" />
                       </button>
@@ -255,14 +249,20 @@ export default function AvailabilityEditor({
                   <button
                     type="button"
                     onClick={() => addWindow(dayKey)}
-                    className="text-primary text-xs font-medium hover:text-primary/80 transition-colors"
+                    className="text-blue-400 text-sm font-medium hover:text-blue-300 transition-colors"
                   >
                     + הוסף
                   </button>
                 </div>
               ) : (
-                <span className="text-sm text-gray-400 flex-1">סגור</span>
+                <span className="text-sm text-white/50 flex-1 text-center sm:text-start mt-1">סגור</span>
               )}
+
+              <Switch
+                checked={enabled}
+                onCheckedChange={() => toggleDay(dayKey)}
+                className="shrink-0 mt-1.5"
+              />
             </div>
           );
         })}
@@ -270,12 +270,12 @@ export default function AvailabilityEditor({
 
       {/* Sticky save bar — only when changes detected */}
       {hasChanges && (
-        <div className="sticky bottom-0 bg-white/90 backdrop-blur-sm border-t mt-4 py-3 px-4 -mx-6 -mb-6 flex items-center justify-between gap-3">
-          <span className="text-sm text-gray-600">יש שינויים שלא נשמרו</span>
+        <div className="sticky bottom-0 bg-[#162e22] backdrop-blur-sm border-t border-white/20 mt-4 py-3 px-4 -mx-6 -mb-6 flex items-center justify-between gap-3">
+          <span className="text-sm text-white/60">יש שינויים שלא נשמרו</span>
           <Button
             onClick={handleSave}
             disabled={saving}
-            className={`transition-all duration-300 ${saveSuccess ? "animate-pulse-glow" : ""}`}
+            className={`bg-blue-600 hover:bg-blue-700 transition-all duration-300 ${saveSuccess ? "animate-pulse-glow" : ""}`}
           >
             {saveSuccess ? (
               <><Check className="size-4" /> נשמר!</>

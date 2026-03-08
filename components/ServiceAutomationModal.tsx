@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { getActionsPerAutomationLimit } from "@/lib/plan-limits";
 
 // Retrying Modal update - Step 1: Update State Initialization
 interface ServiceAutomationModalProps {
@@ -27,6 +28,7 @@ interface ServiceAutomationModalProps {
   onOpenChange: (open: boolean) => void;
   users: any[];
   initialData?: any;
+  userPlan?: string;
 }
 
 export default function ServiceAutomationModal({
@@ -34,6 +36,7 @@ export default function ServiceAutomationModal({
   onOpenChange,
   users,
   initialData,
+  userPlan = "basic",
 }: ServiceAutomationModalProps) {
   const [loading, setLoading] = useState(false);
   const [triggerType, setTriggerType] = useState<

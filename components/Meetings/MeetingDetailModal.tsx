@@ -39,7 +39,14 @@ import {
   CheckSquare,
   Timer,
   Pencil,
+  CalendarClock,
 } from "lucide-react";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -88,6 +95,7 @@ interface MeetingDetailModalProps {
   onUpdateNotes: (id: string, notesBefore?: string, notesAfter?: string) => Promise<{ success: boolean; error?: string }>;
   onCancel: (id: string, reason?: string) => Promise<{ success: boolean; error?: string }>;
   onUpdateTags: (id: string, tags: string[]) => Promise<{ success: boolean; error?: string }>;
+  onReschedule?: (id: string, newStart: string, newEnd: string) => Promise<{ success: boolean; error?: string }>;
   userPlan: string;
 }
 
@@ -105,6 +113,7 @@ export default function MeetingDetailModal({
   onUpdateNotes,
   onCancel,
   onUpdateTags,
+  onReschedule,
   userPlan,
 }: MeetingDetailModalProps) {
   const [notesBefore, setNotesBefore] = useState("");
@@ -113,6 +122,9 @@ export default function MeetingDetailModal({
   const [newTag, setNewTag] = useState("");
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showReschedule, setShowReschedule] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState<Date | undefined>();
+  const [rescheduleTime, setRescheduleTime] = useState("");
 
   // Per-meeting automations
   const [perMeetingAutomations, setPerMeetingAutomations] = useState<any[]>([]);
@@ -166,6 +178,13 @@ export default function MeetingDetailModal({
     return result;
   };
 
+  // Reset reschedule state when meeting changes
+  useEffect(() => {
+    setShowReschedule(false);
+    setRescheduleDate(undefined);
+    setRescheduleTime("");
+  }, [meeting?.id]);
+
   // Fetch automations when modal opens with a meeting
   useEffect(() => {
     if (meeting && meeting.status !== "CANCELLED" && meeting.status !== "COMPLETED") {
@@ -217,6 +236,23 @@ export default function MeetingDetailModal({
     }
   };
 
+  const handleReschedule = async () => {
+    if (!onReschedule || !rescheduleDate || !rescheduleTime || !meeting) return;
+    const [hours, minutes] = rescheduleTime.split(":").map(Number);
+    const newStart = new Date(rescheduleDate);
+    newStart.setHours(hours, minutes, 0, 0);
+    const newEnd = new Date(newStart.getTime() + meeting.meetingType.duration * 60000);
+    setSaving(true);
+    const result = await onReschedule(meeting.id, newStart.toISOString(), newEnd.toISOString());
+    setSaving(false);
+    if (result.success) {
+      toast.success("שעת הפגישה עודכנה");
+      setShowReschedule(false);
+    } else {
+      toast.error(result.error || "שגיאה בעדכון שעה");
+    }
+  };
+
   const handleAddTag = async () => {
     if (!newTag.trim()) return;
     const tags = [...meeting.tags, newTag.trim()];
@@ -258,7 +294,7 @@ export default function MeetingDetailModal({
                 style={{ backgroundColor: meeting.meetingType.color || "#3B82F6" }}
               />
               <span>{meeting.meetingType.name}</span>
-              <MeetingStatusBadge status={meeting.status} />
+              <MeetingStatusBadge status={meeting.status} variant="light" />
             </DialogTitle>
           </DialogHeader>
         </div>
@@ -291,15 +327,108 @@ export default function MeetingDetailModal({
           </div>
 
           {/* Date/Time */}
-          <div className="flex items-center gap-4 text-sm mtg-slide-up" style={{ animationDelay: "80ms" }}>
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span>{dateStr}</span>
+          <div className="space-y-3 mtg-slide-up" style={{ animationDelay: "80ms" }}>
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span>{dateStr}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span dir="ltr">{timeStr}</span>
+              </div>
+              {onReschedule && meeting.status !== "CANCELLED" && meeting.status !== "COMPLETED" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs mr-auto"
+                  onClick={() => {
+                    setShowReschedule(!showReschedule);
+                    if (!showReschedule) {
+                      setRescheduleDate(start);
+                      setRescheduleTime(
+                        `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`
+                      );
+                    }
+                  }}
+                >
+                  <CalendarClock className="h-3.5 w-3.5 ml-1" />
+                  שנה שעה
+                </Button>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <span dir="ltr">{timeStr}</span>
-            </div>
+
+            {showReschedule && (
+              <div className="bg-[#F8FAFC] rounded-xl p-4 space-y-3 border">
+                <h4 className="text-sm font-medium">בחר תאריך ושעה חדשים</h4>
+                <div className="flex flex-col sm:flex-row gap-4 items-start">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="justify-start text-right font-normal">
+                        <Calendar className="h-4 w-4 ml-2" />
+                        {rescheduleDate
+                          ? rescheduleDate.toLocaleDateString("he-IL", {
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                            })
+                          : "בחר תאריך"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarPicker
+                        mode="single"
+                        selected={rescheduleDate}
+                        onSelect={setRescheduleDate}
+                        disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                      />
+                    </PopoverContent>
+                  </Popover>
+
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="time"
+                      value={rescheduleTime}
+                      onChange={(e) => setRescheduleTime(e.target.value)}
+                      className="w-32"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+
+                {rescheduleDate && rescheduleTime && (
+                  <p className="text-xs text-muted-foreground">
+                    משך הפגישה: {meeting.meetingType.duration} דקות
+                    {" · "}
+                    סיום: {(() => {
+                      const [h, m] = rescheduleTime.split(":").map(Number);
+                      const endCalc = new Date(rescheduleDate);
+                      endCalc.setHours(h, m + meeting.meetingType.duration, 0, 0);
+                      return endCalc.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+                    })()}
+                  </p>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleReschedule}
+                    disabled={saving || !rescheduleDate || !rescheduleTime}
+                  >
+                    <CalendarClock className="h-4 w-4 ml-1" />
+                    עדכן שעה
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowReschedule(false)}
+                  >
+                    ביטול
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Status Control */}

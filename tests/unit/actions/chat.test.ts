@@ -1616,7 +1616,7 @@ describe("markAsRead", () => {
       await markAsRead(2, "user");
 
       expect(prisma.message.updateMany).toHaveBeenCalledWith({
-        where: { senderId: 2, receiverId: 1, read: false },
+        where: { senderId: 2, receiverId: 1, read: false, companyId: 100 },
         data: { read: true },
       });
     });
@@ -1736,7 +1736,7 @@ describe("markAsRead", () => {
     await markAsRead(2);
 
     expect(prisma.message.updateMany).toHaveBeenCalledWith({
-      where: { senderId: 2, receiverId: 1, read: false },
+      where: { senderId: 2, receiverId: 1, read: false, companyId: 100 },
       data: { read: true },
     });
   });

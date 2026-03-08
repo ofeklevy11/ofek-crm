@@ -6,6 +6,7 @@ import {
   updateAutomationRule,
 } from "@/app/actions/automations";
 import { getTableById } from "@/app/actions/tables";
+import { getActionsPerAutomationLimit } from "@/lib/plan-limits";
 import {
   X,
   Loader2,
@@ -78,7 +79,7 @@ export default function AutomationModal({
   const totalSteps = 4;
 
   // Calculate max actions based on user plan
-  const maxActions = userPlan === "premium" || userPlan === "super" ? 6 : 2;
+  const maxActions = getActionsPerAutomationLimit(userPlan);
 
   // Source for pre-populating form fields (editingRule takes priority)
   const source = editingRule || initialSchema || null;

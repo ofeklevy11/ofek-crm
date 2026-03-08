@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { revalidatePath } from "next/cache";
 import { inngest } from "@/lib/inngest/client";
 import { validateUserInCompany, validateClientInCompany } from "@/lib/company-validation";
-import { getCachedMetric } from "@/lib/services/cache-service";
+import { getCachedMetric, buildCacheKey } from "@/lib/services/cache-service";
 import { redis } from "@/lib/redis";
 import { TicketStatus, TicketPriority, TicketType } from "@prisma/client";
 import { withRetry } from "@/lib/db-retry";
@@ -29,17 +29,11 @@ function assertServiceAccess(user: { role: string; permissions?: Record<string, 
   }
 }
 
-function serviceStatsKey(companyId: number) {
-  return `service:stats:${companyId}`;
-}
-function slaPoliciesKey(companyId: number) {
-  return `service:sla-policies:${companyId}`;
-}
 async function invalidateServiceCache(companyId: number) {
   try {
     await redis.del(
-      `cache:metric:${serviceStatsKey(companyId)}`,
-      `cache:metric:${slaPoliciesKey(companyId)}`,
+      buildCacheKey(companyId, ["service", "stats"]),
+      buildCacheKey(companyId, ["service", "sla-policies"]),
     );
   } catch {}
 }
@@ -621,7 +615,8 @@ export async function getSlaPolicies() {
   }
 
   return getCachedMetric(
-    slaPoliciesKey(user.companyId),
+    user.companyId,
+    ["service", "sla-policies"],
     async () => {
       return withRetry(() => prisma.slaPolicy.findMany({
         where: { companyId: user.companyId },
@@ -764,7 +759,8 @@ export async function getTicketStats() {
   }
 
   return getCachedMetric(
-    serviceStatsKey(user.companyId),
+    user.companyId,
+    ["service", "stats"],
     async () => {
       const [statusCounts, breachCount] = await Promise.all([
         withRetry(() => prisma.ticket.groupBy({

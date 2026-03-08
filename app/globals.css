@@ -314,7 +314,7 @@
 }
 .mtg-dark-calendar .rdp-button_previous,
 .mtg-dark-calendar .rdp-button_next {
-  color: rgba(255,255,255,0.4) !important;
+  color: rgba(255,255,255,0.7) !important;
   background: transparent !important;
   border: none !important;
   border-radius: 0.375rem !important;
@@ -337,7 +337,7 @@
 }
 .mtg-dark-calendar .rdp-weekday,
 .mtg-dark-calendar [data-slot="weekday"] {
-  color: rgba(255,255,255,0.4) !important;
+  color: rgba(255,255,255,0.7) !important;
   text-align: center !important;
   width: var(--cell-size, 2rem) !important;
   display: flex !important;
@@ -354,11 +354,11 @@
 }
 .mtg-dark-calendar .rdp-day_disabled,
 .mtg-dark-calendar [data-disabled="true"] {
-  color: rgba(255,255,255,0.15) !important;
+  color: rgba(255,255,255,0.35) !important;
 }
 .mtg-dark-calendar [data-selected-single="true"],
 .mtg-dark-calendar .rdp-day_selected {
-  background-color: #7c3aed !important;
+  background-color: #2563eb !important;
   color: #fff !important;
 }
 .mtg-dark-calendar [data-today="true"]:not([data-selected-single="true"]) {
@@ -372,7 +372,7 @@
   border-color: rgba(255,255,255,0.15) !important;
 }
 .mtg-dark-calendar [data-outside=""] {
-  color: rgba(255,255,255,0.15) !important;
+  color: rgba(255,255,255,0.3) !important;
 }
 
 /* ── Meeting dark scrollbar ──────────────────────────────── */

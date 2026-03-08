@@ -2,31 +2,54 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Trash2, Eye, EyeOff } from "lucide-react";
-import { useEffect, useState, memo } from "react";
+import { Trash2, Eye, EyeOff, Settings2 } from "lucide-react";
+import { useEffect, useState, useMemo, memo } from "react";
 import { useRouter } from "next/navigation";
 import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
+import { getMiniMeetingsData } from "@/app/actions/dashboard-mini-widgets";
 import Link from "next/link";
 
 interface MeetingItem {
   id: string;
   participantName: string;
+  participantEmail: string | null;
   startTime: string;
   endTime: string;
   status: string;
+  tags: string[];
   meetingType: { name: string; color?: string | null };
+  client: { name: string } | null;
 }
 
 interface MiniMeetingsWidgetProps {
   id: string;
   onRemove: (id: string) => void;
   settings?: any;
+  onOpenSettings?: (id: string) => void;
 }
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  PENDING: { label: "ממתין", color: "text-yellow-700", bg: "bg-yellow-100" },
+  CONFIRMED: { label: "מאושר", color: "text-blue-700", bg: "bg-blue-100" },
+  COMPLETED: { label: "הושלם", color: "text-emerald-700", bg: "bg-emerald-100" },
+  CANCELLED: { label: "בוטל", color: "text-red-700", bg: "bg-red-100" },
+  NO_SHOW: { label: "לא הגיע", color: "text-gray-600", bg: "bg-gray-200" },
+};
+
+const PRESET_LABELS: Record<string, string> = {
+  today: "היום",
+  this_week: "השבוע",
+  "7d": "7 ימים",
+  "14d": "14 ימים",
+  this_month: "החודש",
+  custom: "מותאם אישית",
+};
 
 function MiniMeetingsWidget({
   id,
   onRemove,
   settings,
+  onOpenSettings,
 }: MiniMeetingsWidgetProps) {
   const router = useRouter();
   const {
@@ -47,19 +70,38 @@ function MiniMeetingsWidget({
 
   const [isCollapsed, setIsCollapsed] = useState(settings?.collapsed || false);
   const [meetings, setMeetings] = useState<MeetingItem[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+
+  const filters = useMemo(() => {
+    if (!settings) return undefined;
+    return {
+      preset: settings.preset,
+      statusFilter: settings.statusFilter,
+      meetingTypeFilter: settings.meetingTypeFilter,
+      dateFrom: settings.dateFrom,
+      dateTo: settings.dateTo,
+      sortBy: settings.sortBy,
+      maxMeetings: settings.maxMeetings,
+    };
+  }, [settings]);
+
+  const settingsKey = useMemo(
+    () => JSON.stringify(filters || {}),
+    [filters],
+  );
 
   useEffect(() => {
     setLoading(true);
-    import("@/app/actions/meetings")
-      .then(({ getTodaysMeetings }) => getTodaysMeetings())
+    getMiniMeetingsData(filters)
       .then((res) => {
         if (res.success && res.data) {
-          setMeetings(res.data as unknown as MeetingItem[]);
+          setMeetings(res.data.meetings as unknown as MeetingItem[]);
+          setCounts(res.data.counts);
         }
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [settingsKey]);
 
   const handleToggleCollapse = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -77,6 +119,76 @@ function MiniMeetingsWidget({
     }
   };
 
+  const totalMeetings = Object.values(counts).reduce((sum, c) => sum + c, 0);
+
+  const dateRangeLabel = useMemo(() => {
+    const now = new Date();
+    const fmt = (d: Date) =>
+      d.toLocaleDateString("he-IL", {
+        day: "numeric",
+        month: "short",
+        timeZone: "Asia/Jerusalem",
+      });
+    const fmtFull = (d: Date) =>
+      d.toLocaleDateString("he-IL", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        timeZone: "Asia/Jerusalem",
+      });
+    const preset = settings?.preset || "today";
+
+    switch (preset) {
+      case "today":
+        return fmtFull(now);
+      case "this_week": {
+        const day = now.getDay();
+        const diff = day === 0 ? 0 : day;
+        const start = new Date(now);
+        start.setDate(now.getDate() - diff);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        return `${fmt(start)} - ${fmt(end)}`;
+      }
+      case "7d": {
+        const end = new Date(now.getTime() + 7 * 86400000);
+        return `${fmt(now)} - ${fmt(end)}`;
+      }
+      case "14d": {
+        const end = new Date(now.getTime() + 14 * 86400000);
+        return `${fmt(now)} - ${fmt(end)}`;
+      }
+      case "this_month": {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        return `${fmt(start)} - ${fmt(end)}`;
+      }
+      case "custom": {
+        const from = settings?.dateFrom ? new Date(settings.dateFrom) : null;
+        const to = settings?.dateTo ? new Date(settings.dateTo) : null;
+        if (from && to) return `${fmt(from)} - ${fmt(to)}`;
+        if (from) return `מ-${fmt(from)}`;
+        if (to) return `עד ${fmt(to)}`;
+        return "";
+      }
+      default:
+        return "";
+    }
+  }, [settings]);
+
+  const filterSummary = useMemo(() => {
+    const parts: string[] = [];
+    const preset = settings?.preset || "today";
+    parts.push(PRESET_LABELS[preset] || "היום");
+
+    if (settings?.statusFilter?.length) {
+      const labels = settings.statusFilter.map((s: string) => STATUS_CONFIG[s]?.label || s);
+      parts.push(labels.join(", "));
+    }
+
+    return parts.join(" · ");
+  }, [settings]);
+
   const formatTime = (d: string) =>
     new Date(d).toLocaleTimeString("he-IL", {
       timeZone: "Asia/Jerusalem",
@@ -84,13 +196,26 @@ function MiniMeetingsWidget({
       minute: "2-digit",
     });
 
-  const STATUS_COLORS: Record<string, string> = {
-    PENDING: "bg-yellow-400",
-    CONFIRMED: "bg-blue-400",
-    COMPLETED: "bg-green-400",
-    CANCELLED: "bg-red-400",
-    NO_SHOW: "bg-gray-400",
-  };
+  const formatDate = (d: string) =>
+    new Date(d).toLocaleDateString("he-IL", {
+      day: "numeric",
+      month: "short",
+    });
+
+  const uniqueMeetingTypes = useMemo(() => {
+    const map = new Map<string, { name: string; color: string }>();
+    for (const m of meetings) {
+      if (m.meetingType?.name && !map.has(m.meetingType.name)) {
+        map.set(m.meetingType.name, {
+          name: m.meetingType.name,
+          color: m.meetingType.color || "#8B5CF6",
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [meetings]);
+
+  const isMultiDay = (settings?.preset || "today") !== "today";
 
   return (
     <div
@@ -102,7 +227,7 @@ function MiniMeetingsWidget({
         isCollapsed ? "h-auto" : "h-full min-h-[300px]"
       }`}
     >
-      <div className="h-1.5 w-full bg-gradient-to-r from-violet-400 to-purple-500" />
+      <div className="h-1.5 w-full bg-linear-to-r from-violet-400 to-purple-500" />
 
       <div className="p-5 flex-1 flex flex-col">
         {/* Header */}
@@ -113,14 +238,43 @@ function MiniMeetingsWidget({
                 פגישות
               </span>
               <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-600 border border-violet-100">
-                היום
+                {filterSummary}
               </span>
             </div>
-            <h3 className="text-lg font-bold text-gray-900">פגישות היום</h3>
-            <p className="text-sm text-gray-500">{meetings.length} פגישות</p>
+            <h3 className="text-lg font-bold text-gray-900">פגישות</h3>
+            {uniqueMeetingTypes.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {uniqueMeetingTypes.map((mt) => (
+                  <span
+                    key={mt.name}
+                    className="text-sm font-bold px-3 py-0.5 rounded-full text-white"
+                    style={{ backgroundColor: mt.color }}
+                  >
+                    {mt.name}
+                  </span>
+                ))}
+              </div>
+            )}
+            {dateRangeLabel && (
+              <p className="text-xs text-violet-500 font-medium mt-1">{dateRangeLabel}</p>
+            )}
+            <p className="text-sm text-gray-500">{totalMeetings} פגישות</p>
           </div>
 
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {onOpenSettings && (
+              <button
+                className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded-md transition"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenSettings(id);
+                }}
+                title="הגדרות"
+              >
+                <Settings2 size={16} />
+              </button>
+            )}
             <button
               className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition"
               onPointerDown={(e) => e.stopPropagation()}
@@ -160,41 +314,69 @@ function MiniMeetingsWidget({
               </div>
             ) : meetings.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-gray-400">
-                <p className="text-sm">אין פגישות היום</p>
+                <p className="text-sm">אין פגישות</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {meetings.map((m) => (
-                  <div
-                    key={m.id}
-                    className="bg-gray-50 rounded-xl p-3 flex items-center gap-3"
-                  >
-                    <div
-                      className="w-2.5 h-2.5 rounded-full shrink-0"
-                      style={{
-                        backgroundColor: m.meetingType?.color || "#8B5CF6",
-                      }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">
-                        {m.participantName}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {m.meetingType?.name}
-                      </p>
-                    </div>
-                    <div className="text-left shrink-0">
-                      <p className="text-sm font-medium text-gray-700" dir="ltr">
-                        {formatTime(m.startTime)}
-                      </p>
+              <div className="space-y-3">
+                {/* Status summary badges */}
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {Object.entries(STATUS_CONFIG)
+                    .filter(([key]) => counts[key])
+                    .map(([key, cfg]) => (
+                      <span
+                        key={key}
+                        className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}
+                      >
+                        {cfg.label} {counts[key]}
+                      </span>
+                    ))}
+                </div>
+
+                {/* Meeting cards - 2 col grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  {meetings.map((m) => {
+                    const st = STATUS_CONFIG[m.status] || STATUS_CONFIG.PENDING;
+                    return (
                       <div
-                        className={`w-1.5 h-1.5 rounded-full mx-auto mt-1 ${
-                          STATUS_COLORS[m.status] || "bg-gray-400"
-                        }`}
-                      />
-                    </div>
-                  </div>
-                ))}
+                        key={m.id}
+                        className="bg-gray-50 rounded-xl p-4 space-y-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{
+                              backgroundColor: m.meetingType?.color || "#8B5CF6",
+                            }}
+                          />
+                          <p className="text-base font-medium text-gray-800 truncate">
+                            {m.participantName}
+                          </p>
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">
+                          {m.meetingType?.name}
+                        </p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={`text-xs font-medium px-2 py-0.5 rounded ${st.bg} ${st.color}`}
+                          >
+                            {st.label}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                          <span dir="ltr">{formatTime(m.startTime)}</span>
+                          {isMultiDay && (
+                            <span>{formatDate(m.startTime)}</span>
+                          )}
+                        </div>
+                        {m.client?.name && (
+                          <p className="text-xs text-gray-400 truncate">
+                            {m.client.name}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 

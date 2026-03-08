@@ -45,6 +45,7 @@ import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
 import { showAlert, showConfirm } from "@/hooks/use-modal";
 import { WorkflowIconMap } from "@/lib/workflows/icon-map";
+import { getAutomationCategoryLimit } from "@/lib/plan-limits";
 
 interface StageDetailModalProps {
   stage: WorkflowStage | null;
@@ -1714,16 +1715,11 @@ export function StageDetailModal({
 
   // Automation Limits Logic
   const planInfo = (() => {
-    const isSuper = currentUser?.isPremium === "super";
-    const isPremium =
-      currentUser?.isPremium === "premium" ||
-      currentUser?.isPremium === true ||
-      currentUser?.isPremium === "true";
-
-    if (isSuper)
-      return { name: "סופר (Super)", limit: Infinity, type: "super" };
-    if (isPremium) return { name: "פרימיום", limit: 6, type: "premium" };
-    return { name: "רגיל", limit: 2, type: "regular" };
+    const tier = currentUser?.isPremium || "basic";
+    const limit = getAutomationCategoryLimit(typeof tier === "boolean" || tier === "true" ? "premium" : tier);
+    const nameMap: Record<string, string> = { super: "סופר (Super)", premium: "פרימיום", basic: "רגיל" };
+    const normalizedTier = tier === "super" ? "super" : (tier === "premium" || tier === true || tier === "true") ? "premium" : "basic";
+    return { name: nameMap[normalizedTier] || "רגיל", limit, type: normalizedTier };
   })();
 
   const otherStagesAutomationsCount = allStages

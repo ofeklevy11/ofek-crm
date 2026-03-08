@@ -7,6 +7,7 @@ import {
 } from "@/app/actions/automations";
 import { getTableById } from "@/app/actions/tables";
 import { getAllFiles } from "@/app/actions/storage";
+import { getActionsPerAutomationLimit } from "@/lib/plan-limits";
 import {
   X,
   Plus,
@@ -60,7 +61,7 @@ export default function MultiEventAutomationModal({
   const totalSteps = 2; // Steps: 1. Event Chain, 2. Actions
 
   // Calculate max actions based on user plan
-  const maxActions = userPlan === "premium" || userPlan === "super" ? 5 : 2;
+  const maxActions = getActionsPerAutomationLimit(userPlan);
 
   // --- General State ---
   const [name, setName] = useState(editingRule?.name || "");

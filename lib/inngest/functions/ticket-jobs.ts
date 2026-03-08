@@ -34,7 +34,7 @@ export const processTicketNotificationJob = inngest.createFunction(
         const { assigneeId, ticketId, ticketTitle } = event.data;
         await createNotificationForCompany({
           companyId,
-          userId: assigneeId,
+          userId: assigneeId!,
           title: event.data.isNew ? "קריאה חדשה הוקצתה לך" : "קריאה הוקצתה לך",
           message: event.data.isNew
             ? `הוקצית לקריאה #${ticketId}: ${ticketTitle}`

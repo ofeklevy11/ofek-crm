@@ -6,15 +6,14 @@ import { hasUserFlag } from "@/lib/permissions";
 import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { validateActionConfigSize, MAX_TITLE_LENGTH } from "@/lib/calendar-validation";
 import { createLogger } from "@/lib/logger";
+import { checkCategoryLimitAndCreate } from "@/lib/automation-limit-check";
+import {
+  AUTOMATION_CATEGORY_LIMITS,
+  getAutomationCategoryLimit,
+  MAX_PER_MEETING_AUTOMATIONS,
+} from "@/lib/plan-limits";
 
 const log = createLogger("MeetingAutomations");
-
-// Tier-based limits for total meeting automations (global + per-meeting combined)
-const MEETING_AUTOMATION_LIMITS: Record<string, number> = {
-  basic: 2,
-  premium: 6,
-  super: Infinity,
-};
 
 // Helper to format date for Hebrew display
 function formatDateHe(d: Date): string {
@@ -73,7 +72,7 @@ export async function getMeetingAutomationUsage(meetingId?: string) {
     if (!currentUser) return { success: false, error: "Authentication required" };
 
     const userPlan = currentUser.isPremium || "basic";
-    const limit = MEETING_AUTOMATION_LIMITS[userPlan] ?? 2;
+    const limit = getAutomationCategoryLimit(userPlan);
 
     const [globalCount, perMeetingCount] = await Promise.all([
       prisma.automationRule.count({
@@ -127,22 +126,6 @@ export async function createGlobalMeetingAutomation(data: {
     const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationMutate);
     if (limited) return { success: false, error: "Rate limit exceeded. Please try again later." };
 
-    // Tier-based limit check: global automations only count against global creation
-    const userPlan = currentUser.isPremium || "basic";
-    const tierLimit = MEETING_AUTOMATION_LIMITS[userPlan] ?? 2;
-    if (tierLimit !== Infinity) {
-      const globalCount = await prisma.automationRule.count({
-        where: {
-          companyId: currentUser.companyId,
-          triggerType: { in: ["MEETING_BOOKED", "MEETING_CANCELLED", "MEETING_REMINDER"] },
-          meetingId: null,
-        },
-      });
-      if (globalCount >= tierLimit) {
-        return { success: false, error: `הגעת למגבלת האוטומציות לפגישות (${tierLimit}). שדרג את התוכנית להוספת אוטומציות נוספות.` };
-      }
-    }
-
     const validationError = validateAutomationInput(data);
     if (validationError) return { success: false, error: validationError };
 
@@ -155,8 +138,13 @@ export async function createGlobalMeetingAutomation(data: {
     if (data.minutesBefore !== undefined) triggerConfig.minutesBefore = data.minutesBefore;
     if (data.meetingTypeId) triggerConfig.meetingTypeId = data.meetingTypeId;
 
-    const rule = await prisma.automationRule.create({
-      data: {
+    // Plan-based per-category limit (atomic transaction)
+    const userTier = currentUser.isPremium || "basic";
+    const result = await checkCategoryLimitAndCreate(
+      currentUser.companyId,
+      userTier,
+      data.triggerType,
+      {
         companyId: currentUser.companyId,
         name: data.name || `אוטומציה קבועה לפגישות - ${data.triggerType}`,
         triggerType: data.triggerType as any,
@@ -166,10 +154,13 @@ export async function createGlobalMeetingAutomation(data: {
         meetingTypeId: data.meetingTypeId || null,
         createdBy: currentUser.id,
       },
-      select: { id: true },
-    });
+    );
 
-    return { success: true, data: rule };
+    if (!result.allowed) {
+      return { success: false, error: result.error };
+    }
+
+    return { success: true, data: result.rule };
   } catch (error) {
     log.error("Error creating global meeting automation", { error: String(error) });
     return { success: false, error: "Failed to create automation" };
@@ -292,7 +283,6 @@ export async function deleteGlobalMeetingAutomation(id: number) {
 // ============================================
 
 const PER_MEETING_TRIGGERS = new Set(["MEETING_REMINDER", "MEETING_CANCELLED"]);
-const MAX_PER_MEETING_AUTOMATIONS = 10;
 
 export async function createPerMeetingAutomation(data: {
   meetingId: string;
@@ -311,31 +301,6 @@ export async function createPerMeetingAutomation(data: {
     const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.automationMutate);
     if (limited) return { success: false, error: "Rate limit exceeded. Please try again later." };
 
-    // Tier-based limit check: global + THIS meeting's per-meeting automations
-    const userPlan = currentUser.isPremium || "basic";
-    const tierLimit = MEETING_AUTOMATION_LIMITS[userPlan] ?? 2;
-    if (tierLimit !== Infinity) {
-      const [globalCount, thisMeetingCount] = await Promise.all([
-        prisma.automationRule.count({
-          where: {
-            companyId: currentUser.companyId,
-            triggerType: { in: ["MEETING_BOOKED", "MEETING_CANCELLED", "MEETING_REMINDER"] },
-            meetingId: null,
-          },
-        }),
-        prisma.automationRule.count({
-          where: {
-            companyId: currentUser.companyId,
-            triggerType: { in: ["MEETING_BOOKED", "MEETING_CANCELLED", "MEETING_REMINDER"] },
-            meetingId: data.meetingId,
-          },
-        }),
-      ]);
-      if (globalCount + thisMeetingCount >= tierLimit) {
-        return { success: false, error: `הגעת למגבלת האוטומציות לפגישות (${tierLimit}). שדרג את התוכנית להוספת אוטומציות נוספות.` };
-      }
-    }
-
     if (!data.triggerType || !PER_MEETING_TRIGGERS.has(data.triggerType)) {
       return { success: false, error: "סוג טריגר לא תקין לאוטומציה לפגישה" };
     }
@@ -343,7 +308,7 @@ export async function createPerMeetingAutomation(data: {
     const validationError = validateAutomationInput(data);
     if (validationError) return { success: false, error: validationError };
 
-    const [meeting, count] = await Promise.all([
+    const [meeting, perMeetingCount] = await Promise.all([
       prisma.meeting.findFirst({
         where: { id: data.meetingId, companyId: currentUser.companyId },
         select: { id: true, status: true },
@@ -356,7 +321,7 @@ export async function createPerMeetingAutomation(data: {
     if (meeting.status === "CANCELLED" || meeting.status === "COMPLETED") {
       return { success: false, error: "לא ניתן להוסיף אוטומציה לפגישה שהושלמה או בוטלה" };
     }
-    if (count >= MAX_PER_MEETING_AUTOMATIONS) {
+    if (perMeetingCount >= MAX_PER_MEETING_AUTOMATIONS) {
       return { success: false, error: `מותר עד ${MAX_PER_MEETING_AUTOMATIONS} אוטומציות לפגישה` };
     }
 
@@ -368,8 +333,13 @@ export async function createPerMeetingAutomation(data: {
     const triggerConfig: any = {};
     if (data.minutesBefore !== undefined) triggerConfig.minutesBefore = data.minutesBefore;
 
-    const rule = await prisma.automationRule.create({
-      data: {
+    // Plan-based per-category limit (atomic transaction)
+    const userTier = currentUser.isPremium || "basic";
+    const result = await checkCategoryLimitAndCreate(
+      currentUser.companyId,
+      userTier,
+      data.triggerType,
+      {
         companyId: currentUser.companyId,
         name: data.name || `אוטומציה לפגישה - ${data.triggerType}`,
         triggerType: data.triggerType as any,
@@ -379,10 +349,13 @@ export async function createPerMeetingAutomation(data: {
         meetingId: data.meetingId,
         createdBy: currentUser.id,
       },
-      select: { id: true },
-    });
+    );
 
-    return { success: true, data: rule };
+    if (!result.allowed) {
+      return { success: false, error: result.error };
+    }
+
+    return { success: true, data: result.rule };
   } catch (error) {
     log.error("Error creating per-meeting automation", { error: String(error) });
     return { success: false, error: "Failed to create automation" };

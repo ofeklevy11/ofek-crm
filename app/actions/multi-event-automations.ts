@@ -392,7 +392,7 @@ export async function calculateMultiEventDuration(
       if (createErr instanceof Prisma.PrismaClientKnownRequestError && createErr.code === "P2002") {
         log.warn("P2002 race: duplicate, updating instead", { automationRuleId, recordId });
         result = await prisma.multiEventDuration.updateMany({
-          where: { automationRuleId, recordId },
+          where: { automationRuleId, recordId, companyId },
           data: {
             eventChain: eventTimestamps,
             eventDeltas: deltas,

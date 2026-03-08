@@ -6,6 +6,7 @@ import {
   updateAutomationRule,
 } from "@/app/actions/automations";
 import { getAllFiles } from "@/app/actions/storage";
+import { getActionsPerAutomationLimit } from "@/lib/plan-limits";
 import { showAlert } from "@/hooks/use-modal";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
@@ -60,7 +61,7 @@ export default function SlaAutomationModal({
   const totalSteps = 3;
 
   // Calculate max actions based on user plan
-  const maxActions = userPlan === "premium" || userPlan === "super" ? 6 : 2;
+  const maxActions = getActionsPerAutomationLimit(userPlan);
 
   // Form State
   const [name, setName] = useState("");

@@ -170,7 +170,7 @@ export default function DashboardClient({
   // Mini Widget Config Modal State
   const [miniConfigModal, setMiniConfigModal] = useState<{
     open: boolean;
-    widgetType: "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES";
+    widgetType: "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES" | "MINI_MEETINGS";
     editWidgetId?: string;
     currentSettings?: any;
   } | null>(null);
@@ -373,26 +373,10 @@ export default function DashboardClient({
     setMiniConfigModal({ open: true, widgetType: "MINI_QUOTES" });
   };
 
-  const handleAddMiniMeetings = async () => {
-    if (!canAddWidget) return;
-    try {
-      const result = await addDashboardWidget({ widgetType: "MINI_MEETINGS" as any, referenceId: "meetings" });
-      if (result.success && result.data) {
-        setWidgets((prev) => [
-          ...prev,
-          {
-            id: result.data!.id,
-            type: "MINI_MEETINGS",
-            referenceId: "meetings",
-            settings: result.data!.settings,
-          },
-        ]);
-        toast.success("מיני פגישות נוסף לדאשבורד");
-      }
-    } catch {
-      toast.error("שגיאה בהוספת וידג'ט");
-    }
+  const handleAddMiniMeetings = () => {
+    setMiniConfigModal({ open: true, widgetType: "MINI_MEETINGS" });
   };
+
 
   const handleMiniConfigConfirm = async (settings: any) => {
     if (!miniConfigModal) return;
@@ -443,7 +427,7 @@ export default function DashboardClient({
     if (!widget) return;
     setMiniConfigModal({
       open: true,
-      widgetType: widget.type as "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES",
+      widgetType: widget.type as "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES" | "MINI_MEETINGS",
       editWidgetId: widgetId,
       currentSettings: widget.settings,
     });
@@ -1243,6 +1227,7 @@ export default function DashboardClient({
                       id={widget.id}
                       onRemove={handleRemoveWidget}
                       settings={(widget as any).settings}
+                      onOpenSettings={handleOpenMiniWidgetSettingsById}
                     />
                   </div>
                 );

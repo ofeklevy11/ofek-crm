@@ -4,8 +4,17 @@ import { createLogger } from "@/lib/logger";
 const log = createLogger("CacheService");
 
 /**
+ * Build the full Redis cache key for a company-scoped metric.
+ * Exported so callers can invalidate specific keys.
+ */
+export function buildCacheKey(companyId: number, keyParts: string[]): string {
+  return `cache:metric:${companyId}:${keyParts.join(":")}`;
+}
+
+/**
  * Retrieves a cached metric or calculates it if missing/stale.
  * Uses Redis instead of PostgreSQL to free up DB connections.
+ * companyId is required to enforce tenant isolation in cache keys.
  *
  * Strategy:
  * 1. Try to read from Redis cache (cheap, no DB connection).
@@ -18,10 +27,12 @@ const log = createLogger("CacheService");
  *    d. If computation fails and stale data exists, return stale data.
  */
 export async function getCachedMetric<T>(
-  key: string,
+  companyId: number,
+  keyParts: string[],
   fetcher: () => Promise<T>,
   ttlSeconds: number = 4 * 60 * 60, // Default: 4 hours
 ): Promise<T> {
+  const key = `${companyId}:${keyParts.join(":")}`;
   const cacheKey = `cache:metric:${key}`;
   const lockKey = `cache:lock:${key}`;
 

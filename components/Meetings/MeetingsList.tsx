@@ -26,7 +26,6 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
-import { Skeleton } from "@/components/ui/skeleton";
 import MeetingStatusBadge from "./MeetingStatusBadge";
 import MeetingDetailModal from "./MeetingDetailModal";
 import { toast } from "sonner";
@@ -127,6 +126,13 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
     return updateMeetingTags(id, tags);
   };
 
+  const handleReschedule = async (id: string, newStart: string, newEnd: string) => {
+    const { rescheduleMeeting } = await import("@/app/actions/meetings");
+    const result = await rescheduleMeeting(id, newStart, newEnd);
+    if (result.success) fetchMeetings();
+    return result;
+  };
+
   const totalPages = Math.ceil(total / limit);
 
   const filteredMeetings = searchQuery.trim()
@@ -141,20 +147,20 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative">
-          <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="חיפוש משתתף..."
-            className="pr-9 w-48 h-9 rounded-lg"
+            className="pr-9 w-48 h-9 rounded-lg bg-white/[0.08] border-white/20 text-white placeholder:text-white/50 focus:ring-blue-500/50"
           />
         </div>
 
         <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-36 rounded-lg h-9">
+          <SelectTrigger className="w-36 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white">
             <SelectValue placeholder="סטטוס" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-[#1a3a2a] border-white/20 text-white/80">
             <SelectItem value="all">כל הסטטוסים</SelectItem>
             <SelectItem value="PENDING">ממתין</SelectItem>
             <SelectItem value="CONFIRMED">מאושר</SelectItem>
@@ -165,10 +171,10 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
         </Select>
 
         <Select value={typeFilter} onValueChange={v => { setTypeFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-44 rounded-lg h-9">
+          <SelectTrigger className="w-44 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white">
             <SelectValue placeholder="סוג פגישה" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-[#1a3a2a] border-white/20 text-white/80">
             <SelectItem value="all">כל הסוגים</SelectItem>
             {meetingTypes.map(t => (
               <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
@@ -177,9 +183,9 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
         </Select>
 
         <div className="flex items-center gap-2 mr-auto">
-          <span className="text-sm text-muted-foreground">{total} פגישות</span>
+          <span className="text-sm text-white/60">{total} פגישות</span>
           {statusFilter !== "all" && (
-            <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => { setStatusFilter("all"); setPage(1); }}>
+            <Badge variant="secondary" className="gap-1 text-xs cursor-pointer bg-white/[0.08] text-white/80 border-white/20 hover:bg-white/[0.15]" onClick={() => { setStatusFilter("all"); setPage(1); }}>
               {statusFilter === "PENDING" ? "ממתין" : statusFilter === "CONFIRMED" ? "מאושר" : statusFilter === "COMPLETED" ? "הושלם" : statusFilter === "CANCELLED" ? "בוטל" : "לא הגיע"}
               <X className="h-3 w-3" />
             </Badge>
@@ -188,37 +194,37 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+      <div className="bg-[#162e22] backdrop-blur-sm rounded-xl border border-white/20 overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="text-right bg-[#F8FAFC] text-xs font-medium text-gray-500">משתתף</TableHead>
-              <TableHead className="text-right bg-[#F8FAFC] text-xs font-medium text-gray-500">סוג</TableHead>
-              <TableHead className="text-right bg-[#F8FAFC] text-xs font-medium text-gray-500">תאריך</TableHead>
-              <TableHead className="text-right bg-[#F8FAFC] text-xs font-medium text-gray-500">שעה</TableHead>
-              <TableHead className="text-right bg-[#F8FAFC] text-xs font-medium text-gray-500">סטטוס</TableHead>
-              <TableHead className="bg-[#F8FAFC]" />
+            <TableRow className="border-white/20 hover:bg-transparent">
+              <TableHead className="text-right bg-white/[0.04] text-sm font-medium text-white/70">משתתף</TableHead>
+              <TableHead className="text-right bg-white/[0.04] text-sm font-medium text-white/70">סוג</TableHead>
+              <TableHead className="text-right bg-white/[0.04] text-sm font-medium text-white/70">תאריך</TableHead>
+              <TableHead className="text-right bg-white/[0.04] text-sm font-medium text-white/70">שעה</TableHead>
+              <TableHead className="text-right bg-white/[0.04] text-sm font-medium text-white/70">סטטוס</TableHead>
+              <TableHead className="bg-white/[0.04]" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
+                <TableRow key={i} className="border-white/20">
                   {Array.from({ length: 6 }).map((_, j) => (
-                    <TableCell key={j}><div className="h-4 w-full mtg-skeleton-shimmer" /></TableCell>
+                    <TableCell key={j}><div className="h-4 w-full mtg-dark-skeleton" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : filteredMeetings.length === 0 ? (
-              <TableRow>
+              <TableRow className="border-white/20">
                 <TableCell colSpan={6} className="py-0">
                   <Empty className="py-10">
                     <EmptyHeader>
                       <EmptyMedia variant="icon">
-                        <CalendarDays className="h-6 w-6" />
+                        <CalendarDays className="h-6 w-6 text-white/60" />
                       </EmptyMedia>
-                      <EmptyTitle>אין פגישות</EmptyTitle>
-                      <EmptyDescription>פגישות שנקבעו יופיעו כאן</EmptyDescription>
+                      <EmptyTitle className="text-white">אין פגישות</EmptyTitle>
+                      <EmptyDescription className="text-white/60">פגישות שנקבעו יופיעו כאן</EmptyDescription>
                     </EmptyHeader>
                   </Empty>
                 </TableCell>
@@ -229,24 +235,24 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
                 return (
                   <TableRow
                     key={m.id}
-                    className="group cursor-pointer hover:bg-[#F8FAFC] transition-colors duration-150 even:bg-gray-50/30 mtg-slide-up"
+                    className="group cursor-pointer hover:bg-white/[0.06] transition-colors duration-150 even:bg-white/[0.02] border-white/20 mtg-slide-up"
                     style={{ animationDelay: `${idx * 40}ms` }}
                     onClick={() => openDetail(m.id)}
                   >
-                    <TableCell className="font-medium">
+                    <TableCell className="font-medium text-white">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-blue-500/15 text-blue-300 flex items-center justify-center text-xs font-bold shrink-0">
                           {m.participantName?.charAt(0) || "?"}
                         </div>
                         <div>
-                          <span className="block">{m.participantName}</span>
+                          <span className="block text-white">{m.participantName}</span>
                           {m.participantEmail && (
-                            <span className="block text-xs text-gray-400">{m.participantEmail}</span>
+                            <span className="block text-xs text-white/60">{m.participantEmail}</span>
                           )}
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-white/80">
                       <div className="flex items-center gap-2">
                         <span
                           className="w-2 h-2 rounded-full shrink-0"
@@ -255,17 +261,17 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
                         {m.meetingType?.name}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-white/80">
                       {formatRelativeDate(start)}
                     </TableCell>
-                    <TableCell dir="ltr" className="text-right">
+                    <TableCell dir="ltr" className="text-right text-white/80">
                       {start.toLocaleTimeString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" })}
                     </TableCell>
                     <TableCell>
                       <MeetingStatusBadge status={m.status} />
                     </TableCell>
                     <TableCell className="w-10">
-                      <Eye className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                      <Eye className="h-4 w-4 text-white/50 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
                     </TableCell>
                   </TableRow>
                 );
@@ -281,19 +287,19 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
           <Button
             variant="outline"
             size="sm"
-            className="h-8 w-8 p-0 rounded-lg"
+            className="h-8 w-8 p-0 rounded-lg bg-white/[0.08] border-white/20 text-white/80 hover:bg-white/[0.15] hover:text-white"
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={page === 1}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <span className="text-sm text-muted-foreground tabular-nums">
+          <span className="text-sm text-white/60 tabular-nums">
             {page} / {totalPages}
           </span>
           <Button
             variant="outline"
             size="sm"
-            className="h-8 w-8 p-0 rounded-lg"
+            className="h-8 w-8 p-0 rounded-lg bg-white/[0.08] border-white/20 text-white/80 hover:bg-white/[0.15] hover:text-white"
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
           >
@@ -311,6 +317,7 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
         onUpdateNotes={handleUpdateNotes}
         onCancel={handleCancel}
         onUpdateTags={handleUpdateTags}
+        onReschedule={handleReschedule}
         userPlan={userPlan}
       />
     </div>

@@ -7,16 +7,18 @@ import {
   Calendar,
   CheckSquare,
   FileText,
+  Users,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { getUsers } from "@/app/actions/users";
+import { getMeetingTypes } from "@/app/actions/meetings";
 
 // ── Types ──────────────────────────────────────────────────────────
 
-type MiniWidgetType = "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES";
+type MiniWidgetType = "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES" | "MINI_MEETINGS";
 
 interface MiniWidgetConfigModalProps {
   widgetType: MiniWidgetType;
@@ -72,6 +74,17 @@ const THEME: Record<MiniWidgetType, {
     btnHover: "hover:bg-indigo-700",
     badge: "bg-indigo-100 text-indigo-700",
   },
+  MINI_MEETINGS: {
+    label: "מיני פגישות",
+    icon: Users,
+    gradient: "from-violet-400 to-purple-500",
+    ring: "ring-violet-400",
+    bg: "bg-violet-50",
+    text: "text-violet-700",
+    btn: "bg-violet-600",
+    btnHover: "hover:bg-violet-700",
+    badge: "bg-violet-100 text-violet-700",
+  },
 };
 
 // ── Preset definitions ─────────────────────────────────────────────
@@ -91,6 +104,14 @@ const TASKS_PRESETS: PresetDef[] = [
   { id: "my_active", label: "המשימות שלי", icon: "👤" },
   { id: "all_active", label: "כל הפעילות", icon: "📋" },
   { id: "due_this_week", label: "לשבוע", icon: "🗓️" },
+];
+
+const MEETINGS_PRESETS: PresetDef[] = [
+  { id: "today", label: "היום", icon: "📅" },
+  { id: "this_week", label: "השבוע", icon: "🗓️" },
+  { id: "7d", label: "7 ימים", icon: "📆" },
+  { id: "14d", label: "14 ימים", icon: "🗃️" },
+  { id: "this_month", label: "החודש", icon: "📋" },
 ];
 
 const QUOTES_PRESETS: PresetDef[] = [
@@ -116,6 +137,16 @@ function getDefaultTasksSettings(preset = "my_active") {
     sortBy: "priority",
     maxTasks: 20,
     showCompleted: false,
+  };
+}
+
+function getDefaultMeetingsSettings(preset = "today") {
+  return {
+    preset,
+    statusFilter: [] as string[],
+    meetingTypeFilter: [] as number[],
+    sortBy: "startTime",
+    maxMeetings: 15,
   };
 }
 
@@ -150,6 +181,10 @@ function advancedFromTasksPreset(preset: string) {
     default:
       return base;
   }
+}
+
+function advancedFromMeetingsPreset(preset: string) {
+  return getDefaultMeetingsSettings(preset);
 }
 
 function advancedFromQuotesPreset(preset: string) {
@@ -356,6 +391,30 @@ export default function MiniWidgetConfigModal({
     currentSettings?.maxQuotes ?? 15
   );
 
+  // Meetings state
+  const [meetPreset, setMeetPreset] = useState(
+    currentSettings?.preset || "today"
+  );
+  const [meetStatusFilter, setMeetStatusFilter] = useState<string[]>(
+    currentSettings?.statusFilter || []
+  );
+  const [meetTypeFilter, setMeetTypeFilter] = useState<number[]>(
+    currentSettings?.meetingTypeFilter || []
+  );
+  const [meetSortBy, setMeetSortBy] = useState(
+    currentSettings?.sortBy || "startTime"
+  );
+  const [meetMaxMeetings, setMeetMaxMeetings] = useState(
+    currentSettings?.maxMeetings ?? 15
+  );
+  const [meetDateFrom, setMeetDateFrom] = useState<string | undefined>(
+    currentSettings?.dateFrom
+  );
+  const [meetDateTo, setMeetDateTo] = useState<string | undefined>(
+    currentSettings?.dateTo
+  );
+  const [meetingTypes, setMeetingTypes] = useState<{ id: number; name: string; color?: string | null }[]>([]);
+
   // ── Preset selection handlers ──────────────────────────────────
 
   const handleCalendarPreset = useCallback((preset: string) => {
@@ -392,6 +451,17 @@ export default function MiniWidgetConfigModal({
     setQuoteMaxQuotes(adv.maxQuotes);
   }, []);
 
+  const handleMeetingsPreset = useCallback((preset: string) => {
+    setMeetPreset(preset);
+    const adv = advancedFromMeetingsPreset(preset);
+    setMeetStatusFilter(adv.statusFilter);
+    setMeetTypeFilter(adv.meetingTypeFilter);
+    setMeetDateFrom(undefined);
+    setMeetDateTo(undefined);
+    setMeetSortBy(adv.sortBy);
+    setMeetMaxMeetings(adv.maxMeetings);
+  }, []);
+
   // Fetch users for "specific user" filter
   useEffect(() => {
     if (canViewAllTasks) {
@@ -401,10 +471,20 @@ export default function MiniWidgetConfigModal({
     }
   }, [canViewAllTasks]);
 
+  // Fetch meeting types for meetings widget
+  useEffect(() => {
+    if (widgetType === "MINI_MEETINGS") {
+      getMeetingTypes().then((res) => {
+        if (res.success && res.data) setMeetingTypes(res.data as any);
+      });
+    }
+  }, [widgetType]);
+
   // Switch to custom when advanced field changes
   const goCustom = useCallback(() => {
     if (widgetType === "MINI_CALENDAR") setCalPreset("custom");
     else if (widgetType === "MINI_TASKS") setTaskPreset("custom");
+    else if (widgetType === "MINI_MEETINGS") setMeetPreset("custom");
     else setQuotePreset("custom");
   }, [widgetType]);
 
@@ -434,6 +514,17 @@ export default function MiniWidgetConfigModal({
         showCompleted: taskShowCompleted,
       };
     }
+    if (widgetType === "MINI_MEETINGS") {
+      return {
+        collapsed: currentSettings?.collapsed ?? false,
+        preset: meetPreset,
+        statusFilter: meetStatusFilter,
+        meetingTypeFilter: meetTypeFilter,
+        ...(meetPreset === "custom" ? { dateFrom: meetDateFrom, dateTo: meetDateTo } : {}),
+        sortBy: meetSortBy,
+        maxMeetings: meetMaxMeetings,
+      };
+    }
     // MINI_QUOTES
     return {
       collapsed: currentSettings?.collapsed ?? false,
@@ -457,18 +548,23 @@ export default function MiniWidgetConfigModal({
       ? CALENDAR_PRESETS
       : widgetType === "MINI_TASKS"
         ? TASKS_PRESETS
-        : QUOTES_PRESETS;
+        : widgetType === "MINI_MEETINGS"
+          ? MEETINGS_PRESETS
+          : QUOTES_PRESETS;
 
   const activePreset =
     widgetType === "MINI_CALENDAR"
       ? calPreset
       : widgetType === "MINI_TASKS"
         ? taskPreset
-        : quotePreset;
+        : widgetType === "MINI_MEETINGS"
+          ? meetPreset
+          : quotePreset;
 
   const handlePresetSelect = (id: string) => {
     if (widgetType === "MINI_CALENDAR") handleCalendarPreset(id);
     else if (widgetType === "MINI_TASKS") handleTasksPreset(id);
+    else if (widgetType === "MINI_MEETINGS") handleMeetingsPreset(id);
     else handleQuotesPreset(id);
   };
 
@@ -768,6 +864,126 @@ export default function MiniWidgetConfigModal({
                     <Switch
                       checked={taskShowCompleted}
                       onCheckedChange={(v) => { setTaskShowCompleted(v); goCustom(); }}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* ── Meetings Advanced ──────────────────── */}
+              {widgetType === "MINI_MEETINGS" && (
+                <>
+                  {/* Status Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">
+                      סינון סטטוס
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      <ToggleChip
+                        label="הכל"
+                        active={meetStatusFilter.length === 0}
+                        color="bg-gray-100 text-gray-700 border-gray-300"
+                        onClick={() => setMeetStatusFilter([])}
+                      />
+                      {[
+                        { id: "PENDING", label: "ממתין", color: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+                        { id: "CONFIRMED", label: "מאושר", color: "bg-blue-100 text-blue-700 border-blue-200" },
+                        { id: "COMPLETED", label: "הושלם", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+                        { id: "CANCELLED", label: "בוטל", color: "bg-red-100 text-red-700 border-red-200" },
+                        { id: "NO_SHOW", label: "לא הגיע", color: "bg-gray-100 text-gray-600 border-gray-200" },
+                      ].map((s) => (
+                        <ToggleChip
+                          key={s.id}
+                          label={s.label}
+                          active={meetStatusFilter.includes(s.id)}
+                          color={s.color}
+                          onClick={() => {
+                            setMeetStatusFilter(toggleArrayItem(meetStatusFilter, s.id));
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Meeting Type Filter */}
+                  {meetingTypes.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-2">
+                        סוג פגישה
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        <ToggleChip
+                          label="הכל"
+                          active={meetTypeFilter.length === 0}
+                          color="bg-gray-100 text-gray-700 border-gray-300"
+                          onClick={() => setMeetTypeFilter([])}
+                        />
+                        {meetingTypes.map((mt) => (
+                          <ToggleChip
+                            key={mt.id}
+                            label={mt.name}
+                            active={meetTypeFilter.includes(mt.id)}
+                            color="bg-violet-100 text-violet-700 border-violet-200"
+                            onClick={() => {
+                              setMeetTypeFilter(
+                                meetTypeFilter.includes(mt.id)
+                                  ? meetTypeFilter.filter((id) => id !== mt.id)
+                                  : [...meetTypeFilter, mt.id]
+                              );
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Custom Date Range */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">
+                      טווח תאריכים מותאם
+                    </label>
+                    <div className="flex gap-2">
+                      <DatePickerField
+                        label="מתאריך"
+                        value={meetDateFrom}
+                        onChange={(v) => { setMeetDateFrom(v); goCustom(); }}
+                      />
+                      <DatePickerField
+                        label="עד תאריך"
+                        value={meetDateTo}
+                        onChange={(v) => { setMeetDateTo(v); goCustom(); }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Sort */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">
+                      מיון לפי
+                    </label>
+                    <SegmentedControl
+                      options={[
+                        { value: "startTime", label: "זמן פגישה" },
+                        { value: "createdAt", label: "תאריך יצירה" },
+                      ]}
+                      value={meetSortBy}
+                      onChange={(v: string) => setMeetSortBy(v)}
+                    />
+                  </div>
+
+                  {/* Max Meetings */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">
+                      מקסימום פגישות
+                    </label>
+                    <SegmentedControl
+                      options={[
+                        { value: 5, label: "5" },
+                        { value: 10, label: "10" },
+                        { value: 15, label: "15" },
+                        { value: 25, label: "25" },
+                      ]}
+                      value={meetMaxMeetings}
+                      onChange={(v: number) => setMeetMaxMeetings(v)}
                     />
                   </div>
                 </>

@@ -9,7 +9,6 @@ import MeetingTypesList from "@/components/Meetings/MeetingTypesList";
 import AvailabilityEditor from "@/components/Meetings/AvailabilityEditor";
 import AvailabilityBlocksList from "@/components/Meetings/AvailabilityBlocksList";
 import GlobalMeetingAutomationsModal from "@/components/Meetings/GlobalMeetingAutomationsModal";
-import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarDays, List, Layers, Clock, Zap } from "lucide-react";
 
 interface MeetingsPageClientProps {
@@ -23,7 +22,7 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
   const [blocks, setBlocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [automationsOpen, setAutomationsOpen] = useState(false);
-  const [stats, setStats] = useState<{ total: number; pending: number; confirmed: number; completed: number } | null>(null);
+  const [stats, setStats] = useState<{ total: number; pending: number; confirmed: number; completed: number; noShow: number } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -54,6 +53,7 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
             pending: d.byStatus?.["PENDING"] || 0,
             confirmed: d.byStatus?.["CONFIRMED"] || 0,
             completed: d.byStatus?.["COMPLETED"] || 0,
+            noShow: d.byStatus?.["NO_SHOW"] || 0,
           });
         }
       } catch {
@@ -91,16 +91,16 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
   if (loading) {
     return (
       <div className="space-y-5">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="rounded-xl border border-gray-100 p-3 space-y-2">
-              <div className="h-3 w-16 mtg-skeleton-shimmer" />
-              <div className="h-7 w-12 mtg-skeleton-shimmer" />
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="rounded-xl border border-white/20 bg-[#162e22] p-3 space-y-2">
+              <div className="h-3 w-16 mtg-dark-skeleton" />
+              <div className="h-7 w-12 mtg-dark-skeleton" />
             </div>
           ))}
         </div>
-        <div className="h-10 w-80 mtg-skeleton-shimmer rounded-xl" />
-        <div className="h-64 w-full mtg-skeleton-shimmer rounded-xl" />
+        <div className="h-10 w-80 mtg-dark-skeleton rounded-xl" />
+        <div className="h-64 w-full mtg-dark-skeleton rounded-xl" />
       </div>
     );
   }
@@ -109,15 +109,16 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
     <>
       <Tabs defaultValue="meetings" dir="rtl">
         {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
             {[
-              { label: "סה״כ החודש", value: stats.total, color: "text-gray-900" },
-              { label: "ממתינות", value: stats.pending, color: "text-amber-600" },
-              { label: "מאושרות", value: stats.confirmed, color: "text-emerald-600" },
-              { label: "הושלמו", value: stats.completed, color: "text-blue-600" },
+              { label: "סה״כ החודש", value: stats.total, color: "text-white/90" },
+              { label: "ממתינות", value: stats.pending, color: "text-amber-400" },
+              { label: "מאושרות", value: stats.confirmed, color: "text-emerald-400" },
+              { label: "הושלמו", value: stats.completed, color: "text-blue-400" },
+              { label: "לא הגיעו", value: stats.noShow, color: "text-red-400" },
             ].map((stat) => (
-              <div key={stat.label} className="bg-white rounded-xl border border-gray-100 p-3">
-                <p className="text-xs text-gray-500 mb-1">{stat.label}</p>
+              <div key={stat.label} className="bg-[#162e22] backdrop-blur-sm rounded-xl border border-white/20 p-3">
+                <p className="text-sm text-white/60 mb-1">{stat.label}</p>
                 <p className={`text-xl font-bold ${stat.color}`}>{stat.value}</p>
               </div>
             ))}
@@ -125,28 +126,28 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
         )}
 
         <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <TabsList className="bg-gray-100/80 p-1 rounded-xl">
-            <TabsTrigger value="meetings" className="gap-1.5 text-gray-500 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900">
+          <TabsList className="bg-white/[0.08] border border-white/20 p-1 rounded-xl">
+            <TabsTrigger value="meetings" className="gap-1.5 text-white/60 data-[state=active]:bg-white/[0.12] data-[state=active]:shadow-none data-[state=active]:text-white">
               <List className="size-4" />
               פגישות
             </TabsTrigger>
-            <TabsTrigger value="calendar" className="gap-1.5 text-gray-500 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900">
+            <TabsTrigger value="calendar" className="gap-1.5 text-white/60 data-[state=active]:bg-white/[0.12] data-[state=active]:shadow-none data-[state=active]:text-white">
               <CalendarDays className="size-4" />
               יומן פגישות
             </TabsTrigger>
             {canManage && (
-              <TabsTrigger value="types" className="gap-1.5 text-gray-500 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900">
+              <TabsTrigger value="types" className="gap-1.5 text-white/60 data-[state=active]:bg-white/[0.12] data-[state=active]:shadow-none data-[state=active]:text-white">
                 <Layers className="size-4" />
                 סוגי פגישות
                 {meetingTypes.length > 0 && (
-                  <span className="mr-1 inline-flex items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none">
+                  <span className="mr-1 inline-flex items-center justify-center rounded-full bg-white/[0.12] px-1.5 py-0.5 text-xs font-medium leading-none text-white/70">
                     {meetingTypes.length}
                   </span>
                 )}
               </TabsTrigger>
             )}
             {canManage && (
-              <TabsTrigger value="availability" className="gap-1.5 text-gray-500 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-gray-900">
+              <TabsTrigger value="availability" className="gap-1.5 text-white/60 data-[state=active]:bg-white/[0.12] data-[state=active]:shadow-none data-[state=active]:text-white">
                 <Clock className="size-4" />
                 זמינות
               </TabsTrigger>
@@ -157,7 +158,7 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5"
+              className="hidden sm:inline-flex gap-1.5 bg-white/[0.08] hover:bg-white/[0.15] text-white/80 border-white/20"
               onClick={() => setAutomationsOpen(true)}
             >
               <Zap className="size-4" />

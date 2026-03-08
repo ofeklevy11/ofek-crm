@@ -32,3 +32,7 @@ export async function getViewAutomations(...args: Parameters<typeof core.getView
 export async function getAnalyticsAutomationsActionCount() {
   return core.getAnalyticsAutomationsActionCount();
 }
+
+export async function getAutomationCategoryUsage() {
+  return core.getAutomationCategoryUsage();
+}

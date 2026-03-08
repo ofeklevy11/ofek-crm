@@ -8,8 +8,9 @@ import AIAutomationCreator from "@/components/AIAutomationCreator";
 import {
   deleteAutomationRule,
   toggleAutomationRule,
+  getAutomationCategoryUsage,
 } from "@/app/actions/automations";
-import { Plus, Trash2, Power, Edit, Zap, Sparkles } from "lucide-react";
+import { Plus, Trash2, Power, Edit, Zap, Sparkles, AlertTriangle } from "lucide-react";
 import { showConfirm } from "@/hooks/use-modal";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
@@ -68,6 +69,19 @@ export default function AutomationsList({
   useEffect(() => {
     setLocalFolders(propsFolders || []);
   }, [propsFolders]);
+
+  // Usage tracking
+  const [usage, setUsage] = useState<{
+    general: { count: number; limit: number };
+  } | null>(null);
+
+  useEffect(() => {
+    getAutomationCategoryUsage().then((res) => {
+      if (res.success && res.data) setUsage({ general: res.data.general });
+    });
+  }, [rules.length]);
+
+  const isAtLimit = usage ? usage.general.count >= usage.general.limit : false;
 
   // State for interactions
   const [activeDropdownId, setActiveDropdownId] = useState<number | null>(null);
@@ -435,16 +449,34 @@ export default function AutomationsList({
       </div>
 
       <div className="flex-1 space-y-6">
+        {isAtLimit && usage && (
+          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            <span>
+              הגעת למגבלת האוטומציות ({usage.general.count}/{usage.general.limit}).
+              מחק אוטומציות קיימות או שדרג את התוכנית כדי ליצור חדשות.
+            </span>
+          </div>
+        )}
+
         <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-          <h2 className="text-lg font-medium text-gray-900">
-            {selectedFolderId
-              ? localFolders.find((f) => f.id === selectedFolderId)?.name
-              : "כל האוטומציות"}
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-medium text-gray-900">
+              {selectedFolderId
+                ? localFolders.find((f) => f.id === selectedFolderId)?.name
+                : "כל האוטומציות"}
+            </h2>
+            {usage && usage.general.limit !== Infinity && (
+              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                {usage.general.count}/{usage.general.limit}
+              </span>
+            )}
+          </div>
           <div className="flex gap-2">
             <button
               onClick={() => setIsAIModalOpen(true)}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transition-all"
+              disabled={isAtLimit}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Sparkles className="ml-2 -mr-1 h-5 w-5" />
               צור אוטומציה עם AI
@@ -454,7 +486,8 @@ export default function AutomationsList({
                 setEditingRule(null);
                 setIsModalOpen(true);
               }}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={isAtLimit}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="ml-2 -mr-1 h-5 w-5" />
               אוטומציה חדשה

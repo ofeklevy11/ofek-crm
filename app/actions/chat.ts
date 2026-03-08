@@ -445,6 +445,7 @@ export async function markAsRead(id: number, type: "user" | "group" = "user") {
 
     await prisma.message.updateMany({
       where: {
+        companyId: currentUser.companyId,
         senderId: parsed.data.id,
         receiverId: currentUser.id,
         read: false,

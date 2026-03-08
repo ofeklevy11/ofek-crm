@@ -35,13 +35,10 @@ import {
 import { getUsers } from "@/app/actions/users";
 import { getAllFiles } from "@/app/actions/storage";
 import { getTableById, getTablesForUser } from "@/app/actions/tables";
+import { AUTOMATION_CATEGORY_LIMITS } from "@/lib/plan-limits";
 
 // Plan limits for analytics automation actions
-const PLAN_LIMITS: Record<string, number> = {
-  basic: 10,
-  premium: 30,
-  super: Infinity,
-};
+const PLAN_LIMITS = AUTOMATION_CATEGORY_LIMITS;
 
 const PLAN_LABELS: Record<string, string> = {
   basic: "בייסיק",

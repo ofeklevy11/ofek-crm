@@ -10,6 +10,7 @@ const WIDGET_TYPES = [
   "MINI_CALENDAR",
   "MINI_TASKS",
   "MINI_QUOTES",
+  "MINI_MEETINGS",
 ] as const;
 
 /** Max JSON size for settings field (10 KB) */

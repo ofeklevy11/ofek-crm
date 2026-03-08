@@ -78,11 +78,7 @@ export const CATEGORY_LABELS: Record<string, { label: string; color: string }> =
 
 // ─── Tier Limits & Selectable Types ─────────────────────────────────────────
 
-export const TIER_ACTION_LIMITS: Record<string, number> = {
-  basic: 2,
-  premium: 6,
-  super: Infinity,
-};
+export { ACTIONS_PER_AUTOMATION_LIMITS as TIER_ACTION_LIMITS } from "@/lib/plan-limits";
 
 export const SELECTABLE_TRIGGER_TYPES = [
   "NEW_RECORD", "RECORD_FIELD_CHANGE", "TASK_STATUS_CHANGE",

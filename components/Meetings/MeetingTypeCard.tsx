@@ -65,7 +65,7 @@ export default function MeetingTypeCard({
   return (
     <Card
       dir="rtl"
-      className={`group relative overflow-hidden transition-all duration-300 hover:shadow-md hover:-translate-y-0.5${!meetingType.isActive ? " opacity-60 saturate-50" : ""}`}
+      className={`group relative overflow-hidden transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 bg-[#162e22] backdrop-blur-sm border-white/20${!meetingType.isActive ? " opacity-60 saturate-50" : ""}`}
     >
       {/* Top gradient bar */}
       <div
@@ -76,7 +76,7 @@ export default function MeetingTypeCard({
       <CardContent className="p-4">
         {/* Header: Name + Active toggle */}
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-base font-semibold truncate">{meetingType.name}</h3>
+          <h3 className="text-base font-semibold truncate text-white">{meetingType.name}</h3>
           <Switch
             checked={meetingType.isActive}
             onCheckedChange={(checked) =>
@@ -87,24 +87,24 @@ export default function MeetingTypeCard({
 
         {/* Duration + Status badges */}
         <div className="flex items-center gap-2 mb-3">
-          <Badge variant="secondary" className="gap-1 bg-gray-100 text-gray-600 rounded-full">
+          <Badge variant="secondary" className="gap-1 bg-white/[0.08] text-white/80 border-white/20 rounded-full">
             <Clock className="size-3" />
             {meetingType.duration} {"דקות"}
           </Badge>
-          <Badge variant="outline" className={meetingType.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-gray-100 text-gray-500 border-gray-200"}>
+          <Badge variant="outline" className={meetingType.isActive ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-white/[0.08] text-white/60 border-white/20"}>
             {meetingType.isActive ? "פעיל" : "לא פעיל"}
           </Badge>
         </div>
 
         {/* Description */}
         {meetingType.description && (
-          <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed mb-3">
+          <p className="text-sm text-white/60 line-clamp-2 leading-relaxed mb-3">
             {meetingType.description}
           </p>
         )}
 
         {/* Buffer & limits info */}
-        <div className="text-[11px] text-gray-400 space-y-0.5 mb-3">
+        <div className="text-xs text-white/60 space-y-0.5 mb-3">
           {(meetingType.bufferBefore > 0 || meetingType.bufferAfter > 0) && (
             <p>
               {"חיץ: "}
@@ -127,11 +127,11 @@ export default function MeetingTypeCard({
         </div>
 
         {/* Action buttons */}
-        <div className="flex items-center gap-1 pt-2 border-t">
+        <div className="flex items-center gap-1 pt-2 border-t border-white/20">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={handleCopyLink}>
-                {copied ? <Check className="size-4 text-green-500" /> : <Link className="size-4" />}
+              <Button variant="ghost" size="icon-sm" className="text-white/80 hover:text-white hover:bg-white/[0.08]" onClick={handleCopyLink}>
+                {copied ? <Check className="size-4 text-green-400" /> : <Link className="size-4" />}
               </Button>
             </TooltipTrigger>
             <TooltipContent>העתק קישור שיתוף</TooltipContent>
@@ -139,7 +139,7 @@ export default function MeetingTypeCard({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={() => onEdit(meetingType.id)}>
+              <Button variant="ghost" size="icon-sm" className="text-white/80 hover:text-white hover:bg-white/[0.08]" onClick={() => onEdit(meetingType.id)}>
                 <Pencil className="size-4" />
               </Button>
             </TooltipTrigger>
@@ -150,20 +150,20 @@ export default function MeetingTypeCard({
             <Tooltip>
               <TooltipTrigger asChild>
                 <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" className="text-destructive hover:text-destructive">
+                  <Button variant="ghost" size="icon-sm" className="text-red-400 hover:text-red-300 hover:bg-white/[0.08]">
                     <Trash2 className="size-4" />
                   </Button>
                 </AlertDialogTrigger>
               </TooltipTrigger>
               <TooltipContent>מחק</TooltipContent>
             </Tooltip>
-            <AlertDialogContent dir="rtl">
+            <AlertDialogContent dir="rtl" className="bg-[#1a3a2a] border-white/20 text-white">
               <AlertDialogHeader>
-                <AlertDialogTitle>מחיקת סוג פגישה</AlertDialogTitle>
-                <AlertDialogDescription>האם למחוק את &quot;{meetingType.name}&quot;? פעולה זו אינה ניתנת לביטול.</AlertDialogDescription>
+                <AlertDialogTitle className="text-white">מחיקת סוג פגישה</AlertDialogTitle>
+                <AlertDialogDescription className="text-white/50">האם למחוק את &quot;{meetingType.name}&quot;? פעולה זו אינה ניתנת לביטול.</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>ביטול</AlertDialogCancel>
+                <AlertDialogCancel className="bg-white/[0.08] border-white/20 text-white/80 hover:bg-white/[0.15] hover:text-white">ביטול</AlertDialogCancel>
                 <AlertDialogAction onClick={() => onDelete(meetingType.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">מחק</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

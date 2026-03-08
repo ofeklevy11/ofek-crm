@@ -201,11 +201,11 @@ async function processStatsServer(
 ) {
   // Stats view usually shows "New this week/month" or total count
 
-  const cacheKey = `view_stats:${companyId}:${tableId}:${stableKey(config)}`;
   const ttl = forceRefresh ? 0 : 4 * 60 * 60; // 0 seconds vs 4 hours
 
   return await getCachedMetric(
-    cacheKey,
+    companyId,
+    ["view_stats", String(tableId), stableKey(config)],
     async () => {
       // We need two counts:
       // 1. Total filtered count (based on regular filters)
@@ -275,15 +275,14 @@ async function processAggregationServer(
   // Generate a unique key for this specific view configuration
   // We use JSON.stringify(config) to capture all filters, fields, and settings.
   // This ensures that if the user changes ANY filter, they get a fresh result.
-  const cacheKey = `view_agg:${companyId}:${tableId}:${stableKey(config)}`;
-
   // Redis TTL controls cache lifetime. ttl=0 bypasses cache (forces recalculation).
   // Normal ttl=4h means Redis will auto-expire the key after 4 hours.
   const ttl = forceRefresh ? 0 : 4 * 60 * 60; // 0 seconds vs 4 hours
 
   // Wrap the heavy database work in our cache service
   return await getCachedMetric(
-    cacheKey,
+    companyId,
+    ["view_agg", String(tableId), stableKey(config)],
     async () => {
       // Check for Group By
       if (config.groupByField && SAFE_FIELD_NAME.test(config.groupByField)) {

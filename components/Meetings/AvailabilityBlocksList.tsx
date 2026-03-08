@@ -124,10 +124,10 @@ export default function AvailabilityBlocksList({
     <div dir="rtl">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base font-semibold">חסימות זמינות</h3>
+        <h3 className="text-base font-semibold text-white">חסימות זמינות</h3>
         <Button
           size="sm"
-          className="gap-1.5"
+          className="gap-1.5 bg-blue-600 hover:bg-blue-700"
           onClick={() => setDialogOpen(true)}
         >
           <Plus className="size-4" />
@@ -140,10 +140,10 @@ export default function AvailabilityBlocksList({
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">
-              <CalendarOff className="h-6 w-6" />
+              <CalendarOff className="h-6 w-6 text-white/60" />
             </EmptyMedia>
-            <EmptyTitle>אין חסימות</EmptyTitle>
-            <EmptyDescription>הוסיפו חסימות זמינות לתאריכים שבהם אינכם זמינים</EmptyDescription>
+            <EmptyTitle className="text-white">אין חסימות</EmptyTitle>
+            <EmptyDescription className="text-white/60">הוסיפו חסימות זמינות לתאריכים שבהם אינכם זמינים</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -151,14 +151,14 @@ export default function AvailabilityBlocksList({
           {blocks.map((block, idx) => (
             <div
               key={block.id}
-              className="flex items-center justify-between rounded-xl border border-r-4 border-r-red-300 bg-background p-3 hover:shadow-sm transition-shadow animate-cascade-in"
+              className="flex items-center justify-between rounded-xl border border-white/20 border-r-4 border-r-red-400/60 bg-[#162e22] backdrop-blur-sm p-3 hover:bg-white/[0.04] transition-shadow animate-cascade-in"
               style={{ animationDelay: `${idx * 60}ms` }}
             >
               <div className="min-w-0 flex-1">
                 {block.title && (
-                  <p className="text-sm font-medium truncate">{block.title}</p>
+                  <p className="text-sm font-medium truncate text-white">{block.title}</p>
                 )}
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-white/60">
                   {formatHebrewDate(block.startDate)}
                   {" — "}
                   {formatHebrewDate(block.endDate)}
@@ -168,20 +168,20 @@ export default function AvailabilityBlocksList({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="text-destructive hover:text-destructive shrink-0 mr-2"
+                  className="text-red-400 hover:text-red-300 hover:bg-white/[0.08] shrink-0 mr-2"
                   disabled={deletingId === block.id}
                   onClick={() => setConfirmDeleteId(block.id)}
                   title="מחק חסימה"
                 >
                   <Trash2 className="size-4" />
                 </Button>
-                <AlertDialogContent dir="rtl">
+                <AlertDialogContent dir="rtl" className="bg-[#1a3a2a] border-white/20 text-white">
                   <AlertDialogHeader>
-                    <AlertDialogTitle>מחיקת חסימה</AlertDialogTitle>
-                    <AlertDialogDescription>האם למחוק את החסימה{block.title ? ` "${block.title}"` : ""}?</AlertDialogDescription>
+                    <AlertDialogTitle className="text-white">מחיקת חסימה</AlertDialogTitle>
+                    <AlertDialogDescription className="text-white/50">האם למחוק את החסימה{block.title ? ` "${block.title}"` : ""}?</AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>ביטול</AlertDialogCancel>
+                    <AlertDialogCancel className="bg-white/[0.08] border-white/20 text-white/80 hover:bg-white/[0.15] hover:text-white">ביטול</AlertDialogCancel>
                     <AlertDialogAction onClick={() => handleDelete(block.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">מחק</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -199,46 +199,49 @@ export default function AvailabilityBlocksList({
           if (!open) resetForm();
         }}
       >
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-sm bg-[#1a3a2a] border-white/20 text-white">
           <DialogHeader>
-            <DialogTitle>הוסף חסימה</DialogTitle>
+            <DialogTitle className="text-white">הוסף חסימה</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3 py-2">
             <div>
-              <label className="text-sm font-medium mb-1 block">
+              <label className="text-sm font-medium mb-1 block text-white/80">
                 כותרת (אופציונלי)
               </label>
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="חופשה, חג..."
+                className="bg-white/[0.08] border-white/20 text-white placeholder:text-white/50 focus:ring-blue-500/50"
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block">
+              <label className="text-sm font-medium mb-1 block text-white/80">
                 תאריך התחלה
               </label>
               <Input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
+                className="bg-white/[0.08] border-white/20 text-white focus:ring-blue-500/50"
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block">
+              <label className="text-sm font-medium mb-1 block text-white/80">
                 תאריך סיום
               </label>
               <Input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
+                className="bg-white/[0.08] border-white/20 text-white focus:ring-blue-500/50"
               />
             </div>
           </div>
 
           <DialogFooter>
-            <Button onClick={handleAdd} disabled={loading} className="gap-1.5">
+            <Button onClick={handleAdd} disabled={loading} className="gap-1.5 bg-blue-600 hover:bg-blue-700">
               {loading ? "שומר..." : "שמור"}
             </Button>
           </DialogFooter>

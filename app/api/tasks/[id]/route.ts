@@ -209,7 +209,7 @@ async function handlePATCH(
             taskId: updated.id,
             taskTitle: updated.title,
             fromStatus: existingTask.status,
-            toStatus: data.status,
+            toStatus: data.status!,
             companyId: user.companyId,
           },
         });

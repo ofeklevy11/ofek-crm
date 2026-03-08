@@ -58,9 +58,48 @@ const basePrisma =
     log: process.env.NODE_ENV === "test" ? [] : ["error"],
   });
 
+// --- Tenant isolation enforcement ---
+// Models that don't have companyId field (exempt from isolation check).
+// Child models derive isolation via CASCADE from parent.
+const TENANT_EXEMPT_MODELS = new Set([
+  "Company",               // IS the tenant
+  "WorkflowStage",         // child of Workflow (CASCADE)
+  "QuoteItem",             // child of Quote (CASCADE)
+  "TicketComment",         // child of Ticket (CASCADE)
+  "TicketActivityLog",     // child of Ticket (CASCADE)
+  "NurtureSubscriber",     // child of NurtureList (CASCADE)
+  "PaymentMethodInternal", // child of Client (CASCADE)
+  "TaskSheetItem",         // child of TaskSheet (CASCADE)
+]);
+
+const CHECKED_OPERATIONS = new Set([
+  "findFirst", "findFirstOrThrow", "findUnique", "findUniqueOrThrow", "findMany",
+  "update", "updateMany", "delete", "deleteMany",
+  "upsert", "count", "groupBy", "aggregate",
+]);
+
+function hasCompanyIdInWhere(args: any): boolean {
+  if (!args?.where) return false;
+  return JSON.stringify(args.where).includes('"companyId"');
+}
+
 export const prisma = basePrisma.$extends({
   query: {
     async $allOperations({ operation, model, args, query }) {
+      // Tenant isolation: ensure companyId is present in WHERE for tenant-scoped models
+      if (model && !TENANT_EXEMPT_MODELS.has(model) && CHECKED_OPERATIONS.has(operation)) {
+        if (!hasCompanyIdInWhere(args)) {
+          const msg = `TENANT_ISOLATION: companyId missing in ${model}.${operation}`;
+          if (process.env.NODE_ENV === "test") {
+            throw new Error(msg);
+          } else if (process.env.NODE_ENV === "development") {
+            console.error(msg, new Error().stack);
+          } else {
+            console.warn(`[tenant-isolation] ${msg}`);
+          }
+        }
+      }
+
       let lastError: unknown;
 
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {

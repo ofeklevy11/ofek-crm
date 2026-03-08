@@ -1,5 +1,5 @@
-/** Maximum automation rules a single company can create */
-export const MAX_RULES_PER_COMPANY = 500;
+/** @deprecated Use MAX_RULES_PER_COMPANY from @/lib/plan-limits instead */
+export { MAX_RULES_PER_COMPANY } from "@/lib/plan-limits";
 
 /** Maximum serialized size for triggerConfig/actionConfig (50KB) */
 const MAX_CONFIG_SIZE = 50 * 1024;

@@ -95,7 +95,7 @@ export const processTaskStatusAutomation = inngest.createFunction(
     const { processTaskStatusChange } = await import(
       "@/app/actions/automations-core"
     );
-    await processTaskStatusChange(taskId, taskTitle, fromStatus, toStatus, companyId);
+    await processTaskStatusChange(String(taskId), taskTitle ?? "", fromStatus, toStatus, companyId);
 
     // Trigger background analytics refresh (debounced per company)
     if (companyId) {

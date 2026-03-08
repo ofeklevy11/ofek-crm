@@ -357,7 +357,7 @@ export async function updateTask(
             taskId: task.id,
             taskTitle: task.title,
             fromStatus: existingTask.status,
-            toStatus: validated.status,
+            toStatus: validated.status!,
             companyId: user.companyId,
           },
         });
