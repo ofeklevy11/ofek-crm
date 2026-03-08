@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import Navbar from "@/components/Navbar";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import MobileFeatureDisclaimer from "@/components/MobileFeatureDisclaimer";
+import MiniFooter from "@/components/MiniFooter";
 import { ModalProvider } from "@/components/ui/modal-provider";
 
 const rubik = Rubik({
@@ -43,6 +44,7 @@ export default function RootLayout({
           <Navbar />
         </Suspense>
         <main>{children}</main>
+        <MiniFooter />
         <SonnerToaster />
         <ModalProvider />
       </body>

@@ -370,6 +370,14 @@ export default function RegisterForm() {
         </div>
       )}
 
+      <p className="text-xs text-center text-muted-foreground">
+        בהרשמה, אתה מסכים ל
+        <Link href="/terms" prefetch={false} className="underline hover:text-foreground transition-colors">תנאי השימוש</Link>
+        {" "}ול
+        <Link href="/privacy" prefetch={false} className="underline hover:text-foreground transition-colors">מדיניות הפרטיות</Link>
+        {" "}שלנו.
+      </p>
+
       <Button
         type="submit"
         disabled={loading}

@@ -72,6 +72,8 @@ export function middleware(request: NextRequest) {
     "/api/auth/logout",
     "/api/auth/register",
     "/api/auth/verify-email",
+    "/terms",
+    "/privacy",
   ];
 
   // Check if the path is strictly one of the public paths

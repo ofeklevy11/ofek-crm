@@ -12,7 +12,7 @@ const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
 const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 
-const SCOPE = "https://www.googleapis.com/auth/calendar.events.readonly";
+const SCOPE = "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email";
 const STATE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
 
 function getRedirectUri(): string {

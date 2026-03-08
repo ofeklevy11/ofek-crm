@@ -164,7 +164,9 @@
       "Bash(__NEW_LINE_c00a71eb48bc2e08__ for:*)",
       "Bash(__NEW_LINE_fb36c35971dba072__ for:*)",
       "Bash(npm test:*)",
-      "Bash(DATABASE_URL=\"postgresql://user:pass@localhost:5432/testdb\" DIRECT_URL=\"postgresql://user:pass@localhost:5432/testdb\" NEXTAUTH_SECRET=\"test-secret\" REDIS_URL=\"redis://localhost:6379\" INNGEST_EVENT_KEY=\"test\" INNGEST_SIGNING_KEY=\"test\" pnpm vitest:*)"
+      "Bash(DATABASE_URL=\"postgresql://user:pass@localhost:5432/testdb\" DIRECT_URL=\"postgresql://user:pass@localhost:5432/testdb\" NEXTAUTH_SECRET=\"test-secret\" REDIS_URL=\"redis://localhost:6379\" INNGEST_EVENT_KEY=\"test\" INNGEST_SIGNING_KEY=\"test\" pnpm vitest:*)",
+      "Bash(openssl rand:*)",
+      "Bash(\"C:/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/.env\":*)"
     ]
   }
 }
