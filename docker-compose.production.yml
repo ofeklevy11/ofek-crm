@@ -21,7 +21,7 @@ x-app-common: &app-common
   environment:
     DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
     REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379"
-    INNGEST_DEV: "false"
+    INNGEST_DEV: "true"
     INNGEST_BASE_URL: "http://inngest:8288"
   networks:
     internal:

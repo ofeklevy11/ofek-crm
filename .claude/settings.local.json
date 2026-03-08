@@ -159,7 +159,8 @@
       "Bash(pnpm vitest:*)",
       "Bash(pnpm dotenv:*)",
       "Bash(pnpm lint:*)",
-      "Bash(DATABASE_URL=\"postgresql://x:x@localhost:5432/x\" REDIS_URL=\"redis://localhost:6379\" SESSION_SECRET=\"test\" NEXT_PUBLIC_APP_URL=\"http://localhost:3000\" CRON_SECRET=\"test\" INNGEST_DEV=\"true\" UPLOADTHING_TOKEN=\"test\" OPENROUTER_API_KEY=\"test\" PDFMONKEY_TEMPLATE_ID=\"test\" PDFMONKEY_API_KEY=\"test\" WHATSAPP_APP_ID=\"test\" NEXT_PUBLIC_WHATSAPP_APP_ID=\"test\" WHATSAPP_APP_SECRET=\"test\" WHATSAPP_TOKEN_ENCRYPTION_KEY=\"aaaabbbbccccddddeeeeffffgggghhhh\" NEXT_PUBLIC_WHATSAPP_CONFIG_ID=\"test\" WHATSAPP_VERIFY_TOKEN=\"test\" WHATSAPP_ACCESS_TOKEN=\"test\" pnpm vitest:*)"
+      "Bash(DATABASE_URL=\"postgresql://x:x@localhost:5432/x\" REDIS_URL=\"redis://localhost:6379\" SESSION_SECRET=\"test\" NEXT_PUBLIC_APP_URL=\"http://localhost:3000\" CRON_SECRET=\"test\" INNGEST_DEV=\"true\" UPLOADTHING_TOKEN=\"test\" OPENROUTER_API_KEY=\"test\" PDFMONKEY_TEMPLATE_ID=\"test\" PDFMONKEY_API_KEY=\"test\" WHATSAPP_APP_ID=\"test\" NEXT_PUBLIC_WHATSAPP_APP_ID=\"test\" WHATSAPP_APP_SECRET=\"test\" WHATSAPP_TOKEN_ENCRYPTION_KEY=\"aaaabbbbccccddddeeeeffffgggghhhh\" NEXT_PUBLIC_WHATSAPP_CONFIG_ID=\"test\" WHATSAPP_VERIFY_TOKEN=\"test\" WHATSAPP_ACCESS_TOKEN=\"test\" pnpm vitest:*)",
+      "Bash(docker run:*)"
     ]
   }
 }
