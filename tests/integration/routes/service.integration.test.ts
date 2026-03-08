@@ -27,6 +27,7 @@ vi.mock("@/lib/notifications-internal", () => ({
 
 vi.mock("@/lib/services/cache-service", () => ({
   getCachedMetric: vi.fn((_companyId: number, _keyParts: string[], fetcher: () => Promise<any>) => fetcher()),
+  buildCacheKey: (companyId: number, keyParts: string[]) => `cache:metric:${companyId}:${keyParts.join(":")}`,
 }));
 
 vi.mock("next/cache", () => ({
