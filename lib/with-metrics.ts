@@ -18,7 +18,7 @@ export function withMetrics<T extends RouteHandler>(route: string, handler: T): 
     } finally {
       const duration = (performance.now() - start) / 1000;
       const labels = {
-        method: request.method,
+        method: request?.method ?? "UNKNOWN",
         route,
         status_code: String(statusCode),
       };
