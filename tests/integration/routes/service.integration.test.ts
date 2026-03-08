@@ -26,7 +26,7 @@ vi.mock("@/lib/notifications-internal", () => ({
 }));
 
 vi.mock("@/lib/services/cache-service", () => ({
-  getCachedMetric: vi.fn((_key: string, fetcher: () => Promise<any>) => fetcher()),
+  getCachedMetric: vi.fn((_companyId: number, _keyParts: string[], fetcher: () => Promise<any>) => fetcher()),
 }));
 
 vi.mock("next/cache", () => ({
@@ -775,8 +775,8 @@ describe("createTicket", () => {
     await createTicket(VALID_CREATE);
 
     expect(redis.del).toHaveBeenCalledWith(
-      `cache:metric:service:stats:${companyA}`,
-      `cache:metric:service:sla-policies:${companyA}`,
+      `cache:metric:${companyA}:service:stats`,
+      `cache:metric:${companyA}:service:sla-policies`,
     );
   });
 
@@ -1117,8 +1117,8 @@ describe("updateTicket", () => {
     await updateTicket(ticket.id, { title: "בדיקת Redis" });
 
     expect(redis.del).toHaveBeenCalledWith(
-      `cache:metric:service:stats:${companyA}`,
-      `cache:metric:service:sla-policies:${companyA}`,
+      `cache:metric:${companyA}:service:stats`,
+      `cache:metric:${companyA}:service:sla-policies`,
     );
   });
 
@@ -1328,8 +1328,8 @@ describe("deleteTicket", () => {
     await deleteTicket(ticket.id);
 
     expect(redis.del).toHaveBeenCalledWith(
-      `cache:metric:service:stats:${companyA}`,
-      `cache:metric:service:sla-policies:${companyA}`,
+      `cache:metric:${companyA}:service:stats`,
+      `cache:metric:${companyA}:service:sla-policies`,
     );
   });
 
@@ -1795,8 +1795,8 @@ describe("SLA Policies", () => {
     ]);
 
     expect(redis.del).toHaveBeenCalledWith(
-      `cache:metric:service:stats:${companyA}`,
-      `cache:metric:service:sla-policies:${companyA}`,
+      `cache:metric:${companyA}:service:stats`,
+      `cache:metric:${companyA}:service:sla-policies`,
     );
     expect(revalidatePath).toHaveBeenCalledWith("/service");
   });
@@ -1806,8 +1806,8 @@ describe("SLA Policies", () => {
     await updateSlaPolicy({ priority: "MEDIUM", responseTimeMinutes: 30, resolveTimeMinutes: 120 });
 
     expect(redis.del).toHaveBeenCalledWith(
-      `cache:metric:service:stats:${companyA}`,
-      `cache:metric:service:sla-policies:${companyA}`,
+      `cache:metric:${companyA}:service:stats`,
+      `cache:metric:${companyA}:service:sla-policies`,
     );
   });
 

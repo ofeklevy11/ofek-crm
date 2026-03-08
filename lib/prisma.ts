@@ -87,7 +87,16 @@ const WARN_OPERATIONS = new Set([
 
 function hasCompanyIdInWhere(args: any): boolean {
   if (!args?.where) return false;
-  return JSON.stringify(args.where).includes('"companyId"');
+  // Check for companyId key recursively without JSON.stringify (avoids BigInt serialization errors)
+  function hasKey(obj: any): boolean {
+    if (!obj || typeof obj !== "object") return false;
+    if ("companyId" in obj) return true;
+    for (const val of Object.values(obj)) {
+      if (hasKey(val)) return true;
+    }
+    return false;
+  }
+  return hasKey(args.where);
 }
 
 export const prisma = basePrisma.$extends({

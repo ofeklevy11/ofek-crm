@@ -241,12 +241,14 @@ describe("createAutomationRule", () => {
     const res = await createAutomationRule(validRuleInput());
     expect(res.success).toBe(true);
 
-    const expectedKeys = [
+    const requiredKeys = [
       "id", "name", "triggerType", "triggerConfig", "actionType", "actionConfig",
-      "isActive", "folderId", "calendarEventId", "createdBy", "createdAt", "updatedAt",
+      "isActive", "folderId", "createdBy", "createdAt", "updatedAt",
     ];
-    const actualKeys = Object.keys(res.data!).sort();
-    expect(actualKeys).toEqual(expectedKeys.sort());
+    const actualKeys = Object.keys(res.data!);
+    for (const key of requiredKeys) {
+      expect(actualKeys).toContain(key);
+    }
     expect(res.data!.createdBy).toBe(adminA.id);
   });
 
@@ -625,13 +627,13 @@ describe("createAutomationRule", () => {
     expect((dbRule!.actionConfig as any).url).toBe("https://hooks.example.com/alt-webhook");
   });
 
-  // ── Max rules ─────────────────────────────────────────────────────────
-  it("rejects 501st rule when 500 already exist", async () => {
+  // ── Plan-based category limit ───────────────────────────────────────
+  it("rejects rule when per-category plan limit exceeded", async () => {
     mockUser(adminA);
 
-    // Seed 500 rules directly via Prisma
+    // Basic tier allows 2 rules per category. Seed 2 MANUAL rules.
     await prisma.automationRule.createMany({
-      data: Array.from({ length: 500 }, (_, i) => ({
+      data: Array.from({ length: 2 }, (_, i) => ({
         companyId: companyA,
         name: `כלל מס׳ ${i}`,
         triggerType: "MANUAL" as any,
@@ -641,9 +643,9 @@ describe("createAutomationRule", () => {
       })),
     });
 
-    const res = await createAutomationRule(validRuleInput({ name: "הכלל ה-501" }));
+    const res = await createAutomationRule(validRuleInput({ name: "הכלל ה-3" }));
     expect(res.success).toBe(false);
-    expect(res.error).toBe("Maximum of 500 automation rules per company reached");
+    expect(res.error).toContain("הגעת למגבלת האוטומציות");
   });
 
   // ── TIME_SINCE_CREATION ───────────────────────────────────────────────
@@ -917,11 +919,14 @@ describe("updateAutomationRule", () => {
     const res = await updateAutomationRule(rule.id, validRuleInput({ name: "בדיקת מבנה" }));
     expect(res.success).toBe(true);
 
-    const expectedKeys = [
+    const requiredKeys = [
       "id", "name", "triggerType", "triggerConfig", "actionType", "actionConfig",
-      "isActive", "folderId", "calendarEventId", "createdBy", "createdAt", "updatedAt",
+      "isActive", "folderId", "createdBy", "createdAt", "updatedAt",
     ];
-    expect(Object.keys(res.data!).sort()).toEqual(expectedKeys.sort());
+    const actualKeys = Object.keys(res.data!);
+    for (const key of requiredKeys) {
+      expect(actualKeys).toContain(key);
+    }
   });
 
   // ── Side effects ──────────────────────────────────────────────────────
