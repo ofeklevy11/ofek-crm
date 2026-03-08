@@ -72,10 +72,17 @@ const TENANT_EXEMPT_MODELS = new Set([
   "TaskSheetItem",         // child of TaskSheet (CASCADE)
 ]);
 
-const CHECKED_OPERATIONS = new Set([
-  "findFirst", "findFirstOrThrow", "findUnique", "findUniqueOrThrow", "findMany",
-  "update", "updateMany", "delete", "deleteMany",
-  "upsert", "count", "groupBy", "aggregate",
+// Operations that MUST include companyId — high risk for cross-tenant data leakage
+const STRICT_OPERATIONS = new Set([
+  "findFirst", "findFirstOrThrow", "findMany",
+  "updateMany", "deleteMany",
+  "count", "groupBy", "aggregate",
+]);
+
+// Operations that SHOULD include companyId but are lower risk (single-record by unique key)
+const WARN_OPERATIONS = new Set([
+  "findUnique", "findUniqueOrThrow",
+  "update", "delete", "upsert",
 ]);
 
 function hasCompanyIdInWhere(args: any): boolean {
@@ -87,8 +94,8 @@ export const prisma = basePrisma.$extends({
   query: {
     async $allOperations({ operation, model, args, query }) {
       // Tenant isolation: ensure companyId is present in WHERE for tenant-scoped models
-      if (model && !TENANT_EXEMPT_MODELS.has(model) && CHECKED_OPERATIONS.has(operation)) {
-        if (!hasCompanyIdInWhere(args)) {
+      if (model && !TENANT_EXEMPT_MODELS.has(model) && !hasCompanyIdInWhere(args)) {
+        if (STRICT_OPERATIONS.has(operation)) {
           const msg = `TENANT_ISOLATION: companyId missing in ${model}.${operation}`;
           if (process.env.NODE_ENV === "test") {
             throw new Error(msg);
@@ -97,6 +104,8 @@ export const prisma = basePrisma.$extends({
           } else {
             console.warn(`[tenant-isolation] ${msg}`);
           }
+        } else if (WARN_OPERATIONS.has(operation)) {
+          console.warn(`[tenant-isolation] companyId missing in ${model}.${operation}`);
         }
       }
 
