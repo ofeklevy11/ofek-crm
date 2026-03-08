@@ -152,12 +152,12 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="חיפוש משתתף..."
-            className="pr-9 w-48 h-9 rounded-lg bg-white/[0.08] border-white/20 text-white placeholder:text-white/50 focus:ring-blue-500/50"
+            className="pr-9 w-full sm:w-48 h-9 rounded-lg bg-white/[0.08] border-white/20 text-white placeholder:text-white/50 focus:ring-blue-500/50"
           />
         </div>
 
         <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-36 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white">
+          <SelectTrigger className="w-full sm:w-36 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white">
             <SelectValue placeholder="סטטוס" />
           </SelectTrigger>
           <SelectContent className="bg-[#1a3a2a] border-white/20 text-white/80">
@@ -171,7 +171,7 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
         </Select>
 
         <Select value={typeFilter} onValueChange={v => { setTypeFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-44 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white">
+          <SelectTrigger className="w-full sm:w-44 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white">
             <SelectValue placeholder="סוג פגישה" />
           </SelectTrigger>
           <SelectContent className="bg-[#1a3a2a] border-white/20 text-white/80">
@@ -194,7 +194,7 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
       </div>
 
       {/* Table */}
-      <div className="bg-[#162e22] backdrop-blur-sm rounded-xl border border-white/20 overflow-hidden">
+      <div className="bg-[#162e22] backdrop-blur-sm rounded-xl border border-white/20 overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="border-white/20 hover:bg-transparent">

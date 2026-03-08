@@ -126,6 +126,7 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
         )}
 
         <div className="flex items-center gap-3 mb-4 flex-wrap">
+          <div className="overflow-x-auto scrollbar-hide max-w-full">
           <TabsList className="bg-white/[0.08] border border-white/20 p-1 rounded-xl">
             <TabsTrigger value="meetings" className="gap-1.5 text-white/60 data-[state=active]:bg-white/[0.12] data-[state=active]:shadow-none data-[state=active]:text-white">
               <List className="size-4" />
@@ -153,6 +154,7 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
               </TabsTrigger>
             )}
           </TabsList>
+          </div>
 
           {canManage && (
             <Button
