@@ -60,6 +60,13 @@ async function handleGET(request: NextRequest) {
 
     // Exchange code for tokens
     const tokens = await exchangeCodeForTokens(code);
+
+    // Validate that drive scope was granted (Google granular consent can omit it)
+    const grantedScope = tokens.scope || "";
+    if (!grantedScope.includes("drive")) {
+      return redirectWithParam("driveError=missing_scope");
+    }
+
     if (!tokens.refresh_token) {
       return redirectWithParam("driveError=no_refresh_token");
     }

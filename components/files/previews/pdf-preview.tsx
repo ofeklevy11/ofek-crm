@@ -83,7 +83,10 @@ export function PdfPreview({ fileId }: PdfPreviewProps) {
           <LazyDocument
             file={url}
             onLoadSuccess={({ numPages: n }) => setNumPages(n)}
-            onLoadError={() => setError("Failed to render PDF")}
+            onLoadError={(err) => {
+              console.error("PDF render error:", err);
+              setError("Failed to render PDF");
+            }}
             loading={<Skeleton className="w-[400px] h-[500px] rounded-lg m-4" />}
           >
             <LazyPage

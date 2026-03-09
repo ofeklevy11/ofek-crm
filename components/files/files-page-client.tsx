@@ -15,6 +15,7 @@ const DRIVE_ERROR_MESSAGES: Record<string, string> = {
   token_exchange_failed: "שגיאה בהחלפת קוד האימות. נסה שוב.",
   missing_state: "פרטי האימות חסרים. נסה להתחבר שוב.",
   invalid_state: "פרטי האימות אינם תקינים. נסה להתחבר שוב.",
+  missing_scope: "לא ניתנה הרשאה ל-Google Drive. נסה להתחבר שוב ואשר גישה לדרייב.",
 };
 
 interface DriveStatus {

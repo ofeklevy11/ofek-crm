@@ -280,7 +280,7 @@ export function CalendarHeader({
                   : "text-gray-500 hover:text-gray-700"
               }`}
             >
-              Google
+              Google Calendar
             </button>
             <button
               onClick={() => onSourceChange("all")}

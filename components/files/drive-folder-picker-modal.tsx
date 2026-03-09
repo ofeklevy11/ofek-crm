@@ -81,6 +81,7 @@ export function DriveFolderPickerModal({
   const [isRootLoaded, setIsRootLoaded] = useState(false);
   const [isRootLoading, setIsRootLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
   const loadSubfolders = useCallback(
     async (parentId: string): Promise<FolderNode[]> => {
@@ -105,6 +106,7 @@ export function DriveFolderPickerModal({
       onOpenChange(isOpen);
       if (isOpen && !isRootLoaded) {
         setIsRootLoading(true);
+        setHasError(false);
         try {
           const res = await fetch(
             `/api/integrations/google/drive/folders?parentId=root`,
@@ -137,6 +139,7 @@ export function DriveFolderPickerModal({
           }
           setIsRootLoaded(true);
         } catch {
+          setHasError(true);
           toast.error("שגיאה בטעינת תיקיות");
         } finally {
           setIsRootLoading(false);
@@ -370,6 +373,21 @@ export function DriveFolderPickerModal({
               {[...Array(5)].map((_, i) => (
                 <Skeleton key={i} className="h-8 w-full" />
               ))}
+            </div>
+          ) : hasError ? (
+            <div className="text-center py-10 space-y-3">
+              <p className="text-sm text-destructive">שגיאה בטעינת תיקיות מ-Google Drive</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsRootLoaded(false);
+                  setHasError(false);
+                  handleOpen(true);
+                }}
+              >
+                נסה שוב
+              </Button>
             </div>
           ) : allFolders.length === 0 ? (
             <div className="text-center py-10 text-muted-foreground">
