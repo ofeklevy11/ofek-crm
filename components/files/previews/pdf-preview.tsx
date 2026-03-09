@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronRight, ChevronLeft } from "lucide-react";
@@ -15,7 +15,7 @@ interface PdfPreviewProps {
 }
 
 export function PdfPreview({ fileId }: PdfPreviewProps) {
-  const [url, setUrl] = useState<string | null>(null);
+  const [data, setData] = useState<Uint8Array | null>(null);
   const [numPages, setNumPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
@@ -23,17 +23,15 @@ export function PdfPreview({ fileId }: PdfPreviewProps) {
 
   useEffect(() => {
     let cancelled = false;
-    let objectUrl: string | null = null;
 
     async function load() {
       try {
         const res = await fetch(`/api/files/${fileId}/preview`);
         if (!res.ok) throw new Error("Failed to load PDF");
 
-        const blob = await res.blob();
+        const buf = await res.arrayBuffer();
         if (!cancelled) {
-          objectUrl = URL.createObjectURL(blob);
-          setUrl(objectUrl);
+          setData(new Uint8Array(buf));
         }
       } catch (err) {
         if (!cancelled) {
@@ -47,9 +45,11 @@ export function PdfPreview({ fileId }: PdfPreviewProps) {
     load();
     return () => {
       cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [fileId]);
+
+  // Memoize so react-pdf doesn't reset/re-load on every render
+  const fileData = useMemo(() => (data ? { data } : null), [data]);
 
   if (loading) {
     return (
@@ -59,7 +59,7 @@ export function PdfPreview({ fileId }: PdfPreviewProps) {
     );
   }
 
-  if (error || !url) {
+  if (error || !data) {
     return (
       <div className="flex items-center justify-center h-[60vh] text-muted-foreground">
         {error || "Failed to load PDF"}
@@ -71,7 +71,7 @@ export function PdfPreview({ fileId }: PdfPreviewProps) {
     <div className="flex flex-col items-center gap-2">
       <div className="overflow-auto max-h-[60vh] rounded-md border bg-muted/30 w-full flex justify-center">
         <Document
-          file={url}
+          file={fileData}
           onLoadSuccess={({ numPages: n }) => setNumPages(n)}
           onLoadError={(err) => {
             console.error("PDF render error:", err);

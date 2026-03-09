@@ -28,6 +28,7 @@ import { FileCard } from "./file-card";
 import { DriveFolderPickerModal } from "./drive-folder-picker-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { showConfirm } from "@/hooks/use-modal";
+import { apiFetch } from "@/lib/api-fetch";
 
 type ViewMode = "grid" | "list" | "compact";
 type FileFilter =
@@ -228,7 +229,7 @@ export function DriveFileExplorer({
       return;
 
     try {
-      const res = await fetch("/api/integrations/google/drive/disconnect", {
+      const res = await apiFetch("/api/integrations/google/drive/disconnect", {
         method: "POST",
       });
       if (!res.ok) {

@@ -68,7 +68,7 @@ describe("middleware — CSRF checks", () => {
     expect(res.status).not.toBe(403);
   });
 
-  it("POST with wrong Origin → 403", () => {
+  it("POST with wrong Origin but valid X-Requested-With → passes (header alone sufficient)", () => {
     process.env.NODE_ENV = "production";
     process.env.NEXT_PUBLIC_APP_URL = "https://bizlycrm.com";
     const res = middleware(
@@ -77,15 +77,31 @@ describe("middleware — CSRF checks", () => {
         "x-requested-with": "XMLHttpRequest",
       }),
     );
-    expect(res.status).toBe(403);
+    // Custom header passes → allowed even though origin fails
+    expect(res.status).not.toBe(403);
   });
 
-  it("POST with Origin but missing X-Requested-With → 403", () => {
+  it("POST with correct Origin but missing X-Requested-With → passes (origin alone sufficient)", () => {
+    process.env.NODE_ENV = "production";
+    process.env.NEXT_PUBLIC_APP_URL = "https://bizlycrm.com";
+    const res = middleware(
+      makeRequest(
+        "POST",
+        "/api/tasks",
+        { origin: "https://bizlycrm.com" },
+        { auth_token: "1.1234567890.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+      ),
+    );
+    // Origin passes → allowed even without X-Requested-With (Cloudflare strips it)
+    expect(res.status).not.toBe(403);
+  });
+
+  it("POST with wrong Origin and no X-Requested-With → 403", () => {
     process.env.NODE_ENV = "production";
     process.env.NEXT_PUBLIC_APP_URL = "https://bizlycrm.com";
     const res = middleware(
       makeRequest("POST", "/api/tasks", {
-        origin: "https://bizlycrm.com",
+        origin: "https://evil.com",
       }),
     );
     expect(res.status).toBe(403);

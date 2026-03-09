@@ -16,7 +16,7 @@ function buildCspHeader(nonce: string, path?: string): string {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://utfs.io https://*.ufs.sh",
     "font-src 'self' data:",
-    "connect-src 'self' https://utfs.io https://*.ufs.sh https://*.uploadthing.com https://*.inngest.com https://graph.facebook.com https://www.facebook.com https://connect.facebook.net",
+    "connect-src 'self' blob: https://utfs.io https://*.ufs.sh https://*.uploadthing.com https://*.inngest.com https://graph.facebook.com https://www.facebook.com https://connect.facebook.net",
     "worker-src 'self' blob:",
     "frame-src https://www.facebook.com blob:",
     `frame-ancestors ${frameAncestors}`,
@@ -45,17 +45,12 @@ export function middleware(request: NextRequest) {
       request.headers.get("referer"),
       process.env.NEXT_PUBLIC_APP_URL,
     );
-    if (!originCheck.allowed) {
-      console.warn(`[CSRF] Origin rejected: ${originCheck.reason} — ${request.method} ${path}`);
-      return NextResponse.json(
-        { error: "Forbidden", message: "CSRF validation failed" },
-        { status: 403 },
-      );
-    }
-
     const headerCheck = validateCustomHeader(request.headers.get("x-requested-with"));
-    if (!headerCheck.allowed) {
-      console.warn(`[CSRF] Header rejected: ${headerCheck.reason} — ${request.method} ${path}`);
+
+    if (!originCheck.allowed && !headerCheck.allowed) {
+      console.warn(
+        `[CSRF] Rejected: origin=${originCheck.reason}, header=${headerCheck.reason} — ${request.method} ${path}`,
+      );
       return NextResponse.json(
         { error: "Forbidden", message: "CSRF validation failed" },
         { status: 403 },
