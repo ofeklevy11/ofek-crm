@@ -156,7 +156,7 @@ export default function TermsPage() {
               <p>
                 לשאלות או בירורים בנוגע לתנאי שימוש אלה, ניתן לפנות אלינו בכתובת:
               </p>
-              <p className="font-medium text-foreground">support@bizlycrm.com</p>
+              <p className="font-medium text-foreground">ofekconnect4@gmail.com</p>
             </Section>
           </div>
         </div>

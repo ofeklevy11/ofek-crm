@@ -6,13 +6,27 @@ import { CreateFolderModal } from "@/components/files/create-folder-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isRateLimitError } from "@/lib/rate-limit-utils";
 import RateLimitFallback from "@/components/RateLimitFallback";
+import { FilesPageClient } from "@/components/files/files-page-client";
+import { SourceSwitcherWrapper } from "@/components/files/source-switcher-wrapper";
 
 interface PageProps {
-  searchParams: Promise<{ folderId?: string }>;
+  searchParams: Promise<{
+    folderId?: string;
+    source?: string;
+    driveFolderId?: string;
+  }>;
 }
 
 export default async function FilesPage({ searchParams }: PageProps) {
   const resolvedSearchParams = await searchParams;
+  const source = resolvedSearchParams.source || "internal";
+
+  // Drive source - render entirely client-side
+  if (source === "drive") {
+    return <FilesPageClient searchParams={resolvedSearchParams} />;
+  }
+
+  // Internal file library (existing behavior, unchanged)
   const parsedFolderId = resolvedSearchParams.folderId
     ? parseInt(resolvedSearchParams.folderId, 10)
     : NaN;
@@ -40,6 +54,7 @@ export default async function FilesPage({ searchParams }: PageProps) {
           </p>
         </div>
         <div className="flex gap-2">
+          <SourceSwitcherWrapper />
           <CreateFolderModal currentFolderId={folderId} />
           <UploadFileModal currentFolderId={folderId} />
         </div>

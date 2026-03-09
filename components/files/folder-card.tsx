@@ -34,7 +34,7 @@ import { getUserFriendlyError } from "@/lib/errors";
 
 interface FolderCardProps {
   folder: {
-    id: number;
+    id: number | string;
     name: string;
     _count: { files: number };
     totalSize?: number;
@@ -47,6 +47,8 @@ interface FolderCardProps {
   onDragOver?: () => void;
   onDragLeave?: () => void;
   onDrop?: () => void;
+  source?: "internal" | "google-drive";
+  onNavigate?: () => void;
 }
 
 export function FolderCard({
@@ -57,7 +59,10 @@ export function FolderCard({
   onDragOver,
   onDragLeave,
   onDrop,
+  source = "internal",
+  onNavigate,
 }: FolderCardProps) {
+  const isDrive = source === "google-drive";
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [newName, setNewName] = useState(folder.name);
@@ -76,7 +81,7 @@ export function FolderCard({
 
     setIsDeleting(true);
     try {
-      await deleteFolder(folder.id);
+      await deleteFolder(folder.id as number);
       toast.success("התיקייה נמחקה בהצלחה");
     } catch (error: any) {
       toast.error(getUserFriendlyError(error));
@@ -93,7 +98,7 @@ export function FolderCard({
 
     setIsRenaming(true);
     try {
-      await renameFolder(folder.id, newName.trim());
+      await renameFolder(folder.id as number, newName.trim());
       toast.success("שם התיקייה עודכן בהצלחה");
       router.refresh();
       setIsRenameOpen(false);
@@ -143,39 +148,186 @@ export function FolderCard({
     });
   };
 
+  const folderHref = isDrive ? "#" : `${baseUrl}?folderId=${folder.id}`;
+  const handleClick = isDrive
+    ? (e: React.MouseEvent) => {
+        e.preventDefault();
+        onNavigate?.();
+      }
+    : undefined;
+
   // Grid View
   if (viewMode === "grid") {
     return (
       <>
         <Link
-          href={`${baseUrl}?folderId=${folder.id}`}
+          href={folderHref}
           prefetch={false}
           className="block group"
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
+          onClick={handleClick}
+          onDragOver={isDrive ? undefined : handleDragOver}
+          onDragLeave={isDrive ? undefined : handleDragLeave}
+          onDrop={isDrive ? undefined : handleDrop}
         >
           <div
             className={cn(
               "relative p-4 border rounded-xl hover:bg-muted/50 transition-all bg-card text-right",
-              isDragOver && "ring-2 ring-primary bg-primary/10 scale-105",
+              !isDrive && isDragOver && "ring-2 ring-primary bg-primary/10 scale-105",
             )}
             dir="rtl"
           >
             <div className="flex items-start justify-between">
-              {/* Dropdown Menu (on the left in RTL, but flex row default is LTR, so justify-between pushes them) 
-                   Wait, in RTL mode:
-                   flex-start is right.
-                   We want the icon on the right (start) and menu on the left (end).
-                   justify-between will put first child on right, second on left.
-               */}
               <div className="p-2 rounded-lg bg-blue-100 text-[#4f95ff]">
                 <FolderIcon className="w-6 h-6" fill="currentColor" />
               </div>
+              {!isDrive && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded-md transition-opacity"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                    >
+                      <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="text-right">
+                    <DropdownMenuItem
+                      onClick={openRenameDialog}
+                      className="gap-2"
+                    >
+                      <Pencil className="w-4 h-4 ml-2" />
+                      שנה שם
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive gap-2"
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                    >
+                      <Trash2 className="w-4 h-4 ml-2" />
+                      מחק
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+            <div className="mt-4">
+              <h3 className="font-medium truncate" title={folder.name}>
+                {folder.name}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {isDrive ? "Google Drive" : `${folder._count.files} קבצים • ${formatSize(folder.totalSize)}`}
+              </p>
+            </div>
+
+            {!isDrive && isDragOver && (
+              <div className="absolute inset-0 flex items-center justify-center bg-primary/20 rounded-xl pointer-events-none">
+                <span className="text-sm font-medium text-primary">
+                  שחרר כאן
+                </span>
+              </div>
+            )}
+          </div>
+        </Link>
+
+        {/* Rename Dialog - Outside Link */}
+        {!isDrive && (
+          <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
+            <DialogContent className="sm:max-w-[400px] text-right">
+              <DialogHeader>
+                <DialogTitle>שינוי שם תיקייה</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="folderName">שם התיקייה</Label>
+                  <Input
+                    id="folderName"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="הזמן שם תיקייה"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleRename();
+                      }
+                    }}
+                    className="text-right"
+                  />
+                </div>
+              </div>
+              <DialogFooter className="mr-auto flex gap-2">
+                <Button variant="outline" onClick={() => setIsRenameOpen(false)}>
+                  ביטול
+                </Button>
+                <Button
+                  onClick={handleRename}
+                  disabled={isRenaming || !newName.trim()}
+                  className="bg-[#4f95ff] hover:bg-[#4f95ff]/90"
+                >
+                  {isRenaming ? "שומר..." : "שמור"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+      </>
+    );
+  }
+
+  // List View
+  if (viewMode === "list") {
+    return (
+      <>
+        <Link
+          href={folderHref}
+          prefetch={false}
+          className="block group"
+          onClick={handleClick}
+          onDragOver={isDrive ? undefined : handleDragOver}
+          onDragLeave={isDrive ? undefined : handleDragLeave}
+          onDrop={isDrive ? undefined : handleDrop}
+        >
+          <div
+            className={cn(
+              "flex items-center gap-4 p-4 border rounded-xl hover:bg-muted/50 transition-all bg-card relative text-right",
+              !isDrive && isDragOver && "ring-2 ring-primary bg-primary/10 scale-[1.02]",
+            )}
+            dir="rtl"
+          >
+            <div className="w-4" />
+            <div className="p-2 rounded-lg bg-blue-100 text-[#4f95ff] shrink-0">
+              <FolderIcon className="w-6 h-6" fill="currentColor" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-medium truncate" title={folder.name}>
+                {folder.name}
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {isDrive ? "Google Drive" : "תיקייה"}
+              </p>
+            </div>
+
+            <div className="text-sm text-muted-foreground w-24 text-left shrink-0">
+              {isDrive ? "-" : formatSize(folder.totalSize)}
+            </div>
+
+            <div className="text-sm text-muted-foreground w-20 text-left shrink-0">
+              {isDrive ? "-" : `${folder._count.files} קבצים`}
+            </div>
+
+            <div className="text-sm text-muted-foreground w-28 shrink-0 text-left">
+              {formatDate(folder.updatedAt)}
+            </div>
+
+            {!isDrive && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded-md transition-opacity"
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded-md transition-opacity shrink-0"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -185,10 +337,7 @@ export function FolderCard({
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="text-right">
-                  <DropdownMenuItem
-                    onClick={openRenameDialog}
-                    className="gap-2"
-                  >
+                  <DropdownMenuItem onClick={openRenameDialog} className="gap-2">
                     <Pencil className="w-4 h-4 ml-2" />
                     שנה שם
                   </DropdownMenuItem>
@@ -203,17 +352,9 @@ export function FolderCard({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-            <div className="mt-4">
-              <h3 className="font-medium truncate" title={folder.name}>
-                {folder.name}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {folder._count.files} קבצים • {formatSize(folder.totalSize)}
-              </p>
-            </div>
+            )}
 
-            {isDragOver && (
+            {!isDrive && isDragOver && (
               <div className="absolute inset-0 flex items-center justify-center bg-primary/20 rounded-xl pointer-events-none">
                 <span className="text-sm font-medium text-primary">
                   שחרר כאן
@@ -224,168 +365,46 @@ export function FolderCard({
         </Link>
 
         {/* Rename Dialog - Outside Link */}
-        <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
-          <DialogContent className="sm:max-w-[400px] text-right">
-            <DialogHeader>
-              <DialogTitle>שינוי שם תיקייה</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="folderName">שם התיקייה</Label>
-                <Input
-                  id="folderName"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="הזמן שם תיקייה"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleRename();
-                    }
-                  }}
-                  className="text-right"
-                />
+        {!isDrive && (
+          <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
+            <DialogContent className="sm:max-w-[400px] text-right">
+              <DialogHeader>
+                <DialogTitle>שינוי שם תיקייה</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="folderNameList">שם התיקייה</Label>
+                  <Input
+                    id="folderNameList"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="הזן שם תיקייה"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleRename();
+                      }
+                    }}
+                    className="text-right"
+                  />
+                </div>
               </div>
-            </div>
-            <DialogFooter className="mr-auto flex gap-2">
-              <Button variant="outline" onClick={() => setIsRenameOpen(false)}>
-                ביטול
-              </Button>
-              <Button
-                onClick={handleRename}
-                disabled={isRenaming || !newName.trim()}
-                className="bg-[#4f95ff] hover:bg-[#4f95ff]/90"
-              >
-                {isRenaming ? "שומר..." : "שמור"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </>
-    );
-  }
-
-  // List View
-  if (viewMode === "list") {
-    return (
-      <>
-        <Link
-          href={`${baseUrl}?folderId=${folder.id}`}
-          prefetch={false}
-          className="block group"
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          <div
-            className={cn(
-              "flex items-center gap-4 p-4 border rounded-xl hover:bg-muted/50 transition-all bg-card relative text-right",
-              isDragOver && "ring-2 ring-primary bg-primary/10 scale-[1.02]",
-            )}
-            dir="rtl"
-          >
-            <div className="w-4" />
-            <div className="p-2 rounded-lg bg-blue-100 text-[#4f95ff] shrink-0">
-              <FolderIcon className="w-6 h-6" fill="currentColor" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-medium truncate" title={folder.name}>
-                {folder.name}
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">תיקייה</p>
-            </div>
-
-            <div className="text-sm text-muted-foreground w-24 text-left shrink-0">
-              {formatSize(folder.totalSize)}
-            </div>
-
-            <div className="text-sm text-muted-foreground w-20 text-left shrink-0">
-              {folder._count.files} קבצים
-            </div>
-
-            <div className="text-sm text-muted-foreground w-28 shrink-0 text-left">
-              {formatDate(folder.updatedAt)}
-            </div>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded-md transition-opacity shrink-0"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
+              <DialogFooter className="mr-auto flex gap-2">
+                <Button variant="outline" onClick={() => setIsRenameOpen(false)}>
+                  ביטול
+                </Button>
+                <Button
+                  onClick={handleRename}
+                  disabled={isRenaming || !newName.trim()}
+                  className="bg-[#4f95ff] hover:bg-[#4f95ff]/90"
                 >
-                  <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="text-right">
-                <DropdownMenuItem onClick={openRenameDialog} className="gap-2">
-                  <Pencil className="w-4 h-4 ml-2" />
-                  שנה שם
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive gap-2"
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                >
-                  <Trash2 className="w-4 h-4 ml-2" />
-                  מחק
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {isDragOver && (
-              <div className="absolute inset-0 flex items-center justify-center bg-primary/20 rounded-xl pointer-events-none">
-                <span className="text-sm font-medium text-primary">
-                  שחרר כאן
-                </span>
-              </div>
-            )}
-          </div>
-        </Link>
-
-        {/* Rename Dialog - Outside Link */}
-        <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
-          <DialogContent className="sm:max-w-[400px] text-right">
-            <DialogHeader>
-              <DialogTitle>שינוי שם תיקייה</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="folderNameList">שם התיקייה</Label>
-                <Input
-                  id="folderNameList"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="הזן שם תיקייה"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleRename();
-                    }
-                  }}
-                  className="text-right"
-                />
-              </div>
-            </div>
-            <DialogFooter className="mr-auto flex gap-2">
-              <Button variant="outline" onClick={() => setIsRenameOpen(false)}>
-                ביטול
-              </Button>
-              <Button
-                onClick={handleRename}
-                disabled={isRenaming || !newName.trim()}
-                className="bg-[#4f95ff] hover:bg-[#4f95ff]/90"
-              >
-                {isRenaming ? "שומר..." : "שמור"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                  {isRenaming ? "שומר..." : "שמור"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </>
     );
   }
@@ -395,17 +414,18 @@ export function FolderCard({
     return (
       <>
         <Link
-          href={`${baseUrl}?folderId=${folder.id}`}
+          href={folderHref}
           prefetch={false}
           className="block group"
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
+          onClick={handleClick}
+          onDragOver={isDrive ? undefined : handleDragOver}
+          onDragLeave={isDrive ? undefined : handleDragLeave}
+          onDrop={isDrive ? undefined : handleDrop}
         >
           <div
             className={cn(
               "grid grid-cols-12 gap-4 px-4 py-3 hover:bg-muted/30 transition-all items-center relative text-right",
-              isDragOver && "bg-primary/10",
+              !isDrive && isDragOver && "bg-primary/10",
             )}
             dir="rtl"
           >
@@ -421,7 +441,7 @@ export function FolderCard({
             </div>
 
             <div className="col-span-2 text-sm text-muted-foreground text-left">
-              {formatSize(folder.totalSize)}
+              {isDrive ? "-" : formatSize(folder.totalSize)}
             </div>
 
             <div className="col-span-3 text-sm text-muted-foreground text-left">
@@ -429,40 +449,42 @@ export function FolderCard({
             </div>
 
             <div className="col-span-1 flex justify-end">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded-md transition-opacity"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                  >
-                    <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="text-right">
-                  <DropdownMenuItem
-                    onClick={openRenameDialog}
-                    className="gap-2"
-                  >
-                    <Pencil className="w-4 h-4 ml-2" />
-                    שנה שם
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive gap-2"
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                  >
-                    <Trash2 className="w-4 h-4 ml-2" />
-                    מחק
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {!isDrive && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded-md transition-opacity"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                    >
+                      <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="text-right">
+                    <DropdownMenuItem
+                      onClick={openRenameDialog}
+                      className="gap-2"
+                    >
+                      <Pencil className="w-4 h-4 ml-2" />
+                      שנה שם
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive gap-2"
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                    >
+                      <Trash2 className="w-4 h-4 ml-2" />
+                      מחק
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
 
-            {isDragOver && (
+            {!isDrive && isDragOver && (
               <div className="absolute inset-0 flex items-center justify-center bg-primary/20 pointer-events-none">
                 <span className="text-sm font-medium text-primary">
                   שחרר כאן
@@ -473,44 +495,46 @@ export function FolderCard({
         </Link>
 
         {/* Rename Dialog - Outside Link */}
-        <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
-          <DialogContent className="sm:max-w-[400px] text-right">
-            <DialogHeader>
-              <DialogTitle>שינוי שם תיקייה</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="folderNameCompact">שם התיקייה</Label>
-                <Input
-                  id="folderNameCompact"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="הזן שם תיקייה"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleRename();
-                    }
-                  }}
-                  className="text-right"
-                />
+        {!isDrive && (
+          <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
+            <DialogContent className="sm:max-w-[400px] text-right">
+              <DialogHeader>
+                <DialogTitle>שינוי שם תיקייה</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="folderNameCompact">שם התיקייה</Label>
+                  <Input
+                    id="folderNameCompact"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="הזן שם תיקייה"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleRename();
+                      }
+                    }}
+                    className="text-right"
+                  />
+                </div>
               </div>
-            </div>
-            <DialogFooter className="mr-auto flex gap-2">
-              <Button variant="outline" onClick={() => setIsRenameOpen(false)}>
-                ביטול
-              </Button>
-              <Button
-                onClick={handleRename}
-                disabled={isRenaming || !newName.trim()}
-                className="bg-[#4f95ff] hover:bg-[#4f95ff]/90"
-              >
-                {isRenaming ? "שומר..." : "שמור"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter className="mr-auto flex gap-2">
+                <Button variant="outline" onClick={() => setIsRenameOpen(false)}>
+                  ביטול
+                </Button>
+                <Button
+                  onClick={handleRename}
+                  disabled={isRenaming || !newName.trim()}
+                  className="bg-[#4f95ff] hover:bg-[#4f95ff]/90"
+                >
+                  {isRenaming ? "שומר..." : "שמור"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </>
     );
   }

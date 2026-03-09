@@ -108,7 +108,32 @@ interface FileCardProps {
   onDragStart?: () => void;
   onDragEnd?: () => void;
   isDragging?: boolean;
+  source?: "internal" | "google-drive";
 }
+
+// Drive file download function
+const downloadDriveFile = async (fileId: string, fileName: string) => {
+  try {
+    const response = await fetch(
+      `/api/integrations/google/drive/files/${fileId}/download`,
+    );
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to download file");
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  } catch (error) {
+    toast.error(getUserFriendlyError(error));
+  }
+};
 
 export function FileCard({
   file,
@@ -116,7 +141,9 @@ export function FileCard({
   onDragStart,
   onDragEnd,
   isDragging = false,
+  source = "internal",
 }: FileCardProps) {
+  const isDrive = source === "google-drive";
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editDisplayName, setEditDisplayName] = useState(
@@ -185,6 +212,21 @@ export function FileCard({
     });
   };
 
+  const handleDownload = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (isDrive) {
+      downloadDriveFile(file.id as any, (file as any).displayName || file.name);
+    } else {
+      downloadFile(file.id as any, (file as any).displayName || file.name);
+    }
+  };
+
+  const openUrl = isDrive
+    ? (file as any).webViewLink || (file as any).url
+    : (file as any).url;
+
+  const sourceLabel = isDrive ? "Google Drive" : ((file as any).source || "ידנית");
+
   const ActionsMenu = ({ align = "end" }: { align?: "start" | "end" }) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -196,48 +238,54 @@ export function FileCard({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align={align} className="text-right">
-        <DropdownMenuItem asChild className="gap-2">
-          <a
-            href={(file as any).url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center"
-          >
-            <ExternalLink className="w-4 h-4 ml-2" />
-            פתח
-          </a>
-        </DropdownMenuItem>
+        {openUrl && (
+          <DropdownMenuItem asChild className="gap-2">
+            <a
+              href={openUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center"
+            >
+              <ExternalLink className="w-4 h-4 ml-2" />
+              פתח
+            </a>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           className="gap-2 cursor-pointer"
           onClick={(e) => {
             e.stopPropagation();
-            downloadFile(file.id, (file as any).displayName || file.name);
+            handleDownload();
           }}
         >
           <Download className="w-4 h-4 ml-2" />
           הורד
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="gap-2"
-          onClick={(e) => {
-            e.stopPropagation();
-            setEditDisplayName((file as any).displayName || "");
-            setIsEditing(true);
-          }}
-        >
-          <Pencil className="w-4 h-4 ml-2" />
-          ערוך שם
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="text-destructive focus:text-destructive gap-2"
-          onClick={handleDelete}
-          disabled={isDeleting}
-        >
-          <Trash2 className="w-4 h-4 ml-2" />
-          מחק
-        </DropdownMenuItem>
+        {!isDrive && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="gap-2"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditDisplayName((file as any).displayName || "");
+                setIsEditing(true);
+              }}
+            >
+              <Pencil className="w-4 h-4 ml-2" />
+              ערוך שם
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive gap-2"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              <Trash2 className="w-4 h-4 ml-2" />
+              מחק
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -246,14 +294,16 @@ export function FileCard({
   if (viewMode === "grid") {
     return (
       <div
-        draggable={!isEditing}
+        draggable={!isEditing && !isDrive}
         onDragStart={(e) => {
+          if (isDrive) return;
           e.dataTransfer.effectAllowed = "move";
           onDragStart?.();
         }}
         onDragEnd={onDragEnd}
         className={cn(
-          "group relative p-4 border rounded-xl hover:bg-muted/50 transition-all bg-card flex flex-col justify-between cursor-grab active:cursor-grabbing text-right",
+          "group relative p-4 border rounded-xl hover:bg-muted/50 transition-all bg-card flex flex-col justify-between text-right",
+          !isDrive && "cursor-grab active:cursor-grabbing",
           isDragging && "opacity-50 scale-95 ring-2 ring-primary",
           isEditing && "cursor-default",
         )}
@@ -349,27 +399,27 @@ export function FileCard({
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 ) : (
-                  <span className="text-muted-foreground">{(file as any).source || "ידנית"}</span>
+                  <span className="text-muted-foreground">{sourceLabel}</span>
                 )}
               </div>
             </div>
 
             {/* Direct action buttons */}
             <div className="mt-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <a
-                href={(file as any).url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-primary/10 text-primary rounded-md hover:bg-primary/20 transition-colors"
-              >
-                <ExternalLink className="w-3 h-3" />
-                פתח
-              </a>
+              {openUrl && (
+                <a
+                  href={openUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-primary/10 text-primary rounded-md hover:bg-primary/20 transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  פתח
+                </a>
+              )}
               <button
                 type="button"
-                onClick={() =>
-                  downloadFile(file.id, (file as any).displayName || file.name)
-                }
+                onClick={() => handleDownload()}
                 className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-[#4f95ff]/10 text-[#4f95ff] rounded-md hover:bg-[#4f95ff]/20 transition-colors"
               >
                 <Download className="w-3 h-3" />
@@ -386,19 +436,23 @@ export function FileCard({
   if (viewMode === "list") {
     return (
       <div
-        draggable
+        draggable={!isDrive}
         onDragStart={(e) => {
+          if (isDrive) return;
           e.dataTransfer.effectAllowed = "move";
           onDragStart?.();
         }}
         onDragEnd={onDragEnd}
         className={cn(
-          "group flex items-center gap-4 p-4 border rounded-xl hover:bg-muted/50 transition-all bg-card cursor-grab active:cursor-grabbing text-right",
+          "group flex items-center gap-4 p-4 border rounded-xl hover:bg-muted/50 transition-all bg-card text-right",
+          !isDrive && "cursor-grab active:cursor-grabbing",
           isDragging && "opacity-50 scale-[0.98] ring-2 ring-primary",
         )}
         dir="rtl"
       >
-        <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+        {!isDrive && (
+          <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+        )}
 
         <div
           className={cn(
@@ -431,7 +485,7 @@ export function FileCard({
                 <ExternalLink className="w-3 h-3" />
               </a>
             ) : (
-              <span className="text-muted-foreground">{(file as any).source || "ידנית"}</span>
+              <span className="text-muted-foreground">{sourceLabel}</span>
             )}
           </div>
         </div>
@@ -446,20 +500,20 @@ export function FileCard({
 
         {/* Direct action buttons */}
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-          <a
-            href={(file as any).url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-            title="פתח"
-          >
-            <ExternalLink className="w-4 h-4" />
-          </a>
+          {openUrl && (
+            <a
+              href={openUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              title="פתח"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          )}
           <button
             type="button"
-            onClick={() =>
-              downloadFile(file.id, (file as any).displayName || file.name)
-            }
+            onClick={() => handleDownload()}
             className="p-1.5 rounded-md bg-[#4f95ff]/10 text-[#4f95ff] hover:bg-[#4f95ff]/20 transition-colors"
             title="הורד"
           >
@@ -478,20 +532,24 @@ export function FileCard({
   if (viewMode === "compact") {
     return (
       <div
-        draggable
+        draggable={!isDrive}
         onDragStart={(e) => {
+          if (isDrive) return;
           e.dataTransfer.effectAllowed = "move";
           onDragStart?.();
         }}
         onDragEnd={onDragEnd}
         className={cn(
-          "group grid grid-cols-12 gap-4 px-4 py-3 hover:bg-muted/30 transition-all cursor-grab active:cursor-grabbing items-center text-right",
+          "group grid grid-cols-12 gap-4 px-4 py-3 hover:bg-muted/30 transition-all items-center text-right",
+          !isDrive && "cursor-grab active:cursor-grabbing",
           isDragging && "opacity-50 bg-primary/10",
         )}
         dir="rtl"
       >
         <div className="col-span-6 flex items-center gap-3 min-w-0">
-          <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+          {!isDrive && (
+            <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+          )}
           {getIcon("sm")}
           <div className="flex flex-col min-w-0">
             <span
