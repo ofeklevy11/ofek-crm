@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  transpilePackages: ["react-pdf"],
   serverExternalPackages: ["ioredis", "pg"],
   typescript: {
     ignoreBuildErrors: false,

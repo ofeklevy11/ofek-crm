@@ -6,6 +6,8 @@ import { prisma } from "@/lib/prisma";
 import {
   getValidAccessToken,
   listDriveFolders,
+  listSharedDrives,
+  listSharedWithMeFolders,
   TokenRevokedError,
 } from "@/lib/services/google-drive";
 import { createLogger } from "@/lib/logger";
@@ -42,8 +44,25 @@ async function handleGET(request: NextRequest) {
     const parentId = searchParams.get("parentId") || "root";
 
     const accessToken = await getValidAccessToken(connection);
-    const folders = await listDriveFolders(accessToken, parentId);
 
+    // For root: return sectioned response with My Drive, Shared Drives, Shared With Me
+    if (parentId === "root") {
+      const [myDriveFolders, sharedDrives, sharedWithMe] = await Promise.all([
+        listDriveFolders(accessToken, "root"),
+        listSharedDrives(accessToken),
+        listSharedWithMeFolders(accessToken),
+      ]);
+
+      return NextResponse.json({
+        sections: {
+          myDrive: myDriveFolders.map((f) => ({ id: f.id, name: f.name })),
+          sharedDrives: sharedDrives.map((d) => ({ id: d.id, name: d.name })),
+          sharedWithMe: sharedWithMe.map((f) => ({ id: f.id, name: f.name })),
+        },
+      });
+    }
+
+    const folders = await listDriveFolders(accessToken, parentId);
     return NextResponse.json({
       folders: folders.map((f) => ({ id: f.id, name: f.name })),
     });

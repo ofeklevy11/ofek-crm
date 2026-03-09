@@ -188,6 +188,8 @@ export async function listDriveFolders(
     fields: "files(id,name,modifiedTime)",
     pageSize: "100",
     orderBy: "name",
+    supportsAllDrives: "true",
+    includeItemsFromAllDrives: "true",
   });
 
   const res = await fetch(`${GOOGLE_DRIVE_API}/files?${params}`, {
@@ -219,6 +221,8 @@ export async function listDriveFiles(
       "files(id,name,mimeType,size,modifiedTime,thumbnailLink,webViewLink,iconLink),nextPageToken",
     pageSize: "50",
     orderBy: "folder,name",
+    supportsAllDrives: "true",
+    includeItemsFromAllDrives: "true",
   });
   if (pageToken) {
     params.set("pageToken", pageToken);
@@ -250,6 +254,7 @@ export async function getDriveFileMeta(
 ): Promise<DriveFile> {
   const params = new URLSearchParams({
     fields: "id,name,mimeType,size,modifiedTime,webViewLink",
+    supportsAllDrives: "true",
   });
 
   const res = await fetch(`${GOOGLE_DRIVE_API}/files/${fileId}?${params}`, {
@@ -300,13 +305,13 @@ export async function downloadDriveFile(
   if (exportMime) {
     // Google Docs types need to be exported
     return fetch(
-      `${GOOGLE_DRIVE_API}/files/${fileId}/export?mimeType=${encodeURIComponent(exportMime)}`,
+      `${GOOGLE_DRIVE_API}/files/${fileId}/export?mimeType=${encodeURIComponent(exportMime)}&supportsAllDrives=true`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
   }
 
   // Regular file download
-  return fetch(`${GOOGLE_DRIVE_API}/files/${fileId}?alt=media`, {
+  return fetch(`${GOOGLE_DRIVE_API}/files/${fileId}?alt=media&supportsAllDrives=true`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 }
@@ -323,7 +328,7 @@ export async function verifyFolderAccess(
   let currentId = folderId;
   const maxDepth = 20;
   for (let i = 0; i < maxDepth; i++) {
-    const params = new URLSearchParams({ fields: "id,parents" });
+    const params = new URLSearchParams({ fields: "id,parents", supportsAllDrives: "true" });
     const res = await fetch(
       `${GOOGLE_DRIVE_API}/files/${currentId}?${params}`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
@@ -341,6 +346,51 @@ export async function verifyFolderAccess(
   }
 
   return false;
+}
+
+// ─── Shared Drives & Shared With Me ───
+
+export async function listSharedDrives(
+  accessToken: string,
+): Promise<{ id: string; name: string }[]> {
+  try {
+    const params = new URLSearchParams({
+      pageSize: "100",
+      fields: "drives(id,name)",
+    });
+    const res = await fetch(`${GOOGLE_DRIVE_API}/drives?${params}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.drives || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function listSharedWithMeFolders(
+  accessToken: string,
+): Promise<DriveFolder[]> {
+  try {
+    const q = `sharedWithMe=true and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+    const params = new URLSearchParams({
+      q,
+      fields: "files(id,name,modifiedTime)",
+      pageSize: "100",
+      orderBy: "name",
+      supportsAllDrives: "true",
+      includeItemsFromAllDrives: "true",
+    });
+    const res = await fetch(`${GOOGLE_DRIVE_API}/files?${params}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.files || [];
+  } catch {
+    return [];
+  }
 }
 
 // ─── Token Revocation ───

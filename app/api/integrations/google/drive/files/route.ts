@@ -136,7 +136,7 @@ async function verifyAccessAndBuildBreadcrumbs(
 ): Promise<{ hasAccess: boolean; breadcrumbs: { id: string; name: string }[] }> {
   // If the folder itself is a selected root, it's accessible
   if (selectedIds.includes(folderId)) {
-    const params = new URLSearchParams({ fields: "id,name" });
+    const params = new URLSearchParams({ fields: "id,name", supportsAllDrives: "true" });
     const res = await fetch(
       `https://www.googleapis.com/drive/v3/files/${folderId}?${params}`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
@@ -152,7 +152,7 @@ async function verifyAccessAndBuildBreadcrumbs(
   const maxDepth = 20;
 
   for (let i = 0; i < maxDepth; i++) {
-    const params = new URLSearchParams({ fields: "id,name,parents" });
+    const params = new URLSearchParams({ fields: "id,name,parents", supportsAllDrives: "true" });
     const res = await fetch(
       `https://www.googleapis.com/drive/v3/files/${currentId}?${params}`,
       { headers: { Authorization: `Bearer ${accessToken}` } },

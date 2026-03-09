@@ -14,7 +14,10 @@ import {
   ChevronDown,
   ChevronLeft,
   Folder,
+  HardDrive,
   Loader2,
+  Share2,
+  Users,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -43,7 +46,23 @@ interface DriveFolderPickerModalProps {
   onSaved: () => void;
 }
 
+interface SectionState {
+  myDrive: FolderNode[];
+  sharedDrives: FolderNode[];
+  sharedWithMe: FolderNode[];
+}
+
+const EMPTY_SECTIONS: SectionState = { myDrive: [], sharedDrives: [], sharedWithMe: [] };
+
 const MAX_FOLDERS = 20;
+
+type SectionKey = keyof SectionState;
+
+const SECTION_CONFIG: { key: SectionKey; label: string; Icon: typeof HardDrive }[] = [
+  { key: "myDrive", label: "הדרייב שלי", Icon: HardDrive },
+  { key: "sharedDrives", label: "דרייבים משותפים", Icon: Users },
+  { key: "sharedWithMe", label: "שותף איתי", Icon: Share2 },
+];
 
 export function DriveFolderPickerModal({
   open,
@@ -52,14 +71,19 @@ export function DriveFolderPickerModal({
   initialSelected = [],
   onSaved,
 }: DriveFolderPickerModalProps) {
-  const [folders, setFolders] = useState<FolderNode[]>([]);
+  const [sections, setSections] = useState<SectionState>(EMPTY_SECTIONS);
+  const [collapsedSections, setCollapsedSections] = useState<Record<SectionKey, boolean>>({
+    myDrive: false,
+    sharedDrives: false,
+    sharedWithMe: false,
+  });
   const [selected, setSelected] = useState<SelectedFolder[]>(initialSelected);
   const [isRootLoaded, setIsRootLoaded] = useState(false);
   const [isRootLoading, setIsRootLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const loadFolders = useCallback(
-    async (parentId: string = "root"): Promise<FolderNode[]> => {
+  const loadSubfolders = useCallback(
+    async (parentId: string): Promise<FolderNode[]> => {
       const res = await fetch(
         `/api/integrations/google/drive/folders?parentId=${parentId}`,
       );
@@ -82,8 +106,35 @@ export function DriveFolderPickerModal({
       if (isOpen && !isRootLoaded) {
         setIsRootLoading(true);
         try {
-          const rootFolders = await loadFolders("root");
-          setFolders(rootFolders);
+          const res = await fetch(
+            `/api/integrations/google/drive/folders?parentId=root`,
+          );
+          if (!res.ok) throw new Error("Failed to load folders");
+          const data = await res.json();
+
+          const toNodes = (items: { id: string; name: string }[]): FolderNode[] =>
+            items.map((f) => ({
+              id: f.id,
+              name: f.name,
+              isLoaded: false,
+              isLoading: false,
+              isExpanded: false,
+            }));
+
+          if (data.sections) {
+            setSections({
+              myDrive: toNodes(data.sections.myDrive || []),
+              sharedDrives: toNodes(data.sections.sharedDrives || []),
+              sharedWithMe: toNodes(data.sections.sharedWithMe || []),
+            });
+          } else {
+            // Fallback for old API response
+            setSections({
+              myDrive: toNodes(data.folders || []),
+              sharedDrives: [],
+              sharedWithMe: [],
+            });
+          }
           setIsRootLoaded(true);
         } catch {
           toast.error("שגיאה בטעינת תיקיות");
@@ -95,8 +146,10 @@ export function DriveFolderPickerModal({
         setSelected(initialSelected);
       }
     },
-    [isRootLoaded, loadFolders, onOpenChange, initialSelected],
+    [isRootLoaded, onOpenChange, initialSelected],
   );
+
+  const allFolders = [...sections.myDrive, ...sections.sharedDrives, ...sections.sharedWithMe];
 
   const toggleExpand = useCallback(
     async (folderId: string) => {
@@ -112,7 +165,15 @@ export function DriveFolderPickerModal({
           return n;
         });
 
-      // Find the node
+      const updateSections = (updater: (nodes: FolderNode[]) => FolderNode[]) => {
+        setSections((prev) => ({
+          myDrive: updater(prev.myDrive),
+          sharedDrives: updater(prev.sharedDrives),
+          sharedWithMe: updater(prev.sharedWithMe),
+        }));
+      };
+
+      // Find the node across all sections
       const findNode = (
         nodes: FolderNode[],
         id: string,
@@ -127,24 +188,24 @@ export function DriveFolderPickerModal({
         return null;
       };
 
-      const node = findNode(folders, folderId);
+      const node = findNode(allFolders, folderId);
       if (!node) return;
 
       if (node.isExpanded) {
-        setFolders((prev) =>
-          updateNode(prev, folderId, (n) => ({ ...n, isExpanded: false })),
+        updateSections((nodes) =>
+          updateNode(nodes, folderId, (n) => ({ ...n, isExpanded: false })),
         );
         return;
       }
 
       if (!node.isLoaded) {
-        setFolders((prev) =>
-          updateNode(prev, folderId, (n) => ({ ...n, isLoading: true })),
+        updateSections((nodes) =>
+          updateNode(nodes, folderId, (n) => ({ ...n, isLoading: true })),
         );
         try {
-          const children = await loadFolders(folderId);
-          setFolders((prev) =>
-            updateNode(prev, folderId, (n) => ({
+          const children = await loadSubfolders(folderId);
+          updateSections((nodes) =>
+            updateNode(nodes, folderId, (n) => ({
               ...n,
               children,
               isLoaded: true,
@@ -153,18 +214,18 @@ export function DriveFolderPickerModal({
             })),
           );
         } catch {
-          setFolders((prev) =>
-            updateNode(prev, folderId, (n) => ({ ...n, isLoading: false })),
+          updateSections((nodes) =>
+            updateNode(nodes, folderId, (n) => ({ ...n, isLoading: false })),
           );
           toast.error("שגיאה בטעינת תיקיות");
         }
       } else {
-        setFolders((prev) =>
-          updateNode(prev, folderId, (n) => ({ ...n, isExpanded: true })),
+        updateSections((nodes) =>
+          updateNode(nodes, folderId, (n) => ({ ...n, isExpanded: true })),
         );
       }
     },
-    [folders, loadFolders],
+    [allFolders, loadSubfolders],
   );
 
   const toggleSelect = (folder: { id: string; name: string }) => {
@@ -310,13 +371,44 @@ export function DriveFolderPickerModal({
                 <Skeleton key={i} className="h-8 w-full" />
               ))}
             </div>
-          ) : folders.length === 0 ? (
+          ) : allFolders.length === 0 ? (
             <div className="text-center py-10 text-muted-foreground">
               לא נמצאו תיקיות
             </div>
           ) : (
             <div className="py-1">
-              {folders.map((f) => renderFolder(f))}
+              {SECTION_CONFIG.map(({ key, label, Icon }) => {
+                const sectionFolders = sections[key];
+                if (sectionFolders.length === 0) return null;
+                const isCollapsed = collapsedSections[key];
+                return (
+                  <div key={key} className="mb-2">
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 rounded-lg transition-colors"
+                      onClick={() =>
+                        setCollapsedSections((prev) => ({ ...prev, [key]: !prev[key] }))
+                      }
+                    >
+                      {isCollapsed ? (
+                        <ChevronLeft className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                      <Icon className="w-4 h-4" />
+                      <span>{label}</span>
+                      <span className="text-xs text-muted-foreground/70">
+                        ({sectionFolders.length})
+                      </span>
+                    </button>
+                    {!isCollapsed && (
+                      <div>
+                        {sectionFolders.map((f) => renderFolder(f, 1))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

@@ -3,6 +3,8 @@
 import { useEffect, useState, lazy, Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronRight, ChevronLeft } from "lucide-react";
+import "react-pdf/dist/Page/AnnotationLayer.css";
+import "react-pdf/dist/Page/TextLayer.css";
 
 const LazyDocument = lazy(() =>
   import("react-pdf").then((mod) => ({ default: mod.Document })),
@@ -13,7 +15,10 @@ const LazyPage = lazy(() =>
 
 // Configure worker
 import { pdfjs } from "react-pdf";
-pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url,
+).toString();
 
 interface PdfPreviewProps {
   fileId: number;
