@@ -1,10 +1,21 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { SourceSwitcher } from "./source-switcher";
 import { DriveConnectionCard } from "./drive-connection-card";
 import { DriveFileExplorer } from "./drive-file-explorer";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const DRIVE_ERROR_MESSAGES: Record<string, string> = {
+  no_refresh_token: "לא התקבל אישור מלא מ-Google. נסה להתחבר שוב.",
+  callback_failed: "שגיאה בתהליך ההתחברות ל-Google Drive.",
+  no_code: "לא התקבל קוד אימות מ-Google.",
+  token_exchange_failed: "שגיאה בהחלפת קוד האימות. נסה שוב.",
+  missing_state: "פרטי האימות חסרים. נסה להתחבר שוב.",
+  invalid_state: "פרטי האימות אינם תקינים. נסה להתחבר שוב.",
+};
 
 interface DriveStatus {
   connected: boolean;
@@ -19,10 +30,18 @@ interface FilesPageClientProps {
 export function FilesPageClient({ searchParams }: FilesPageClientProps) {
   const [status, setStatus] = useState<DriveStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const urlParams = useSearchParams();
+  const router = useRouter();
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/integrations/google/drive/status");
+      const res = await fetch("/api/integrations/google/drive/status", {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        setStatus({ connected: false });
+        return;
+      }
       const data = await res.json();
       setStatus(data);
     } catch {
@@ -31,6 +50,22 @@ export function FilesPageClient({ searchParams }: FilesPageClientProps) {
       setIsLoading(false);
     }
   }, []);
+
+  // Read OAuth callback URL params and show toasts
+  useEffect(() => {
+    const error = urlParams.get("driveError");
+    const connected = urlParams.get("driveConnected");
+
+    if (error) {
+      toast.error(DRIVE_ERROR_MESSAGES[error] || "שגיאה בהתחברות ל-Google Drive.");
+    } else if (connected === "true") {
+      toast.success("Google Drive חובר בהצלחה!");
+    }
+
+    if (error || connected) {
+      router.replace("/files?source=drive");
+    }
+  }, [urlParams, router]);
 
   useEffect(() => {
     fetchStatus();

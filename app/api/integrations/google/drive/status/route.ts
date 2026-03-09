@@ -7,11 +7,18 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("GoogleDriveStatus");
 
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate",
+};
+
 async function handleGET() {
   try {
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401, headers: NO_CACHE_HEADERS },
+      );
     }
 
     const rl = await checkRateLimit(
@@ -35,23 +42,29 @@ async function handleGET() {
     });
 
     if (!connection || !connection.isActive) {
-      return NextResponse.json({ connected: false });
+      return NextResponse.json(
+        { connected: false },
+        { headers: NO_CACHE_HEADERS },
+      );
     }
 
-    return NextResponse.json({
-      connected: true,
-      email: connection.googleEmail,
-      selectedFolders: connection.selectedFolders.map((f) => ({
-        driveFolderId: f.driveFolderId,
-        folderName: f.folderName,
-      })),
-      isActive: connection.isActive,
-    });
+    return NextResponse.json(
+      {
+        connected: true,
+        email: connection.googleEmail,
+        selectedFolders: connection.selectedFolders.map((f) => ({
+          driveFolderId: f.driveFolderId,
+          folderName: f.folderName,
+        })),
+        isActive: connection.isActive,
+      },
+      { headers: NO_CACHE_HEADERS },
+    );
   } catch (error) {
     log.error("Failed to get Drive status", { error: String(error) });
     return NextResponse.json(
       { error: "Failed to get Drive status" },
-      { status: 500 },
+      { status: 500, headers: NO_CACHE_HEADERS },
     );
   }
 }

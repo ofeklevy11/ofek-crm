@@ -111,7 +111,7 @@ jobs:
             ls -t /opt/crm/backups/pre-deploy-*.sql.gz 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
 
             echo "=== Running database migrations ==="
-            $COMPOSE --profile migration run --rm migrator pnpm prisma migrate deploy
+            $COMPOSE --profile migration run --build --rm migrator pnpm prisma migrate deploy
 
             echo "=== Starting app-$TARGET ==="
             $COMPOSE --profile $TARGET up -d app-$TARGET

@@ -23,7 +23,11 @@ export default async function FilesPage({ searchParams }: PageProps) {
 
   // Drive source - render entirely client-side
   if (source === "drive") {
-    return <FilesPageClient searchParams={resolvedSearchParams} />;
+    return (
+      <Suspense fallback={<FilesSkeleton />}>
+        <FilesPageClient searchParams={resolvedSearchParams} />
+      </Suspense>
+    );
   }
 
   // Internal file library (existing behavior, unchanged)

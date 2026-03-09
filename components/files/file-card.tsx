@@ -31,6 +31,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { showConfirm } from "@/hooks/use-modal";
 import { getUserFriendlyError } from "@/lib/errors";
+import { FilePreviewModal } from "./file-preview-modal";
 
 // Secure download function that uses API route
 const downloadFile = async (fileId: number, fileName: string) => {
@@ -144,6 +145,7 @@ export function FileCard({
   source = "internal",
 }: FileCardProps) {
   const isDrive = source === "google-drive";
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editDisplayName, setEditDisplayName] = useState(
@@ -238,17 +240,30 @@ export function FileCard({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align={align} className="text-right">
-        {openUrl && (
-          <DropdownMenuItem asChild className="gap-2">
-            <a
-              href={openUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center"
-            >
-              <ExternalLink className="w-4 h-4 ml-2" />
-              פתח
-            </a>
+        {isDrive ? (
+          openUrl && (
+            <DropdownMenuItem asChild className="gap-2">
+              <a
+                href={openUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center"
+              >
+                <ExternalLink className="w-4 h-4 ml-2" />
+                פתח
+              </a>
+            </DropdownMenuItem>
+          )
+        ) : (
+          <DropdownMenuItem
+            className="gap-2 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              setPreviewOpen(true);
+            }}
+          >
+            <ExternalLink className="w-4 h-4 ml-2" />
+            פתח
           </DropdownMenuItem>
         )}
         <DropdownMenuItem
@@ -288,6 +303,18 @@ export function FileCard({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+
+  const previewModal = !isDrive && (
+    <FilePreviewModal
+      file={file}
+      open={previewOpen}
+      onOpenChange={setPreviewOpen}
+      onDownload={() => {
+        handleDownload();
+        setPreviewOpen(false);
+      }}
+    />
   );
 
   // Grid View
@@ -406,16 +433,27 @@ export function FileCard({
 
             {/* Direct action buttons */}
             <div className="mt-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              {openUrl && (
-                <a
-                  href={openUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+              {isDrive ? (
+                openUrl && (
+                  <a
+                    href={openUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-primary/10 text-primary rounded-md hover:bg-primary/20 transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    פתח
+                  </a>
+                )
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setPreviewOpen(true)}
                   className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-primary/10 text-primary rounded-md hover:bg-primary/20 transition-colors"
                 >
                   <ExternalLink className="w-3 h-3" />
                   פתח
-                </a>
+                </button>
               )}
               <button
                 type="button"
@@ -428,6 +466,7 @@ export function FileCard({
             </div>
           </>
         )}
+        {previewModal}
       </div>
     );
   }
@@ -500,16 +539,27 @@ export function FileCard({
 
         {/* Direct action buttons */}
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-          {openUrl && (
-            <a
-              href={openUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+          {isDrive ? (
+            openUrl && (
+              <a
+                href={openUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                title="פתח"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            )
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPreviewOpen(true)}
               className="p-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
               title="פתח"
             >
               <ExternalLink className="w-4 h-4" />
-            </a>
+            </button>
           )}
           <button
             type="button"
@@ -524,6 +574,7 @@ export function FileCard({
         <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <ActionsMenu />
         </div>
+        {previewModal}
       </div>
     );
   }
@@ -584,6 +635,7 @@ export function FileCard({
         <div className="col-span-1 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
           <ActionsMenu />
         </div>
+        {previewModal}
       </div>
     );
   }
