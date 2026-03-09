@@ -14,7 +14,8 @@ import { TextPreview } from "./previews/text-preview";
 import { ImagePreview } from "./previews/image-preview";
 import { CsvPreview } from "./previews/csv-preview";
 import { ExcelPreview } from "./previews/excel-preview";
-import { PdfPreview } from "./previews/pdf-preview";
+import dynamic from "next/dynamic";
+const PdfPreview = dynamic(() => import("./previews/pdf-preview").then((m) => ({ default: m.PdfPreview })), { ssr: false });
 
 interface FilePreviewModalProps {
   file: FileModel;

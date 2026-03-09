@@ -231,11 +231,16 @@ export function DriveFileExplorer({
       const res = await fetch("/api/integrations/google/drive/disconnect", {
         method: "POST",
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Failed to disconnect");
+      }
       toast.success("Google Drive נותק בהצלחה");
       onStatusChange();
-    } catch {
-      toast.error("שגיאה בניתוק");
+    } catch (err: any) {
+      toast.error(err.message === "Rate limit exceeded. Please try again later."
+        ? "יותר מדי ניסיונות. נסה שוב בעוד מספר דקות."
+        : "שגיאה בניתוק Google Drive");
     }
   };
 

@@ -189,6 +189,8 @@ export const RATE_LIMITS = {
   googleCalOAuth: { prefix: "gcal-oauth", max: 5, windowSeconds: 900 } satisfies RateLimitConfig,
   /** Google Drive OAuth: 5 per user per 15 minutes */
   googleDriveOAuth: { prefix: "gdrive-oauth", max: 5, windowSeconds: 900 } satisfies RateLimitConfig,
+  /** Google Drive disconnect: 10 per user per 15 minutes */
+  googleDriveDisconnect: { prefix: "gdrive-disconnect", max: 10, windowSeconds: 900 } satisfies RateLimitConfig,
   /** Google Drive reads: 60 per user per minute */
   googleDriveRead: { prefix: "gdrive-read", max: 60, windowSeconds: 60 } satisfies RateLimitConfig,
   /** Google Drive downloads: 30 per user per minute */

@@ -1,20 +1,13 @@
 "use client";
 
-import { useEffect, useState, lazy, Suspense } from "react";
+import { useEffect, useState } from "react";
+import { Document, Page, pdfjs } from "react-pdf";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronRight, ChevronLeft } from "lucide-react";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
-const LazyDocument = lazy(() =>
-  import("react-pdf").then((mod) => ({ default: mod.Document })),
-);
-const LazyPage = lazy(() =>
-  import("react-pdf").then((mod) => ({ default: mod.Page })),
-);
-
-// Configure worker
-import { pdfjs } from "react-pdf";
+// Configure worker — static file from public/ works with both Turbopack (dev) and webpack (prod)
 pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 interface PdfPreviewProps {
@@ -77,25 +70,21 @@ export function PdfPreview({ fileId }: PdfPreviewProps) {
   return (
     <div className="flex flex-col items-center gap-2">
       <div className="overflow-auto max-h-[60vh] rounded-md border bg-muted/30 w-full flex justify-center">
-        <Suspense
-          fallback={<Skeleton className="w-[400px] h-[500px] rounded-lg m-4" />}
+        <Document
+          file={url}
+          onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+          onLoadError={(err) => {
+            console.error("PDF render error:", err);
+            setError("Failed to render PDF");
+          }}
+          loading={<Skeleton className="w-[400px] h-[500px] rounded-lg m-4" />}
         >
-          <LazyDocument
-            file={url}
-            onLoadSuccess={({ numPages: n }) => setNumPages(n)}
-            onLoadError={(err) => {
-              console.error("PDF render error:", err);
-              setError("Failed to render PDF");
-            }}
+          <Page
+            pageNumber={currentPage}
+            width={700}
             loading={<Skeleton className="w-[400px] h-[500px] rounded-lg m-4" />}
-          >
-            <LazyPage
-              pageNumber={currentPage}
-              width={700}
-              loading={<Skeleton className="w-[400px] h-[500px] rounded-lg m-4" />}
-            />
-          </LazyDocument>
-        </Suspense>
+          />
+        </Document>
       </div>
 
       {numPages > 1 && (

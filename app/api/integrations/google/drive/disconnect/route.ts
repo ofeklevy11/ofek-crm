@@ -17,7 +17,7 @@ async function handlePOST() {
 
     const rl = await checkRateLimit(
       String(user.id),
-      RATE_LIMITS.googleDriveOAuth,
+      RATE_LIMITS.googleDriveDisconnect,
     );
     if (rl) return rl;
 
