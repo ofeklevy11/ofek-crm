@@ -1154,7 +1154,7 @@ export default function ViewAutomationModal({
                             className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500"
                             dir="ltr"
                           />
-                          {waPhoneColumnId.replace("manual:", "") && (
+                          {currentActionType === "SEND_WHATSAPP" && waPhoneColumnId.replace("manual:", "") && (
                             <div className="mt-2 text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
                               <strong>תצוגה מקדימה לשליחה:</strong>{" "}
                               <span dir="ltr" className="font-mono">

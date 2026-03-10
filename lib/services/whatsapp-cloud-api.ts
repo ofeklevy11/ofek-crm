@@ -3,6 +3,7 @@ import { createLogger } from "@/lib/logger";
 const log = createLogger("WhatsAppCloudAPI");
 
 const GRAPH_API_BASE = "https://graph.facebook.com/v21.0";
+const MAX_MEDIA_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB (Meta's own limit is 100 MB)
 
 interface SendMessageResult {
   messageId: string;
@@ -50,7 +51,12 @@ export async function sendTextMessage(
   }
 
   const data = await res.json();
-  return { messageId: data.messages?.[0]?.id };
+  const messageId = data.messages?.[0]?.id;
+  if (!messageId) {
+    log.error("sendTextMessage: no message ID in response", { data });
+    throw new Error("WhatsApp API returned no message ID");
+  }
+  return { messageId };
 }
 
 /**
@@ -95,7 +101,12 @@ export async function sendMediaMessage(
   }
 
   const data = await res.json();
-  return { messageId: data.messages?.[0]?.id };
+  const messageId = data.messages?.[0]?.id;
+  if (!messageId) {
+    log.error("sendMediaMessage: no message ID in response", { data });
+    throw new Error("WhatsApp API returned no message ID");
+  }
+  return { messageId };
 }
 
 /**
@@ -143,7 +154,12 @@ export async function sendTemplateMessage(
   }
 
   const data = await res.json();
-  return { messageId: data.messages?.[0]?.id };
+  const messageId = data.messages?.[0]?.id;
+  if (!messageId) {
+    log.error("sendTemplateMessage: no message ID in response", { data });
+    throw new Error("WhatsApp API returned no message ID");
+  }
+  return { messageId };
 }
 
 /**
@@ -187,7 +203,15 @@ export async function downloadMedia(
     throw new Error(`Media download failed: ${res.status}`);
   }
 
+  const contentLength = Number(res.headers.get("content-length") || "0");
+  if (contentLength > MAX_MEDIA_SIZE_BYTES) {
+    throw new Error(`Media too large: ${contentLength} bytes (max ${MAX_MEDIA_SIZE_BYTES})`);
+  }
+
   const arrayBuffer = await res.arrayBuffer();
+  if (arrayBuffer.byteLength > MAX_MEDIA_SIZE_BYTES) {
+    throw new Error(`Media too large: ${arrayBuffer.byteLength} bytes (max ${MAX_MEDIA_SIZE_BYTES})`);
+  }
   return Buffer.from(arrayBuffer);
 }
 
@@ -214,6 +238,8 @@ export async function markMessageAsRead(
   });
 
   if (!res.ok) {
-    log.error("markMessageAsRead failed", { status: res.status });
+    const err = await res.text().catch(() => "");
+    log.error("markMessageAsRead failed", { status: res.status, body: err.slice(0, 200) });
+    throw new Error(`markMessageAsRead failed: ${res.status}`);
   }
 }

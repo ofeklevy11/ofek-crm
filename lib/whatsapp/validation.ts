@@ -46,3 +46,22 @@ export const manualConnectSchema = z.object({
   wabaId: z.string().min(1).max(64).regex(/^\d+$/, "WABA ID must be numeric"),
   accessToken: z.string().min(10).max(512),
 });
+
+const templateParameterSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("text"), text: z.string().min(1).max(1024) }),
+  z.object({ type: z.literal("image"), image: z.object({ link: z.string().url() }) }),
+  z.object({ type: z.literal("video"), video: z.object({ link: z.string().url() }) }),
+  z.object({ type: z.literal("document"), document: z.object({ link: z.string().url() }) }),
+]);
+
+export const sendTemplateMessageSchema = z.object({
+  conversationId: z.number().int().positive(),
+  templateName: z.string().min(1).max(512),
+  languageCode: z.string().min(2).max(10),
+  components: z.array(z.object({
+    type: z.enum(["header", "body", "button"]),
+    parameters: z.array(templateParameterSchema).optional(),
+    sub_type: z.string().optional(),
+    index: z.number().optional(),
+  })).optional(),
+});

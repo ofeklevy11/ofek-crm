@@ -571,8 +571,8 @@ export default function TaskItemAutomationBuilder({
                 <p className="text-xs text-gray-500 mt-1">
                   ניתן להזין מספר רגיל או מזהה קבוצה (Group ID)
                 </p>
-                {/* Preview Logic */}
-                {(config.phone as string) && (
+                {/* Preview Logic - only for Green API (WhatsApp) */}
+                {selectedType === "SEND_WHATSAPP" && (config.phone as string) && (
                   <div className="mt-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
                     <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 font-semibold">
                       תצוגה מקדימה למערכת (Preview)

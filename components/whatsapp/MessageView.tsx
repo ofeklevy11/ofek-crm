@@ -8,10 +8,13 @@ import WindowBanner from "./WindowBanner";
 import {
   getConversationMessages,
   sendWhatsAppMessage,
+  sendWhatsAppTemplateMessage,
   markConversationAsRead,
 } from "@/app/actions/whatsapp";
+import TemplatePicker from "./TemplatePicker";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import { FileText, RefreshCw } from "lucide-react";
 
 interface Message {
   id: string;
@@ -63,9 +66,12 @@ export default function MessageView({
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevConversationId = useRef<number | null>(null);
+  const isNearBottomRef = useRef(true);
 
   // Load messages when conversation changes
   useEffect(() => {
@@ -88,8 +94,10 @@ export default function MessageView({
         if (newMsgs.length === 0) return prev;
         return [...newMsgs, ...prev];
       });
-      // Scroll to bottom on new message
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+      // Only auto-scroll if user is near the bottom (not reading old messages)
+      if (isNearBottomRef.current) {
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+      }
       // Mark as read
       markConversationAsRead(conversationId).catch(() => {});
     }
@@ -116,6 +124,7 @@ export default function MessageView({
     try {
       if (cursor) setLoadingMore(true);
       else setLoading(true);
+      setLoadError(false);
 
       const result = await getConversationMessages({
         conversationId,
@@ -137,6 +146,7 @@ export default function MessageView({
         setTimeout(() => bottomRef.current?.scrollIntoView(), 50);
       }
     } catch (error) {
+      if (!cursor) setLoadError(true);
       toast.error("שגיאה בטעינת הודעות");
     } finally {
       setLoading(false);
@@ -150,10 +160,12 @@ export default function MessageView({
     loadMessages(oldestMsg.id);
   }, [loadingMore, hasMore, messages]);
 
-  // Infinite scroll detection
+  // Infinite scroll detection + track scroll position
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
-    const { scrollTop } = scrollRef.current;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    // Track if user is near the bottom for auto-scroll decisions
+    isNearBottomRef.current = scrollHeight - scrollTop - clientHeight < 150;
     // Since messages are in reverse order (newest first), scrolling up loads more
     if (scrollTop === 0 && hasMore && !loadingMore) {
       handleLoadMore();
@@ -167,6 +179,19 @@ export default function MessageView({
       toast.error(getUserFriendlyError(error));
       throw error;
     }
+  };
+
+  const handleSendTemplate = async (
+    templateName: string,
+    languageCode: string,
+    components?: any[],
+  ) => {
+    await sendWhatsAppTemplateMessage({
+      conversationId,
+      templateName,
+      languageCode,
+      components,
+    });
   };
 
   const assignedUser = meta?.assignedUserId
@@ -204,6 +229,17 @@ export default function MessageView({
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <span className="animate-spin h-6 w-6 border-2 border-green-500 border-t-transparent rounded-full" />
+          </div>
+        ) : loadError && messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-500">
+            <p className="text-sm">שגיאה בטעינת הודעות</p>
+            <button
+              onClick={() => loadMessages()}
+              className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg border hover:bg-gray-50 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              נסה שוב
+            </button>
           </div>
         ) : (
           <>
@@ -248,16 +284,38 @@ export default function MessageView({
       </div>
 
       {/* Input */}
-      <MessageInput
-        onSend={handleSend}
-        disabled={meta?.status === "CLOSED" || !isWindowOpen}
-        placeholder={
-          meta?.status === "CLOSED"
-            ? "השיחה סגורה"
-            : !isWindowOpen
-              ? "חלון ה-24 שעות פג — נדרשת הודעת תבנית"
-              : "הקלד הודעה..."
-        }
+      {meta?.status === "CLOSED" ? (
+        <MessageInput onSend={handleSend} disabled placeholder="השיחה סגורה" />
+      ) : !isWindowOpen ? (
+        <div className="flex items-center justify-center p-3 border-t bg-white">
+          <button
+            onClick={() => setShowTemplatePicker(true)}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors"
+          >
+            שלח הודעת תבנית
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-end gap-0 bg-white">
+          <button
+            onClick={() => setShowTemplatePicker(true)}
+            className="shrink-0 mr-1 mb-3 ml-3 flex items-center gap-1 px-2.5 py-2 text-xs rounded-lg border border-green-600 text-green-700 hover:bg-green-50 transition-colors"
+            title="שלח הודעת תבנית"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            תבנית
+          </button>
+          <div className="flex-1">
+            <MessageInput onSend={handleSend} placeholder="הקלד הודעה..." />
+          </div>
+        </div>
+      )}
+
+      <TemplatePicker
+        open={showTemplatePicker}
+        onOpenChange={setShowTemplatePicker}
+        conversationId={conversationId}
+        onSend={handleSendTemplate}
       />
     </div>
   );

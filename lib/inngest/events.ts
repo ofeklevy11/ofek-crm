@@ -185,6 +185,9 @@ export type Events = {
       mediaUrl?: string;
       mediaFileName?: string;
       sentByUserId: number;
+      templateName?: string;
+      languageCode?: string;
+      templateComponents?: unknown[];
     };
   };
   "whatsapp/download-media": {

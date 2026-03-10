@@ -50,6 +50,13 @@ export default function MessageBubble({
             : "bg-white text-gray-900 border border-gray-200"
         }`}
       >
+        {/* Template badge */}
+        {type === "TEMPLATE" && (
+          <span className="inline-block text-[10px] font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5 mb-1">
+            הודעת תבנית
+          </span>
+        )}
+
         {/* Sender name for outbound */}
         {isOutbound && senderName && (
           <p className="text-xs font-semibold text-green-700 mb-1">

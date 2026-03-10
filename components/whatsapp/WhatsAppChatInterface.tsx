@@ -8,7 +8,7 @@ import {
   getCompanyUsers,
 } from "@/app/actions/whatsapp";
 import { useRealtime } from "@/hooks/use-realtime";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
 
@@ -151,17 +151,18 @@ export default function WhatsAppChatInterface({
         if (
           data.conversationId === selectedConvIdRef.current
         ) {
-          setRealtimeStatusUpdates((prev) => [
-            ...prev,
-            { wamId: data.wamId, status: data.status },
-          ]);
+          setRealtimeStatusUpdates((prev) => {
+            // Replace existing entry for same wamId to prevent unbounded growth
+            const filtered = prev.filter((u) => u.wamId !== data.wamId);
+            return [...filtered, { wamId: data.wamId, status: data.status }];
+          });
         }
       }
     },
     [],
   );
 
-  useRealtime(currentUser.id, handleRealtimeMessage, {
+  const { hasGivenUp } = useRealtime(currentUser.id, handleRealtimeMessage, {
     onReconnect: fetchData,
   });
 
@@ -185,7 +186,20 @@ export default function WhatsAppChatInterface({
   }
 
   return (
-    <div className="flex h-[calc(100vh-120px)] bg-white rounded-xl shadow-sm border overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-120px)] bg-white rounded-xl shadow-sm border overflow-hidden">
+      {hasGivenUp && (
+        <div className="flex items-center justify-center gap-2 px-3 py-2 bg-red-50 border-b border-red-200 text-red-700 text-sm">
+          <WifiOff className="w-4 h-4" />
+          <span>החיבור לעדכונים בזמן אמת נותק.</span>
+          <button
+            onClick={() => window.location.reload()}
+            className="underline font-medium hover:text-red-800"
+          >
+            רענן את הדף
+          </button>
+        </div>
+      )}
+      <div className="flex flex-1 min-h-0">
       {/* Conversation list - desktop: always visible, mobile: toggle */}
       <div
         className={`w-full md:w-[360px] shrink-0 ${
@@ -227,6 +241,7 @@ export default function WhatsAppChatInterface({
             <p className="text-sm">בחר שיחה מהרשימה כדי להתחיל</p>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

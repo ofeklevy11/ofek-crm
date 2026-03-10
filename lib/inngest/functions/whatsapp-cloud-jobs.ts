@@ -173,18 +173,20 @@ export const processWaIncomingMessage = inngest.createFunction(
           payload,
         );
       } else {
-        // Broadcast: fetch all company users and publish to each
+        // Broadcast: fetch all company users and publish in parallel
         const { prisma } = await import("@/lib/prisma");
         const users = await prisma.user.findMany({
           where: { companyId },
           select: { id: true },
         });
-        for (const user of users) {
-          await redis.publish(
-            `company:${companyId}:user:${user.id}:whatsapp`,
-            payload,
-          );
-        }
+        await Promise.all(
+          users.map((user) =>
+            redis.publish(
+              `company:${companyId}:user:${user.id}:whatsapp`,
+              payload,
+            )
+          )
+        );
       }
     });
 
@@ -253,22 +255,30 @@ export const processWaStatusUpdate = inngest.createFunction(
         return null;
       }
 
-      // Only upgrade status (never downgrade), except FAILED always applies
-      const currentPriority = STATUS_PRIORITY[message.status] ?? 0;
-      const newPriority = STATUS_PRIORITY[newStatus] ?? 0;
-      if (newStatus !== "FAILED" && newPriority <= currentPriority) {
-        return null; // Already at this status or higher
-      }
-
       const errorInfo = errors?.length
         ? { errorCode: String((errors[0] as any)?.code || ""), errorMessage: String((errors[0] as any)?.title || "") }
         : {};
 
-      await prisma.waMessage.update({
-        where: { wamId },
+      // Atomic conditional update — only upgrade status, never downgrade
+      // Uses updateMany with WHERE to avoid read-then-write race condition
+      const newPriority = STATUS_PRIORITY[newStatus] ?? 0;
+      const allowedCurrentStatuses =
+        newStatus === "FAILED"
+          ? undefined // FAILED always applies
+          : (Object.entries(STATUS_PRIORITY)
+              .filter(([, p]) => p < newPriority)
+              .map(([s]) => s) as any[]);
+
+      const result = await prisma.waMessage.updateMany({
+        where: {
+          wamId,
+          companyId,
+          ...(allowedCurrentStatuses ? { status: { in: allowedCurrentStatuses } } : {}),
+        },
         data: { status: newStatus as any, ...errorInfo },
       });
 
+      if (result.count === 0) return null;
       return { conversationId: message.conversationId };
     });
 
@@ -300,12 +310,14 @@ export const processWaStatusUpdate = inngest.createFunction(
             where: { companyId },
             select: { id: true },
           });
-          for (const user of users) {
-            await redis.publish(
-              `company:${companyId}:user:${user.id}:whatsapp`,
-              payload,
-            );
-          }
+          await Promise.all(
+            users.map((user) =>
+              redis.publish(
+                `company:${companyId}:user:${user.id}:whatsapp`,
+                payload,
+              )
+            )
+          );
         }
       });
     }
@@ -321,6 +333,7 @@ export const sendWaOutboundMessage = inngest.createFunction(
     name: "Send WhatsApp Outbound Message",
     retries: 3,
     timeouts: { finish: "60s" },
+    idempotency: "event.id",
     concurrency: [
       { limit: 3, key: "event.data.companyId" },
       { limit: 10 },
@@ -336,6 +349,9 @@ export const sendWaOutboundMessage = inngest.createFunction(
       mediaUrl,
       mediaFileName,
       sentByUserId,
+      templateName,
+      languageCode,
+      templateComponents,
     } = event.data as {
       companyId: number;
       conversationId: number;
@@ -344,6 +360,9 @@ export const sendWaOutboundMessage = inngest.createFunction(
       mediaUrl?: string;
       mediaFileName?: string;
       sentByUserId: number;
+      templateName?: string;
+      languageCode?: string;
+      templateComponents?: unknown[];
     };
 
     // Step 1: Load conversation, contact, phone, and account data
@@ -390,26 +409,28 @@ export const sendWaOutboundMessage = inngest.createFunction(
       };
     });
 
-    // Step 2: Check 24-hour window
-    await step.run("validate-window", async () => {
-      if (!context.lastInboundAt) {
-        throw new NonRetriableError(
-          "Cannot send free-form message: no inbound message from contact. Use a template instead.",
-        );
-      }
-      const hoursSinceLastInbound =
-        (Date.now() - new Date(context.lastInboundAt).getTime()) / (1000 * 60 * 60);
-      if (hoursSinceLastInbound > 24) {
-        throw new NonRetriableError(
-          "24-hour messaging window expired. Use a template message to re-engage.",
-        );
-      }
-    });
+    // Step 2: Check 24-hour window (skip for template messages)
+    if (type !== "template") {
+      await step.run("validate-window", async () => {
+        if (!context.lastInboundAt) {
+          throw new NonRetriableError(
+            "Cannot send free-form message: no inbound message from contact. Use a template instead.",
+          );
+        }
+        const hoursSinceLastInbound =
+          (Date.now() - new Date(context.lastInboundAt).getTime()) / (1000 * 60 * 60);
+        if (hoursSinceLastInbound > 24) {
+          throw new NonRetriableError(
+            "24-hour messaging window expired. Use a template message to re-engage.",
+          );
+        }
+      });
+    }
 
     // Step 3: Decrypt token and send via Cloud API
     const sendResult = await step.run("send-via-api", async () => {
       const { decrypt } = await import("@/lib/services/encryption");
-      const { sendTextMessage, sendMediaMessage } = await import(
+      const { sendTextMessage, sendMediaMessage, sendTemplateMessage } = await import(
         "@/lib/services/whatsapp-cloud-api"
       );
 
@@ -419,7 +440,16 @@ export const sendWaOutboundMessage = inngest.createFunction(
         authTag: context.accessTokenTag,
       });
 
-      if (type === "text" || !mediaUrl) {
+      if (type === "template" && templateName && languageCode) {
+        return sendTemplateMessage(
+          context.phoneNumberId,
+          accessToken,
+          context.waId,
+          templateName,
+          languageCode,
+          templateComponents,
+        );
+      } else if (type === "text" || !mediaUrl) {
         return sendTextMessage(
           context.phoneNumberId,
           accessToken,
@@ -484,6 +514,7 @@ export const sendWaOutboundMessage = inngest.createFunction(
         wamId: sendResult.messageId,
         status: "SENT",
         body: body?.slice(0, 100),
+        messageType: type?.toUpperCase() || "TEXT",
         timestamp: new Date().toISOString(),
       });
 

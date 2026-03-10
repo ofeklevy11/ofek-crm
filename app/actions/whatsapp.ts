@@ -8,6 +8,7 @@ import { inngest } from "@/lib/inngest/client";
 import { withRetry } from "@/lib/db-retry";
 import {
   sendMessageSchema,
+  sendTemplateMessageSchema,
   getConversationsSchema,
   getMessagesSchema,
   assignConversationSchema,
@@ -356,4 +357,122 @@ export async function getCompanyUsers() {
     select: { id: true, name: true, role: true },
     orderBy: { name: "asc" },
   });
+}
+
+// ── Template Messages ─────────────────────────────────────────────
+
+// In-memory cache for templates: keyed by wabaId
+const templateCache = new Map<string, { data: any[]; expiry: number }>();
+const TEMPLATE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+export async function getWhatsAppTemplates(conversationId: number) {
+  const user = await requireWhatsAppUser("whatsappRead");
+  if (!conversationId || conversationId <= 0) throw new Error("Invalid input");
+
+  // Load conversation → phoneNumber → account to get wabaId + token
+  const conversation = await withRetry(() =>
+    prisma.waConversation.findFirst({
+      where: { id: conversationId, companyId: user.companyId },
+      select: {
+        phoneNumber: {
+          select: {
+            account: {
+              select: {
+                wabaId: true,
+                accessTokenEnc: true,
+                accessTokenIv: true,
+                accessTokenTag: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+  );
+
+  if (!conversation) throw new Error("Conversation not found");
+
+  const account = conversation.phoneNumber.account;
+
+  // Check cache (keyed by wabaId for multi-WABA support)
+  const cached = templateCache.get(account.wabaId);
+  if (cached && cached.expiry > Date.now()) {
+    return cached.data;
+  }
+
+  const { decrypt } = await import("@/lib/services/encryption");
+  const { env } = await import("@/lib/env");
+
+  const accessToken = env.WHATSAPP_ACCESS_TOKEN || decrypt({
+    ciphertext: account.accessTokenEnc,
+    iv: account.accessTokenIv,
+    authTag: account.accessTokenTag,
+  });
+
+  const res = await fetch(
+    `https://graph.facebook.com/v21.0/${account.wabaId}/message_templates?status=APPROVED&limit=250`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(30_000),
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    log.error("getWhatsAppTemplates failed", { status: res.status, body: err.slice(0, 200) });
+    throw new Error("Failed to fetch templates");
+  }
+
+  const json = await res.json();
+  const templates = (json.data || []).map((t: any) => ({
+    name: t.name,
+    language: t.language,
+    category: t.category,
+    components: t.components,
+  }));
+
+  // Cache by wabaId
+  templateCache.set(account.wabaId, { data: templates, expiry: Date.now() + TEMPLATE_CACHE_TTL });
+
+  return templates;
+}
+
+export async function sendWhatsAppTemplateMessage(input: {
+  conversationId: number;
+  templateName: string;
+  languageCode: string;
+  components?: any[];
+}) {
+  const user = await requireWhatsAppUser("whatsappSend");
+  const parsed = sendTemplateMessageSchema.safeParse(input);
+  if (!parsed.success) throw new Error("Invalid input");
+
+  const { conversationId, templateName, languageCode, components } = parsed.data;
+
+  // Verify conversation belongs to company
+  const conversation = await withRetry(() =>
+    prisma.waConversation.findFirst({
+      where: { id: conversationId, companyId: user.companyId },
+      select: { id: true, companyId: true },
+    }),
+  );
+
+  if (!conversation) throw new Error("Conversation not found");
+
+  // Dispatch to Inngest
+  await inngest.send({
+    name: "whatsapp/send-message",
+    data: {
+      companyId: user.companyId,
+      conversationId,
+      body: `[תבנית: ${templateName}]`,
+      type: "template",
+      sentByUserId: user.id,
+      templateName,
+      languageCode,
+      templateComponents: components,
+    },
+  });
+
+  return { success: true, queued: true };
 }

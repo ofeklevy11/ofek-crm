@@ -113,14 +113,18 @@ async function handlePOST(req: NextRequest) {
       const phoneNumberId = value.metadata?.phone_number_id;
       if (!phoneNumberId) continue;
 
-      // Rate limit per phone number
+      // Rate limit per phone number — log warning but still dispatch to Inngest
+      // (Inngest concurrency controls handle backpressure; dropping events loses messages)
       const rateLimited = await checkRateLimit(
         phoneNumberId,
         RATE_LIMITS.whatsappWebhook,
       );
       if (rateLimited) {
-        log.error("Webhook rate limited", { phoneNumberId });
-        continue; // Skip this change but still return 200
+        log.error("Webhook rate limited — still dispatching", {
+          phoneNumberId,
+          messageCount: value.messages?.length ?? 0,
+          statusCount: value.statuses?.length ?? 0,
+        });
       }
 
       // Route to tenant

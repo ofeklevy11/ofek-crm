@@ -1502,15 +1502,17 @@ export default function AutomationModal({
                         className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500"
                         dir="ltr"
                       />
-                      <div className="mt-2 text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
-                        <strong>תצוגה מקדימה לשליחה:</strong>{" "}
-                        <span dir="ltr" className="font-mono">
-                          {formatPhonePreview(
-                            waPhoneColumnId.replace("manual:", ""),
-                            "private",
-                          )}
-                        </span>
-                      </div>
+                      {currentActionType === "SEND_WHATSAPP" && (
+                        <div className="mt-2 text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
+                          <strong>תצוגה מקדימה לשליחה:</strong>{" "}
+                          <span dir="ltr" className="font-mono">
+                            {formatPhonePreview(
+                              waPhoneColumnId.replace("manual:", ""),
+                              "private",
+                            )}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1534,7 +1536,7 @@ export default function AutomationModal({
                     ניתן למצוא את מזהה הקבוצה ב-Green API או דרך הדפדפן (סיומת
                     @g.us).
                   </p>
-                  {waPhoneColumnId.startsWith("manual:") && (
+                  {currentActionType === "SEND_WHATSAPP" && waPhoneColumnId.startsWith("manual:") && (
                     <div className="mt-2 text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
                       <strong>תצוגה מקדימה לשליחה:</strong>{" "}
                       <span dir="ltr" className="font-mono">
