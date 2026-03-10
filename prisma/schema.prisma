@@ -1794,11 +1794,13 @@ model WorkerTask {
 
 // NURTURE HUB MODULE
 model NurtureList {
-  id          Int     @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   companyId   Int
   name        String // e.g. "Birthday Club", "VIP Clients"
   slug        String // e.g. "birthday-club"
   description String?
+  isEnabled   Boolean  @default(false)
+  configJson  Json?
 
   subscribers NurtureSubscriber[]
 

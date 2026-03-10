@@ -7,13 +7,10 @@ import {
   Gift,
   Save,
   MessageSquare,
-  Mail,
   Smartphone,
   Clock,
-  CheckCircle2,
   AlertCircle,
   Zap,
-  User,
   Phone,
   X,
   Trash2,
@@ -21,6 +18,8 @@ import {
   ToggleRight,
   Pencil,
   Loader2,
+  Send,
+  Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getFriendlyResultError, getUserFriendlyError } from "@/lib/errors";
@@ -56,6 +55,8 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import CustomerListManager from "@/components/nurture/CustomerListManager";
+import NurtureChannelSelector from "@/components/nurture/NurtureChannelSelector";
+import NurtureMessageEditor from "@/components/nurture/NurtureMessageEditor";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   getNurtureSubscribers,
@@ -66,6 +67,10 @@ import {
   getTableFields,
   DataSource,
   FieldDefinition,
+  saveNurtureConfig,
+  getNurtureConfig,
+  getAvailableChannels,
+  sendNurtureCampaign,
 } from "../actions";
 import {
   deleteAutomationRule,
@@ -181,27 +186,68 @@ export default function BirthdayAutomationPage() {
     refreshData();
   };
 
+  const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false });
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
+
   // Form State
   const [config, setConfig] = useState({
     channels: {
-      email: true,
       sms: false,
-      whatsapp: false,
+      whatsappGreen: false,
+      whatsappCloud: false,
     },
     timing: "09:00",
-    emailSubject: "מזל טוב ליום הולדתך! 🎁",
-    emailBody:
-      "היי {first_name},\n\nיום הולדת שמח! 🎉\nאנחנו רוצים לחגוג איתך את היום המיוחד ולכן הכנו לך מתנה קטנה...\n\nיש לך 15% הנחה לקנייה הבאה שלך!\nקוד קופון: BDAY15\n\nבאהבה,\nצוות העסק",
     smsBody:
       "מזל טוב {first_name}! 🎂 פינוק ליום ההולדת מחכה לך אצלנו: 15% הנחה בהצגת הודעה זו. תוקף: 7 ימים.",
-    offerType: "percentage", // percentage, fixed, gift
+    whatsappGreenBody:
+      "מזל טוב {first_name}! 🎂🎉\nפינוק ליום ההולדת מחכה לך אצלנו: 15% הנחה!\nתוקף: 7 ימים.",
+    whatsappCloudTemplateName: "",
+    whatsappCloudLanguageCode: "he",
+    offerType: "percentage",
     offerValue: "15",
   });
 
-  const handleSave = () => {
-    // In a real app this would call an API
-    console.log("Saving config:", config, isEnabled);
-    toast.success("ההגדרות נשמרו בהצלחה (דמו)");
+  // Load saved config and available channels on mount
+  useEffect(() => {
+    getNurtureConfig("birthday").then((saved) => {
+      if (saved?.config) setConfig((prev) => ({ ...prev, ...(saved.config as any) }));
+      if (saved?.isEnabled !== undefined) setIsEnabled(saved.isEnabled);
+    }).catch((err: any) => {
+      if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(err));
+    });
+    getAvailableChannels().then(setAvailableChannels).catch((err: any) => {
+      if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(err));
+    });
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const result = await saveNurtureConfig("birthday", config, isEnabled);
+      if (result.success) toast.success("ההגדרות נשמרו בהצלחה");
+      else toast.error(getFriendlyResultError(result.error, "שגיאה בשמירה"));
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSendNow = async () => {
+    if (!(await showConfirm(`לשלוח את הקמפיין ל-${customers.length} לקוחות?`))) return;
+    setSending(true);
+    try {
+      const result = await sendNurtureCampaign("birthday");
+      if (result.success) toast.success(`${result.count} הודעות נשלחו בהצלחה`);
+      else toast.error(getFriendlyResultError(result.error, "שגיאה בשליחה"));
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -228,25 +274,22 @@ export default function BirthdayAutomationPage() {
             </p>
           </div>
           <div className="mr-auto flex items-center gap-3">
-            <div className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-full text-sm font-medium border border-slate-200 flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              בקרוב...
-            </div>
+            <Button
+              onClick={handleSendNow}
+              disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud)}
+              className="bg-pink-600 hover:bg-pink-700 gap-2"
+            >
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              שלח עכשיו
+            </Button>
+            <Button onClick={handleSave} disabled={saving} variant="outline" className="gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              שמור
+            </Button>
           </div>
         </div>
 
-        {/* Coming Soon Overlay */}
-        <div className="absolute inset-0 z-50 flex items-start justify-center pt-40 pointer-events-none">
-          <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-2xl border border-indigo-100 text-center max-w-sm mx-4">
-            <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <Clock className="w-6 h-6 text-indigo-400" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-1">בקרוב...</h3>
-            <p className="text-sm text-slate-500">מודול זה נמצא בפיתוח</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 grayscale opacity-50 pointer-events-none select-none">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Col: Configuration */}
           <div className="lg:col-span-2 space-y-6">
             {/* Customer List Management */}
@@ -280,9 +323,9 @@ export default function BirthdayAutomationPage() {
                     </div>
                     {/* List */}
                     <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
-                      {customers.map((c, i) => (
+                      {customers.map((c) => (
                         <div
-                          key={i}
+                          key={c.id}
                           className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors group"
                           onClick={() => setSelectedCustomer(c)}
                         >
@@ -446,105 +489,12 @@ export default function BirthdayAutomationPage() {
                 <CardTitle className="text-lg">ערוצי שליחה</CardTitle>
                 <CardDescription>בחר היכן הלקוח יקבל את הברכה</CardDescription>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div
-                  className={cn(
-                    "cursor-pointer border rounded-xl p-4 flex flex-col items-center gap-3 transition-all",
-                    config.channels.email
-                      ? "border-indigo-500 bg-indigo-50/50"
-                      : "border-slate-200 hover:border-slate-300"
-                  )}
-                  onClick={() =>
-                    setConfig({
-                      ...config,
-                      channels: {
-                        ...config.channels,
-                        email: !config.channels.email,
-                      },
-                    })
-                  }
-                >
-                  <div
-                    className={cn(
-                      "p-2 rounded-full",
-                      config.channels.email
-                        ? "bg-indigo-100 text-indigo-600"
-                        : "bg-slate-100 text-slate-400"
-                    )}
-                  >
-                    <Mail className="w-5 h-5" />
-                  </div>
-                  <span className="font-medium text-sm">אימייל</span>
-                  {config.channels.email && (
-                    <CheckCircle2 className="w-4 h-4 text-indigo-600" />
-                  )}
-                </div>
-
-                <div
-                  className={cn(
-                    "cursor-pointer border rounded-xl p-4 flex flex-col items-center gap-3 transition-all",
-                    config.channels.sms
-                      ? "border-pink-500 bg-pink-50/50"
-                      : "border-slate-200 hover:border-slate-300"
-                  )}
-                  onClick={() =>
-                    setConfig({
-                      ...config,
-                      channels: {
-                        ...config.channels,
-                        sms: !config.channels.sms,
-                      },
-                    })
-                  }
-                >
-                  <div
-                    className={cn(
-                      "p-2 rounded-full",
-                      config.channels.sms
-                        ? "bg-pink-100 text-pink-600"
-                        : "bg-slate-100 text-slate-400"
-                    )}
-                  >
-                    <MessageSquare className="w-5 h-5" />
-                  </div>
-                  <span className="font-medium text-sm">SMS</span>
-                  {config.channels.sms && (
-                    <CheckCircle2 className="w-4 h-4 text-pink-600" />
-                  )}
-                </div>
-
-                <div
-                  className={cn(
-                    "cursor-pointer border rounded-xl p-4 flex flex-col items-center gap-3 transition-all",
-                    config.channels.whatsapp
-                      ? "border-green-500 bg-green-50/50"
-                      : "border-slate-200 hover:border-slate-300"
-                  )}
-                  onClick={() =>
-                    setConfig({
-                      ...config,
-                      channels: {
-                        ...config.channels,
-                        whatsapp: !config.channels.whatsapp,
-                      },
-                    })
-                  }
-                >
-                  <div
-                    className={cn(
-                      "p-2 rounded-full",
-                      config.channels.whatsapp
-                        ? "bg-green-100 text-green-600"
-                        : "bg-slate-100 text-slate-400"
-                    )}
-                  >
-                    <Smartphone className="w-5 h-5" />
-                  </div>
-                  <span className="font-medium text-sm">WhatsApp</span>
-                  {config.channels.whatsapp && (
-                    <CheckCircle2 className="w-4 h-4 text-green-600" />
-                  )}
-                </div>
+              <CardContent>
+                <NurtureChannelSelector
+                  channels={config.channels}
+                  onChange={(channels) => setConfig({ ...config, channels })}
+                  availableChannels={availableChannels}
+                />
               </CardContent>
             </Card>
 
@@ -596,94 +546,22 @@ export default function BirthdayAutomationPage() {
 
             {/* Message Editor */}
             <Card>
-              <CardHeader className="pb-3 border-b border-slate-100">
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => setActiveTab("content")}
-                    className={cn(
-                      "text-sm font-medium pb-3 -mb-3 border-b-2 transition-colors",
-                      activeTab === "content"
-                        ? "border-indigo-600 text-indigo-600"
-                        : "border-transparent text-slate-500"
-                    )}
-                  >
-                    עריכת תוכן
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("design")}
-                    className={cn(
-                      "text-sm font-medium pb-3 -mb-3 border-b-2 transition-colors",
-                      activeTab === "design"
-                        ? "border-indigo-600 text-indigo-600"
-                        : "border-transparent text-slate-500"
-                    )}
-                  >
-                    עיצוב (HTML)
-                  </button>
-                </div>
+              <CardHeader>
+                <CardTitle className="text-lg">תוכן ההודעות</CardTitle>
               </CardHeader>
-              <CardContent className="pt-6 space-y-6">
-                {config.channels.email && (
-                  <div className="space-y-4">
-                    <h3 className="font-medium flex items-center gap-2 text-indigo-700">
-                      <Mail className="w-4 h-4" />
-                      תוכן האימייל
-                    </h3>
-                    <div className="space-y-2">
-                      <Label>נושא המייל</Label>
-                      <Input
-                        value={config.emailSubject}
-                        onChange={(e) =>
-                          setConfig({ ...config, emailSubject: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>גוף ההודעה</Label>
-                      <Textarea
-                        rows={6}
-                        value={config.emailBody}
-                        onChange={(e) =>
-                          setConfig({ ...config, emailBody: e.target.value })
-                        }
-                        className="font-mono text-sm leading-relaxed"
-                      />
-                      <div className="flex gap-2 text-xs text-slate-500">
-                        <span className="bg-slate-100 px-1.5 py-0.5 rounded cursor-pointer hover:bg-slate-200">
-                          {"{first_name}"}
-                        </span>
-                        <span className="bg-slate-100 px-1.5 py-0.5 rounded cursor-pointer hover:bg-slate-200">
-                          {"{last_name}"}
-                        </span>
-                        <span className="bg-slate-100 px-1.5 py-0.5 rounded cursor-pointer hover:bg-slate-200">
-                          {"{coupon_code}"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {(config.channels.sms || config.channels.whatsapp) && (
-                  <>
-                    <div className="border-t border-slate-100 my-4" />
-                    <div className="space-y-4">
-                      <h3 className="font-medium flex items-center gap-2 text-pink-700">
-                        <MessageSquare className="w-4 h-4" />
-                        תוכן SMS / WhatsApp
-                      </h3>
-                      <div className="space-y-2">
-                        <Label>נושא ההודעה</Label>
-                        <Textarea
-                          rows={3}
-                          value={config.smsBody}
-                          onChange={(e) =>
-                            setConfig({ ...config, smsBody: e.target.value })
-                          }
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
+              <CardContent>
+                <NurtureMessageEditor
+                  channels={config.channels}
+                  smsBody={config.smsBody}
+                  whatsappGreenBody={config.whatsappGreenBody}
+                  whatsappCloudTemplateName={config.whatsappCloudTemplateName}
+                  whatsappCloudLanguageCode={config.whatsappCloudLanguageCode}
+                  onSmsBodyChange={(v) => setConfig({ ...config, smsBody: v })}
+                  onWhatsappGreenBodyChange={(v) => setConfig({ ...config, whatsappGreenBody: v })}
+                  onWhatsappCloudTemplateNameChange={(v) => setConfig({ ...config, whatsappCloudTemplateName: v })}
+                  onWhatsappCloudLanguageCodeChange={(v) => setConfig({ ...config, whatsappCloudLanguageCode: v })}
+                  placeholders={["{first_name}", "{coupon_code}"]}
+                />
               </CardContent>
             </Card>
           </div>
@@ -709,55 +587,53 @@ export default function BirthdayAutomationPage() {
 
                   {/* App Content Mock */}
                   <div className="p-4 space-y-4 h-full overflow-y-auto pb-12">
-                    {config.channels.email ? (
-                      <div className="bg-white p-4 rounded-xl shadow-sm space-y-3">
-                        <div className="flex items-center gap-2 border-b border-slate-50 pb-2">
-                          <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-xs font-bold">
-                            L
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-slate-900">
-                              העסק שלנו
-                            </div>
-                            <div className="text-[10px] text-slate-500">
-                              אל: ישראל ישראלי
-                            </div>
-                          </div>
+                    {config.channels.sms && config.smsBody && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] text-slate-400 font-medium px-1">SMS</div>
+                        <div className="p-3 rounded-xl shadow-sm text-xs text-slate-800 max-w-[85%] bg-slate-100">
+                          {config.smsBody.replace(/\{first_name\}/g, "ישראל")}
+                          <div className="text-[9px] text-slate-400 text-left mt-1">09:00</div>
                         </div>
-                        <div className="space-y-2">
-                          <div className="text-sm font-bold text-slate-900">
-                            {config.emailSubject}
-                          </div>
-                          <div className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">
-                            {config.emailBody.replace("{first_name}", "ישראל")}
-                          </div>
-                        </div>
-                        {config.offerType !== "none" && (
-                          <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-center">
-                            <div className="text-xs text-indigo-800 font-medium mb-1">
-                              {config.offerType === "percentage"
-                                ? `${config.offerValue}% הנחה`
-                                : config.offerType === "fixed"
-                                ? `₪${config.offerValue} מתנה`
-                                : "מתנה מיוחדת"}
-                            </div>
-                            <div className="text-lg font-bold tracking-widest text-indigo-600 bg-white inline-block px-3 py-1 rounded border border-indigo-200 border-dashed">
-                              BDAY15
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center h-20 text-xs text-slate-400">
-                        בחר אימייל לתצוגה מקדימה
                       </div>
                     )}
 
-                    {(config.channels.sms || config.channels.whatsapp) && (
-                      <div className="p-3 rounded-tr-xl rounded-tl-xl rounded-bl-xl shadow-sm text-xs text-slate-800 ml-auto max-w-[85%] relative bg-[#DCF8C6] self-end">
-                        {config.smsBody.replace("{first_name}", "ישראל")}
-                        <div className="text-[9px] text-slate-400 text-left mt-1">
-                          09:00
+                    {config.channels.whatsappGreen && config.whatsappGreenBody && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] text-green-600 font-medium px-1">WhatsApp (Green API)</div>
+                        <div className="p-3 rounded-tr-xl rounded-tl-xl rounded-bl-xl shadow-sm text-xs text-slate-800 ml-auto max-w-[85%] bg-[#DCF8C6]">
+                          {config.whatsappGreenBody.replace(/\{first_name\}/g, "ישראל")}
+                          <div className="text-[9px] text-slate-400 text-left mt-1">09:00</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {config.channels.whatsappCloud && config.whatsappCloudTemplateName && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] text-blue-600 font-medium px-1">WhatsApp (Cloud API)</div>
+                        <div className="p-3 rounded-tr-xl rounded-tl-xl rounded-bl-xl shadow-sm text-xs text-slate-800 ml-auto max-w-[85%] bg-blue-50 border border-blue-100">
+                          <div className="font-medium mb-1">Template: {config.whatsappCloudTemplateName}</div>
+                          <div className="text-[10px] text-blue-500">שפה: {config.whatsappCloudLanguageCode}</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud && (
+                      <div className="flex items-center justify-center h-20 text-xs text-slate-400">
+                        בחר ערוץ לתצוגה מקדימה
+                      </div>
+                    )}
+
+                    {config.offerType !== "none" && (
+                      <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-center">
+                        <div className="text-xs text-indigo-800 font-medium mb-1">
+                          {config.offerType === "percentage"
+                            ? `${config.offerValue}% הנחה`
+                            : config.offerType === "fixed"
+                            ? `₪${config.offerValue} מתנה`
+                            : "מתנה מיוחדת"}
+                        </div>
+                        <div className="text-lg font-bold tracking-widest text-indigo-600 bg-white inline-block px-3 py-1 rounded border border-indigo-200 border-dashed">
+                          BDAY15
                         </div>
                       </div>
                     )}

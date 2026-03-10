@@ -13,7 +13,6 @@ import {
   ArrowLeft,
   Zap,
   Heart,
-  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +29,7 @@ const nurturePaths = [
     bg: "bg-pink-500/10",
     stats: "30% אחוזי המרה",
     href: "/nurture-hub/birthday",
-    comingSoon: true,
+
   },
   {
     id: "referral",
@@ -43,7 +42,7 @@ const nurturePaths = [
     bg: "bg-blue-500/10",
     stats: "גידול אורגני",
     href: "/nurture-hub/referral",
-    comingSoon: true,
+
   },
   {
     id: "upsell",
@@ -56,7 +55,7 @@ const nurturePaths = [
     bg: "bg-emerald-500/10",
     stats: "+15% להכנסות",
     href: "/nurture-hub/upsell",
-    comingSoon: true,
+
   },
   {
     id: "review",
@@ -69,7 +68,7 @@ const nurturePaths = [
     bg: "bg-amber-500/10",
     stats: "שיפור מוניטין",
     href: "/nurture-hub/review",
-    comingSoon: true,
+
   },
   {
     id: "renewal",
@@ -82,7 +81,7 @@ const nurturePaths = [
     bg: "bg-cyan-500/10",
     stats: "מניעת נטישה",
     href: "/nurture-hub/renewal",
-    comingSoon: true,
+
   },
   {
     id: "winback",
@@ -95,7 +94,7 @@ const nurturePaths = [
     bg: "bg-slate-500/10",
     stats: "הזדמנות שנייה",
     href: "/nurture-hub/winback",
-    comingSoon: true,
+
   },
   {
     id: "vip",
@@ -108,7 +107,7 @@ const nurturePaths = [
     bg: "bg-amber-500/10",
     stats: "לקוחות זהב",
     href: "/nurture-hub/vip",
-    comingSoon: true,
+
   },
 ];
 
@@ -195,51 +194,31 @@ export default function NurtureHubPage() {
 
         {/* Main Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {nurturePaths.map((path, index) => {
-            const isComingSoon = (path as any).comingSoon;
-            // Updated to always be Link
-            const CardWrapper = Link;
-
-            return (
-              <CardWrapper
+          {nurturePaths.map((path, index) => (
+              <Link
                 href={path.href}
                 key={path.id}
-                className={cn(
-                  "group relative block",
-                  // Removed cursor-not-allowed to allow clicking
-                  isComingSoon && "grayscale-[0.5] opacity-90"
-                )}
-                onMouseEnter={() => !isComingSoon && setHoveredCard(path.id)}
+                className="group relative block"
+                onMouseEnter={() => setHoveredCard(path.id)}
                 onMouseLeave={() => setHoveredCard(null)}
                 style={{ animationDelay: `${index * 100}ms` }}
               >
                 <div
-                  className={cn(
-                    "relative h-full bg-white rounded-3xl p-8 transition-all duration-300 border border-slate-100 overflow-hidden",
-                    // Use standard hover effect even if coming soon, or maybe slightly different
-                    "hover:shadow-[0_20px_50px_rgba(0,0,0,0.1)] hover:-translate-y-2",
-                    isComingSoon && "bg-slate-50/50",
-                    "flex flex-col justify-between"
-                  )}
+                  className="relative h-full bg-white rounded-3xl p-8 transition-all duration-300 border border-slate-100 overflow-hidden hover:shadow-[0_20px_50px_rgba(0,0,0,0.1)] hover:-translate-y-2 flex flex-col justify-between"
                 >
-                  {/* Gradient Border Effect on Hover (Only for active cards) */}
-                  {!isComingSoon && (
-                    <div
-                      className={cn(
-                        "absolute top-0 left-0 w-full h-1 bg-linear-to-r opacity-0 transition-opacity duration-300",
-                        path.color,
-                        hoveredCard === path.id && "opacity-100"
-                      )}
-                    />
-                  )}
+                  <div
+                    className={cn(
+                      "absolute top-0 left-0 w-full h-1 bg-linear-to-r opacity-0 transition-opacity duration-300",
+                      path.color,
+                      hoveredCard === path.id && "opacity-100"
+                    )}
+                  />
 
                   <div>
-                    {/* Icon Header */}
                     <div className="flex justify-between items-start mb-6">
                       <div
                         className={cn(
-                          "p-4 rounded-2xl transition-all duration-300",
-                          !isComingSoon && "group-hover:scale-110",
+                          "p-4 rounded-2xl transition-all duration-300 group-hover:scale-110",
                           path.bg
                         )}
                       >
@@ -250,21 +229,9 @@ export default function NurtureHubPage() {
                           {path.stats}
                         </span>
                       )}
-                      {isComingSoon && (
-                        <span className="px-3 py-1 bg-slate-200/70 rounded-full text-xs font-semibold text-slate-500 border border-slate-200 flex items-center gap-1">
-                          <Lock className="w-3 h-3" />
-                          בקרוב
-                        </span>
-                      )}
                     </div>
 
-                    {/* Content */}
-                    <h3
-                      className={cn(
-                        "text-2xl font-bold text-slate-900 mb-3 transition-colors",
-                        !isComingSoon && "group-hover:text-indigo-900"
-                      )}
-                    >
+                    <h3 className="text-2xl font-bold text-slate-900 mb-3 transition-colors group-hover:text-indigo-900">
                       {path.title}
                     </h3>
                     <p className="text-slate-500 leading-relaxed mb-6">
@@ -272,35 +239,17 @@ export default function NurtureHubPage() {
                     </p>
                   </div>
 
-                  {/* Action Area */}
                   <div className="pt-6 border-t border-slate-100/50 mt-auto flex items-center justify-between">
-                    <span
-                      className={cn(
-                        "text-sm font-medium text-slate-400 transition-colors",
-                        !isComingSoon && "group-hover:text-indigo-600"
-                      )}
-                    >
-                      {isComingSoon ? "בפיתוח... (לחץ לצפייה)" : "הגדר מסלול"}
+                    <span className="text-sm font-medium text-slate-400 transition-colors group-hover:text-indigo-600">
+                      הגדר מסלול
                     </span>
-                    <div
-                      className={cn(
-                        "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300",
-                        isComingSoon
-                          ? "bg-slate-100 text-slate-300 group-hover:bg-slate-200 group-hover:text-slate-500"
-                          : "bg-slate-50 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transform group-hover:rotate-180"
-                      )}
-                    >
-                      {isComingSoon ? (
-                        <Lock className="w-4 h-4" />
-                      ) : (
-                        <ArrowLeft className="w-5 h-5" />
-                      )}
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 bg-slate-50 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transform group-hover:rotate-180">
+                      <ArrowLeft className="w-5 h-5" />
                     </div>
                   </div>
                 </div>
-              </CardWrapper>
-            );
-          })}
+              </Link>
+          ))}
         </div>
       </div>
     </div>

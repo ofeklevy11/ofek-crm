@@ -11,6 +11,7 @@ import {
   Table2,
   Files,
   Folder,
+  FolderSync,
   Image,
   FileText,
   Music,
@@ -384,6 +385,17 @@ export function DriveFileExplorer({
         </nav>
 
         <div className="flex items-center gap-4">
+          {/* Change Folders Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5"
+            onClick={() => setShowFolderPicker(true)}
+          >
+            <FolderSync className="w-4 h-4" />
+            שינוי תיקיות
+          </Button>
+
           {/* Settings toggle */}
           <Button
             variant="ghost"

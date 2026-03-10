@@ -232,6 +232,13 @@ export function decryptToken(enc: string, iv: string, tag: string): string {
 
 // ─── Get Valid Access Token (auto-refresh) ───
 
+export class TokenRevokedError extends Error {
+  constructor() {
+    super("Google Calendar refresh token has been revoked");
+    this.name = "TokenRevokedError";
+  }
+}
+
 export async function getValidAccessToken(
   connection: {
     id: number;
@@ -260,7 +267,20 @@ export async function getValidAccessToken(
     connection.refreshTokenTag,
   );
 
-  const refreshed = await refreshAccessToken(refreshToken);
+  let refreshed;
+  try {
+    refreshed = await refreshAccessToken(refreshToken);
+  } catch {
+    log.warn("Refresh token appears revoked, deactivating connection", {
+      connectionId: connection.id,
+    });
+    await prisma.googleCalendarConnection.update({
+      where: { id: connection.id },
+      data: { isActive: false },
+    });
+    throw new TokenRevokedError();
+  }
+
   const encAccess = encryptToken(refreshed.access_token);
 
   await prisma.googleCalendarConnection.update({

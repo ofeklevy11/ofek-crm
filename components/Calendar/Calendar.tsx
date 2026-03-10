@@ -145,11 +145,14 @@ export function Calendar() {
                 endTime: new Date(event.endTime),
               })),
             );
-          }
-          if (gResult.connected === false) {
+          } else if (gResult.connected === false) {
             setGoogleConnected(false);
             setGoogleEmail(null);
             setGoogleEvents([]);
+            setCalendarSource("crm");
+            toast.error("חיבור Google Calendar פג תוקף - יש להתחבר מחדש", { id: "gcal-revoked" });
+          } else if (!gResult.success) {
+            toast.error(gResult.error || "שגיאה בטעינת אירועי Google Calendar", { id: "gcal-error" });
           }
         }
       } catch (error) {

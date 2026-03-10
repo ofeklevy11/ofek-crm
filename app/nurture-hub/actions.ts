@@ -495,3 +495,177 @@ export async function deleteNurtureSubscriber(id: string) {
     return { success: false, error: "Failed to delete subscriber" };
   }
 }
+
+// Save nurture campaign configuration
+export async function saveNurtureConfig(
+  slug: string,
+  configJson: any,
+  isEnabled: boolean
+) {
+  try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return { success: false, error: "Authentication required" };
+
+    // configJson & isEnabled added in pending migration
+    await (prisma.nurtureList as any).upsert({
+      where: {
+        companyId_slug: {
+          companyId: currentUser.companyId,
+          slug,
+        },
+      },
+      update: {
+        configJson,
+        isEnabled,
+      },
+      create: {
+        companyId: currentUser.companyId,
+        slug,
+        name: slug.charAt(0).toUpperCase() + slug.slice(1).replace(/-/g, " "),
+        configJson,
+        isEnabled,
+      },
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error saving nurture config:", error);
+    return { success: false, error: "Failed to save config" };
+  }
+}
+
+// Get nurture campaign configuration
+export async function getNurtureConfig(slug: string) {
+  try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return null;
+
+    // configJson & isEnabled added in pending migration
+    const list = await (prisma.nurtureList as any).findFirst({
+      where: { slug, companyId: currentUser.companyId },
+      select: { configJson: true, isEnabled: true },
+    });
+
+    if (!list) return null;
+    return { config: (list as any).configJson, isEnabled: (list as any).isEnabled };
+  } catch (error) {
+    console.error("Error fetching nurture config:", error);
+    return null;
+  }
+}
+
+// Check which channels are available for the company
+export async function getAvailableChannels() {
+  try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return { sms: false, whatsappGreen: false, whatsappCloud: false };
+
+    const [smsIntegration, company, waAccount] = await Promise.all([
+      prisma.smsIntegration.findFirst({
+        where: { companyId: currentUser.companyId, status: "READY" },
+        select: { id: true },
+      }),
+      prisma.company.findUnique({
+        where: { id: currentUser.companyId },
+        select: { greenApiInstanceId: true, greenApiToken: true },
+      }),
+      // phoneNumbers relation
+      (prisma.whatsAppAccount as any).findFirst({
+        where: { companyId: currentUser.companyId, status: "ACTIVE" },
+        include: { phoneNumbers: { where: { isActive: true }, take: 1 } },
+      }),
+    ]);
+
+    return {
+      sms: !!smsIntegration,
+      whatsappGreen: !!(company?.greenApiInstanceId && company?.greenApiToken),
+      whatsappCloud: !!(waAccount && (waAccount as any).phoneNumbers?.length > 0),
+    };
+  } catch (error) {
+    console.error("Error checking available channels:", error);
+    return { sms: false, whatsappGreen: false, whatsappCloud: false };
+  }
+}
+
+// Send nurture campaign to all subscribers
+export async function sendNurtureCampaign(slug: string) {
+  try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return { success: false, error: "Authentication required" };
+
+    const list = await prisma.nurtureList.findFirst({
+      where: { slug, companyId: currentUser.companyId },
+      include: { subscribers: true },
+    });
+
+    if (!list) return { success: false, error: "Campaign not found" };
+    if (!(list as any).configJson) return { success: false, error: "No config saved" };
+
+    const config = (list as any).configJson as any;
+    const channels = config.channels || {};
+
+    if (!channels.sms && !channels.whatsappGreen && !channels.whatsappCloud) {
+      return { success: false, error: "No channels selected" };
+    }
+
+    if (channels.sms && !config.smsBody?.trim()) {
+      return { success: false, error: "תוכן הודעת SMS חסר" };
+    }
+    if (channels.whatsappGreen && !config.whatsappGreenBody?.trim()) {
+      return { success: false, error: "תוכן הודעת WhatsApp חסר" };
+    }
+
+    // Filter subscribers with active phone
+    const activeSubscribers = list.subscribers.filter(
+      (sub: any) => sub.phoneActive && sub.phone
+    );
+
+    if (activeSubscribers.length === 0) {
+      return { success: false, error: "No active subscribers with phone numbers" };
+    }
+
+    // Validate integrations
+    const available = await getAvailableChannels();
+    if (channels.sms && !available.sms) {
+      return { success: false, error: "SMS integration not configured" };
+    }
+    if (channels.whatsappGreen && !available.whatsappGreen) {
+      return { success: false, error: "WhatsApp Green API not configured" };
+    }
+    if (channels.whatsappCloud && !available.whatsappCloud) {
+      return { success: false, error: "WhatsApp Cloud API not configured" };
+    }
+    if (channels.whatsappCloud && !config.whatsappCloudTemplateName) {
+      return { success: false, error: "WhatsApp Cloud template name is required" };
+    }
+
+    const { inngest } = await import("@/lib/inngest/client");
+
+    // Enqueue a message event for each subscriber
+    const events = activeSubscribers.map((sub: any) => ({
+      name: "nurture/send-campaign-message" as const,
+      data: {
+        companyId: currentUser.companyId,
+        subscriberPhone: sub.phone,
+        subscriberName: sub.name,
+        channels,
+        smsBody: config.smsBody || "",
+        whatsappGreenBody: config.whatsappGreenBody || "",
+        whatsappCloudTemplateName: config.whatsappCloudTemplateName || "",
+        whatsappCloudLanguageCode: config.whatsappCloudLanguageCode || "he",
+        slug,
+      },
+    }));
+
+    await inngest.send(events);
+
+    return { success: true, count: activeSubscribers.length };
+  } catch (error) {
+    console.error("Error sending nurture campaign:", error);
+    return { success: false, error: "Failed to send campaign" };
+  }
+}

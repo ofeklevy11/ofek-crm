@@ -319,4 +319,19 @@ export type Events = {
       mode?: string;
     };
   };
+
+  // --- Nurture events ---
+  "nurture/send-campaign-message": {
+    data: {
+      companyId: number;
+      subscriberPhone: string;
+      subscriberName: string;
+      channels: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean };
+      smsBody: string;
+      whatsappGreenBody: string;
+      whatsappCloudTemplateName: string;
+      whatsappCloudLanguageCode: string;
+      slug: string;
+    };
+  };
 };

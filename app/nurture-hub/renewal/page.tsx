@@ -17,6 +17,8 @@ import {
   Mail,
   Phone,
   X,
+  Send,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -40,7 +42,9 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import CustomerListManager from "@/components/nurture/CustomerListManager";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import NurtureChannelSelector from "@/components/nurture/NurtureChannelSelector";
+import NurtureMessageEditor from "@/components/nurture/NurtureMessageEditor";
+
 import {
   getNurtureSubscribers,
   getNurtureRules,
@@ -48,6 +52,10 @@ import {
   deleteNurtureSubscriber,
   getDataSources,
   DataSource,
+  saveNurtureConfig,
+  getNurtureConfig,
+  getAvailableChannels,
+  sendNurtureCampaign,
 } from "../actions";
 import {
   deleteAutomationRule,
@@ -127,18 +135,59 @@ export default function RenewalAutomationPage() {
   };
 
   const [isEnabled, setIsEnabled] = useState(false);
+  const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false });
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
   const [config, setConfig] = useState({
     daysBeforeExpiry: "30",
     offerType: "discount",
     offerValue: "10",
-    emailSubject: "המנוי שלך עומד להסתיים... אל תפספס! ⏳",
-    emailBody:
-      "היי {first_name},\n\nשמנו לב שהמנוי שלך מסתיים ב-{expiry_date}.\nאנחנו לא רוצים שתישאר בלי שירות, ולכן אם תחדש עכשיו תקבל {offer_value} במתנה!\n\nלחידוש מהיר לחץ כאן:\n{link}",
+    channels: { sms: false, whatsappGreen: false, whatsappCloud: false },
+    smsBody: "היי {first_name}, המנוי שלך עומד להסתיים! חדש עכשיו וקבל הטבה מיוחדת.",
+    whatsappGreenBody: "היי {first_name}, המנוי שלך עומד להסתיים! חדש עכשיו וקבל הטבה מיוחדת.",
+    whatsappCloudTemplateName: "",
+    whatsappCloudLanguageCode: "he",
   });
 
-  const handleSave = () => {
-    console.log("Saving renewal config:", config, isEnabled);
-    toast.success("ההגדרות נשמרו בהצלחה (דמו)");
+  useEffect(() => {
+    getNurtureConfig("renewal").then((saved) => {
+      if (saved?.config) setConfig((prev) => ({ ...prev, ...(saved.config as any) }));
+      if (saved?.isEnabled !== undefined) setIsEnabled(saved.isEnabled);
+    }).catch((err: any) => {
+      if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(err));
+    });
+    getAvailableChannels().then(setAvailableChannels).catch((err: any) => {
+      if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(err));
+    });
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const result = await saveNurtureConfig("renewal", config, isEnabled);
+      if (result.success) toast.success("ההגדרות נשמרו בהצלחה");
+      else toast.error(getFriendlyResultError(result.error, "שגיאה בשמירה"));
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSendNow = async () => {
+    if (!(await showConfirm(`לשלוח את הקמפיין ל-${customers.length} לקוחות?`))) return;
+    setSending(true);
+    try {
+      const result = await sendNurtureCampaign("renewal");
+      if (result.success) toast.success(`${result.count} הודעות נשלחו בהצלחה`);
+      else toast.error(getFriendlyResultError(result.error, "שגיאה בשליחה"));
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -164,25 +213,22 @@ export default function RenewalAutomationPage() {
             </p>
           </div>
           <div className="mr-auto flex items-center gap-3">
-            <div className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-full text-sm font-medium border border-slate-200 flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              בקרוב...
-            </div>
+            <Button
+              onClick={handleSendNow}
+              disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud)}
+              className="bg-indigo-600 hover:bg-indigo-700 gap-2"
+            >
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              שלח עכשיו
+            </Button>
+            <Button onClick={handleSave} disabled={saving} variant="outline" className="gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              שמור
+            </Button>
           </div>
         </div>
 
-        {/* Coming Soon Overlay */}
-        <div className="absolute inset-0 z-50 flex items-start justify-center pt-40 pointer-events-none">
-          <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-2xl border border-indigo-100 text-center max-w-sm mx-4">
-            <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <Clock className="w-6 h-6 text-indigo-400" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-1">בקרוב...</h3>
-            <p className="text-sm text-slate-500">מודול זה נמצא בפיתוח</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 grayscale opacity-50 pointer-events-none select-none">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
             {/* Customer List Management */}
             <Card>
@@ -197,7 +243,7 @@ export default function RenewalAutomationPage() {
                   />
                 </CardTitle>
                 <CardDescription>
-                  נהל את רשימת הלקוחות שיקבלו את הברכה
+                  נהל את רשימת הלקוחות שיקבלו תזכורת חידוש
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -215,9 +261,9 @@ export default function RenewalAutomationPage() {
                     </div>
                     {/* List */}
                     <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
-                      {customers.map((c, i) => (
+                      {customers.map((c) => (
                         <div
-                          key={i}
+                          key={c.id}
                           className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors group"
                           onClick={() => setSelectedCustomer(c)}
                         >
@@ -375,6 +421,42 @@ export default function RenewalAutomationPage() {
               </Card>
             )}
 
+            {/* Channel Selection */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">ערוצי שליחה</CardTitle>
+                <CardDescription>בחר היכן הלקוח יקבל את ההודעה</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <NurtureChannelSelector
+                  channels={config.channels}
+                  onChange={(channels) => setConfig({ ...config, channels })}
+                  availableChannels={availableChannels}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Message Editor */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">תוכן ההודעות</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <NurtureMessageEditor
+                  channels={config.channels}
+                  smsBody={config.smsBody}
+                  whatsappGreenBody={config.whatsappGreenBody}
+                  whatsappCloudTemplateName={config.whatsappCloudTemplateName}
+                  whatsappCloudLanguageCode={config.whatsappCloudLanguageCode}
+                  onSmsBodyChange={(v) => setConfig({ ...config, smsBody: v })}
+                  onWhatsappGreenBodyChange={(v) => setConfig({ ...config, whatsappGreenBody: v })}
+                  onWhatsappCloudTemplateNameChange={(v) => setConfig({ ...config, whatsappCloudTemplateName: v })}
+                  onWhatsappCloudLanguageCodeChange={(v) => setConfig({ ...config, whatsappCloudLanguageCode: v })}
+                  placeholders={["{first_name}"]}
+                />
+              </CardContent>
+            </Card>
+
             {/* Trigger Config */}
             <Card>
               <CardHeader>
@@ -447,83 +529,61 @@ export default function RenewalAutomationPage() {
               </CardContent>
             </Card>
 
-            {/* Message Config */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">תוכן המייל</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>נושא</Label>
-                  <Input
-                    value={config.emailSubject}
-                    onChange={(e) =>
-                      setConfig({ ...config, emailSubject: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>גוף ההודעה</Label>
-                  <Textarea
-                    rows={6}
-                    value={config.emailBody}
-                    onChange={(e) =>
-                      setConfig({ ...config, emailBody: e.target.value })
-                    }
-                  />
-                  <div className="flex gap-2 text-xs text-slate-500">
-                    <span className="bg-slate-100 px-1.5 py-0.5 rounded cursor-pointer hover:bg-slate-200">
-                      {"{expiry_date}"}
-                    </span>
-                    <span className="bg-slate-100 px-1.5 py-0.5 rounded cursor-pointer hover:bg-slate-200">
-                      {"{offer_value}"}
-                    </span>
-                    <span className="bg-slate-100 px-1.5 py-0.5 rounded cursor-pointer hover:bg-slate-200">
-                      {"{link}"}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Preview Sidebar */}
           <div className="lg:col-span-1">
-            <Card className="bg-linear-to-br from-slate-900 to-slate-800 text-white border-0 overflow-hidden relative">
-              {/* Abstract shapes */}
-              <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/20 rounded-full blur-2xl -mr-10 -mt-10"></div>
-              <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/20 rounded-full blur-2xl -ml-10 -mb-10"></div>
-
-              <CardContent className="p-6 relative z-10 flex flex-col h-full min-h-[400px]">
-                <div className="mb-4 text-xs font-mono text-cyan-400">
-                  PREVIEW: EMAIL
-                </div>
-                <h3 className="text-xl font-bold mb-4 leading-tight">
-                  {config.emailSubject}
-                </h3>
-                <div className="space-y-4 text-sm text-slate-300 flex-1 whitespace-pre-line">
-                  {config.emailBody
-                    .replace("{first_name}", "דני")
-                    .replace("{expiry_date}", "01/05/2026")
-                    .replace(
-                      "{offer_value}",
-                      config.offerType === "discount"
-                        ? `${config.offerValue}% הנחה`
-                        : "הטבה מיוחדת"
-                    )
-                    .replace("{link}", "")}
-                </div>
-
-                <div className="mt-8">
-                  <Button className="w-full bg-cyan-500 hover:bg-cyan-600 text-white font-bold h-12">
-                    חדש מנוי עכשיו <ArrowUpRight className="w-4 h-4 mr-2" />
-                  </Button>
-                  <div className="text-center mt-3 text-xs text-slate-500">
-                    *ההטבה בתוקף ל-48 שעות בלבד
+            <div className="sticky top-8 space-y-6">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+                תצוגה מקדימה
+              </h3>
+              <div className="border border-slate-200 bg-white rounded-[2.5rem] p-3 shadow-xl max-w-[320px] mx-auto">
+                <div className="bg-slate-50 rounded-[2rem] h-[550px] overflow-hidden border border-slate-100 relative">
+                  <div className="h-6 bg-white flex justify-between items-center px-4 text-[10px] text-slate-800 font-medium">
+                    <span>09:41</span>
+                    <div className="flex gap-1">
+                      <span>📶</span>
+                      <span>🔋</span>
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-4 h-full overflow-y-auto pb-12">
+                    {config.channels.sms && config.smsBody && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] text-slate-400 font-medium px-1">SMS</div>
+                        <div className="p-3 rounded-xl shadow-sm text-xs text-slate-800 max-w-[85%] bg-slate-100">
+                          {config.smsBody.replace(/\{first_name\}/g, "ישראל")}
+                          <div className="text-[9px] text-slate-400 text-left mt-1">09:00</div>
+                        </div>
+                      </div>
+                    )}
+                    {config.channels.whatsappGreen && config.whatsappGreenBody && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] text-green-600 font-medium px-1">WhatsApp (Green API)</div>
+                        <div className="p-3 rounded-tr-xl rounded-tl-xl rounded-bl-xl shadow-sm text-xs text-slate-800 ml-auto max-w-[85%] bg-[#DCF8C6]">
+                          {config.whatsappGreenBody.replace(/\{first_name\}/g, "ישראל")}
+                          <div className="text-[9px] text-slate-400 text-left mt-1">09:00</div>
+                        </div>
+                      </div>
+                    )}
+                    {config.channels.whatsappCloud && config.whatsappCloudTemplateName && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] text-blue-600 font-medium px-1">WhatsApp (Cloud API)</div>
+                        <div className="p-3 rounded-tr-xl rounded-tl-xl rounded-bl-xl shadow-sm text-xs text-slate-800 ml-auto max-w-[85%] bg-blue-50 border border-blue-100">
+                          <div className="font-medium mb-1">Template: {config.whatsappCloudTemplateName}</div>
+                          <div className="text-[10px] text-blue-500">שפה: {config.whatsappCloudLanguageCode}</div>
+                        </div>
+                      </div>
+                    )}
+                    {!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud && (
+                      <div className="flex flex-col items-center justify-center h-full text-slate-400 text-sm">
+                        <RefreshCw className="w-8 h-8 mb-2 opacity-30" />
+                        בחר ערוץ שליחה כדי לראות תצוגה מקדימה
+                      </div>
+                    )}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -16,6 +16,8 @@ import {
   Settings,
   Bell,
   MessageSquare,
+  Send,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -39,9 +41,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import CustomerListManager from "@/components/nurture/CustomerListManager";
-import { getNurtureSubscribers } from "../actions";
+import NurtureChannelSelector from "@/components/nurture/NurtureChannelSelector";
+import NurtureMessageEditor from "@/components/nurture/NurtureMessageEditor";
+import { getNurtureSubscribers, saveNurtureConfig, getNurtureConfig, getAvailableChannels, sendNurtureCampaign } from "../actions";
 import { toast } from "sonner";
-import { getUserFriendlyError } from "@/lib/errors";
+import { getFriendlyResultError, getUserFriendlyError } from "@/lib/errors";
+import { showConfirm } from "@/hooks/use-modal";
 import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 
 // Mock types for the VIP module
@@ -76,6 +81,19 @@ export default function VipClubPage() {
     giftValue: "20",
   });
 
+  const [isEnabled, setIsEnabled] = useState(false);
+  const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false });
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [config, setConfig] = useState({
+    channels: { sms: false, whatsappGreen: false, whatsappCloud: false },
+    smsBody: "ברוכים הבאים למועדון ה-VIP! שמחים שהצטרפתם, {first_name}.",
+    whatsappGreenBody: "ברוכים הבאים למועדון ה-VIP! שמחים שהצטרפתם, {first_name}.",
+    whatsappCloudTemplateName: "",
+    whatsappCloudLanguageCode: "he",
+    managerAlert: true,
+  });
+
   const refreshData = () => {
     setLoading(true);
     getNurtureSubscribers("vip").then((subs) => {
@@ -92,14 +110,49 @@ export default function VipClubPage() {
     refreshData();
   }, []);
 
+  useEffect(() => {
+    getNurtureConfig("vip").then((saved) => {
+      if (saved?.config) setConfig((prev) => ({ ...prev, ...(saved.config as any) }));
+      if (saved?.isEnabled !== undefined) setIsEnabled(saved.isEnabled);
+    }).catch((err: any) => {
+      if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(err));
+    });
+    getAvailableChannels().then(setAvailableChannels).catch((err: any) => {
+      if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(err));
+    });
+  }, []);
+
   const handleAddCustomers = () => {
     refreshData();
   };
 
-  const handleSavePolicy = () => {
-    // Mock save
-    console.log("Saving policy:", policy, welcomePackage);
-    toast.success("הגדרות מועדון ה-VIP נשמרו בהצלחה!");
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const result = await saveNurtureConfig("vip", { ...config, policy, welcomePackage }, isEnabled);
+      if (result.success) toast.success("ההגדרות נשמרו בהצלחה");
+      else toast.error(getFriendlyResultError(result.error, "שגיאה בשמירה"));
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSendNow = async () => {
+    if (!(await showConfirm(`לשלוח את הקמפיין ל-${customers.length} לקוחות?`))) return;
+    setSending(true);
+    try {
+      const result = await sendNurtureCampaign("vip");
+      if (result.success) toast.success(`${result.count} הודעות נשלחו בהצלחה`);
+      else toast.error(getFriendlyResultError(result.error, "שגיאה בשליחה"));
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -125,29 +178,26 @@ export default function VipClubPage() {
               נהל את לקוחות הפרימיום, הגדר חוקי תיעדוף והענק יחס מועדף
             </p>
           </div>
-          <div className="mr-auto">
-            <div className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-full text-sm font-medium border border-slate-200 flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              בקרוב...
-            </div>
-          </div>
-        </div>
-
-        {/* Coming Soon Overlay */}
-        <div className="absolute inset-0 z-50 flex items-start justify-center pt-40 pointer-events-none">
-          <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-2xl border border-indigo-100 text-center max-w-sm mx-4">
-            <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <Clock className="w-6 h-6 text-indigo-400" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-1">בקרוב...</h3>
-            <p className="text-sm text-slate-500">מודול זה נמצא בפיתוח</p>
+          <div className="mr-auto flex items-center gap-3">
+            <Button
+              onClick={handleSendNow}
+              disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud)}
+              className="bg-amber-600 hover:bg-amber-700 gap-2"
+            >
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              שלח עכשיו
+            </Button>
+            <Button onClick={handleSave} disabled={saving} variant="outline" className="gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              שמור
+            </Button>
           </div>
         </div>
 
         <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
-          className="space-y-8 grayscale opacity-50 pointer-events-none select-none"
+          className="space-y-8"
         >
           <TabsList className="bg-white p-1 border border-slate-200 rounded-xl h-auto">
             <TabsTrigger
@@ -295,9 +345,9 @@ export default function VipClubPage() {
                       <div className="col-span-2 text-left">סטטוס</div>
                     </div>
                     <div className="divide-y divide-slate-100 bg-white">
-                      {customers.map((c, i) => (
+                      {customers.map((c) => (
                         <div
-                          key={i}
+                          key={c.id}
                           className="grid grid-cols-12 gap-2 px-4 py-3 hover:bg-slate-50 transition-colors items-center group"
                         >
                           <div className="col-span-4 flex items-center gap-3">
@@ -433,7 +483,7 @@ export default function VipClubPage() {
                         שלח SMS/מייל למנהל התיק ברגע שהלקוח יוצר קשר
                       </p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch checked={config.managerAlert} onCheckedChange={(v) => setConfig({ ...config, managerAlert: v })} />
                   </div>
                 </CardContent>
               </Card>
@@ -531,6 +581,42 @@ export default function VipClubPage() {
                     </div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Channel Selection */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">ערוצי שליחה</CardTitle>
+                <CardDescription>בחר באילו ערוצים לשלוח הודעות לחברי VIP</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <NurtureChannelSelector
+                  channels={config.channels}
+                  onChange={(channels) => setConfig({ ...config, channels })}
+                  availableChannels={availableChannels}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Message Editor */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">תוכן ההודעות</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <NurtureMessageEditor
+                  channels={config.channels}
+                  smsBody={config.smsBody}
+                  whatsappGreenBody={config.whatsappGreenBody}
+                  whatsappCloudTemplateName={config.whatsappCloudTemplateName}
+                  whatsappCloudLanguageCode={config.whatsappCloudLanguageCode}
+                  onSmsBodyChange={(v) => setConfig({ ...config, smsBody: v })}
+                  onWhatsappGreenBodyChange={(v) => setConfig({ ...config, whatsappGreenBody: v })}
+                  onWhatsappCloudTemplateNameChange={(v) => setConfig({ ...config, whatsappCloudTemplateName: v })}
+                  onWhatsappCloudLanguageCodeChange={(v) => setConfig({ ...config, whatsappCloudLanguageCode: v })}
+                  placeholders={["{first_name}"]}
+                />
               </CardContent>
             </Card>
           </TabsContent>

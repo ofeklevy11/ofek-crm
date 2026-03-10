@@ -6,6 +6,8 @@ import {
   ArrowRight,
   Star,
   Save,
+  Send,
+  Loader2,
   ThumbsUp,
   MessageCircle,
   Clock,
@@ -39,8 +41,10 @@ import {
 } from "@/components/ui/select";
 
 import { Badge } from "@/components/ui/badge";
+import NurtureChannelSelector from "@/components/nurture/NurtureChannelSelector";
+import NurtureMessageEditor from "@/components/nurture/NurtureMessageEditor";
 import CustomerListManager from "@/components/nurture/CustomerListManager";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
 import {
   getNurtureSubscribers,
   getNurtureRules,
@@ -48,6 +52,10 @@ import {
   deleteNurtureSubscriber,
   getDataSources,
   DataSource,
+  saveNurtureConfig,
+  getNurtureConfig,
+  getAvailableChannels,
+  sendNurtureCampaign,
 } from "../actions";
 import {
   deleteAutomationRule,
@@ -122,11 +130,28 @@ export default function ReviewAutomationPage() {
     refreshData();
   }, []);
 
+  useEffect(() => {
+    getNurtureConfig("review").then((saved) => {
+      if (saved?.config) setConfig((prev) => ({ ...prev, ...(saved.config as any) }));
+      if (saved?.isEnabled !== undefined) setIsEnabled(saved.isEnabled);
+    }).catch((err: any) => {
+      if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(err));
+    });
+    getAvailableChannels().then(setAvailableChannels).catch((err: any) => {
+      if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
+      else toast.error(getUserFriendlyError(err));
+    });
+  }, []);
+
   const handleAddCustomers = (newCustomers: any[]) => {
     refreshData();
   };
 
   const [isEnabled, setIsEnabled] = useState(false);
+  const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false });
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
   const [config, setConfig] = useState({
     platforms: {
       google: true,
@@ -135,14 +160,38 @@ export default function ReviewAutomationPage() {
     },
     timing: "immediate", // immediate, 1_day, 3_days
     minStarsForPublic: "4", // Only ask for public review if internal rating is >= this
-    messageSubject: "איך הייתה החוויה שלך?",
-    messageBody:
-      "היי {first_name},\n\nשמחנו לתת לך שירות! נשמח לשמוע איך היה בקישור קצר למטה.\nדעתך חשובה לנו מאוד ועוזרת לנו להשתפר.",
+    channels: { sms: false, whatsappGreen: false, whatsappCloud: false },
+    smsBody: "היי {first_name}, שמחנו לתת לך שירות! נשמח לשמוע מה חשבת בקישור קצר.",
+    whatsappGreenBody: "היי {first_name}, שמחנו לתת לך שירות! נשמח לשמוע מה חשבת בקישור קצר.",
+    whatsappCloudTemplateName: "",
+    whatsappCloudLanguageCode: "he",
   });
 
-  const handleSave = () => {
-    console.log("Saving review config:", config, isEnabled);
-    toast.success("ההגדרות נשמרו בהצלחה (דמו)");
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const result = await saveNurtureConfig("review", config, isEnabled);
+      if (result.success) toast.success("ההגדרות נשמרו בהצלחה");
+      else toast.error(getFriendlyResultError(result.error, "שגיאה בשמירה"));
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSendNow = async () => {
+    if (!(await showConfirm(`לשלוח את הקמפיין ל-${customers.length} לקוחות?`))) return;
+    setSending(true);
+    try {
+      const result = await sendNurtureCampaign("review");
+      if (result.success) toast.success(`${result.count} הודעות נשלחו בהצלחה`);
+      else toast.error(getFriendlyResultError(result.error, "שגיאה בשליחה"));
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -168,25 +217,22 @@ export default function ReviewAutomationPage() {
             </p>
           </div>
           <div className="mr-auto flex items-center gap-3">
-            <div className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-full text-sm font-medium border border-slate-200 flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              בקרוב...
-            </div>
+            <Button
+              onClick={handleSendNow}
+              disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud)}
+              className="bg-amber-600 hover:bg-amber-700 gap-2"
+            >
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              שלח עכשיו
+            </Button>
+            <Button onClick={handleSave} disabled={saving} variant="outline" className="gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              שמור
+            </Button>
           </div>
         </div>
 
-        {/* Coming Soon Overlay */}
-        <div className="absolute inset-0 z-50 flex items-start justify-center pt-40 pointer-events-none">
-          <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-2xl border border-indigo-100 text-center max-w-sm mx-4">
-            <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <Clock className="w-6 h-6 text-indigo-400" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-1">בקרוב...</h3>
-            <p className="text-sm text-slate-500">מודול זה נמצא בפיתוח</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 grayscale opacity-50 pointer-events-none select-none">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
             {/* Customer List Management */}
             <Card>
@@ -201,7 +247,7 @@ export default function ReviewAutomationPage() {
                   />
                 </CardTitle>
                 <CardDescription>
-                  נהל את רשימת הלקוחות שיקבלו את הברכה
+                  נהל את רשימת הלקוחות שיקבלו בקשת ביקורת
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -219,9 +265,9 @@ export default function ReviewAutomationPage() {
                     </div>
                     {/* List */}
                     <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
-                      {customers.map((c, i) => (
+                      {customers.map((c) => (
                         <div
-                          key={i}
+                          key={c.id}
                           className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors group"
                           onClick={() => setSelectedCustomer(c)}
                         >
@@ -379,6 +425,42 @@ export default function ReviewAutomationPage() {
               </Card>
             )}
 
+            {/* Channel Selection */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">ערוצי שליחה</CardTitle>
+                <CardDescription>בחר היכן הלקוח יקבל את ההודעה</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <NurtureChannelSelector
+                  channels={config.channels}
+                  onChange={(channels) => setConfig({ ...config, channels })}
+                  availableChannels={availableChannels}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Message Editor */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">תוכן ההודעות</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <NurtureMessageEditor
+                  channels={config.channels}
+                  smsBody={config.smsBody}
+                  whatsappGreenBody={config.whatsappGreenBody}
+                  whatsappCloudTemplateName={config.whatsappCloudTemplateName}
+                  whatsappCloudLanguageCode={config.whatsappCloudLanguageCode}
+                  onSmsBodyChange={(v) => setConfig({ ...config, smsBody: v })}
+                  onWhatsappGreenBodyChange={(v) => setConfig({ ...config, whatsappGreenBody: v })}
+                  onWhatsappCloudTemplateNameChange={(v) => setConfig({ ...config, whatsappCloudTemplateName: v })}
+                  onWhatsappCloudLanguageCodeChange={(v) => setConfig({ ...config, whatsappCloudLanguageCode: v })}
+                  placeholders={["{first_name}"]}
+                />
+              </CardContent>
+            </Card>
+
             {/* Logic & Platforms */}
             <Card>
               <CardHeader>
@@ -508,33 +590,6 @@ export default function ReviewAutomationPage() {
               </CardContent>
             </Card>
 
-            {/* Message Config */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">תוכן הפנייה</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>כותרת</Label>
-                  <Input
-                    value={config.messageSubject}
-                    onChange={(e) =>
-                      setConfig({ ...config, messageSubject: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>גוף ההודעה</Label>
-                  <Textarea
-                    rows={4}
-                    value={config.messageBody}
-                    onChange={(e) =>
-                      setConfig({ ...config, messageBody: e.target.value })
-                    }
-                  />
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Preview Sidebar */}
@@ -544,9 +599,9 @@ export default function ReviewAutomationPage() {
                 <div className="w-16 h-16 bg-slate-100 rounded-full mx-auto mb-3 flex items-center justify-center">
                   <span className="text-2xl">🏢</span>
                 </div>
-                <h3 className="font-bold text-lg">{config.messageSubject}</h3>
+                <h3 className="font-bold text-lg">איך הייתה החוויה שלך?</h3>
                 <p className="text-sm text-slate-500 mt-2 px-4 whitespace-pre-line">
-                  {config.messageBody.replace("{first_name}", "דני")}
+                  {(config.smsBody || config.whatsappGreenBody || "").replace("{first_name}", "דני")}
                 </p>
               </div>
 

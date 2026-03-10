@@ -8,6 +8,7 @@ import {
   fetchGoogleCalendarEvents,
   decryptToken,
   revokeToken,
+  TokenRevokedError,
 } from "@/lib/services/google-calendar";
 import { CalendarEvent } from "@/lib/types";
 import { createLogger } from "@/lib/logger";
@@ -114,6 +115,10 @@ export async function getGoogleCalendarEvents(
 
     return { success: true, data: events, connected: true };
   } catch (error) {
+    if (error instanceof TokenRevokedError) {
+      log.warn("Google Calendar token revoked", { userId: user.id });
+      return { success: false, connected: false, error: "חיבור Google Calendar פג תוקף - יש להתחבר מחדש" };
+    }
     log.error("Failed to fetch Google Calendar events", {
       error: String(error),
       userId: user.id,
