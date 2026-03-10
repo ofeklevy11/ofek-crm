@@ -43,6 +43,7 @@ vi.mock("@/lib/services/encryption", () => ({
 // ── Mock WhatsApp Cloud API ──────────────────────────────────────
 const mockSendTextMessage = vi.fn().mockResolvedValue({ messageId: "wamid.test123" });
 const mockSendMediaMessage = vi.fn().mockResolvedValue({ messageId: "wamid.test123" });
+const mockSendTemplateMessage = vi.fn().mockResolvedValue({ messageId: "wamid.test123" });
 const mockGetMediaUrl = vi.fn().mockResolvedValue({
   url: "https://example.com/media",
   mime_type: "image/jpeg",
@@ -51,6 +52,7 @@ const mockDownloadMedia = vi.fn().mockResolvedValue(Buffer.from("fake"));
 vi.mock("@/lib/services/whatsapp-cloud-api", () => ({
   sendTextMessage: (...args: any[]) => mockSendTextMessage(...args),
   sendMediaMessage: (...args: any[]) => mockSendMediaMessage(...args),
+  sendTemplateMessage: (...args: any[]) => mockSendTemplateMessage(...args),
   getMediaUrl: (...args: any[]) => mockGetMediaUrl(...args),
   downloadMedia: (...args: any[]) => mockDownloadMedia(...args),
 }));
