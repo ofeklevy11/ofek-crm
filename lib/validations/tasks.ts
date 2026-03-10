@@ -90,6 +90,7 @@ export const makeCreateTaskSchema = z.object({
   ).default("medium"),
   due_date: z
     .string()
+    .nullable()
     .optional()
     .transform((val) => {
       if (!val || val === "YYYY-MM-DD") return undefined;

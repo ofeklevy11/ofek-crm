@@ -54,6 +54,11 @@ import {
   sendWaOutboundMessage,
   downloadWaMedia,
 } from "@/lib/inngest/functions/whatsapp-cloud-jobs";
+import {
+  sendSmsJob,
+  sendSmsAutomationJob,
+  processSmsStatusUpdate,
+} from "@/lib/inngest/functions/sms-jobs";
 
 const functions = [
   processImportJob,
@@ -92,6 +97,9 @@ const functions = [
   processWaStatusUpdate,
   sendWaOutboundMessage,
   downloadWaMedia,
+  sendSmsJob,
+  sendSmsAutomationJob,
+  processSmsStatusUpdate,
 ];
 
 log.info("Inngest route loaded", { functionIds: functions.map((f) => f.id) });

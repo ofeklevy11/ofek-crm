@@ -109,6 +109,7 @@ export default function MultiEventAutomationModal({
   const [currentActionType, setCurrentActionType] = useState<
     | "CALCULATE_MULTI_EVENT_DURATION"
     | "SEND_WHATSAPP"
+    | "SEND_SMS"
     | "SEND_NOTIFICATION"
     | "CREATE_TASK"
     | "WEBHOOK"
@@ -151,7 +152,7 @@ export default function MultiEventAutomationModal({
 
   // Helper: Count existing WhatsApp actions in the list
   const getExistingWhatsAppCount = () => {
-    return actions.filter((a) => a.type === "SEND_WHATSAPP").length;
+    return actions.filter((a) => a.type === "SEND_WHATSAPP" || a.type === "SEND_SMS").length;
   };
 
   // Helper: Get minimum delay required for current WhatsApp action
@@ -160,7 +161,7 @@ export default function MultiEventAutomationModal({
     // If editing an existing WhatsApp action, don't count it twice
     const isEditingWhatsApp =
       editingActionIndex !== null &&
-      actions[editingActionIndex]?.type === "SEND_WHATSAPP";
+      (actions[editingActionIndex]?.type === "SEND_WHATSAPP" || actions[editingActionIndex]?.type === "SEND_SMS");
     const effectiveCount = isEditingWhatsApp
       ? existingCount - 1
       : existingCount;
@@ -275,7 +276,9 @@ export default function MultiEventAutomationModal({
         // Restore WhatsApp State
         if (
           config.actionType === "SEND_WHATSAPP" ||
-          editingRule.actionType === "SEND_WHATSAPP"
+          config.actionType === "SEND_SMS" ||
+          editingRule.actionType === "SEND_WHATSAPP" ||
+          editingRule.actionType === "SEND_SMS"
         ) {
           const phoneCol = editingRule.actionConfig?.phoneColumnId || "";
           if (phoneCol.includes("@g.us")) {
@@ -425,7 +428,7 @@ export default function MultiEventAutomationModal({
     if (!currentActionType) return false;
     if (currentActionType === "SEND_NOTIFICATION")
       return !!recipientId && !!messageTemplate;
-    if (currentActionType === "SEND_WHATSAPP") {
+    if (currentActionType === "SEND_WHATSAPP" || currentActionType === "SEND_SMS") {
       if (!waPhoneColumnId && waPhoneMode === "column") return false;
       if (!waContent && waMessageType !== "media") return false;
       if (waMessageType === "media" && !waMediaFileId) return false;
@@ -453,7 +456,7 @@ export default function MultiEventAutomationModal({
     if (!validateCurrentAction()) return;
 
     let config: any = {};
-    if (currentActionType === "SEND_WHATSAPP") {
+    if (currentActionType === "SEND_WHATSAPP" || currentActionType === "SEND_SMS") {
       config = {
         phoneColumnId: waPhoneColumnId,
         messageType: waMessageType,
@@ -532,7 +535,7 @@ export default function MultiEventAutomationModal({
       setRecipientId(conf.recipientId?.toString() || "");
       setMessageTemplate(conf.messageTemplate || "");
       setTitleTemplate(conf.titleTemplate || "");
-    } else if (action.type === "SEND_WHATSAPP") {
+    } else if (action.type === "SEND_WHATSAPP" || action.type === "SEND_SMS") {
       setWaPhoneColumnId(conf.phoneColumnId || "");
       setWaTargetType(
         conf.phoneColumnId?.includes("@g.us") ? "group" : "private",
@@ -916,6 +919,13 @@ export default function MultiEventAutomationModal({
                 onClick={() => setCurrentActionType("SEND_WHATSAPP")}
               />
               <ActionCard
+                title="שליחת SMS"
+                desc="שלח הודעת SMS לנמען באופן אוטומטי"
+                icon={<Smartphone className="text-blue-500" />}
+                selected={false}
+                onClick={() => setCurrentActionType("SEND_SMS")}
+              />
+              <ActionCard
                 title="צור משימה חדשה"
                 desc="פתח משימה חדשה במערכת להמשך טיפול"
                 icon={<ListTodo className="text-purple-500" />}
@@ -958,6 +968,7 @@ export default function MultiEventAutomationModal({
                   {currentActionType === "CALCULATE_MULTI_EVENT_DURATION" &&
                     "חישוב והתראה"}
                   {currentActionType === "SEND_WHATSAPP" && "שליחת WhatsApp"}
+                  {currentActionType === "SEND_SMS" && "שליחת SMS"}
                   {currentActionType === "CREATE_TASK" && "יצירת משימה"}
                   {currentActionType === "WEBHOOK" && "Webhook"}
                   {currentActionType === "SEND_NOTIFICATION" && "התראה"}
@@ -966,7 +977,7 @@ export default function MultiEventAutomationModal({
               </div>
 
               {/* WhatsApp Config */}
-              {currentActionType === "SEND_WHATSAPP" && (
+              {(currentActionType === "SEND_WHATSAPP" || currentActionType === "SEND_SMS") && (
                 <div key="wa-config" className="space-y-6 animate-in fade-in">
                   {/* Reuse existing WA config UI code */}
                   <div className="bg-green-50 p-4 rounded-xl border border-green-200">
@@ -1612,6 +1623,7 @@ export default function MultiEventAutomationModal({
                     {action.type === "CALCULATE_MULTI_EVENT_DURATION" &&
                       "חישוב והתראה"}
                     {action.type === "SEND_WHATSAPP" && "שליחת הודעת WhatsApp"}
+                    {action.type === "SEND_SMS" && "שליחת הודעת SMS"}
                     {action.type === "CREATE_TASK" && "יצירת משימה חדשה"}
                     {action.type === "WEBHOOK" && "שליחת Webhook"}
                     {action.type === "SEND_NOTIFICATION" && "התראה למערכת"}

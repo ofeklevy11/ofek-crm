@@ -548,6 +548,7 @@ export default function MeetingDetailModal({
                         <div className="shrink-0 text-muted-foreground">
                           {auto.actionType === "SEND_NOTIFICATION" && <Bell className="h-3.5 w-3.5" />}
                           {auto.actionType === "SEND_WHATSAPP" && <MessageSquare className="h-3.5 w-3.5" />}
+                          {auto.actionType === "SEND_SMS" && <Phone className="h-3.5 w-3.5" />}
                           {auto.actionType === "WEBHOOK" && <Webhook className="h-3.5 w-3.5" />}
                           {auto.actionType === "CREATE_TASK" && <CheckSquare className="h-3.5 w-3.5" />}
                           {auto.actionType === "CALCULATE_DURATION" && <Timer className="h-3.5 w-3.5" />}

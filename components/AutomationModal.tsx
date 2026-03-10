@@ -164,6 +164,7 @@ export default function AutomationModal({
     | "SEND_NOTIFICATION"
     | "CALCULATE_DURATION"
     | "SEND_WHATSAPP"
+    | "SEND_SMS"
     | "WEBHOOK"
     | "CREATE_TASK"
     | "UPDATE_RECORD_FIELD"
@@ -477,7 +478,7 @@ export default function AutomationModal({
               messageTemplate,
               titleTemplate: "עדכון במערכת",
             }
-          : currentActionType === "SEND_WHATSAPP"
+          : currentActionType === "SEND_WHATSAPP" || currentActionType === "SEND_SMS"
             ? {
                 phoneColumnId: waPhoneColumnId,
                 messageType: waMessageType,
@@ -560,7 +561,7 @@ export default function AutomationModal({
     if (action.type === "SEND_NOTIFICATION") {
       setRecipientId(action.config.recipientId?.toString() || "");
       setMessageTemplate(action.config.messageTemplate || "");
-    } else if (action.type === "SEND_WHATSAPP") {
+    } else if (action.type === "SEND_WHATSAPP" || action.type === "SEND_SMS") {
       setWaPhoneColumnId(action.config.phoneColumnId || "");
       setWaTargetType(
         action.config.phoneColumnId?.includes("@g.us") ? "group" : "private",
@@ -629,7 +630,7 @@ export default function AutomationModal({
     if (!currentActionType) return false;
     if (currentActionType === "SEND_NOTIFICATION")
       return !!recipientId && !!messageTemplate;
-    if (currentActionType === "SEND_WHATSAPP") {
+    if (currentActionType === "SEND_WHATSAPP" || currentActionType === "SEND_SMS") {
       if (!waPhoneColumnId) return false;
       if (!waContent) return false;
       if (waMessageType === "media" && !waMediaFileId) return false;
@@ -638,9 +639,9 @@ export default function AutomationModal({
       const waBeforeCount =
         editingActionIndex !== null
           ? actions.filter(
-              (a, i) => a.type === "SEND_WHATSAPP" && i < editingActionIndex,
+              (a, i) => (a.type === "SEND_WHATSAPP" || a.type === "SEND_SMS") && i < editingActionIndex,
             ).length
-          : actions.filter((a) => a.type === "SEND_WHATSAPP").length;
+          : actions.filter((a) => a.type === "SEND_WHATSAPP" || a.type === "SEND_SMS").length;
 
       if (waBeforeCount > 0) {
         const minDelay = waBeforeCount >= 2 ? 20 : 10;
@@ -1203,6 +1204,7 @@ export default function AutomationModal({
                 <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
                   {act.type === "SEND_NOTIFICATION" && <Bell size={20} />}
                   {act.type === "SEND_WHATSAPP" && <MessageSquare size={20} />}
+                  {act.type === "SEND_SMS" && <Phone size={20} />}
                   {act.type === "WEBHOOK" && (
                     <div className="font-bold text-xs">API</div>
                   )}
@@ -1214,6 +1216,7 @@ export default function AutomationModal({
                   <div className="font-medium text-gray-900">
                     {act.type === "SEND_NOTIFICATION" && "שליחת התראה"}
                     {act.type === "SEND_WHATSAPP" && "שליחת WhatsApp"}
+                    {act.type === "SEND_SMS" && "שליחת SMS"}
                     {act.type === "WEBHOOK" && "Webhook"}
                     {act.type === "CALCULATE_DURATION" && "חישוב זמן"}
                     {act.type === "CREATE_TASK" && "יצירת משימה"}
@@ -1301,6 +1304,13 @@ export default function AutomationModal({
               onClick={() => setCurrentActionType("SEND_WHATSAPP")}
             />
             <TriggerCard
+              title="שליחת SMS"
+              description="שלח הודעת SMS לנמען"
+              icon={<Phone className="text-blue-600" size={24} />}
+              selected={currentActionType === "SEND_SMS"}
+              onClick={() => setCurrentActionType("SEND_SMS")}
+            />
+            <TriggerCard
               title="חישוב זמן"
               description="חשב ושמור את זמן השהייה בסטטוס"
               icon={<Timer className="text-teal-500" size={24} />}
@@ -1375,11 +1385,11 @@ export default function AutomationModal({
             </div>
           )}
 
-          {currentActionType === "SEND_WHATSAPP" && (
-            <div className="bg-green-50 p-6 rounded-xl border border-green-100 space-y-5 animate-in slide-in-from-top-2">
-              <div className="flex items-center gap-2 mb-2 text-green-800 font-medium pb-2 border-b border-green-200">
-                <MessageSquare size={18} />
-                הגדרות הודעת WhatsApp
+          {(currentActionType === "SEND_WHATSAPP" || currentActionType === "SEND_SMS") && (
+            <div className={`${currentActionType === "SEND_SMS" ? "bg-blue-50" : "bg-green-50"} p-6 rounded-xl border ${currentActionType === "SEND_SMS" ? "border-blue-100" : "border-green-100"} space-y-5 animate-in slide-in-from-top-2`}>
+              <div className={`flex items-center gap-2 mb-2 ${currentActionType === "SEND_SMS" ? "text-blue-800" : "text-green-800"} font-medium pb-2 border-b ${currentActionType === "SEND_SMS" ? "border-blue-200" : "border-green-200"}`}>
+                {currentActionType === "SEND_SMS" ? <Phone size={18} /> : <MessageSquare size={18} />}
+                {currentActionType === "SEND_SMS" ? "הגדרות הודעת SMS" : "הגדרות הודעת WhatsApp"}
               </div>
 
               {/* Target Type Selection */}
@@ -1544,9 +1554,9 @@ export default function AutomationModal({
                   editingActionIndex !== null
                     ? actions.filter(
                         (a, i) =>
-                          a.type === "SEND_WHATSAPP" && i < editingActionIndex,
+                          (a.type === "SEND_WHATSAPP" || a.type === "SEND_SMS") && i < editingActionIndex,
                       ).length
-                    : actions.filter((a) => a.type === "SEND_WHATSAPP").length;
+                    : actions.filter((a) => a.type === "SEND_WHATSAPP" || a.type === "SEND_SMS").length;
 
                 if (waBeforeCount > 0) {
                   const minDelay = waBeforeCount >= 2 ? 20 : 10;

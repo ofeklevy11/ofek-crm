@@ -192,7 +192,7 @@ export function EventAutomationBuilder({
       } else if (initialData.actionType === "SEND_NOTIFICATION") {
         setNotifMessage(config.messageTemplate || "");
         setNotifRecipient(config.recipientId ? String(config.recipientId) : "");
-      } else if (initialData.actionType === "SEND_WHATSAPP") {
+      } else if (initialData.actionType === "SEND_WHATSAPP" || initialData.actionType === "SEND_SMS") {
         const phone = config.phoneColumnId?.startsWith("manual:")
           ? config.phoneColumnId.replace("manual:", "")
           : "";
@@ -247,11 +247,11 @@ export function EventAutomationBuilder({
     let validationError: string | null = null;
 
     // Validation
-    if (actionType === "SEND_WHATSAPP") {
+    if (actionType === "SEND_WHATSAPP" || actionType === "SEND_SMS") {
       if (!waPhone || waPhone.trim() === "") {
         validationError = "חובה להזין מספר טלפון או Group ID";
       } else if (!waMessage || waMessage.trim() === "") {
-        validationError = "חובה להזין תוכן הודעה להודעת ה-WhatsApp";
+        validationError = actionType === "SEND_SMS" ? "חובה להזין תוכן הודעה להודעת ה-SMS" : "חובה להזין תוכן הודעה להודעת ה-WhatsApp";
       }
     } else if (actionType === "WEBHOOK") {
       if (!webhookUrl || webhookUrl.trim() === "") {
@@ -297,7 +297,7 @@ export function EventAutomationBuilder({
         messageTemplate: notifMessage,
         recipientId: notifRecipient ? Number(notifRecipient) : null,
       };
-    } else if (actionType === "SEND_WHATSAPP") {
+    } else if (actionType === "SEND_WHATSAPP" || actionType === "SEND_SMS") {
       config = {
         // We use a special prefix to indicate manual number if needed
         // But executeWhatsAppAction usually expects phoneColumnId.
@@ -543,6 +543,14 @@ export function EventAutomationBuilder({
                   border: "hover:border-green-500",
                 },
                 {
+                  id: "SEND_SMS",
+                  title: "שליחת SMS",
+                  icon: Smartphone,
+                  color: "text-blue-600",
+                  bg: "bg-blue-50",
+                  border: "hover:border-blue-500",
+                },
+                {
                   id: "WEBHOOK",
                   title: "שליחת Webhook",
                   icon: Webhook,
@@ -776,8 +784,8 @@ export function EventAutomationBuilder({
               </div>
             )}
 
-            {/* WhatsApp Config */}
-            {actionType === "SEND_WHATSAPP" && (
+            {/* WhatsApp / SMS Config */}
+            {(actionType === "SEND_WHATSAPP" || actionType === "SEND_SMS") && (
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-5 relative overflow-hidden">
                 {/* Green API Badge */}
                 <div className="absolute top-0 left-0 bg-green-500 text-white text-[10px] px-2 py-0.5 rounded-br-lg font-bold tracking-wider">

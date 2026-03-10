@@ -23,6 +23,7 @@ import {
   ChevronDown,
   Copy,
   Timer,
+  Phone,
 } from "lucide-react";
 import {
   createAutomationRule,
@@ -116,7 +117,7 @@ export default function ViewAutomationModal({
   const [actions, setActions] = useState<{ type: string; config: any }[]>([]);
   const [isAddingAction, setIsAddingAction] = useState(false);
   const [currentActionType, setCurrentActionType] = useState<
-    "SEND_NOTIFICATION" | "SEND_WHATSAPP" | "WEBHOOK" | "CREATE_TASK" | "CALCULATE_DURATION" | "UPDATE_RECORD_FIELD" | ""
+    "SEND_NOTIFICATION" | "SEND_WHATSAPP" | "SEND_SMS" | "WEBHOOK" | "CREATE_TASK" | "CALCULATE_DURATION" | "UPDATE_RECORD_FIELD" | ""
   >("");
   const [editingActionIndex, setEditingActionIndex] = useState<number | null>(
     null,
@@ -265,7 +266,7 @@ export default function ViewAutomationModal({
     if (!currentActionType) return false;
     if (currentActionType === "SEND_NOTIFICATION")
       return !!recipientId && !!messageTemplate;
-    if (currentActionType === "SEND_WHATSAPP") {
+    if (currentActionType === "SEND_WHATSAPP" || currentActionType === "SEND_SMS") {
       // Check actual phone number, not just the "manual:" prefix
       const actualPhone = waPhoneColumnId.replace("manual:", "").trim();
       if (!actualPhone) return false;
@@ -274,9 +275,9 @@ export default function ViewAutomationModal({
       const waBeforeCount =
         editingActionIndex !== null
           ? actions.filter(
-              (a, i) => a.type === "SEND_WHATSAPP" && i < editingActionIndex,
+              (a, i) => (a.type === "SEND_WHATSAPP" || a.type === "SEND_SMS") && i < editingActionIndex,
             ).length
-          : actions.filter((a) => a.type === "SEND_WHATSAPP").length;
+          : actions.filter((a) => a.type === "SEND_WHATSAPP" || a.type === "SEND_SMS").length;
       if (waBeforeCount > 0) {
         const minDelay = waBeforeCount >= 2 ? 20 : 10;
         if (!waDelay || waDelay < minDelay) return false;
@@ -308,7 +309,7 @@ export default function ViewAutomationModal({
               messageTemplate,
               titleTemplate: `התראה: ${view.ruleName}`,
             }
-          : currentActionType === "SEND_WHATSAPP"
+          : currentActionType === "SEND_WHATSAPP" || currentActionType === "SEND_SMS"
             ? {
                 phoneColumnId: waPhoneColumnId,
                 messageType: waMessageType,
@@ -362,7 +363,7 @@ export default function ViewAutomationModal({
     if (action.type === "SEND_NOTIFICATION") {
       setRecipientId(action.config.recipientId?.toString() || "");
       setMessageTemplate(action.config.messageTemplate || "");
-    } else if (action.type === "SEND_WHATSAPP") {
+    } else if (action.type === "SEND_WHATSAPP" || action.type === "SEND_SMS") {
       setWaPhoneColumnId(action.config.phoneColumnId || "");
       setWaMessageType(action.config.messageType || "private");
       setWaContent(action.config.content || "");
@@ -534,6 +535,8 @@ export default function ViewAutomationModal({
         return <Bell size={20} />;
       case "SEND_WHATSAPP":
         return <MessageSquare size={20} />;
+      case "SEND_SMS":
+        return <Phone size={20} />;
       case "WEBHOOK":
         return <div className="font-bold text-xs">API</div>;
       case "CREATE_TASK":
@@ -553,6 +556,8 @@ export default function ViewAutomationModal({
         return "שליחת התראה";
       case "SEND_WHATSAPP":
         return "שליחת WhatsApp";
+      case "SEND_SMS":
+        return "שליחת SMS";
       case "WEBHOOK":
         return "Webhook";
       case "CREATE_TASK":
@@ -1039,6 +1044,15 @@ export default function ViewAutomationModal({
                         onClick={() => setCurrentActionType("SEND_WHATSAPP")}
                       />
                       <ActionCard
+                        title="שליחת SMS"
+                        description="שלח הודעת SMS לנמען"
+                        icon={
+                          <Phone className="text-blue-600" size={24} />
+                        }
+                        selected={currentActionType === "SEND_SMS"}
+                        onClick={() => setCurrentActionType("SEND_SMS")}
+                      />
+                      <ActionCard
                         title="Webhook"
                         description="שלח נתונים למערכת חיצונית"
                         icon={
@@ -1118,11 +1132,11 @@ export default function ViewAutomationModal({
                       </div>
                     )}
 
-                    {currentActionType === "SEND_WHATSAPP" && (
-                      <div className="bg-green-50 p-6 rounded-xl border border-green-100 space-y-5 animate-in slide-in-from-top-2">
-                        <div className="flex items-center gap-2 mb-2 text-green-800 font-medium pb-2 border-b border-green-200">
-                          <MessageSquare size={18} />
-                          הגדרות הודעת WhatsApp
+                    {(currentActionType === "SEND_WHATSAPP" || currentActionType === "SEND_SMS") && (
+                      <div className={`${currentActionType === "SEND_SMS" ? "bg-blue-50" : "bg-green-50"} p-6 rounded-xl border ${currentActionType === "SEND_SMS" ? "border-blue-100" : "border-green-100"} space-y-5 animate-in slide-in-from-top-2`}>
+                        <div className={`flex items-center gap-2 mb-2 ${currentActionType === "SEND_SMS" ? "text-blue-800" : "text-green-800"} font-medium pb-2 border-b ${currentActionType === "SEND_SMS" ? "border-blue-200" : "border-green-200"}`}>
+                          {currentActionType === "SEND_SMS" ? <Phone size={18} /> : <MessageSquare size={18} />}
+                          {currentActionType === "SEND_SMS" ? "הגדרות הודעת SMS" : "הגדרות הודעת WhatsApp"}
                         </div>
 
                         {/* Phone number - manual only for analytics (no table context) */}
@@ -1158,11 +1172,11 @@ export default function ViewAutomationModal({
                             editingActionIndex !== null
                               ? actions.filter(
                                   (a, i) =>
-                                    a.type === "SEND_WHATSAPP" &&
+                                    (a.type === "SEND_WHATSAPP" || a.type === "SEND_SMS") &&
                                     i < editingActionIndex,
                                 ).length
                               : actions.filter(
-                                  (a) => a.type === "SEND_WHATSAPP",
+                                  (a) => a.type === "SEND_WHATSAPP" || a.type === "SEND_SMS",
                                 ).length;
 
                           if (waBeforeCount > 0) {

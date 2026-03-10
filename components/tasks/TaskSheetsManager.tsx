@@ -95,7 +95,8 @@ interface NewItemType {
       | "SEND_NOTIFICATION"
       | "UPDATE_TASK"
       | "SEND_WEBHOOK"
-      | "SEND_WHATSAPP";
+      | "SEND_WHATSAPP"
+      | "SEND_SMS";
     config: Record<string, unknown>;
   }>;
 }
@@ -132,6 +133,7 @@ export default function TaskSheetsManager({
         | "UPDATE_TASK"
         | "SEND_WEBHOOK"
         | "SEND_WHATSAPP"
+        | "SEND_SMS"
         | "CREATE_CALENDAR_EVENT";
       config: Record<string, unknown>;
     }>;
@@ -318,6 +320,7 @@ export default function TaskSheetsManager({
               return `באוטומציה לפריט "${item.title}": חובה להזין כתובת URL`;
             break;
           case "SEND_WHATSAPP":
+          case "SEND_SMS":
             // Check if phone source is from table or manual
             if (config.phoneSource === "table") {
               // When using table as phone source, validate table and column selection

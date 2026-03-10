@@ -17,6 +17,7 @@ import {
   Calendar,
   AlertCircle,
   Zap,
+  Phone,
 } from "lucide-react";
 import TaskItemAutomationBuilder, {
   OnCompleteAction,
@@ -67,6 +68,13 @@ const actionTypes = [
     icon: MessageCircle,
     color: "text-green-600",
     bgColor: "bg-green-50",
+  },
+  {
+    value: "SEND_SMS",
+    label: "שליחת SMS",
+    icon: Phone,
+    color: "text-blue-600",
+    bgColor: "bg-blue-50",
   },
   {
     value: "CREATE_CALENDAR_EVENT",
@@ -169,6 +177,10 @@ export default function TaskItemAutomations({
         return action.config.phone
           ? `ל-${action.config.phone}`
           : "הודעת וואטספ";
+      case "SEND_SMS":
+        return action.config.phone
+          ? `ל-${action.config.phone}`
+          : "הודעת SMS";
       case "SEND_WEBHOOK":
         return action.config.url ? "שליחת נתונים" : "Webhook";
       case "UPDATE_RECORD":

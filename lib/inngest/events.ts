@@ -274,6 +274,37 @@ export type Events = {
     };
   };
 
+  // --- SMS events ---
+  "sms/send-message": {
+    data: {
+      companyId: number;
+      toNumber: string;
+      body: string;
+      fromNumber?: string;
+      sentByUserId?: number;
+      automationRuleId?: number;
+    };
+  };
+  "sms/status-update": {
+    data: {
+      companyId: number;
+      twilioSid: string;
+      status: string;
+      errorCode?: string;
+      errorMessage?: string;
+    };
+  };
+
+  // --- Automation SMS event ---
+  "automation/send-sms": {
+    data: {
+      companyId: number;
+      phone: string;
+      content: string;
+      delay?: number;
+    };
+  };
+
   // --- AI events ---
   "ai/generation.requested": {
     data: {

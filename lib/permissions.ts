@@ -49,6 +49,8 @@ export const USER_FLAGS = [
   { key: "canSearchTables", label: "חיפוש בטבלאות" },
   { key: "canFilterTables", label: "שימוש בפילטרים" },
   { key: "canExportTables", label: "ייצוא נתונים לקבצים" },
+  { key: "canViewSms", label: "גישה ל-SMS" },
+  { key: "canSendSms", label: "שליחת הודעות SMS" },
 ] as const;
 
 export type UserFlagKey = (typeof USER_FLAGS)[number]["key"];

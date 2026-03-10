@@ -46,12 +46,21 @@ enum AutomationActionType {
   CALCULATE_MULTI_EVENT_DURATION
   UPDATE_RECORD_FIELD
   SEND_WHATSAPP
+  SEND_SMS
   WEBHOOK
   ADD_TO_NURTURE_LIST
   CREATE_TASK
   CREATE_RECORD
   CREATE_CALENDAR_EVENT
   MULTI_ACTION
+}
+
+enum SmsIntegrationStatus {
+  DISCONNECTED
+  CREDENTIALS_INVALID
+  CONNECTED
+  NO_SMS_NUMBER
+  READY
 }
 
 enum TaskStatus {
@@ -413,6 +422,10 @@ model Company {
 
   // Google Drive
   googleDriveConnections GoogleDriveConnection[]
+
+  // SMS (Twilio)
+  smsIntegration SmsIntegration?
+  smsMessages    SmsMessage[]
 }
 
 model User {
@@ -469,6 +482,9 @@ model User {
 
   // Google Drive
   googleDriveConnections GoogleDriveConnection[]
+
+  // SMS (Twilio)
+  smsIntegrationsConnected SmsIntegration[] @relation("SmsIntegrationConnectedBy")
 
   @@index([companyId])
 }
@@ -2263,4 +2279,65 @@ model GoogleDriveSelectedFolder {
 
   @@unique([connectionId, driveFolderId])
   @@index([connectionId])
+}
+
+// ============================================
+// SMS (Twilio)
+// ============================================
+
+model SmsIntegration {
+  id        Int      @id @default(autoincrement())
+  companyId Int      @unique // One integration per company
+
+  accountSid   String // Twilio Account SID (not secret)
+  authTokenEnc String // AES-256-GCM encrypted Auth Token
+  authTokenIv  String
+  authTokenTag String
+
+  fromNumber   String? // Default sender in E.164
+  friendlyName String? // Twilio account friendly name
+
+  status SmsIntegrationStatus @default(DISCONNECTED)
+
+  connectedBy   Int?
+  connectedUser User? @relation("SmsIntegrationConnectedBy", fields: [connectedBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company  Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  messages SmsMessage[]
+
+  @@index([companyId])
+  @@index([accountSid])
+}
+
+model SmsMessage {
+  id        BigInt @id @default(autoincrement())
+  companyId Int
+
+  twilioSid String? @unique // Twilio Message SID for webhook matching
+  direction String  @default("OUTBOUND")
+
+  fromNumber String
+  toNumber   String
+  body       String
+
+  status       String  @default("QUEUED") // QUEUED, SENT, DELIVERED, UNDELIVERED, FAILED
+  errorCode    String?
+  errorMessage String?
+
+  sentByUserId     Int?
+  automationRuleId Int?
+  integrationId    Int
+
+  integration SmsIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, createdAt])
+  @@index([twilioSid])
+  @@index([companyId, status])
 }

@@ -321,6 +321,10 @@ export default function AutomationsList({
         return `שליחת וואטסאפ (${
           config.messageType === "media" ? "מדיה" : "הודעה"
         })`;
+      case "SEND_SMS":
+        return `שליחת SMS (${
+          config.messageType === "media" ? "מדיה" : "הודעה"
+        })`;
       case "CREATE_TASK":
         return "יצירת משימה";
       case "CALCULATE_DURATION":

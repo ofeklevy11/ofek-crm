@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import MeetingAutomationWizard from "./MeetingAutomationWizard";
 import { toast } from "sonner";
-import { Plus, Trash2, Bell, Clock, MessageSquare, Webhook, CheckSquare, Timer, Pencil, Edit2, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Bell, Clock, MessageSquare, Webhook, CheckSquare, Timer, Pencil, Edit2, AlertCircle, Phone } from "lucide-react";
 
 interface AutomationRule {
   id: number;
@@ -45,6 +45,7 @@ const TRIGGER_LABELS: Record<string, string> = {
 const ACTION_ICONS: Record<string, React.ReactNode> = {
   SEND_NOTIFICATION: <Bell className="h-3.5 w-3.5" />,
   SEND_WHATSAPP: <MessageSquare className="h-3.5 w-3.5" />,
+  SEND_SMS: <Phone className="h-3.5 w-3.5" />,
   CREATE_TASK: <CheckSquare className="h-3.5 w-3.5" />,
   WEBHOOK: <Webhook className="h-3.5 w-3.5" />,
   CALCULATE_DURATION: <Timer className="h-3.5 w-3.5" />,
@@ -54,6 +55,7 @@ const ACTION_ICONS: Record<string, React.ReactNode> = {
 const ACTION_LABELS: Record<string, string> = {
   SEND_NOTIFICATION: "התראה",
   SEND_WHATSAPP: "וואטסאפ",
+  SEND_SMS: "SMS",
   CREATE_TASK: "משימה",
   WEBHOOK: "Webhook",
   CALCULATE_DURATION: "חישוב זמן",

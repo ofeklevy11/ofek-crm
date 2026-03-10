@@ -17,6 +17,7 @@ import {
   ChevronDown,
   Info,
   Plus,
+  Phone,
 } from "lucide-react";
 import { getTableById } from "@/app/actions/tables";
 import { showAlert } from "@/hooks/use-modal";
@@ -30,6 +31,7 @@ export interface OnCompleteAction {
     | "SEND_NOTIFICATION"
     | "SEND_WEBHOOK"
     | "SEND_WHATSAPP"
+    | "SEND_SMS"
     | "CREATE_CALENDAR_EVENT"
     | "CREATE_RECORD";
   config: Record<string, unknown>;
@@ -65,6 +67,13 @@ const actionTypes = [
     description: "שלח הודעת וואטספ אוטומטית",
     icon: MessageCircle,
     color: "bg-green-100 text-green-600",
+  },
+  {
+    value: "SEND_SMS",
+    label: "שליחת SMS",
+    description: "שלח הודעת SMS אוטומטית",
+    icon: Phone,
+    color: "bg-blue-100 text-blue-600",
   },
   {
     value: "CREATE_CALENDAR_EVENT",
@@ -159,7 +168,7 @@ export default function TaskItemAutomationBuilder({
   // Load columns for WhatsApp table selection
   useEffect(() => {
     const waTableId = config.waTableId as number | undefined;
-    if (selectedType === "SEND_WHATSAPP" && waTableId) {
+    if ((selectedType === "SEND_WHATSAPP" || selectedType === "SEND_SMS") && waTableId) {
       setLoadingWaColumns(true);
       getTableById(Number(waTableId))
         .then((res) => {
@@ -239,6 +248,7 @@ export default function TaskItemAutomationBuilder({
         }
         break;
       case "SEND_WHATSAPP":
+      case "SEND_SMS":
         // Check if phone source is from table or manual
         if (config.phoneSource === "table") {
           // When using table as phone source, validate table and column selection
@@ -505,6 +515,7 @@ export default function TaskItemAutomationBuilder({
         );
 
       case "SEND_WHATSAPP":
+      case "SEND_SMS":
         return (
           <div className="space-y-4">
             {/* Phone Source Selection */}

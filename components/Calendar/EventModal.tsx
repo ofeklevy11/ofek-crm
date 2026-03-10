@@ -773,12 +773,14 @@ export function EventModal({
                                         ? "bg-green-50 text-green-600"
                                         : auto.actionType === "SEND_WHATSAPP"
                                           ? "bg-[#e6f7ee] text-green-700"
-                                          : auto.actionType === "CREATE_RECORD"
+                                          : auto.actionType === "SEND_SMS"
                                             ? "bg-blue-50 text-blue-600"
-                                            : auto.actionType ===
-                                                "CREATE_CALENDAR_EVENT"
-                                              ? "bg-indigo-50 text-indigo-600"
-                                              : "bg-gray-50 text-gray-600"
+                                            : auto.actionType === "CREATE_RECORD"
+                                              ? "bg-blue-50 text-blue-600"
+                                              : auto.actionType ===
+                                                  "CREATE_CALENDAR_EVENT"
+                                                ? "bg-indigo-50 text-indigo-600"
+                                                : "bg-gray-50 text-gray-600"
                                   }`}
                                 >
                                   {auto.actionType === "SEND_NOTIFICATION" ? (
@@ -787,6 +789,8 @@ export function EventModal({
                                     <CheckSquare size={20} />
                                   ) : auto.actionType === "SEND_WHATSAPP" ? (
                                     <WhatsAppIcon size={20} />
+                                  ) : auto.actionType === "SEND_SMS" ? (
+                                    <Smartphone size={20} />
                                   ) : auto.actionType === "CREATE_RECORD" ? (
                                     <TableIcon size={20} />
                                   ) : auto.actionType ===
@@ -813,13 +817,15 @@ export function EventModal({
                                           ? "משימה"
                                           : auto.actionType === "SEND_WHATSAPP"
                                             ? "WhatsApp"
-                                            : auto.actionType ===
-                                                "CREATE_RECORD"
-                                              ? "רשומה"
+                                            : auto.actionType === "SEND_SMS"
+                                              ? "SMS"
                                               : auto.actionType ===
-                                                  "CREATE_CALENDAR_EVENT"
-                                                ? "אירוע"
-                                                : "פעולה"}
+                                                  "CREATE_RECORD"
+                                                ? "רשומה"
+                                                : auto.actionType ===
+                                                    "CREATE_CALENDAR_EVENT"
+                                                  ? "אירוע"
+                                                  : "פעולה"}
                                     </span>
                                   </div>
                                 </div>
@@ -874,12 +880,14 @@ export function EventModal({
                                       ? "bg-green-50 text-green-600"
                                       : auto.actionType === "SEND_WHATSAPP"
                                         ? "bg-[#e6f7ee] text-green-700"
-                                        : auto.actionType === "CREATE_RECORD"
+                                        : auto.actionType === "SEND_SMS"
                                           ? "bg-blue-50 text-blue-600"
-                                          : auto.actionType ===
-                                              "CREATE_CALENDAR_EVENT"
-                                            ? "bg-indigo-50 text-indigo-600"
-                                            : "bg-gray-50 text-gray-600"
+                                          : auto.actionType === "CREATE_RECORD"
+                                            ? "bg-blue-50 text-blue-600"
+                                            : auto.actionType ===
+                                                "CREATE_CALENDAR_EVENT"
+                                              ? "bg-indigo-50 text-indigo-600"
+                                              : "bg-gray-50 text-gray-600"
                                 }`}
                               >
                                 {auto.actionType === "SEND_NOTIFICATION" ? (
@@ -888,6 +896,8 @@ export function EventModal({
                                   <CheckSquare size={20} />
                                 ) : auto.actionType === "SEND_WHATSAPP" ? (
                                   <WhatsAppIcon size={20} />
+                                ) : auto.actionType === "SEND_SMS" ? (
+                                  <Smartphone size={20} />
                                 ) : auto.actionType === "CREATE_RECORD" ? (
                                   <TableIcon size={20} />
                                 ) : auto.actionType ===
@@ -913,12 +923,14 @@ export function EventModal({
                                         ? "משימה"
                                         : auto.actionType === "SEND_WHATSAPP"
                                           ? "WhatsApp"
-                                          : auto.actionType === "CREATE_RECORD"
-                                            ? "רשומה"
-                                            : auto.actionType ===
-                                                "CREATE_CALENDAR_EVENT"
-                                              ? "אירוע"
-                                              : "פעולה"}
+                                          : auto.actionType === "SEND_SMS"
+                                            ? "SMS"
+                                            : auto.actionType === "CREATE_RECORD"
+                                              ? "רשומה"
+                                              : auto.actionType ===
+                                                  "CREATE_CALENDAR_EVENT"
+                                                ? "אירוע"
+                                                : "פעולה"}
                                   </span>
                                 </div>
                               </div>

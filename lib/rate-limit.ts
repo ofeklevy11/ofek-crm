@@ -195,4 +195,12 @@ export const RATE_LIMITS = {
   googleDriveRead: { prefix: "gdrive-read", max: 60, windowSeconds: 60 } satisfies RateLimitConfig,
   /** Google Drive downloads: 30 per user per minute */
   googleDriveDownload: { prefix: "gdrive-dl", max: 30, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** SMS integration mutations: 10 per user per minute */
+  smsMutation: { prefix: "sms-mut", max: 10, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** SMS sends: 10 per user per minute */
+  smsSend: { prefix: "sms-send", max: 10, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** Twilio webhook: 120 per account per minute */
+  twilioWebhook: { prefix: "tw-wh", max: 120, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** SMS test send: 3 per user per 15 minutes */
+  smsTestSend: { prefix: "sms-test", max: 3, windowSeconds: 900 } satisfies RateLimitConfig,
 } as const;

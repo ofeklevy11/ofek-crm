@@ -282,6 +282,60 @@ export async function executeRuleActions(
             }
           }
         }
+      } else if (type === "SEND_SMS") {
+        // Prepare data for SMS
+        const smsData = { ...context.recordData };
+        if (context.taskTitle) {
+          smsData.taskTitle = context.taskTitle;
+          smsData.fromStatus = context.fromStatus;
+          smsData.toStatus = context.toStatus;
+        }
+
+        // Resolve phone number
+        const smsPhoneColumnId = config.phoneColumnId;
+        let smsPhone = "";
+        if (context.meetingId && context.participantPhone) {
+          smsPhone = context.participantPhone;
+        } else if (smsPhoneColumnId?.startsWith("manual:")) {
+          smsPhone = smsPhoneColumnId.replace("manual:", "");
+        } else if (smsPhoneColumnId) {
+          smsPhone = smsData[smsPhoneColumnId] || "";
+        }
+
+        // Resolve content with dynamic placeholders
+        let smsContent = config.content || config.message || "";
+        for (const key in smsData) {
+          smsContent = smsContent.split(`{${key}}`).join(String(smsData[key] || ""));
+        }
+        if (context.meetingId) {
+          smsContent = smsContent
+            .split("{participantName}").join(context.participantName || "")
+            .split("{participantEmail}").join(context.participantEmail || "")
+            .split("{participantPhone}").join(context.participantPhone || "")
+            .split("{meetingType}").join(context.meetingType || "")
+            .split("{meetingStart}").join(context.meetingStart || "")
+            .split("{meetingEnd}").join(context.meetingEnd || "");
+        }
+
+        if (!smsPhone) {
+          log.error("SMS: No phone resolved from column config");
+        } else {
+          try {
+            await inngest.send({
+              id: `sms-${companyId}-${smsPhone}-${ruleId}-${Math.floor(Date.now() / 5000)}`,
+              name: "automation/send-sms",
+              data: {
+                companyId,
+                phone: String(smsPhone),
+                content: smsContent,
+                delay: config.delay,
+              },
+            });
+            log.info("SMS job enqueued", { phoneMasked: `${String(smsPhone).slice(0, 3)}****${String(smsPhone).slice(-2)}` });
+          } catch (err) {
+            log.error("Inngest SMS enqueue failed", { ruleId, error: String(err) });
+          }
+        }
       } else if (type === "WEBHOOK") {
         const webhookData: Record<string, unknown> = {
           ...context.recordData,

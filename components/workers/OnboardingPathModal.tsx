@@ -181,6 +181,7 @@ export default function OnboardingPathModal({
         if (!config.title) return "יש להזין כותרת להתראה";
         break;
       case "SEND_WHATSAPP":
+      case "SEND_SMS":
         // Check if phone source is from table or manual
         if (config.phoneSource === "table") {
           // When using table as phone source, validate table and column selection
@@ -941,6 +942,7 @@ export default function OnboardingPathModal({
                                                   SEND_NOTIFICATION:
                                                     "שליחת התראה",
                                                   SEND_WHATSAPP: "שליחת וואטספ",
+                                                  SEND_SMS: "שליחת SMS",
                                                   UPDATE_RECORD: "עדכון רשומה",
                                                   CREATE_RECORD:
                                                     "יצירת רשומה בטבלה",
@@ -1391,6 +1393,7 @@ export default function OnboardingPathModal({
                                     CREATE_TASK: "יצירת משימה",
                                     SEND_NOTIFICATION: "שליחת התראה",
                                     SEND_WHATSAPP: "שליחת וואטספ",
+                                    SEND_SMS: "שליחת SMS",
                                     UPDATE_RECORD: "עדכון רשומה",
                                     CREATE_RECORD: "יצירת רשומה בטבלה",
                                     CREATE_CALENDAR_EVENT: "יצירת אירוע",

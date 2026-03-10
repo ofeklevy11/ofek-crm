@@ -366,12 +366,14 @@ export function GlobalEventAutomationsModal({
                                       ? "bg-green-50 text-green-600"
                                       : auto.actionType === "SEND_WHATSAPP"
                                         ? "bg-[#e6f7ee] text-green-700"
-                                        : auto.actionType === "CREATE_RECORD"
+                                        : auto.actionType === "SEND_SMS"
                                           ? "bg-blue-50 text-blue-600"
-                                          : auto.actionType ===
-                                              "CREATE_CALENDAR_EVENT"
-                                            ? "bg-indigo-50 text-indigo-600"
-                                            : "bg-purple-50 text-purple-600"
+                                          : auto.actionType === "CREATE_RECORD"
+                                            ? "bg-blue-50 text-blue-600"
+                                            : auto.actionType ===
+                                                "CREATE_CALENDAR_EVENT"
+                                              ? "bg-indigo-50 text-indigo-600"
+                                              : "bg-purple-50 text-purple-600"
                                 }`}
                               >
                                 {auto.actionType === "SEND_NOTIFICATION" ? (
@@ -380,6 +382,8 @@ export function GlobalEventAutomationsModal({
                                   <CheckSquare size={24} />
                                 ) : auto.actionType === "SEND_WHATSAPP" ? (
                                   <WhatsAppIcon size={24} />
+                                ) : auto.actionType === "SEND_SMS" ? (
+                                  <Smartphone size={24} />
                                 ) : auto.actionType === "CREATE_RECORD" ? (
                                   <TableIcon size={24} />
                                 ) : auto.actionType ===
@@ -412,12 +416,14 @@ export function GlobalEventAutomationsModal({
                                         ? "משימה אוטומטית"
                                         : auto.actionType === "SEND_WHATSAPP"
                                           ? "הודעת WhatsApp"
-                                          : auto.actionType === "CREATE_RECORD"
-                                            ? "יצירת רשומה בטבלה"
-                                            : auto.actionType ===
-                                                "CREATE_CALENDAR_EVENT"
-                                              ? "יצירת אירוע נוסף ביומן"
-                                              : "Webhook"}
+                                          : auto.actionType === "SEND_SMS"
+                                            ? "שליחת SMS"
+                                            : auto.actionType === "CREATE_RECORD"
+                                              ? "יצירת רשומה בטבלה"
+                                              : auto.actionType ===
+                                                  "CREATE_CALENDAR_EVENT"
+                                                ? "יצירת אירוע נוסף ביומן"
+                                                : "Webhook"}
                                   </span>
                                 </div>
                               </div>

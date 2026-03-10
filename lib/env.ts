@@ -48,5 +48,6 @@ export const env = {
   GOOGLE_CLIENT_ID: optionalEnv("GOOGLE_CLIENT_ID"),
   GOOGLE_CLIENT_SECRET: optionalEnv("GOOGLE_CLIENT_SECRET"),
   GOOGLE_TOKEN_ENCRYPTION_KEY: optionalEnv("GOOGLE_TOKEN_ENCRYPTION_KEY"),
+  TWILIO_TOKEN_ENCRYPTION_KEY: optionalEnv("TWILIO_TOKEN_ENCRYPTION_KEY"),
   NODE_ENV: process.env.NODE_ENV || "development",
 } as const;

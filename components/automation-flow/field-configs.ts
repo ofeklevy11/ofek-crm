@@ -58,6 +58,7 @@ export const ACTION_LABELS: Record<string, string> = {
   CREATE_TASK: "יצירת משימה",
   UPDATE_RECORD_FIELD: "עדכון שדה ברשומה",
   SEND_WHATSAPP: "שליחת וואטסאפ",
+  SEND_SMS: "שליחת SMS",
   WEBHOOK: "Webhook",
   ADD_TO_NURTURE_LIST: "הוספה לרשימת דיוור",
   CREATE_RECORD: "יצירת רשומה",
@@ -86,7 +87,7 @@ export const SELECTABLE_TRIGGER_TYPES = [
 ];
 export const SELECTABLE_ACTION_TYPES = [
   "SEND_NOTIFICATION", "CREATE_TASK", "UPDATE_RECORD_FIELD",
-  "SEND_WHATSAPP", "WEBHOOK", "CALCULATE_DURATION",
+  "SEND_WHATSAPP", "SEND_SMS", "WEBHOOK", "CALCULATE_DURATION",
 ];
 
 // ─── Icon & Color Mappings ───────────────────────────────────────────────────
@@ -111,6 +112,7 @@ export const ACTION_ICONS: Record<string, LucideIcon> = {
   CREATE_TASK: CheckSquare,
   UPDATE_RECORD_FIELD: RefreshCw,
   SEND_WHATSAPP: MessageSquare,
+  SEND_SMS: Phone,
   WEBHOOK: Globe,
   ADD_TO_NURTURE_LIST: ListPlus,
   CREATE_RECORD: FilePlus,
@@ -140,6 +142,7 @@ export const ACTION_COLORS: Record<string, string> = {
   CREATE_TASK: "border-emerald-400",
   UPDATE_RECORD_FIELD: "border-lime-400",
   SEND_WHATSAPP: "border-green-500",
+  SEND_SMS: "border-blue-500",
   WEBHOOK: "border-teal-400",
   ADD_TO_NURTURE_LIST: "border-cyan-400",
   CREATE_RECORD: "border-green-400",
@@ -281,6 +284,11 @@ export const ACTION_FIELD_CONFIGS: Record<string, FieldConfig[]> = {
   SEND_WHATSAPP: [
     { key: "phoneColumnId", label: "יעד שליחה", inputType: "whatsapp-phone" },
     { key: "content", label: "תוכן ההודעה", inputType: "textarea", placeholder: "תוכן הודעת הוואטסאפ..." },
+    { key: "delay", label: "השהייה (שניות)", inputType: "number", placeholder: "0", optional: true },
+  ],
+  SEND_SMS: [
+    { key: "phoneColumnId", label: "מספר טלפון", inputType: "whatsapp-phone" },
+    { key: "content", label: "תוכן ההודעה", inputType: "textarea", placeholder: "תוכן הודעת ה-SMS..." },
     { key: "delay", label: "השהייה (שניות)", inputType: "number", placeholder: "0", optional: true },
   ],
   WEBHOOK: [

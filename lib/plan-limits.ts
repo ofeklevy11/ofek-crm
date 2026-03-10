@@ -17,6 +17,17 @@ export const ACTIONS_PER_AUTOMATION_LIMITS: Record<string, number> = {
   super: Infinity,
 };
 
+// --- Monthly SMS Limits ---
+export const MONTHLY_SMS_LIMITS: Record<string, number> = {
+  basic: 100,
+  premium: 500,
+  super: Infinity,
+};
+
+export function getMonthlySmsLimit(tier: string | null | undefined): number {
+  return MONTHLY_SMS_LIMITS[tier || "basic"] ?? MONTHLY_SMS_LIMITS.basic;
+}
+
 // --- Safety caps ---
 export const MAX_RULES_PER_COMPANY = 500;
 export const MAX_PER_MEETING_AUTOMATIONS = 10;

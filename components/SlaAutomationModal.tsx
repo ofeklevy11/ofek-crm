@@ -27,6 +27,7 @@ import {
   Clock,
   Zap,
   Shield,
+  Phone,
 } from "lucide-react";
 
 interface User {
@@ -45,6 +46,7 @@ interface SlaAutomationModalProps {
 type ActionType =
   | "SEND_NOTIFICATION"
   | "SEND_WHATSAPP"
+  | "SEND_SMS"
   | "WEBHOOK"
   | "CREATE_TASK"
   | "";
@@ -222,15 +224,15 @@ export default function SlaAutomationModal({
     if (!currentActionType) return false;
     if (currentActionType === "SEND_NOTIFICATION")
       return !!recipientId && !!messageTemplate;
-    if (currentActionType === "SEND_WHATSAPP") {
+    if (currentActionType === "SEND_WHATSAPP" || currentActionType === "SEND_SMS") {
       if (!waPhoneColumnId || !waContent) return false;
       if (waMessageType === "media" && !waMediaFileId) return false;
       const waBeforeCount =
         editingActionIndex !== null
           ? actions.filter(
-              (a, i) => a.type === "SEND_WHATSAPP" && i < editingActionIndex,
+              (a, i) => (a.type === "SEND_WHATSAPP" || a.type === "SEND_SMS") && i < editingActionIndex,
             ).length
-          : actions.filter((a) => a.type === "SEND_WHATSAPP").length;
+          : actions.filter((a) => a.type === "SEND_WHATSAPP" || a.type === "SEND_SMS").length;
       if (waBeforeCount > 0) {
         const minDelay = waBeforeCount >= 2 ? 20 : 10;
         if (!waDelay || waDelay < minDelay) return false;
@@ -256,7 +258,7 @@ export default function SlaAutomationModal({
               titleTemplate:
                 triggerType === "SLA_BREACH" ? "חריגת SLA" : "עדכון קריאה",
             }
-          : currentActionType === "SEND_WHATSAPP"
+          : currentActionType === "SEND_WHATSAPP" || currentActionType === "SEND_SMS"
             ? {
                 phoneColumnId: waPhoneColumnId,
                 messageType: waMessageType,
@@ -309,7 +311,7 @@ export default function SlaAutomationModal({
     if (action.type === "SEND_NOTIFICATION") {
       setRecipientId(action.config.recipientId?.toString() || "");
       setMessageTemplate(action.config.messageTemplate || "");
-    } else if (action.type === "SEND_WHATSAPP") {
+    } else if (action.type === "SEND_WHATSAPP" || action.type === "SEND_SMS") {
       setWaPhoneColumnId(action.config.phoneColumnId || "");
       setWaTargetType(
         action.config.phoneColumnId?.includes("@g.us") ? "group" : "private",
@@ -601,6 +603,7 @@ export default function SlaAutomationModal({
                 <div className="p-2 bg-[#4f95ff]/20 text-[#4f95ff] rounded-lg">
                   {act.type === "SEND_NOTIFICATION" && <Bell size={20} />}
                   {act.type === "SEND_WHATSAPP" && <MessageSquare size={20} />}
+                  {act.type === "SEND_SMS" && <Phone size={20} />}
                   {act.type === "WEBHOOK" && (
                     <div className="font-bold text-xs">API</div>
                   )}
@@ -610,6 +613,7 @@ export default function SlaAutomationModal({
                   <div className="font-medium text-gray-900">
                     {act.type === "SEND_NOTIFICATION" && "שליחת התראה"}
                     {act.type === "SEND_WHATSAPP" && "שליחת WhatsApp"}
+                    {act.type === "SEND_SMS" && "שליחת SMS"}
                     {act.type === "WEBHOOK" && "Webhook"}
                     {act.type === "CREATE_TASK" && "יצירת משימה"}
                   </div>
@@ -679,6 +683,13 @@ export default function SlaAutomationModal({
               onClick={() => setCurrentActionType("SEND_WHATSAPP")}
             />
             <ActionCard
+              title="שליחת SMS"
+              description="שלח הודעת SMS לנמען"
+              icon={<Phone className="text-blue-600" size={24} />}
+              selected={currentActionType === "SEND_SMS"}
+              onClick={() => setCurrentActionType("SEND_SMS")}
+            />
+            <ActionCard
               title="יצירת משימה"
               description="צור משימה חדשה אוטומטית"
               icon={<CheckSquare className="text-[#4f95ff]" size={24} />}
@@ -733,7 +744,7 @@ export default function SlaAutomationModal({
             </div>
           )}
 
-          {currentActionType === "SEND_WHATSAPP" && (
+          {(currentActionType === "SEND_WHATSAPP" || currentActionType === "SEND_SMS") && (
             <div className="bg-green-50 p-5 rounded-xl border border-green-100 space-y-5 animate-in fade-in slide-in-from-top-2">
               <div className="flex items-center gap-2 text-green-800 font-medium pb-2 border-b border-green-200">
                 <MessageSquare size={18} />
@@ -797,9 +808,9 @@ export default function SlaAutomationModal({
                   editingActionIndex !== null
                     ? actions.filter(
                         (a, i) =>
-                          a.type === "SEND_WHATSAPP" && i < editingActionIndex,
+                          (a.type === "SEND_WHATSAPP" || a.type === "SEND_SMS") && i < editingActionIndex,
                       ).length
-                    : actions.filter((a) => a.type === "SEND_WHATSAPP").length;
+                    : actions.filter((a) => a.type === "SEND_WHATSAPP" || a.type === "SEND_SMS").length;
 
                 if (waBeforeCount > 0) {
                   const minDelay = waBeforeCount >= 2 ? 20 : 10;

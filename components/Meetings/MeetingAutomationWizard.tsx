@@ -10,6 +10,7 @@ import {
   Pencil,
   Webhook,
   Clock,
+  Phone,
   ArrowRight,
   ArrowLeft,
   CheckCircle2,
@@ -105,6 +106,13 @@ const ACTION_OPTIONS = [
     color: "green",
   },
   {
+    value: "SEND_SMS",
+    title: "שליחת SMS",
+    description: "שלח הודעת SMS למשתתף",
+    icon: <Phone className="text-blue-600" size={24} />,
+    color: "blue",
+  },
+  {
     value: "CALCULATE_DURATION",
     title: "חישוב זמן",
     description: "חשב משך זמן בין אירועים",
@@ -143,6 +151,7 @@ const TRIGGER_LABELS: Record<string, string> = {
 const ACTION_LABELS: Record<string, string> = {
   SEND_NOTIFICATION: "התראה",
   SEND_WHATSAPP: "וואטסאפ",
+  SEND_SMS: "SMS",
   CALCULATE_DURATION: "חישוב זמן",
   WEBHOOK: "Webhook",
   CREATE_TASK: "משימה",
@@ -246,6 +255,8 @@ export default function MeetingAutomationWizard({
       case "SEND_NOTIFICATION":
         return { message: notifMessage || "תזכורת לפגישה" };
       case "SEND_WHATSAPP":
+        return { message: notifMessage || "תזכורת לפגישה" };
+      case "SEND_SMS":
         return { message: notifMessage || "תזכורת לפגישה" };
       case "WEBHOOK":
         return { url: webhookUrl };
@@ -389,19 +400,23 @@ export default function MeetingAutomationWizard({
       </div>
 
       {/* Action-specific config */}
-      {(actionType === "SEND_NOTIFICATION" || actionType === "SEND_WHATSAPP") && (
+      {(actionType === "SEND_NOTIFICATION" || actionType === "SEND_WHATSAPP" || actionType === "SEND_SMS") && (
         <div className={`p-6 rounded-xl border space-y-4 animate-in slide-in-from-top-2 ${
           actionType === "SEND_WHATSAPP"
             ? "bg-green-50 border-green-100"
-            : "bg-yellow-50 border-yellow-100"
+            : actionType === "SEND_SMS"
+              ? "bg-blue-50 border-blue-100"
+              : "bg-yellow-50 border-yellow-100"
         }`}>
           <div className={`flex items-center gap-2 mb-2 font-medium pb-2 border-b ${
             actionType === "SEND_WHATSAPP"
               ? "text-green-800 border-green-200"
-              : "text-yellow-800 border-yellow-200"
+              : actionType === "SEND_SMS"
+                ? "text-blue-800 border-blue-200"
+                : "text-yellow-800 border-yellow-200"
           }`}>
-            {actionType === "SEND_WHATSAPP" ? <MessageSquare size={18} /> : <Bell size={18} />}
-            {actionType === "SEND_WHATSAPP" ? "הודעת וואטסאפ" : "הודעת התראה"}
+            {actionType === "SEND_WHATSAPP" ? <MessageSquare size={18} /> : actionType === "SEND_SMS" ? <Phone size={18} /> : <Bell size={18} />}
+            {actionType === "SEND_WHATSAPP" ? "הודעת וואטסאפ" : actionType === "SEND_SMS" ? "הודעת SMS" : "הודעת התראה"}
           </div>
           <Textarea
             value={notifMessage}

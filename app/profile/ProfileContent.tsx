@@ -874,6 +874,38 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                     </Badge>
                   )}
                 </div>
+
+                <div className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-slate-300 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-blue-50 rounded-lg border border-blue-100">
+                      <span className="text-blue-600 font-bold text-lg">SMS</span>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-slate-900">
+                        Twilio SMS
+                      </h4>
+                      <p className="text-sm text-slate-500">
+                        שליחת הודעות SMS דרך Twilio
+                      </p>
+                    </div>
+                  </div>
+                  {isAdmin ? (
+                    <Button
+                      variant="outline"
+                      className="bg-white hover:bg-slate-50 text-indigo-600 border-indigo-200 hover:border-indigo-300"
+                      onClick={() => router.push("/profile/sms")}
+                    >
+                      הגדרות
+                    </Button>
+                  ) : (
+                    <Badge
+                      variant="secondary"
+                      className="bg-slate-100 text-slate-500"
+                    >
+                      גישה לאדמין בלבד
+                    </Badge>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
