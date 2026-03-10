@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -101,56 +101,55 @@ export function DriveFolderPickerModal({
     [],
   );
 
-  const handleOpen = useCallback(
-    async (isOpen: boolean) => {
-      onOpenChange(isOpen);
-      if (isOpen && !isRootLoaded) {
-        setIsRootLoading(true);
-        setHasError(false);
-        try {
-          const res = await fetch(
-            `/api/integrations/google/drive/folders?parentId=root`,
-          );
-          if (!res.ok) throw new Error("Failed to load folders");
-          const data = await res.json();
+  const loadRootFolders = useCallback(async () => {
+    setIsRootLoading(true);
+    setHasError(false);
+    try {
+      const res = await fetch(
+        `/api/integrations/google/drive/folders?parentId=root`,
+      );
+      if (!res.ok) throw new Error("Failed to load folders");
+      const data = await res.json();
 
-          const toNodes = (items: { id: string; name: string }[]): FolderNode[] =>
-            items.map((f) => ({
-              id: f.id,
-              name: f.name,
-              isLoaded: false,
-              isLoading: false,
-              isExpanded: false,
-            }));
+      const toNodes = (items: { id: string; name: string }[]): FolderNode[] =>
+        items.map((f) => ({
+          id: f.id,
+          name: f.name,
+          isLoaded: false,
+          isLoading: false,
+          isExpanded: false,
+        }));
 
-          if (data.sections) {
-            setSections({
-              myDrive: toNodes(data.sections.myDrive || []),
-              sharedDrives: toNodes(data.sections.sharedDrives || []),
-              sharedWithMe: toNodes(data.sections.sharedWithMe || []),
-            });
-          } else {
-            // Fallback for old API response
-            setSections({
-              myDrive: toNodes(data.folders || []),
-              sharedDrives: [],
-              sharedWithMe: [],
-            });
-          }
-          setIsRootLoaded(true);
-        } catch {
-          setHasError(true);
-          toast.error("שגיאה בטעינת תיקיות");
-        } finally {
-          setIsRootLoading(false);
-        }
+      if (data.sections) {
+        setSections({
+          myDrive: toNodes(data.sections.myDrive || []),
+          sharedDrives: toNodes(data.sections.sharedDrives || []),
+          sharedWithMe: toNodes(data.sections.sharedWithMe || []),
+        });
+      } else {
+        setSections({
+          myDrive: toNodes(data.folders || []),
+          sharedDrives: [],
+          sharedWithMe: [],
+        });
       }
-      if (isOpen) {
-        setSelected(initialSelected);
-      }
-    },
-    [isRootLoaded, onOpenChange, initialSelected],
-  );
+      setIsRootLoaded(true);
+    } catch {
+      setHasError(true);
+      toast.error("שגיאה בטעינת תיקיות");
+    } finally {
+      setIsRootLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open && !isRootLoaded && !isRootLoading) {
+      loadRootFolders();
+    }
+    if (open) {
+      setSelected(initialSelected);
+    }
+  }, [open]);
 
   const allFolders = [...sections.myDrive, ...sections.sharedDrives, ...sections.sharedWithMe];
 
@@ -332,7 +331,7 @@ export function DriveFolderPickerModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[80vh] flex flex-col text-right">
         <DialogHeader>
           <DialogTitle>בחר תיקיות מ-Google Drive</DialogTitle>
@@ -382,8 +381,7 @@ export function DriveFolderPickerModal({
                 size="sm"
                 onClick={() => {
                   setIsRootLoaded(false);
-                  setHasError(false);
-                  handleOpen(true);
+                  loadRootFolders();
                 }}
               >
                 נסה שוב
