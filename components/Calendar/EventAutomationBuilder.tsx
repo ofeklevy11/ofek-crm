@@ -787,17 +787,24 @@ export function EventAutomationBuilder({
             {/* WhatsApp / SMS Config */}
             {(actionType === "SEND_WHATSAPP" || actionType === "SEND_SMS") && (
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-5 relative overflow-hidden">
-                {/* Green API Badge */}
-                <div className="absolute top-0 left-0 bg-green-500 text-white text-[10px] px-2 py-0.5 rounded-br-lg font-bold tracking-wider">
-                  POWERED BY GREEN-API
-                </div>
+                {actionType === "SEND_WHATSAPP" && (
+                  <div className="absolute top-0 left-0 bg-green-500 text-white text-[10px] px-2 py-0.5 rounded-br-lg font-bold tracking-wider">
+                    POWERED BY GREEN-API
+                  </div>
+                )}
 
                 <div className="flex items-center gap-3 border-b pb-4 mb-4">
-                  <div className="p-2 bg-green-100 rounded-lg text-green-700">
-                    <WhatsAppIcon />
-                  </div>
+                  {actionType === "SEND_SMS" ? (
+                    <div className="p-2 bg-blue-100 rounded-lg text-blue-700">
+                      <Smartphone className="w-5 h-5" />
+                    </div>
+                  ) : (
+                    <div className="p-2 bg-green-100 rounded-lg text-green-700">
+                      <WhatsAppIcon />
+                    </div>
+                  )}
                   <h3 className="text-lg md:text-xl font-bold text-gray-800">
-                    הודעת WhatsApp
+                    {actionType === "SEND_SMS" ? "הודעת SMS" : "הודעת WhatsApp"}
                   </h3>
                 </div>
 
@@ -814,7 +821,7 @@ export function EventAutomationBuilder({
                       placeholder="+972501234567"
                     />
                     <div className="absolute right-3 top-2.5 text-gray-400 pointer-events-none">
-                      <WhatsAppIcon size={16} />
+                      {actionType === "SEND_SMS" ? <Smartphone size={16} /> : <WhatsAppIcon size={16} />}
                     </div>
                   </div>
                   <p
@@ -834,17 +841,26 @@ export function EventAutomationBuilder({
                       value={waMessage}
                       onChange={(e) => setWaMessage(e.target.value)}
                       rows={5}
-                      className="w-full px-4 py-3 bg-[#e6f7ee] border border-green-200 rounded-lg focus:ring-2 focus:ring-green-500 text-gray-800"
+                      className={actionType === "SEND_SMS"
+                        ? "w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-800"
+                        : "w-full px-4 py-3 bg-[#e6f7ee] border border-green-200 rounded-lg focus:ring-2 focus:ring-green-500 text-gray-800"
+                      }
                     />
                     <div className="absolute bottom-2 left-2 flex gap-1">
                       <span
-                        className="text-[10px] bg-white/50 px-1 rounded text-green-800 border border-green-200 cursor-help"
+                        className={actionType === "SEND_SMS"
+                          ? "text-[10px] bg-white/50 px-1 rounded text-blue-800 border border-blue-200 cursor-help"
+                          : "text-[10px] bg-white/50 px-1 rounded text-green-800 border border-green-200 cursor-help"
+                        }
                         title="שם האירוע"
                       >
                         {"{eventTitle}"}
                       </span>
                       <span
-                        className="text-[10px] bg-white/50 px-1 rounded text-green-800 border border-green-200 cursor-help"
+                        className={actionType === "SEND_SMS"
+                          ? "text-[10px] bg-white/50 px-1 rounded text-blue-800 border border-blue-200 cursor-help"
+                          : "text-[10px] bg-white/50 px-1 rounded text-green-800 border border-green-200 cursor-help"
+                        }
                         title="שעת התחלה"
                       >
                         {"{eventStart}"}
@@ -857,8 +873,9 @@ export function EventAutomationBuilder({
                 <div className="bg-blue-50 p-3 rounded-lg flex gap-2 items-start text-xs text-blue-700">
                   <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
                   <p>
-                    שים לב: ההודעה תישלח דרך החשבון המחובר ל-Green API. וודא
-                    שהמספר תקין.
+                    {actionType === "SEND_SMS"
+                      ? "שים לב: ההודעה תישלח כ-SMS דרך Twilio. וודא שהמספר תקין."
+                      : "שים לב: ההודעה תישלח דרך החשבון המחובר ל-Green API. וודא שהמספר תקין."}
                   </p>
                 </div>
               </div>

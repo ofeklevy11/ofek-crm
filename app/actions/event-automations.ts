@@ -24,6 +24,7 @@ interface EventAutomationData {
 const VALID_ACTION_TYPES = new Set([
   "SEND_NOTIFICATION",
   "SEND_WHATSAPP",
+  "SEND_SMS",
   "SEND_EMAIL",
   "CREATE_TASK",
   "UPDATE_RECORD_FIELD",

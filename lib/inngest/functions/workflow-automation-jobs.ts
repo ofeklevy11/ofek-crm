@@ -19,6 +19,7 @@ const ALLOWED_ACTION_TYPES = new Set([
   "update_record",
   "create_event",
   "whatsapp",
+  "sms",
   "webhook",
 ]);
 
@@ -311,6 +312,29 @@ export const processWorkflowStageAutomations = inngest.createFunction(
               log.info("WhatsApp job enqueued");
             } else {
               log.warn("WhatsApp: No phone number resolved");
+            }
+            break;
+          }
+
+          case "sms": {
+            let smsTarget = config.phoneColumnId || "";
+            if (smsTarget.startsWith("manual:")) {
+              smsTarget = smsTarget.replace("manual:", "");
+            }
+
+            if (smsTarget) {
+              await inngest.send({
+                id: `sms-workflow-${companyId}-${smsTarget}-${stageId}-${Math.floor(Date.now() / 5000)}`,
+                name: "automation/send-sms",
+                data: {
+                  companyId,
+                  phone: String(smsTarget),
+                  content: config.content || "",
+                },
+              });
+              log.info("SMS job enqueued");
+            } else {
+              log.warn("SMS: No phone number resolved");
             }
             break;
           }

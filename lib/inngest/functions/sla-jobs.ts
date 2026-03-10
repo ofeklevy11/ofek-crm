@@ -483,6 +483,34 @@ async function executeSlaAction(
       break;
     }
 
+    case "SEND_SMS": {
+      let phone = "";
+      if (actionConfig.phoneColumnId?.startsWith("manual:")) {
+        phone = actionConfig.phoneColumnId.replace("manual:", "");
+      }
+
+      if (!phone) {
+        throw new Error(
+          `[SLA] SMS action: No phone number configured for rule ${rule.id} ("${rule.name}")`,
+        );
+      }
+
+      const content = replaceTemplateVars(actionConfig.content || "");
+
+      const { inngest: slaInngest } = await import("@/lib/inngest/client");
+      await slaInngest.send({
+        id: `sms-sla-${companyId}-${rule.id}-${contextData.ticketId}-${breachType}`,
+        name: "automation/send-sms",
+        data: {
+          companyId,
+          phone: String(phone),
+          content,
+        },
+      });
+      log.info("SMS job enqueued for SLA breach");
+      break;
+    }
+
     case "WEBHOOK": {
       const url = actionConfig.webhookUrl || actionConfig.url;
       if (!url) {

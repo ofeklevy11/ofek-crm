@@ -22,6 +22,7 @@ export interface OnCompleteAction {
     | "UPDATE_TASK"
     | "SEND_WEBHOOK"
     | "SEND_WHATSAPP"
+    | "SEND_SMS"
     | "CREATE_CALENDAR_EVENT"
     | "CREATE_RECORD";
   config: Record<string, unknown>;
@@ -69,6 +70,9 @@ export async function executeSingleAction(
       break;
     case "SEND_WHATSAPP":
       await executeSendWhatsapp(action.config, item, user);
+      break;
+    case "SEND_SMS":
+      await executeSendSms(action.config, item, user);
       break;
     case "CREATE_CALENDAR_EVENT":
       await executeCreateCalendarEvent(action.config, user);
@@ -477,5 +481,93 @@ async function executeSendWhatsapp(
     log.info("WhatsApp job enqueued");
   } catch (err) {
     log.error("Failed to enqueue WhatsApp job", { error: String(err) });
+  }
+}
+
+// Send SMS message
+async function executeSendSms(
+  config: Record<string, unknown>,
+  item: {
+    id: number;
+    title: string;
+    sheet: { title: string; companyId: number };
+  },
+  user: { id: number; name: string },
+) {
+  let phoneNumber: string | null = null;
+
+  if (
+    config.phoneSource === "table" &&
+    config.waTableId &&
+    config.waPhoneColumn
+  ) {
+    const smsTable = await prisma.tableMeta.findFirst({
+      where: { id: Number(config.waTableId), companyId: item.sheet.companyId },
+      select: { id: true },
+    });
+    if (!smsTable) {
+      log.warn("SMS: Table not found or unauthorized", { waTableId: config.waTableId });
+      return;
+    }
+
+    try {
+      let record;
+      if (config.waRecordId) {
+        record = await prisma.record.findFirst({
+          where: {
+            id: Number(config.waRecordId),
+            tableId: Number(config.waTableId),
+            companyId: item.sheet.companyId,
+          },
+        });
+      } else {
+        record = await prisma.record.findFirst({
+          where: {
+            tableId: Number(config.waTableId),
+            companyId: item.sheet.companyId,
+          },
+          orderBy: { createdAt: "desc" },
+        });
+      }
+
+      if (record && record.data) {
+        const recordData = record.data as Record<string, unknown>;
+        phoneNumber = recordData[config.waPhoneColumn as string] as string;
+      } else {
+        log.warn("SMS: Record not found in table", { waTableId: config.waTableId });
+      }
+    } catch (fetchError) {
+      log.error("SMS: Error fetching phone from table", { error: String(fetchError) });
+    }
+  } else {
+    phoneNumber = config.phone as string;
+  }
+
+  const message = config.message as string | undefined;
+
+  if (!phoneNumber || !message) {
+    log.warn("SMS: Missing phone or message");
+    return;
+  }
+
+  const finalMessage = message
+    .replace("{itemTitle}", item.title)
+    .replace("{sheetTitle}", item.sheet.title)
+    .replace("{userName}", user.name);
+
+  const { inngest } = await import("@/lib/inngest/client");
+  try {
+    await inngest.send({
+      id: `sms-tasksheet-${item.sheet.companyId}-${phoneNumber}-${item.id}-${Math.floor(Date.now() / 5000)}`,
+      name: "automation/send-sms",
+      data: {
+        companyId: item.sheet.companyId,
+        phone: String(phoneNumber),
+        content: finalMessage,
+      },
+    });
+    log.info("SMS job enqueued");
+  } catch (err) {
+    log.error("Failed to enqueue SMS job", { error: String(err) });
   }
 }

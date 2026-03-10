@@ -165,7 +165,6 @@ const AUTOMATION_CATEGORIES = [
         label: "שלח SMS",
         icon: MessageSquare,
         description: "שליחת מסרון",
-        comingSoon: true,
       },
     ],
   },
@@ -485,6 +484,9 @@ function AutomationConfigModal({
         validationError = "חובה לבחור קובץ מדיה";
       // else if (waMessageType === "private" && !fields.content) // Optional validation for text content
       //   validationError = "חובה להזין תוכן הודעה";
+    } else if (type.id === "sms") {
+      if (!fields.phoneColumnId) validationError = "חובה להזין מספר טלפון";
+      else if (!fields.content) validationError = "חובה להזין תוכן הודעה";
     } else if (type.id === "webhook" && !fields.url) {
       validationError = "חובה להזין כתובת URL";
     }
@@ -559,6 +561,10 @@ function AutomationConfigModal({
           mediaFileId: fields.mediaFileId,
           tableId: waTableId,
         };
+        break;
+      case "sms":
+        desc = `שלח SMS`;
+        configToSave = { phoneColumnId: fields.phoneColumnId, content: fields.content };
         break;
       case "webhook":
         desc = `Webhook לכתובת: ${fields.url || "..."}`;
@@ -1591,6 +1597,122 @@ function AutomationConfigModal({
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* --- SMS --- */}
+          {type.id === "sms" && (
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  מספר טלפון
+                </label>
+                <div className="flex gap-4 mb-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="smsPhoneMode"
+                      checked={
+                        !String(fields.phoneColumnId || "").startsWith("manual:")
+                      }
+                      onChange={() =>
+                        setFields({ ...fields, phoneColumnId: "" })
+                      }
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">לפי עמודה בטבלה</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="smsPhoneMode"
+                      checked={String(fields.phoneColumnId || "").startsWith(
+                        "manual:",
+                      )}
+                      onChange={() =>
+                        setFields({ ...fields, phoneColumnId: "manual:" })
+                      }
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">מספר ידני קבוע</span>
+                  </label>
+                </div>
+
+                {!String(fields.phoneColumnId || "").startsWith("manual:") ? (
+                  <div>
+                    <select
+                      value={fields.phoneColumnId || ""}
+                      onChange={(e) =>
+                        setFields({
+                          ...fields,
+                          phoneColumnId: e.target.value,
+                        })
+                      }
+                      disabled={!waTableId}
+                      className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                    >
+                      <option value="">
+                        {waTableId ? "בחר עמודה..." : "יש לבחור טבלה למעלה"}
+                      </option>
+                      {waColumns.map((col: any) => (
+                        <option key={col.id || col.name} value={col.name}>
+                          {col.label || col.name} ({col.type})
+                        </option>
+                      ))}
+                    </select>
+                    {!waTableId && (
+                      <div className="mt-2">
+                        <select
+                          className="w-full p-2 border rounded-md text-sm"
+                          value={waTableId}
+                          onChange={(e) => setWaTableId(e.target.value)}
+                        >
+                          <option value="">בחר טבלה...</option>
+                          {tables.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="text"
+                      value={String(fields.phoneColumnId || "").replace(
+                        "manual:",
+                        "",
+                      )}
+                      onChange={(e) =>
+                        setFields({
+                          ...fields,
+                          phoneColumnId: `manual:${e.target.value}`,
+                        })
+                      }
+                      placeholder="הכנס מספר טלפון (לדוגמה: 0501234567)"
+                      className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500"
+                      dir="ltr"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  תוכן ההודעה
+                </label>
+                <textarea
+                  value={fields.content || ""}
+                  onChange={(e) =>
+                    setFields({ ...fields, content: e.target.value })
+                  }
+                  rows={4}
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  placeholder="הקלד את ההודעה כאן..."
+                />
               </div>
             </div>
           )}

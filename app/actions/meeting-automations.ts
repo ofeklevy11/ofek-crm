@@ -26,6 +26,7 @@ function formatTimeHe(d: Date): string {
 const VALID_ACTION_TYPES = new Set([
   "SEND_NOTIFICATION",
   "SEND_WHATSAPP",
+  "SEND_SMS",
   "CREATE_TASK",
   "UPDATE_RECORD_FIELD",
   "WEBHOOK",
