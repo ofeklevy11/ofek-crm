@@ -31,10 +31,15 @@ async function handlePOST(req: Request) {
     try {
       body = await req.json();
     } catch {
+      log.error("Invalid JSON body");
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
+
+    log.info("Incoming request", { body });
+
     const parsed = makeCreateTaskSchema.safeParse(body);
     if (!parsed.success) {
+      log.error("Validation failed", { errors: parsed.error.flatten().fieldErrors, body });
       return NextResponse.json(
         { error: "Validation failed", details: parsed.error.flatten().fieldErrors },
         { status: 400 }

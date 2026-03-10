@@ -16,6 +16,21 @@ export const VALID_TASK_STATUSES = [
 
 export const VALID_TASK_PRIORITIES = ["low", "medium", "high"] as const;
 
+const STATUS_LABEL_MAP: Record<string, string> = {
+  "to do": "todo",
+  "in progress": "in_progress",
+  "waiting client": "waiting_client",
+  "on hold": "on_hold",
+  "completed month": "completed_month",
+  "done": "done",
+};
+
+const PRIORITY_LABEL_MAP: Record<string, string> = {
+  "low": "low",
+  "medium": "medium",
+  "high": "high",
+};
+
 const title = z.string().trim().min(1).max(MAX_TITLE_LENGTH);
 const description = z.string().max(MAX_DESCRIPTION_LENGTH).nullable().optional();
 const status = z.enum(VALID_TASK_STATUSES);
@@ -57,8 +72,22 @@ export const makeCreateTaskSchema = z.object({
   title,
   description: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
   email: z.string().email().optional(),
-  status: status.default("todo"),
-  priority: z.enum(VALID_TASK_PRIORITIES).default("medium"),
+  status: z.preprocess(
+    (val) => {
+      if (typeof val !== "string") return val;
+      const lower = val.toLowerCase().trim();
+      return STATUS_LABEL_MAP[lower] ?? lower;
+    },
+    status
+  ).default("todo"),
+  priority: z.preprocess(
+    (val) => {
+      if (typeof val !== "string") return val;
+      const lower = val.toLowerCase().trim();
+      return PRIORITY_LABEL_MAP[lower] ?? lower;
+    },
+    z.enum(VALID_TASK_PRIORITIES)
+  ).default("medium"),
   due_date: z
     .string()
     .optional()
