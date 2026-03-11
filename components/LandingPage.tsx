@@ -13,14 +13,17 @@ import {
   BarChart3,
   Calendar,
   CheckCircle2,
+  Globe,
   Layers,
   LayoutDashboard,
   ListChecks,
   MousePointerClick,
   Rocket,
   Settings,
+  Shield,
   Sparkles,
   Star,
+  Target,
   TrendingUp,
   Users,
   Wallet,
@@ -243,9 +246,9 @@ export default function LandingPage() {
                 className={`text-lg sm:text-xl text-gray-500 leading-relaxed max-w-lg mx-auto lg:mx-0 ${heroAnim(200)}`}
                 style={{ transitionDelay: "200ms" }}
               >
-                BizlyCRM מרכזת את ניהול הלידים, הלקוחות, המכירות, הפיננסים
-                והמשימות שלכם — עם אוטומציות חכמות, דוחות בזמן אמת, וממשק שפשוט
-                עובד.
+                BizlyCRM היא מערכת ניהול קשרי לקוחות (CRM) שמרכזת את ניהול
+                הלידים, הלקוחות, המכירות, הפיננסים והמשימות שלכם — עם אוטומציות
+                חכמות, דוחות בזמן אמת, וממשק שפשוט עובד.
               </p>
 
               {/* CTAs */}
@@ -467,6 +470,91 @@ export default function LandingPage() {
           </div>
         </div>
       </Reveal>
+
+      {/* ─────────────────── PURPOSE / ABOUT ─────────────────── */}
+      <section className="py-24 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Reveal className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-semibold mb-4">
+              <Target className="w-3 h-3" />
+              מה זה BizlyCRM
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900">
+              הכירו את הפלטפורמה שתשנה את
+              <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-l from-[#4f95ff] to-[#a24ec1]">
+                הדרך שבה אתם מנהלים את העסק
+              </span>
+            </h2>
+          </Reveal>
+
+          <div className="max-w-4xl mx-auto">
+            <Reveal delay={100}>
+              <div className="bg-gradient-to-b from-gray-50 to-white rounded-3xl border border-gray-100 p-8 sm:p-12 space-y-6">
+                <p className="text-gray-700 text-lg leading-relaxed">
+                  <strong>BizlyCRM</strong> היא מערכת לניהול קשרי לקוחות (CRM)
+                  שתוכננה במיוחד עבור עסקים קטנים ובינוניים. המערכת מאפשרת לכם
+                  לנהל את כל מחזור חיי הלקוח — מרגע הכניסה כליד, דרך תהליך
+                  המכירה, ועד לשימור לקוח פעיל — הכל ממקום אחד.
+                </p>
+                <p className="text-gray-700 text-lg leading-relaxed">
+                  המערכת כוללת כלים מתקדמים לניהול לידים ולקוחות, מעקב אחר עסקאות
+                  ומכירות, הפקת הצעות מחיר וחשבוניות, ניהול משימות ופרויקטים,
+                  תזמון פגישות ויומן חכם, ואוטומציות שחוסכות שעות עבודה ידנית.
+                  בנוסף, דשבורדים ודוחות מתקדמים מאפשרים לקבל תמונה ברורה של
+                  ביצועי העסק בזמן אמת.
+                </p>
+
+                <div className="grid sm:grid-cols-3 gap-6 pt-4">
+                  {[
+                    {
+                      icon: Globe,
+                      title: "נגיש מכל מקום",
+                      desc: "מערכת מבוססת ענן — כל מה שצריך זה דפדפן אינטרנט כדי לנהל את העסק מכל מכשיר.",
+                    },
+                    {
+                      icon: Shield,
+                      title: "מאובטח ופרטי",
+                      desc: "הנתונים שלכם מוצפנים ומאוחסנים בצורה מאובטחת. אנחנו לא משתפים מידע עם צד שלישי.",
+                    },
+                    {
+                      icon: Zap,
+                      title: "אוטומציה חכמה",
+                      desc: "חסכו זמן עם תהליכים אוטומטיים — פולואפ, תזכורות, שיוך לידים, ועוד.",
+                    },
+                  ].map((item, i) => (
+                    <Reveal key={item.title} delay={200 + i * 100}>
+                      <div className="text-center space-y-3">
+                        <div className="w-12 h-12 mx-auto rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                          <item.icon className="w-6 h-6" />
+                        </div>
+                        <h3 className="font-bold text-gray-900">
+                          {item.title}
+                        </h3>
+                        <p className="text-sm text-gray-500 leading-relaxed">
+                          {item.desc}
+                        </p>
+                      </div>
+                    </Reveal>
+                  ))}
+                </div>
+
+                {/* English summary for Google reviewers */}
+                <div className="mt-8 pt-6 border-t border-gray-100">
+                  <p className="text-gray-400 text-sm leading-relaxed" dir="ltr" lang="en">
+                    <strong>BizlyCRM</strong> is a cloud-based Customer Relationship Management
+                    (CRM) platform designed for small and medium-sized businesses. It helps
+                    businesses manage their leads, customers, sales pipeline, invoicing,
+                    task management, appointment scheduling, and reporting — all in one
+                    place. The platform provides automation tools to streamline workflows
+                    and real-time analytics to support data-driven business decisions.
+                  </p>
+                </div>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </section>
 
       {/* ─────────────────── FEATURES ─────────────────── */}
       <section className="py-24 relative">

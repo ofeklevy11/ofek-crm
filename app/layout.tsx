@@ -15,7 +15,8 @@ const rubik = Rubik({
 
 export const metadata: Metadata = {
   title: "BizlyCRM",
-  description: "מערכת ניהול לעסקים",
+  description:
+    "BizlyCRM — A cloud-based CRM platform for small and medium businesses. Manage leads, customers, sales, invoicing, tasks, scheduling, and analytics in one place. | מערכת ניהול קשרי לקוחות לעסקים קטנים ובינוניים.",
 };
 
 function NavbarSkeleton() {
