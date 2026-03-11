@@ -64,6 +64,10 @@ vi.mock("next/link", () => ({
   default: ({ children, href, ...rest }: any) => ({ type: "Link", props: { href, ...rest, children } }),
 }));
 
+vi.mock("next/font/google", () => ({
+  Heebo: () => ({ className: "mock-heebo" }),
+}));
+
 // ── Import under test + mocked references ──────────────────────────
 
 import Home from "@/app/page";

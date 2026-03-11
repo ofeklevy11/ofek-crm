@@ -141,7 +141,9 @@ describe("Event Dispatching", () => {
   it("batch sends in chunks of 500", async () => {
     // Create enough companies to exceed 500 events
     const companies = Array.from({ length: 200 }, (_, i) => ({ id: i + 1 }));
-    vi.mocked(prisma.$queryRaw).mockResolvedValue(companies);
+    vi.mocked(prisma.$queryRaw)
+      .mockResolvedValueOnce(companies)   // automation companies
+      .mockResolvedValueOnce([]);          // nurture companies (empty)
     vi.mocked(inngest.send).mockResolvedValue(undefined as any);
     await GET(makeRequest(`Bearer ${CRON_SECRET}`));
     // 1 meeting + 200*2 time/event + 1 SLA = 402 events — fits in one batch
