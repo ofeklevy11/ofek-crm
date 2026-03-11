@@ -72,6 +72,7 @@ import Home from "@/app/page";
 import DashboardPage from "@/app/dashboard/page";
 import RateLimitFallback from "@/components/RateLimitFallback";
 import DashboardClient from "@/components/DashboardClient";
+import LandingPage from "@/components/LandingPage";
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -117,7 +118,7 @@ describe("Home page (app/page.tsx)", () => {
 
     const result = await Home();
 
-    expect(result.type).toBe("LandingPage");
+    expect(result.type).toBe(LandingPage);
     expect(mockRedirect).not.toHaveBeenCalled();
   });
 
