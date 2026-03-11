@@ -1480,14 +1480,16 @@ describe("toggleAutomationRule", () => {
 
 describe("getViewAutomations", () => {
   async function seedViewRule(companyId: number, viewId: number | string, overrides: Record<string, unknown> = {}) {
+    const { name, actionType, actionConfig, createdAt, ...rest } = overrides;
     return prisma.automationRule.create({
       data: {
         companyId,
-        name: overrides.name as string ?? "אוטומציית תצוגה",
+        name: name as string ?? "אוטומציית תצוגה",
         triggerType: "VIEW_METRIC_THRESHOLD",
-        actionType: (overrides.actionType as any) ?? "SEND_NOTIFICATION",
+        actionType: (actionType as any) ?? "SEND_NOTIFICATION",
         triggerConfig: { viewId, operator: "gt", threshold: 100 },
-        actionConfig: (overrides.actionConfig as any) ?? {},
+        actionConfig: (actionConfig as any) ?? {},
+        ...(createdAt ? { createdAt: createdAt as Date } : {}),
       },
     });
   }
@@ -1531,8 +1533,10 @@ describe("getViewAutomations", () => {
 
   it("returns rules ordered desc by createdAt", async () => {
     mockUser(adminA);
-    const r1 = await seedViewRule(companyA, 42, { name: "ראשונה" });
-    const r2 = await seedViewRule(companyA, 42, { name: "שנייה" });
+    const now = new Date();
+    const earlier = new Date(now.getTime() - 1000);
+    const r1 = await seedViewRule(companyA, 42, { name: "ראשונה", createdAt: earlier });
+    const r2 = await seedViewRule(companyA, 42, { name: "שנייה", createdAt: now });
 
     const res = await getViewAutomations(42);
     expect(res.data![0].id).toBe(r2.id);
