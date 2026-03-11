@@ -8,6 +8,7 @@ const {
   mockGetDashboardInitialData,
   mockCheckActionRateLimit,
   mockIsRateLimitError,
+  mockRedirect,
   MOCK_DASHBOARD_RATE_LIMITS,
 } = vi.hoisted(() => ({
   mockGetCurrentUser: vi.fn(),
@@ -15,6 +16,7 @@ const {
   mockGetDashboardInitialData: vi.fn(),
   mockCheckActionRateLimit: vi.fn(),
   mockIsRateLimitError: vi.fn(),
+  mockRedirect: vi.fn(),
   MOCK_DASHBOARD_RATE_LIMITS: {
     page: { prefix: "dash-page", max: 120, windowSeconds: 60 },
     read: { prefix: "dash-read", max: 60, windowSeconds: 60 },
@@ -53,42 +55,23 @@ vi.mock("@/components/RateLimitFallback", () => ({
   default: (props: any) => ({ type: "RateLimitFallback", props }),
 }));
 
-vi.mock("lucide-react", () => {
-  const icon = (name: string) => (props: any) => ({ type: name, props });
-  return {
-    ArrowLeft: icon("ArrowLeft"),
-    BarChart3: icon("BarChart3"),
-    Calendar: icon("Calendar"),
-    CheckCircle2: icon("CheckCircle2"),
-    Layers: icon("Layers"),
-    LayoutDashboard: icon("LayoutDashboard"),
-    ListChecks: icon("ListChecks"),
-    MousePointerClick: icon("MousePointerClick"),
-    Rocket: icon("Rocket"),
-    Settings: icon("Settings"),
-    Sparkles: icon("Sparkles"),
-    Star: icon("Star"),
-    TrendingUp: icon("TrendingUp"),
-    Users: icon("Users"),
-    Wallet: icon("Wallet"),
-    Zap: icon("Zap"),
-  };
-});
-
-vi.mock("next/link", () => ({
-  default: ({ children, href, ...rest }: any) => ({ type: "Link", props: { href, ...rest, children } }),
+vi.mock("@/components/LandingPage", () => ({
+  default: () => ({ type: "LandingPage", props: {} }),
 }));
 
-vi.mock("next/font/google", () => ({
-  Heebo: () => ({ className: "mock-heebo" }),
+vi.mock("next/navigation", () => ({
+  redirect: (...args: any[]) => {
+    mockRedirect(...args);
+    throw new Error(`NEXT_REDIRECT:${args[0]}`);
+  },
 }));
 
 // ── Import under test + mocked references ──────────────────────────
 
 import Home from "@/app/page";
+import DashboardPage from "@/app/dashboard/page";
 import RateLimitFallback from "@/components/RateLimitFallback";
 import DashboardClient from "@/components/DashboardClient";
-import Link from "next/link";
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -122,49 +105,47 @@ function findInTree(node: any, predicate: (n: any) => boolean): any | null {
   return null;
 }
 
-/** Collect all elements matching a predicate from the JSX tree. */
-function findAllInTree(node: any, predicate: (n: any) => boolean, acc: any[] = []): any[] {
-  if (!node) return acc;
-  if (predicate(node)) acc.push(node);
-  const children = node?.props?.children;
-  if (Array.isArray(children)) {
-    for (const child of children) {
-      findAllInTree(child, predicate, acc);
-    }
-  } else if (children && typeof children === "object") {
-    findAllInTree(children, predicate, acc);
-  }
-  return acc;
-}
-
 // ── Tests ──────────────────────────────────────────────────────────
 
-describe("Home page component (app/page.tsx)", () => {
+describe("Home page (app/page.tsx)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });
 
-  it("renders marketing page for unauthenticated user", async () => {
+  it("renders LandingPage for unauthenticated user", async () => {
     mockGetCurrentUser.mockResolvedValue(null);
 
     const result = await Home();
 
-    expect(result.props.dir).toBe("rtl");
-    expect(result.props.className).toContain("bg-[#f4f8f8]");
+    expect(result.type).toBe("LandingPage");
+    expect(mockRedirect).not.toHaveBeenCalled();
+  });
 
-    // JSX elements have `type` as the mock function reference — search by reference
-    const links = findAllInTree(result, (n) => n?.type === Link);
-    const hrefs = links.map((l) => l.props.href);
-    expect(hrefs).toContain("/login");
-    expect(hrefs).toContain("/register");
-    expect(mockGetDashboardInitialData).not.toHaveBeenCalled();
+  it("redirects authenticated user to /dashboard", async () => {
+    mockGetCurrentUser.mockResolvedValue(makeUser());
+
+    await expect(Home()).rejects.toThrow("NEXT_REDIRECT:/dashboard");
+    expect(mockRedirect).toHaveBeenCalledWith("/dashboard");
+  });
+});
+
+describe("Dashboard page (app/dashboard/page.tsx)", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("redirects to /login when user is null", async () => {
+    mockGetCurrentUser.mockResolvedValue(null);
+
+    await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT:/login");
+    expect(mockRedirect).toHaveBeenCalledWith("/login");
   });
 
   it("renders RateLimitFallback when page rate-limited", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser());
     mockCheckActionRateLimit.mockResolvedValue({ error: "Rate limit exceeded" });
 
-    const result = await Home();
+    const result = await DashboardPage();
 
     expect(result.type).toBe(RateLimitFallback);
   });
@@ -175,7 +156,7 @@ describe("Home page component (app/page.tsx)", () => {
     mockCheckActionRateLimit.mockResolvedValue(null);
     mockHasUserFlag.mockReturnValue(false);
 
-    const result = await Home();
+    const result = await DashboardPage();
 
     const dc = findInTree(result, (n) => n?.type === DashboardClient);
     expect(dc).toBeTruthy();
@@ -198,7 +179,7 @@ describe("Home page component (app/page.tsx)", () => {
     mockHasUserFlag.mockReturnValue(true);
     mockGetDashboardInitialData.mockResolvedValue(mockData);
 
-    const result = await Home();
+    const result = await DashboardPage();
 
     const dc = findInTree(result, (n) => n?.type === DashboardClient);
     expect(dc).toBeTruthy();
@@ -216,7 +197,7 @@ describe("Home page component (app/page.tsx)", () => {
     mockGetDashboardInitialData.mockRejectedValue(thrownError);
     mockIsRateLimitError.mockReturnValue(true);
 
-    const result = await Home();
+    const result = await DashboardPage();
 
     expect(result.type).toBe(RateLimitFallback);
     expect(mockIsRateLimitError).toHaveBeenCalledWith(thrownError);
@@ -229,7 +210,7 @@ describe("Home page component (app/page.tsx)", () => {
     mockGetDashboardInitialData.mockRejectedValue(new Error("DB down"));
     mockIsRateLimitError.mockReturnValue(false);
 
-    await expect(Home()).rejects.toThrow("DB down");
+    await expect(DashboardPage()).rejects.toThrow("DB down");
   });
 
   it("calls checkActionRateLimit with correct args", async () => {
@@ -238,7 +219,7 @@ describe("Home page component (app/page.tsx)", () => {
     mockCheckActionRateLimit.mockResolvedValue(null);
     mockHasUserFlag.mockReturnValue(false);
 
-    await Home();
+    await DashboardPage();
 
     expect(mockCheckActionRateLimit).toHaveBeenCalledWith(
       "42",
@@ -252,32 +233,16 @@ describe("Home page component (app/page.tsx)", () => {
     mockCheckActionRateLimit.mockResolvedValue(null);
     mockHasUserFlag.mockReturnValue(false);
 
-    await Home();
+    await DashboardPage();
 
     expect(mockHasUserFlag).toHaveBeenCalledWith(user, "canViewDashboardData");
-  });
-
-  it("does not call checkActionRateLimit when user is null (early return)", async () => {
-    mockGetCurrentUser.mockResolvedValue(null);
-
-    await Home();
-
-    expect(mockCheckActionRateLimit).not.toHaveBeenCalled();
-  });
-
-  it("does not call hasUserFlag when user is null", async () => {
-    mockGetCurrentUser.mockResolvedValue(null);
-
-    await Home();
-
-    expect(mockHasUserFlag).not.toHaveBeenCalled();
   });
 
   it("does not call getDashboardInitialData when rate limited", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser());
     mockCheckActionRateLimit.mockResolvedValue({ error: "Rate limit exceeded" });
 
-    await Home();
+    await DashboardPage();
 
     expect(mockGetDashboardInitialData).not.toHaveBeenCalled();
   });
@@ -293,7 +258,7 @@ describe("Home page component (app/page.tsx)", () => {
       goals: [],
     });
 
-    const result = await Home();
+    const result = await DashboardPage();
 
     expect(result.props.dir).toBe("rtl");
   });
