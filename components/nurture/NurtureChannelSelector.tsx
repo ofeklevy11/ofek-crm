@@ -79,7 +79,7 @@ export default function NurtureChannelSelector({
             {isActive && <CheckCircle2 className={cn("w-4 h-4", ch.checkColor)} />}
             {!isAvailable && (
               <Link
-                href="/settings"
+                href="/profile"
                 onClick={(e) => e.stopPropagation()}
                 className="text-[10px] text-red-500 flex items-center gap-1 hover:underline"
               >

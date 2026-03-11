@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Plus,
   Search,
@@ -16,6 +16,8 @@ import {
   Pencil,
   ArrowLeft,
   Settings,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import {
   Dialog,
@@ -184,6 +186,10 @@ export default function CustomerListManager({
   const [searchQuery, setSearchQuery] = useState("");
   const [dbResults, setDbResults] = useState<any[]>([]); // Raw records
   const [selectedDbCustomers, setSelectedDbCustomers] = useState<string[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Track total raw records fetched from server (for skip calculation with dynamic tables)
+  const dbOffsetRef = useRef(0);
 
   // Field mapping for database import
   const [importFields, setImportFields] = useState<FieldDefinition[]>([]);
@@ -284,36 +290,43 @@ export default function CustomerListManager({
       (!importMapping.name || (!importMapping.email && !importMapping.phone))
     ) {
       setDbResults([]);
+      setHasMore(false);
       return;
     }
 
     const fetchRecords = async () => {
       setLoading(true);
+      dbOffsetRef.current = 0;
       try {
-        let records: any[];
-
         if (isDynamicTable) {
           // Use raw records for dynamic tables (with custom field mapping)
-          records = await getRawTableRecords(selectedTable);
+          const { records, hasMore: more } = await getRawTableRecords(selectedTable, 0, 20);
+          dbOffsetRef.current = records.length;
 
           // Filter by search query if provided
+          let filtered = records;
           if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            records = records.filter((r: any) => {
+            filtered = records.filter((r: any) => {
               const name = String(r[importMapping.name] || "").toLowerCase();
               const email = String(r[importMapping.email] || "").toLowerCase();
               return name.includes(q) || email.includes(q);
             });
           }
+
+          setDbResults(filtered);
+          setHasMore(more);
         } else {
           // Use pre-mapped records for system tables (clients, users)
-          records = await getDataSourceRecords(selectedTable, searchQuery);
+          const { records, hasMore: more } = await getDataSourceRecords(selectedTable, searchQuery, 0, 20);
+          dbOffsetRef.current = records.length;
+          setDbResults(records);
+          setHasMore(more);
         }
-
-        setDbResults(records);
       } catch (error) {
         console.error("Failed to fetch records:", error);
         setDbResults([]);
+        setHasMore(false);
       } finally {
         setLoading(false);
       }
@@ -429,6 +442,55 @@ export default function CustomerListManager({
       setSelectedDbCustomers((prev) => [...prev, id]);
     }
   };
+
+  const handleSelectAll = () => {
+    const allIds = dbResults.map((r) => r.id);
+    const allSelected = allIds.length > 0 && allIds.every((id) => selectedDbCustomers.includes(id));
+    setSelectedDbCustomers(allSelected ? [] : allIds);
+  };
+
+  const handleLoadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || !selectedTable) return;
+    setLoadingMore(true);
+    try {
+      const isDynamicTable = !isNaN(parseInt(selectedTable));
+      if (isDynamicTable) {
+        const { records, hasMore: more } = await getRawTableRecords(
+          selectedTable,
+          dbOffsetRef.current,
+          20
+        );
+        dbOffsetRef.current += records.length;
+
+        let filtered = records;
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          filtered = records.filter((r: any) => {
+            const name = String(r[importMapping.name] || "").toLowerCase();
+            const email = String(r[importMapping.email] || "").toLowerCase();
+            return name.includes(q) || email.includes(q);
+          });
+        }
+
+        setDbResults((prev) => [...prev, ...filtered]);
+        setHasMore(more);
+      } else {
+        const { records, hasMore: more } = await getDataSourceRecords(
+          selectedTable,
+          searchQuery,
+          dbOffsetRef.current,
+          20
+        );
+        dbOffsetRef.current += records.length;
+        setDbResults((prev) => [...prev, ...records]);
+        setHasMore(more);
+      }
+    } catch (error) {
+      console.error("Failed to load more records:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, selectedTable, searchQuery, importMapping.name, importMapping.email]);
 
   const handleSaveAutomation = async () => {
     // Validation: Name + (Email OR Phone)
@@ -1282,7 +1344,7 @@ export default function CustomerListManager({
             </DialogHeader>
           </div>
 
-          <div className="flex-1 bg-slate-50/50">
+          <div className="flex-1 bg-slate-50/50 overflow-hidden">
             <Tabs
               value={activeTab}
               onValueChange={setActiveTab}
@@ -1550,6 +1612,38 @@ export default function CustomerListManager({
                         />
                       </div>
                     )}
+                  {/* Select All header */}
+                  {selectedTable &&
+                    dbResults.length > 0 &&
+                    (importFields.length === 0 || importMapping.name) && (
+                      <div className="flex items-center justify-between">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs gap-1.5 h-7 px-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                          onClick={handleSelectAll}
+                        >
+                          {dbResults.length > 0 &&
+                          dbResults.every((r) =>
+                            selectedDbCustomers.includes(r.id)
+                          ) ? (
+                            <>
+                              <CheckSquare className="w-3.5 h-3.5" />
+                              בטל בחירה
+                            </>
+                          ) : (
+                            <>
+                              <Square className="w-3.5 h-3.5" />
+                              בחר הכל
+                            </>
+                          )}
+                        </Button>
+                        <span className="text-xs text-slate-400">
+                          נבחרו {selectedDbCustomers.length} מתוך {dbResults.length}
+                        </span>
+                      </div>
+                    )}
                 </div>
 
                 {/* Results List */}
@@ -1576,7 +1670,7 @@ export default function CustomerListManager({
                       <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
                     </div>
                   ) : (
-                    <ScrollArea className="h-[250px]" dir="rtl">
+                    <ScrollArea className="h-full" dir="rtl">
                       <div className="divide-y divide-slate-100">
                         {dbResults.map((record) => {
                           const isDynamic = importFields.length > 0;
@@ -1638,6 +1732,23 @@ export default function CustomerListManager({
                         {dbResults.length === 0 && (
                           <div className="p-8 text-center text-sm text-slate-400">
                             לא נמצאו תוצאות
+                          </div>
+                        )}
+                        {hasMore && dbResults.length > 0 && (
+                          <div className="p-3 border-t border-slate-100">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="w-full text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                              onClick={handleLoadMore}
+                              disabled={loadingMore}
+                            >
+                              {loadingMore ? (
+                                <Loader2 className="w-4 h-4 animate-spin ml-2" />
+                              ) : null}
+                              {loadingMore ? "טוען..." : "טען עוד"}
+                            </Button>
                           </div>
                         )}
                       </div>

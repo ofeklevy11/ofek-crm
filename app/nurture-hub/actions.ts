@@ -63,8 +63,10 @@ export async function getDataSources(): Promise<DataSource[]> {
 
 export async function getDataSourceRecords(
   sourceId: string,
-  query: string = ""
-): Promise<DataRecord[]> {
+  query: string = "",
+  skip: number = 0,
+  take: number = 20
+): Promise<{ records: DataRecord[]; hasMore: boolean }> {
   let records: DataRecord[] = [];
 
   // Get current user for multi-tenancy filtering
@@ -72,11 +74,8 @@ export async function getDataSourceRecords(
   const currentUser = await getCurrentUser();
 
   if (!currentUser) {
-    return records; // Return empty if not authenticated
+    return { records, hasMore: false };
   }
-
-  // Helper to filter by query
-  // Note: Prisma string filter 'contains' is case-insensitive with mode: 'insensitive' (Postgres)
 
   if (sourceId === "clients") {
     try {
@@ -93,7 +92,8 @@ export async function getDataSourceRecords(
               }
             : {}),
         },
-        take: 50,
+        skip,
+        take,
       });
 
       records = clients.map((c) => ({
@@ -121,7 +121,8 @@ export async function getDataSourceRecords(
               }
             : {}),
         },
-        take: 50,
+        skip,
+        take,
       });
       records = users.map((u) => ({
         id: u.id.toString(),
@@ -143,7 +144,8 @@ export async function getDataSourceRecords(
             tableId,
             companyId: currentUser.companyId,
           },
-          take: 100,
+          skip,
+          take,
         });
 
         // Simple heuristic mapping
@@ -152,7 +154,6 @@ export async function getDataSourceRecords(
           .map((r) => {
             const data = r.data as any;
 
-            // Try to identify name/email fields
             const name =
               data.name ||
               data.Name ||
@@ -171,7 +172,7 @@ export async function getDataSourceRecords(
               name: typeof name === "string" ? name : JSON.stringify(name),
               email: typeof email === "string" ? email : "",
               phone: typeof phone === "string" ? phone : "",
-              source: sourceId, // We could look up table name but overhead
+              source: sourceId,
             };
           })
           .filter((r) => {
@@ -188,7 +189,7 @@ export async function getDataSourceRecords(
     }
   }
 
-  return records;
+  return { records, hasMore: records.length === take };
 }
 
 export type FieldDefinition = {
@@ -239,17 +240,21 @@ export async function getTableFields(
 }
 
 // Get raw records from a dynamic table (for custom field mapping in import)
-export async function getRawTableRecords(tableId: string) {
+export async function getRawTableRecords(
+  tableId: string,
+  skip: number = 0,
+  take: number = 20
+): Promise<{ records: any[]; hasMore: boolean }> {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
 
     if (!currentUser) {
-      return []; // Return empty if not authenticated
+      return { records: [], hasMore: false };
     }
 
     const id = parseInt(tableId);
-    if (isNaN(id)) return [];
+    if (isNaN(id)) return { records: [], hasMore: false };
 
     // CRITICAL: Filter records by companyId for multi-tenancy
     const dbRecords = await prisma.record.findMany({
@@ -257,19 +262,21 @@ export async function getRawTableRecords(tableId: string) {
         tableId: id,
         companyId: currentUser.companyId,
       },
-      take: 100,
+      skip,
+      take,
     });
 
     // Return records with flattened data for easy access
-    return dbRecords.map((r) => ({
+    const records = dbRecords.map((r) => ({
       id: r.id.toString(),
-
       ...(r.data as any), // Spread all data fields
       _rawData: r.data, // Keep reference to raw data
     }));
+
+    return { records, hasMore: records.length === take };
   } catch (error) {
     console.error("Error fetching raw table records:", error);
-    return [];
+    return { records: [], hasMore: false };
   }
 }
 
@@ -650,21 +657,21 @@ export async function sendNurtureCampaign(slug: string, subscriberId?: string) {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
-    if (!currentUser) return { success: false, error: "Authentication required" };
+    if (!currentUser) return { success: false, error: "נדרשת התחברות" };
 
     const list = await prisma.nurtureList.findFirst({
       where: { slug, companyId: currentUser.companyId },
       include: { subscribers: true },
     });
 
-    if (!list) return { success: false, error: "Campaign not found" };
-    if (!list.configJson) return { success: false, error: "No config saved" };
+    if (!list) return { success: false, error: "קמפיין לא נמצא" };
+    if (!list.configJson) return { success: false, error: "יש לשמור את ההגדרות לפני שליחה" };
 
     const config = list.configJson as any;
     const channels = config.channels || {};
 
     if (!channels.sms && !channels.whatsappGreen && !channels.whatsappCloud) {
-      return { success: false, error: "No channels selected" };
+      return { success: false, error: "יש לבחור לפחות ערוץ שליחה אחד" };
     }
 
     // Resolve active message from templates array (backward compat with flat fields)
@@ -689,26 +696,30 @@ export async function sendNurtureCampaign(slug: string, subscriberId?: string) {
 
     // If subscriberId provided, filter to only that subscriber
     if (subscriberId) {
-      activeSubscribers = activeSubscribers.filter((sub: any) => sub.id === subscriberId);
+      const subId = parseInt(subscriberId);
+      if (isNaN(subId)) {
+        return { success: false, error: "המנוי לא נמצא או שאין לו מספר טלפון פעיל" };
+      }
+      activeSubscribers = activeSubscribers.filter((sub: any) => sub.id === subId);
       if (activeSubscribers.length === 0) {
         return { success: false, error: "המנוי לא נמצא או שאין לו מספר טלפון פעיל" };
       }
     }
 
     if (activeSubscribers.length === 0) {
-      return { success: false, error: "No active subscribers with phone numbers" };
+      return { success: false, error: "אין מנויים פעילים עם מספרי טלפון" };
     }
 
     // Validate integrations
     const available = await getAvailableChannels();
     if (channels.sms && !available.sms) {
-      return { success: false, error: "SMS integration not configured" };
+      return { success: false, error: "חיבור SMS לא מוגדר" };
     }
     if (channels.whatsappGreen && !available.whatsappGreen) {
-      return { success: false, error: "WhatsApp Green API not configured" };
+      return { success: false, error: "חיבור WhatsApp Green API לא מוגדר" };
     }
     if (channels.whatsappCloud && !available.whatsappCloud) {
-      return { success: false, error: "WhatsApp Cloud API not configured" };
+      return { success: false, error: "חיבור WhatsApp Cloud API לא מוגדר" };
     }
     if (channels.whatsappCloud && !activeMsg.whatsappCloudTemplateName) {
       return { success: false, error: "WhatsApp Cloud template name is required" };

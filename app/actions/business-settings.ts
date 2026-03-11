@@ -67,7 +67,7 @@ export async function updateBusinessSettings(data: {
 
   revalidatePath("/quotes");
   revalidatePath("/quotes/new");
-  revalidatePath("/settings");
+  revalidatePath("/profile");
 
   createAuditLog(
     null,
