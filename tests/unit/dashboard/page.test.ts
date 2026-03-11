@@ -53,9 +53,27 @@ vi.mock("@/components/RateLimitFallback", () => ({
   default: (props: any) => ({ type: "RateLimitFallback", props }),
 }));
 
-vi.mock("lucide-react", () => new Proxy({}, {
-  get: (_target, name) => (props: any) => ({ type: String(name), props }),
-}));
+vi.mock("lucide-react", () => {
+  const icon = (name: string) => (props: any) => ({ type: name, props });
+  return {
+    ArrowLeft: icon("ArrowLeft"),
+    BarChart3: icon("BarChart3"),
+    Calendar: icon("Calendar"),
+    CheckCircle2: icon("CheckCircle2"),
+    Layers: icon("Layers"),
+    LayoutDashboard: icon("LayoutDashboard"),
+    ListChecks: icon("ListChecks"),
+    MousePointerClick: icon("MousePointerClick"),
+    Rocket: icon("Rocket"),
+    Settings: icon("Settings"),
+    Sparkles: icon("Sparkles"),
+    Star: icon("Star"),
+    TrendingUp: icon("TrendingUp"),
+    Users: icon("Users"),
+    Wallet: icon("Wallet"),
+    Zap: icon("Zap"),
+  };
+});
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...rest }: any) => ({ type: "Link", props: { href, ...rest, children } }),
