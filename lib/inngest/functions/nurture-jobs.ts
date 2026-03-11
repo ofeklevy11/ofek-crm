@@ -1,6 +1,7 @@
 import { inngest } from "@/lib/inngest/client";
 import { createLogger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { normalizeToE164 } from "@/lib/utils/phone";
 
 const log = createLogger("NurtureJobs");
 
@@ -35,15 +36,20 @@ export const sendNurtureCampaignMessage = inngest.createFunction(
 
     // Send SMS
     if (channels.sms && smsBody) {
-      await step.sendEvent("send-sms", {
-        name: "sms/send-message",
-        data: {
-          companyId,
-          toNumber: subscriberPhone,
-          body: interpolate(smsBody),
-        },
-      });
-      log.info("Nurture SMS queued", { companyId, slug, phone: subscriberPhone });
+      const normalizedPhone = normalizeToE164(subscriberPhone);
+      if (!normalizedPhone) {
+        log.warn("Nurture SMS skipped — invalid phone", { companyId, slug, phone: subscriberPhone });
+      } else {
+        await step.sendEvent("send-sms", {
+          name: "sms/send-message",
+          data: {
+            companyId,
+            toNumber: normalizedPhone,
+            body: interpolate(smsBody),
+          },
+        });
+        log.info("Nurture SMS queued", { companyId, slug, phone: normalizedPhone });
+      }
     }
 
     // Send WhatsApp via Green API

@@ -491,6 +491,186 @@ export async function addNurtureSubscriberManual(
   }
 }
 
+// Bulk import subscribers from a data source in a single server call
+export async function bulkImportNurtureSubscribers(
+  listSlug: string,
+  sourceId: string,
+  selectedIds: string[],
+  mapping?: { name: string; email: string; phone: string; triggerDate?: string }
+): Promise<{
+  success: boolean;
+  successCount?: number;
+  duplicateCount?: number;
+  missingContactCount?: number;
+  duplicateNames?: string[];
+  missingContactNames?: string[];
+  error?: string;
+}> {
+  try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return { success: false, error: "Authentication required" };
+    if (selectedIds.length === 0) return { success: true, successCount: 0, duplicateCount: 0, missingContactCount: 0 };
+
+    // Find or create list (once)
+    let list = await prisma.nurtureList.findFirst({
+      where: { slug: listSlug, companyId: currentUser.companyId },
+    });
+    if (!list) {
+      list = await prisma.nurtureList.create({
+        data: {
+          companyId: currentUser.companyId,
+          slug: listSlug,
+          name: listSlug.charAt(0).toUpperCase() + listSlug.slice(1).replace("-", " "),
+        },
+      });
+    }
+
+    // Resolve records from source in batches of 500
+    const numericIds = selectedIds.map(Number);
+    type MappedRecord = { name: string; email: string | null; phone: string | null; triggerDate: string | null };
+    const mapped: MappedRecord[] = [];
+    const BATCH = 500;
+
+    for (let i = 0; i < numericIds.length; i += BATCH) {
+      const batchIds = numericIds.slice(i, i + BATCH);
+
+      if (sourceId === "clients") {
+        const clients = await prisma.client.findMany({
+          where: { id: { in: batchIds }, companyId: currentUser.companyId },
+        });
+        for (const c of clients) {
+          mapped.push({ name: c.name, email: c.email || null, phone: c.phone || null, triggerDate: null });
+        }
+      } else if (sourceId === "users") {
+        const users = await prisma.user.findMany({
+          where: { id: { in: batchIds }, companyId: currentUser.companyId },
+        });
+        for (const u of users) {
+          mapped.push({ name: u.name, email: u.email || null, phone: null, triggerDate: null });
+        }
+      } else {
+        const tableId = parseInt(sourceId);
+        if (isNaN(tableId)) return { success: false, error: "Invalid source" };
+        const records = await prisma.record.findMany({
+          where: { id: { in: batchIds }, tableId, companyId: currentUser.companyId },
+        });
+        for (const r of records) {
+          const data = r.data as any;
+          if (mapping) {
+            mapped.push({
+              name: String(data[mapping.name] || `Record #${r.id}`),
+              email: data[mapping.email] ? String(data[mapping.email]) : null,
+              phone: data[mapping.phone] ? String(data[mapping.phone]) : null,
+              triggerDate: mapping.triggerDate && data[mapping.triggerDate] ? String(data[mapping.triggerDate]) : null,
+            });
+          } else {
+            // Heuristic fallback (same as getDataSourceRecords)
+            const name = data.name || data.Name || data.title || data.Title || data["שם"] || data["שם מלא"] || `Record #${r.id}`;
+            const email = data.email || data.Email || data["מייל"] || data["אימייל"] || null;
+            const phone = data.phone || data.Phone || data["טלפון"] || data["נייד"] || null;
+            mapped.push({
+              name: typeof name === "string" ? name : JSON.stringify(name),
+              email: typeof email === "string" ? email : null,
+              phone: typeof phone === "string" ? phone : null,
+              triggerDate: null,
+            });
+          }
+        }
+      }
+    }
+
+    // Classify: missing contact vs to-check
+    const missingContactNames: string[] = [];
+    const toCheck: MappedRecord[] = [];
+    for (const rec of mapped) {
+      if (!rec.email && !rec.phone) {
+        missingContactNames.push(rec.name);
+      } else {
+        toCheck.push(rec);
+      }
+    }
+
+    // Bulk duplicate check — one query
+    const emails = toCheck.map((r) => r.email).filter(Boolean) as string[];
+    const phones = toCheck.map((r) => r.phone).filter(Boolean) as string[];
+    const orConditions: any[] = [];
+    if (emails.length > 0) orConditions.push({ email: { in: emails } });
+    if (phones.length > 0) orConditions.push({ phone: { in: phones } });
+
+    const existingSet = new Set<string>();
+    if (orConditions.length > 0) {
+      const existing = await prisma.nurtureSubscriber.findMany({
+        where: { nurtureListId: list.id, OR: orConditions },
+        select: { email: true, phone: true },
+      });
+      for (const e of existing) {
+        if (e.email) existingSet.add(`e:${e.email}`);
+        if (e.phone) existingSet.add(`p:${e.phone}`);
+      }
+    }
+
+    // Filter duplicates + intra-batch dedup
+    const seenInBatch = new Set<string>();
+    const duplicateNames: string[] = [];
+    const toInsert: {
+      nurtureListId: number;
+      name: string;
+      email: string | null;
+      phone: string | null;
+      triggerDate: Date | null;
+      sourceType: string;
+    }[] = [];
+
+    for (const rec of toCheck) {
+      const isDup =
+        (rec.email && existingSet.has(`e:${rec.email}`)) ||
+        (rec.phone && existingSet.has(`p:${rec.phone}`)) ||
+        (rec.email && seenInBatch.has(`e:${rec.email}`)) ||
+        (rec.phone && seenInBatch.has(`p:${rec.phone}`));
+
+      if (isDup) {
+        duplicateNames.push(rec.name);
+        continue;
+      }
+
+      if (rec.email) seenInBatch.add(`e:${rec.email}`);
+      if (rec.phone) seenInBatch.add(`p:${rec.phone}`);
+
+      let triggerDate: Date | null = null;
+      if (rec.triggerDate) {
+        const parsed = new Date(rec.triggerDate);
+        if (!isNaN(parsed.getTime())) triggerDate = parsed;
+      }
+
+      toInsert.push({
+        nurtureListId: list.id,
+        name: rec.name,
+        email: rec.email,
+        phone: rec.phone,
+        triggerDate,
+        sourceType: "MANUAL",
+      });
+    }
+
+    // Bulk insert
+    if (toInsert.length > 0) {
+      await prisma.nurtureSubscriber.createMany({ data: toInsert });
+    }
+
+    return {
+      success: true,
+      successCount: toInsert.length,
+      duplicateCount: duplicateNames.length,
+      missingContactCount: missingContactNames.length,
+      duplicateNames,
+      missingContactNames,
+    };
+  } catch (error) {
+    return handleNurtureError(error, "bulkImportNurtureSubscribers");
+  }
+}
+
 // Get automation rules for nurture lists
 export async function getNurtureRules(slug: string) {
   try {

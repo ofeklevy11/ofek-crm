@@ -42,8 +42,8 @@ import {
   getTableFields,
   getRawTableRecords,
   getAllRecordIds,
-  getRecordsByIds,
   addNurtureSubscriberManual,
+  bulkImportNurtureSubscribers,
   getNurtureRules,
   DataSource,
   DataRecord,
@@ -371,71 +371,46 @@ export default function CustomerListManager({
   };
 
   const handleImportSelected = async () => {
+    if (loading || selectedDbCustomers.length === 0) return;
     const isDynamic = importFields.length > 0;
-    const loadedIds = new Set(dbResults.map((r) => r.id));
-    const loadedRecords = dbResults.filter((c) => selectedDbCustomers.includes(c.id));
-    const unloadedIds = selectedDbCustomers.filter((id) => !loadedIds.has(id));
 
-    setLoading(true);
-    let successCount = 0;
-    let failCount = 0;
-
-    const importRecord = async (record: any) => {
-      const name = isDynamic
-        ? record[importMapping.name] || `Record #${record.id}`
-        : record.name;
-      const email = isDynamic
-        ? record[importMapping.email] || undefined
-        : record.email || undefined;
-      const phone = isDynamic
-        ? record[importMapping.phone] || undefined
-        : record.phone || undefined;
-      const triggerDateVal = isDynamic && importMapping.triggerDate
-        ? record[importMapping.triggerDate] || undefined
-        : undefined;
-
-      const result = await addNurtureSubscriberManual(listSlug, {
-        name: String(name),
-        email: email ? String(email) : undefined,
-        phone: phone ? String(phone) : undefined,
-        triggerDate: triggerDateVal ? String(triggerDateVal) : undefined,
-      });
-      if (result.success) successCount++;
-      else failCount++;
-    };
+    // Close dialog immediately and show info toast
+    setIsOpen(false);
+    toast.info(`מייבא ${selectedDbCustomers.length} לקוחות...`);
 
     try {
-      // Import loaded records
-      for (const record of loadedRecords) {
-        await importRecord(record);
+      const result = await bulkImportNurtureSubscribers(
+        listSlug,
+        selectedTable,
+        selectedDbCustomers,
+        isDynamic ? { name: importMapping.name, email: importMapping.email, phone: importMapping.phone, triggerDate: importMapping.triggerDate || undefined } : undefined
+      );
+
+      if (!result.success) {
+        toast.error(result.error || "שגיאה בייבוא");
+        return;
       }
 
-      // Fetch and import unloaded records in batches
-      if (unloadedIds.length > 0) {
-        const batchSize = 200;
-        for (let i = 0; i < unloadedIds.length; i += batchSize) {
-          const batchIds = unloadedIds.slice(i, i + batchSize);
-          const fetched = await getRecordsByIds(selectedTable, batchIds);
-          for (const record of fetched) {
-            await importRecord(record);
-          }
-        }
+      if (result.successCount! > 0) {
+        toast.success(`${result.successCount} לקוחות יובאו בהצלחה`);
+      }
+      if (result.duplicateCount! > 0) {
+        const names = result.duplicateNames!.length <= 3
+          ? result.duplicateNames!.join(", ")
+          : `${result.duplicateNames!.slice(0, 3).join(", ")} ועוד ${result.duplicateNames!.length - 3}`;
+        toast.error(`כבר קיימים ברשימה: ${names}`);
+      }
+      if (result.missingContactCount! > 0) {
+        const names = result.missingContactNames!.length <= 3
+          ? result.missingContactNames!.join(", ")
+          : `${result.missingContactNames!.slice(0, 3).join(", ")} ועוד ${result.missingContactNames!.length - 3}`;
+        toast.error(`חסר מייל/טלפון: ${names}`);
       }
 
-      if (failCount === 0) {
-        toast.success(`${successCount} לקוחות יובאו בהצלחה`);
-      } else if (successCount === 0) {
-        toast.error(`הייבוא נכשל. ייתכן שכל הלקוחות כבר קיימים ברשימה`);
-      } else {
-        toast.warning(`${successCount} יובאו בהצלחה, ${failCount} נכשלו (כפילויות או שגיאות)`);
-      }
       onAddCustomers([]);
-      setIsOpen(false);
       setSelectedDbCustomers([]);
     } catch (error) {
       toast.error(getUserFriendlyError(error));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -1533,7 +1508,7 @@ export default function CustomerListManager({
                             ) : (
                               <>
                                 <Square className="w-3.5 h-3.5" />
-                                בחר הכל
+                                בחר הכל (הרשומות שמופיעות ברשימה)
                               </>
                             )}
                           </Button>
@@ -1556,7 +1531,7 @@ export default function CustomerListManager({
                               ) : (
                                 <>
                                   <Database className="w-3.5 h-3.5" />
-                                  בחר הכל מהטבלה
+                                  בחר את כל הרשומות בטבלה
                                 </>
                               )}
                             </Button>
