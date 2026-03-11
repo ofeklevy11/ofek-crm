@@ -6,7 +6,7 @@ export default async function CalendarPage() {
   const user = await getCurrentUser();
 
   if (!user || user.role !== "admin") {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return (

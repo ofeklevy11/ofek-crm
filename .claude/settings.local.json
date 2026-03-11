@@ -166,7 +166,23 @@
       "Bash(npm test:*)",
       "Bash(DATABASE_URL=\"postgresql://user:pass@localhost:5432/testdb\" DIRECT_URL=\"postgresql://user:pass@localhost:5432/testdb\" NEXTAUTH_SECRET=\"test-secret\" REDIS_URL=\"redis://localhost:6379\" INNGEST_EVENT_KEY=\"test\" INNGEST_SIGNING_KEY=\"test\" pnpm vitest:*)",
       "Bash(openssl rand:*)",
-      "Bash(\"C:/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/.env\":*)"
+      "Bash(\"C:/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/.env\":*)",
+      "Bash(find /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app -type f \\\\\\( -name \"*.json\" -o -name \"manifest*\" -o -name \"spec*\" \\\\\\) -not -path \"*/node_modules/*\" -not -path \"*/.next/*\" 2>/dev/null | head -30)",
+      "Bash(find /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app -type f \\\\\\( -name \"*make*\" -o -name \"*spec*\" -o -name \"*module*\" \\\\\\) \\\\\\( -name \"*.json\" -o -name \"*.ts\" \\\\\\) -not -path \"*/node_modules/*\" -not -path \"*/.next/*\" 2>/dev/null | grep -v \"test\\\\|coverage\\\\|dist\")",
+      "Bash(find \"C:\\\\Users\\\\Ofek\\\\Desktop\\\\ofek-prog\\\\ofek-business-crm\\\\my-app\" -type f \\\\\\( -name \"*.json\" -o -name \"manifest*\" \\\\\\) ! -path \"*/node_modules/*\" ! -path \"*/.next/*\" ! -path \"*/coverage/*\" 2>/dev/null | head -20)",
+      "Bash(find \"C:\\\\Users\\\\Ofek\\\\Desktop\\\\ofek-prog\\\\ofek-business-crm\\\\my-app\" -type f \\\\\\( -name \"*.md\" \\\\\\) ! -path \"*/node_modules/*\" ! -path \"*/.next/*\" 2>/dev/null | xargs grep -l -i \"make\\\\|dropdown\\\\|field\" 2>/dev/null | head -10)",
+      "Bash(find \"C:\\\\Users\\\\Ofek\\\\Desktop\\\\ofek-prog\\\\ofek-business-crm\\\\my-app\" -type f \\\\\\( -name \"*.json\" -o -name \"*.ts\" \\\\\\) ! -path \"*/node_modules/*\" ! -path \"*/.next/*\" ! -path \"*/coverage/*\" 2>/dev/null | xargs grep -l \"rpc\\\\|RPC\" 2>/dev/null | grep -v \".next\")",
+      "Bash(pnpm test:e2e 2>&1)",
+      "Bash(grep -n \"TWILIO_TOKEN_ENCRYPTION_KEY\" /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/.env 2>/dev/null; echo \"EXIT: $?\")",
+      "Bash(pnpm prisma:*)",
+      "Bash(git reset:*)",
+      "Bash(find \"C:\\\\Users\\\\Ofek\\\\Desktop\\\\ofek-prog\\\\ofek-business-crm\\\\my-app\" -path \"*node_modules\" -prune -o -type f \\\\\\( -name \"*send-whatsapp*\" -o -name \"*whatsapp*\" \\\\\\) -print 2>/dev/null | grep -i inngest)",
+      "Bash(do echo:*)",
+      "Bash(find /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/app/nurture-hub -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.jsx\" -o -name \"*.js\" \\\\\\) 2>/dev/null | head -30)",
+      "Bash(find /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app -type f -path \"*api*\" \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) 2>/dev/null | xargs grep -l \"nurture\" | head -20)",
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(32\\).toString\\('hex'\\)\\)\")",
+      "Bash(find /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/app -type d -name \"*\\(dashboard\\)*\" -o -type d -name \"*\\(auth\\)*\" -o -type d -name \"*\\(settings\\)*\" 2>/dev/null)",
+      "Bash(for f:*)"
     ]
   }
 }

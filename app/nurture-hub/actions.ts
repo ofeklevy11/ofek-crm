@@ -1,6 +1,16 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+
+function handleNurtureError(error: unknown, context: string): { success: false; error: string } {
+  console.error(`[NurtureHub] ${context}:`, error);
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === "P2002") return { success: false, error: "פריט עם פרטים אלו כבר קיים במערכת" };
+    if (error.code === "P2025") return { success: false, error: "הפריט המבוקש לא נמצא" };
+  }
+  return { success: false, error: "אירעה שגיאה. אנא נסו שוב מאוחר יותר" };
+}
 
 export type DataSource = {
   id: string; // "clients" | "users" | tableId
@@ -269,7 +279,6 @@ export async function getNurtureSubscribers(slug: string) {
     const currentUser = await getCurrentUser();
     if (!currentUser) return [];
 
-    // @ts-ignore
     const list = await prisma.nurtureList.findFirst({
       where: {
         slug,
@@ -285,7 +294,6 @@ export async function getNurtureSubscribers(slug: string) {
     if (!list) return [];
 
     // Get all unique table IDs from subscribers
-    // @ts-ignore
     const tableIds = [
       ...new Set(
         list.subscribers
@@ -305,7 +313,6 @@ export async function getNurtureSubscribers(slug: string) {
 
     const tableMap = new Map(tables.map((t) => [t.id, t.name]));
 
-    // @ts-ignore
     return list.subscribers.map((sub: any) => ({
       id: sub.id.toString(),
       name: sub.name,
@@ -313,9 +320,12 @@ export async function getNurtureSubscribers(slug: string) {
       phone: sub.phone || "",
       emailActive: sub.emailActive ?? true,
       phoneActive: sub.phoneActive ?? true,
+      triggerDate: sub.triggerDate || null,
       source:
         sub.sourceType === "TABLE"
           ? "Table Automation"
+          : sub.sourceType === "WEBHOOK"
+          ? "Webhook"
           : sub.sourceType || "Manual",
       sourceTableId: sub.sourceTableId,
       sourceTableName: sub.sourceTableId
@@ -332,7 +342,7 @@ export async function getNurtureSubscribers(slug: string) {
 // Add a subscriber manually
 export async function addNurtureSubscriberManual(
   slug: string,
-  data: { name: string; email?: string; phone?: string }
+  data: { name: string; email?: string; phone?: string; triggerDate?: string }
 ) {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
@@ -347,14 +357,12 @@ export async function addNurtureSubscriberManual(
     }
 
     // Find or create the list
-    // @ts-ignore
     let list = await prisma.nurtureList.findFirst({
       where: { slug, companyId: currentUser.companyId },
     });
 
     if (!list) {
-      // @ts-ignore
-      list = await prisma.nurtureList.create({
+        list = await prisma.nurtureList.create({
         data: {
           companyId: currentUser.companyId,
           slug,
@@ -368,7 +376,6 @@ export async function addNurtureSubscriberManual(
     if (data.email) conditions.push({ email: data.email });
     if (data.phone) conditions.push({ phone: data.phone });
 
-    // @ts-ignore
     const existing = await prisma.nurtureSubscriber.findFirst({
       where: {
         nurtureListId: list.id,
@@ -377,24 +384,30 @@ export async function addNurtureSubscriberManual(
     });
 
     if (existing) {
-      return { success: false, error: "Subscriber already exists" };
+      return { success: false, error: "מנוי עם פרטים אלו כבר קיים ברשימה" };
     }
 
-    // @ts-ignore
+    // Parse triggerDate if provided
+    let triggerDate: Date | null = null;
+    if (data.triggerDate) {
+      const parsed = new Date(data.triggerDate);
+      if (!isNaN(parsed.getTime())) triggerDate = parsed;
+    }
+
     await prisma.nurtureSubscriber.create({
       data: {
         nurtureListId: list.id,
         name: data.name,
         email: data.email || null,
         phone: data.phone || null,
+        triggerDate,
         sourceType: "MANUAL",
       },
     });
 
     return { success: true };
   } catch (error) {
-    console.error("Error adding subscriber:", error);
-    return { success: false, error: "Failed to add subscriber" };
+    return handleNurtureError(error, "addNurtureSubscriberManual");
   }
 }
 
@@ -430,7 +443,14 @@ export async function getNurtureRules(slug: string) {
 // Update a subscriber - only updates channel preferences (emailActive, phoneActive)
 export async function updateNurtureSubscriber(
   id: string,
-  data: { emailActive?: boolean; phoneActive?: boolean }
+  data: {
+    emailActive?: boolean;
+    phoneActive?: boolean;
+    phone?: string;
+    email?: string;
+    name?: string;
+    triggerDate?: string | null;
+  }
 ) {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
@@ -443,25 +463,29 @@ export async function updateNurtureSubscriber(
     }
 
     // Verify subscriber belongs to user's company via nurtureList relation
-    // @ts-ignore
     const subscriber = await prisma.nurtureSubscriber.findFirst({
       where: { id: subscriberId, nurtureList: { companyId: user.companyId } },
     });
     if (!subscriber) return { success: false, error: "Not found" };
 
-    // @ts-ignore
+    const updateData: any = {};
+    if (data.emailActive !== undefined) updateData.emailActive = data.emailActive;
+    if (data.phoneActive !== undefined) updateData.phoneActive = data.phoneActive;
+    if (data.phone !== undefined) updateData.phone = data.phone || null;
+    if (data.email !== undefined) updateData.email = data.email || null;
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.triggerDate !== undefined) {
+      updateData.triggerDate = data.triggerDate ? new Date(data.triggerDate) : null;
+    }
+
     await prisma.nurtureSubscriber.update({
       where: { id: subscriberId },
-      data: {
-        emailActive: data.emailActive,
-        phoneActive: data.phoneActive,
-      },
+      data: updateData,
     });
 
     return { success: true };
   } catch (error) {
-    console.error("Error updating subscriber:", error);
-    return { success: false, error: "Failed to update subscriber" };
+    return handleNurtureError(error, "updateNurtureSubscriber");
   }
 }
 
@@ -478,21 +502,18 @@ export async function deleteNurtureSubscriber(id: string) {
     }
 
     // Verify subscriber belongs to user's company via nurtureList relation
-    // @ts-ignore
     const subscriber = await prisma.nurtureSubscriber.findFirst({
       where: { id: subscriberId, nurtureList: { companyId: user.companyId } },
     });
     if (!subscriber) return { success: false, error: "Not found" };
 
-    // @ts-ignore
     await prisma.nurtureSubscriber.delete({
       where: { id: subscriberId },
     });
 
     return { success: true };
   } catch (error) {
-    console.error("Error deleting subscriber:", error);
-    return { success: false, error: "Failed to delete subscriber" };
+    return handleNurtureError(error, "deleteNurtureSubscriber");
   }
 }
 
@@ -507,8 +528,7 @@ export async function saveNurtureConfig(
     const currentUser = await getCurrentUser();
     if (!currentUser) return { success: false, error: "Authentication required" };
 
-    // configJson & isEnabled added in pending migration
-    await (prisma.nurtureList as any).upsert({
+    await prisma.nurtureList.upsert({
       where: {
         companyId_slug: {
           companyId: currentUser.companyId,
@@ -530,8 +550,7 @@ export async function saveNurtureConfig(
 
     return { success: true };
   } catch (error) {
-    console.error("Error saving nurture config:", error);
-    return { success: false, error: "Failed to save config" };
+    return handleNurtureError(error, "saveNurtureConfig");
   }
 }
 
@@ -542,14 +561,13 @@ export async function getNurtureConfig(slug: string) {
     const currentUser = await getCurrentUser();
     if (!currentUser) return null;
 
-    // configJson & isEnabled added in pending migration
-    const list = await (prisma.nurtureList as any).findFirst({
+    const list = await prisma.nurtureList.findFirst({
       where: { slug, companyId: currentUser.companyId },
       select: { configJson: true, isEnabled: true },
     });
 
     if (!list) return null;
-    return { config: (list as any).configJson, isEnabled: (list as any).isEnabled };
+    return { config: list.configJson, isEnabled: list.isEnabled };
   } catch (error) {
     console.error("Error fetching nurture config:", error);
     return null;
@@ -590,8 +608,45 @@ export async function getAvailableChannels() {
   }
 }
 
-// Send nurture campaign to all subscribers
-export async function sendNurtureCampaign(slug: string) {
+// Get recent send logs for a nurture list
+export async function getNurtureSendLogs(slug: string) {
+  try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return [];
+
+    const list = await prisma.nurtureList.findFirst({
+      where: { slug, companyId: currentUser.companyId },
+      select: { id: true },
+    });
+    if (!list) return [];
+
+    const logs = await prisma.nurtureSendLog.findMany({
+      where: { nurtureListId: list.id },
+      orderBy: { sentAt: "desc" },
+      take: 100,
+      include: {
+        subscriber: { select: { name: true, phone: true } },
+      },
+    });
+
+    return logs.map((l) => ({
+      id: l.id,
+      subscriberName: l.subscriber.name,
+      subscriberPhone: l.subscriber.phone,
+      triggerKey: l.triggerKey,
+      channel: l.channel,
+      status: l.status,
+      sentAt: l.sentAt,
+    }));
+  } catch (error) {
+    console.error("Error fetching nurture send logs:", error);
+    return [];
+  }
+}
+
+// Send nurture campaign to all subscribers or a specific one
+export async function sendNurtureCampaign(slug: string, subscriberId?: string) {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
@@ -603,26 +658,42 @@ export async function sendNurtureCampaign(slug: string) {
     });
 
     if (!list) return { success: false, error: "Campaign not found" };
-    if (!(list as any).configJson) return { success: false, error: "No config saved" };
+    if (!list.configJson) return { success: false, error: "No config saved" };
 
-    const config = (list as any).configJson as any;
+    const config = list.configJson as any;
     const channels = config.channels || {};
 
     if (!channels.sms && !channels.whatsappGreen && !channels.whatsappCloud) {
       return { success: false, error: "No channels selected" };
     }
 
-    if (channels.sms && !config.smsBody?.trim()) {
-      return { success: false, error: "תוכן הודעת SMS חסר" };
+    // Resolve active message from templates array (backward compat with flat fields)
+    const { migrateConfigMessages, getActiveMessage } = await import("@/components/nurture/NurtureMessageEditor");
+    const messages = migrateConfigMessages(config);
+    const activeMsg = getActiveMessage(messages);
+    if (!activeMsg) {
+      return { success: false, error: "אין תבנית הודעה פעילה" };
     }
-    if (channels.whatsappGreen && !config.whatsappGreenBody?.trim()) {
-      return { success: false, error: "תוכן הודעת WhatsApp חסר" };
+
+    if (channels.sms && !activeMsg.smsBody?.trim()) {
+      return { success: false, error: "תוכן הודעת SMS חסר בתבנית הפעילה" };
+    }
+    if (channels.whatsappGreen && !activeMsg.whatsappGreenBody?.trim()) {
+      return { success: false, error: "תוכן הודעת WhatsApp חסר בתבנית הפעילה" };
     }
 
     // Filter subscribers with active phone
-    const activeSubscribers = list.subscribers.filter(
+    let activeSubscribers = list.subscribers.filter(
       (sub: any) => sub.phoneActive && sub.phone
     );
+
+    // If subscriberId provided, filter to only that subscriber
+    if (subscriberId) {
+      activeSubscribers = activeSubscribers.filter((sub: any) => sub.id === subscriberId);
+      if (activeSubscribers.length === 0) {
+        return { success: false, error: "המנוי לא נמצא או שאין לו מספר טלפון פעיל" };
+      }
+    }
 
     if (activeSubscribers.length === 0) {
       return { success: false, error: "No active subscribers with phone numbers" };
@@ -639,7 +710,7 @@ export async function sendNurtureCampaign(slug: string) {
     if (channels.whatsappCloud && !available.whatsappCloud) {
       return { success: false, error: "WhatsApp Cloud API not configured" };
     }
-    if (channels.whatsappCloud && !config.whatsappCloudTemplateName) {
+    if (channels.whatsappCloud && !activeMsg.whatsappCloudTemplateName) {
       return { success: false, error: "WhatsApp Cloud template name is required" };
     }
 
@@ -653,10 +724,10 @@ export async function sendNurtureCampaign(slug: string) {
         subscriberPhone: sub.phone,
         subscriberName: sub.name,
         channels,
-        smsBody: config.smsBody || "",
-        whatsappGreenBody: config.whatsappGreenBody || "",
-        whatsappCloudTemplateName: config.whatsappCloudTemplateName || "",
-        whatsappCloudLanguageCode: config.whatsappCloudLanguageCode || "he",
+        smsBody: activeMsg.smsBody || "",
+        whatsappGreenBody: activeMsg.whatsappGreenBody || "",
+        whatsappCloudTemplateName: activeMsg.whatsappCloudTemplateName || "",
+        whatsappCloudLanguageCode: activeMsg.whatsappCloudLanguageCode || "he",
         slug,
       },
     }));
@@ -665,7 +736,6 @@ export async function sendNurtureCampaign(slug: string) {
 
     return { success: true, count: activeSubscribers.length };
   } catch (error) {
-    console.error("Error sending nurture campaign:", error);
-    return { success: false, error: "Failed to send campaign" };
+    return handleNurtureError(error, "sendNurtureCampaign");
   }
 }

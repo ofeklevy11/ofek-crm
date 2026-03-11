@@ -276,6 +276,18 @@
 }
 .mtg-check-scale { animation: mtgCheckScale 0.4s ease-out both; }
 
+/* ── Landing page floating animations ─────────────────────── */
+@keyframes lpFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+@keyframes lpFloatReverse {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(8px); }
+}
+.lp-float { animation: lpFloat 6s ease-in-out infinite; }
+.lp-float-reverse { animation: lpFloatReverse 5s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   .mtg-skeleton-shimmer,
   .mtg-slide-up,
@@ -286,7 +298,9 @@
   .animate-cascade-in,
   .animate-fade-in-up,
   .animate-pulse-glow,
-  .animate-scale-in {
+  .animate-scale-in,
+  .lp-float,
+  .lp-float-reverse {
     animation: none !important;
   }
 }

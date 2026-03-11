@@ -10,7 +10,7 @@ export default async function QuotesLayout({
   const user = await getCurrentUser();
 
   if (!user || !hasUserFlag(user, "canViewQuotes")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return <>{children}</>;

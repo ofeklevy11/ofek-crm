@@ -520,8 +520,18 @@ export async function executeRuleActions(
           const email = context.recordData[mapping.email] || "";
           const phone = context.recordData[mapping.phone] || "";
 
+          // Extract triggerDate from mapping if configured
+          let triggerDate: Date | undefined;
+          if (mapping.triggerDate && context.recordData[mapping.triggerDate]) {
+            const rawDate = context.recordData[mapping.triggerDate];
+            const parsed = new Date(rawDate);
+            if (!isNaN(parsed.getTime())) {
+              triggerDate = parsed;
+            }
+          }
+
           if (email || phone) {
-            await addToNurtureList({
+            const added = await addToNurtureList({
               companyId,
               listSlug: config.listId,
               name,
@@ -530,7 +540,64 @@ export async function executeRuleActions(
               sourceType: "TABLE",
               sourceId: String(context.recordId),
               sourceTableId: context.tableId,
+              triggerDate,
             });
+
+            // autoTrigger: immediately dispatch delayed send (for review/upsell)
+            if (added && config.autoTrigger && phone) {
+              try {
+                const { inngest: inngestClient } = await import("@/lib/inngest/client");
+                const list = await prisma.nurtureList.findUnique({
+                  where: { companyId_slug: { companyId, slug: config.listId } },
+                });
+                if (list?.configJson && list.isEnabled) {
+                  const listConfig = list.configJson as any;
+                  const channels = listConfig.channels || {};
+                  if (channels.sms || channels.whatsappGreen || channels.whatsappCloud) {
+                    // Calculate delay
+                    let delayMs = 0;
+                    if (config.listId === "review") {
+                      const timingMap: Record<string, number> = {
+                        immediate: 0,
+                        "1_hour": 3600000,
+                        "24_hours": 86400000,
+                        "3_days": 259200000,
+                      };
+                      delayMs = timingMap[listConfig.timing] || 0;
+                    } else if (config.listId === "upsell") {
+                      delayMs = parseInt(listConfig.delayMinutes || "15", 10) * 60000;
+                    }
+
+                    const sub = await prisma.nurtureSubscriber.findFirst({
+                      where: { nurtureListId: list.id, phone },
+                    });
+
+                    if (sub) {
+                      await inngestClient.send({
+                        name: "nurture/delayed-send",
+                        data: {
+                          companyId,
+                          subscriberId: sub.id,
+                          nurtureListId: list.id,
+                          subscriberPhone: phone,
+                          subscriberName: name,
+                          channels,
+                          smsBody: listConfig.smsBody || "",
+                          whatsappGreenBody: listConfig.whatsappGreenBody || "",
+                          whatsappCloudTemplateName: listConfig.whatsappCloudTemplateName || "",
+                          whatsappCloudLanguageCode: listConfig.whatsappCloudLanguageCode || "he",
+                          slug: config.listId,
+                          delayMs,
+                          triggerKey: `auto-${config.listId}-${Date.now()}`,
+                        },
+                      });
+                    }
+                  }
+                }
+              } catch (autoErr) {
+                log.error("Auto-trigger failed", { error: String(autoErr) });
+              }
+            }
           }
         }
       } else if (type === "UPDATE_RECORD_FIELD") {
@@ -2122,7 +2189,8 @@ async function addToNurtureList(params: {
   sourceType: string;
   sourceId: string;
   sourceTableId?: number;
-}) {
+  triggerDate?: Date;
+}): Promise<boolean> {
   const {
     companyId,
     listSlug,
@@ -2132,6 +2200,7 @@ async function addToNurtureList(params: {
     sourceType,
     sourceId,
     sourceTableId,
+    triggerDate,
   } = params;
 
   if (!email && !phone) return false;
@@ -2200,6 +2269,7 @@ async function addToNurtureList(params: {
             sourceType,
             sourceId,
             sourceTableId,
+            triggerDate,
           },
         });
         return true;

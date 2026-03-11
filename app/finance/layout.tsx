@@ -10,7 +10,7 @@ export default async function FinanceLayout({
   const user = await getCurrentUser();
 
   if (!user || !hasUserFlag(user, "canViewFinance")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return <>{children}</>;

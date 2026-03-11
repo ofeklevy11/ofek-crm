@@ -18,7 +18,7 @@ export default async function AutomationsPage() {
   }
 
   if (!hasUserFlag(user, "canViewAutomations")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   let rulesResponse, usersResponse, tables, foldersResponse;

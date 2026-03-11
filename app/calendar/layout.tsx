@@ -10,7 +10,7 @@ export default async function CalendarLayout({
   const user = await getCurrentUser();
 
   if (!user || !hasUserFlag(user, "canViewCalendar")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return <>{children}</>;

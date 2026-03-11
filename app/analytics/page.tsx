@@ -11,7 +11,7 @@ import RateLimitFallback from "@/components/RateLimitFallback";
 export default async function AnalyticsPage() {
   const user = await getCurrentUser();
   if (!user || !hasUserFlag(user, "canViewAnalytics")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   let analyticsData, foldersData, refreshUsageData;

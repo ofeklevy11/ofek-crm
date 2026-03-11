@@ -8,9 +8,6 @@ import {
   Save,
   Send,
   Loader2,
-  ThumbsUp,
-  MessageCircle,
-  Clock,
   Zap,
   Pencil,
   ToggleRight,
@@ -20,11 +17,9 @@ import {
   Phone,
   X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -42,8 +37,9 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import NurtureChannelSelector from "@/components/nurture/NurtureChannelSelector";
-import NurtureMessageEditor from "@/components/nurture/NurtureMessageEditor";
+import NurtureMessageEditor, { migrateConfigMessages, NurtureMessage } from "@/components/nurture/NurtureMessageEditor";
 import CustomerListManager from "@/components/nurture/CustomerListManager";
+import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
 
 import {
   getNurtureSubscribers,
@@ -132,7 +128,12 @@ export default function ReviewAutomationPage() {
 
   useEffect(() => {
     getNurtureConfig("review").then((saved) => {
-      if (saved?.config) setConfig((prev) => ({ ...prev, ...(saved.config as any) }));
+      if (saved?.config) {
+        const raw = saved.config as any;
+        const { smsBody, whatsappGreenBody, whatsappCloudTemplateName, whatsappCloudLanguageCode, ...rest } = raw;
+        const messages = migrateConfigMessages(raw);
+        setConfig((prev) => ({ ...prev, ...rest, messages }));
+      }
       if (saved?.isEnabled !== undefined) setIsEnabled(saved.isEnabled);
     }).catch((err: any) => {
       if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
@@ -152,19 +153,21 @@ export default function ReviewAutomationPage() {
   const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false });
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sendingCustomerId, setSendingCustomerId] = useState<string | null>(null);
   const [config, setConfig] = useState({
-    platforms: {
-      google: true,
-      facebook: false,
-      website: true,
-    },
-    timing: "immediate", // immediate, 1_day, 3_days
-    minStarsForPublic: "4", // Only ask for public review if internal rating is >= this
+    timing: "immediate",
     channels: { sms: false, whatsappGreen: false, whatsappCloud: false },
-    smsBody: "היי {first_name}, שמחנו לתת לך שירות! נשמח לשמוע מה חשבת בקישור קצר.",
-    whatsappGreenBody: "היי {first_name}, שמחנו לתת לך שירות! נשמח לשמוע מה חשבת בקישור קצר.",
-    whatsappCloudTemplateName: "",
-    whatsappCloudLanguageCode: "he",
+    messages: [
+      {
+        id: "msg_default",
+        name: "הודעה ראשית",
+        isActive: true,
+        smsBody: "היי {first_name}, שמחנו לתת לך שירות! נשמח לשמוע מה חשבת בקישור קצר.",
+        whatsappGreenBody: "היי {first_name}, שמחנו לתת לך שירות! נשמח לשמוע מה חשבת בקישור קצר.",
+        whatsappCloudTemplateName: "",
+        whatsappCloudLanguageCode: "he",
+      },
+    ] as NurtureMessage[],
   });
 
   const handleSave = async () => {
@@ -191,6 +194,20 @@ export default function ReviewAutomationPage() {
       toast.error(getUserFriendlyError(error));
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleSendToCustomer = async (customer: Customer) => {
+    if (!(await showConfirm(`לשלוח הודעה ל-${customer.name}?`))) return;
+    setSendingCustomerId(customer.id);
+    try {
+      const result = await sendNurtureCampaign("review", customer.id);
+      if (result.success) toast.success(`ההודעה נשלחה ל-${customer.name}`);
+      else toast.error(getFriendlyResultError(result.error, "שגיאה בשליחה"));
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setSendingCustomerId(null);
     }
   };
 
@@ -223,7 +240,7 @@ export default function ReviewAutomationPage() {
               className="bg-amber-600 hover:bg-amber-700 gap-2"
             >
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              שלח עכשיו
+              שלח לכולם
             </Button>
             <Button onClick={handleSave} disabled={saving} variant="outline" className="gap-2">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -232,8 +249,9 @@ export default function ReviewAutomationPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
+        <NurtureTriggerInfo slug="review" />
+
+        <div className="space-y-6">
             {/* Customer List Management */}
             <Card>
               <CardHeader>
@@ -260,15 +278,16 @@ export default function ReviewAutomationPage() {
                     {/* Header */}
                     <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 border-b text-xs font-medium text-slate-500">
                       <div className="col-span-4">שם</div>
-                      <div className="col-span-4">פרטי קשר</div>
-                      <div className="col-span-4">מקור</div>
+                      <div className="col-span-3">פרטי קשר</div>
+                      <div className="col-span-3">מקור</div>
+                      <div className="col-span-2 text-center">שליחה</div>
                     </div>
                     {/* List */}
                     <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
                       {customers.map((c) => (
                         <div
                           key={c.id}
-                          className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors group"
+                          className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors group items-center"
                           onClick={() => setSelectedCustomer(c)}
                         >
                           <div className="col-span-4 flex items-center gap-2 overflow-hidden">
@@ -279,10 +298,10 @@ export default function ReviewAutomationPage() {
                               {c.name}
                             </span>
                           </div>
-                          <div className="col-span-4 flex items-center text-xs text-slate-600 truncate">
+                          <div className="col-span-3 flex items-center text-xs text-slate-600 truncate">
                             {c.email || c.phone || "—"}
                           </div>
-                          <div className="col-span-4 flex items-center gap-1.5">
+                          <div className="col-span-3 flex items-center gap-1.5">
                             <span
                               className={`text-[10px] px-1.5 py-0.5 rounded ${
                                 c.source === "Table Automation"
@@ -302,6 +321,17 @@ export default function ReviewAutomationPage() {
                                   {c.sourceTableName}
                                 </span>
                               )}
+                          </div>
+                          <div className="col-span-2 flex items-center justify-center">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleSendToCustomer(c); }}
+                              disabled={sendingCustomerId === c.id || !c.phone || !c.phoneActive}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded bg-amber-50 text-amber-600 hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                              title={!c.phone || !c.phoneActive ? "אין מספר טלפון פעיל" : `שלח ל-${c.name}`}
+                            >
+                              {sendingCustomerId === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                              שלח
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -448,194 +478,70 @@ export default function ReviewAutomationPage() {
               <CardContent>
                 <NurtureMessageEditor
                   channels={config.channels}
-                  smsBody={config.smsBody}
-                  whatsappGreenBody={config.whatsappGreenBody}
-                  whatsappCloudTemplateName={config.whatsappCloudTemplateName}
-                  whatsappCloudLanguageCode={config.whatsappCloudLanguageCode}
-                  onSmsBodyChange={(v) => setConfig({ ...config, smsBody: v })}
-                  onWhatsappGreenBodyChange={(v) => setConfig({ ...config, whatsappGreenBody: v })}
-                  onWhatsappCloudTemplateNameChange={(v) => setConfig({ ...config, whatsappCloudTemplateName: v })}
-                  onWhatsappCloudLanguageCodeChange={(v) => setConfig({ ...config, whatsappCloudLanguageCode: v })}
+                  messages={config.messages}
+                  onMessagesChange={(messages) => setConfig({ ...config, messages })}
                   placeholders={["{first_name}"]}
                 />
               </CardContent>
             </Card>
 
-            {/* Logic & Platforms */}
+            {/* Timing & Scheduling */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">לוגיקה ופלטפורמות</CardTitle>
-                <CardDescription>
-                  הגדר מתי ולאן להפנות את הלקוחות
-                </CardDescription>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-amber-500 fill-amber-500" />
+                  תזמון שליחה
+                </CardTitle>
+                <CardDescription>הגדר מתי לשלוח בקשת ביקורת ללקוחות שמתווספים לרשימה</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div
-                    className={cn(
-                      "cursor-pointer border rounded-xl p-4 flex flex-col items-center gap-3 transition-all",
-                      config.platforms.google
-                        ? "border-amber-500 bg-amber-50/50"
-                        : "border-slate-200 hover:border-slate-300"
-                    )}
-                    onClick={() =>
-                      setConfig({
-                        ...config,
-                        platforms: {
-                          ...config.platforms,
-                          google: !config.platforms.google,
-                        },
-                      })
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="flex flex-col gap-1">
+                    <span>שליחה אוטומטית לאחר הוספה לרשימה</span>
+                    <span className="text-xs text-slate-500 font-normal">
+                      כמה זמן אחרי שלקוח מתווסף לרשימה לשלוח לו בקשה?
+                    </span>
+                  </Label>
+                  <Select
+                    value={config.timing}
+                    onValueChange={(val) =>
+                      setConfig({ ...config, timing: val })
                     }
                   >
-                    <div className="text-2xl">G</div>
-                    <span className="font-medium text-sm">Google Reviews</span>
-                  </div>
-                  <div
-                    className={cn(
-                      "cursor-pointer border rounded-xl p-4 flex flex-col items-center gap-3 transition-all",
-                      config.platforms.facebook
-                        ? "border-blue-500 bg-blue-50/50"
-                        : "border-slate-200 hover:border-slate-300"
-                    )}
-                    onClick={() =>
-                      setConfig({
-                        ...config,
-                        platforms: {
-                          ...config.platforms,
-                          facebook: !config.platforms.facebook,
-                        },
-                      })
-                    }
-                  >
-                    <div className="text-2xl text-blue-600">f</div>
-                    <span className="font-medium text-sm">Facebook</span>
-                  </div>
-                  <div
-                    className={cn(
-                      "cursor-pointer border rounded-xl p-4 flex flex-col items-center gap-3 transition-all",
-                      config.platforms.website
-                        ? "border-indigo-500 bg-indigo-50/50"
-                        : "border-slate-200 hover:border-slate-300"
-                    )}
-                    onClick={() =>
-                      setConfig({
-                        ...config,
-                        platforms: {
-                          ...config.platforms,
-                          website: !config.platforms.website,
-                        },
-                      })
-                    }
-                  >
-                    <div className="text-2xl">🌐</div>
-                    <span className="font-medium text-sm">אתר הבית</span>
-                  </div>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manual">ידני בלבד</SelectItem>
+                      <SelectItem value="immediate">מיידית</SelectItem>
+                      <SelectItem value="1_hour">שעה אחרי</SelectItem>
+                      <SelectItem value="24_hours">יום אחרי</SelectItem>
+                      <SelectItem value="3_days">3 ימים אחרי</SelectItem>
+                      <SelectItem value="1_week">שבוע אחרי</SelectItem>
+                      <SelectItem value="2_weeks">שבועיים אחרי</SelectItem>
+                      <SelectItem value="1_month">חודש אחרי</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                <div className="space-y-4 pt-4 border-t border-slate-100">
-                  <div className="flex items-center justify-between">
-                    <Label className="flex flex-col gap-1">
-                      <span>סינון איכות חכם</span>
-                      <span className="text-xs text-slate-500 font-normal">
-                        בקש ביקורת פומבית (גוגל/פייסבוק) רק אם הדירוג הפנימי
-                        גבוה מ-
-                      </span>
-                    </Label>
-                    <Select
-                      value={config.minStarsForPublic}
-                      onValueChange={(val) =>
-                        setConfig({ ...config, minStarsForPublic: val })
-                      }
-                    >
-                      <SelectTrigger className="w-[100px]">
-                        <div className="flex items-center gap-2">
-                          <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-                          <SelectValue />
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="3">3 כוכבים</SelectItem>
-                        <SelectItem value="4">4 כוכבים</SelectItem>
-                        <SelectItem value="5">5 כוכבים</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <Label className="flex flex-col gap-1">
-                      <span>תזמון שליחה</span>
-                      <span className="text-xs text-slate-500 font-normal">
-                        כמה זמן לאחר סיום השירות/רכישה לשלוח את הבקשה?
-                      </span>
-                    </Label>
-                    <Select
-                      value={config.timing}
-                      onValueChange={(val) =>
-                        setConfig({ ...config, timing: val })
-                      }
-                    >
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="immediate">מיידית</SelectItem>
-                        <SelectItem value="1_hour">שעה אחרי</SelectItem>
-                        <SelectItem value="24_hours">יום אחרי</SelectItem>
-                        <SelectItem value="3_days">3 ימים אחרי</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="bg-slate-50 border rounded-lg p-3 text-xs text-slate-600 space-y-1">
+                  <p>
+                    {config.timing === "manual"
+                      ? "לקוחות יתווספו לרשימה ותוכל לשלוח להם ידנית בלחיצה על \"שלח\" ליד כל לקוח, או \"שלח לכולם\"."
+                      : `לאחר הוספה לרשימה (ידנית או אוטומטית), ההודעה תישלח ${
+                          config.timing === "immediate" ? "מיד" :
+                          config.timing === "1_hour" ? "שעה אחרי" :
+                          config.timing === "24_hours" ? "יום אחרי" :
+                          config.timing === "3_days" ? "3 ימים אחרי" :
+                          config.timing === "1_week" ? "שבוע אחרי" :
+                          config.timing === "2_weeks" ? "שבועיים אחרי" :
+                          config.timing === "1_month" ? "חודש אחרי" : ""
+                        }. תמיד אפשר גם לשלוח ידנית.`}
+                  </p>
                 </div>
               </CardContent>
             </Card>
 
-          </div>
-
-          {/* Preview Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="sticky top-8 bg-white border border-slate-200 rounded-[2rem] p-4 shadow-xl">
-              <div className="text-center mb-6 mt-4">
-                <div className="w-16 h-16 bg-slate-100 rounded-full mx-auto mb-3 flex items-center justify-center">
-                  <span className="text-2xl">🏢</span>
-                </div>
-                <h3 className="font-bold text-lg">איך הייתה החוויה שלך?</h3>
-                <p className="text-sm text-slate-500 mt-2 px-4 whitespace-pre-line">
-                  {(config.smsBody || config.whatsappGreenBody || "").replace("{first_name}", "דני")}
-                </p>
-              </div>
-
-              <div className="flex justify-center gap-2 mb-8">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <Star
-                    key={star}
-                    className={cn(
-                      "w-8 h-8 cursor-pointer transition-all hover:scale-110",
-                      star <= 4
-                        ? "text-amber-400 fill-amber-400"
-                        : "text-slate-200 fill-slate-200"
-                    )}
-                  />
-                ))}
-              </div>
-
-              <div className="text-center text-xs text-slate-400 pb-4">
-                *אם הלקוח ידרג גבוה, הוא יועבר ל:
-              </div>
-              <div className="grid grid-cols-2 gap-2 px-4 pb-4">
-                {config.platforms.google && (
-                  <div className="bg-red-50 text-red-600 border border-red-100 py-2 rounded-lg text-xs font-bold text-center">
-                    Google
-                  </div>
-                )}
-                {config.platforms.facebook && (
-                  <div className="bg-blue-50 text-blue-600 border border-blue-100 py-2 rounded-lg text-xs font-bold text-center">
-                    Facebook
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -705,27 +611,50 @@ export default function ReviewAutomationPage() {
             </div>
 
             {editingCustomer ? (
-              /* Edit Mode - Only channel preferences */
+              /* Edit Mode */
               <div className="space-y-4 border-t pt-4">
-                <div className="text-sm text-slate-600 mb-2">
-                  בחר אילו ערוצי תקשורת פעילים עבור לקוח זה:
+                <div className="text-sm font-medium text-slate-700 mb-1">פרטי לקוח</div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-500">שם</Label>
+                  <Input
+                    value={editingCustomer.name}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, name: e.target.value })}
+                    className="h-9 text-sm"
+                  />
                 </div>
 
-                {/* Email Toggle */}
-                {selectedCustomer.email && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-500">טלפון</Label>
+                  <Input
+                    value={editingCustomer.phone || ""}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, phone: e.target.value })}
+                    className="h-9 text-sm"
+                    dir="ltr"
+                    placeholder="05XXXXXXXX"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-500">אימייל</Label>
+                  <Input
+                    value={editingCustomer.email || ""}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, email: e.target.value })}
+                    className="h-9 text-sm"
+                    dir="ltr"
+                    type="email"
+                  />
+                </div>
+
+                <div className="text-sm font-medium text-slate-700 mt-2">ערוצי תקשורת</div>
+
+                {editingCustomer.email && (
                   <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
                         <Mail className="w-4 h-4 text-blue-600" />
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-slate-900">
-                          אימייל
-                        </div>
-                        <div className="text-sm text-slate-500">
-                          {selectedCustomer.email}
-                        </div>
-                      </div>
+                      <div className="text-sm font-medium text-slate-900">אימייל</div>
                     </div>
                     <button
                       onClick={() =>
@@ -749,21 +678,13 @@ export default function ReviewAutomationPage() {
                   </div>
                 )}
 
-                {/* Phone Toggle */}
-                {selectedCustomer.phone && (
+                {editingCustomer.phone && (
                   <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center">
                         <Phone className="w-4 h-4 text-green-600" />
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-slate-900">
-                          טלפון (SMS/WhatsApp)
-                        </div>
-                        <div className="text-sm text-slate-500">
-                          {selectedCustomer.phone}
-                        </div>
-                      </div>
+                      <div className="text-sm font-medium text-slate-900">טלפון (SMS/WhatsApp)</div>
                     </div>
                     <button
                       onClick={() =>
@@ -787,12 +708,10 @@ export default function ReviewAutomationPage() {
                   </div>
                 )}
 
-                {/* Warning if both disabled */}
                 {!editingCustomer.emailActive &&
                   !editingCustomer.phoneActive && (
                     <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded-lg">
-                      ⚠️ שים לב: שני ערוצי התקשורת מושבתים. הלקוח לא יקבל
-                      הודעות.
+                      שני ערוצי התקשורת מושבתים. הלקוח לא יקבל הודעות.
                     </div>
                   )}
 
@@ -808,19 +727,26 @@ export default function ReviewAutomationPage() {
                   <Button
                     size="sm"
                     onClick={async () => {
-                      const result = await updateNurtureSubscriber(
-                        editingCustomer.id,
-                        {
-                          emailActive: editingCustomer.emailActive,
-                          phoneActive: editingCustomer.phoneActive,
+                      try {
+                        const result = await updateNurtureSubscriber(
+                          editingCustomer.id,
+                          {
+                            name: editingCustomer.name,
+                            phone: editingCustomer.phone || "",
+                            email: editingCustomer.email || "",
+                            emailActive: editingCustomer.emailActive,
+                            phoneActive: editingCustomer.phoneActive,
+                          }
+                        );
+                        if (result.success) {
+                          setEditingCustomer(null);
+                          setSelectedCustomer(null);
+                          refreshData();
+                        } else {
+                          toast.error(getFriendlyResultError(result.error, "שגיאה בשמירה"));
                         }
-                      );
-                      if (result.success) {
-                        setEditingCustomer(null);
-                        setSelectedCustomer(null);
-                        refreshData();
-                      } else {
-                        toast.error(getFriendlyResultError(result.error, "שגיאה בשמירה"));
+                      } catch (error) {
+                        toast.error(getUserFriendlyError(error));
                       }
                     }}
                     className="flex-1 bg-indigo-600 hover:bg-indigo-700"
@@ -867,6 +793,7 @@ export default function ReviewAutomationPage() {
                           `האם למחוק את ${selectedCustomer.name} מהרשימה?`
                         ))
                       ) return;
+                      try {
                         const result = await deleteNurtureSubscriber(
                           selectedCustomer.id
                         );
@@ -876,6 +803,9 @@ export default function ReviewAutomationPage() {
                         } else {
                           toast.error(getFriendlyResultError(result.error, "שגיאה במחיקה"));
                         }
+                      } catch (error) {
+                        toast.error(getUserFriendlyError(error));
+                      }
                     }}
                     className="w-full flex items-center justify-center gap-2 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >

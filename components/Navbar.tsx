@@ -25,7 +25,7 @@ export default async function Navbar() {
         <div className="flex items-center justify-between h-16">
           <div className="shrink-0 flex items-center">
             <Link
-              href="/"
+              href="/dashboard"
               prefetch={false}
               className="text-base font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent whitespace-nowrap"
             >
@@ -39,7 +39,7 @@ export default async function Navbar() {
           <div className="hidden md:flex items-center justify-center flex-1 px-8">
             <div className="flex items-center space-x-6 space-x-reverse overflow-x-auto scrollbar-hide py-2">
               {user && hasUserFlag(user, "canViewDashboardData") && (
-                <Link href="/" prefetch={false} className={linkClass}>
+                <Link href="/dashboard" prefetch={false} className={linkClass}>
                   לוח בקרה
                 </Link>
               )}

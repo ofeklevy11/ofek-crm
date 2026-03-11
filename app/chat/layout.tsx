@@ -10,7 +10,7 @@ export default async function ChatLayout({
   const user = await getCurrentUser();
 
   if (!user || !hasUserFlag(user, "canViewChat")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return <>{children}</>;

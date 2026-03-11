@@ -10,7 +10,7 @@ export default async function NurtureHubLayout({
   const user = await getCurrentUser();
 
   if (!user || !hasUserFlag(user, "canViewNurtureHub")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return <>{children}</>;

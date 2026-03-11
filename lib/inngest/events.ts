@@ -334,4 +334,26 @@ export type Events = {
       slug: string;
     };
   };
+  "nurture/process-date-triggers": {
+    data: {
+      companyId: number;
+    };
+  };
+  "nurture/delayed-send": {
+    data: {
+      companyId: number;
+      subscriberId: number;
+      nurtureListId: number;
+      subscriberPhone: string;
+      subscriberName: string;
+      channels: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean };
+      smsBody: string;
+      whatsappGreenBody: string;
+      whatsappCloudTemplateName: string;
+      whatsappCloudLanguageCode: string;
+      slug: string;
+      delayMs: number;
+      triggerKey: string;
+    };
+  };
 };

@@ -66,7 +66,22 @@ export async function GET(request: Request) {
       });
     }
 
-    // Send all events (meeting reminders + per-company time/event-based + SLA)
+    // Dispatch nurture date-based triggers
+    const nurtureCompanies = await prisma.$queryRaw<{ id: number }[]>`
+      SELECT DISTINCT nl."companyId" as id
+      FROM "NurtureList" nl
+      WHERE nl."isEnabled" = true
+        AND nl."slug" IN ('birthday', 'renewal', 'winback')
+    `;
+    for (const c of nurtureCompanies) {
+      events.push({
+        id: `nurture-triggers-${c.id}-${minuteBucket}`,
+        name: "nurture/process-date-triggers",
+        data: { companyId: c.id },
+      });
+    }
+
+    // Send all events (meeting reminders + per-company time/event-based + SLA + nurture)
     if (events.length > 0) {
       try {
         const INNGEST_BATCH_SIZE = 500;

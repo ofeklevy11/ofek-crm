@@ -14,9 +14,8 @@ function requireRedisUrl(): string {
   return url;
 }
 
-export const redis =
-  globalForRedis.redis ||
-  new Redis(requireRedisUrl(), {
+function createRedisClient(): Redis {
+  const client = new Redis(requireRedisUrl(), {
     tls: process.env.REDIS_URL?.includes("rediss://") ? {} : undefined,
     // Add prefix for environment isolation
     keyPrefix:
@@ -27,19 +26,25 @@ export const redis =
     lazyConnect: true,             // don't connect until first command (needed for Docker build)
     // Do not panic if connection fails, just log
     retryStrategy: (times) => {
+      if (times === 1) console.warn("[redis] Connection lost, attempting reconnection…");
       // Reconnect with exponential backoff
       return Math.min(times * 50, 2000);
     },
   });
+  // Prevent unhandled error events from crashing the process
+  client.on("error", () => { /* handled by retryStrategy */ });
+  return client;
+}
+
+export const redis = globalForRedis.redis || createRedisClient();
 
 globalForRedis.redis = redis;
 
 // Singleton pattern for Publisher as well to avoid too many connections
 const globalPublisher = globalThis as unknown as { redisPublisher: Redis };
 
-export const redisPublisher =
-  globalPublisher.redisPublisher ||
-  new Redis(requireRedisUrl(), {
+function createRedisPublisher(): Redis {
+  const client = new Redis(requireRedisUrl(), {
     tls: process.env.REDIS_URL?.includes("rediss://") ? {} : undefined,
     keyPrefix:
       (process.env.NODE_ENV === "production" ? "prod:" : "dev:") + "app:",
@@ -48,5 +53,11 @@ export const redisPublisher =
     enableOfflineQueue: false,
     lazyConnect: true,
   });
+  client.on("error", () => { /* handled by retryStrategy */ });
+  return client;
+}
+
+export const redisPublisher =
+  globalPublisher.redisPublisher || createRedisPublisher();
 
 globalPublisher.redisPublisher = redisPublisher;

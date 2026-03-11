@@ -123,7 +123,7 @@ export default function RegisterForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "שגיאה באימות");
 
-      window.location.href = "/";
+      window.location.href = "/dashboard";
     } catch (err: any) {
       const msg = getUserFriendlyError(err);
       setIsRateLimited(/מדי (בקשות|פניות|ניסיונות)/i.test(msg));

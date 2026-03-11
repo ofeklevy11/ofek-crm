@@ -10,7 +10,7 @@ export default async function AnalyticsLayout({
   const user = await getCurrentUser();
 
   if (!user || !hasUserFlag(user, "canViewAnalytics")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return <>{children}</>;

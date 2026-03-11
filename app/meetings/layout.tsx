@@ -9,7 +9,7 @@ export default async function MeetingsLayout({
 }) {
   const user = await getCurrentUser();
   if (!user || !hasUserFlag(user, "canViewMeetings")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return <>{children}</>;

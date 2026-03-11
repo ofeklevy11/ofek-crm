@@ -10,7 +10,7 @@ export default async function ServicesLayout({
   const user = await getCurrentUser();
 
   if (!user || !hasUserFlag(user, "canViewServices")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return <>{children}</>;

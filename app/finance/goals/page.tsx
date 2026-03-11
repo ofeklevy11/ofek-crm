@@ -17,7 +17,7 @@ export default async function GoalsPage() {
     redirect("/login");
   }
   if (!hasUserFlag(user, "canViewGoals")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   // Rate-limit check (Redis down → allow)

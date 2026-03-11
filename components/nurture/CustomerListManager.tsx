@@ -139,11 +139,19 @@ export default function CustomerListManager({
   const [fetchingFields, setFetchingFields] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Whether this slug needs a triggerDate
+  const needsTriggerDate = ["birthday", "renewal", "winback"].includes(listSlug);
+  const triggerDateLabel =
+    listSlug === "birthday" ? "תאריך יום הולדת" :
+    listSlug === "renewal" ? "תאריך סיום הסכם" :
+    listSlug === "winback" ? "תאריך פעילות אחרונה" : "תאריך טריגר";
+
   // Manual Form State
   const [manualForm, setManualForm] = useState({
     name: "",
     email: "",
     phone: "",
+    triggerDate: "",
   });
 
   // Database Search State
@@ -183,6 +191,7 @@ export default function CustomerListManager({
     name: "",
     email: "",
     phone: "",
+    triggerDate: "",
   });
 
   // 1. Load Tables on Mount
@@ -241,7 +250,7 @@ export default function CustomerListManager({
   useEffect(() => {
     if (!selectedTable) {
       setImportFields([]);
-      setImportMapping({ name: "", email: "", phone: "" });
+      setImportMapping({ name: "", email: "", phone: "", triggerDate: "" });
       return;
     }
 
@@ -259,7 +268,7 @@ export default function CustomerListManager({
     } else {
       // For system tables (clients, users), use predefined mapping
       setImportFields([]);
-      setImportMapping({ name: "name", email: "email", phone: "phone" });
+      setImportMapping({ name: "name", email: "email", phone: "phone", triggerDate: "" });
     }
   }, [selectedTable]);
 
@@ -338,6 +347,7 @@ export default function CustomerListManager({
         name: manualForm.name,
         email: manualForm.email || undefined,
         phone: manualForm.phone || undefined,
+        triggerDate: manualForm.triggerDate || undefined,
       });
 
       if (result.success) {
@@ -348,7 +358,7 @@ export default function CustomerListManager({
           source: "Manual",
         };
         onAddCustomers([newCustomer]);
-        setManualForm({ name: "", email: "", phone: "" });
+        setManualForm({ name: "", email: "", phone: "", triggerDate: "" });
         setIsOpen(false);
       } else {
         toast.error(getFriendlyResultError(result.error, "שגיאה בהוספת הלקוח"));
@@ -368,6 +378,8 @@ export default function CustomerListManager({
     const isDynamic = importFields.length > 0;
 
     setLoading(true);
+    let successCount = 0;
+    let failCount = 0;
     try {
       for (const record of recordsToImport) {
         // Extract data using mapping
@@ -380,14 +392,26 @@ export default function CustomerListManager({
         const phone = isDynamic
           ? record[importMapping.phone] || undefined
           : record.phone || undefined;
+        const triggerDateVal = isDynamic && importMapping.triggerDate
+          ? record[importMapping.triggerDate] || undefined
+          : undefined;
 
-        await addNurtureSubscriberManual(listSlug, {
+        const result = await addNurtureSubscriberManual(listSlug, {
           name: String(name),
           email: email ? String(email) : undefined,
           phone: phone ? String(phone) : undefined,
+          triggerDate: triggerDateVal ? String(triggerDateVal) : undefined,
         });
+        if (result.success) successCount++;
+        else failCount++;
       }
-      toast.success("הלקוחות יובאו בהצלחה");
+      if (failCount === 0) {
+        toast.success(`${successCount} לקוחות יובאו בהצלחה`);
+      } else if (successCount === 0) {
+        toast.error(`הייבוא נכשל. ייתכן שכל הלקוחות כבר קיימים ברשימה`);
+      } else {
+        toast.warning(`${successCount} יובאו בהצלחה, ${failCount} נכשלו (כפילויות או שגיאות)`);
+      }
       onAddCustomers([]);
       setIsOpen(false);
       setSelectedDbCustomers([]);
@@ -1350,6 +1374,19 @@ export default function CustomerListManager({
                     />
                   </div>
 
+                  {needsTriggerDate && (
+                    <div className="space-y-2">
+                      <Label>{triggerDateLabel}</Label>
+                      <Input
+                        type="date"
+                        value={manualForm.triggerDate}
+                        onChange={(e) =>
+                          setManualForm({ ...manualForm, triggerDate: e.target.value })
+                        }
+                      />
+                    </div>
+                  )}
+
                   <div className="pt-4 flex justify-end">
                     <Button
                       type="submit"
@@ -1465,6 +1502,30 @@ export default function CustomerListManager({
                             ))}
                           </select>
                         </div>
+                        {needsTriggerDate && (
+                          <div className="space-y-1">
+                            <Label className="text-xs text-amber-800">
+                              {triggerDateLabel}
+                            </Label>
+                            <select
+                              className="w-full h-9 rounded-md border border-amber-200 bg-white px-2 text-sm"
+                              value={importMapping.triggerDate}
+                              onChange={(e) =>
+                                setImportMapping({
+                                  ...importMapping,
+                                  triggerDate: e.target.value,
+                                })
+                              }
+                            >
+                              <option value="">בחר שדה...</option>
+                              {importFields.map((f) => (
+                                <option key={f.key} value={f.key}>
+                                  {f.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
                       </div>
                       {!importMapping.email &&
                         !importMapping.phone &&

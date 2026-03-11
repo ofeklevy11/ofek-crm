@@ -10,7 +10,7 @@ export default async function WorkflowsLayout({
   const user = await getCurrentUser();
 
   if (!user || !hasUserFlag(user, "canViewWorkflows")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return <>{children}</>;

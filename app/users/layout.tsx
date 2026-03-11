@@ -10,7 +10,7 @@ export default async function UsersLayout({
   const user = await getCurrentUser();
 
   if (!user || !hasUserFlag(user, "canViewUsers")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return <>{children}</>;

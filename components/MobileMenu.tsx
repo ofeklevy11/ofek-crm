@@ -64,7 +64,7 @@ export default function MobileMenu({ user }: MobileMenuProps) {
             </p>
           </div>
           {hasUserFlag(user, "canViewDashboardData") && (
-            <LinkItem href="/">לוח בקרה</LinkItem>
+            <LinkItem href="/dashboard">לוח בקרה</LinkItem>
           )}
 
           {hasUserFlag(user, "canViewTables") && (

@@ -44,7 +44,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import CustomerListManager from "@/components/nurture/CustomerListManager";
 import NurtureChannelSelector from "@/components/nurture/NurtureChannelSelector";
-import NurtureMessageEditor from "@/components/nurture/NurtureMessageEditor";
+import NurtureMessageEditor, { migrateConfigMessages, NurtureMessage } from "@/components/nurture/NurtureMessageEditor";
+import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
 
 import {
   getNurtureSubscribers,
@@ -79,6 +80,7 @@ interface Customer {
   sourceTableId?: number;
   sourceTableName?: string;
   createdAt?: Date;
+  triggerDate?: string | null;
 }
 
 export default function WinbackAutomationPage() {
@@ -139,6 +141,7 @@ export default function WinbackAutomationPage() {
   const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false });
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sendingCustomerId, setSendingCustomerId] = useState<string | null>(null);
   const [config, setConfig] = useState({
     inactivityDays: "90",
     offerTitle: "מתגעגעים אליך! 💔",
@@ -146,15 +149,27 @@ export default function WinbackAutomationPage() {
     messageBody:
       "היי {first_name},\n\nעבר המון זמן מאז שראינו אותך! \nאנחנו מתגעגעים ורוצים שתחזור, אז הכנו לך הטבה מיוחדת:\n{offer_value} לקנייה חוזרת.\n\nמחכים לך,",
     channels: { sms: false, whatsappGreen: false, whatsappCloud: false },
-    smsBody: "היי {first_name}, מתגעגעים אליך! הכנו לך הטבה מיוחדת לחזרה.",
-    whatsappGreenBody: "היי {first_name}, מתגעגעים אליך! הכנו לך הטבה מיוחדת לחזרה.",
-    whatsappCloudTemplateName: "",
-    whatsappCloudLanguageCode: "he",
+    messages: [
+      {
+        id: "msg_default",
+        name: "הודעה ראשית",
+        isActive: true,
+        smsBody: "היי {first_name}, מתגעגעים אליך! הכנו לך הטבה מיוחדת לחזרה.",
+        whatsappGreenBody: "היי {first_name}, מתגעגעים אליך! הכנו לך הטבה מיוחדת לחזרה.",
+        whatsappCloudTemplateName: "",
+        whatsappCloudLanguageCode: "he",
+      },
+    ] as NurtureMessage[],
   });
 
   useEffect(() => {
     getNurtureConfig("winback").then((saved) => {
-      if (saved?.config) setConfig((prev) => ({ ...prev, ...(saved.config as any) }));
+      if (saved?.config) {
+        const raw = saved.config as any;
+        const { smsBody, whatsappGreenBody, whatsappCloudTemplateName, whatsappCloudLanguageCode, ...rest } = raw;
+        const messages = migrateConfigMessages(raw);
+        setConfig((prev) => ({ ...prev, ...rest, messages }));
+      }
       if (saved?.isEnabled !== undefined) setIsEnabled(saved.isEnabled);
     }).catch((err: any) => {
       if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
@@ -193,6 +208,20 @@ export default function WinbackAutomationPage() {
     }
   };
 
+  const handleSendToCustomer = async (customer: Customer) => {
+    if (!(await showConfirm(`לשלוח הודעה ל-${customer.name}?`))) return;
+    setSendingCustomerId(customer.id);
+    try {
+      const result = await sendNurtureCampaign("winback", customer.id);
+      if (result.success) toast.success(`ההודעה נשלחה ל-${customer.name}`);
+      else toast.error(getFriendlyResultError(result.error, "שגיאה בשליחה"));
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setSendingCustomerId(null);
+    }
+  };
+
   return (
     <div
       className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20"
@@ -222,7 +251,7 @@ export default function WinbackAutomationPage() {
               className="bg-indigo-600 hover:bg-indigo-700 gap-2"
             >
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              שלח עכשיו
+              שלח לכולם
             </Button>
             <Button onClick={handleSave} disabled={saving} variant="outline" className="gap-2">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -230,6 +259,8 @@ export default function WinbackAutomationPage() {
             </Button>
           </div>
         </div>
+
+        <NurtureTriggerInfo slug="winback" />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
@@ -258,19 +289,38 @@ export default function WinbackAutomationPage() {
                   <div className="border rounded-lg overflow-hidden">
                     {/* Header */}
                     <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 border-b text-xs font-medium text-slate-500">
-                      <div className="col-span-4">שם</div>
-                      <div className="col-span-4">פרטי קשר</div>
-                      <div className="col-span-4">מקור</div>
+                      <div className="col-span-3">שם</div>
+                      <div className="col-span-3">פעילות אחרונה</div>
+                      <div className="col-span-2">פרטי קשר</div>
+                      <div className="col-span-2">מקור</div>
+                      <div className="col-span-2 text-center">שליחה</div>
                     </div>
                     {/* List */}
                     <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
-                      {customers.map((c) => (
+                      {customers.map((c) => {
+                        let activityNode: React.ReactNode;
+                        if (c.triggerDate) {
+                          const d = new Date(c.triggerDate);
+                          const daysDiff = Math.floor((Date.now() - d.getTime()) / 86400000);
+                          const dateStr = d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
+                          activityNode = (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[10px] text-slate-500">{dateStr}</span>
+                              <span className={`text-[10px] font-medium ${daysDiff > 90 ? "text-red-600" : "text-emerald-600"}`}>
+                                {daysDiff > 90 ? "לא פעיל" : "פעיל"}
+                              </span>
+                            </div>
+                          );
+                        } else {
+                          activityNode = <span className="text-[10px] text-orange-500">חסר תאריך</span>;
+                        }
+                        return (
                         <div
                           key={c.id}
-                          className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors group"
+                          className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors group items-center"
                           onClick={() => setSelectedCustomer(c)}
                         >
-                          <div className="col-span-4 flex items-center gap-2 overflow-hidden">
+                          <div className="col-span-3 flex items-center gap-2 overflow-hidden">
                             <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold shrink-0">
                               {c.name.slice(0, 2)}
                             </div>
@@ -278,10 +328,13 @@ export default function WinbackAutomationPage() {
                               {c.name}
                             </span>
                           </div>
-                          <div className="col-span-4 flex items-center text-xs text-slate-600 truncate">
+                          <div className="col-span-3 flex items-center">
+                            {activityNode}
+                          </div>
+                          <div className="col-span-2 flex items-center text-xs text-slate-600 truncate">
                             {c.email || c.phone || "—"}
                           </div>
-                          <div className="col-span-4 flex items-center gap-1.5">
+                          <div className="col-span-2 flex items-center gap-1.5">
                             <span
                               className={`text-[10px] px-1.5 py-0.5 rounded ${
                                 c.source === "Table Automation"
@@ -302,8 +355,20 @@ export default function WinbackAutomationPage() {
                                 </span>
                               )}
                           </div>
+                          <div className="col-span-2 flex items-center justify-center">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleSendToCustomer(c); }}
+                              disabled={sendingCustomerId === c.id || !c.phone || !c.phoneActive}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                              title={!c.phone || !c.phoneActive ? "אין מספר טלפון פעיל" : `שלח ל-${c.name}`}
+                            >
+                              {sendingCustomerId === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                              שלח
+                            </button>
+                          </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -447,14 +512,8 @@ export default function WinbackAutomationPage() {
               <CardContent>
                 <NurtureMessageEditor
                   channels={config.channels}
-                  smsBody={config.smsBody}
-                  whatsappGreenBody={config.whatsappGreenBody}
-                  whatsappCloudTemplateName={config.whatsappCloudTemplateName}
-                  whatsappCloudLanguageCode={config.whatsappCloudLanguageCode}
-                  onSmsBodyChange={(v) => setConfig({ ...config, smsBody: v })}
-                  onWhatsappGreenBodyChange={(v) => setConfig({ ...config, whatsappGreenBody: v })}
-                  onWhatsappCloudTemplateNameChange={(v) => setConfig({ ...config, whatsappCloudTemplateName: v })}
-                  onWhatsappCloudLanguageCodeChange={(v) => setConfig({ ...config, whatsappCloudLanguageCode: v })}
+                  messages={config.messages}
+                  onMessagesChange={(messages) => setConfig({ ...config, messages })}
                   placeholders={["{first_name}"]}
                 />
               </CardContent>
@@ -639,27 +698,61 @@ export default function WinbackAutomationPage() {
             </div>
 
             {editingCustomer ? (
-              /* Edit Mode - Only channel preferences */
+              /* Edit Mode */
               <div className="space-y-4 border-t pt-4">
-                <div className="text-sm text-slate-600 mb-2">
-                  בחר אילו ערוצי תקשורת פעילים עבור לקוח זה:
+                <div className="text-sm font-medium text-slate-700 mb-1">פרטי לקוח</div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-500">שם</Label>
+                  <Input
+                    value={editingCustomer.name}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, name: e.target.value })}
+                    className="h-9 text-sm"
+                  />
                 </div>
 
-                {/* Email Toggle */}
-                {selectedCustomer.email && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-500">טלפון</Label>
+                  <Input
+                    value={editingCustomer.phone || ""}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, phone: e.target.value })}
+                    className="h-9 text-sm"
+                    dir="ltr"
+                    placeholder="05XXXXXXXX"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-500">אימייל</Label>
+                  <Input
+                    value={editingCustomer.email || ""}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, email: e.target.value })}
+                    className="h-9 text-sm"
+                    dir="ltr"
+                    type="email"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-500">תאריך טריגר</Label>
+                  <Input
+                    type="date"
+                    value={editingCustomer.triggerDate ? new Date(editingCustomer.triggerDate).toISOString().split("T")[0] : ""}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, triggerDate: e.target.value || null })}
+                    className="h-9 text-sm"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div className="text-sm font-medium text-slate-700 mt-2">ערוצי תקשורת</div>
+
+                {editingCustomer.email && (
                   <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
                         <Mail className="w-4 h-4 text-blue-600" />
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-slate-900">
-                          אימייל
-                        </div>
-                        <div className="text-sm text-slate-500">
-                          {selectedCustomer.email}
-                        </div>
-                      </div>
+                      <div className="text-sm font-medium text-slate-900">אימייל</div>
                     </div>
                     <button
                       onClick={() =>
@@ -683,21 +776,13 @@ export default function WinbackAutomationPage() {
                   </div>
                 )}
 
-                {/* Phone Toggle */}
-                {selectedCustomer.phone && (
+                {editingCustomer.phone && (
                   <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center">
                         <Phone className="w-4 h-4 text-green-600" />
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-slate-900">
-                          טלפון (SMS/WhatsApp)
-                        </div>
-                        <div className="text-sm text-slate-500">
-                          {selectedCustomer.phone}
-                        </div>
-                      </div>
+                      <div className="text-sm font-medium text-slate-900">טלפון (SMS/WhatsApp)</div>
                     </div>
                     <button
                       onClick={() =>
@@ -721,12 +806,10 @@ export default function WinbackAutomationPage() {
                   </div>
                 )}
 
-                {/* Warning if both disabled */}
                 {!editingCustomer.emailActive &&
                   !editingCustomer.phoneActive && (
                     <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded-lg">
-                      ⚠️ שים לב: שני ערוצי התקשורת מושבתים. הלקוח לא יקבל
-                      הודעות.
+                      שני ערוצי התקשורת מושבתים. הלקוח לא יקבל הודעות.
                     </div>
                   )}
 
@@ -742,19 +825,27 @@ export default function WinbackAutomationPage() {
                   <Button
                     size="sm"
                     onClick={async () => {
-                      const result = await updateNurtureSubscriber(
-                        editingCustomer.id,
-                        {
-                          emailActive: editingCustomer.emailActive,
-                          phoneActive: editingCustomer.phoneActive,
+                      try {
+                        const result = await updateNurtureSubscriber(
+                          editingCustomer.id,
+                          {
+                            name: editingCustomer.name,
+                            phone: editingCustomer.phone || "",
+                            email: editingCustomer.email || "",
+                            triggerDate: editingCustomer.triggerDate || null,
+                            emailActive: editingCustomer.emailActive,
+                            phoneActive: editingCustomer.phoneActive,
+                          }
+                        );
+                        if (result.success) {
+                          setEditingCustomer(null);
+                          setSelectedCustomer(null);
+                          refreshData();
+                        } else {
+                          toast.error(getFriendlyResultError(result.error, "שגיאה בשמירה"));
                         }
-                      );
-                      if (result.success) {
-                        setEditingCustomer(null);
-                        setSelectedCustomer(null);
-                        refreshData();
-                      } else {
-                        toast.error(getFriendlyResultError(result.error, "שגיאה בשמירה"));
+                      } catch (error) {
+                        toast.error(getUserFriendlyError(error));
                       }
                     }}
                     className="flex-1 bg-indigo-600 hover:bg-indigo-700"
@@ -801,6 +892,7 @@ export default function WinbackAutomationPage() {
                           `האם למחוק את ${selectedCustomer.name} מהרשימה?`
                         ))
                       ) return;
+                      try {
                         const result = await deleteNurtureSubscriber(
                           selectedCustomer.id
                         );
@@ -810,6 +902,9 @@ export default function WinbackAutomationPage() {
                         } else {
                           toast.error(getFriendlyResultError(result.error, "שגיאה במחיקה"));
                         }
+                      } catch (error) {
+                        toast.error(getUserFriendlyError(error));
+                      }
                     }}
                     className="w-full flex items-center justify-center gap-2 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >

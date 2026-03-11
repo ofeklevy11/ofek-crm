@@ -60,6 +60,10 @@ import {
   processSmsStatusUpdate,
 } from "@/lib/inngest/functions/sms-jobs";
 import { sendNurtureCampaignMessage } from "@/lib/inngest/functions/nurture-jobs";
+import {
+  processNurtureDateTriggers,
+  nurtureDelayedSend,
+} from "@/lib/inngest/functions/nurture-trigger-jobs";
 
 const functions = [
   processImportJob,
@@ -102,6 +106,8 @@ const functions = [
   sendSmsAutomationJob,
   processSmsStatusUpdate,
   sendNurtureCampaignMessage,
+  processNurtureDateTriggers,
+  nurtureDelayedSend,
 ];
 
 log.info("Inngest route loaded", { functionIds: functions.map((f) => f.id) });

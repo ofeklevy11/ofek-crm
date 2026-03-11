@@ -1803,6 +1803,7 @@ model NurtureList {
   configJson  Json?
 
   subscribers NurtureSubscriber[]
+  sendLogs    NurtureSendLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1825,6 +1826,9 @@ model NurtureSubscriber {
   emailActive Boolean @default(true)
   phoneActive Boolean @default(true)
 
+  // Key date for trigger logic (birthday, contract expiry, last activity)
+  triggerDate DateTime?
+
   // Metadata about where this came from
   sourceType    String? // 'TABLE', 'MANUAL', 'IMPORT'
   sourceId      String? // Record ID or similar
@@ -1834,10 +1838,29 @@ model NurtureSubscriber {
   updatedAt DateTime @updatedAt
 
   nurtureList NurtureList @relation(fields: [nurtureListId], references: [id], onDelete: Cascade)
+  sendLogs    NurtureSendLog[]
 
   @@index([nurtureListId])
   @@index([email])
   @@index([phone])
+  @@index([triggerDate])
+}
+
+model NurtureSendLog {
+  id            Int      @id @default(autoincrement())
+  subscriberId  Int
+  nurtureListId Int
+  triggerKey     String   // "birthday-2026", "renewal-2026-04-15", "winback-2026-Q1"
+  channel       String?  // "sms", "whatsapp_green", "whatsapp_cloud"
+  status        String   @default("SENT") // SENT, FAILED, PENDING
+  sentAt        DateTime @default(now())
+
+  subscriber  NurtureSubscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  nurtureList NurtureList       @relation(fields: [nurtureListId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriberId, nurtureListId, triggerKey])
+  @@index([nurtureListId, triggerKey])
+  @@index([sentAt])
 }
 
 // Dashboard Widget Configuration - stores user's dashboard layout

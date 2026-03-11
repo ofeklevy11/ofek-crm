@@ -8,10 +8,6 @@ import {
   Save,
   Send,
   Loader2,
-  ShoppingBag,
-  ArrowUp,
-  Plus,
-  CheckCircle2,
   Zap,
   Pencil,
   ToggleRight,
@@ -20,13 +16,11 @@ import {
   Mail,
   Phone,
   X,
-  Clock,
+  Copy,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -43,8 +37,9 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import NurtureChannelSelector from "@/components/nurture/NurtureChannelSelector";
-import NurtureMessageEditor from "@/components/nurture/NurtureMessageEditor";
+import NurtureMessageEditor, { migrateConfigMessages, NurtureMessage } from "@/components/nurture/NurtureMessageEditor";
 import CustomerListManager from "@/components/nurture/CustomerListManager";
+import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
 
 import {
   getNurtureSubscribers,
@@ -133,7 +128,12 @@ export default function UpsellAutomationPage() {
 
   useEffect(() => {
     getNurtureConfig("upsell").then((saved) => {
-      if (saved?.config) setConfig((prev) => ({ ...prev, ...(saved.config as any) }));
+      if (saved?.config) {
+        const raw = saved.config as any;
+        const { smsBody, whatsappGreenBody, whatsappCloudTemplateName, whatsappCloudLanguageCode, ...rest } = raw;
+        const messages = migrateConfigMessages(raw);
+        setConfig((prev) => ({ ...prev, ...rest, messages }));
+      }
       if (saved?.isEnabled !== undefined) setIsEnabled(saved.isEnabled);
     }).catch((err: any) => {
       if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
@@ -153,18 +153,21 @@ export default function UpsellAutomationPage() {
   const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false });
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
-  const [activeStrategy, setActiveStrategy] = useState("cross_sell"); // upsell, cross_sell
-
+  const [sendingCustomerId, setSendingCustomerId] = useState<string | null>(null);
   const [config, setConfig] = useState({
-    triggerEvent: "purchase_completed",
-    delayMinutes: "15",
-    offerTitle: "הנה משהו שישלים את החוויה שלך...",
-    discount: "10%",
     channels: { sms: false, whatsappGreen: false, whatsappCloud: false },
-    smsBody: "היי {first_name}, הנה הצעה מיוחדת שתשלים את הרכישה שלך! {offer_value}",
-    whatsappGreenBody: "היי {first_name}, הנה הצעה מיוחדת שתשלים את הרכישה שלך! {offer_value}",
-    whatsappCloudTemplateName: "",
-    whatsappCloudLanguageCode: "he",
+    timing: "manual",
+    messages: [
+      {
+        id: "msg_default",
+        name: "הודעה ראשית",
+        isActive: true,
+        smsBody: "היי {first_name}, הנה הצעה מיוחדת בשבילך!",
+        whatsappGreenBody: "היי {first_name}, הנה הצעה מיוחדת בשבילך!",
+        whatsappCloudTemplateName: "",
+        whatsappCloudLanguageCode: "he",
+      },
+    ] as NurtureMessage[],
   });
 
   const handleSave = async () => {
@@ -191,6 +194,20 @@ export default function UpsellAutomationPage() {
       toast.error(getUserFriendlyError(error));
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleSendToCustomer = async (customer: Customer) => {
+    if (!(await showConfirm(`לשלוח הודעה ל-${customer.name}?`))) return;
+    setSendingCustomerId(customer.id);
+    try {
+      const result = await sendNurtureCampaign("upsell", customer.id);
+      if (result.success) toast.success(`ההודעה נשלחה ל-${customer.name}`);
+      else toast.error(getFriendlyResultError(result.error, "שגיאה בשליחה"));
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setSendingCustomerId(null);
     }
   };
 
@@ -223,7 +240,7 @@ export default function UpsellAutomationPage() {
               className="bg-indigo-600 hover:bg-indigo-700 gap-2"
             >
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              שלח עכשיו
+              שלח לכולם
             </Button>
             <Button onClick={handleSave} disabled={saving} variant="outline" className="gap-2">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -232,8 +249,9 @@ export default function UpsellAutomationPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
+        <NurtureTriggerInfo slug="upsell" />
+
+        <div className="space-y-6">
             {/* Customer List Management */}
             <Card>
               <CardHeader>
@@ -260,15 +278,16 @@ export default function UpsellAutomationPage() {
                     {/* Header */}
                     <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 border-b text-xs font-medium text-slate-500">
                       <div className="col-span-4">שם</div>
-                      <div className="col-span-4">פרטי קשר</div>
-                      <div className="col-span-4">מקור</div>
+                      <div className="col-span-3">פרטי קשר</div>
+                      <div className="col-span-3">מקור</div>
+                      <div className="col-span-2 text-center">שליחה</div>
                     </div>
                     {/* List */}
                     <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
                       {customers.map((c) => (
                         <div
                           key={c.id}
-                          className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors group"
+                          className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors group items-center"
                           onClick={() => setSelectedCustomer(c)}
                         >
                           <div className="col-span-4 flex items-center gap-2 overflow-hidden">
@@ -279,10 +298,10 @@ export default function UpsellAutomationPage() {
                               {c.name}
                             </span>
                           </div>
-                          <div className="col-span-4 flex items-center text-xs text-slate-600 truncate">
+                          <div className="col-span-3 flex items-center text-xs text-slate-600 truncate">
                             {c.email || c.phone || "—"}
                           </div>
-                          <div className="col-span-4 flex items-center gap-1.5">
+                          <div className="col-span-3 flex items-center gap-1.5">
                             <span
                               className={`text-[10px] px-1.5 py-0.5 rounded ${
                                 c.source === "Table Automation"
@@ -302,6 +321,17 @@ export default function UpsellAutomationPage() {
                                   {c.sourceTableName}
                                 </span>
                               )}
+                          </div>
+                          <div className="col-span-2 flex items-center justify-center">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleSendToCustomer(c); }}
+                              disabled={sendingCustomerId === c.id || !c.phone || !c.phoneActive}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                              title={!c.phone || !c.phoneActive ? "אין מספר טלפון פעיל" : `שלח ל-${c.name}`}
+                            >
+                              {sendingCustomerId === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                              שלח
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -448,197 +478,89 @@ export default function UpsellAutomationPage() {
               <CardContent>
                 <NurtureMessageEditor
                   channels={config.channels}
-                  smsBody={config.smsBody}
-                  whatsappGreenBody={config.whatsappGreenBody}
-                  whatsappCloudTemplateName={config.whatsappCloudTemplateName}
-                  whatsappCloudLanguageCode={config.whatsappCloudLanguageCode}
-                  onSmsBodyChange={(v) => setConfig({ ...config, smsBody: v })}
-                  onWhatsappGreenBodyChange={(v) => setConfig({ ...config, whatsappGreenBody: v })}
-                  onWhatsappCloudTemplateNameChange={(v) => setConfig({ ...config, whatsappCloudTemplateName: v })}
-                  onWhatsappCloudLanguageCodeChange={(v) => setConfig({ ...config, whatsappCloudLanguageCode: v })}
+                  messages={config.messages}
+                  onMessagesChange={(messages) => setConfig({ ...config, messages })}
                   placeholders={["{first_name}"]}
                 />
               </CardContent>
             </Card>
 
-            {/* Visual Strategy Select */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div
-                onClick={() => setActiveStrategy("cross_sell")}
-                className={cn(
-                  "cursor-pointer border-2 rounded-xl p-4 transition-all relative overflow-hidden",
-                  activeStrategy === "cross_sell"
-                    ? "border-emerald-500 bg-emerald-50/30"
-                    : "border-slate-200 hover:border-emerald-200"
-                )}
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
-                    <Plus className="w-5 h-5" />
-                  </div>
-                  <span className="font-bold text-lg">Cross-sell</span>
-                </div>
-                <p className="text-sm text-slate-500">
-                  מכירת מוצרים משלימים (לדוגמה: קנית נעליים? הנה גרביים)
-                </p>
-                {activeStrategy === "cross_sell" && (
-                  <div className="absolute top-2 left-2 text-emerald-600">
-                    <CheckCircle2 className="w-5 h-5" />
-                  </div>
-                )}
-              </div>
-
-              <div
-                onClick={() => setActiveStrategy("upsell")}
-                className={cn(
-                  "cursor-pointer border-2 rounded-xl p-4 transition-all relative overflow-hidden",
-                  activeStrategy === "upsell"
-                    ? "border-emerald-500 bg-emerald-50/30"
-                    : "border-slate-200 hover:border-emerald-200"
-                )}
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
-                    <ArrowUp className="w-5 h-5" />
-                  </div>
-                  <span className="font-bold text-lg">Upsell</span>
-                </div>
-                <p className="text-sm text-slate-500">
-                  שדרוג לעסקה יקרה יותר (לדוגמה: שדרוג לפרימיום)
-                </p>
-                {activeStrategy === "upsell" && (
-                  <div className="absolute top-2 left-2 text-emerald-600">
-                    <CheckCircle2 className="w-5 h-5" />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Configuration */}
+            {/* Timing & Webhook */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">טריגרים ותזמון</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label>מתי להציע?</Label>
-                    <Select
-                      value={config.triggerEvent}
-                      onValueChange={(val) =>
-                        setConfig({ ...config, triggerEvent: val })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="cart_add">
-                          מיד בהוספה לעגלה
-                        </SelectItem>
-                        <SelectItem value="checkout_start">
-                          במעבר לתשלום
-                        </SelectItem>
-                        <SelectItem value="purchase_completed">
-                          מיד לאחר רכישה (Thank you page)
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>הנחה לתמריץ (אופציונלי)</Label>
-                    <Input
-                      value={config.discount}
-                      onChange={(e) =>
-                        setConfig({ ...config, discount: e.target.value })
-                      }
-                      placeholder="%"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Message Config */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">קופי ועיצוב</CardTitle>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-amber-500 fill-amber-500" />
+                  תזמון שליחה
+                </CardTitle>
+                <CardDescription>הגדר מתי לשלוח הצעת שדרוג ללקוחות שמתווספים לרשימה</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>כותרת ההצעה</Label>
-                  <Input
-                    value={config.offerTitle}
-                    onChange={(e) =>
-                      setConfig({ ...config, offerTitle: e.target.value })
+                <div className="flex items-center justify-between">
+                  <Label className="flex flex-col gap-1">
+                    <span>שליחה אוטומטית לאחר הוספה לרשימה</span>
+                    <span className="text-xs text-slate-500 font-normal">
+                      כמה זמן אחרי שלקוח מתווסף לרשימה לשלוח לו הצעה?
+                    </span>
+                  </Label>
+                  <Select
+                    value={config.timing}
+                    onValueChange={(val) =>
+                      setConfig({ ...config, timing: val })
                     }
-                  />
+                  >
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manual">ידני בלבד</SelectItem>
+                      <SelectItem value="immediate">מיידית</SelectItem>
+                      <SelectItem value="1_hour">שעה אחרי</SelectItem>
+                      <SelectItem value="24_hours">יום אחרי</SelectItem>
+                      <SelectItem value="3_days">3 ימים אחרי</SelectItem>
+                      <SelectItem value="1_week">שבוע אחרי</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="bg-slate-50 border rounded-lg p-3 text-xs text-slate-600 space-y-1">
+                  <p>
+                    {config.timing === "manual"
+                      ? "לקוחות יתווספו לרשימה ותוכל לשלוח להם ידנית בלחיצה על \"שלח\" ליד כל לקוח, או \"שלח לכולם\"."
+                      : `לאחר הוספה לרשימה (ידנית או אוטומטית), ההודעה תישלח ${
+                          config.timing === "immediate" ? "מיד" :
+                          config.timing === "1_hour" ? "שעה אחרי" :
+                          config.timing === "24_hours" ? "יום אחרי" :
+                          config.timing === "3_days" ? "3 ימים אחרי" :
+                          config.timing === "1_week" ? "שבוע אחרי" : ""
+                        }. תמיד אפשר גם לשלוח ידנית.`}
+                  </p>
+                </div>
+
+                <div className="border-t pt-4 mt-4 space-y-3">
+                  <div className="text-sm font-medium text-slate-700">Webhook URL</div>
+                  <div className="bg-slate-50 border rounded-lg p-3 flex items-center justify-between">
+                    <code className="text-sm font-mono text-slate-700">/api/nurture/webhook/upsell</code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText("/api/nurture/webhook/upsell");
+                        toast.success("URL הועתק");
+                      }}
+                      className="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 transition-colors"
+                      title="העתק URL"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    שלח POST עם Authorization: Bearer NURTURE_WEBHOOK_SECRET וגוף &#123; companyId, phone, name &#125;
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    או הגדר חוק אוטומציה עם autoTrigger להפעלה אוטומטית
+                  </p>
                 </div>
               </CardContent>
             </Card>
           </div>
-
-          {/* Preview Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="sticky top-8 space-y-6">
-              <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-12 h-12 bg-slate-100 rounded-md"></div>
-                  <div className="space-y-1">
-                    <div className="h-2 w-20 bg-slate-200 rounded"></div>
-                    <div className="h-2 w-12 bg-slate-100 rounded"></div>
-                  </div>
-                  <div className="mr-auto text-green-600 font-bold text-xs">
-                    V נרכש
-                  </div>
-                </div>
-
-                <div className="border-t border-dashed border-slate-200 my-4 pt-4">
-                  <h4 className="font-bold text-center text-slate-800 mb-4">
-                    {config.offerTitle}
-                  </h4>
-
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3 flex gap-3 items-center">
-                    <div className="w-14 h-14 bg-white rounded-md border border-emerald-100 flex items-center justify-center">
-                      <ShoppingBag className="w-6 h-6 text-emerald-500" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-bold text-slate-800 text-sm">
-                        מוצר משלים מושלם
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-emerald-600 font-bold">₪89</span>
-                        <span className="text-slate-400 text-xs line-through">
-                          ₪100
-                        </span>
-                        <Badge
-                          variant="secondary"
-                          className="bg-emerald-200 text-emerald-800 text-[10px] h-5 px-1"
-                        >
-                          {config.discount} הנחה
-                        </Badge>
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      className="bg-emerald-600 hover:bg-emerald-700 h-8 w-8 p-0 rounded-full"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <Button
-                  variant="outline"
-                  className="w-full mt-4 text-xs h-8 text-slate-400"
-                >
-                  לא תודה, דלג
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Customer Details Popup */}
@@ -707,27 +629,50 @@ export default function UpsellAutomationPage() {
             </div>
 
             {editingCustomer ? (
-              /* Edit Mode - Only channel preferences */
+              /* Edit Mode */
               <div className="space-y-4 border-t pt-4">
-                <div className="text-sm text-slate-600 mb-2">
-                  בחר אילו ערוצי תקשורת פעילים עבור לקוח זה:
+                <div className="text-sm font-medium text-slate-700 mb-1">פרטי לקוח</div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-500">שם</Label>
+                  <Input
+                    value={editingCustomer.name}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, name: e.target.value })}
+                    className="h-9 text-sm"
+                  />
                 </div>
 
-                {/* Email Toggle */}
-                {selectedCustomer.email && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-500">טלפון</Label>
+                  <Input
+                    value={editingCustomer.phone || ""}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, phone: e.target.value })}
+                    className="h-9 text-sm"
+                    dir="ltr"
+                    placeholder="05XXXXXXXX"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-500">אימייל</Label>
+                  <Input
+                    value={editingCustomer.email || ""}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, email: e.target.value })}
+                    className="h-9 text-sm"
+                    dir="ltr"
+                    type="email"
+                  />
+                </div>
+
+                <div className="text-sm font-medium text-slate-700 mt-2">ערוצי תקשורת</div>
+
+                {editingCustomer.email && (
                   <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
                         <Mail className="w-4 h-4 text-blue-600" />
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-slate-900">
-                          אימייל
-                        </div>
-                        <div className="text-sm text-slate-500">
-                          {selectedCustomer.email}
-                        </div>
-                      </div>
+                      <div className="text-sm font-medium text-slate-900">אימייל</div>
                     </div>
                     <button
                       onClick={() =>
@@ -751,21 +696,13 @@ export default function UpsellAutomationPage() {
                   </div>
                 )}
 
-                {/* Phone Toggle */}
-                {selectedCustomer.phone && (
+                {editingCustomer.phone && (
                   <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center">
                         <Phone className="w-4 h-4 text-green-600" />
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-slate-900">
-                          טלפון (SMS/WhatsApp)
-                        </div>
-                        <div className="text-sm text-slate-500">
-                          {selectedCustomer.phone}
-                        </div>
-                      </div>
+                      <div className="text-sm font-medium text-slate-900">טלפון (SMS/WhatsApp)</div>
                     </div>
                     <button
                       onClick={() =>
@@ -789,12 +726,10 @@ export default function UpsellAutomationPage() {
                   </div>
                 )}
 
-                {/* Warning if both disabled */}
                 {!editingCustomer.emailActive &&
                   !editingCustomer.phoneActive && (
                     <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded-lg">
-                      ⚠️ שים לב: שני ערוצי התקשורת מושבתים. הלקוח לא יקבל
-                      הודעות.
+                      שני ערוצי התקשורת מושבתים. הלקוח לא יקבל הודעות.
                     </div>
                   )}
 
@@ -810,19 +745,26 @@ export default function UpsellAutomationPage() {
                   <Button
                     size="sm"
                     onClick={async () => {
-                      const result = await updateNurtureSubscriber(
-                        editingCustomer.id,
-                        {
-                          emailActive: editingCustomer.emailActive,
-                          phoneActive: editingCustomer.phoneActive,
+                      try {
+                        const result = await updateNurtureSubscriber(
+                          editingCustomer.id,
+                          {
+                            name: editingCustomer.name,
+                            phone: editingCustomer.phone || "",
+                            email: editingCustomer.email || "",
+                            emailActive: editingCustomer.emailActive,
+                            phoneActive: editingCustomer.phoneActive,
+                          }
+                        );
+                        if (result.success) {
+                          setEditingCustomer(null);
+                          setSelectedCustomer(null);
+                          refreshData();
+                        } else {
+                          toast.error(getFriendlyResultError(result.error, "שגיאה בשמירה"));
                         }
-                      );
-                      if (result.success) {
-                        setEditingCustomer(null);
-                        setSelectedCustomer(null);
-                        refreshData();
-                      } else {
-                        toast.error(getFriendlyResultError(result.error, "שגיאה בשמירה"));
+                      } catch (error) {
+                        toast.error(getUserFriendlyError(error));
                       }
                     }}
                     className="flex-1 bg-indigo-600 hover:bg-indigo-700"
@@ -869,6 +811,7 @@ export default function UpsellAutomationPage() {
                           `האם למחוק את ${selectedCustomer.name} מהרשימה?`
                         ))
                       ) return;
+                      try {
                         const result = await deleteNurtureSubscriber(
                           selectedCustomer.id
                         );
@@ -878,6 +821,9 @@ export default function UpsellAutomationPage() {
                         } else {
                           toast.error(getFriendlyResultError(result.error, "שגיאה במחיקה"));
                         }
+                      } catch (error) {
+                        toast.error(getUserFriendlyError(error));
+                      }
                     }}
                     className="w-full flex items-center justify-center gap-2 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >

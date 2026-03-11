@@ -9,7 +9,7 @@ export default async function WhatsAppLayout({
 }) {
   const user = await getCurrentUser();
   if (!user || !hasUserFlag(user, "canViewWhatsApp")) {
-    redirect("/");
+    redirect("/dashboard");
   }
   return <>{children}</>;
 }

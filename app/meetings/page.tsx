@@ -7,7 +7,7 @@ import { CalendarDays } from "lucide-react";
 
 export default async function MeetingsPage() {
   const user = await getCurrentUser();
-  if (!user || !hasUserFlag(user, "canViewMeetings")) redirect("/");
+  if (!user || !hasUserFlag(user, "canViewMeetings")) redirect("/dashboard");
 
   const canManage = hasUserFlag(user, "canManageMeetings");
 

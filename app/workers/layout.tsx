@@ -10,7 +10,7 @@ export default async function WorkersLayout({
   const user = await getCurrentUser();
 
   if (!user || !hasUserFlag(user, "canViewWorkers")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return <>{children}</>;

@@ -14,7 +14,7 @@ export default async function ArchivedGoalsPage() {
     redirect("/login");
   }
   if (!hasUserFlag(user, "canViewGoals")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   // Fetch data (rate-limit enforced inside getArchivedGoals/getGoalCreationData via requireGoalUser)

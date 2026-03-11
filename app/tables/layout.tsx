@@ -10,7 +10,7 @@ export default async function TablesLayout({
   const user = await getCurrentUser();
 
   if (!user || !hasUserFlag(user, "canViewTables")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return <>{children}</>;

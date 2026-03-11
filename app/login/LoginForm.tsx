@@ -38,7 +38,7 @@ export default function LoginForm() {
         throw new Error(data.error || "שגיאה בהתחברות");
       }
 
-      window.location.href = "/";
+      window.location.href = "/dashboard";
     } catch (err: any) {
       const msg = getUserFriendlyError(err);
       setIsRateLimited(/מדי (בקשות|פניות|ניסיונות)/i.test(msg));

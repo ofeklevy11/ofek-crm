@@ -10,7 +10,7 @@ export default async function AutomationsLayout({
   const user = await getCurrentUser();
 
   if (!user || !hasUserFlag(user, "canViewAutomations")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return <>{children}</>;

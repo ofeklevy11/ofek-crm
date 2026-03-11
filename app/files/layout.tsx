@@ -10,7 +10,7 @@ export default async function FilesLayout({
   const user = await getCurrentUser();
 
   if (!user || !hasUserFlag(user, "canViewFiles")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return <>{children}</>;

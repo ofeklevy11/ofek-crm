@@ -8,7 +8,7 @@ import GraphsDashboard from "@/components/analytics/GraphsDashboard";
 export default async function GraphsPage() {
   const user = await getCurrentUser();
   if (!user || !hasUserFlag(user, "canViewAnalytics")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   const [analyticsData, refreshUsageData] = await Promise.all([

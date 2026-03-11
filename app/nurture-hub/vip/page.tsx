@@ -42,7 +42,8 @@ import {
 } from "@/components/ui/select";
 import CustomerListManager from "@/components/nurture/CustomerListManager";
 import NurtureChannelSelector from "@/components/nurture/NurtureChannelSelector";
-import NurtureMessageEditor from "@/components/nurture/NurtureMessageEditor";
+import NurtureMessageEditor, { migrateConfigMessages, NurtureMessage } from "@/components/nurture/NurtureMessageEditor";
+import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
 import { getNurtureSubscribers, saveNurtureConfig, getNurtureConfig, getAvailableChannels, sendNurtureCampaign } from "../actions";
 import { toast } from "sonner";
 import { getFriendlyResultError, getUserFriendlyError } from "@/lib/errors";
@@ -85,12 +86,20 @@ export default function VipClubPage() {
   const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false });
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sendingCustomerId, setSendingCustomerId] = useState<string | null>(null);
   const [config, setConfig] = useState({
     channels: { sms: false, whatsappGreen: false, whatsappCloud: false },
-    smsBody: "ברוכים הבאים למועדון ה-VIP! שמחים שהצטרפתם, {first_name}.",
-    whatsappGreenBody: "ברוכים הבאים למועדון ה-VIP! שמחים שהצטרפתם, {first_name}.",
-    whatsappCloudTemplateName: "",
-    whatsappCloudLanguageCode: "he",
+    messages: [
+      {
+        id: "msg_default",
+        name: "הודעה ראשית",
+        isActive: true,
+        smsBody: "ברוכים הבאים למועדון ה-VIP! שמחים שהצטרפתם, {first_name}.",
+        whatsappGreenBody: "ברוכים הבאים למועדון ה-VIP! שמחים שהצטרפתם, {first_name}.",
+        whatsappCloudTemplateName: "",
+        whatsappCloudLanguageCode: "he",
+      },
+    ] as NurtureMessage[],
     managerAlert: true,
   });
 
@@ -112,7 +121,12 @@ export default function VipClubPage() {
 
   useEffect(() => {
     getNurtureConfig("vip").then((saved) => {
-      if (saved?.config) setConfig((prev) => ({ ...prev, ...(saved.config as any) }));
+      if (saved?.config) {
+        const raw = saved.config as any;
+        const { smsBody, whatsappGreenBody, whatsappCloudTemplateName, whatsappCloudLanguageCode, ...rest } = raw;
+        const messages = migrateConfigMessages(raw);
+        setConfig((prev) => ({ ...prev, ...rest, messages }));
+      }
       if (saved?.isEnabled !== undefined) setIsEnabled(saved.isEnabled);
     }).catch((err: any) => {
       if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
@@ -155,6 +169,20 @@ export default function VipClubPage() {
     }
   };
 
+  const handleSendToCustomer = async (customer: { id: string; name: string; phone?: string; phoneActive?: boolean }) => {
+    if (!(await showConfirm(`לשלוח הודעה ל-${customer.name}?`))) return;
+    setSendingCustomerId(customer.id);
+    try {
+      const result = await sendNurtureCampaign("vip", customer.id);
+      if (result.success) toast.success(`ההודעה נשלחה ל-${customer.name}`);
+      else toast.error(getFriendlyResultError(result.error, "שגיאה בשליחה"));
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setSendingCustomerId(null);
+    }
+  };
+
   return (
     <div
       className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20"
@@ -185,7 +213,7 @@ export default function VipClubPage() {
               className="bg-amber-600 hover:bg-amber-700 gap-2"
             >
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              שלח עכשיו
+              שלח לכולם
             </Button>
             <Button onClick={handleSave} disabled={saving} variant="outline" className="gap-2">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -193,6 +221,8 @@ export default function VipClubPage() {
             </Button>
           </div>
         </div>
+
+        <NurtureTriggerInfo slug="vip" />
 
         <Tabs
           value={activeTab}
@@ -339,10 +369,11 @@ export default function VipClubPage() {
                 ) : (
                   <div className="border rounded-lg overflow-hidden">
                     <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-slate-50 border-b text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      <div className="col-span-4">לקוח</div>
-                      <div className="col-span-4">פרטי קשר</div>
+                      <div className="col-span-3">לקוח</div>
+                      <div className="col-span-3">פרטי קשר</div>
                       <div className="col-span-2">מקור הצטרפות</div>
-                      <div className="col-span-2 text-left">סטטוס</div>
+                      <div className="col-span-2">סטטוס</div>
+                      <div className="col-span-2 text-center">שליחה</div>
                     </div>
                     <div className="divide-y divide-slate-100 bg-white">
                       {customers.map((c) => (
@@ -350,15 +381,15 @@ export default function VipClubPage() {
                           key={c.id}
                           className="grid grid-cols-12 gap-2 px-4 py-3 hover:bg-slate-50 transition-colors items-center group"
                         >
-                          <div className="col-span-4 flex items-center gap-3">
+                          <div className="col-span-3 flex items-center gap-3">
                             <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-sm">
                               {c.name.slice(0, 2)}
                             </div>
-                            <span className="text-sm font-medium text-slate-900">
+                            <span className="text-sm font-medium text-slate-900 truncate">
                               {c.name}
                             </span>
                           </div>
-                          <div className="col-span-4 text-sm text-slate-600">
+                          <div className="col-span-3 text-sm text-slate-600 truncate">
                             {c.email || c.phone || "—"}
                           </div>
                           <div className="col-span-2">
@@ -366,11 +397,22 @@ export default function VipClubPage() {
                               {c.sourceType === "MANUAL" ? "ידני" : "אוטומטי"}
                             </span>
                           </div>
-                          <div className="col-span-2 text-left">
+                          <div className="col-span-2">
                             <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-100">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                               פעיל
                             </div>
+                          </div>
+                          <div className="col-span-2 flex items-center justify-center">
+                            <button
+                              onClick={() => handleSendToCustomer(c)}
+                              disabled={sendingCustomerId === c.id || !c.phone}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded bg-amber-50 text-amber-600 hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                              title={!c.phone ? "אין מספר טלפון" : `שלח ל-${c.name}`}
+                            >
+                              {sendingCustomerId === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                              שלח
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -607,14 +649,8 @@ export default function VipClubPage() {
               <CardContent>
                 <NurtureMessageEditor
                   channels={config.channels}
-                  smsBody={config.smsBody}
-                  whatsappGreenBody={config.whatsappGreenBody}
-                  whatsappCloudTemplateName={config.whatsappCloudTemplateName}
-                  whatsappCloudLanguageCode={config.whatsappCloudLanguageCode}
-                  onSmsBodyChange={(v) => setConfig({ ...config, smsBody: v })}
-                  onWhatsappGreenBodyChange={(v) => setConfig({ ...config, whatsappGreenBody: v })}
-                  onWhatsappCloudTemplateNameChange={(v) => setConfig({ ...config, whatsappCloudTemplateName: v })}
-                  onWhatsappCloudLanguageCodeChange={(v) => setConfig({ ...config, whatsappCloudLanguageCode: v })}
+                  messages={config.messages}
+                  onMessagesChange={(messages) => setConfig({ ...config, messages })}
                   placeholders={["{first_name}"]}
                 />
               </CardContent>

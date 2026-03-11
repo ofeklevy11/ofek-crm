@@ -11,11 +11,11 @@ export default function PrivacyPage() {
       <div className="max-w-3xl mx-auto">
         <div className="bg-background rounded-2xl shadow-lg border border-border/40 overflow-hidden">
           <div className="bg-gradient-to-r from-primary to-secondary p-6">
-            <h1 className="text-2xl font-bold text-white text-center">מדיניות פרטיות</h1>
-            <p className="text-white/70 text-center text-sm mt-1">עדכון אחרון: מרץ 2026</p>
+            <h1 className="text-3xl font-extrabold text-white text-center">מדיניות פרטיות</h1>
+            <p className="text-white/80 text-center text-base mt-1">עדכון אחרון: מרץ 2026</p>
           </div>
 
-          <div className="p-6 md:p-8 space-y-8 text-sm leading-relaxed text-foreground/80">
+          <div className="p-6 md:p-8 space-y-8 text-base leading-relaxed text-foreground/90">
             <Section title="1. כללי">
               <p>
                 מדיניות פרטיות זו מתארת כיצד BizlyCRM (להלן: &quot;החברה&quot;, &quot;אנחנו&quot;)
@@ -257,7 +257,7 @@ export default function PrivacyPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
-      <h2 className="text-base font-bold text-foreground">{title}</h2>
+      <h2 className="text-xl font-bold text-foreground">{title}</h2>
       <div className="space-y-2">{children}</div>
     </section>
   );

@@ -10,7 +10,7 @@ export default async function TasksLayout({
   const user = await getCurrentUser();
 
   if (!user || !hasUserFlag(user, "canViewTasks")) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   return <>{children}</>;
