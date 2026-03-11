@@ -53,11 +53,8 @@ vi.mock("@/components/RateLimitFallback", () => ({
   default: (props: any) => ({ type: "RateLimitFallback", props }),
 }));
 
-vi.mock("lucide-react", () => ({
-  ArrowLeft: (props: any) => ({ type: "ArrowLeft", props }),
-  CheckCircle2: (props: any) => ({ type: "CheckCircle2", props }),
-  LayoutDashboard: (props: any) => ({ type: "LayoutDashboard", props }),
-  Zap: (props: any) => ({ type: "Zap", props }),
+vi.mock("lucide-react", () => new Proxy({}, {
+  get: (_target, name) => (props: any) => ({ type: String(name), props }),
 }));
 
 vi.mock("next/link", () => ({
