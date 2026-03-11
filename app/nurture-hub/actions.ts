@@ -192,6 +192,79 @@ export async function getDataSourceRecords(
   return { records, hasMore: records.length === take };
 }
 
+// Lightweight query: returns only IDs (no payload) for "select all in table"
+export async function getAllRecordIds(sourceId: string): Promise<string[]> {
+  const { getCurrentUser } = await import("@/lib/permissions-server");
+  const currentUser = await getCurrentUser();
+  if (!currentUser) return [];
+
+  if (sourceId === "clients") {
+    const rows = await prisma.client.findMany({
+      where: { companyId: currentUser.companyId },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id.toString());
+  } else if (sourceId === "users") {
+    const rows = await prisma.user.findMany({
+      where: { companyId: currentUser.companyId },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id.toString());
+  } else {
+    const tableId = parseInt(sourceId);
+    if (isNaN(tableId)) return [];
+    const rows = await prisma.record.findMany({
+      where: { tableId, companyId: currentUser.companyId },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id.toString());
+  }
+}
+
+// Fetch full records by specific IDs (for importing unloaded "select all" records)
+export async function getRecordsByIds(
+  sourceId: string,
+  ids: string[]
+): Promise<any[]> {
+  const { getCurrentUser } = await import("@/lib/permissions-server");
+  const currentUser = await getCurrentUser();
+  if (!currentUser || ids.length === 0) return [];
+
+  if (sourceId === "clients") {
+    const clients = await prisma.client.findMany({
+      where: { id: { in: ids.map(Number) }, companyId: currentUser.companyId },
+    });
+    return clients.map((c) => ({
+      id: c.id.toString(),
+      name: c.name,
+      email: c.email || "",
+      phone: c.phone || "",
+      source: "Clients",
+    }));
+  } else if (sourceId === "users") {
+    const users = await prisma.user.findMany({
+      where: { id: { in: ids.map(Number) }, companyId: currentUser.companyId },
+    });
+    return users.map((u) => ({
+      id: u.id.toString(),
+      name: u.name,
+      email: u.email,
+      source: "Users",
+    }));
+  } else {
+    const tableId = parseInt(sourceId);
+    if (isNaN(tableId)) return [];
+    const records = await prisma.record.findMany({
+      where: { id: { in: ids.map(Number) }, tableId, companyId: currentUser.companyId },
+    });
+    return records.map((r) => ({
+      id: r.id.toString(),
+      ...(r.data as any),
+      _rawData: r.data,
+    }));
+  }
+}
+
 export type FieldDefinition = {
   key: string;
   name: string;
@@ -675,7 +748,7 @@ export async function sendNurtureCampaign(slug: string, subscriberId?: string) {
     }
 
     // Resolve active message from templates array (backward compat with flat fields)
-    const { migrateConfigMessages, getActiveMessage } = await import("@/components/nurture/NurtureMessageEditor");
+    const { migrateConfigMessages, getActiveMessage } = await import("@/lib/nurture-messages");
     const messages = migrateConfigMessages(config);
     const activeMsg = getActiveMessage(messages);
     if (!activeMsg) {

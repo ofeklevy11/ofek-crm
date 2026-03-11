@@ -529,7 +529,6 @@ export default function AutomationsList({
                   referral: "חבר מביא חבר",
                   upsell: "מכירות חוזרות",
                   winback: "שימור לקוחות",
-                  vip: "לקוחות VIP",
                   review: "ביקורות",
                   renewal: "חידושים",
                 };

@@ -39,7 +39,7 @@ export async function processDateBasedNurtureTriggers(companyId: number) {
   if (lists.length === 0) return { processed: 0 };
 
   const { inngest } = await import("@/lib/inngest/client");
-  const { migrateConfigMessages, getActiveMessage } = await import("@/components/nurture/NurtureMessageEditor");
+  const { migrateConfigMessages, getActiveMessage } = await import("@/lib/nurture-messages");
   let totalProcessed = 0;
 
   for (const list of lists) {

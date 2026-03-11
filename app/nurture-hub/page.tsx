@@ -8,7 +8,7 @@ import {
   TrendingUp,
   Star,
   RefreshCw,
-  Crown,
+
   UserPlus,
   ArrowLeft,
   Zap,
@@ -94,19 +94,6 @@ const nurturePaths = [
     bg: "bg-slate-500/10",
     stats: "הזדמנות שנייה",
     href: "/nurture-hub/winback",
-
-  },
-  {
-    id: "vip",
-    title: "הצעות VIP",
-    description:
-      "טיפול בלקוחות המובילים: הטבות בלעדיות, יחס מועדף ותוכן פרימיום לחיזוק הקשר.",
-    icon: Crown,
-    color: "from-amber-400 to-yellow-500",
-    textColor: "text-amber-600",
-    bg: "bg-amber-500/10",
-    stats: "לקוחות זהב",
-    href: "/nurture-hub/vip",
 
   },
 ];

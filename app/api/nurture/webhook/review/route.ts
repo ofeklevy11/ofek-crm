@@ -3,7 +3,7 @@ import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { inngest } from "@/lib/inngest/client";
 import { createLogger } from "@/lib/logger";
-import { migrateConfigMessages, getActiveMessage } from "@/components/nurture/NurtureMessageEditor";
+import { migrateConfigMessages, getActiveMessage } from "@/lib/nurture-messages";
 
 const log = createLogger("NurtureWebhook:Review");
 

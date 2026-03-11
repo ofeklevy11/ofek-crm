@@ -16,7 +16,6 @@ import {
   Mail,
   Phone,
   X,
-  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -536,28 +535,6 @@ export default function UpsellAutomationPage() {
                   </p>
                 </div>
 
-                <div className="border-t pt-4 mt-4 space-y-3">
-                  <div className="text-sm font-medium text-slate-700">Webhook URL</div>
-                  <div className="bg-slate-50 border rounded-lg p-3 flex items-center justify-between">
-                    <code className="text-sm font-mono text-slate-700">/api/nurture/webhook/upsell</code>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText("/api/nurture/webhook/upsell");
-                        toast.success("URL הועתק");
-                      }}
-                      className="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 transition-colors"
-                      title="העתק URL"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    שלח POST עם Authorization: Bearer NURTURE_WEBHOOK_SECRET וגוף &#123; companyId, phone, name &#125;
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    או הגדר חוק אוטומציה עם autoTrigger להפעלה אוטומטית
-                  </p>
-                </div>
               </CardContent>
             </Card>
           </div>

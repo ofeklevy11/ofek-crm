@@ -41,6 +41,8 @@ import {
   getDataSourceRecords,
   getTableFields,
   getRawTableRecords,
+  getAllRecordIds,
+  getRecordsByIds,
   addNurtureSubscriberManual,
   getNurtureRules,
   DataSource,
@@ -54,7 +56,7 @@ import {
   toggleAutomationRule,
   updateAutomationRule,
 } from "@/app/actions/automations";
-import { getUsers } from "@/app/actions/users";
+
 import { Badge } from "@/components/ui/badge";
 import { getFriendlyResultError, getUserFriendlyError } from "@/lib/errors";
 import { toast } from "sonner";
@@ -130,13 +132,8 @@ export default function CustomerListManager({
     fields: { name: "", email: "", phone: "" },
     condition: { field: "", fromValue: "", toValue: "" },
   });
-  const [postAddActions, setPostAddActions] = useState({
-    sendNotification: true,
-    notifyUserId: "",
-    notifyTitle: "לקוח חדש ברשימה",
-    notifyMessage: "לקוח חדש נוסף לרשימה!",
-  });
-  const [users, setUsers] = useState<{ id: number; name: string }[]>([]);
+
+
   const [tableFields, setTableFields] = useState<FieldDefinition[]>([]);
   const [fetchingFields, setFetchingFields] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -188,6 +185,7 @@ export default function CustomerListManager({
   const [selectedDbCustomers, setSelectedDbCustomers] = useState<string[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [selectingAll, setSelectingAll] = useState(false);
   // Track total raw records fetched from server (for skip calculation with dynamic tables)
   const dbOffsetRef = useRef(0);
 
@@ -210,18 +208,7 @@ export default function CustomerListManager({
         console.error("Failed to load data sources:", error);
       }
     };
-    const loadUsers = async () => {
-      try {
-        const result = await getUsers();
-        if (result.success && result.data) {
-          setUsers(result.data.map((u: any) => ({ id: u.id, name: u.name })));
-        }
-      } catch (error) {
-        console.error("Failed to load users:", error);
-      }
-    };
     loadTables();
-    loadUsers();
   }, []);
 
   // Load existing automation rules when modal opens
@@ -384,40 +371,57 @@ export default function CustomerListManager({
   };
 
   const handleImportSelected = async () => {
-    const recordsToImport = dbResults.filter((c) =>
-      selectedDbCustomers.includes(c.id)
-    );
-
     const isDynamic = importFields.length > 0;
+    const loadedIds = new Set(dbResults.map((r) => r.id));
+    const loadedRecords = dbResults.filter((c) => selectedDbCustomers.includes(c.id));
+    const unloadedIds = selectedDbCustomers.filter((id) => !loadedIds.has(id));
 
     setLoading(true);
     let successCount = 0;
     let failCount = 0;
-    try {
-      for (const record of recordsToImport) {
-        // Extract data using mapping
-        const name = isDynamic
-          ? record[importMapping.name] || `Record #${record.id}`
-          : record.name;
-        const email = isDynamic
-          ? record[importMapping.email] || undefined
-          : record.email || undefined;
-        const phone = isDynamic
-          ? record[importMapping.phone] || undefined
-          : record.phone || undefined;
-        const triggerDateVal = isDynamic && importMapping.triggerDate
-          ? record[importMapping.triggerDate] || undefined
-          : undefined;
 
-        const result = await addNurtureSubscriberManual(listSlug, {
-          name: String(name),
-          email: email ? String(email) : undefined,
-          phone: phone ? String(phone) : undefined,
-          triggerDate: triggerDateVal ? String(triggerDateVal) : undefined,
-        });
-        if (result.success) successCount++;
-        else failCount++;
+    const importRecord = async (record: any) => {
+      const name = isDynamic
+        ? record[importMapping.name] || `Record #${record.id}`
+        : record.name;
+      const email = isDynamic
+        ? record[importMapping.email] || undefined
+        : record.email || undefined;
+      const phone = isDynamic
+        ? record[importMapping.phone] || undefined
+        : record.phone || undefined;
+      const triggerDateVal = isDynamic && importMapping.triggerDate
+        ? record[importMapping.triggerDate] || undefined
+        : undefined;
+
+      const result = await addNurtureSubscriberManual(listSlug, {
+        name: String(name),
+        email: email ? String(email) : undefined,
+        phone: phone ? String(phone) : undefined,
+        triggerDate: triggerDateVal ? String(triggerDateVal) : undefined,
+      });
+      if (result.success) successCount++;
+      else failCount++;
+    };
+
+    try {
+      // Import loaded records
+      for (const record of loadedRecords) {
+        await importRecord(record);
       }
+
+      // Fetch and import unloaded records in batches
+      if (unloadedIds.length > 0) {
+        const batchSize = 200;
+        for (let i = 0; i < unloadedIds.length; i += batchSize) {
+          const batchIds = unloadedIds.slice(i, i + batchSize);
+          const fetched = await getRecordsByIds(selectedTable, batchIds);
+          for (const record of fetched) {
+            await importRecord(record);
+          }
+        }
+      }
+
       if (failCount === 0) {
         toast.success(`${successCount} לקוחות יובאו בהצלחה`);
       } else if (successCount === 0) {
@@ -447,6 +451,24 @@ export default function CustomerListManager({
     const allIds = dbResults.map((r) => r.id);
     const allSelected = allIds.length > 0 && allIds.every((id) => selectedDbCustomers.includes(id));
     setSelectedDbCustomers(allSelected ? [] : allIds);
+  };
+
+  const handleSelectAllFromTable = async () => {
+    if (!selectedTable || selectingAll) return;
+    // If already selecting more than loaded → deselect all
+    if (selectedDbCustomers.length > dbResults.length) {
+      setSelectedDbCustomers([]);
+      return;
+    }
+    setSelectingAll(true);
+    try {
+      const allIds = await getAllRecordIds(selectedTable);
+      setSelectedDbCustomers(allIds);
+    } catch (error) {
+      console.error("Failed to fetch all record IDs:", error);
+    } finally {
+      setSelectingAll(false);
+    }
   };
 
   const handleLoadMore = useCallback(async () => {
@@ -551,13 +573,8 @@ export default function CustomerListManager({
             email: autoConfig.fields.email,
             phone: autoConfig.fields.phone,
           },
-          // Post-add actions
-          sendNotification: postAddActions.sendNotification,
-          notifyUserId: postAddActions.notifyUserId
-            ? parseInt(postAddActions.notifyUserId)
-            : undefined,
-          notifyTitle: postAddActions.notifyTitle,
-          notifyMessage: postAddActions.notifyMessage,
+
+
         },
       };
 
@@ -619,13 +636,8 @@ export default function CustomerListManager({
         toValue: tc.toValue || "",
       },
     });
-    // Load post-add actions configuration
-    setPostAddActions({
-      sendNotification: ac.sendNotification !== false,
-      notifyUserId: ac.notifyUserId ? String(ac.notifyUserId) : "",
-      notifyTitle: ac.notifyTitle || "לקוח חדש ברשימה",
-      notifyMessage: ac.notifyMessage || "לקוח חדש נוסף לרשימה!",
-    });
+
+
   };
 
   const handleDeleteRule = async (ruleId: number) => {
@@ -692,12 +704,8 @@ export default function CustomerListManager({
                       fields: { name: "", email: "", phone: "" },
                       condition: { field: "", fromValue: "", toValue: "" },
                     });
-                    setPostAddActions({
-                      sendNotification: true,
-                      notifyUserId: "",
-                      notifyTitle: "לקוח חדש ברשימה",
-                      notifyMessage: "לקוח חדש נוסף לרשימה!",
-                    });
+
+
                   }}
                   className="p-1 rounded-md hover:bg-slate-100 transition-colors"
                 >
@@ -827,15 +835,8 @@ export default function CustomerListManager({
                                   ? "רשומה חדשה"
                                   : "שינוי סטטוס"}
                               </Badge>
-                              {actionConfig.sendNotification &&
-                                actionConfig.notifyUserId && (
-                                  <Badge className="text-[10px] bg-blue-100 text-blue-700 border-blue-200">
-                                    🔔 שליחת התראה ל-
-                                    {users.find(
-                                      (u) => u.id === actionConfig.notifyUserId
-                                    )?.name || "משתמש"}
-                                  </Badge>
-                                )}
+
+
                             </div>
                           </div>
                         );
@@ -855,12 +856,8 @@ export default function CustomerListManager({
                       fields: { name: "", email: "", phone: "" },
                       condition: { field: "", fromValue: "", toValue: "" },
                     });
-                    setPostAddActions({
-                      sendNotification: true,
-                      notifyUserId: "",
-                      notifyTitle: "לקוח חדש ברשימה",
-                      notifyMessage: "לקוח חדש נוסף לרשימה!",
-                    });
+
+
                   }}
                   className="w-full gap-2 bg-indigo-600 hover:bg-indigo-700"
                 >
@@ -1161,104 +1158,8 @@ export default function CustomerListManager({
                         </div>
                       </div>
 
-                      {/* Post-Add Actions Section */}
-                      <div className="space-y-3 border-t pt-4 mt-4">
-                        <Label className="flex items-center gap-2">
-                          <Zap className="w-4 h-4 text-amber-500" />
-                          פעולות לאחר הוספה
-                        </Label>
 
-                        <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg space-y-3">
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              id="sendNotification"
-                              checked={postAddActions.sendNotification}
-                              onChange={(e) =>
-                                setPostAddActions({
-                                  ...postAddActions,
-                                  sendNotification: e.target.checked,
-                                })
-                              }
-                              className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <Label
-                              htmlFor="sendNotification"
-                              className="text-sm text-blue-900 cursor-pointer"
-                            >
-                              שליחת התראה למשתמש
-                            </Label>
-                          </div>
 
-                          {postAddActions.sendNotification && (
-                            <div className="space-y-3 pr-7">
-                              <div className="space-y-1">
-                                <Label className="text-xs text-blue-800">
-                                  למי לשלוח התראה?
-                                </Label>
-                                <select
-                                  className="w-full h-9 rounded-md border border-blue-200 bg-white px-2 text-sm"
-                                  value={postAddActions.notifyUserId}
-                                  onChange={(e) =>
-                                    setPostAddActions({
-                                      ...postAddActions,
-                                      notifyUserId: e.target.value,
-                                    })
-                                  }
-                                >
-                                  <option value="">בחר משתמש...</option>
-                                  {users.length === 0 && (
-                                    <option value="" disabled>
-                                      אין משתמשים זמינים
-                                    </option>
-                                  )}
-                                  {users.map((user) => (
-                                    <option key={user.id} value={user.id}>
-                                      {user.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              <div className="space-y-1">
-                                <Label className="text-xs text-blue-800">
-                                  כותרת ההתראה
-                                </Label>
-                                <Input
-                                  type="text"
-                                  className="w-full h-9 rounded-md border border-blue-200 bg-white px-2 text-sm"
-                                  value={postAddActions.notifyTitle}
-                                  onChange={(e) =>
-                                    setPostAddActions({
-                                      ...postAddActions,
-                                      notifyTitle: e.target.value,
-                                    })
-                                  }
-                                  placeholder="לקוח חדש ברשימה"
-                                />
-                              </div>
-
-                              <div className="space-y-1">
-                                <Label className="text-xs text-blue-800">
-                                  תוכן ההתראה
-                                </Label>
-                                <Input
-                                  type="text"
-                                  className="w-full h-9 rounded-md border border-blue-200 bg-white px-2 text-sm"
-                                  value={postAddActions.notifyMessage}
-                                  onChange={(e) =>
-                                    setPostAddActions({
-                                      ...postAddActions,
-                                      notifyMessage: e.target.value,
-                                    })
-                                  }
-                                  placeholder="לקוח חדש נוסף לרשימה!"
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
                     </>
                   )}
                 </div>
@@ -1281,12 +1182,8 @@ export default function CustomerListManager({
                     setAutoViewMode("list");
                     setAutoStep(1);
                     setEditingRuleId(null);
-                    setPostAddActions({
-                      sendNotification: true,
-                      notifyUserId: "",
-                      notifyTitle: "לקוח חדש ברשימה",
-                      notifyMessage: "לקוח חדש נוסף לרשימה!",
-                    });
+
+
                   }}
                 >
                   ביטול
@@ -1617,30 +1514,56 @@ export default function CustomerListManager({
                     dbResults.length > 0 &&
                     (importFields.length === 0 || importMapping.name) && (
                       <div className="flex items-center justify-between">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs gap-1.5 h-7 px-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                          onClick={handleSelectAll}
-                        >
-                          {dbResults.length > 0 &&
-                          dbResults.every((r) =>
-                            selectedDbCustomers.includes(r.id)
-                          ) ? (
-                            <>
-                              <CheckSquare className="w-3.5 h-3.5" />
-                              בטל בחירה
-                            </>
-                          ) : (
-                            <>
-                              <Square className="w-3.5 h-3.5" />
-                              בחר הכל
-                            </>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs gap-1.5 h-7 px-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                            onClick={handleSelectAll}
+                          >
+                            {dbResults.length > 0 &&
+                            dbResults.every((r) =>
+                              selectedDbCustomers.includes(r.id)
+                            ) ? (
+                              <>
+                                <CheckSquare className="w-3.5 h-3.5" />
+                                בטל בחירה
+                              </>
+                            ) : (
+                              <>
+                                <Square className="w-3.5 h-3.5" />
+                                בחר הכל
+                              </>
+                            )}
+                          </Button>
+                          {hasMore && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs gap-1.5 h-7 px-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                              onClick={handleSelectAllFromTable}
+                              disabled={selectingAll}
+                            >
+                              {selectingAll ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : selectedDbCustomers.length > dbResults.length ? (
+                                <>
+                                  <CheckSquare className="w-3.5 h-3.5" />
+                                  בטל בחירת כל הטבלה
+                                </>
+                              ) : (
+                                <>
+                                  <Database className="w-3.5 h-3.5" />
+                                  בחר הכל מהטבלה
+                                </>
+                              )}
+                            </Button>
                           )}
-                        </Button>
+                        </div>
                         <span className="text-xs text-slate-400">
-                          נבחרו {selectedDbCustomers.length} מתוך {dbResults.length}
+                          נבחרו {selectedDbCustomers.length}
                         </span>
                       </div>
                     )}
