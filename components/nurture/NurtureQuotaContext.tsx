@@ -64,10 +64,11 @@ export function NurtureQuotaProvider({
       setResetInSeconds((prev) => {
         if (prev <= 0) return 0; // Already idle — don't poll
         if (prev === 1) {
-          // Window just expired — reset optimistically, then re-fetch
+          // Window just expired — reset optimistically
           setUsed(0);
           setRemaining(limit);
-          fetchQuota();
+          // Delay re-fetch so Redis key has fully expired
+          setTimeout(fetchQuota, 2000);
           return 0;
         }
         return prev - 1;
