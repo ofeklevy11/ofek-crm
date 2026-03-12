@@ -2,7 +2,7 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { NurtureSubscriberResult } from "@/app/nurture-hub/actions";
 
@@ -29,6 +29,9 @@ interface Props {
   onCustomerClick: (customer: NurtureSubscriberResult) => void;
   onSendToCustomer: (customer: NurtureSubscriberResult) => void;
   onLoadMore: () => void;
+  onBulkSend?: () => void;
+  onBulkDelete?: () => void;
+  isDeletingBulk?: boolean;
   hasActiveSearch?: boolean;
   onClearSearch?: () => void;
 }
@@ -61,6 +64,9 @@ export default function NurtureCustomerGrid({
   onCustomerClick,
   onSendToCustomer,
   onLoadMore,
+  onBulkSend,
+  onBulkDelete,
+  isDeletingBulk,
   hasActiveSearch,
   onClearSearch,
 }: Props) {
@@ -217,6 +223,39 @@ export default function NurtureCustomerGrid({
           ))}
         </div>
       </div>
+
+      {/* Selection bar */}
+      {selectedCustomerIds.size > 0 && (
+        <div className="flex items-center justify-between mt-2 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-lg">
+          <span className="text-sm font-medium text-indigo-700">
+            {selectedCustomerIds.size} נבחרו
+          </span>
+          <div className="flex items-center gap-2">
+            {onBulkDelete && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onBulkDelete}
+                disabled={isDeletingBulk}
+                className="text-xs h-7 gap-1 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+              >
+                {isDeletingBulk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                מחק ({selectedCustomerIds.size})
+              </Button>
+            )}
+            {onBulkSend && (
+              <Button
+                size="sm"
+                onClick={onBulkSend}
+                className="text-xs h-7 gap-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                <Send className="w-3 h-3" />
+                שלח לנבחרים ({selectedCustomerIds.size})
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Load More */}
       {(hasMore || isLoadingMore) && (

@@ -862,6 +862,30 @@ export async function deleteNurtureSubscriber(id: string) {
   }
 }
 
+// Bulk delete subscribers
+export async function deleteNurtureSubscribers(ids: string[]) {
+  try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
+    const numericIds = ids.map((id) => parseInt(id)).filter((id) => !isNaN(id));
+    if (numericIds.length === 0) return { success: false, error: "No valid IDs" };
+
+    // Only delete subscribers belonging to user's company
+    const { count } = await prisma.nurtureSubscriber.deleteMany({
+      where: {
+        id: { in: numericIds },
+        nurtureList: { companyId: user.companyId },
+      },
+    });
+
+    return { success: true, count };
+  } catch (error) {
+    return handleNurtureError(error, "deleteNurtureSubscribers");
+  }
+}
+
 // Save nurture campaign configuration
 export async function saveNurtureConfig(
   slug: string,

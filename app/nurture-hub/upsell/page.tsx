@@ -53,6 +53,7 @@ import {
   getNurtureRules,
   updateNurtureSubscriber,
   deleteNurtureSubscriber,
+  deleteNurtureSubscribers,
   getDataSources,
   DataSource,
   saveNurtureConfig,
@@ -148,6 +149,9 @@ export default function UpsellAutomationPage() {
   const [sendConfirmCustomer, setSendConfirmCustomer] = useState<NurtureSubscriberResult | null>(null);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const [bulkSendOpen, setBulkSendOpen] = useState(false);
+  const [bulkSendForSelected, setBulkSendForSelected] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const quota = useNurtureQuota();
   const [config, setConfig] = useState({
     channels: { sms: false, whatsappGreen: false, whatsappCloud: false },
@@ -179,7 +183,7 @@ export default function UpsellAutomationPage() {
   };
 
   const bulkCustomers: BulkCustomer[] = useMemo(() => {
-    const source = selectedCustomerIds.size > 0
+    const source = bulkSendForSelected && selectedCustomerIds.size > 0
       ? customers.filter((c) => selectedCustomerIds.has(c.id))
       : customers;
     return source.map((c) => ({
@@ -190,9 +194,28 @@ export default function UpsellAutomationPage() {
       alreadySent: !!lastSentMap[c.id],
       lastSentAt: lastSentMap[c.id] || undefined,
     }));
-  }, [customers, lastSentMap, selectedCustomerIds]);
+  }, [customers, lastSentMap, selectedCustomerIds, bulkSendForSelected]);
 
-  const handleSendNow = () => setBulkSendOpen(true);
+  const handleSendNow = () => { setBulkSendForSelected(false); setBulkSendOpen(true); };
+  const handleSendSelected = () => { setBulkSendForSelected(true); setBulkSendOpen(true); };
+
+  const handleBulkDelete = async () => {
+    if (!(await showConfirm(`האם למחוק ${selectedCustomerIds.size} נרשמים מהרשימה?`))) return;
+    setIsDeletingBulk(true);
+    try {
+      const result = await deleteNurtureSubscribers(Array.from(selectedCustomerIds));
+      if (result.success) {
+        toast.success(`${(result as any).count ?? selectedCustomerIds.size} נרשמים נמחקו`);
+        refreshData();
+      } else {
+        toast.error(getFriendlyResultError(result.error, "שגיאה במחיקה"));
+      }
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setIsDeletingBulk(false);
+    }
+  };
 
   const handleBulkConfirmSend = async (channels: ChannelSelection, subscriberIds?: string[]) => {
     setBulkSendOpen(false);
@@ -284,7 +307,7 @@ export default function UpsellAutomationPage() {
               className="bg-indigo-600 hover:bg-indigo-700 gap-2"
             >
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {selectedCustomerIds.size > 0 ? `שלח לנבחרים (${selectedCustomerIds.size})` : "שלח לכולם"}
+              שלח לכולם
             </Button>
             <Button onClick={handleSave} disabled={saving} variant="outline" className="gap-2">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -337,6 +360,9 @@ export default function UpsellAutomationPage() {
                   onCustomerClick={setSelectedCustomer}
                   onSendToCustomer={handleSendToCustomer}
                   onLoadMore={loadMore}
+                  onBulkSend={handleSendSelected}
+                  onBulkDelete={handleBulkDelete}
+                  isDeletingBulk={isDeletingBulk}
                   hasActiveSearch={!!search || filters.length > 0}
                   onClearSearch={() => { setSearch(""); setFilters([]); }}
                 />
@@ -550,6 +576,7 @@ export default function UpsellAutomationPage() {
           onClick={() => {
             setSelectedCustomer(null);
             setEditingCustomer(null);
+            setConfirmingDelete(false);
           }}
         >
           <div
@@ -561,6 +588,7 @@ export default function UpsellAutomationPage() {
               onClick={() => {
                 setSelectedCustomer(null);
                 setEditingCustomer(null);
+                setConfirmingDelete(false);
               }}
               className="absolute top-3 left-3 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
             >
@@ -798,32 +826,51 @@ export default function UpsellAutomationPage() {
 
                 {/* Delete Button */}
                 <div className="border-t mt-4 pt-4">
-                  <button
-                    onClick={async () => {
-                      if (
-                        !(await showConfirm(
-                          `האם למחוק את ${selectedCustomer.name} מהרשימה?`
-                        ))
-                      ) return;
-                      try {
-                        const result = await deleteNurtureSubscriber(
-                          selectedCustomer.id
-                        );
-                        if (result.success) {
-                          setSelectedCustomer(null);
-                          refreshData();
-                        } else {
-                          toast.error(getFriendlyResultError(result.error, "שגיאה במחיקה"));
-                        }
-                      } catch (error) {
-                        toast.error(getUserFriendlyError(error));
-                      }
-                    }}
-                    className="w-full flex items-center justify-center gap-2 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    מחק מהרשימה
-                  </button>
+                  {confirmingDelete ? (
+                    <div className="space-y-2">
+                      <p className="text-sm text-center text-red-600 font-medium">
+                        האם למחוק את {selectedCustomer.name} מהרשימה?
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            try {
+                              const result = await deleteNurtureSubscriber(
+                                selectedCustomer.id
+                              );
+                              if (result.success) {
+                                toast.success("נמחק בהצלחה");
+                                setSelectedCustomer(null);
+                                setConfirmingDelete(false);
+                                refreshData();
+                              } else {
+                                toast.error(getFriendlyResultError(result.error, "שגיאה במחיקה"));
+                              }
+                            } catch (error) {
+                              toast.error(getUserFriendlyError(error));
+                            }
+                          }}
+                          className="flex-1 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                        >
+                          כן, מחק
+                        </button>
+                        <button
+                          onClick={() => setConfirmingDelete(false)}
+                          className="flex-1 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                        >
+                          ביטול
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmingDelete(true)}
+                      className="w-full flex items-center justify-center gap-2 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      מחק מהרשימה
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -850,6 +897,7 @@ export default function UpsellAutomationPage() {
         onConfirm={handleBulkConfirmSend}
         loading={sending}
         quota={quota}
+        selectedOnly={bulkSendForSelected}
       />
     </div>
   );

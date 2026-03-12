@@ -54,6 +54,7 @@ interface NurtureSendConfirmDialogProps {
   // Bulk mode
   customers?: BulkCustomer[];
   quota?: QuotaInfo | null;
+  selectedOnly?: boolean;
 }
 
 export default function NurtureSendConfirmDialog({
@@ -67,6 +68,7 @@ export default function NurtureSendConfirmDialog({
   customerLastSentAt,
   customers,
   quota,
+  selectedOnly,
 }: NurtureSendConfirmDialogProps) {
   const [selected, setSelected] = useState<ChannelSelection>({});
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -245,7 +247,7 @@ export default function NurtureSendConfirmDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="w-5 h-5" />
-            שליחה לכל הרשימה — {customers?.length || 0} לקוחות
+            {selectedOnly ? "שליחה לנבחרים" : "שליחה לכל הרשימה"} — {customers?.length || 0} לקוחות
           </DialogTitle>
           <DialogDescription>בחר ערוצים ולקוחות לשליחה</DialogDescription>
         </DialogHeader>
