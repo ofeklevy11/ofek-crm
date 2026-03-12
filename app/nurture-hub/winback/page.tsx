@@ -46,6 +46,8 @@ import CustomerListManager from "@/components/nurture/CustomerListManager";
 import NurtureChannelSelector from "@/components/nurture/NurtureChannelSelector";
 import NurtureMessageEditor, { migrateConfigMessages, NurtureMessage } from "@/components/nurture/NurtureMessageEditor";
 import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
+import { useNurtureQuota } from "@/components/nurture/NurtureQuotaContext";
+import NurtureQuotaBadge from "@/components/nurture/NurtureQuotaBadge";
 
 import {
   getNurtureSubscribers,
@@ -142,6 +144,7 @@ export default function WinbackAutomationPage() {
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendingCustomerId, setSendingCustomerId] = useState<string | null>(null);
+  const quota = useNurtureQuota();
   const [config, setConfig] = useState({
     inactivityDays: "90",
     offerTitle: "מתגעגעים אליך! 💔",
@@ -195,7 +198,8 @@ export default function WinbackAutomationPage() {
   };
 
   const handleSendNow = async () => {
-    if (!(await showConfirm(`לשלוח את הקמפיין ל-${customers.length} לקוחות?`))) return;
+    const tierInfo = quota.isUnlimited ? "ללא הגבלה" : `${quota.limit} הודעות/דקה`;
+    if (!(await showConfirm(`לשלוח את הקמפיין ל-${customers.length} לקוחות?\n\nשליחה המונית מתבצעת דרך תור עיבוד ואינה מושפעת ממגבלת ההודעות האישית (${tierInfo}).`))) return;
     setSending(true);
     try {
       const result = await sendNurtureCampaign("winback");
@@ -209,12 +213,17 @@ export default function WinbackAutomationPage() {
   };
 
   const handleSendToCustomer = async (customer: Customer) => {
+    if (!quota.isUnlimited && quota.remaining <= 0) {
+      toast.error(`חרגת ממגבלת ההודעות. נסה שוב בעוד ${quota.resetInSeconds} שניות.`);
+      return;
+    }
     if (!(await showConfirm(`לשלוח הודעה ל-${customer.name}?`))) return;
     setSendingCustomerId(customer.id);
     try {
       const result = await sendNurtureCampaign("winback", customer.id);
       if (result.success) toast.success(`ההודעה נשלחה ל-${customer.name}`);
       else toast.error(getFriendlyResultError(result.error, "שגיאה בשליחה"));
+      quota.refreshQuota();
     } catch (error) {
       toast.error(getUserFriendlyError(error));
     } finally {
@@ -245,6 +254,7 @@ export default function WinbackAutomationPage() {
             </p>
           </div>
           <div className="mr-auto flex items-center gap-3">
+            <NurtureQuotaBadge />
             <Button
               onClick={handleSendNow}
               disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud)}
@@ -358,7 +368,7 @@ export default function WinbackAutomationPage() {
                           <div className="col-span-2 flex items-center justify-center">
                             <button
                               onClick={(e) => { e.stopPropagation(); handleSendToCustomer(c); }}
-                              disabled={sendingCustomerId === c.id || !c.phone || !c.phoneActive}
+                              disabled={sendingCustomerId === c.id || !c.phone || !c.phoneActive || (!quota.isUnlimited && quota.remaining <= 0)}
                               className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                               title={!c.phone || !c.phoneActive ? "אין מספר טלפון פעיל" : `שלח ל-${c.name}`}
                             >

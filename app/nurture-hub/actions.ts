@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { normalizeToE164 } from "@/lib/utils/phone";
 
 function handleNurtureError(error: unknown, context: string): { success: false; error: string } {
   console.error(`[NurtureHub] ${context}:`, error);
@@ -474,12 +475,14 @@ export async function addNurtureSubscriberManual(
       if (!isNaN(parsed.getTime())) triggerDate = parsed;
     }
 
+    const normalizedPhone = data.phone ? normalizeToE164(data.phone) : null;
     await prisma.nurtureSubscriber.create({
       data: {
         nurtureListId: list.id,
         name: data.name,
         email: data.email || null,
-        phone: data.phone || null,
+        phone: normalizedPhone || data.phone || null,
+        phoneActive: !!normalizedPhone,
         triggerDate,
         sourceType: "MANUAL",
       },
@@ -618,6 +621,7 @@ export async function bulkImportNurtureSubscribers(
       name: string;
       email: string | null;
       phone: string | null;
+      phoneActive: boolean;
       triggerDate: Date | null;
       sourceType: string;
     }[] = [];
@@ -643,11 +647,13 @@ export async function bulkImportNurtureSubscribers(
         if (!isNaN(parsed.getTime())) triggerDate = parsed;
       }
 
+      const normalizedPhone = rec.phone ? normalizeToE164(rec.phone) : null;
       toInsert.push({
         nurtureListId: list.id,
         name: rec.name,
         email: rec.email,
-        phone: rec.phone,
+        phone: normalizedPhone || rec.phone,
+        phoneActive: !!normalizedPhone,
         triggerDate,
         sourceType: "MANUAL",
       });
@@ -905,8 +911,24 @@ export async function getNurtureSendLogs(slug: string) {
   }
 }
 
+// Get current nurture quota status for UI display
+export async function getNurtureQuotaAction() {
+  try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return null;
+
+    const { getNurtureQuotaStatus } = await import("@/lib/nurture-rate-limit");
+    const tier = (currentUser.isPremium as "basic" | "premium" | "super") || "basic";
+    return await getNurtureQuotaStatus(currentUser.id, tier);
+  } catch (error) {
+    console.error("[NurtureHub] getNurtureQuotaAction:", error);
+    return null;
+  }
+}
+
 // Send nurture campaign to all subscribers or a specific one
-export async function sendNurtureCampaign(slug: string, subscriberId?: string) {
+export async function sendNurtureCampaign(slug: string, subscriberId?: string): Promise<{ success: boolean; error?: string; count?: number; resetInSeconds?: number }> {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
@@ -925,6 +947,23 @@ export async function sendNurtureCampaign(slug: string, subscriberId?: string) {
 
     if (!channels.sms && !channels.whatsappGreen && !channels.whatsappCloud) {
       return { success: false, error: "יש לבחור לפחות ערוץ שליחה אחד" };
+    }
+
+    // Rate limit individual sends only (not bulk)
+    if (subscriberId) {
+      const tier = (currentUser.isPremium as "basic" | "premium" | "super") || "basic";
+      if (tier !== "super") {
+        const channelCount = [channels.sms, channels.whatsappGreen, channels.whatsappCloud].filter(Boolean).length;
+        const { consumeNurtureQuota } = await import("@/lib/nurture-rate-limit");
+        const quota = await consumeNurtureQuota(currentUser.id, tier, channelCount);
+        if (!quota.allowed) {
+          return {
+            success: false,
+            error: `חרגת ממגבלת ההודעות (${tier === "basic" ? 3 : 6}/דקה). נסה שוב בעוד ${quota.resetInSeconds} שניות.`,
+            resetInSeconds: quota.resetInSeconds,
+          };
+        }
+      }
     }
 
     // Resolve active message from templates array (backward compat with flat fields)

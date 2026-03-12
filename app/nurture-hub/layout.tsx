@@ -1,6 +1,8 @@
 import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import { redirect } from "next/navigation";
+import { NurtureQuotaProvider } from "@/components/nurture/NurtureQuotaContext";
+import type { UserTier } from "@/lib/nurture-rate-limit";
 
 export default async function NurtureHubLayout({
   children,
@@ -13,5 +15,11 @@ export default async function NurtureHubLayout({
     redirect("/dashboard");
   }
 
-  return <>{children}</>;
+  const tier = (user.isPremium as UserTier) || "basic";
+
+  return (
+    <NurtureQuotaProvider tier={tier}>
+      {children}
+    </NurtureQuotaProvider>
+  );
 }

@@ -35,7 +35,11 @@ export const sendNurtureCampaignMessage = inngest.createFunction(
       text.replace(/\{first_name\}/g, subscriberName);
 
     // Send SMS
-    if (channels.sms && smsBody) {
+    if (!channels.sms) {
+      log.info("SMS channel not enabled", { companyId, slug });
+    } else if (!smsBody) {
+      log.warn("SMS skipped — empty message body", { companyId, slug });
+    } else {
       const normalizedPhone = normalizeToE164(subscriberPhone);
       if (!normalizedPhone) {
         log.warn("Nurture SMS skipped — invalid phone", { companyId, slug, phone: subscriberPhone });

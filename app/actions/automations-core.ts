@@ -554,6 +554,10 @@ export async function executeRuleActions(
                   const listConfig = list.configJson as any;
                   const channels = listConfig.channels || {};
                   if (channels.sms || channels.whatsappGreen || channels.whatsappCloud) {
+                    // Resolve active message from config (messages[] array, not root fields)
+                    const { migrateConfigMessages, getActiveMessage } = await import("@/lib/nurture-messages");
+                    const activeMsg = getActiveMessage(migrateConfigMessages(listConfig));
+
                     // Calculate delay
                     let delayMs = 0;
                     if (config.listId === "review") {
@@ -572,7 +576,7 @@ export async function executeRuleActions(
                       where: { nurtureListId: list.id, phone },
                     });
 
-                    if (sub) {
+                    if (sub && activeMsg) {
                       await inngestClient.send({
                         name: "nurture/delayed-send",
                         data: {
@@ -582,10 +586,10 @@ export async function executeRuleActions(
                           subscriberPhone: phone,
                           subscriberName: name,
                           channels,
-                          smsBody: listConfig.smsBody || "",
-                          whatsappGreenBody: listConfig.whatsappGreenBody || "",
-                          whatsappCloudTemplateName: listConfig.whatsappCloudTemplateName || "",
-                          whatsappCloudLanguageCode: listConfig.whatsappCloudLanguageCode || "he",
+                          smsBody: activeMsg.smsBody || "",
+                          whatsappGreenBody: activeMsg.whatsappGreenBody || "",
+                          whatsappCloudTemplateName: activeMsg.whatsappCloudTemplateName || "",
+                          whatsappCloudLanguageCode: activeMsg.whatsappCloudLanguageCode || "he",
                           slug: config.listId,
                           delayMs,
                           triggerKey: `auto-${config.listId}-${Date.now()}`,
@@ -2260,12 +2264,15 @@ async function addToNurtureList(params: {
 
     if (!existing) {
       try {
+        const { normalizeToE164 } = await import("@/lib/utils/phone");
+        const normalizedPhone = phone ? normalizeToE164(phone) : null;
         await prisma.nurtureSubscriber.create({
           data: {
             nurtureListId: list.id,
             name,
             email,
-            phone,
+            phone: normalizedPhone || phone,
+            phoneActive: !!normalizedPhone,
             sourceType,
             sourceId,
             sourceTableId,
