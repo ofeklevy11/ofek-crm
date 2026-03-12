@@ -346,10 +346,11 @@ export default function RenewalAutomationPage() {
                     {/* Header */}
                     <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 border-b text-xs font-medium text-slate-500">
                       <div className="col-span-3">שם</div>
-                      <div className="col-span-3">תאריך סיום</div>
+                      <div className="col-span-2">תאריך סיום</div>
                       <div className="col-span-2">פרטי קשר</div>
                       <div className="col-span-2">מקור</div>
-                      <div className="col-span-2 text-center">שליחה</div>
+                      <div className="col-span-2 text-center">שליחה אחרונה</div>
+                      <div className="col-span-1 text-center">שליחה</div>
                     </div>
                     {/* List */}
                     <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
@@ -367,7 +368,7 @@ export default function RenewalAutomationPage() {
                               {c.name}
                             </span>
                           </div>
-                          <div className="col-span-3 flex items-center">
+                          <div className="col-span-2 flex items-center">
                             {c.triggerDate ? (
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-xs text-slate-600">
@@ -407,12 +408,16 @@ export default function RenewalAutomationPage() {
                                 </span>
                               )}
                           </div>
-                          <div className="col-span-2 flex items-center justify-center gap-1">
-                            {lastSentMap[c.id] && (
+                          <div className="col-span-2 flex items-center justify-center">
+                            {lastSentMap[c.id] ? (
                               <span className="text-[10px] text-slate-400">
                                 {new Date(lastSentMap[c.id]).toLocaleDateString("he-IL")}
                               </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-300">—</span>
                             )}
+                          </div>
+                          <div className="col-span-1 flex items-center justify-center">
                             <button
                               onClick={(e) => { e.stopPropagation(); handleSendToCustomer(c); }}
                               disabled={sendingCustomerId === c.id || !c.phone || !c.phoneActive || (!quota.isUnlimited && quota.remaining <= 0)}
@@ -956,6 +961,20 @@ export default function RenewalAutomationPage() {
                     </div>
                   </div>
                 </div>
+
+                {lastSentMap[selectedCustomer.id] && (
+                  <div className="flex items-center gap-3 border-t pt-3">
+                    <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center">
+                      <Clock className="w-4 h-4 text-orange-600" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">נשלח לאחרונה</div>
+                      <div className="text-sm text-slate-900">
+                        {new Date(lastSentMap[selectedCustomer.id]).toLocaleDateString("he-IL")}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Delete Button */}
                 <div className="border-t mt-4 pt-4">

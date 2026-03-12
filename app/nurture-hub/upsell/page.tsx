@@ -16,6 +16,7 @@ import {
   Mail,
   Phone,
   X,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -335,9 +336,10 @@ export default function UpsellAutomationPage() {
                   <div className="border rounded-lg overflow-hidden">
                     {/* Header */}
                     <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 border-b text-xs font-medium text-slate-500">
-                      <div className="col-span-4">שם</div>
+                      <div className="col-span-3">שם</div>
                       <div className="col-span-3">פרטי קשר</div>
-                      <div className="col-span-3">מקור</div>
+                      <div className="col-span-2">מקור</div>
+                      <div className="col-span-2 text-center">שליחה אחרונה</div>
                       <div className="col-span-2 text-center">שליחה</div>
                     </div>
                     {/* List */}
@@ -348,7 +350,7 @@ export default function UpsellAutomationPage() {
                           className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors group items-center"
                           onClick={() => setSelectedCustomer(c)}
                         >
-                          <div className="col-span-4 flex items-center gap-2 overflow-hidden">
+                          <div className="col-span-3 flex items-center gap-2 overflow-hidden">
                             <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-bold shrink-0">
                               {c.name.slice(0, 2)}
                             </div>
@@ -359,7 +361,7 @@ export default function UpsellAutomationPage() {
                           <div className="col-span-3 flex items-center text-xs text-slate-600 truncate">
                             {c.email || c.phone || "—"}
                           </div>
-                          <div className="col-span-3 flex items-center gap-1.5">
+                          <div className="col-span-2 flex items-center gap-1.5">
                             <span
                               className={`text-[10px] px-1.5 py-0.5 rounded ${
                                 c.source === "Table Automation"
@@ -380,12 +382,16 @@ export default function UpsellAutomationPage() {
                                 </span>
                               )}
                           </div>
-                          <div className="col-span-2 flex items-center justify-center gap-1">
-                            {lastSentMap[c.id] && (
+                          <div className="col-span-2 flex items-center justify-center">
+                            {lastSentMap[c.id] ? (
                               <span className="text-[10px] text-slate-400">
                                 {new Date(lastSentMap[c.id]).toLocaleDateString("he-IL")}
                               </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-300">—</span>
                             )}
+                          </div>
+                          <div className="col-span-2 flex items-center justify-center">
                             <button
                               onClick={(e) => { e.stopPropagation(); handleSendToCustomer(c); }}
                               disabled={sendingCustomerId === c.id || !c.phone || !c.phoneActive || (!quota.isUnlimited && quota.remaining <= 0)}
@@ -842,6 +848,20 @@ export default function UpsellAutomationPage() {
                     </div>
                   </div>
                 </div>
+
+                {lastSentMap[selectedCustomer.id] && (
+                  <div className="flex items-center gap-3 border-t pt-3">
+                    <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center">
+                      <Clock className="w-4 h-4 text-orange-600" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">נשלח לאחרונה</div>
+                      <div className="text-sm text-slate-900">
+                        {new Date(lastSentMap[selectedCustomer.id]).toLocaleDateString("he-IL")}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Delete Button */}
                 <div className="border-t mt-4 pt-4">
