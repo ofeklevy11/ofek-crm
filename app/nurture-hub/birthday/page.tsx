@@ -6,8 +6,6 @@ import {
   ArrowRight,
   Gift,
   Save,
-  MessageSquare,
-  Smartphone,
   Clock,
   AlertCircle,
   Zap,
@@ -62,9 +60,12 @@ import { useNurtureQuota } from "@/components/nurture/NurtureQuotaContext";
 import NurtureQuotaBadge from "@/components/nurture/NurtureQuotaBadge";
 import NurtureQueuePanel from "@/components/nurture/NurtureQueuePanel";
 import NurtureSendConfirmDialog, { type ChannelSelection, type BulkCustomer } from "@/components/nurture/NurtureSendConfirmDialog";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import NurtureSubscriberSearch from "@/components/nurture/NurtureSubscriberSearch";
+import NurtureCustomerGrid from "@/components/nurture/NurtureCustomerGrid";
+import { useNurtureSubscribers } from "@/hooks/useNurtureSubscribers";
+import { BIRTHDAY_SMART_FIELDS } from "@/lib/nurture-fields";
+import type { NurtureSubscriberResult } from "../actions";
 import {
-  getNurtureSubscribers,
   getNurtureRules,
   updateNurtureSubscriber,
   deleteNurtureSubscriber,
@@ -76,7 +77,6 @@ import {
   getNurtureConfig,
   getAvailableChannels,
   sendNurtureCampaign,
-  getSubscriberLastSentMap,
 } from "../actions";
 import {
   deleteAutomationRule,
@@ -84,33 +84,15 @@ import {
   updateAutomationRule,
 } from "@/app/actions/automations";
 
-// Type needed for list state
-interface Customer {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  emailActive: boolean;
-  phoneActive: boolean;
-  source: string;
-  sourceTableId?: number;
-  sourceTableName?: string;
-  triggerDate?: string | null;
-}
-
 // Since Tabs might not be in the listed files (I didn't see tabs.tsx), I'll implement a simple one or just check quickly.
 // Ah, I didn't see tabs.tsx in the list. I'll use state for tabs.
 
 export default function BirthdayAutomationPage() {
-  const [activeTab, setActiveTab] = useState("content");
   const [isEnabled, setIsEnabled] = useState(false);
   const [isAutoModalOpen, setIsAutoModalOpen] = useState(false);
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [rules, setRules] = useState<any[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
-    null
-  );
-  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<NurtureSubscriberResult | null>(null);
+  const [editingCustomer, setEditingCustomer] = useState<NurtureSubscriberResult | null>(null);
 
   // Tables and editing state
   const [tables, setTables] = useState<DataSource[]>([]);
@@ -126,31 +108,28 @@ export default function BirthdayAutomationPage() {
   const [fetchingFields, setFetchingFields] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Hook for subscribers with pagination/search
+  const {
+    customers, total, hasMore, isLoading, isLoadingMore,
+    lastSentMap, selectedCustomerIds,
+    search, filters, setSearch, setFilters,
+    toggleCustomerSelection, toggleAllCustomers,
+    loadMore, refreshData,
+  } = useNurtureSubscribers("birthday");
+
   // Helper to get table name from ID
   const getTableName = (tableId: string) => {
     const table = tables.find((t) => t.id === tableId);
     return table?.name || `טבלה ${tableId}`;
   };
 
-  const refreshData = () => {
-    getNurtureSubscribers("birthday").then((subs) => {
-      setCustomers(
-        subs.map((s) => ({
-          ...s,
-          sourceTableName: s.sourceTableName || undefined,
-        }))
-      );
-    }).catch((err: any) => {
-      if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
-      else toast.error(getUserFriendlyError(err));
-    });
+  const refreshRules = () => {
     getNurtureRules("birthday").then((r) => {
       setRules(r);
     }).catch((err: any) => {
       if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
       else toast.error(getUserFriendlyError(err));
     });
-    getSubscriberLastSentMap("birthday").then(setLastSentMap).catch(() => {});
   };
 
   // Load tables on mount
@@ -186,11 +165,10 @@ export default function BirthdayAutomationPage() {
   }, [editConfig.tableId]);
 
   useEffect(() => {
-    refreshData();
+    refreshRules();
   }, []);
 
-  const handleAddCustomers = (newCustomers: any[]) => {
-    // Refresh from DB to get the latest
+  const handleAddCustomers = () => {
     refreshData();
   };
 
@@ -199,10 +177,9 @@ export default function BirthdayAutomationPage() {
   const [sending, setSending] = useState(false);
   const [sendingCustomerId, setSendingCustomerId] = useState<string | null>(null);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
-  const [sendConfirmCustomer, setSendConfirmCustomer] = useState<Customer | null>(null);
+  const [sendConfirmCustomer, setSendConfirmCustomer] = useState<NurtureSubscriberResult | null>(null);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const [bulkSendOpen, setBulkSendOpen] = useState(false);
-  const [lastSentMap, setLastSentMap] = useState<Record<string, string>>({});
   const quota = useNurtureQuota();
 
   // Form State
@@ -259,17 +236,19 @@ export default function BirthdayAutomationPage() {
     }
   };
 
-  const bulkCustomers: BulkCustomer[] = useMemo(() =>
-    customers.map((c) => ({
+  const bulkCustomers: BulkCustomer[] = useMemo(() => {
+    const source = selectedCustomerIds.size > 0
+      ? customers.filter((c) => selectedCustomerIds.has(c.id))
+      : customers;
+    return source.map((c) => ({
       id: c.id,
       name: c.name,
       phone: c.phone,
       phoneActive: c.phoneActive,
       alreadySent: !!lastSentMap[c.id],
       lastSentAt: lastSentMap[c.id] || undefined,
-    })),
-    [customers, lastSentMap]
-  );
+    }));
+  }, [customers, lastSentMap, selectedCustomerIds]);
 
   const handleSendNow = () => setBulkSendOpen(true);
 
@@ -299,7 +278,7 @@ export default function BirthdayAutomationPage() {
     }
   };
 
-  const handleSendToCustomer = (customer: Customer) => {
+  const handleSendToCustomer = (customer: NurtureSubscriberResult) => {
     if (!quota.isUnlimited && quota.remaining <= 0) {
       toast.error(`חרגת ממגבלת ההודעות. נסה שוב בעוד ${quota.resetInSeconds} שניות.`);
       return;
@@ -364,7 +343,7 @@ export default function BirthdayAutomationPage() {
               className="bg-pink-600 hover:bg-pink-700 gap-2"
             >
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              שלח לכולם
+              {selectedCustomerIds.size > 0 ? `שלח לנבחרים (${selectedCustomerIds.size})` : "שלח לכולם"}
             </Button>
             <Button onClick={handleSave} disabled={saving} variant="outline" className="gap-2">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -382,7 +361,7 @@ export default function BirthdayAutomationPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex justify-between items-center">
-                  <span>רשימת לקוחות ({customers.length})</span>
+                  <span>רשימת לקוחות ({total})</span>
                   <CustomerListManager
                     onAddCustomers={handleAddCustomers}
                     listSlug="birthday"
@@ -395,95 +374,44 @@ export default function BirthdayAutomationPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {customers.length === 0 ? (
-                  <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-lg border border-dashed text-sm">
-                    עדיין אין לקוחות ברשימה. לחץ על "הוסף לקוחות" כדי להתחיל.
-                  </div>
-                ) : (
-                  <div className="border rounded-lg overflow-hidden">
-                    {/* Header */}
-                    <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 border-b text-xs font-medium text-slate-500">
-                      <div className="col-span-3">שם</div>
-                      <div className="col-span-2">תאריך</div>
-                      <div className="col-span-2">פרטי קשר</div>
-                      <div className="col-span-2">מקור</div>
-                      <div className="col-span-2 text-center">שליחה אחרונה</div>
-                      <div className="col-span-1 text-center">שליחה</div>
-                    </div>
-                    {/* List */}
-                    <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
-                      {customers.map((c) => (
-                        <div
-                          key={c.id}
-                          className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors group items-center"
-                          onClick={() => setSelectedCustomer(c)}
-                        >
-                          <div className="col-span-3 flex items-center gap-2 overflow-hidden">
-                            <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold shrink-0">
-                              {c.name.slice(0, 2)}
-                            </div>
-                            <span className="text-sm font-medium text-slate-900 truncate">
-                              {c.name}
-                            </span>
-                          </div>
-                          <div className="col-span-2 flex items-center text-xs text-slate-600">
-                            {c.triggerDate ? (
-                              new Date(c.triggerDate).toLocaleDateString("he-IL")
-                            ) : (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 font-medium">
-                                חסר תאריך
-                              </span>
-                            )}
-                          </div>
-                          <div className="col-span-2 flex items-center text-xs text-slate-600 truncate">
-                            {c.email || c.phone || "—"}
-                          </div>
-                          <div className="col-span-2 flex items-center gap-1.5">
-                            <span
-                              className={`text-[10px] px-1.5 py-0.5 rounded ${
-                                c.source === "Table Automation"
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : "bg-slate-100 text-slate-500"
-                              }`}
-                            >
-                              {c.source === "Manual"
-                                ? "ידני"
-                                : c.source === "Table Automation"
-                                ? "אוטומציה"
-                                : c.source}
-                            </span>
-                            {c.source === "Table Automation" &&
-                              c.sourceTableName && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">
-                                  {c.sourceTableName}
-                                </span>
-                              )}
-                          </div>
-                          <div className="col-span-2 flex items-center justify-center">
-                            {lastSentMap[c.id] ? (
-                              <span className="text-[10px] text-slate-400">
-                                {new Date(lastSentMap[c.id]).toLocaleDateString("he-IL")}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-slate-300">—</span>
-                            )}
-                          </div>
-                          <div className="col-span-1 flex items-center justify-center">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleSendToCustomer(c); }}
-                              disabled={sendingCustomerId === c.id || !c.phone || !c.phoneActive || (!quota.isUnlimited && quota.remaining <= 0)}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded bg-pink-50 text-pink-600 hover:bg-pink-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                              title={!c.phone || !c.phoneActive ? "אין מספר טלפון פעיל" : `שלח ל-${c.name}`}
-                            >
-                              {sendingCustomerId === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                              שלח
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <NurtureSubscriberSearch
+                  smartFields={BIRTHDAY_SMART_FIELDS}
+                  search={search}
+                  onSearchChange={setSearch}
+                  filters={filters}
+                  onFiltersChange={setFilters}
+                />
+                <NurtureCustomerGrid
+                  customers={customers}
+                  total={total}
+                  hasMore={hasMore}
+                  isLoading={isLoading}
+                  isLoadingMore={isLoadingMore}
+                  lastSentMap={lastSentMap}
+                  selectedCustomerIds={selectedCustomerIds}
+                  sendingCustomerId={sendingCustomerId}
+                  quotaRemaining={quota.remaining}
+                  isQuotaUnlimited={quota.isUnlimited}
+                  dateColumn={{
+                    label: "תאריך",
+                    render: (c) =>
+                      c.triggerDate ? (
+                        new Date(c.triggerDate).toLocaleDateString("he-IL")
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 font-medium">
+                          חסר תאריך
+                        </span>
+                      ),
+                  }}
+                  accentColor="pink"
+                  onToggleSelection={toggleCustomerSelection}
+                  onToggleAll={toggleAllCustomers}
+                  onCustomerClick={setSelectedCustomer}
+                  onSendToCustomer={handleSendToCustomer}
+                  onLoadMore={loadMore}
+                  hasActiveSearch={!!search || filters.length > 0}
+                  onClearSearch={() => { setSearch(""); setFilters([]); }}
+                />
               </CardContent>
             </Card>
 
@@ -546,7 +474,7 @@ export default function BirthdayAutomationPage() {
                                     rule.id,
                                     !rule.isActive
                                   );
-                                  refreshData();
+                                  refreshRules();
                                 } catch (error) {
                                   if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
                                   else toast.error(getUserFriendlyError(error));
@@ -571,7 +499,7 @@ export default function BirthdayAutomationPage() {
                                 if (await showConfirm("האם למחוק את חוק האוטומציה?")) {
                                   try {
                                     await deleteAutomationRule(rule.id);
-                                    refreshData();
+                                    refreshRules();
                                   } catch (error) {
                                     if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
                                     else toast.error(getUserFriendlyError(error));

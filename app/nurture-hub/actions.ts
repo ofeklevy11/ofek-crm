@@ -354,54 +354,133 @@ export async function getRawTableRecords(
   }
 }
 
-export async function getNurtureSubscribers(slug: string) {
+export type NurtureSubscriberFilter = {
+  field: string;      // 'name' | 'email' | 'phone' | 'sourceType' | 'triggerDate' | 'phoneActive'
+  operator: string;   // 'contains' | 'equals' | 'before' | 'after' | 'is'
+  value: string;
+};
+
+export type NurtureSubscriberResult = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  emailActive: boolean;
+  phoneActive: boolean;
+  triggerDate: string | null;
+  source: string;
+  sourceTableId?: number;
+  sourceTableName?: string | null;
+  createdAt: Date;
+};
+
+export async function getNurtureSubscribers(
+  slug: string,
+  options?: {
+    skip?: number;
+    take?: number;
+    search?: string;
+    filters?: NurtureSubscriberFilter[];
+  }
+): Promise<{ subscribers: NurtureSubscriberResult[]; total: number; hasMore: boolean }> {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
-    if (!currentUser) return [];
+    if (!currentUser) return { subscribers: [], total: 0, hasMore: false };
 
     const list = await prisma.nurtureList.findFirst({
-      where: {
-        slug,
-        companyId: currentUser.companyId,
-      },
-      include: {
-        subscribers: {
-          orderBy: { createdAt: "desc" },
-        },
-      },
+      where: { slug, companyId: currentUser.companyId },
+      select: { id: true },
     });
+    if (!list) return { subscribers: [], total: 0, hasMore: false };
 
-    if (!list) return [];
+    const skip = options?.skip ?? 0;
+    const take = options?.take ?? 20;
 
-    // Get all unique table IDs from subscribers
-    const tableIds = [
-      ...new Set(
-        list.subscribers
-          .filter((sub: any) => sub.sourceTableId)
-          .map((sub: any) => sub.sourceTableId)
-      ),
-    ];
+    // Build where clause
+    const where: any = { nurtureListId: list.id };
+    const andConditions: any[] = [];
 
-    // Fetch table names in bulk (scoped to company)
-    const tables =
-      tableIds.length > 0
-        ? await prisma.tableMeta.findMany({
-            where: { id: { in: tableIds as number[] }, companyId: currentUser.companyId },
-            select: { id: true, name: true },
-          })
-        : [];
+    // General search: OR across name/email/phone
+    if (options?.search?.trim()) {
+      const q = options.search.trim();
+      andConditions.push({
+        OR: [
+          { name: { contains: q, mode: "insensitive" } },
+          { email: { contains: q, mode: "insensitive" } },
+          { phone: { contains: q, mode: "insensitive" } },
+        ],
+      });
+    }
 
+    // Smart filters
+    if (options?.filters?.length) {
+      for (const f of options.filters) {
+        if (!f.value && f.field !== "phoneActive") continue;
+        switch (f.field) {
+          case "name":
+          case "email":
+          case "phone":
+            andConditions.push({ [f.field]: { contains: f.value, mode: "insensitive" } });
+            break;
+          case "sourceType": {
+            // Map Hebrew labels to DB values
+            const valueMap: Record<string, string> = {
+              "ידני": "MANUAL", "MANUAL": "MANUAL",
+              "אוטומציה": "TABLE", "TABLE": "TABLE",
+              "Webhook": "WEBHOOK", "WEBHOOK": "WEBHOOK",
+            };
+            const mapped = valueMap[f.value] || f.value;
+            andConditions.push({ sourceType: mapped });
+            break;
+          }
+          case "triggerDate":
+            if (f.operator === "before") {
+              andConditions.push({ triggerDate: { lte: new Date(f.value) } });
+            } else if (f.operator === "after") {
+              andConditions.push({ triggerDate: { gte: new Date(f.value) } });
+            }
+            break;
+          case "phoneActive":
+            andConditions.push({ phoneActive: f.value === "true" });
+            break;
+        }
+      }
+    }
+
+    if (andConditions.length > 0) where.AND = andConditions;
+
+    // Parallel count + find
+    const [total, subscribers] = await Promise.all([
+      prisma.nurtureSubscriber.count({ where }),
+      prisma.nurtureSubscriber.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take,
+      }),
+    ]);
+
+    // Resolve table names in bulk
+    const tableIds = [...new Set(
+      subscribers.filter((sub: any) => sub.sourceTableId).map((sub: any) => sub.sourceTableId)
+    )];
+    const tables = tableIds.length > 0
+      ? await prisma.tableMeta.findMany({
+          where: { id: { in: tableIds as number[] }, companyId: currentUser.companyId },
+          select: { id: true, name: true },
+        })
+      : [];
     const tableMap = new Map(tables.map((t) => [t.id, t.name]));
 
-    return list.subscribers.map((sub: any) => ({
+    const mapped = subscribers.map((sub: any) => ({
       id: sub.id.toString(),
       name: sub.name,
       email: sub.email || "",
       phone: sub.phone || "",
       emailActive: sub.emailActive ?? true,
       phoneActive: sub.phoneActive ?? true,
-      triggerDate: sub.triggerDate || null,
+      triggerDate: sub.triggerDate ? sub.triggerDate.toISOString() : null,
       source:
         sub.sourceType === "TABLE"
           ? "Table Automation"
@@ -409,14 +488,14 @@ export async function getNurtureSubscribers(slug: string) {
           ? "Webhook"
           : sub.sourceType || "Manual",
       sourceTableId: sub.sourceTableId,
-      sourceTableName: sub.sourceTableId
-        ? tableMap.get(sub.sourceTableId)
-        : null,
+      sourceTableName: sub.sourceTableId ? tableMap.get(sub.sourceTableId) : null,
       createdAt: sub.createdAt,
     }));
+
+    return { subscribers: mapped, total, hasMore: skip + take < total };
   } catch (error) {
     console.error("Error fetching nurture subscribers:", error);
-    return [];
+    return { subscribers: [], total: 0, hasMore: false };
   }
 }
 
