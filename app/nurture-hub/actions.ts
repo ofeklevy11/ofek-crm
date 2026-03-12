@@ -898,6 +898,7 @@ export async function getNurtureSendLogs(slug: string) {
 
     return logs.map((l) => ({
       id: l.id,
+      subscriberId: l.subscriberId,
       subscriberName: l.subscriber.name,
       subscriberPhone: l.subscriber.phone,
       triggerKey: l.triggerKey,
@@ -931,7 +932,8 @@ export async function getNurtureQuotaAction() {
 export async function sendNurtureCampaign(
   slug: string,
   subscriberId?: string,
-  channelOverrides?: { sms?: boolean; whatsappGreen?: boolean; whatsappCloud?: boolean }
+  channelOverrides?: { sms?: boolean; whatsappGreen?: boolean; whatsappCloud?: boolean },
+  subscriberIds?: string[]
 ): Promise<{ success: boolean; error?: string; count?: number; totalSubscribers?: number; quotaLimited?: boolean; resetInSeconds?: number; channelsSent?: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean }; batchId?: string }> {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
@@ -950,9 +952,9 @@ export async function sendNurtureCampaign(
     const configChannels = config.channels || {};
     const channels = channelOverrides
       ? {
-          sms: !!configChannels.sms && channelOverrides.sms !== false,
-          whatsappGreen: !!configChannels.whatsappGreen && channelOverrides.whatsappGreen !== false,
-          whatsappCloud: !!configChannels.whatsappCloud && channelOverrides.whatsappCloud !== false,
+          sms: !!channelOverrides.sms,
+          whatsappGreen: !!channelOverrides.whatsappGreen,
+          whatsappCloud: !!channelOverrides.whatsappCloud,
         }
       : configChannels;
 
@@ -1006,6 +1008,12 @@ export async function sendNurtureCampaign(
       if (activeSubscribers.length === 0) {
         return { success: false, error: "המנוי לא נמצא או שאין לו מספר טלפון פעיל" };
       }
+    }
+
+    // Filter to specific subscriber IDs if provided (bulk dialog selection)
+    if (!subscriberId && subscriberIds && subscriberIds.length > 0) {
+      const idSet = new Set(subscriberIds.map(Number));
+      activeSubscribers = activeSubscribers.filter((sub: any) => idSet.has(sub.id));
     }
 
     if (activeSubscribers.length === 0) {

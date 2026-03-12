@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -42,7 +42,7 @@ import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
 import { useNurtureQuota } from "@/components/nurture/NurtureQuotaContext";
 import NurtureQuotaBadge from "@/components/nurture/NurtureQuotaBadge";
 import NurtureQueuePanel from "@/components/nurture/NurtureQueuePanel";
-import NurtureSendConfirmDialog, { type ChannelSelection } from "@/components/nurture/NurtureSendConfirmDialog";
+import NurtureSendConfirmDialog, { type ChannelSelection, type BulkCustomer } from "@/components/nurture/NurtureSendConfirmDialog";
 
 import {
   getNurtureSubscribers,
@@ -55,6 +55,7 @@ import {
   getNurtureConfig,
   getAvailableChannels,
   sendNurtureCampaign,
+  getNurtureSendLogs,
 } from "../actions";
 import {
   deleteAutomationRule,
@@ -113,6 +114,7 @@ export default function UpsellAutomationPage() {
       if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
       else toast.error(getUserFriendlyError(err));
     });
+    getNurtureSendLogs("upsell").then(setSendLogs).catch(() => {});
   };
 
   // Load tables on mount
@@ -160,6 +162,8 @@ export default function UpsellAutomationPage() {
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [sendConfirmCustomer, setSendConfirmCustomer] = useState<Customer | null>(null);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
+  const [bulkSendOpen, setBulkSendOpen] = useState(false);
+  const [sendLogs, setSendLogs] = useState<any[]>([]);
   const quota = useNurtureQuota();
   const [config, setConfig] = useState({
     channels: { sms: false, whatsappGreen: false, whatsappCloud: false },
@@ -190,20 +194,24 @@ export default function UpsellAutomationPage() {
     }
   };
 
-  const handleSendNow = async () => {
-    if (!quota.isUnlimited && quota.remaining <= 0) {
-      toast.error(`אין מכסת הודעות זמינה. נסה שוב בעוד ${quota.resetInSeconds} שניות.`);
-      return;
-    }
-    const maxSendable = quota.isUnlimited ? customers.length : quota.remaining;
-    const limited = !quota.isUnlimited && maxSendable < customers.length;
-    const confirmMsg = limited
-      ? `ניתן לשלוח ל-${maxSendable} מתוך ${customers.length} לקוחות (מגבלת מכסה). להמשיך?`
-      : `לשלוח את הקמפיין ל-${customers.length} לקוחות?`;
-    if (!(await showConfirm(confirmMsg))) return;
+  const bulkCustomers: BulkCustomer[] = useMemo(() =>
+    customers.map((c) => ({
+      id: c.id,
+      name: c.name,
+      phone: c.phone,
+      phoneActive: c.phoneActive,
+      alreadySent: sendLogs.some((log) => String(log.subscriberId) === c.id && log.status === "SENT"),
+    })),
+    [customers, sendLogs]
+  );
+
+  const handleSendNow = () => setBulkSendOpen(true);
+
+  const handleBulkConfirmSend = async (channels: ChannelSelection, subscriberIds?: string[]) => {
+    setBulkSendOpen(false);
     setSending(true);
     try {
-      const result = await sendNurtureCampaign("upsell");
+      const result = await sendNurtureCampaign("upsell", undefined, channels, subscriberIds);
       if (result.success) {
         const ch = result.channelsSent;
         const parts: string[] = [];
@@ -215,6 +223,7 @@ export default function UpsellAutomationPage() {
         toast.success(`${result.count} הודעות נשלחו בהצלחה${via}${quotaNote}`);
         setActiveBatchId(result.batchId ?? null);
         quota.refreshQuota();
+        refreshData();
       }
       else toast.error(getFriendlyResultError(result.error, "שגיאה בשליחה"));
     } catch (error) {
@@ -866,10 +875,21 @@ export default function UpsellAutomationPage() {
       <NurtureSendConfirmDialog
         open={sendConfirmOpen}
         onOpenChange={setSendConfirmOpen}
+        mode="single"
         customerName={sendConfirmCustomer?.name || ""}
         enabledChannels={config.channels}
         onConfirm={handleConfirmSend}
         loading={sendingCustomerId === sendConfirmCustomer?.id}
+      />
+      <NurtureSendConfirmDialog
+        open={bulkSendOpen}
+        onOpenChange={setBulkSendOpen}
+        mode="bulk"
+        customers={bulkCustomers}
+        enabledChannels={config.channels}
+        onConfirm={handleBulkConfirmSend}
+        loading={sending}
+        quota={quota}
       />
     </div>
   );
