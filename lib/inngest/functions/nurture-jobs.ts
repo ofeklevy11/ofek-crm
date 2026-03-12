@@ -29,10 +29,21 @@ export const sendNurtureCampaignMessage = inngest.createFunction(
       whatsappCloudTemplateName,
       whatsappCloudLanguageCode,
       slug,
+      batchId,
     } = event.data;
+
+    // Mark as sending in batch queue
+    if (batchId) {
+      try {
+        const { updateQueueItemStatus } = await import("@/lib/nurture-queue");
+        await updateQueueItemStatus(batchId, subscriberPhone, "sending");
+      } catch { /* non-critical */ }
+    }
 
     const interpolate = (text: string) =>
       text.replace(/\{first_name\}/g, subscriberName);
+
+    let hasFailed = false;
 
     // Send SMS
     if (!channels.sms) {
@@ -111,6 +122,7 @@ export const sendNurtureCampaignMessage = inngest.createFunction(
             template: whatsappCloudTemplateName,
           });
         } catch (err) {
+          hasFailed = true;
           log.error("Nurture WhatsApp Cloud failed", {
             companyId,
             slug,
@@ -119,6 +131,14 @@ export const sendNurtureCampaignMessage = inngest.createFunction(
           });
         }
       });
+    }
+
+    // Update batch queue with final status
+    if (batchId) {
+      try {
+        const { updateQueueItemStatus } = await import("@/lib/nurture-queue");
+        await updateQueueItemStatus(batchId, subscriberPhone, hasFailed ? "failed" : "sent");
+      } catch { /* non-critical */ }
     }
 
     return { success: true };

@@ -928,7 +928,11 @@ export async function getNurtureQuotaAction() {
 }
 
 // Send nurture campaign to all subscribers or a specific one
-export async function sendNurtureCampaign(slug: string, subscriberId?: string): Promise<{ success: boolean; error?: string; count?: number; resetInSeconds?: number; channelsSent?: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean } }> {
+export async function sendNurtureCampaign(
+  slug: string,
+  subscriberId?: string,
+  channelOverrides?: { sms?: boolean; whatsappGreen?: boolean; whatsappCloud?: boolean }
+): Promise<{ success: boolean; error?: string; count?: number; totalSubscribers?: number; quotaLimited?: boolean; resetInSeconds?: number; channelsSent?: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean }; batchId?: string }> {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
@@ -943,19 +947,25 @@ export async function sendNurtureCampaign(slug: string, subscriberId?: string): 
     if (!list.configJson) return { success: false, error: "יש לשמור את ההגדרות לפני שליחה" };
 
     const config = list.configJson as any;
-    const channels = config.channels || {};
+    const configChannels = config.channels || {};
+    const channels = channelOverrides
+      ? {
+          sms: !!configChannels.sms && channelOverrides.sms !== false,
+          whatsappGreen: !!configChannels.whatsappGreen && channelOverrides.whatsappGreen !== false,
+          whatsappCloud: !!configChannels.whatsappCloud && channelOverrides.whatsappCloud !== false,
+        }
+      : configChannels;
 
     if (!channels.sms && !channels.whatsappGreen && !channels.whatsappCloud) {
       return { success: false, error: "יש לבחור לפחות ערוץ שליחה אחד" };
     }
 
-    // Rate limit individual sends only (not bulk)
+    // Rate limit both individual and bulk sends
+    const tier = (currentUser.isPremium as "basic" | "premium" | "super") || "basic";
     if (subscriberId) {
-      const tier = (currentUser.isPremium as "basic" | "premium" | "super") || "basic";
       if (tier !== "super") {
-        const channelCount = [channels.sms, channels.whatsappGreen, channels.whatsappCloud].filter(Boolean).length;
         const { consumeNurtureQuota } = await import("@/lib/nurture-rate-limit");
-        const quota = await consumeNurtureQuota(currentUser.id, tier, channelCount);
+        const quota = await consumeNurtureQuota(currentUser.id, tier, 1);
         if (!quota.allowed) {
           return {
             success: false,
@@ -1002,6 +1012,28 @@ export async function sendNurtureCampaign(slug: string, subscriberId?: string): 
       return { success: false, error: "אין מנויים פעילים עם מספרי טלפון" };
     }
 
+    // Bulk rate limiting (not for individual sends — already handled above)
+    const totalSubscribers = activeSubscribers.length;
+    let quotaLimited = false;
+    if (!subscriberId && tier !== "super") {
+      const totalUnitsNeeded = activeSubscribers.length;
+      const { consumeNurtureQuotaBulk } = await import("@/lib/nurture-rate-limit");
+      const bulk = await consumeNurtureQuotaBulk(currentUser.id, tier, totalUnitsNeeded);
+
+      if (bulk.consumed === 0) {
+        return {
+          success: false,
+          error: `אין מכסת הודעות זמינה. נסה שוב בעוד ${bulk.resetInSeconds} שניות.`,
+          resetInSeconds: bulk.resetInSeconds,
+        };
+      }
+
+      if (bulk.consumed < totalUnitsNeeded) {
+        activeSubscribers = activeSubscribers.slice(0, bulk.consumed);
+        quotaLimited = true;
+      }
+    }
+
     // Validate integrations
     const available = await getAvailableChannels();
     if (channels.sms && !available.sms) {
@@ -1021,13 +1053,31 @@ export async function sendNurtureCampaign(slug: string, subscriberId?: string): 
     const { createLogger } = await import("@/lib/logger");
     const log = createLogger("NurtureCampaign");
 
+    // Generate batch ID for queue tracking (bulk sends only)
+    const batchId = !subscriberId ? crypto.randomUUID() : undefined;
+
     log.info("Dispatching nurture campaign", {
       slug,
       channels,
       smsBody: !!activeMsg.smsBody,
       subscriberCount: activeSubscribers.length,
       phones: activeSubscribers.map((s: any) => s.phone?.substring(0, 6) + "***"),
+      batchId,
+      quotaLimited,
     });
+
+    // Init batch queue in Redis (bulk sends only)
+    if (batchId) {
+      const { initBatchQueue } = await import("@/lib/nurture-queue");
+      await initBatchQueue(
+        batchId,
+        currentUser.id,
+        slug,
+        activeSubscribers.map((s: any) => ({ phone: s.phone, name: s.name })),
+        channels,
+        activeMsg.smsBody || activeMsg.whatsappGreenBody || activeMsg.whatsappCloudTemplateName || ""
+      );
+    }
 
     // Enqueue a message event for each subscriber
     const events = activeSubscribers.map((sub: any) => ({
@@ -1042,6 +1092,7 @@ export async function sendNurtureCampaign(slug: string, subscriberId?: string): 
         whatsappCloudTemplateName: activeMsg.whatsappCloudTemplateName || "",
         whatsappCloudLanguageCode: activeMsg.whatsappCloudLanguageCode || "he",
         slug,
+        batchId,
       },
     }));
 
@@ -1050,6 +1101,9 @@ export async function sendNurtureCampaign(slug: string, subscriberId?: string): 
     return {
       success: true,
       count: activeSubscribers.length,
+      totalSubscribers,
+      quotaLimited,
+      batchId,
       channelsSent: {
         sms: !!channels.sms,
         whatsappGreen: !!channels.whatsappGreen,
@@ -1058,6 +1112,27 @@ export async function sendNurtureCampaign(slug: string, subscriberId?: string): 
     };
   } catch (error) {
     return handleNurtureError(error, "sendNurtureCampaign");
+  }
+}
+
+// Get live batch queue status for polling
+export async function getNurtureBatchStatus(batchId: string) {
+  try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return null;
+
+    const { getBatchQueueStatus } = await import("@/lib/nurture-queue");
+    const status = await getBatchQueueStatus(batchId);
+    if (!status) return null;
+
+    // Verify ownership
+    if (status.meta.userId !== currentUser.id) return null;
+
+    return status;
+  } catch (error) {
+    console.error("[NurtureHub] getNurtureBatchStatus:", error);
+    return null;
   }
 }
 

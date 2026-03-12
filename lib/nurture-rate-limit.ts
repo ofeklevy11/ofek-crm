@@ -81,6 +81,61 @@ export async function consumeNurtureQuota(
   }
 }
 
+/**
+ * Lua script: atomic partial consumption — consumes up to available quota.
+ * Returns [consumed, remaining, ttl].
+ */
+const CONSUME_BULK_LUA = `
+local key = KEYS[1]
+local requested = tonumber(ARGV[1])
+local limit = tonumber(ARGV[2])
+local window = tonumber(ARGV[3])
+local current = tonumber(redis.call('GET', key) or '0')
+local available = limit - current
+if available <= 0 then
+  local ttl = redis.call('TTL', key)
+  if ttl < 0 then ttl = window end
+  return {0, 0, ttl}
+end
+local consume = math.min(requested, available)
+local newVal = redis.call('INCRBY', key, consume)
+if newVal == consume then redis.call('EXPIRE', key, window) end
+local ttl = redis.call('TTL', key)
+if ttl < 0 then ttl = window end
+return {consume, limit - newVal, ttl}
+`;
+
+export async function consumeNurtureQuotaBulk(
+  userId: number,
+  tier: UserTier,
+  requestedUnits: number
+): Promise<{ consumed: number; remaining: number; resetInSeconds: number }> {
+  const limit = TIER_LIMITS[tier];
+  if (limit === Infinity) {
+    return { consumed: requestedUnits, remaining: Infinity, resetInSeconds: 0 };
+  }
+
+  try {
+    const result = (await redis.eval(
+      CONSUME_BULK_LUA,
+      1,
+      redisKey(userId),
+      requestedUnits,
+      limit,
+      WINDOW_SECONDS
+    )) as [number, number, number];
+
+    return {
+      consumed: result[0],
+      remaining: result[1],
+      resetInSeconds: result[2],
+    };
+  } catch {
+    // Redis down — fallback: allow all (best-effort)
+    return { consumed: requestedUnits, remaining: 0, resetInSeconds: WINDOW_SECONDS };
+  }
+}
+
 export async function getNurtureQuotaStatus(
   userId: number,
   tier: UserTier

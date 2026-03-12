@@ -60,6 +60,8 @@ import NurtureMessageEditor, { migrateConfigMessages, getActiveMessage, NurtureM
 import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
 import { useNurtureQuota } from "@/components/nurture/NurtureQuotaContext";
 import NurtureQuotaBadge from "@/components/nurture/NurtureQuotaBadge";
+import NurtureQueuePanel from "@/components/nurture/NurtureQueuePanel";
+import NurtureSendConfirmDialog, { type ChannelSelection } from "@/components/nurture/NurtureSendConfirmDialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   getNurtureSubscribers,
@@ -194,6 +196,9 @@ export default function BirthdayAutomationPage() {
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendingCustomerId, setSendingCustomerId] = useState<string | null>(null);
+  const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
+  const [sendConfirmCustomer, setSendConfirmCustomer] = useState<Customer | null>(null);
+  const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const quota = useNurtureQuota();
 
   // Form State
@@ -251,8 +256,16 @@ export default function BirthdayAutomationPage() {
   };
 
   const handleSendNow = async () => {
-    const tierInfo = quota.isUnlimited ? "ללא הגבלה" : `${quota.limit} הודעות/דקה`;
-    if (!(await showConfirm(`לשלוח את הקמפיין ל-${customers.length} לקוחות?\n\nשליחה המונית מתבצעת דרך תור עיבוד ואינה מושפעת ממגבלת ההודעות האישית (${tierInfo}).`))) return;
+    if (!quota.isUnlimited && quota.remaining <= 0) {
+      toast.error(`אין מכסת הודעות זמינה. נסה שוב בעוד ${quota.resetInSeconds} שניות.`);
+      return;
+    }
+    const maxSendable = quota.isUnlimited ? customers.length : quota.remaining;
+    const limited = !quota.isUnlimited && maxSendable < customers.length;
+    const confirmMsg = limited
+      ? `ניתן לשלוח ל-${maxSendable} מתוך ${customers.length} לקוחות (מגבלת מכסה). להמשיך?`
+      : `לשלוח את הקמפיין ל-${customers.length} לקוחות?`;
+    if (!(await showConfirm(confirmMsg))) return;
     setSending(true);
     try {
       const result = await sendNurtureCampaign("birthday");
@@ -263,7 +276,10 @@ export default function BirthdayAutomationPage() {
         if (ch?.whatsappGreen) parts.push("WhatsApp");
         if (ch?.whatsappCloud) parts.push("WhatsApp Cloud");
         const via = parts.length > 0 ? ` (${parts.join(", ")})` : "";
-        toast.success(`${result.count} הודעות נשלחו בהצלחה${via}`);
+        const quotaNote = result.quotaLimited ? ` (מתוך ${result.totalSubscribers})` : "";
+        toast.success(`${result.count} הודעות נשלחו בהצלחה${via}${quotaNote}`);
+        setActiveBatchId(result.batchId ?? null);
+        quota.refreshQuota();
       }
       else toast.error(getFriendlyResultError(result.error, "שגיאה בשליחה"));
     } catch (error) {
@@ -273,15 +289,22 @@ export default function BirthdayAutomationPage() {
     }
   };
 
-  const handleSendToCustomer = async (customer: Customer) => {
+  const handleSendToCustomer = (customer: Customer) => {
     if (!quota.isUnlimited && quota.remaining <= 0) {
       toast.error(`חרגת ממגבלת ההודעות. נסה שוב בעוד ${quota.resetInSeconds} שניות.`);
       return;
     }
-    if (!(await showConfirm(`לשלוח הודעה ל-${customer.name}?`))) return;
+    setSendConfirmCustomer(customer);
+    setSendConfirmOpen(true);
+  };
+
+  const handleConfirmSend = async (selectedChannels: ChannelSelection) => {
+    const customer = sendConfirmCustomer;
+    if (!customer) return;
+    setSendConfirmOpen(false);
     setSendingCustomerId(customer.id);
     try {
-      const result = await sendNurtureCampaign("birthday", customer.id);
+      const result = await sendNurtureCampaign("birthday", customer.id, selectedChannels);
       if (result.success) {
         const ch = result.channelsSent;
         const parts: string[] = [];
@@ -1411,6 +1434,15 @@ export default function BirthdayAutomationPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <NurtureQueuePanel batchId={activeBatchId} onClose={() => setActiveBatchId(null)} />
+      <NurtureSendConfirmDialog
+        open={sendConfirmOpen}
+        onOpenChange={setSendConfirmOpen}
+        customerName={sendConfirmCustomer?.name || ""}
+        enabledChannels={config.channels}
+        onConfirm={handleConfirmSend}
+        loading={sendingCustomerId === sendConfirmCustomer?.id}
+      />
     </div>
   );
 }

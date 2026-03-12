@@ -332,6 +332,7 @@ export type Events = {
       whatsappCloudTemplateName: string;
       whatsappCloudLanguageCode: string;
       slug: string;
+      batchId?: string;
     };
   };
   "nurture/process-date-triggers": {
