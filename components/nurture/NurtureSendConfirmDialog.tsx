@@ -29,6 +29,7 @@ export type BulkCustomer = {
   phone?: string;
   phoneActive: boolean;
   alreadySent: boolean;
+  lastSentAt?: string;
 };
 
 export type QuotaInfo = {
@@ -49,6 +50,7 @@ interface NurtureSendConfirmDialogProps {
   mode: "single" | "bulk";
   // Single mode
   customerName?: string;
+  customerLastSentAt?: string;
   // Bulk mode
   customers?: BulkCustomer[];
   quota?: QuotaInfo | null;
@@ -62,6 +64,7 @@ export default function NurtureSendConfirmDialog({
   loading,
   mode,
   customerName,
+  customerLastSentAt,
   customers,
   quota,
 }: NurtureSendConfirmDialogProps) {
@@ -119,7 +122,7 @@ export default function NurtureSendConfirmDialog({
         ? "text-yellow-600"
         : "text-red-600";
 
-  const exceedsQuota = quota && !quota.isUnlimited && selectedCount > quota.remaining;
+  const exceedsQuota = quota && !quota.isUnlimited && totalMessages > quota.remaining;
 
   // ─── Single mode ───
   if (mode === "single") {
@@ -129,6 +132,11 @@ export default function NurtureSendConfirmDialog({
           <DialogHeader>
             <DialogTitle>שליחת הודעה ל-{customerName}</DialogTitle>
             <DialogDescription>בחר את הערוצים לשליחה:</DialogDescription>
+            {customerLastSentAt && (
+              <p className="text-xs text-slate-500 mt-1">
+                נשלח לאחרונה: {new Date(customerLastSentAt).toLocaleDateString("he-IL")}
+              </p>
+            )}
           </DialogHeader>
           <div className="flex flex-col gap-3 py-2">
             {enabledChannels.sms && (
@@ -292,7 +300,7 @@ export default function NurtureSendConfirmDialog({
             {exceedsQuota && (
               <p className="text-xs text-red-600 font-medium">
                 חריגה ממכסה! נותרו רק {quota!.remaining} יחידות מכסה.
-                רק {quota!.remaining} לקוחות יישלחו.
+                רק {Math.floor(quota!.remaining / channelCount)} לקוחות יישלחו.
               </p>
             )}
           </div>
@@ -372,7 +380,9 @@ export default function NurtureSendConfirmDialog({
                           </span>
                         )}
                         {c.alreadySent && !excludeSent && (
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">נשלח</Badge>
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                            נשלח {c.lastSentAt ? new Date(c.lastSentAt).toLocaleDateString("he-IL") : ""}
+                          </Badge>
                         )}
                         {!c.phoneActive && (
                           <Badge variant="destructive" className="text-[10px] px-1.5 py-0">אין טלפון</Badge>

@@ -55,7 +55,7 @@ import {
   getNurtureConfig,
   getAvailableChannels,
   sendNurtureCampaign,
-  getNurtureSendLogs,
+  getSubscriberLastSentMap,
 } from "../actions";
 import {
   deleteAutomationRule,
@@ -114,7 +114,7 @@ export default function UpsellAutomationPage() {
       if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
       else toast.error(getUserFriendlyError(err));
     });
-    getNurtureSendLogs("upsell").then(setSendLogs).catch(() => {});
+    getSubscriberLastSentMap("upsell").then(setLastSentMap).catch(() => {});
   };
 
   // Load tables on mount
@@ -163,7 +163,7 @@ export default function UpsellAutomationPage() {
   const [sendConfirmCustomer, setSendConfirmCustomer] = useState<Customer | null>(null);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const [bulkSendOpen, setBulkSendOpen] = useState(false);
-  const [sendLogs, setSendLogs] = useState<any[]>([]);
+  const [lastSentMap, setLastSentMap] = useState<Record<string, string>>({});
   const quota = useNurtureQuota();
   const [config, setConfig] = useState({
     channels: { sms: false, whatsappGreen: false, whatsappCloud: false },
@@ -200,9 +200,10 @@ export default function UpsellAutomationPage() {
       name: c.name,
       phone: c.phone,
       phoneActive: c.phoneActive,
-      alreadySent: sendLogs.some((log) => String(log.subscriberId) === c.id && log.status === "SENT"),
+      alreadySent: !!lastSentMap[c.id],
+      lastSentAt: lastSentMap[c.id] || undefined,
     })),
-    [customers, sendLogs]
+    [customers, lastSentMap]
   );
 
   const handleSendNow = () => setBulkSendOpen(true);
@@ -379,7 +380,12 @@ export default function UpsellAutomationPage() {
                                 </span>
                               )}
                           </div>
-                          <div className="col-span-2 flex items-center justify-center">
+                          <div className="col-span-2 flex items-center justify-center gap-1">
+                            {lastSentMap[c.id] && (
+                              <span className="text-[10px] text-slate-400">
+                                {new Date(lastSentMap[c.id]).toLocaleDateString("he-IL")}
+                              </span>
+                            )}
                             <button
                               onClick={(e) => { e.stopPropagation(); handleSendToCustomer(c); }}
                               disabled={sendingCustomerId === c.id || !c.phone || !c.phoneActive || (!quota.isUnlimited && quota.remaining <= 0)}
@@ -877,6 +883,7 @@ export default function UpsellAutomationPage() {
         onOpenChange={setSendConfirmOpen}
         mode="single"
         customerName={sendConfirmCustomer?.name || ""}
+        customerLastSentAt={sendConfirmCustomer ? lastSentMap[sendConfirmCustomer.id] : undefined}
         enabledChannels={config.channels}
         onConfirm={handleConfirmSend}
         loading={sendingCustomerId === sendConfirmCustomer?.id}

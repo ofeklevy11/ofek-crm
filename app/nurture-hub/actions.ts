@@ -912,6 +912,38 @@ export async function getNurtureSendLogs(slug: string) {
   }
 }
 
+// Get last-sent date per subscriber for a nurture list
+export async function getSubscriberLastSentMap(slug: string): Promise<Record<string, string>> {
+  try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return {};
+
+    const list = await prisma.nurtureList.findFirst({
+      where: { slug, companyId: currentUser.companyId },
+      select: { id: true },
+    });
+    if (!list) return {};
+
+    const groups = await prisma.nurtureSendLog.groupBy({
+      by: ["subscriberId"],
+      where: { nurtureListId: list.id, status: "SENT" },
+      _max: { sentAt: true },
+    });
+
+    const result: Record<string, string> = {};
+    for (const g of groups) {
+      if (g._max.sentAt) {
+        result[String(g.subscriberId)] = g._max.sentAt.toISOString();
+      }
+    }
+    return result;
+  } catch (error) {
+    console.error("Error fetching subscriber last sent map:", error);
+    return {};
+  }
+}
+
 // Get current nurture quota status for UI display
 export async function getNurtureQuotaAction() {
   try {
@@ -962,12 +994,14 @@ export async function sendNurtureCampaign(
       return { success: false, error: "יש לבחור לפחות ערוץ שליחה אחד" };
     }
 
+    const channelCount = (channels.sms ? 1 : 0) + (channels.whatsappGreen ? 1 : 0) + (channels.whatsappCloud ? 1 : 0);
+
     // Rate limit both individual and bulk sends
     const tier = (currentUser.isPremium as "basic" | "premium" | "super") || "basic";
     if (subscriberId) {
       if (tier !== "super") {
         const { consumeNurtureQuota } = await import("@/lib/nurture-rate-limit");
-        const quota = await consumeNurtureQuota(currentUser.id, tier, 1);
+        const quota = await consumeNurtureQuota(currentUser.id, tier, channelCount);
         if (!quota.allowed) {
           return {
             success: false,
@@ -1024,7 +1058,7 @@ export async function sendNurtureCampaign(
     const totalSubscribers = activeSubscribers.length;
     let quotaLimited = false;
     if (!subscriberId && tier !== "super") {
-      const totalUnitsNeeded = activeSubscribers.length;
+      const totalUnitsNeeded = activeSubscribers.length * channelCount;
       const { consumeNurtureQuotaBulk } = await import("@/lib/nurture-rate-limit");
       const bulk = await consumeNurtureQuotaBulk(currentUser.id, tier, totalUnitsNeeded);
 
@@ -1037,7 +1071,7 @@ export async function sendNurtureCampaign(
       }
 
       if (bulk.consumed < totalUnitsNeeded) {
-        activeSubscribers = activeSubscribers.slice(0, bulk.consumed);
+        activeSubscribers = activeSubscribers.slice(0, Math.floor(bulk.consumed / channelCount));
         quotaLimited = true;
       }
     }
@@ -1086,6 +1120,18 @@ export async function sendNurtureCampaign(
         activeMsg.smsBody || activeMsg.whatsappGreenBody || activeMsg.whatsappCloudTemplateName || ""
       );
     }
+
+    // Create send logs for manual sends
+    const triggerKey = `manual-${Date.now()}`;
+    await prisma.nurtureSendLog.createMany({
+      data: activeSubscribers.map((sub: any) => ({
+        subscriberId: sub.id,
+        nurtureListId: list.id,
+        triggerKey,
+        status: "SENT",
+      })),
+      skipDuplicates: true,
+    });
 
     // Enqueue a message event for each subscriber
     const events = activeSubscribers.map((sub: any) => ({
