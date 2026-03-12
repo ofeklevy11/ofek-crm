@@ -203,7 +203,15 @@ export default function WinbackAutomationPage() {
     setSending(true);
     try {
       const result = await sendNurtureCampaign("winback");
-      if (result.success) toast.success(`${result.count} הודעות נשלחו בהצלחה`);
+      if (result.success) {
+        const ch = result.channelsSent;
+        const parts: string[] = [];
+        if (ch?.sms) parts.push("SMS");
+        if (ch?.whatsappGreen) parts.push("WhatsApp");
+        if (ch?.whatsappCloud) parts.push("WhatsApp Cloud");
+        const via = parts.length > 0 ? ` (${parts.join(", ")})` : "";
+        toast.success(`${result.count} הודעות נשלחו בהצלחה${via}`);
+      }
       else toast.error(getFriendlyResultError(result.error, "שגיאה בשליחה"));
     } catch (error) {
       toast.error(getUserFriendlyError(error));
@@ -221,7 +229,15 @@ export default function WinbackAutomationPage() {
     setSendingCustomerId(customer.id);
     try {
       const result = await sendNurtureCampaign("winback", customer.id);
-      if (result.success) toast.success(`ההודעה נשלחה ל-${customer.name}`);
+      if (result.success) {
+        const ch = result.channelsSent;
+        const parts: string[] = [];
+        if (ch?.sms) parts.push("SMS");
+        if (ch?.whatsappGreen) parts.push("WhatsApp");
+        if (ch?.whatsappCloud) parts.push("WhatsApp Cloud");
+        const via = parts.length > 0 ? ` (${parts.join(", ")})` : "";
+        toast.success(`ההודעה נשלחה ל-${customer.name}${via}`);
+      }
       else toast.error(getFriendlyResultError(result.error, "שגיאה בשליחה"));
       quota.refreshQuota();
     } catch (error) {

@@ -928,7 +928,7 @@ export async function getNurtureQuotaAction() {
 }
 
 // Send nurture campaign to all subscribers or a specific one
-export async function sendNurtureCampaign(slug: string, subscriberId?: string): Promise<{ success: boolean; error?: string; count?: number; resetInSeconds?: number }> {
+export async function sendNurtureCampaign(slug: string, subscriberId?: string): Promise<{ success: boolean; error?: string; count?: number; resetInSeconds?: number; channelsSent?: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean } }> {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
@@ -1018,6 +1018,16 @@ export async function sendNurtureCampaign(slug: string, subscriberId?: string): 
     }
 
     const { inngest } = await import("@/lib/inngest/client");
+    const { createLogger } = await import("@/lib/logger");
+    const log = createLogger("NurtureCampaign");
+
+    log.info("Dispatching nurture campaign", {
+      slug,
+      channels,
+      smsBody: !!activeMsg.smsBody,
+      subscriberCount: activeSubscribers.length,
+      phones: activeSubscribers.map((s: any) => s.phone?.substring(0, 6) + "***"),
+    });
 
     // Enqueue a message event for each subscriber
     const events = activeSubscribers.map((sub: any) => ({
@@ -1037,8 +1047,50 @@ export async function sendNurtureCampaign(slug: string, subscriberId?: string): 
 
     await inngest.send(events);
 
-    return { success: true, count: activeSubscribers.length };
+    return {
+      success: true,
+      count: activeSubscribers.length,
+      channelsSent: {
+        sms: !!channels.sms,
+        whatsappGreen: !!channels.whatsappGreen,
+        whatsappCloud: !!channels.whatsappCloud,
+      },
+    };
   } catch (error) {
     return handleNurtureError(error, "sendNurtureCampaign");
   }
+}
+
+export async function normalizeExistingSubscriberPhones(): Promise<{ updated: number }> {
+  const { getCurrentUser } = await import("@/lib/permissions-server");
+  const currentUser = await getCurrentUser();
+  if (!currentUser) return { updated: 0 };
+
+  const subscribers = await prisma.nurtureSubscriber.findMany({
+    where: {
+      nurtureList: { companyId: currentUser.companyId },
+      phone: { not: null },
+    },
+    select: { id: true, phone: true },
+  });
+
+  let updated = 0;
+  for (const sub of subscribers) {
+    if (!sub.phone) continue;
+    const normalized = normalizeToE164(sub.phone);
+    if (normalized && normalized !== sub.phone) {
+      await prisma.nurtureSubscriber.update({
+        where: { id: sub.id },
+        data: { phone: normalized },
+      });
+      updated++;
+    } else if (!normalized) {
+      await prisma.nurtureSubscriber.update({
+        where: { id: sub.id },
+        data: { phoneActive: false },
+      });
+      updated++;
+    }
+  }
+  return { updated };
 }
