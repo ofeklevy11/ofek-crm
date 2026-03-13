@@ -1554,7 +1554,7 @@ describe("getViewAutomations", () => {
       "id", "companyId", "name", "description", "triggerType", "triggerConfig",
       "actionType", "actionConfig", "isActive", "createdBy", "createdAt", "updatedAt",
       "lastRunAt", "analyticsOrder", "analyticsColor", "cachedStats", "lastCachedAt",
-      "folderId", "calendarEventId", "meetingTypeId", "meetingId",
+      "folderId", "calendarEventId", "meetingTypeId", "meetingId", "source",
     ];
     expect(Object.keys(rule).sort()).toEqual(expectedKeys.sort());
   });
