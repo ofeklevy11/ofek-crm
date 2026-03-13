@@ -336,6 +336,68 @@ export async function executeRuleActions(
             log.error("Inngest SMS enqueue failed", { ruleId, error: String(err) });
           }
         }
+      } else if (type === "SEND_EMAIL") {
+        // Prepare data for Email
+        const emailData = { ...context.recordData };
+        if (context.taskTitle) {
+          emailData.taskTitle = context.taskTitle;
+          emailData.fromStatus = context.fromStatus;
+          emailData.toStatus = context.toStatus;
+        }
+
+        // Resolve email address
+        const emailColumnId = config.emailColumnId;
+        let emailAddr = "";
+        if (context.meetingId && context.participantEmail) {
+          emailAddr = context.participantEmail;
+        } else if (emailColumnId?.startsWith("manual:")) {
+          emailAddr = emailColumnId.replace("manual:", "");
+        } else if (emailColumnId) {
+          emailAddr = emailData[emailColumnId] || "";
+        }
+
+        // Resolve subject with dynamic placeholders
+        let emailSubject = config.subject || "";
+        for (const key in emailData) {
+          emailSubject = emailSubject.split(`{${key}}`).join(String(emailData[key] || ""));
+        }
+        // Resolve content with dynamic placeholders
+        let emailContent = config.content || config.message || "";
+        for (const key in emailData) {
+          emailContent = emailContent.split(`{${key}}`).join(String(emailData[key] || ""));
+        }
+        if (context.meetingId) {
+          const meetingReplace = (text: string) => text
+            .split("{participantName}").join(context.participantName || "")
+            .split("{participantEmail}").join(context.participantEmail || "")
+            .split("{participantPhone}").join(context.participantPhone || "")
+            .split("{meetingType}").join(context.meetingType || "")
+            .split("{meetingStart}").join(context.meetingStart || "")
+            .split("{meetingEnd}").join(context.meetingEnd || "");
+          emailSubject = meetingReplace(emailSubject);
+          emailContent = meetingReplace(emailContent);
+        }
+
+        if (!emailAddr) {
+          log.error("Email: No email resolved from column config");
+        } else {
+          try {
+            await inngest.send({
+              id: `email-${companyId}-${emailAddr}-${ruleId}-${Math.floor(Date.now() / 5000)}`,
+              name: "automation/send-email",
+              data: {
+                companyId,
+                to: String(emailAddr),
+                subject: emailSubject,
+                body: emailContent,
+                delay: config.delay,
+              },
+            });
+            log.info("Email job enqueued", { emailMasked: String(emailAddr).replace(/(.{3}).*(@.*)/, "$1***$2") });
+          } catch (err) {
+            log.error("Inngest Email enqueue failed", { ruleId, error: String(err) });
+          }
+        }
       } else if (type === "WEBHOOK") {
         const webhookData: Record<string, unknown> = {
           ...context.recordData,
@@ -593,6 +655,9 @@ export async function executeRuleActions(
                           whatsappGreenBody: activeMsg.whatsappGreenBody || "",
                           whatsappCloudTemplateName: activeMsg.whatsappCloudTemplateName || "",
                           whatsappCloudLanguageCode: activeMsg.whatsappCloudLanguageCode || "he",
+                          subscriberEmail: sub.email || "",
+                          emailSubject: activeMsg.emailSubject || "",
+                          emailBody: activeMsg.emailBody || "",
                           slug: config.listId,
                           delayMs,
                           triggerKey: `auto-${config.listId}-${Date.now()}`,

@@ -511,6 +511,36 @@ async function executeSlaAction(
       break;
     }
 
+    case "SEND_EMAIL": {
+      let email = "";
+      if (actionConfig.emailColumnId?.startsWith("manual:")) {
+        email = actionConfig.emailColumnId.replace("manual:", "");
+      }
+
+      if (!email) {
+        throw new Error(
+          `[SLA] Email action: No email configured for rule ${rule.id} ("${rule.name}")`,
+        );
+      }
+
+      const emailSubject = replaceTemplateVars(actionConfig.subject || "");
+      const emailContent = replaceTemplateVars(actionConfig.content || "");
+
+      const { inngest: slaEmailInngest } = await import("@/lib/inngest/client");
+      await slaEmailInngest.send({
+        id: `email-sla-${companyId}-${rule.id}-${contextData.ticketId}-${breachType}`,
+        name: "automation/send-email",
+        data: {
+          companyId,
+          to: String(email),
+          subject: emailSubject,
+          body: emailContent,
+        },
+      });
+      log.info("Email job enqueued for SLA breach");
+      break;
+    }
+
     case "WEBHOOK": {
       const url = actionConfig.webhookUrl || actionConfig.url;
       if (!url) {

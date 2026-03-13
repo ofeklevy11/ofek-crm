@@ -28,9 +28,11 @@ export async function processDateBasedNurtureTriggers(companyId: number) {
     include: {
       subscribers: {
         where: {
-          phoneActive: true,
-          phone: { not: null },
           triggerDate: { not: null },
+          OR: [
+            { phoneActive: true, phone: { not: null } },
+            { emailActive: true, email: { not: null } },
+          ],
         },
       },
     },
@@ -46,7 +48,7 @@ export async function processDateBasedNurtureTriggers(companyId: number) {
     const config = (list.configJson as any) || {};
     const channels = config.channels || {};
 
-    if (!channels.sms && !channels.whatsappGreen && !channels.whatsappCloud) {
+    if (!channels.sms && !channels.whatsappGreen && !channels.whatsappCloud && !channels.email) {
       continue;
     }
 
@@ -56,12 +58,14 @@ export async function processDateBasedNurtureTriggers(companyId: number) {
     const eligibleSubscribers: {
       id: number;
       phone: string;
+      email: string;
       name: string;
       triggerKey: string;
     }[] = [];
 
     for (const sub of list.subscribers) {
-      if (!sub.triggerDate || !sub.phone) continue;
+      if (!sub.triggerDate) continue;
+      if (!sub.phone && !sub.email) continue;
 
       const triggerDate = new Date(sub.triggerDate);
 
@@ -79,7 +83,8 @@ export async function processDateBasedNurtureTriggers(companyId: number) {
         ) {
           eligibleSubscribers.push({
             id: sub.id,
-            phone: sub.phone,
+            phone: sub.phone || "",
+            email: sub.email || "",
             name: sub.name,
             triggerKey: `birthday-${todayYear}`,
           });
@@ -97,7 +102,8 @@ export async function processDateBasedNurtureTriggers(companyId: number) {
         if (triggerISO === targetISO) {
           eligibleSubscribers.push({
             id: sub.id,
-            phone: sub.phone,
+            phone: sub.phone || "",
+            email: sub.email || "",
             name: sub.name,
             triggerKey: `renewal-${triggerISO}`,
           });
@@ -110,7 +116,8 @@ export async function processDateBasedNurtureTriggers(companyId: number) {
         if (triggerDate < cutoffDate) {
           eligibleSubscribers.push({
             id: sub.id,
-            phone: sub.phone,
+            phone: sub.phone || "",
+            email: sub.email || "",
             name: sub.name,
             triggerKey: `winback-${todayYear}-Q${currentQuarter}`,
           });
@@ -156,11 +163,14 @@ export async function processDateBasedNurtureTriggers(companyId: number) {
         nurtureListId: list.id,
         subscriberPhone: sub.phone,
         subscriberName: sub.name,
-        channels,
+        channels: { ...channels, email: !!channels.email },
         smsBody: activeMsg.smsBody || "",
         whatsappGreenBody: activeMsg.whatsappGreenBody || "",
         whatsappCloudTemplateName: activeMsg.whatsappCloudTemplateName || "",
         whatsappCloudLanguageCode: activeMsg.whatsappCloudLanguageCode || "he",
+        subscriberEmail: sub.email || "",
+        emailSubject: activeMsg.emailSubject || "",
+        emailBody: activeMsg.emailBody || "",
         slug: list.slug,
       },
     }));

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -45,7 +45,6 @@ import NurtureMessageEditor, { migrateConfigMessages, getActiveMessage, NurtureM
 import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
 import NurtureAutomationPreview from "@/components/nurture/NurtureAutomationPreview";
 import { useNurtureQuota } from "@/components/nurture/NurtureQuotaContext";
-import NurtureQuotaBadge from "@/components/nurture/NurtureQuotaBadge";
 import NurtureQueuePanel from "@/components/nurture/NurtureQueuePanel";
 import NurtureSendConfirmDialog, { type ChannelSelection, type BulkCustomer } from "@/components/nurture/NurtureSendConfirmDialog";
 import NurtureSubscriberSearch from "@/components/nurture/NurtureSubscriberSearch";
@@ -124,7 +123,7 @@ export default function RenewalAutomationPage() {
   };
 
   const [isEnabled, setIsEnabled] = useState(false);
-  const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false });
+  const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false, email: false });
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendingCustomerId, setSendingCustomerId] = useState<string | null>(null);
@@ -136,11 +135,13 @@ export default function RenewalAutomationPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const quota = useNurtureQuota();
+  const [previewRefreshTrigger, setPreviewRefreshTrigger] = useState(0);
+  const handleAutoSendDispatched = useCallback(() => { setPreviewRefreshTrigger(p => p + 1); quota.refreshQuota(); }, [quota]);
   const [config, setConfig] = useState({
     daysBeforeExpiry: "30",
     offerType: "discount",
     offerValue: "10",
-    channels: { sms: false, whatsappGreen: false, whatsappCloud: false },
+    channels: { sms: false, whatsappGreen: false, whatsappCloud: false, email: false },
     messages: [
       {
         id: "msg_default",
@@ -150,6 +151,8 @@ export default function RenewalAutomationPage() {
         whatsappGreenBody: "היי {first_name}, המנוי שלך עומד להסתיים! חדש עכשיו וקבל הטבה מיוחדת.",
         whatsappCloudTemplateName: "",
         whatsappCloudLanguageCode: "he",
+        emailSubject: "",
+        emailBody: "",
       },
     ] as NurtureMessage[],
   });
@@ -304,7 +307,6 @@ export default function RenewalAutomationPage() {
             </p>
           </div>
           <div className="mr-auto flex items-center gap-3">
-            <NurtureQuotaBadge />
             <div className="flex items-center gap-2 border rounded-lg px-3 py-1.5">
               <Label htmlFor="renewal-enabled" className="text-sm text-slate-600 cursor-pointer">
                 {isEnabled ? "פעיל" : "כבוי"}
@@ -317,7 +319,7 @@ export default function RenewalAutomationPage() {
             </div>
             <Button
               onClick={handleSendNow}
-              disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud)}
+              disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud && !config.channels.email)}
               className="bg-indigo-600 hover:bg-indigo-700 gap-2"
             >
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -339,6 +341,7 @@ export default function RenewalAutomationPage() {
           customerCount={total}
           isEnabled={isEnabled}
           accentColor="blue"
+          refreshTrigger={previewRefreshTrigger}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -353,6 +356,7 @@ export default function RenewalAutomationPage() {
                     listSlug="renewal"
                     automationOpenProp={isAutoModalOpen}
                     onAutomationOpenChangeProp={setIsAutoModalOpen}
+                    onAutoSendDispatched={handleAutoSendDispatched}
                   />
                 </CardTitle>
                 <CardDescription>
@@ -672,7 +676,16 @@ export default function RenewalAutomationPage() {
                         </div>
                       </div>
                     )}
-                    {!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud && (
+                    {config.channels.email && getActiveMessage(config.messages)?.emailBody && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] text-purple-600 font-medium px-1">Email</div>
+                        <div className="p-3 rounded-xl shadow-sm text-xs text-slate-800 max-w-[85%] bg-purple-50 border border-purple-100">
+                          <div className="font-medium mb-1">{getActiveMessage(config.messages)!.emailSubject?.replace(/\{first_name\}/g, "ישראל") || "ללא נושא"}</div>
+                          <div>{getActiveMessage(config.messages)!.emailBody.replace(/\{first_name\}/g, "ישראל").slice(0, 100)}{getActiveMessage(config.messages)!.emailBody.length > 100 ? "..." : ""}</div>
+                        </div>
+                      </div>
+                    )}
+                    {!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud && !config.channels.email && (
                       <div className="flex flex-col items-center justify-center h-full text-slate-400 text-sm">
                         <RefreshCw className="w-8 h-8 mb-2 opacity-30" />
                         בחר ערוץ שליחה כדי לראות תצוגה מקדימה

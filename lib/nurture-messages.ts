@@ -6,6 +6,8 @@ export interface NurtureMessage {
   whatsappGreenBody: string;
   whatsappCloudTemplateName: string;
   whatsappCloudLanguageCode: string;
+  emailSubject: string;
+  emailBody: string;
 }
 
 /** Migrate old flat-field config to messages array */
@@ -21,6 +23,8 @@ export function migrateConfigMessages(config: any): NurtureMessage[] {
     whatsappGreenBody: config.whatsappGreenBody || "",
     whatsappCloudTemplateName: config.whatsappCloudTemplateName || "",
     whatsappCloudLanguageCode: config.whatsappCloudLanguageCode || "he",
+    emailSubject: config.emailSubject || "",
+    emailBody: config.emailBody || "",
   }];
 }
 

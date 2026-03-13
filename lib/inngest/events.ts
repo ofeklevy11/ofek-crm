@@ -308,6 +308,17 @@ export type Events = {
     };
   };
 
+  // --- Automation Email event ---
+  "automation/send-email": {
+    data: {
+      companyId: number;
+      to: string;
+      subject: string;
+      body: string;
+      delay?: number;
+    };
+  };
+
   // --- AI events ---
   "ai/generation.requested": {
     data: {
@@ -328,11 +339,14 @@ export type Events = {
       nurtureListId?: number;
       subscriberPhone: string;
       subscriberName: string;
-      channels: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean };
+      channels: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean; email: boolean };
       smsBody: string;
       whatsappGreenBody: string;
       whatsappCloudTemplateName: string;
       whatsappCloudLanguageCode: string;
+      subscriberEmail: string;
+      emailSubject: string;
+      emailBody: string;
       slug: string;
       batchId?: string;
     };
@@ -349,11 +363,14 @@ export type Events = {
       nurtureListId: number;
       subscriberPhone: string;
       subscriberName: string;
-      channels: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean };
+      channels: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean; email: boolean };
       smsBody: string;
       whatsappGreenBody: string;
       whatsappCloudTemplateName: string;
       whatsappCloudLanguageCode: string;
+      subscriberEmail: string;
+      emailSubject: string;
+      emailBody: string;
       slug: string;
       delayMs: number;
       triggerKey: string;

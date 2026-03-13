@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { MessageSquare, Smartphone, Plus, Trash2, Check, Pencil } from "lucide-react";
+import { MessageSquare, Smartphone, Mail, Plus, Trash2, Check, Pencil } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ interface ChannelState {
   sms: boolean;
   whatsappGreen: boolean;
   whatsappCloud: boolean;
+  email: boolean;
 }
 
 import { migrateConfigMessages, getActiveMessage, type NurtureMessage } from "@/lib/nurture-messages";
@@ -45,7 +46,7 @@ export default function NurtureMessageEditor({
   const selected = messages[selectedIdx] || messages[0];
   if (!selected) return null;
 
-  const hasAny = channels.sms || channels.whatsappGreen || channels.whatsappCloud;
+  const hasAny = channels.sms || channels.whatsappGreen || channels.whatsappCloud || channels.email;
   if (!hasAny) return null;
 
   const updateSelected = (patch: Partial<NurtureMessage>) => {
@@ -62,6 +63,8 @@ export default function NurtureMessageEditor({
       whatsappGreenBody: "",
       whatsappCloudTemplateName: "",
       whatsappCloudLanguageCode: "he",
+      emailSubject: "",
+      emailBody: "",
     };
     onMessagesChange([...messages, newMsg]);
     setSelectedIdx(messages.length);
@@ -230,6 +233,30 @@ export default function NurtureMessageEditor({
               value={selected.whatsappGreenBody}
               onChange={(e) => updateSelected({ whatsappGreenBody: e.target.value })}
               placeholder="הזן את תוכן הודעת WhatsApp..."
+            />
+            <PlaceholderTags />
+          </div>
+        )}
+
+        {channels.email && (
+          <div className="space-y-3">
+            <h3 className="font-medium flex items-center gap-2 text-purple-700">
+              <Mail className="w-4 h-4" />
+              תוכן אימייל
+            </h3>
+            <div className="space-y-2">
+              <Label>נושא</Label>
+              <Input
+                value={selected.emailSubject}
+                onChange={(e) => updateSelected({ emailSubject: e.target.value })}
+                placeholder="הזן את נושא האימייל..."
+              />
+            </div>
+            <Textarea
+              rows={4}
+              value={selected.emailBody}
+              onChange={(e) => updateSelected({ emailBody: e.target.value })}
+              placeholder="הזן את תוכן האימייל..."
             />
             <PlaceholderTags />
           </div>

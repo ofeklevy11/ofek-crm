@@ -59,6 +59,7 @@ import {
   sendSmsAutomationJob,
   processSmsStatusUpdate,
 } from "@/lib/inngest/functions/sms-jobs";
+import { sendEmailAutomationJob } from "@/lib/inngest/functions/email-jobs";
 import { sendNurtureCampaignMessage } from "@/lib/inngest/functions/nurture-jobs";
 import {
   processNurtureDateTriggers,
@@ -105,6 +106,7 @@ const functions = [
   sendSmsJob,
   sendSmsAutomationJob,
   processSmsStatusUpdate,
+  sendEmailAutomationJob,
   sendNurtureCampaignMessage,
   processNurtureDateTriggers,
   nurtureDelayedSend,

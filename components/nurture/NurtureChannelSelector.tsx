@@ -9,6 +9,7 @@ interface ChannelState {
   sms: boolean;
   whatsappGreen: boolean;
   whatsappCloud: boolean;
+  email: boolean;
 }
 
 interface NurtureChannelSelectorProps {
@@ -41,6 +42,14 @@ const channelDefs = [
     activeColor: "border-blue-500 bg-blue-50/50",
     iconActiveColor: "bg-blue-100 text-blue-600",
     checkColor: "text-blue-600",
+  },
+  {
+    key: "email" as const,
+    label: "אימייל",
+    icon: Mail,
+    activeColor: "border-purple-500 bg-purple-50/50",
+    iconActiveColor: "bg-purple-100 text-purple-600",
+    checkColor: "text-purple-600",
   },
 ];
 
@@ -91,14 +100,6 @@ export default function NurtureChannelSelector({
         );
       })}
 
-      {/* Email - greyed out */}
-      <div className="border rounded-xl p-4 flex flex-col items-center gap-3 border-slate-200 opacity-50 cursor-not-allowed select-none">
-        <div className="p-2 rounded-full bg-slate-100 text-slate-400">
-          <Mail className="w-5 h-5" />
-        </div>
-        <span className="font-medium text-sm">אימייל</span>
-        <span className="text-[10px] bg-slate-200 px-2 py-0.5 rounded-full text-slate-500">בקרוב</span>
-      </div>
     </div>
   );
 }

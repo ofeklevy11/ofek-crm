@@ -76,6 +76,7 @@ interface CustomerListProps {
   title?: string;
   description?: string;
   listSlug?: string; // e.g. "birthday", "referral"
+  onAutoSendDispatched?: () => void;
 }
 
 export default function CustomerListManager({
@@ -85,6 +86,7 @@ export default function CustomerListManager({
   listSlug = "birthday",
   automationOpenProp,
   onAutomationOpenChangeProp,
+  onAutoSendDispatched,
 }: CustomerListProps & {
   automationOpenProp?: boolean;
   onAutomationOpenChangeProp?: (open: boolean) => void;
@@ -351,7 +353,16 @@ export default function CustomerListManager({
       });
 
       if (result.success) {
-        toast.success("הלקוח נוסף בהצלחה");
+        if (result.autoSendDispatched && result.autoSendChannels) {
+          const ch: string[] = [];
+          if (result.autoSendChannels.sms) ch.push("SMS");
+          if (result.autoSendChannels.whatsappGreen) ch.push("WhatsApp");
+          if (result.autoSendChannels.whatsappCloud) ch.push("WhatsApp Cloud");
+          toast.success(`הלקוח נוסף — הודעה נשלחת מיד (${ch.join(", ")})`);
+          onAutoSendDispatched?.();
+        } else {
+          toast.success("הלקוח נוסף בהצלחה");
+        }
         const newCustomer: Customer = {
           id: `man_${Date.now()}`,
           ...manualForm,
@@ -392,7 +403,16 @@ export default function CustomerListManager({
       }
 
       if (result.successCount! > 0) {
-        toast.success(`${result.successCount} לקוחות יובאו בהצלחה`);
+        if (result.autoSendCount && result.autoSendCount > 0 && result.autoSendChannels) {
+          const ch: string[] = [];
+          if (result.autoSendChannels.sms) ch.push("SMS");
+          if (result.autoSendChannels.whatsappGreen) ch.push("WhatsApp");
+          if (result.autoSendChannels.whatsappCloud) ch.push("WhatsApp Cloud");
+          toast.success(`${result.successCount} לקוחות יובאו — ${result.autoSendCount} הודעות נשלחות (${ch.join(", ")})`);
+          onAutoSendDispatched?.();
+        } else {
+          toast.success(`${result.successCount} לקוחות יובאו בהצלחה`);
+        }
       }
       if (result.duplicateCount! > 0) {
         const names = result.duplicateNames!.length <= 3

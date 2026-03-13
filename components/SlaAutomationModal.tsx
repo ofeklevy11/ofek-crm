@@ -28,6 +28,7 @@ import {
   Zap,
   Shield,
   Phone,
+  Mail,
 } from "lucide-react";
 
 interface User {
@@ -47,6 +48,7 @@ type ActionType =
   | "SEND_NOTIFICATION"
   | "SEND_WHATSAPP"
   | "SEND_SMS"
+  | "SEND_EMAIL"
   | "WEBHOOK"
   | "CREATE_TASK"
   | "";
@@ -106,6 +108,12 @@ export default function SlaAutomationModal({
   const [waContent, setWaContent] = useState("");
   const [waMediaFileId, setWaMediaFileId] = useState("");
   const [waDelay, setWaDelay] = useState(0);
+
+  // Email Specific
+  const [emailColumnId, setEmailColumnId] = useState("");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailContent, setEmailContent] = useState("");
+  const [emailDelay, setEmailDelay] = useState(0);
 
   // Webhook Specific
   const [webhookUrl, setWebhookUrl] = useState("");
@@ -198,6 +206,10 @@ export default function SlaAutomationModal({
     setWaContent("");
     setWaMediaFileId("");
     setWaDelay(0);
+    setEmailColumnId("");
+    setEmailSubject("");
+    setEmailContent("");
+    setEmailDelay(0);
     setWebhookUrl("");
     setTaskTitle("");
     setTaskDescription("");
@@ -239,6 +251,9 @@ export default function SlaAutomationModal({
       }
       return true;
     }
+    if (currentActionType === "SEND_EMAIL") {
+      return !!emailColumnId && !!emailContent;
+    }
     if (currentActionType === "WEBHOOK")
       return !!webhookUrl && webhookUrl.startsWith("http");
     if (currentActionType === "CREATE_TASK") return !!taskTitle;
@@ -266,7 +281,14 @@ export default function SlaAutomationModal({
                 mediaFileId: waMediaFileId ? Number(waMediaFileId) : null,
                 delay: waDelay,
               }
-            : currentActionType === "CREATE_TASK"
+            : currentActionType === "SEND_EMAIL"
+              ? {
+                  emailColumnId: emailColumnId,
+                  subject: emailSubject,
+                  content: emailContent,
+                  delay: emailDelay,
+                }
+              : currentActionType === "CREATE_TASK"
               ? {
                   title: taskTitle,
                   description: taskDescription,
@@ -320,6 +342,11 @@ export default function SlaAutomationModal({
       setWaContent(action.config.content || "");
       setWaMediaFileId(action.config.mediaFileId?.toString() || "");
       setWaDelay(action.config.delay || 0);
+    } else if (action.type === "SEND_EMAIL") {
+      setEmailColumnId(action.config.emailColumnId || "");
+      setEmailSubject(action.config.subject || "");
+      setEmailContent(action.config.content || "");
+      setEmailDelay(action.config.delay || 0);
     } else if (action.type === "WEBHOOK") {
       setWebhookUrl(action.config.webhookUrl || "");
     } else if (action.type === "CREATE_TASK") {
@@ -604,6 +631,7 @@ export default function SlaAutomationModal({
                   {act.type === "SEND_NOTIFICATION" && <Bell size={20} />}
                   {act.type === "SEND_WHATSAPP" && <MessageSquare size={20} />}
                   {act.type === "SEND_SMS" && <Phone size={20} />}
+                  {act.type === "SEND_EMAIL" && <Mail size={20} />}
                   {act.type === "WEBHOOK" && (
                     <div className="font-bold text-xs">API</div>
                   )}
@@ -614,6 +642,7 @@ export default function SlaAutomationModal({
                     {act.type === "SEND_NOTIFICATION" && "שליחת התראה"}
                     {act.type === "SEND_WHATSAPP" && "שליחת WhatsApp"}
                     {act.type === "SEND_SMS" && "שליחת SMS"}
+                    {act.type === "SEND_EMAIL" && "שליחת אימייל"}
                     {act.type === "WEBHOOK" && "Webhook"}
                     {act.type === "CREATE_TASK" && "יצירת משימה"}
                   </div>
@@ -688,6 +717,13 @@ export default function SlaAutomationModal({
               icon={<Phone className="text-blue-600" size={24} />}
               selected={currentActionType === "SEND_SMS"}
               onClick={() => setCurrentActionType("SEND_SMS")}
+            />
+            <ActionCard
+              title="שליחת אימייל"
+              description="שלח אימייל לנמען"
+              icon={<Mail className="text-purple-600" size={24} />}
+              selected={currentActionType === "SEND_EMAIL"}
+              onClick={() => setCurrentActionType("SEND_EMAIL")}
             />
             <ActionCard
               title="יצירת משימה"
@@ -916,6 +952,76 @@ export default function SlaAutomationModal({
                   משתנים זמינים: {"{ticketTitle}"}, {"{ticketId}"},{" "}
                   {"{priority}"}, {"{breachType}"}
                 </p>
+              </div>
+            </div>
+          )}
+
+          {currentActionType === "SEND_EMAIL" && (
+            <div className="bg-purple-50 p-5 rounded-xl border border-purple-100 space-y-5 animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-2 text-purple-800 font-medium pb-2 border-b border-purple-200">
+                <Mail size={18} />
+                הגדרות אימייל
+              </div>
+
+              {/* Email recipient */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  כתובת אימייל הנמען
+                </label>
+                <input
+                  type="email"
+                  value={emailColumnId.startsWith("manual:") ? emailColumnId.replace("manual:", "") : emailColumnId}
+                  onChange={(e) => setEmailColumnId(`manual:${e.target.value}`)}
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg"
+                  placeholder="example@email.com"
+                  dir="ltr"
+                />
+              </div>
+
+              {/* Subject */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  נושא
+                </label>
+                <input
+                  type="text"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg"
+                  placeholder="נושא האימייל..."
+                />
+              </div>
+
+              {/* Content */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  תוכן האימייל
+                </label>
+                <textarea
+                  value={emailContent}
+                  onChange={(e) => setEmailContent(e.target.value)}
+                  rows={4}
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg"
+                  placeholder="הקלד את תוכן האימייל כאן..."
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  משתנים זמינים: {"{ticketTitle}"}, {"{ticketId}"},
+                  {" "}{"{priority}"}, {"{breachType}"}
+                </p>
+              </div>
+
+              {/* Delay */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  השהייה (שניות) — אופציונלי
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={emailDelay}
+                  onChange={(e) => setEmailDelay(parseInt(e.target.value) || 0)}
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg"
+                />
               </div>
             </div>
           )}

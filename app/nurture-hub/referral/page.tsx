@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Card,
   CardContent,
@@ -44,7 +45,6 @@ import CustomerListManager from "@/components/nurture/CustomerListManager";
 import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
 import NurtureAutomationPreview from "@/components/nurture/NurtureAutomationPreview";
 import { useNurtureQuota } from "@/components/nurture/NurtureQuotaContext";
-import NurtureQuotaBadge from "@/components/nurture/NurtureQuotaBadge";
 import NurtureQueuePanel from "@/components/nurture/NurtureQueuePanel";
 import NurtureSendConfirmDialog, { type ChannelSelection, type BulkCustomer } from "@/components/nurture/NurtureSendConfirmDialog";
 import NurtureSubscriberSearch from "@/components/nurture/NurtureSubscriberSearch";
@@ -144,7 +144,7 @@ export default function ReferralAutomationPage() {
   };
 
   const [isEnabled, setIsEnabled] = useState(false);
-  const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false });
+  const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false, email: false });
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendingCustomerId, setSendingCustomerId] = useState<string | null>(null);
@@ -156,12 +156,14 @@ export default function ReferralAutomationPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const quota = useNurtureQuota();
+  const [previewRefreshTrigger, setPreviewRefreshTrigger] = useState(0);
+  const handleAutoSendDispatched = useCallback(() => { setPreviewRefreshTrigger(p => p + 1); quota.refreshQuota(); }, [quota]);
   const [config, setConfig] = useState({
     referrerRewardType: "credit",
     referrerRewardValue: "50",
     refereeRewardType: "discount",
     refereeRewardValue: "10",
-    channels: { sms: false, whatsappGreen: false, whatsappCloud: false },
+    channels: { sms: false, whatsappGreen: false, whatsappCloud: false, email: false },
     messages: [
       {
         id: "msg_default",
@@ -171,6 +173,8 @@ export default function ReferralAutomationPage() {
         whatsappGreenBody: "היי {first_name}, יש לנו תוכנית המלצות מיוחדת! המלץ לחברים וקבל תגמול. פרטים נוספים בקישור.",
         whatsappCloudTemplateName: "",
         whatsappCloudLanguageCode: "he",
+        emailSubject: "",
+        emailBody: "",
       },
     ] as NurtureMessage[],
   });
@@ -306,10 +310,19 @@ export default function ReferralAutomationPage() {
             </p>
           </div>
           <div className="mr-auto flex items-center gap-3">
-            <NurtureQuotaBadge />
+            <div className="flex items-center gap-2 border rounded-lg px-3 py-1.5">
+              <Label htmlFor="referral-enabled" className="text-sm text-slate-600 cursor-pointer">
+                {isEnabled ? "פעיל" : "כבוי"}
+              </Label>
+              <Switch
+                id="referral-enabled"
+                checked={isEnabled}
+                onCheckedChange={setIsEnabled}
+              />
+            </div>
             <Button
               onClick={handleSendNow}
-              disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud)}
+              disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud && !config.channels.email)}
               className="bg-indigo-600 hover:bg-indigo-700 gap-2"
             >
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -331,6 +344,7 @@ export default function ReferralAutomationPage() {
           customerCount={total}
           isEnabled={isEnabled}
           accentColor="orange"
+          refreshTrigger={previewRefreshTrigger}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -345,6 +359,7 @@ export default function ReferralAutomationPage() {
                     listSlug="referral"
                     automationOpenProp={isAutoModalOpen}
                     onAutomationOpenChangeProp={setIsAutoModalOpen}
+                    onAutoSendDispatched={handleAutoSendDispatched}
                   />
                 </CardTitle>
                 <CardDescription>

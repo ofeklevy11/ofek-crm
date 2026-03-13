@@ -56,6 +56,9 @@ export const nurtureDelayedSend = inngest.createFunction(
       whatsappGreenBody,
       whatsappCloudTemplateName,
       whatsappCloudLanguageCode,
+      subscriberEmail,
+      emailSubject,
+      emailBody,
       slug,
       delayMs,
       triggerKey,
@@ -91,7 +94,7 @@ export const nurtureDelayedSend = inngest.createFunction(
           subscriberId,
           nurtureListId,
           triggerKey,
-          status: "SENT",
+          status: "DISPATCHED",
         },
       });
     });
@@ -101,6 +104,8 @@ export const nurtureDelayedSend = inngest.createFunction(
       name: "nurture/send-campaign-message",
       data: {
         companyId,
+        subscriberId,
+        nurtureListId,
         subscriberPhone,
         subscriberName,
         channels,
@@ -108,6 +113,9 @@ export const nurtureDelayedSend = inngest.createFunction(
         whatsappGreenBody,
         whatsappCloudTemplateName,
         whatsappCloudLanguageCode,
+        subscriberEmail: subscriberEmail || "",
+        emailSubject: emailSubject || "",
+        emailBody: emailBody || "",
         slug,
       },
     });

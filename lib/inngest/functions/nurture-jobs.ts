@@ -30,6 +30,9 @@ export const sendNurtureCampaignMessage = inngest.createFunction(
       whatsappGreenBody,
       whatsappCloudTemplateName,
       whatsappCloudLanguageCode,
+      subscriberEmail,
+      emailSubject,
+      emailBody,
       slug,
       batchId,
     } = event.data;
@@ -129,6 +132,28 @@ export const sendNurtureCampaignMessage = inngest.createFunction(
             companyId,
             slug,
             phone: subscriberPhone,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      });
+    }
+
+    // Send Email
+    if (channels.email && emailBody && subscriberEmail) {
+      await step.run("send-email", async () => {
+        try {
+          const { sendAutomationEmail } = await import("@/lib/email");
+          await sendAutomationEmail(
+            subscriberEmail,
+            interpolate(emailSubject || ""),
+            interpolate(emailBody),
+          );
+          log.info("Nurture email sent", { companyId, slug, email: subscriberEmail.replace(/(.{3}).*(@.*)/, "$1***$2") });
+        } catch (err) {
+          hasFailed = true;
+          log.error("Nurture email failed", {
+            companyId,
+            slug,
             error: err instanceof Error ? err.message : String(err),
           });
         }

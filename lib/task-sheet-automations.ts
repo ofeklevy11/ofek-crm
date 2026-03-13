@@ -23,6 +23,7 @@ export interface OnCompleteAction {
     | "SEND_WEBHOOK"
     | "SEND_WHATSAPP"
     | "SEND_SMS"
+    | "SEND_EMAIL"
     | "CREATE_CALENDAR_EVENT"
     | "CREATE_RECORD";
   config: Record<string, unknown>;
@@ -73,6 +74,9 @@ export async function executeSingleAction(
       break;
     case "SEND_SMS":
       await executeSendSms(action.config, item, user);
+      break;
+    case "SEND_EMAIL":
+      await executeSendEmail(action.config, item, user);
       break;
     case "CREATE_CALENDAR_EVENT":
       await executeCreateCalendarEvent(action.config, user);
@@ -569,5 +573,100 @@ async function executeSendSms(
     log.info("SMS job enqueued");
   } catch (err) {
     log.error("Failed to enqueue SMS job", { error: String(err) });
+  }
+}
+
+// Send Email
+async function executeSendEmail(
+  config: Record<string, unknown>,
+  item: {
+    id: number;
+    title: string;
+    sheet: { title: string; companyId: number };
+  },
+  user: { id: number; name: string },
+) {
+  let emailAddress: string | null = null;
+
+  if (
+    config.emailSource === "table" &&
+    config.emailTableId &&
+    config.emailColumn
+  ) {
+    const emailTable = await prisma.tableMeta.findFirst({
+      where: { id: Number(config.emailTableId), companyId: item.sheet.companyId },
+      select: { id: true },
+    });
+    if (!emailTable) {
+      log.warn("Email: Table not found or unauthorized", { emailTableId: config.emailTableId });
+      return;
+    }
+
+    try {
+      let record;
+      if (config.emailRecordId) {
+        record = await prisma.record.findFirst({
+          where: {
+            id: Number(config.emailRecordId),
+            tableId: Number(config.emailTableId),
+            companyId: item.sheet.companyId,
+          },
+        });
+      } else {
+        record = await prisma.record.findFirst({
+          where: {
+            tableId: Number(config.emailTableId),
+            companyId: item.sheet.companyId,
+          },
+          orderBy: { createdAt: "desc" },
+        });
+      }
+
+      if (record && record.data) {
+        const recordData = record.data as Record<string, unknown>;
+        emailAddress = recordData[config.emailColumn as string] as string;
+      } else {
+        log.warn("Email: Record not found in table", { emailTableId: config.emailTableId });
+      }
+    } catch (fetchError) {
+      log.error("Email: Error fetching email from table", { error: String(fetchError) });
+    }
+  } else {
+    emailAddress = config.email as string;
+  }
+
+  const subject = config.subject as string | undefined;
+  const message = config.message as string | undefined;
+
+  if (!emailAddress || !message) {
+    log.warn("Email: Missing email or message");
+    return;
+  }
+
+  const finalSubject = (subject || "")
+    .replace("{itemTitle}", item.title)
+    .replace("{sheetTitle}", item.sheet.title)
+    .replace("{userName}", user.name);
+
+  const finalMessage = message
+    .replace("{itemTitle}", item.title)
+    .replace("{sheetTitle}", item.sheet.title)
+    .replace("{userName}", user.name);
+
+  const { inngest } = await import("@/lib/inngest/client");
+  try {
+    await inngest.send({
+      id: `email-tasksheet-${item.sheet.companyId}-${emailAddress}-${item.id}-${Math.floor(Date.now() / 5000)}`,
+      name: "automation/send-email",
+      data: {
+        companyId: item.sheet.companyId,
+        to: String(emailAddress),
+        subject: finalSubject,
+        body: finalMessage,
+      },
+    });
+    log.info("Email job enqueued");
+  } catch (err) {
+    log.error("Failed to enqueue Email job", { error: String(err) });
   }
 }

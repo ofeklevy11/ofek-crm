@@ -502,35 +502,37 @@ export async function getNurtureSubscribers(
 // Helper: dispatch auto-send Inngest event if the list is configured for it
 async function dispatchAutoSendIfConfigured(
   list: { id: number; configJson: any; isEnabled: boolean; slug: string },
-  subscriber: { id: number; phone: string | null; phoneActive: boolean; name: string },
+  subscriber: { id: number; phone: string | null; phoneActive: boolean; email?: string | null; emailActive?: boolean; name: string },
   companyId: number
-) {
+): Promise<{ dispatched: boolean; channels?: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean; email: boolean }; timing?: string }> {
   try {
     if (!list.configJson) {
       console.log("[AutoSend] skip: no configJson on list", list.id);
-      return;
+      return { dispatched: false };
     }
     const config = list.configJson as any;
-    if (!subscriber.phone || !subscriber.phoneActive) {
-      console.log("[AutoSend] skip: subscriber has no active phone", { phone: subscriber.phone, phoneActive: subscriber.phoneActive });
-      return;
+    const hasPhone = subscriber.phone && subscriber.phoneActive;
+    const hasEmail = subscriber.email && subscriber.emailActive;
+    if (!hasPhone && !hasEmail) {
+      console.log("[AutoSend] skip: subscriber has no active contact method", { phone: subscriber.phone, phoneActive: subscriber.phoneActive, email: subscriber.email });
+      return { dispatched: false };
     }
     if (config.timing === "manual" || !config.timing) {
       console.log("[AutoSend] skip: timing is manual or unset", config.timing);
-      return;
+      return { dispatched: false };
     }
 
     const channels = config.channels || {};
-    if (!channels.sms && !channels.whatsappGreen && !channels.whatsappCloud) {
+    if (!channels.sms && !channels.whatsappGreen && !channels.whatsappCloud && !channels.email) {
       console.log("[AutoSend] skip: no channels enabled", channels);
-      return;
+      return { dispatched: false };
     }
 
     const { migrateConfigMessages, getActiveMessage, NURTURE_TIMING_MAP } = await import("@/lib/nurture-messages");
     const activeMsg = getActiveMessage(migrateConfigMessages(config));
     if (!activeMsg) {
       console.log("[AutoSend] skip: no active message found");
-      return;
+      return { dispatched: false };
     }
 
     const delayMs = NURTURE_TIMING_MAP[config.timing] ?? 0;
@@ -546,21 +548,26 @@ async function dispatchAutoSendIfConfigured(
         companyId,
         subscriberId: subscriber.id,
         nurtureListId: list.id,
-        subscriberPhone: subscriber.phone,
+        subscriberPhone: subscriber.phone || "",
         subscriberName: subscriber.name,
-        channels,
+        channels: { ...channels, email: !!channels.email },
         smsBody: activeMsg.smsBody || "",
         whatsappGreenBody: activeMsg.whatsappGreenBody || "",
         whatsappCloudTemplateName: activeMsg.whatsappCloudTemplateName || "",
         whatsappCloudLanguageCode: activeMsg.whatsappCloudLanguageCode || "he",
+        subscriberEmail: subscriber.email || "",
+        emailSubject: activeMsg.emailSubject || "",
+        emailBody: activeMsg.emailBody || "",
         slug: list.slug,
         delayMs,
         triggerKey: `manual-${list.slug}-${Date.now()}`,
       },
     });
     console.log("[AutoSend] event dispatched successfully");
+    return { dispatched: true, channels, timing: config.timing };
   } catch (err) {
     console.error("[NurtureHub] dispatchAutoSendIfConfigured failed (non-fatal):", err);
+    return { dispatched: false };
   }
 }
 
@@ -633,13 +640,18 @@ export async function addNurtureSubscriberManual(
     });
 
     // Dispatch auto-send if configured
-    await dispatchAutoSendIfConfigured(
+    const autoSend = await dispatchAutoSendIfConfigured(
       list,
-      { id: newSub.id, phone: newSub.phone, phoneActive: newSub.phoneActive, name: newSub.name },
+      { id: newSub.id, phone: newSub.phone, phoneActive: newSub.phoneActive, email: newSub.email, emailActive: newSub.emailActive, name: newSub.name },
       currentUser.companyId
     );
 
-    return { success: true };
+    return {
+      success: true,
+      autoSendDispatched: autoSend.dispatched,
+      autoSendChannels: autoSend.channels,
+      autoSendTiming: autoSend.timing,
+    };
   } catch (error) {
     return handleNurtureError(error, "addNurtureSubscriberManual");
   }
@@ -658,6 +670,9 @@ export async function bulkImportNurtureSubscribers(
   missingContactCount?: number;
   duplicateNames?: string[];
   missingContactNames?: string[];
+  autoSendCount?: number;
+  autoSendChannels?: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean };
+  autoSendTiming?: string;
   error?: string;
 }> {
   try {
@@ -767,6 +782,9 @@ export async function bulkImportNurtureSubscribers(
     // Filter duplicates + intra-batch dedup
     const seenInBatch = new Set<string>();
     const duplicateNames: string[] = [];
+    let autoSendCount = 0;
+    let autoSendChannels: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean } | undefined;
+    let autoSendTiming: string | undefined;
     const toInsert: {
       nurtureListId: number;
       name: string;
@@ -828,10 +846,17 @@ export async function bulkImportNurtureSubscribers(
             const batchPhones = phonesWithAutoSend.slice(i, i + DISPATCH_BATCH);
             const createdSubs = await prisma.nurtureSubscriber.findMany({
               where: { nurtureListId: list.id, phone: { in: batchPhones } },
-              select: { id: true, phone: true, phoneActive: true, name: true },
+              select: { id: true, phone: true, phoneActive: true, email: true, emailActive: true, name: true },
             });
             for (const sub of createdSubs) {
-              await dispatchAutoSendIfConfigured(list, sub, currentUser.companyId);
+              const result = await dispatchAutoSendIfConfigured(list, sub, currentUser.companyId);
+              if (result.dispatched) {
+                autoSendCount++;
+                if (!autoSendChannels) {
+                  autoSendChannels = result.channels;
+                  autoSendTiming = result.timing;
+                }
+              }
             }
           }
         }
@@ -845,6 +870,9 @@ export async function bulkImportNurtureSubscribers(
       missingContactCount: missingContactNames.length,
       duplicateNames,
       missingContactNames,
+      autoSendCount,
+      autoSendChannels,
+      autoSendTiming,
     };
   } catch (error) {
     return handleNurtureError(error, "bulkImportNurtureSubscribers");
@@ -1043,7 +1071,7 @@ export async function getAvailableChannels() {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
-    if (!currentUser) return { sms: false, whatsappGreen: false, whatsappCloud: false };
+    if (!currentUser) return { sms: false, whatsappGreen: false, whatsappCloud: false, email: false };
 
     const [smsIntegration, company, waAccount] = await Promise.all([
       prisma.smsIntegration.findFirst({
@@ -1065,10 +1093,11 @@ export async function getAvailableChannels() {
       sms: !!smsIntegration,
       whatsappGreen: !!(company?.greenApiInstanceId && company?.greenApiToken),
       whatsappCloud: !!(waAccount && (waAccount as any).phoneNumbers?.length > 0),
+      email: true,
     };
   } catch (error) {
     console.error("Error checking available channels:", error);
-    return { sms: false, whatsappGreen: false, whatsappCloud: false };
+    return { sms: false, whatsappGreen: false, whatsappCloud: false, email: false };
   }
 }
 
@@ -1205,7 +1234,7 @@ export async function sendNurtureCampaign(
   subscriberId?: string,
   channelOverrides?: { sms?: boolean; whatsappGreen?: boolean; whatsappCloud?: boolean },
   subscriberIds?: string[]
-): Promise<{ success: boolean; error?: string; count?: number; totalSubscribers?: number; quotaLimited?: boolean; resetInSeconds?: number; channelsSent?: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean }; batchId?: string }> {
+): Promise<{ success: boolean; error?: string; count?: number; totalSubscribers?: number; quotaLimited?: boolean; resetInSeconds?: number; channelsSent?: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean; email: boolean }; batchId?: string }> {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
@@ -1226,14 +1255,15 @@ export async function sendNurtureCampaign(
           sms: !!channelOverrides.sms,
           whatsappGreen: !!channelOverrides.whatsappGreen,
           whatsappCloud: !!channelOverrides.whatsappCloud,
+          email: !!(channelOverrides as any).email,
         }
-      : configChannels;
+      : { ...configChannels, email: !!configChannels.email };
 
-    if (!channels.sms && !channels.whatsappGreen && !channels.whatsappCloud) {
+    if (!channels.sms && !channels.whatsappGreen && !channels.whatsappCloud && !channels.email) {
       return { success: false, error: "יש לבחור לפחות ערוץ שליחה אחד" };
     }
 
-    const channelCount = (channels.sms ? 1 : 0) + (channels.whatsappGreen ? 1 : 0) + (channels.whatsappCloud ? 1 : 0);
+    const channelCount = (channels.sms ? 1 : 0) + (channels.whatsappGreen ? 1 : 0) + (channels.whatsappCloud ? 1 : 0) + (channels.email ? 1 : 0);
 
     // Rate limit both individual and bulk sends
     const tier = (currentUser.isPremium as "basic" | "premium" | "super") || "basic";
@@ -1265,10 +1295,21 @@ export async function sendNurtureCampaign(
     if (channels.whatsappGreen && !activeMsg.whatsappGreenBody?.trim()) {
       return { success: false, error: "תוכן הודעת WhatsApp חסר בתבנית הפעילה" };
     }
+    if (channels.email && !activeMsg.emailBody?.trim()) {
+      return { success: false, error: "תוכן האימייל חסר בתבנית הפעילה" };
+    }
 
-    // Filter subscribers with active phone
+    // Filter subscribers with active contact method
     let activeSubscribers = list.subscribers.filter(
-      (sub: any) => sub.phoneActive && sub.phone
+      (sub: any) => {
+        const hasPhone = sub.phoneActive && sub.phone;
+        const hasEmail = sub.emailActive && sub.email;
+        // If email is the only channel, require email; otherwise require phone or email
+        if (channels.email && !channels.sms && !channels.whatsappGreen && !channels.whatsappCloud) {
+          return hasEmail;
+        }
+        return hasPhone || hasEmail;
+      }
     );
 
     // If subscriberId provided, filter to only that subscriber
@@ -1377,13 +1418,16 @@ export async function sendNurtureCampaign(
       name: "nurture/send-campaign-message" as const,
       data: {
         companyId: currentUser.companyId,
-        subscriberPhone: sub.phone,
+        subscriberPhone: sub.phone || "",
         subscriberName: sub.name,
         channels,
         smsBody: activeMsg.smsBody || "",
         whatsappGreenBody: activeMsg.whatsappGreenBody || "",
         whatsappCloudTemplateName: activeMsg.whatsappCloudTemplateName || "",
         whatsappCloudLanguageCode: activeMsg.whatsappCloudLanguageCode || "he",
+        subscriberEmail: sub.email || "",
+        emailSubject: activeMsg.emailSubject || "",
+        emailBody: activeMsg.emailBody || "",
         slug,
         batchId,
       },
@@ -1401,6 +1445,7 @@ export async function sendNurtureCampaign(
         sms: !!channels.sms,
         whatsappGreen: !!channels.whatsappGreen,
         whatsappCloud: !!channels.whatsappCloud,
+        email: !!channels.email,
       },
     };
   } catch (error) {

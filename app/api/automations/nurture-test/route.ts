@@ -249,6 +249,9 @@ async function handleForceMode(slug: string, rawPhone: string | null) {
       whatsappGreenBody: activeMsg.whatsappGreenBody || "",
       whatsappCloudTemplateName: activeMsg.whatsappCloudTemplateName || "",
       whatsappCloudLanguageCode: activeMsg.whatsappCloudLanguageCode || "he",
+      subscriberEmail: sub.email || "",
+      emailSubject: activeMsg.emailSubject || "",
+      emailBody: activeMsg.emailBody || "",
       slug,
     },
   });

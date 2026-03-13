@@ -89,6 +89,19 @@ export async function sendEmailChangeVerification(to: string, code: string) {
   }
 }
 
+export async function sendAutomationEmail(to: string, subject: string, html: string) {
+  const { error } = await getResend().emails.send({
+    from: "Bizly CRM <automation@bizlycrm.com>",
+    to,
+    subject,
+    html,
+  });
+
+  if (error) {
+    throw new Error(`Failed to send automation email: ${error.message}`);
+  }
+}
+
 export async function sendEmailChangedNotification(to: string) {
   const { error } = await getResend().emails.send({
     from: "Bizly CRM <noreply@bizlycrm.com>",

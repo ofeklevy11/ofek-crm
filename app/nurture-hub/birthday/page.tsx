@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -59,7 +59,6 @@ import NurtureMessageEditor, { migrateConfigMessages, getActiveMessage, NurtureM
 import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
 import NurtureAutomationPreview from "@/components/nurture/NurtureAutomationPreview";
 import { useNurtureQuota } from "@/components/nurture/NurtureQuotaContext";
-import NurtureQuotaBadge from "@/components/nurture/NurtureQuotaBadge";
 import NurtureQueuePanel from "@/components/nurture/NurtureQueuePanel";
 import NurtureSendConfirmDialog, { type ChannelSelection, type BulkCustomer } from "@/components/nurture/NurtureSendConfirmDialog";
 import NurtureSubscriberSearch from "@/components/nurture/NurtureSubscriberSearch";
@@ -175,7 +174,7 @@ export default function BirthdayAutomationPage() {
     refreshData();
   };
 
-  const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false });
+  const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false, email: false });
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendingCustomerId, setSendingCustomerId] = useState<string | null>(null);
@@ -187,6 +186,8 @@ export default function BirthdayAutomationPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const quota = useNurtureQuota();
+  const [previewRefreshTrigger, setPreviewRefreshTrigger] = useState(0);
+  const handleAutoSendDispatched = useCallback(() => { setPreviewRefreshTrigger(p => p + 1); quota.refreshQuota(); }, [quota]);
 
   // Form State
   const [config, setConfig] = useState({
@@ -194,6 +195,7 @@ export default function BirthdayAutomationPage() {
       sms: false,
       whatsappGreen: false,
       whatsappCloud: false,
+      email: false,
     },
     timing: "09:00",
     messages: [{
@@ -204,6 +206,8 @@ export default function BirthdayAutomationPage() {
       whatsappGreenBody: "מזל טוב {first_name}! 🎂🎉\nפינוק ליום ההולדת מחכה לך אצלנו: 15% הנחה!\nתוקף: 7 ימים.",
       whatsappCloudTemplateName: "",
       whatsappCloudLanguageCode: "he",
+      emailSubject: "",
+      emailBody: "",
     }] as NurtureMessage[],
     offerType: "percentage",
     offerValue: "15",
@@ -361,7 +365,6 @@ export default function BirthdayAutomationPage() {
             </p>
           </div>
           <div className="mr-auto flex items-center gap-3">
-            <NurtureQuotaBadge />
             <div className="flex items-center gap-2 border rounded-lg px-3 py-1.5">
               <Label htmlFor="birthday-enabled" className="text-sm text-slate-600 cursor-pointer">
                 {isEnabled ? "פעיל" : "כבוי"}
@@ -374,7 +377,7 @@ export default function BirthdayAutomationPage() {
             </div>
             <Button
               onClick={handleSendNow}
-              disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud)}
+              disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud && !config.channels.email)}
               className="bg-pink-600 hover:bg-pink-700 gap-2"
             >
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -396,6 +399,7 @@ export default function BirthdayAutomationPage() {
           customerCount={total}
           isEnabled={isEnabled}
           accentColor="pink"
+          refreshTrigger={previewRefreshTrigger}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -411,6 +415,7 @@ export default function BirthdayAutomationPage() {
                     listSlug="birthday"
                     automationOpenProp={isAutoModalOpen}
                     onAutomationOpenChangeProp={setIsAutoModalOpen}
+                    onAutoSendDispatched={handleAutoSendDispatched}
                   />
                 </CardTitle>
                 <CardDescription>
@@ -704,7 +709,17 @@ export default function BirthdayAutomationPage() {
                       </div>
                     )}
 
-                    {!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud && (
+                    {config.channels.email && getActiveMessage(config.messages)?.emailBody && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] text-purple-600 font-medium px-1">Email</div>
+                        <div className="p-3 rounded-xl shadow-sm text-xs text-slate-800 max-w-[85%] bg-purple-50 border border-purple-100">
+                          <div className="font-medium mb-1">{getActiveMessage(config.messages)!.emailSubject?.replace(/\{first_name\}/g, "ישראל") || "ללא נושא"}</div>
+                          <div>{getActiveMessage(config.messages)!.emailBody.replace(/\{first_name\}/g, "ישראל").slice(0, 100)}{getActiveMessage(config.messages)!.emailBody.length > 100 ? "..." : ""}</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud && !config.channels.email && (
                       <div className="flex items-center justify-center h-20 text-xs text-slate-400">
                         בחר ערוץ לתצוגה מקדימה
                       </div>

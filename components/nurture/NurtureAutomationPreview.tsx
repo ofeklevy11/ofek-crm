@@ -9,12 +9,13 @@ import { getActiveMessage } from "@/lib/nurture-messages";
 
 interface NurtureAutomationPreviewProps {
   slug: string;
-  channels: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean };
+  channels: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean; email: boolean };
   messages: NurtureMessage[];
   timing: string;
   customerCount: number;
   isEnabled: boolean;
   accentColor?: string;
+  refreshTrigger?: number;
 }
 
 const TIMING_LABELS: Record<string, string> = {
@@ -36,6 +37,7 @@ export default function NurtureAutomationPreview({
   timing,
   customerCount,
   isEnabled,
+  refreshTrigger,
 }: NurtureAutomationPreviewProps) {
   const quota = useNurtureQuota();
   const [activity, setActivity] = useState<{
@@ -71,6 +73,13 @@ export default function NurtureAutomationPreview({
     fetchActivity();
   }, [fetchActivity]);
 
+  // Immediate refresh when refreshTrigger changes (e.g. after auto-send dispatch)
+  useEffect(() => {
+    if (refreshTrigger && refreshTrigger > 0) {
+      fetchActivity();
+    }
+  }, [refreshTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Polling
   useEffect(() => {
     if (!shouldPoll) return;
@@ -90,13 +99,14 @@ export default function NurtureAutomationPreview({
   }, [shouldPoll, fetchActivity]);
 
   const activeMsg = getActiveMessage(messages);
-  const msgPreview = activeMsg?.smsBody || activeMsg?.whatsappGreenBody || "";
+  const msgPreview = activeMsg?.smsBody || activeMsg?.whatsappGreenBody || activeMsg?.emailBody || "";
   const truncatedMsg = msgPreview.length > 50 ? msgPreview.slice(0, 50) + "..." : msgPreview;
 
   const activeChannels: string[] = [];
   if (channels.sms) activeChannels.push("SMS");
   if (channels.whatsappGreen) activeChannels.push("WA");
   if (channels.whatsappCloud) activeChannels.push("WA Cloud");
+  if (channels.email) activeChannels.push("Email");
 
   return (
     <div className="mb-6 bg-white border border-slate-200 rounded-xl px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm shadow-sm">
@@ -171,6 +181,29 @@ export default function NurtureAutomationPreview({
           </div>
         </>
       )}
+
+      {/* Quota & Plan */}
+      <div className="ml-auto flex items-center gap-1.5 text-xs tabular-nums">
+        {quota.isUnlimited ? (
+          <span className="text-indigo-600 font-medium">ללא הגבלה · Super</span>
+        ) : (
+          <>
+            <span className={`font-medium ${
+              quota.remaining === 0
+                ? "text-red-600"
+                : quota.used > 0
+                ? "text-amber-600"
+                : "text-green-600"
+            }`}>
+              {quota.remaining}/{quota.limit} הודעות זמינות
+            </span>
+            <span className="text-slate-400">·</span>
+            <span className="text-slate-400">
+              {quota.tier === "premium" ? "Premium" : "Basic"}
+            </span>
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -20,6 +20,7 @@ const ALLOWED_ACTION_TYPES = new Set([
   "create_event",
   "whatsapp",
   "sms",
+  "email",
   "webhook",
 ]);
 
@@ -335,6 +336,30 @@ export const processWorkflowStageAutomations = inngest.createFunction(
               log.info("SMS job enqueued");
             } else {
               log.warn("SMS: No phone number resolved");
+            }
+            break;
+          }
+
+          case "email": {
+            let emailTarget = config.emailColumnId || "";
+            if (emailTarget.startsWith("manual:")) {
+              emailTarget = emailTarget.replace("manual:", "");
+            }
+
+            if (emailTarget) {
+              await inngest.send({
+                id: `email-workflow-${companyId}-${emailTarget}-${stageId}-${Math.floor(Date.now() / 5000)}`,
+                name: "automation/send-email",
+                data: {
+                  companyId,
+                  to: String(emailTarget),
+                  subject: config.subject || "",
+                  body: config.content || "",
+                },
+              });
+              log.info("Email job enqueued");
+            } else {
+              log.warn("Email: No email address resolved");
             }
             break;
           }

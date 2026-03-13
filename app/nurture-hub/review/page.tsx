@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -44,7 +44,6 @@ import CustomerListManager from "@/components/nurture/CustomerListManager";
 import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
 import NurtureAutomationPreview from "@/components/nurture/NurtureAutomationPreview";
 import { useNurtureQuota } from "@/components/nurture/NurtureQuotaContext";
-import NurtureQuotaBadge from "@/components/nurture/NurtureQuotaBadge";
 import NurtureQueuePanel from "@/components/nurture/NurtureQueuePanel";
 import NurtureSendConfirmDialog, { type ChannelSelection, type BulkCustomer } from "@/components/nurture/NurtureSendConfirmDialog";
 import NurtureSubscriberSearch from "@/components/nurture/NurtureSubscriberSearch";
@@ -144,7 +143,7 @@ export default function ReviewAutomationPage() {
   };
 
   const [isEnabled, setIsEnabled] = useState(false);
-  const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false });
+  const [availableChannels, setAvailableChannels] = useState({ sms: false, whatsappGreen: false, whatsappCloud: false, email: false });
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendingCustomerId, setSendingCustomerId] = useState<string | null>(null);
@@ -156,9 +155,11 @@ export default function ReviewAutomationPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const quota = useNurtureQuota();
+  const [previewRefreshTrigger, setPreviewRefreshTrigger] = useState(0);
+  const handleAutoSendDispatched = useCallback(() => { setPreviewRefreshTrigger(p => p + 1); quota.refreshQuota(); }, [quota]);
   const [config, setConfig] = useState({
     timing: "immediate",
-    channels: { sms: false, whatsappGreen: false, whatsappCloud: false },
+    channels: { sms: false, whatsappGreen: false, whatsappCloud: false, email: false },
     messages: [
       {
         id: "msg_default",
@@ -168,6 +169,8 @@ export default function ReviewAutomationPage() {
         whatsappGreenBody: "היי {first_name}, שמחנו לתת לך שירות! נשמח לשמוע מה חשבת בקישור קצר.",
         whatsappCloudTemplateName: "",
         whatsappCloudLanguageCode: "he",
+        emailSubject: "",
+        emailBody: "",
       },
     ] as NurtureMessage[],
   });
@@ -303,7 +306,6 @@ export default function ReviewAutomationPage() {
             </p>
           </div>
           <div className="mr-auto flex items-center gap-3">
-            <NurtureQuotaBadge />
             <div className="flex items-center gap-2 border rounded-lg px-3 py-1.5">
               <Label htmlFor="review-enabled" className="text-sm text-slate-600 cursor-pointer">
                 {isEnabled ? "פעיל" : "כבוי"}
@@ -316,7 +318,7 @@ export default function ReviewAutomationPage() {
             </div>
             <Button
               onClick={handleSendNow}
-              disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud)}
+              disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud && !config.channels.email)}
               className="bg-amber-600 hover:bg-amber-700 gap-2"
             >
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -338,6 +340,7 @@ export default function ReviewAutomationPage() {
           customerCount={total}
           isEnabled={isEnabled}
           accentColor="amber"
+          refreshTrigger={previewRefreshTrigger}
         />
 
         <div className="space-y-6">
@@ -351,6 +354,7 @@ export default function ReviewAutomationPage() {
                     listSlug="review"
                     automationOpenProp={isAutoModalOpen}
                     onAutomationOpenChangeProp={setIsAutoModalOpen}
+                    onAutoSendDispatched={handleAutoSendDispatched}
                   />
                 </CardTitle>
                 <CardDescription>
