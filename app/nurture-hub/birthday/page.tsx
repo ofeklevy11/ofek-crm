@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { showAlert, showConfirm } from "@/hooks/use-modal";
 import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,6 +57,7 @@ import CustomerListManager from "@/components/nurture/CustomerListManager";
 import NurtureChannelSelector from "@/components/nurture/NurtureChannelSelector";
 import NurtureMessageEditor, { migrateConfigMessages, getActiveMessage, NurtureMessage } from "@/components/nurture/NurtureMessageEditor";
 import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
+import NurtureAutomationPreview from "@/components/nurture/NurtureAutomationPreview";
 import { useNurtureQuota } from "@/components/nurture/NurtureQuotaContext";
 import NurtureQuotaBadge from "@/components/nurture/NurtureQuotaBadge";
 import NurtureQueuePanel from "@/components/nurture/NurtureQueuePanel";
@@ -360,6 +362,16 @@ export default function BirthdayAutomationPage() {
           </div>
           <div className="mr-auto flex items-center gap-3">
             <NurtureQuotaBadge />
+            <div className="flex items-center gap-2 border rounded-lg px-3 py-1.5">
+              <Label htmlFor="birthday-enabled" className="text-sm text-slate-600 cursor-pointer">
+                {isEnabled ? "פעיל" : "כבוי"}
+              </Label>
+              <Switch
+                id="birthday-enabled"
+                checked={isEnabled}
+                onCheckedChange={setIsEnabled}
+              />
+            </div>
             <Button
               onClick={handleSendNow}
               disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud)}
@@ -376,6 +388,15 @@ export default function BirthdayAutomationPage() {
         </div>
 
         <NurtureTriggerInfo slug="birthday" />
+        <NurtureAutomationPreview
+          slug="birthday"
+          channels={config.channels}
+          messages={config.messages}
+          timing="cron"
+          customerCount={total}
+          isEnabled={isEnabled}
+          accentColor="pink"
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Col: Configuration */}
@@ -1357,6 +1378,8 @@ export default function BirthdayAutomationPage() {
                             }
                           >
                             <option value="">בחר שדה...</option>
+                            <option value="__createdAt">תאריך יצירה (מערכת)</option>
+                            <option value="__updatedAt">תאריך עדכון (מערכת)</option>
                             {tableFields
                               .filter(
                                 (f) =>

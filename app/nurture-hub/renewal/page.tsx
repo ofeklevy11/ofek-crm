@@ -20,6 +20,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -303,6 +304,16 @@ export default function RenewalAutomationPage() {
           </div>
           <div className="mr-auto flex items-center gap-3">
             <NurtureQuotaBadge />
+            <div className="flex items-center gap-2 border rounded-lg px-3 py-1.5">
+              <Label htmlFor="renewal-enabled" className="text-sm text-slate-600 cursor-pointer">
+                {isEnabled ? "פעיל" : "כבוי"}
+              </Label>
+              <Switch
+                id="renewal-enabled"
+                checked={isEnabled}
+                onCheckedChange={setIsEnabled}
+              />
+            </div>
             <Button
               onClick={handleSendNow}
               disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud)}
