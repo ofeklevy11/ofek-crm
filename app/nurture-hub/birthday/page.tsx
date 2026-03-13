@@ -60,6 +60,7 @@ import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
 import NurtureAutomationPreview from "@/components/nurture/NurtureAutomationPreview";
 import { useNurtureQuota } from "@/components/nurture/NurtureQuotaContext";
 import NurtureQueuePanel from "@/components/nurture/NurtureQueuePanel";
+import NurtureAutoSendQueue from "@/components/nurture/NurtureAutoSendQueue";
 import NurtureSendConfirmDialog, { type ChannelSelection, type BulkCustomer } from "@/components/nurture/NurtureSendConfirmDialog";
 import NurtureSubscriberSearch from "@/components/nurture/NurtureSubscriberSearch";
 import NurtureCustomerGrid from "@/components/nurture/NurtureCustomerGrid";
@@ -93,6 +94,7 @@ export default function BirthdayAutomationPage() {
   const [isEnabled, setIsEnabled] = useState(false);
   const [isAutoModalOpen, setIsAutoModalOpen] = useState(false);
   const [rules, setRules] = useState<any[]>([]);
+  const [confirmDeleteRuleId, setConfirmDeleteRuleId] = useState<number | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<NurtureSubscriberResult | null>(null);
   const [editingCustomer, setEditingCustomer] = useState<NurtureSubscriberResult | null>(null);
 
@@ -187,7 +189,8 @@ export default function BirthdayAutomationPage() {
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const quota = useNurtureQuota();
   const [previewRefreshTrigger, setPreviewRefreshTrigger] = useState(0);
-  const handleAutoSendDispatched = useCallback(() => { setPreviewRefreshTrigger(p => p + 1); quota.refreshQuota(); }, [quota]);
+  const [autoSendQueueTrigger, setAutoSendQueueTrigger] = useState(0);
+  const handleAutoSendDispatched = useCallback(() => { setPreviewRefreshTrigger(p => p + 1); setAutoSendQueueTrigger(p => p + 1); }, []);
 
   // Form State
   const [config, setConfig] = useState({
@@ -254,7 +257,9 @@ export default function BirthdayAutomationPage() {
       id: c.id,
       name: c.name,
       phone: c.phone,
+      email: c.email,
       phoneActive: c.phoneActive,
+      emailActive: c.emailActive,
       alreadySent: !!lastSentMap[c.id],
       lastSentAt: lastSentMap[c.id] || undefined,
     }));
@@ -292,6 +297,7 @@ export default function BirthdayAutomationPage() {
         if (ch?.sms) parts.push("SMS");
         if (ch?.whatsappGreen) parts.push("WhatsApp");
         if (ch?.whatsappCloud) parts.push("WhatsApp Cloud");
+        if (ch?.email) parts.push("אימייל");
         const via = parts.length > 0 ? ` (${parts.join(", ")})` : "";
         const quotaNote = result.quotaLimited ? ` (מתוך ${result.totalSubscribers})` : "";
         toast.success(`${result.count} הודעות נשלחו בהצלחה${via}${quotaNote}`);
@@ -329,6 +335,7 @@ export default function BirthdayAutomationPage() {
         if (ch?.sms) parts.push("SMS");
         if (ch?.whatsappGreen) parts.push("WhatsApp");
         if (ch?.whatsappCloud) parts.push("WhatsApp Cloud");
+        if (ch?.email) parts.push("אימייל");
         const via = parts.length > 0 ? ` (${parts.join(", ")})` : "";
         toast.success(`ההודעה נשלחה ל-${customer.name}${via}`);
       }
@@ -546,23 +553,45 @@ export default function BirthdayAutomationPage() {
                               )}
                             </button>
                             {/* Delete */}
-                            <button
-                              onClick={async () => {
-                                if (await showConfirm("האם למחוק את חוק האוטומציה?")) {
-                                  try {
-                                    await deleteAutomationRule(rule.id);
-                                    refreshRules();
-                                  } catch (error) {
-                                    if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
-                                    else toast.error(getUserFriendlyError(error));
-                                  }
-                                }
-                              }}
-                              className="p-1.5 rounded-md text-red-500 hover:bg-red-50 transition-colors"
-                              title="מחק"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {confirmDeleteRuleId === rule.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const result = await deleteAutomationRule(rule.id);
+                                      if (result.success) {
+                                        refreshRules();
+                                        toast.success("האוטומציה נמחקה בהצלחה");
+                                      } else {
+                                        toast.error(result.error || "שגיאה במחיקת האוטומציה");
+                                      }
+                                    } catch (error) {
+                                      if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
+                                      else toast.error(getUserFriendlyError(error));
+                                    } finally {
+                                      setConfirmDeleteRuleId(null);
+                                    }
+                                  }}
+                                  className="p-1 rounded-md text-white bg-red-500 hover:bg-red-600 transition-colors text-xs px-2"
+                                >
+                                  מחק
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDeleteRuleId(null)}
+                                  className="p-1 rounded-md text-slate-500 hover:bg-slate-100 transition-colors"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmDeleteRuleId(rule.id)}
+                                className="p-1.5 rounded-md text-red-500 hover:bg-red-50 transition-colors"
+                                title="מחק"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                             <Badge
                               className={`${
                                 rule.isActive
@@ -1520,6 +1549,7 @@ export default function BirthdayAutomationPage() {
         </DialogContent>
       </Dialog>
       <NurtureQueuePanel batchId={activeBatchId} onClose={() => setActiveBatchId(null)} />
+      <NurtureAutoSendQueue slug="birthday" trigger={autoSendQueueTrigger} />
       <NurtureSendConfirmDialog
         open={sendConfirmOpen}
         onOpenChange={setSendConfirmOpen}

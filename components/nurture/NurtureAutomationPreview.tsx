@@ -197,9 +197,17 @@ export default function NurtureAutomationPreview({
             }`}>
               {quota.remaining}/{quota.limit} הודעות זמינות
             </span>
+            {quota.resetInSeconds > 0 && (
+              <>
+                <span className="text-slate-400">·</span>
+                <span className="text-slate-400">
+                  איפוס {quota.resetInSeconds}s
+                </span>
+              </>
+            )}
             <span className="text-slate-400">·</span>
             <span className="text-slate-400">
-              {quota.tier === "premium" ? "Premium" : "Basic"}
+              {quota.tier === "premium" ? "Premium" : "Basic"} · מתאפס כל דקה
             </span>
           </>
         )}

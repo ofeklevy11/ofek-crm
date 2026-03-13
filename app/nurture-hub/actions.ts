@@ -563,8 +563,17 @@ async function dispatchAutoSendIfConfigured(
         triggerKey: `manual-${list.slug}-${Date.now()}`,
       },
     });
-    console.log("[AutoSend] event dispatched successfully");
-    return { dispatched: true, channels, timing: config.timing };
+    console.log("[AutoSend] event dispatched successfully", { channels, timing: config.timing });
+    return {
+      dispatched: true,
+      channels: {
+        sms: !!channels.sms,
+        whatsappGreen: !!channels.whatsappGreen,
+        whatsappCloud: !!channels.whatsappCloud,
+        email: !!channels.email,
+      },
+      timing: String(config.timing),
+    };
   } catch (err) {
     console.error("[NurtureHub] dispatchAutoSendIfConfigured failed (non-fatal):", err);
     return { dispatched: false };
@@ -645,6 +654,16 @@ export async function addNurtureSubscriberManual(
       { id: newSub.id, phone: newSub.phone, phoneActive: newSub.phoneActive, email: newSub.email, emailActive: newSub.emailActive, name: newSub.name },
       currentUser.companyId
     );
+
+    // Consume quota at dispatch time so it's charged immediately
+    if (autoSend.dispatched && autoSend.channels) {
+      const channelCount = [autoSend.channels.sms, autoSend.channels.whatsappGreen, autoSend.channels.whatsappCloud].filter(Boolean).length;
+      if (channelCount > 0) {
+        const { consumeNurtureQuota } = await import("@/lib/nurture-rate-limit");
+        const tier = (currentUser.isPremium as "basic" | "premium" | "super") || "basic";
+        await consumeNurtureQuota(currentUser.id, tier, channelCount);
+      }
+    }
 
     return {
       success: true,
@@ -859,6 +878,16 @@ export async function bulkImportNurtureSubscribers(
               }
             }
           }
+        }
+      }
+
+      // Consume quota for all dispatched auto-sends
+      if (autoSendCount > 0 && autoSendChannels) {
+        const channelCount = [autoSendChannels.sms, autoSendChannels.whatsappGreen, autoSendChannels.whatsappCloud].filter(Boolean).length;
+        if (channelCount > 0) {
+          const { consumeNurtureQuota } = await import("@/lib/nurture-rate-limit");
+          const tier = (currentUser.isPremium as "basic" | "premium" | "super") || "basic";
+          await consumeNurtureQuota(currentUser.id, tier, channelCount * autoSendCount);
         }
       }
     }
@@ -1228,11 +1257,65 @@ export async function getRecentAutoSendActivity(slug: string) {
   }
 }
 
+// Get individual auto-send queue items for the floating queue panel
+export async function getAutoSendQueue(slug: string): Promise<{
+  items: { id: number; name: string; phone: string; status: string; sentAt: string }[];
+  channels: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean; email: boolean };
+} | null> {
+  try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return null;
+
+    const list = await prisma.nurtureList.findFirst({
+      where: { slug, companyId: currentUser.companyId },
+      select: { id: true, configJson: true },
+    });
+    if (!list) return null;
+
+    const config = list.configJson as any;
+    const channels = config?.channels || {};
+    const recentCutoff = new Date(Date.now() - 5 * 60 * 1000);
+
+    const logs = await prisma.nurtureSendLog.findMany({
+      where: {
+        nurtureListId: list.id,
+        sentAt: { gte: recentCutoff },
+        triggerKey: { startsWith: "manual-" },
+      },
+      include: {
+        subscriber: { select: { name: true, phone: true } },
+      },
+      orderBy: { sentAt: "desc" },
+      take: 20,
+    });
+
+    return {
+      items: logs.map((l) => ({
+        id: l.id,
+        name: l.subscriber.name,
+        phone: l.subscriber.phone || "",
+        status: l.status,
+        sentAt: l.sentAt.toISOString(),
+      })),
+      channels: {
+        sms: !!channels.sms,
+        whatsappGreen: !!channels.whatsappGreen,
+        whatsappCloud: !!channels.whatsappCloud,
+        email: !!channels.email,
+      },
+    };
+  } catch (error) {
+    console.error("[NurtureHub] getAutoSendQueue:", error);
+    return null;
+  }
+}
+
 // Send nurture campaign to all subscribers or a specific one
 export async function sendNurtureCampaign(
   slug: string,
   subscriberId?: string,
-  channelOverrides?: { sms?: boolean; whatsappGreen?: boolean; whatsappCloud?: boolean },
+  channelOverrides?: { sms?: boolean; whatsappGreen?: boolean; whatsappCloud?: boolean; email?: boolean },
   subscriberIds?: string[]
 ): Promise<{ success: boolean; error?: string; count?: number; totalSubscribers?: number; quotaLimited?: boolean; resetInSeconds?: number; channelsSent?: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean; email: boolean }; batchId?: string }> {
   try {
@@ -1255,7 +1338,7 @@ export async function sendNurtureCampaign(
           sms: !!channelOverrides.sms,
           whatsappGreen: !!channelOverrides.whatsappGreen,
           whatsappCloud: !!channelOverrides.whatsappCloud,
-          email: !!(channelOverrides as any).email,
+          email: !!channelOverrides.email,
         }
       : { ...configChannels, email: !!configChannels.email };
 

@@ -154,6 +154,7 @@ export async function createGlobalMeetingAutomation(data: {
         actionConfig: finalActionConfig,
         meetingTypeId: data.meetingTypeId || null,
         createdBy: currentUser.id,
+        source: "MEETING",
       },
     );
 
@@ -349,6 +350,7 @@ export async function createPerMeetingAutomation(data: {
         actionConfig: finalActionConfig,
         meetingId: data.meetingId,
         createdBy: currentUser.id,
+        source: "MEETING",
       },
     );
 

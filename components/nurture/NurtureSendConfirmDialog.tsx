@@ -21,13 +21,16 @@ export type ChannelSelection = {
   sms?: boolean;
   whatsappGreen?: boolean;
   whatsappCloud?: boolean;
+  email?: boolean;
 };
 
 export type BulkCustomer = {
   id: string;
   name: string;
   phone?: string;
+  email?: string;
   phoneActive: boolean;
+  emailActive: boolean;
   alreadySent: boolean;
   lastSentAt?: string;
 };
@@ -82,6 +85,7 @@ export default function NurtureSendConfirmDialog({
         sms: !!enabledChannels.sms,
         whatsappGreen: !!enabledChannels.whatsappGreen,
         whatsappCloud: !!enabledChannels.whatsappCloud,
+        email: !!enabledChannels.email,
       });
       setSearch("");
       setExcludeSent(true);
@@ -90,15 +94,15 @@ export default function NurtureSendConfirmDialog({
         // Pre-select all eligible customers (phoneActive + not already sent)
         const ids = new Set<string>();
         for (const c of customers) {
-          if (c.phoneActive && !c.alreadySent) ids.add(c.id);
+          if ((c.phoneActive || c.emailActive) && !c.alreadySent) ids.add(c.id);
         }
         setSelectedIds(ids);
       }
     }
   }, [open, enabledChannels, mode, customers]);
 
-  const anyChannelSelected = selected.sms || selected.whatsappGreen || selected.whatsappCloud;
-  const channelCount = (selected.sms ? 1 : 0) + (selected.whatsappGreen ? 1 : 0) + (selected.whatsappCloud ? 1 : 0);
+  const anyChannelSelected = selected.sms || selected.whatsappGreen || selected.whatsappCloud || selected.email;
+  const channelCount = (selected.sms ? 1 : 0) + (selected.whatsappGreen ? 1 : 0) + (selected.whatsappCloud ? 1 : 0) + (selected.email ? 1 : 0);
 
   // ─── Bulk mode computations ───
   const filteredCustomers = useMemo(() => {
@@ -180,6 +184,19 @@ export default function NurtureSendConfirmDialog({
                 </Label>
               </div>
             )}
+            {enabledChannels.email && (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="ch-email"
+                  checked={!!selected.email}
+                  onCheckedChange={(v) => setSelected((p) => ({ ...p, email: !!v }))}
+                  disabled={loading}
+                />
+                <Label htmlFor="ch-email" className="cursor-pointer text-sm">
+                  שלח אימייל ל-{customerName}
+                </Label>
+              </div>
+            )}
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
@@ -213,7 +230,7 @@ export default function NurtureSendConfirmDialog({
     setSelectedIds((prev) => {
       const next = new Set(prev);
       for (const c of filteredCustomers) {
-        if (c.phoneActive) next.add(c.id);
+        if (c.phoneActive || c.emailActive) next.add(c.id);
       }
       return next;
     });
@@ -240,6 +257,7 @@ export default function NurtureSendConfirmDialog({
   if (selected.sms) channelLabels.push("SMS");
   if (selected.whatsappGreen) channelLabels.push("WhatsApp");
   if (selected.whatsappCloud) channelLabels.push("WhatsApp Cloud");
+  if (selected.email) channelLabels.push("אימייל");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -290,12 +308,23 @@ export default function NurtureSendConfirmDialog({
                   <Label htmlFor="bulk-ch-wa-cloud" className="cursor-pointer text-sm">WhatsApp Cloud</Label>
                 </div>
               )}
+              {enabledChannels.email && (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="bulk-ch-email"
+                    checked={!!selected.email}
+                    onCheckedChange={(v) => setSelected((p) => ({ ...p, email: !!v }))}
+                    disabled={loading}
+                  />
+                  <Label htmlFor="bulk-ch-email" className="cursor-pointer text-sm">אימייל</Label>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Section 2: Message Unit Calculator */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
-            <p className="text-xs text-blue-600">SMS = 1 יחידה &nbsp;|&nbsp; WhatsApp = 1 יחידה</p>
+            <p className="text-xs text-blue-600">1 SMS = 1 יחידה &nbsp;|&nbsp; 1 WhatsApp = 1 יחידה &nbsp;|&nbsp; 1 אימייל = 1 יחידה</p>
             <p className="text-sm font-medium text-blue-800">
               {selectedCount} לקוחות × {channelCount} ערוצים = {totalMessages} הודעות בסה״כ
             </p>
@@ -363,7 +392,7 @@ export default function NurtureSendConfirmDialog({
                   <p className="text-sm text-slate-400 text-center py-4">לא נמצאו לקוחות</p>
                 ) : (
                   filteredCustomers.map((c) => {
-                    const disabled = !c.phoneActive;
+                    const disabled = !c.phoneActive && !c.emailActive;
                     const checked = selectedIds.has(c.id);
                     return (
                       <div
@@ -386,8 +415,8 @@ export default function NurtureSendConfirmDialog({
                             נשלח {c.lastSentAt ? new Date(c.lastSentAt).toLocaleDateString("he-IL") : ""}
                           </Badge>
                         )}
-                        {!c.phoneActive && (
-                          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">אין טלפון</Badge>
+                        {!c.phoneActive && !c.emailActive && (
+                          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">אין פרטי קשר</Badge>
                         )}
                       </div>
                     );
@@ -400,7 +429,7 @@ export default function NurtureSendConfirmDialog({
 
         <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
           <span className="text-sm text-slate-500 ml-auto">
-            {selectedCount}/{filteredCustomers.filter((c) => c.phoneActive).length} לקוחות נבחרו
+            {selectedCount}/{filteredCustomers.filter((c) => c.phoneActive || c.emailActive).length} לקוחות נבחרו
           </span>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             ביטול

@@ -602,6 +602,8 @@ model AutomationRule {
   meetingId String?
   meeting   Meeting? @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
+  source String?
+
   @@index([companyId, isActive, triggerType]) // Covers companyId-only prefix queries + active rules by trigger type
   @@index([companyId, isActive, actionType]) // Covers analytics data fetch (filter by actionType)
   @@index([calendarEventId])

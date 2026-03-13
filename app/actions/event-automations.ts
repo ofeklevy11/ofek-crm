@@ -103,6 +103,7 @@ export async function createGlobalEventAutomation(
         actionConfig: finalActionConfig,
         calendarEventId: null,
         createdBy: currentUser.id,
+        source: "CALENDAR",
       },
     );
 
@@ -257,6 +258,7 @@ export async function createEventAutomation(data: EventAutomationData) {
         actionConfig: finalActionConfig,
         calendarEventId: data.eventId,
         createdBy: currentUser.id,
+        source: "CALENDAR",
       },
     );
 

@@ -1069,6 +1069,8 @@ export async function getAutomationRules(opts?: { cursor?: number; limit?: numbe
         isActive: true,
         folderId: true,
         calendarEventId: true,
+        meetingId: true,
+        source: true,
         createdAt: true,
       },
       take,
@@ -1081,7 +1083,9 @@ export async function getAutomationRules(opts?: { cursor?: number; limit?: numbe
 
     return { success: true, data, hasMore, nextCursor };
   } catch (error) {
-    log.error("Error fetching automation rules", { error: String(error) });
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : undefined;
+    log.error("Error fetching automation rules", { error: errMsg, stack: errStack });
     return { success: false, error: "Failed to fetch automation rules" };
   }
 }
@@ -1092,6 +1096,7 @@ export async function createAutomationRule(data: {
   triggerConfig: any;
   actionType: string;
   actionConfig: any;
+  source?: string;
 }) {
   try {
     // Get the current authenticated user from session
@@ -1169,6 +1174,7 @@ export async function createAutomationRule(data: {
         folderId: folderId ?? null,
         createdBy: currentUser.id,
         companyId: currentUser.companyId,
+        ...(data.source ? { source: data.source } : {}),
       },
     );
 
@@ -1195,8 +1201,9 @@ export async function createAutomationRule(data: {
     revalidatePath("/analytics");
     return { success: true, data: rule };
   } catch (error) {
-    log.error("Error creating automation rule", { error: String(error) });
-    return { success: false, error: "Failed to create automation rule" };
+    const errMsg = error instanceof Error ? error.message : String(error);
+    log.error("Error creating automation rule", { error: errMsg, stack: error instanceof Error ? error.stack : undefined });
+    return { success: false, error: `Failed to create automation rule: ${errMsg}` };
   }
 }
 

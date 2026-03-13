@@ -65,6 +65,7 @@ export async function createCalendarEventForCompany(
           calendarEventId: created.id,
           createdBy,
           isActive: true,
+          source: "CALENDAR",
         })),
       });
     }

@@ -627,7 +627,7 @@ export default function MultiEventAutomationModal({
       if (editingRule) {
         result = await updateAutomationRule(editingRule.id, ruleData);
       } else {
-        result = await createAutomationRule(ruleData);
+        result = await createAutomationRule({ ...ruleData, source: "MULTI_EVENT" });
       }
 
       if (result.success) {

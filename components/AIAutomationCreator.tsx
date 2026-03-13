@@ -217,6 +217,7 @@ export default function AIAutomationCreator({
         triggerConfig: currentSchema.triggerConfig,
         actionType: currentSchema.actionType,
         actionConfig: currentSchema.actionConfig,
+        source: "AI",
       });
 
       if (result.success) {

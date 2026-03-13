@@ -502,6 +502,7 @@ export default function ViewAutomationModal({
           triggerConfig,
           actionType: finalActionType,
           actionConfig: finalActionConfig,
+          source: "ANALYTICS_VIEW",
         });
         if (!result.success) throw new Error(result.error);
         toast.success("האוטומציה נוצרה בהצלחה");

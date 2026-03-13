@@ -68,6 +68,7 @@ const TENANT_EXEMPT_MODELS = new Set([
   "TicketComment",         // child of Ticket (CASCADE)
   "TicketActivityLog",     // child of Ticket (CASCADE)
   "NurtureSubscriber",     // child of NurtureList (CASCADE)
+  "NurtureSendLog",        // child of NurtureList (CASCADE)
   "PaymentMethodInternal", // child of Client (CASCADE)
   "TaskSheetItem",         // child of TaskSheet (CASCADE)
 ]);

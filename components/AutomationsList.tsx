@@ -11,9 +11,14 @@ import {
   getAutomationCategoryUsage,
 } from "@/app/actions/automations";
 import { Plus, Trash2, Power, Edit, Zap, Sparkles, AlertTriangle } from "lucide-react";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import { showConfirm } from "@/hooks/use-modal";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import { AUTOMATION_SOURCES, inferSource } from "@/lib/automation-source";
 
 interface AutomationRule {
   id: number;
@@ -30,6 +35,8 @@ interface AutomationRule {
     title: string;
   };
   calendarEventId?: string | null;
+  meetingId?: string | null;
+  source?: string | null;
 }
 
 interface AutomationsListProps {
@@ -40,6 +47,15 @@ interface AutomationsListProps {
   folders?: { id: number; name: string; _count?: any }[];
   userPlan?: string;
 }
+
+const DELETABLE_SOURCES = new Set(["MANUAL", "MULTI_EVENT", "AI", "ANALYTICS_VIEW"]);
+
+const SOURCE_PAGE_URL: Record<string, string> = {
+  NURTURE: "/nurture-hub",
+  CALENDAR: "/calendar",
+  SERVICE: "/service/automations",
+  MEETING: "/meetings",
+};
 
 export default function AutomationsList({
   initialRules,
@@ -57,6 +73,12 @@ export default function AutomationsList({
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+  const [deleteDialog, setDeleteDialog] = useState<{
+    rule: AutomationRule;
+    mode: "confirm" | "alert";
+    alertMessage?: string;
+    sourcePageUrl?: string;
+  } | null>(null);
 
   // Use folders from props
   const [localFolders, setLocalFolders] = useState(propsFolders || []);
@@ -137,15 +159,37 @@ export default function AutomationsList({
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (await showConfirm({ message: "האם אתה בטוח שברצונך למחוק אוטומציה זו?", variant: "destructive" })) {
-      try {
-        await deleteAutomationRule(id);
-        setRules(rules.filter((r) => r.id !== id));
+  const handleDelete = (rule: AutomationRule) => {
+    const source = rule.source || inferSource(rule);
+
+    if (!DELETABLE_SOURCES.has(source)) {
+      const sourceLabel = AUTOMATION_SOURCES[source]?.label || source;
+      setDeleteDialog({
+        rule,
+        mode: "alert",
+        alertMessage: `אוטומציה זו נוצרה מעמוד "${sourceLabel}". כדי למחוק אותה, יש לגשת לעמוד המקור.`,
+        sourcePageUrl: SOURCE_PAGE_URL[source],
+      });
+      return;
+    }
+
+    setDeleteDialog({ rule, mode: "confirm" });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteDialog) return;
+    const ruleId = deleteDialog.rule.id;
+    setDeleteDialog(null);
+    try {
+      const result = await deleteAutomationRule(ruleId);
+      if (result.success) {
+        setRules(rules.filter((r) => r.id !== ruleId));
         toast.success("האוטומציה נמחקה בהצלחה");
-      } catch (error) {
-        toast.error(getUserFriendlyError(error));
+      } else {
+        toast.error(result.error || "שגיאה במחיקת האוטומציה");
       }
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
     }
   };
 
@@ -694,7 +738,7 @@ export default function AutomationsList({
                       </button>
                     )}
                     <button
-                      onClick={() => handleDelete(rule.id)}
+                      onClick={() => handleDelete(rule)}
                       className="text-gray-400 hover:text-red-500 transition-colors"
                     >
                       <Trash2 size={20} />
@@ -707,7 +751,16 @@ export default function AutomationsList({
                   >
                     <Power size={24} />
                   </div>
-                  <div className="ml-16 flex items-start gap-2 min-h-14">
+                  <div className="ml-16 min-h-14">
+                    {(() => {
+                      const src = rule.source || inferSource(rule);
+                      const meta = AUTOMATION_SOURCES[src];
+                      return meta ? (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${meta.bgColor} ${meta.color} border ${meta.borderColor} mt-3 mb-2`}>
+                          {meta.label}
+                        </span>
+                      ) : null;
+                    })()}
                     <p
                       className={`font-semibold text-gray-900 wrap-break-word leading-tight ${
                         isLongName ? "text-lg" : "text-xl"
@@ -715,11 +768,6 @@ export default function AutomationsList({
                     >
                       {displayName}
                     </p>
-                    {rule.triggerType === "VIEW_METRIC_THRESHOLD" && (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200 shrink-0">
-                        תצוגה
-                      </span>
-                    )}
                   </div>
                 </dt>
                 <dd className="ml-16 pb-6 flex items-baseline sm:pb-7">
@@ -801,6 +849,44 @@ export default function AutomationsList({
           currentUserId={currentUserId}
           userPlan={userPlan}
         />
+
+        {/* Delete confirmation / alert dialog */}
+        <AlertDialog open={!!deleteDialog} onOpenChange={(open) => { if (!open) setDeleteDialog(null); }}>
+          <AlertDialogContent dir="rtl">
+            <AlertDialogHeader className="sm:text-right">
+              <AlertDialogTitle>
+                {deleteDialog?.mode === "alert" ? "שים לב" : "מחיקת אוטומציה"}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {deleteDialog?.mode === "alert"
+                  ? deleteDialog.alertMessage
+                  : "האם אתה בטוח שברצונך למחוק אוטומציה זו?"}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="sm:flex-row-reverse sm:justify-start">
+              {deleteDialog?.mode === "confirm" ? (
+                <>
+                  <AlertDialogCancel>ביטול</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={confirmDelete}
+                    className="bg-destructive text-white hover:bg-destructive/90"
+                  >
+                    מחק
+                  </AlertDialogAction>
+                </>
+              ) : (
+                <>
+                  <AlertDialogCancel>סגור</AlertDialogCancel>
+                  {deleteDialog?.sourcePageUrl && (
+                    <AlertDialogAction onClick={() => router.push(deleteDialog.sourcePageUrl!)}>
+                      עבור לעמוד המקור
+                    </AlertDialogAction>
+                  )}
+                </>
+              )}
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

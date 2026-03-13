@@ -128,6 +128,7 @@ export default function CustomerListManager({
   const [existingRules, setExistingRules] = useState<any[]>([]);
   const [loadingRules, setLoadingRules] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [autoConfig, setAutoConfig] = useState({
     trigger: "record_created", // record_created, status_changed
     tableId: "",
@@ -582,7 +583,7 @@ export default function CustomerListManager({
         result = await updateAutomationRule(editingRuleId, ruleData);
       } else {
         // Create new rule
-        result = await createAutomationRule(ruleData);
+        result = await createAutomationRule({ ...ruleData, source: "NURTURE" });
       }
 
       if (result.success) {
@@ -639,16 +640,20 @@ export default function CustomerListManager({
   };
 
   const handleDeleteRule = async (ruleId: number) => {
-    if (await showConfirm("האם למחוק את חוק האוטומציה?")) {
-      try {
-        await deleteAutomationRule(ruleId);
+    try {
+      const result = await deleteAutomationRule(ruleId);
+      if (result.success) {
         toast.success("האוטומציה נמחקה בהצלחה");
         const rules = await getNurtureRules(listSlug);
         setExistingRules(rules);
         onAddCustomers([]); // Refresh parent
-      } catch (error) {
-        toast.error(getUserFriendlyError(error));
+      } else {
+        toast.error(result.error || "שגיאה במחיקת האוטומציה");
       }
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setConfirmDeleteId(null);
     }
   };
 
@@ -808,13 +813,30 @@ export default function CustomerListManager({
                                   )}
                                 </button>
                                 {/* Delete */}
-                                <button
-                                  onClick={() => handleDeleteRule(rule.id)}
-                                  className="p-1.5 rounded-md text-red-500 hover:bg-red-50 transition-colors"
-                                  title="מחק"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                                {confirmDeleteId === rule.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => handleDeleteRule(rule.id)}
+                                      className="p-1 rounded-md text-white bg-red-500 hover:bg-red-600 transition-colors text-xs px-2"
+                                    >
+                                      מחק
+                                    </button>
+                                    <button
+                                      onClick={() => setConfirmDeleteId(null)}
+                                      className="p-1 rounded-md text-slate-500 hover:bg-slate-100 transition-colors"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setConfirmDeleteId(rule.id)}
+                                    className="p-1.5 rounded-md text-red-500 hover:bg-red-50 transition-colors"
+                                    title="מחק"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
                               </div>
                             </div>
                             <div className="mt-2 flex items-center flex-wrap gap-2">

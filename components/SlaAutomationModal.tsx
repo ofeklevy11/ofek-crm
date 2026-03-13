@@ -414,7 +414,7 @@ export default function SlaAutomationModal({
       if (initialData?.id) {
         await updateAutomationRule(initialData.id, data);
       } else {
-        await createAutomationRule(data);
+        await createAutomationRule({ ...data, source: "SERVICE" });
       }
 
       toast.success("האוטומציה נשמרה בהצלחה");

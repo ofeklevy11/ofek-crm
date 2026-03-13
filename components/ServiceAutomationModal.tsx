@@ -148,7 +148,7 @@ export default function ServiceAutomationModal({
       if (initialData?.id) {
         await updateAutomationRule(initialData.id, commonData);
       } else {
-        await createAutomationRule(commonData);
+        await createAutomationRule({ ...commonData, source: "SERVICE" });
       }
 
       toast.success("האוטומציה נשמרה בהצלחה");

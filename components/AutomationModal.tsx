@@ -456,7 +456,7 @@ export default function AutomationModal({
       if (editingRule) {
         result = await updateAutomationRule(editingRule.id, data);
       } else {
-        result = await createAutomationRule(data);
+        result = await createAutomationRule({ ...data, source: "MANUAL" });
       }
 
       if (result.success) {
@@ -891,8 +891,8 @@ export default function AutomationModal({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
               >
                 <option value="">תמיד (כל רשומה חדשה)</option>
-                {columns.map((col: any) => (
-                  <option key={col.id || col.name} value={col.name}>
+                {columns.map((col: any, i: number) => (
+                  <option key={`${col.id || col.name}-${i}`} value={col.name}>
                     {col.label || col.name}
                   </option>
                 ))}
@@ -1159,8 +1159,8 @@ export default function AutomationModal({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
               >
                 <option value="">תמיד (ללא תנאי)</option>
-                {columns.map((col: any) => (
-                  <option key={col.id || col.name} value={col.name}>
+                {columns.map((col: any, i: number) => (
+                  <option key={`${col.id || col.name}-${i}`} value={col.name}>
                     {col.label || col.name}
                   </option>
                 ))}
@@ -1514,8 +1514,8 @@ export default function AutomationModal({
                           className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500"
                         >
                           <option value="">בחר עמודה מהטבלה...</option>
-                          {columns.map((col: any) => (
-                            <option key={col.id || col.name} value={col.name}>
+                          {columns.map((col: any, i: number) => (
+                            <option key={`${col.id || col.name}-${i}`} value={col.name}>
                               {col.label || col.name} ({col.type})
                             </option>
                           ))}
@@ -1724,9 +1724,9 @@ export default function AutomationModal({
                   {showDynamicValues && (
                     <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
                       {columns.length > 0 ? (
-                        columns.map((col: any) => (
+                        columns.map((col: any, i: number) => (
                           <button
-                            key={col.id || col.name}
+                            key={`${col.id || col.name}-${i}`}
                             type="button"
                             onClick={() => {
                               navigator.clipboard.writeText(`{${col.name}}`);
@@ -1812,9 +1812,9 @@ export default function AutomationModal({
                     className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg"
                   >
                     <option value="">בחר עמודת אימייל...</option>
-                    {columns.map((col: any) => (
-                      <option key={col.key} value={col.key}>
-                        {col.label}
+                    {columns.map((col: any, i: number) => (
+                      <option key={`${col.id || col.name}-${i}`} value={col.name}>
+                        {col.label || col.name}
                       </option>
                     ))}
                   </select>
@@ -1945,9 +1945,9 @@ export default function AutomationModal({
                   {showDynamicValues && (
                     <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
                       {columns.length > 0 ? (
-                        columns.map((col: any) => (
+                        columns.map((col: any, i: number) => (
                           <button
-                            key={col.id || col.name}
+                            key={`${col.id || col.name}-${i}`}
                             type="button"
                             onClick={() => {
                               navigator.clipboard.writeText(`{${col.name}}`);
