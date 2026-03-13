@@ -16,6 +16,7 @@ const CSRF_EXEMPT_PREFIXES = [
   "/api/p/",           // Public APIs
   "/api/uploadthing",  // UploadThing SDK auth
   "/api/webhooks/",    // WhatsApp webhooks (signature-verified in route)
+  "/api/nurture/webhook/", // Nurture webhooks (Bearer NURTURE_WEBHOOK_SECRET)
 ];
 
 const CSRF_EXEMPT_PREFIXES_EXTRA = [
