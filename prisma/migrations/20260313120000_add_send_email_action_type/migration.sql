@@ -1,2 +1,2 @@
 -- AlterEnum
-ALTER TYPE "AutomationActionType" ADD VALUE 'SEND_EMAIL';
+ALTER TYPE "AutomationActionType" ADD VALUE IF NOT EXISTS 'SEND_EMAIL';
