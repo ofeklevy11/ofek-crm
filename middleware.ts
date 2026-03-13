@@ -81,6 +81,7 @@ export function middleware(request: NextRequest) {
     path.startsWith("/api/webhooks/") || // WhatsApp webhooks (signature-verified in route)
     path.startsWith("/api/cron/") || // Allow Cron jobs to bypass cookie auth (secured in route)
     path === "/api/automations/cron" || // Allow automation cron endpoint to bypass cookie auth
+    path === "/api/automations/nurture-test" || // Nurture test endpoint (Bearer secured in route)
     path.startsWith("/api/auth/forgot-password") || // Forgot password flow (public)
     path.startsWith("/api/health") || // Health checks (no cookie auth — Bearer secured in route)
     path === "/api/metrics" || // Prometheus scrape endpoint (Bearer secured in route)
