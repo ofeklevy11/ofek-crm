@@ -95,15 +95,22 @@ export default function AutomationsList({
   // Usage tracking
   const [usage, setUsage] = useState<{
     general: { count: number; limit: number };
+    meeting: { count: number; limit: number };
+    event: { count: number; limit: number };
   } | null>(null);
 
   useEffect(() => {
     getAutomationCategoryUsage().then((res) => {
-      if (res.success && res.data) setUsage({ general: res.data.general });
+      if (res.success && res.data) setUsage({
+        general: res.data.general,
+        meeting: res.data.meeting,
+        event: res.data.event,
+      });
     });
   }, [rules.length]);
 
-  const isAtLimit = usage ? usage.general.count >= usage.general.limit : false;
+  const totalCount = usage ? usage.general.count + usage.meeting.count + usage.event.count : 0;
+  const isAtLimit = usage ? totalCount >= usage.general.limit : false;
 
   // State for interactions
   const [activeDropdownId, setActiveDropdownId] = useState<number | null>(null);
@@ -501,7 +508,7 @@ export default function AutomationsList({
           <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm">
             <AlertTriangle className="h-5 w-5 shrink-0" />
             <span>
-              הגעת למגבלת האוטומציות ({usage.general.count}/{usage.general.limit}).
+              הגעת למגבלת האוטומציות ({totalCount}/{usage.general.limit}).
               מחק אוטומציות קיימות או שדרג את התוכנית כדי ליצור חדשות.
             </span>
           </div>
@@ -516,7 +523,7 @@ export default function AutomationsList({
             </h2>
             {usage && usage.general.limit !== Infinity && (
               <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                {usage.general.count}/{usage.general.limit}
+                {totalCount}/{usage.general.limit}
               </span>
             )}
           </div>
