@@ -1154,6 +1154,8 @@ export default function CustomerListManager({
                                 }
                               >
                                 <option value="">בחר שדה...</option>
+                                <option value="__createdAt">תאריך יצירה (מערכת)</option>
+                                <option value="__updatedAt">תאריך עדכון (מערכת)</option>
                                 {tableFields
                                   .filter(
                                     (f) =>

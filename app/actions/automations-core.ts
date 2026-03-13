@@ -522,11 +522,24 @@ export async function executeRuleActions(
 
           // Extract triggerDate from mapping if configured
           let triggerDate: Date | undefined;
-          if (mapping.triggerDate && context.recordData[mapping.triggerDate]) {
-            const rawDate = context.recordData[mapping.triggerDate];
-            const parsed = new Date(rawDate);
-            if (!isNaN(parsed.getTime())) {
-              triggerDate = parsed;
+          if (mapping.triggerDate) {
+            if (mapping.triggerDate === "__createdAt" || mapping.triggerDate === "__updatedAt") {
+              // System fields: fetch from record model
+              if (context.recordId) {
+                const rec = await prisma.record.findFirst({
+                  where: { id: context.recordId, companyId },
+                  select: { createdAt: true, updatedAt: true },
+                });
+                if (rec) {
+                  triggerDate = mapping.triggerDate === "__createdAt" ? rec.createdAt : rec.updatedAt;
+                }
+              }
+            } else if (context.recordData[mapping.triggerDate]) {
+              const rawDate = context.recordData[mapping.triggerDate];
+              const parsed = new Date(rawDate);
+              if (!isNaN(parsed.getTime())) {
+                triggerDate = parsed;
+              }
             }
           }
 

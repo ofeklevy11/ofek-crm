@@ -43,6 +43,7 @@ import CustomerListManager from "@/components/nurture/CustomerListManager";
 import NurtureChannelSelector from "@/components/nurture/NurtureChannelSelector";
 import NurtureMessageEditor, { migrateConfigMessages, getActiveMessage, NurtureMessage } from "@/components/nurture/NurtureMessageEditor";
 import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
+import NurtureAutomationPreview from "@/components/nurture/NurtureAutomationPreview";
 import { useNurtureQuota } from "@/components/nurture/NurtureQuotaContext";
 import NurtureQuotaBadge from "@/components/nurture/NurtureQuotaBadge";
 import NurtureQueuePanel from "@/components/nurture/NurtureQueuePanel";
@@ -330,6 +331,15 @@ export default function RenewalAutomationPage() {
         </div>
 
         <NurtureTriggerInfo slug="renewal" />
+        <NurtureAutomationPreview
+          slug="renewal"
+          channels={config.channels}
+          messages={config.messages}
+          timing="cron"
+          customerCount={total}
+          isEnabled={isEnabled}
+          accentColor="blue"
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">

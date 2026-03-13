@@ -1158,6 +1158,47 @@ export async function getNurtureQuotaAction() {
   }
 }
 
+// Get recent auto-send activity for live preview indicator
+export async function getRecentAutoSendActivity(slug: string) {
+  try {
+    const { getCurrentUser } = await import("@/lib/permissions-server");
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return null;
+
+    const list = await prisma.nurtureList.findFirst({
+      where: { slug, companyId: currentUser.companyId },
+      select: { id: true },
+    });
+    if (!list) return null;
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const [pendingCount, totalSentToday, lastSend] = await Promise.all([
+      prisma.nurtureSendLog.count({
+        where: { nurtureListId: list.id, status: "DISPATCHED" },
+      }),
+      prisma.nurtureSendLog.count({
+        where: { nurtureListId: list.id, status: "SENT", sentAt: { gte: todayStart } },
+      }),
+      prisma.nurtureSendLog.findFirst({
+        where: { nurtureListId: list.id, status: "SENT" },
+        orderBy: { sentAt: "desc" },
+        select: { sentAt: true },
+      }),
+    ]);
+
+    return {
+      pendingCount,
+      totalSentToday,
+      lastSendAt: lastSend?.sentAt?.toISOString() ?? null,
+    };
+  } catch (error) {
+    console.error("[NurtureHub] getRecentAutoSendActivity:", error);
+    return null;
+  }
+}
+
 // Send nurture campaign to all subscribers or a specific one
 export async function sendNurtureCampaign(
   slug: string,

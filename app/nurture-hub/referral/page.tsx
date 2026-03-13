@@ -42,6 +42,7 @@ import NurtureChannelSelector from "@/components/nurture/NurtureChannelSelector"
 import NurtureMessageEditor, { migrateConfigMessages, NurtureMessage } from "@/components/nurture/NurtureMessageEditor";
 import CustomerListManager from "@/components/nurture/CustomerListManager";
 import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
+import NurtureAutomationPreview from "@/components/nurture/NurtureAutomationPreview";
 import { useNurtureQuota } from "@/components/nurture/NurtureQuotaContext";
 import NurtureQuotaBadge from "@/components/nurture/NurtureQuotaBadge";
 import NurtureQueuePanel from "@/components/nurture/NurtureQueuePanel";
@@ -322,6 +323,15 @@ export default function ReferralAutomationPage() {
         </div>
 
         <NurtureTriggerInfo slug="referral" />
+        <NurtureAutomationPreview
+          slug="referral"
+          channels={config.channels}
+          messages={config.messages}
+          timing="manual"
+          customerCount={total}
+          isEnabled={isEnabled}
+          accentColor="orange"
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">

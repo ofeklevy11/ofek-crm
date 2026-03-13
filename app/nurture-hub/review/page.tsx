@@ -21,6 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Card,
   CardContent,
@@ -41,6 +42,7 @@ import NurtureChannelSelector from "@/components/nurture/NurtureChannelSelector"
 import NurtureMessageEditor, { migrateConfigMessages, NurtureMessage } from "@/components/nurture/NurtureMessageEditor";
 import CustomerListManager from "@/components/nurture/CustomerListManager";
 import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
+import NurtureAutomationPreview from "@/components/nurture/NurtureAutomationPreview";
 import { useNurtureQuota } from "@/components/nurture/NurtureQuotaContext";
 import NurtureQuotaBadge from "@/components/nurture/NurtureQuotaBadge";
 import NurtureQueuePanel from "@/components/nurture/NurtureQueuePanel";
@@ -302,6 +304,16 @@ export default function ReviewAutomationPage() {
           </div>
           <div className="mr-auto flex items-center gap-3">
             <NurtureQuotaBadge />
+            <div className="flex items-center gap-2 border rounded-lg px-3 py-1.5">
+              <Label htmlFor="review-enabled" className="text-sm text-slate-600 cursor-pointer">
+                {isEnabled ? "פעיל" : "כבוי"}
+              </Label>
+              <Switch
+                id="review-enabled"
+                checked={isEnabled}
+                onCheckedChange={setIsEnabled}
+              />
+            </div>
             <Button
               onClick={handleSendNow}
               disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud)}
@@ -318,6 +330,15 @@ export default function ReviewAutomationPage() {
         </div>
 
         <NurtureTriggerInfo slug="review" />
+        <NurtureAutomationPreview
+          slug="review"
+          channels={config.channels}
+          messages={config.messages}
+          timing={config.timing}
+          customerCount={total}
+          isEnabled={isEnabled}
+          accentColor="amber"
+        />
 
         <div className="space-y-6">
             {/* Customer List Management */}
