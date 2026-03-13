@@ -88,8 +88,11 @@ export async function processDateBasedNurtureTriggers(companyId: number) {
         const daysBeforeExpiry = parseInt(config.daysBeforeExpiry || "30", 10);
         const targetDate = new Date(today);
         targetDate.setDate(targetDate.getDate() + daysBeforeExpiry);
-        const targetISO = targetDate.toISOString().split("T")[0];
-        const triggerISO = triggerDate.toISOString().split("T")[0];
+        // Use local-timezone-safe date formatting (avoids UTC off-by-one near midnight)
+        const fmtDate = (d: Date) =>
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        const targetISO = fmtDate(targetDate);
+        const triggerISO = fmtDate(triggerDate);
 
         if (triggerISO === targetISO) {
           eligibleSubscribers.push({
@@ -144,11 +147,13 @@ export async function processDateBasedNurtureTriggers(companyId: number) {
 
     if (toSend.length === 0) continue;
 
-    // Dispatch send events
+    // Dispatch send events (include subscriberId/nurtureListId for failure tracking)
     const events = toSend.map((sub) => ({
       name: "nurture/send-campaign-message" as const,
       data: {
         companyId,
+        subscriberId: sub.id,
+        nurtureListId: list.id,
         subscriberPhone: sub.phone,
         subscriberName: sub.name,
         channels,
@@ -162,14 +167,14 @@ export async function processDateBasedNurtureTriggers(companyId: number) {
 
     await inngest.send(events);
 
-    // Mark as SENT
+    // Mark as DISPATCHED (actual delivery status updated by the send job)
     await prisma.nurtureSendLog.updateMany({
       where: {
         nurtureListId: list.id,
         status: "PENDING",
         subscriberId: { in: toSend.map((s) => s.id) },
       },
-      data: { status: "SENT" },
+      data: { status: "DISPATCHED" },
     });
 
     totalProcessed += toSend.length;

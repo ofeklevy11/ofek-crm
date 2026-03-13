@@ -129,7 +129,7 @@ export default function CustomerListManager({
   const [autoConfig, setAutoConfig] = useState({
     trigger: "record_created", // record_created, status_changed
     tableId: "",
-    fields: { name: "", email: "", phone: "" },
+    fields: { name: "", email: "", phone: "", triggerDate: "" },
     condition: { field: "", fromValue: "", toValue: "" },
   });
 
@@ -547,6 +547,9 @@ export default function CustomerListManager({
             name: autoConfig.fields.name,
             email: autoConfig.fields.email,
             phone: autoConfig.fields.phone,
+            ...(needsTriggerDate && autoConfig.fields.triggerDate
+              ? { triggerDate: autoConfig.fields.triggerDate }
+              : {}),
           },
 
 
@@ -581,7 +584,7 @@ export default function CustomerListManager({
         setAutoConfig({
           trigger: "record_created",
           tableId: "",
-          fields: { name: "", email: "", phone: "" },
+          fields: { name: "", email: "", phone: "", triggerDate: "" },
           condition: { field: "", fromValue: "", toValue: "" },
         });
       } else {
@@ -604,7 +607,7 @@ export default function CustomerListManager({
       trigger:
         rule.triggerType === "NEW_RECORD" ? "record_created" : "status_changed",
       tableId: String(tc.tableId || ""),
-      fields: ac.mapping || { name: "", email: "", phone: "" },
+      fields: { name: "", email: "", phone: "", triggerDate: "", ...ac.mapping },
       condition: {
         field: tc.columnId || "",
         fromValue: tc.fromValue || "",
@@ -676,7 +679,7 @@ export default function CustomerListManager({
                     setAutoConfig({
                       trigger: "record_created",
                       tableId: "",
-                      fields: { name: "", email: "", phone: "" },
+                      fields: { name: "", email: "", phone: "", triggerDate: "" },
                       condition: { field: "", fromValue: "", toValue: "" },
                     });
 
@@ -828,7 +831,7 @@ export default function CustomerListManager({
                     setAutoConfig({
                       trigger: "record_created",
                       tableId: "",
-                      fields: { name: "", email: "", phone: "" },
+                      fields: { name: "", email: "", phone: "", triggerDate: "" },
                       condition: { field: "", fromValue: "", toValue: "" },
                     });
 
@@ -931,8 +934,10 @@ export default function CustomerListManager({
                               {tableFields
                                 .filter(
                                   (f) =>
+                                    f.type === "select" ||
                                     f.type === "singleSelect" ||
-                                    f.type.toLowerCase().includes("status")
+                                    f.type === "status" ||
+                                    f.type === "multiSelect"
                                 )
                                 .map((f) => (
                                   <option key={f.key} value={f.key}>
@@ -1130,6 +1135,41 @@ export default function CustomerListManager({
                                 ))}
                             </select>
                           </div>
+                          {needsTriggerDate && (
+                            <div className="space-y-1">
+                              <Label className="text-xs text-slate-500">
+                                {triggerDateLabel}
+                              </Label>
+                              <select
+                                className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
+                                value={autoConfig.fields.triggerDate}
+                                onChange={(e) =>
+                                  setAutoConfig({
+                                    ...autoConfig,
+                                    fields: {
+                                      ...autoConfig.fields,
+                                      triggerDate: e.target.value,
+                                    },
+                                  })
+                                }
+                              >
+                                <option value="">בחר שדה...</option>
+                                {tableFields
+                                  .filter(
+                                    (f) =>
+                                      f.type === "date" ||
+                                      f.type === "text" ||
+                                      f.name.includes("תאריך") ||
+                                      f.name.toLowerCase().includes("date")
+                                  )
+                                  .map((f) => (
+                                    <option key={f.key} value={f.key}>
+                                      {f.name}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                          )}
                         </div>
                       </div>
 

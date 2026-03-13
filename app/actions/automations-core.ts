@@ -559,18 +559,8 @@ export async function executeRuleActions(
                     const activeMsg = getActiveMessage(migrateConfigMessages(listConfig));
 
                     // Calculate delay
-                    let delayMs = 0;
-                    if (config.listId === "review") {
-                      const timingMap: Record<string, number> = {
-                        immediate: 0,
-                        "1_hour": 3600000,
-                        "24_hours": 86400000,
-                        "3_days": 259200000,
-                      };
-                      delayMs = timingMap[listConfig.timing] || 0;
-                    } else if (config.listId === "upsell") {
-                      delayMs = parseInt(listConfig.delayMinutes || "15", 10) * 60000;
-                    }
+                    const { NURTURE_TIMING_MAP } = await import("@/lib/nurture-messages");
+                    const delayMs = NURTURE_TIMING_MAP[listConfig.timing] ?? 0;
 
                     const sub = await prisma.nurtureSubscriber.findFirst({
                       where: { nurtureListId: list.id, phone },

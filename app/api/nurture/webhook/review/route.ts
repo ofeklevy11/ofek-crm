@@ -3,7 +3,7 @@ import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { inngest } from "@/lib/inngest/client";
 import { createLogger } from "@/lib/logger";
-import { migrateConfigMessages, getActiveMessage } from "@/lib/nurture-messages";
+import { migrateConfigMessages, getActiveMessage, NURTURE_TIMING_MAP } from "@/lib/nurture-messages";
 
 const log = createLogger("NurtureWebhook:Review");
 
@@ -74,13 +74,7 @@ export async function POST(request: Request) {
     }
 
     // Calculate delay from timing config
-    const timingMap: Record<string, number> = {
-      immediate: 0,
-      "1_hour": 3600000,
-      "24_hours": 86400000,
-      "3_days": 259200000,
-    };
-    const delayMs = timingMap[config.timing] || 0;
+    const delayMs = NURTURE_TIMING_MAP[config.timing] ?? 0;
     const triggerKey = `review-webhook-${Date.now()}`;
     const activeMsg = getActiveMessage(migrateConfigMessages(config));
 

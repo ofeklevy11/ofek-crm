@@ -102,7 +102,7 @@ export default function BirthdayAutomationPage() {
   const [editConfig, setEditConfig] = useState({
     trigger: "record_created",
     tableId: "",
-    fields: { name: "", email: "", phone: "" },
+    fields: { name: "", email: "", phone: "", triggerDate: "" },
     condition: { field: "", fromValue: "", toValue: "" },
   });
   const [tableFields, setTableFields] = useState<FieldDefinition[]>([]);
@@ -1141,8 +1141,10 @@ export default function BirthdayAutomationPage() {
                             {tableFields
                               .filter(
                                 (f) =>
+                                  f.type === "select" ||
                                   f.type === "singleSelect" ||
-                                  f.type.toLowerCase().includes("status")
+                                  f.type === "status" ||
+                                  f.type === "multiSelect"
                               )
                               .map((f) => (
                                 <option key={f.key} value={f.key}>
@@ -1337,6 +1339,39 @@ export default function BirthdayAutomationPage() {
                               ))}
                           </select>
                         </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-slate-500">
+                            תאריך יום הולדת
+                          </Label>
+                          <select
+                            className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
+                            value={editConfig.fields.triggerDate}
+                            onChange={(e) =>
+                              setEditConfig({
+                                ...editConfig,
+                                fields: {
+                                  ...editConfig.fields,
+                                  triggerDate: e.target.value,
+                                },
+                              })
+                            }
+                          >
+                            <option value="">בחר שדה...</option>
+                            {tableFields
+                              .filter(
+                                (f) =>
+                                  f.type === "date" ||
+                                  f.type === "text" ||
+                                  f.name.includes("תאריך") ||
+                                  f.name.toLowerCase().includes("date")
+                              )
+                              .map((f) => (
+                                <option key={f.key} value={f.key}>
+                                  {f.name}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
                       </div>
                     </div>
                   </>
@@ -1403,6 +1438,9 @@ export default function BirthdayAutomationPage() {
                               name: editConfig.fields.name,
                               email: editConfig.fields.email,
                               phone: editConfig.fields.phone,
+                              ...(editConfig.fields.triggerDate
+                                ? { triggerDate: editConfig.fields.triggerDate }
+                                : {}),
                             },
                           },
                         }

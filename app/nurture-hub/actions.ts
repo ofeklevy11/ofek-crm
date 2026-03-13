@@ -499,6 +499,71 @@ export async function getNurtureSubscribers(
   }
 }
 
+// Helper: dispatch auto-send Inngest event if the list is configured for it
+async function dispatchAutoSendIfConfigured(
+  list: { id: number; configJson: any; isEnabled: boolean; slug: string },
+  subscriber: { id: number; phone: string | null; phoneActive: boolean; name: string },
+  companyId: number
+) {
+  try {
+    if (!list.configJson) {
+      console.log("[AutoSend] skip: no configJson on list", list.id);
+      return;
+    }
+    const config = list.configJson as any;
+    if (!subscriber.phone || !subscriber.phoneActive) {
+      console.log("[AutoSend] skip: subscriber has no active phone", { phone: subscriber.phone, phoneActive: subscriber.phoneActive });
+      return;
+    }
+    if (config.timing === "manual" || !config.timing) {
+      console.log("[AutoSend] skip: timing is manual or unset", config.timing);
+      return;
+    }
+
+    const channels = config.channels || {};
+    if (!channels.sms && !channels.whatsappGreen && !channels.whatsappCloud) {
+      console.log("[AutoSend] skip: no channels enabled", channels);
+      return;
+    }
+
+    const { migrateConfigMessages, getActiveMessage, NURTURE_TIMING_MAP } = await import("@/lib/nurture-messages");
+    const activeMsg = getActiveMessage(migrateConfigMessages(config));
+    if (!activeMsg) {
+      console.log("[AutoSend] skip: no active message found");
+      return;
+    }
+
+    const delayMs = NURTURE_TIMING_MAP[config.timing] ?? 0;
+    const { inngest } = await import("@/lib/inngest/client");
+
+    console.log("[AutoSend] dispatching nurture/delayed-send", {
+      subscriberId: subscriber.id, slug: list.slug, delayMs, timing: config.timing,
+    });
+
+    await inngest.send({
+      name: "nurture/delayed-send",
+      data: {
+        companyId,
+        subscriberId: subscriber.id,
+        nurtureListId: list.id,
+        subscriberPhone: subscriber.phone,
+        subscriberName: subscriber.name,
+        channels,
+        smsBody: activeMsg.smsBody || "",
+        whatsappGreenBody: activeMsg.whatsappGreenBody || "",
+        whatsappCloudTemplateName: activeMsg.whatsappCloudTemplateName || "",
+        whatsappCloudLanguageCode: activeMsg.whatsappCloudLanguageCode || "he",
+        slug: list.slug,
+        delayMs,
+        triggerKey: `manual-${list.slug}-${Date.now()}`,
+      },
+    });
+    console.log("[AutoSend] event dispatched successfully");
+  } catch (err) {
+    console.error("[NurtureHub] dispatchAutoSendIfConfigured failed (non-fatal):", err);
+  }
+}
+
 // Add a subscriber manually
 export async function addNurtureSubscriberManual(
   slug: string,
@@ -555,7 +620,7 @@ export async function addNurtureSubscriberManual(
     }
 
     const normalizedPhone = data.phone ? normalizeToE164(data.phone) : null;
-    await prisma.nurtureSubscriber.create({
+    const newSub = await prisma.nurtureSubscriber.create({
       data: {
         nurtureListId: list.id,
         name: data.name,
@@ -566,6 +631,13 @@ export async function addNurtureSubscriberManual(
         sourceType: "MANUAL",
       },
     });
+
+    // Dispatch auto-send if configured
+    await dispatchAutoSendIfConfigured(
+      list,
+      { id: newSub.id, phone: newSub.phone, phoneActive: newSub.phoneActive, name: newSub.name },
+      currentUser.companyId
+    );
 
     return { success: true };
   } catch (error) {
@@ -741,6 +813,29 @@ export async function bulkImportNurtureSubscribers(
     // Bulk insert
     if (toInsert.length > 0) {
       await prisma.nurtureSubscriber.createMany({ data: toInsert });
+
+      // Dispatch auto-send for newly created subscribers with active phones
+      const config = list.configJson as any;
+      if (config?.timing && config.timing !== "manual") {
+        const phonesWithAutoSend = toInsert
+          .filter((r) => r.phone && r.phoneActive)
+          .map((r) => r.phone!);
+
+        if (phonesWithAutoSend.length > 0) {
+          // Query back created subscribers to get their IDs
+          const DISPATCH_BATCH = 50;
+          for (let i = 0; i < phonesWithAutoSend.length; i += DISPATCH_BATCH) {
+            const batchPhones = phonesWithAutoSend.slice(i, i + DISPATCH_BATCH);
+            const createdSubs = await prisma.nurtureSubscriber.findMany({
+              where: { nurtureListId: list.id, phone: { in: batchPhones } },
+              select: { id: true, phone: true, phoneActive: true, name: true },
+            });
+            for (const sub of createdSubs) {
+              await dispatchAutoSendIfConfigured(list, sub, currentUser.companyId);
+            }
+          }
+        }
+      }
     }
 
     return {

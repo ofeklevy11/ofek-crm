@@ -324,6 +324,8 @@ export type Events = {
   "nurture/send-campaign-message": {
     data: {
       companyId: number;
+      subscriberId?: number;
+      nurtureListId?: number;
       subscriberPhone: string;
       subscriberName: string;
       channels: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean };

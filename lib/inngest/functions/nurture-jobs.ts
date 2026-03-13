@@ -21,6 +21,8 @@ export const sendNurtureCampaignMessage = inngest.createFunction(
   async ({ event, step }) => {
     const {
       companyId,
+      subscriberId,
+      nurtureListId,
       subscriberPhone,
       subscriberName,
       channels,
@@ -141,6 +143,20 @@ export const sendNurtureCampaignMessage = inngest.createFunction(
       } catch { /* non-critical */ }
     }
 
-    return { success: true };
+    // Update NurtureSendLog with delivery status (for automated triggers)
+    if (subscriberId && nurtureListId) {
+      try {
+        await prisma.nurtureSendLog.updateMany({
+          where: {
+            subscriberId,
+            nurtureListId,
+            status: "DISPATCHED",
+          },
+          data: { status: hasFailed ? "FAILED" : "SENT" },
+        });
+      } catch { /* non-critical — log already exists with DISPATCHED */ }
+    }
+
+    return { success: !hasFailed };
   }
 );
