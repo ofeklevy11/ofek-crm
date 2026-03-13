@@ -43,6 +43,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "slug param required (renewal|winback|birthday)" }, { status: 400 });
     }
 
+    if (mode === "live") return handleLiveMode(slug);
     if (mode === "force") return handleForceMode(slug, rawPhone);
     if (mode === "cleanup") return handleCleanupMode(slug, rawPhone);
     return handleDryMode(slug, rawPhone);
@@ -263,6 +264,52 @@ async function handleForceMode(slug: string, rawPhone: string | null) {
     message: activeMsg.name,
     note: "Check your phone. Inngest will process the event and update send log status to SENT or FAILED.",
   });
+}
+
+// ─── LIVE MODE ──────────────────────────────────────────────
+// Runs the actual processDateBasedNurtureTriggers (same as the cron job).
+
+async function handleLiveMode(slug: string) {
+  const { processDateBasedNurtureTriggers } = await import("@/app/actions/nurture-triggers");
+
+  const companies = await prisma.nurtureList.findMany({
+    where: { isEnabled: true, slug },
+    select: { companyId: true },
+    distinct: ["companyId"],
+  });
+
+  const results: any[] = [];
+
+  for (const { companyId } of companies) {
+    const result = await processDateBasedNurtureTriggers(companyId);
+
+    const recentLogs = await prisma.nurtureSendLog.findMany({
+      where: {
+        nurtureList: { companyId, slug },
+        sentAt: { gte: new Date(Date.now() - 60_000) },
+      },
+      include: {
+        subscriber: { select: { name: true, phone: true } },
+        nurtureList: { select: { slug: true } },
+      },
+      orderBy: { sentAt: "desc" },
+    });
+
+    results.push({
+      companyId,
+      ...result,
+      recentSendLogs: recentLogs.map((l) => ({
+        subscriberName: l.subscriber.name,
+        subscriberPhone: l.subscriber.phone,
+        slug: l.nurtureList.slug,
+        triggerKey: l.triggerKey,
+        status: l.status,
+        sentAt: l.sentAt.toISOString(),
+      })),
+    });
+  }
+
+  return NextResponse.json({ mode: "live", results });
 }
 
 // ─── CLEANUP MODE ───────────────────────────────────────────
