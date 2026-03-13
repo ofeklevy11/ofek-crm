@@ -351,7 +351,7 @@ describe("createAutomationRule", () => {
     vi.mocked(getCurrentUser).mockResolvedValue(adminUser as any);
     vi.mocked(checkCategoryLimitAndCreate).mockRejectedValue(new Error("DB fail"));
     const res = await createAutomationRule(validRuleInput);
-    expect(res).toEqual({ success: false, error: "Failed to create automation rule" });
+    expect(res).toEqual({ success: false, error: "Failed to create automation rule: DB fail" });
   });
 });
 

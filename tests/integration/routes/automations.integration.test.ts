@@ -715,7 +715,7 @@ describe("getAutomationRules", () => {
 
     const expectedKeys = [
       "id", "name", "triggerType", "triggerConfig", "actionType", "actionConfig",
-      "isActive", "folderId", "calendarEventId", "createdAt",
+      "isActive", "folderId", "calendarEventId", "createdAt", "meetingId", "source",
     ];
     expect(Object.keys(rule).sort()).toEqual(expectedKeys.sort());
   });
