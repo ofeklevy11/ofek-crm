@@ -53,7 +53,8 @@ export function PdfPreview({ fileId }: PdfPreviewProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
+      <div className="flex items-center justify-center h-[60vh]" role="status" aria-label="טוען תצוגה מקדימה...">
+        <span className="sr-only">טוען תצוגה מקדימה...</span>
         <Skeleton className="w-[400px] h-[500px] rounded-lg" />
       </div>
     );
@@ -93,16 +94,18 @@ export function PdfPreview({ fileId }: PdfPreviewProps) {
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage <= 1}
             className="p-1 rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="עמוד קודם"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="text-sm text-muted-foreground">
+          <span className="text-sm text-muted-foreground" aria-live="polite" aria-label={`עמוד ${currentPage} מתוך ${numPages}`}>
             {currentPage} / {numPages}
           </span>
           <button
             onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
             disabled={currentPage >= numPages}
             className="p-1 rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="עמוד הבא"
           >
             <ChevronRight className="w-5 h-5" />
           </button>

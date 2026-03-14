@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getServiceAutomationRules, getServiceUsers } from "@/app/actions/tickets";
 import ServiceAutomationsClient from "./client";
 import { isRateLimitError } from "@/lib/rate-limit-utils";
 import RateLimitFallback from "@/components/RateLimitFallback";
+
+export const metadata: Metadata = {
+  title: "אוטומציות שירות",
+};
 
 export default async function ServiceAutomationsPage() {
   let rules, users;

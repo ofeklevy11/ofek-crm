@@ -8,7 +8,6 @@ import {
   Card,
   CardContent,
   CardHeader,
-  CardTitle,
   CardDescription,
 } from "@/components/ui/card";
 import {
@@ -36,7 +35,6 @@ interface SchemaField {
   name: string;
   type: string;
   label: string;
-  // include other props if needed
 }
 
 function GeneratorContent() {
@@ -51,7 +49,6 @@ function GeneratorContent() {
   const [selectedTableSlug, setSelectedTableSlug] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  /* State for User Context */
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
   const [currentUserCompanyId, setCurrentUserCompanyId] = useState<
     number | null
@@ -91,14 +88,14 @@ function GeneratorContent() {
   };
 
   const generateJson = () => {
-    const companyId = currentUserCompanyId || 1; // Fallback to 1 if not loaded, but should be loaded
+    const companyId = currentUserCompanyId || 1;
 
     if (mode === "TASK") {
       return JSON.stringify(
         {
           company_id: companyId,
           title: "משימה חדשה מאוטומציה",
-          email: "{{1.email}}", // Required to identify user
+          email: "{{1.email}}",
           description: "{{1.description}}",
           status: "todo",
           priority: "medium",
@@ -147,7 +144,6 @@ function GeneratorContent() {
     };
 
     schema.forEach((field) => {
-      // Logic to suggest reasonable placeholders based on field name/type
       let placeholder = `{{change_me}}`;
 
       const name = field.name.toLowerCase();
@@ -179,14 +175,16 @@ function GeneratorContent() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50" dir="rtl">
+    <div className="min-h-screen bg-slate-50">
       <main className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="flex items-center gap-2 mb-6 text-slate-500 hover:text-slate-800 transition-colors w-fit">
-          <ArrowLeft className="w-4 h-4" />{" "}
-          <Link href="/guides" className="flex items-center gap-2">
-            חזרה למדריכים
-          </Link>
-        </div>
+        <nav aria-label="ניווט" className="mb-6">
+          <div className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors w-fit">
+            <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+            <Link href="/guides" className="flex items-center gap-2">
+              חזרה למדריכים
+            </Link>
+          </div>
+        </nav>
 
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">
@@ -198,10 +196,11 @@ function GeneratorContent() {
         </div>
 
         <div className="flex justify-center mb-8">
-          <div className="bg-slate-100 p-1 rounded-lg inline-flex">
+          <div className="bg-slate-100 p-1 rounded-lg inline-flex" role="group" aria-label="בחירת סוג פעולה">
             <button
               onClick={() => setMode("TABLE")}
-              className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
+              aria-pressed={mode === "TABLE"}
+              className={`px-6 py-2 rounded-md text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                 mode === "TABLE"
                   ? "bg-white text-blue-600 shadow-sm"
                   : "text-slate-500 hover:text-slate-900"
@@ -211,7 +210,8 @@ function GeneratorContent() {
             </button>
             <button
               onClick={() => setMode("TASK")}
-              className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
+              aria-pressed={mode === "TASK"}
+              className={`px-6 py-2 rounded-md text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                 mode === "TASK"
                   ? "bg-white text-purple-600 shadow-sm"
                   : "text-slate-500 hover:text-slate-900"
@@ -221,7 +221,8 @@ function GeneratorContent() {
             </button>
             <button
               onClick={() => setMode("CALENDAR")}
-              className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
+              aria-pressed={mode === "CALENDAR"}
+              className={`px-6 py-2 rounded-md text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                 mode === "CALENDAR"
                   ? "bg-white text-orange-600 shadow-sm"
                   : "text-slate-500 hover:text-slate-900"
@@ -234,20 +235,20 @@ function GeneratorContent() {
 
         <Card className="border-slate-200 shadow-sm">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <h2 className="text-2xl font-semibold leading-none tracking-tight flex items-center gap-2">
               {mode === "TABLE" && (
-                <Database className="w-5 h-5 text-blue-600" />
+                <Database className="w-5 h-5 text-blue-600" aria-hidden="true" />
               )}
-              {mode === "TASK" && <Check className="w-5 h-5 text-purple-600" />}
+              {mode === "TASK" && <Check className="w-5 h-5 text-purple-600" aria-hidden="true" />}
               {mode === "CALENDAR" && (
-                <Calendar className="w-5 h-5 text-orange-600" />
+                <Calendar className="w-5 h-5 text-orange-600" aria-hidden="true" />
               )}
               {mode === "TABLE"
                 ? "בחר טבלה"
                 : mode === "TASK"
                   ? "הגדרות משימה"
                   : "הגדרות יומן"}
-            </CardTitle>
+            </h2>
             <CardDescription>
               {mode === "TABLE"
                 ? "בחר את הטבלה אליה תרצה להכניס נתונים. המערכת תזהה אוטומטית את העמודות."
@@ -258,8 +259,8 @@ function GeneratorContent() {
           </CardHeader>
           <CardContent>
             {mode === "TABLE" && loading ? (
-              <div className="flex justify-center py-8 text-slate-400">
-                <Loader2 className="w-8 h-8 animate-spin" />
+              <div className="flex justify-center py-8 text-slate-400" role="status" aria-label="טוען">
+                <Loader2 className="w-8 h-8 animate-spin" aria-hidden="true" />
               </div>
             ) : (
               <div className="space-y-6">
@@ -270,6 +271,7 @@ function GeneratorContent() {
                   >
                     <SelectTrigger
                       className="w-full h-12 text-lg text-right"
+                      aria-label="בחר טבלה"
                     >
                       <SelectValue placeholder="בחר טבלה מהרשימה..." />
                     </SelectTrigger>
@@ -302,15 +304,16 @@ function GeneratorContent() {
                           size="icon"
                           className="h-6 w-6"
                           onClick={() => handleCopy(getApiUrl())}
+                          aria-label="העתק כתובת API"
                         >
-                          <Copy className="w-3 h-3" />
+                          <Copy className="w-3 h-3" aria-hidden="true" />
                         </Button>
                       </div>
                     </div>
 
                     {mode === "TASK" && (
-                      <Alert className="bg-red-50 border-red-200 text-red-900 mb-4">
-                        <Info className="h-4 w-4 text-red-600" />
+                      <Alert className="bg-red-50 border-red-200 text-red-900 mb-4" role="note">
+                        <Info className="h-4 w-4 text-red-600" aria-hidden="true" />
                         <AlertDescription className="font-bold">
                           שים לב: ערכי status ו-priority חייבים להיות באותיות
                           קטנות בלבד (lowercase)! שימוש באותיות גדולות יגרום
@@ -321,8 +324,8 @@ function GeneratorContent() {
 
                     {mode === "CALENDAR" && (
                       <div className="space-y-4 mb-4">
-                        <Alert className="bg-amber-100 border-amber-200 text-amber-900">
-                          <Info className="h-4 w-4 text-amber-700" />
+                        <Alert className="bg-amber-100 border-amber-200 text-amber-900" role="note">
+                          <Info className="h-4 w-4 text-amber-700" aria-hidden="true" />
                           <AlertDescription className="font-bold">
                             שימו לב: פורמט התאריך הוא ISO-8601 (שנה-חודש-יום).
                             <br />
@@ -331,8 +334,8 @@ function GeneratorContent() {
                           </AlertDescription>
                         </Alert>
 
-                        <Alert className="bg-red-50 border-red-200 text-red-900">
-                          <Info className="h-4 w-4 text-red-600" />
+                        <Alert className="bg-red-50 border-red-200 text-red-900" role="note">
+                          <Info className="h-4 w-4 text-red-600" aria-hidden="true" />
                           <AlertDescription className="font-bold">
                             שדה email הוא קריטי! בלי אימייל תקין של משתמש קיים
                             במערכת, הבקשה תיכשל.
@@ -356,9 +359,9 @@ function GeneratorContent() {
                           onClick={() => handleCopy(jsonOutput)}
                         >
                           {copied ? (
-                            <Check className="w-4 h-4 mr-1" />
+                            <Check className="w-4 h-4 mr-1" aria-hidden="true" />
                           ) : (
-                            <Copy className="w-4 h-4 mr-1" />
+                            <Copy className="w-4 h-4 mr-1" aria-hidden="true" />
                           )}
                           {copied ? "הועתק!" : "העתק JSON"}
                         </Button>
@@ -367,13 +370,15 @@ function GeneratorContent() {
                         <pre
                           className="text-slate-50 font-mono text-sm leading-relaxed"
                           dir="ltr"
+                          role="group"
+                          aria-label="קוד JSON שנוצר"
                         >
                           <code>{jsonOutput}</code>
                         </pre>
                       </div>
                     </div>
 
-                    <Alert className="bg-blue-50 border-blue-200 text-blue-800">
+                    <Alert className="bg-blue-50 border-blue-200 text-blue-800" role="note">
                       <AlertDescription>
                         {mode === "TABLE" ? (
                           <>
@@ -440,6 +445,10 @@ function GeneratorContent() {
             )}
           </CardContent>
         </Card>
+
+        <span className="sr-only" aria-live="polite" aria-atomic="true">
+          {copied ? "הטקסט הועתק ללוח" : ""}
+        </span>
       </main>
     </div>
   );
@@ -449,8 +458,8 @@ export default function MakeRequestGenerator() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center min-h-screen">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <div className="flex items-center justify-center min-h-screen" role="status" aria-label="טוען">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" aria-hidden="true" />
         </div>
       }
     >

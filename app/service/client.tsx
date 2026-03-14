@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import {
@@ -62,6 +62,7 @@ import {
   DragStartEvent,
   closestCorners,
   PointerSensor,
+  KeyboardSensor,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
@@ -146,6 +147,21 @@ export default function ServicePageClient({
     },
     { open: 0, inProgress: 0, urgent: 0 },
   ), [tickets]);
+
+  // Search result announcement for screen readers
+  const [searchAnnouncement, setSearchAnnouncement] = useState("");
+  const isInitialRender = useRef(true);
+  useEffect(() => {
+    if (isInitialRender.current) {
+      isInitialRender.current = false;
+      return;
+    }
+    if (searchQuery) {
+      setSearchAnnouncement(`נמצאו ${filteredTickets.length} קריאות`);
+    } else {
+      setSearchAnnouncement("");
+    }
+  }, [searchQuery, filteredTickets.length]);
 
   const [activeDragTicket, setActiveDragTicket] = useState<any>(null);
 
@@ -255,6 +271,7 @@ export default function ServicePageClient({
 
       {/* Stats Cards */}
       {/* Stats Cards - Bento Grid Layout */}
+      <h2 className="sr-only">סטטיסטיקות קריאות שירות</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         <div className="lg:col-span-2">
           <StatsCard
@@ -285,7 +302,7 @@ export default function ServicePageClient({
         </div>
         {/* New Cards */}
         <div className="lg:col-span-3">
-          <Link href="/service/sla-breaches" className="block h-full">
+          <Link href="/service/sla-breaches" className="block h-full" aria-label={`קריאות בחריגה: ${ticketStats?.breached || 0}`}>
             <StatsCard
               title="קריאות בחריגה"
               value={ticketStats?.breached || 0}
@@ -297,7 +314,7 @@ export default function ServicePageClient({
           </Link>
         </div>
         <div className="lg:col-span-3">
-          <Link href="/service/archive" className="block h-full">
+          <Link href="/service/archive" className="block h-full" aria-label={`קריאות סגורות: ${ticketStats?.closed || 0}`}>
             <StatsCard
               title="קריאות סגורות"
               value={ticketStats?.closed || 0}
@@ -311,20 +328,25 @@ export default function ServicePageClient({
       </div>
 
       {/* Filters & View Toggle */}
+      <h2 className="sr-only">סינון וחיפוש קריאות</h2>
       <div className="flex items-center justify-between gap-4 bg-white p-2 rounded-lg border shadow-sm">
         <div className="flex items-center gap-2 flex-1 relative">
           <Search className="w-4 h-4 absolute right-3 text-slate-400" />
           <Input
             placeholder="חיפוש קריאות..."
-            className="pr-9 bg-transparent border-0 focus-visible:ring-0 max-w-sm text-right"
+            aria-label="חיפוש קריאות"
+            className="pr-9 bg-transparent border-0 focus-visible:ring-1 focus-visible:ring-slate-300 max-w-sm text-right"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
+          <div aria-live="polite" className="sr-only">{searchAnnouncement}</div>
         </div>
         <div className="flex items-center gap-2 border-r pr-2">
           <Button
             variant="ghost"
             size="sm"
+            aria-label="תצוגת קנבן"
+            aria-pressed={viewMode === "kanban"}
             className={cn(
               viewMode === "kanban" && "bg-slate-100 text-[#000000]"
             )}
@@ -335,6 +357,8 @@ export default function ServicePageClient({
           <Button
             variant="ghost"
             size="sm"
+            aria-label="תצוגת רשימה"
+            aria-pressed={viewMode === "list"}
             className={cn(viewMode === "list" && "bg-slate-100 text-[#000000]")}
             onClick={() => setViewMode("list")}
           >
@@ -344,6 +368,7 @@ export default function ServicePageClient({
       </div>
 
       {/* Main Content */}
+      <h2 className="sr-only">רשימת קריאות</h2>
       <div className="flex-1 min-h-0">
         {viewMode === "kanban" ? (
           <TicketKanban
@@ -397,6 +422,8 @@ function StatsCard({
 }: any) {
   return (
     <div
+      role="group"
+      aria-label={`${title}: ${value}`}
       className={cn(
         "p-4 rounded-xl border shadow-sm flex items-center justify-between transition-all hover:shadow-md",
         fullBackground ? bgColor : "bg-white",
@@ -412,12 +439,12 @@ function StatsCard({
         >
           {title}
         </p>
-        <h3 className="text-2xl font-bold mt-1 text-[#000000]">{value}</h3>
+        <p className="text-2xl font-bold mt-1 text-[#000000]">{value}</p>
       </div>
       <div
         className={cn("p-3 rounded-lg", fullBackground ? "bg-white" : bgColor)}
       >
-        <Icon className={cn("w-6 h-6", color)} />
+        <Icon className={cn("w-6 h-6", color)} aria-hidden="true" />
       </div>
     </div>
   );
@@ -441,7 +468,8 @@ function TicketKanban({
       activationConstraint: {
         distance: 8,
       },
-    })
+    }),
+    useSensor(KeyboardSensor)
   );
 
   const columns = [
@@ -465,6 +493,26 @@ function TicketKanban({
       collisionDetection={closestCorners}
       onDragEnd={onDragEnd}
       onDragStart={onDragStart}
+      accessibility={{
+        announcements: {
+          onDragStart({ active }) {
+            return `התחלת גרירה של קריאה ${active.id}`;
+          },
+          onDragOver({ active, over }) {
+            if (!over) return '';
+            const colLabel = columns.find(c => c.id === over.id)?.label;
+            return colLabel ? `קריאה ${active.id} מעל ${colLabel}` : '';
+          },
+          onDragEnd({ active, over }) {
+            if (!over) return 'הגרירה בוטלה';
+            const colLabel = columns.find(c => c.id === over.id)?.label;
+            return colLabel ? `קריאה ${active.id} הועברה ל${colLabel}` : 'הגרירה בוטלה';
+          },
+          onDragCancel() {
+            return 'הגרירה בוטלה';
+          },
+        },
+      }}
     >
       <div className="h-full overflow-x-auto pb-4">
         <div className="flex gap-4 h-full min-w-[1000px]">
@@ -481,11 +529,13 @@ function TicketKanban({
       {createPortal(
         <DragOverlay>
           {activeDragTicket ? (
-            <TicketCard
-              ticket={activeDragTicket}
-              onSelect={() => {}}
-              isDragOverlay
-            />
+            <div aria-hidden="true">
+              <TicketCard
+                ticket={activeDragTicket}
+                onSelect={() => {}}
+                isDragOverlay
+              />
+            </div>
           ) : null}
         </DragOverlay>,
         document.body
@@ -508,13 +558,13 @@ function DroppableColumn({
   });
 
   return (
-    <div className="flex-1 flex flex-col gap-3 min-w-[280px]">
+    <div className="flex-1 flex flex-col gap-3 min-w-[280px]" role="region" aria-label={column.label}>
       <div className="flex items-center justify-between p-1">
         <div className="flex items-center gap-2">
           <div className={cn("w-2 h-2 rounded-full", column.color)} />
-          <span className="font-semibold text-sm text-[#000000]">
+          <h2 className="font-semibold text-sm text-[#000000]">
             {column.label}
-          </span>
+          </h2>
           <span className="text-xs text-slate-500 font-medium px-2 py-0.5 bg-slate-100 rounded-full">
             {tickets.length}
           </span>
@@ -577,15 +627,27 @@ function TicketCard({
     <div
       className={cn(
         "bg-white p-3 rounded-lg border shadow-sm transition-all group relative",
-        !isDragOverlay && "hover:shadow-md",
+        !isDragOverlay && "hover:shadow-md cursor-pointer focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:ring-offset-1",
         isDragOverlay && "shadow-xl cursor-grabbing rotate-2 scale-105"
       )}
       onClick={() => onSelect(ticket)}
+      {...(!isDragOverlay && {
+        role: "button",
+        tabIndex: 0,
+        "aria-label": `קריאה #${ticket.id}: ${ticket.title} - ${getPriorityLabel(ticket.priority)}`,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect(ticket);
+          }
+        },
+      })}
     >
       {/* Drag Handle */}
       {dragHandleProps && (
         <div
           {...dragHandleProps}
+          aria-label="גרור קריאה"
           className="absolute top-3 left-3 cursor-grab text-slate-300 hover:text-slate-500 p-1 z-10"
           onClick={(e) => e.stopPropagation()}
         >
@@ -646,7 +708,7 @@ function TicketList({
       className="bg-white rounded-lg border shadow-sm overflow-hidden"
       dir="rtl"
     >
-      <table className="w-full text-sm text-right">
+      <table className="w-full text-sm text-right" aria-label="רשימת קריאות שירות">
         <thead className="bg-slate-50 text-slate-500 border-b">
           <tr>
             <th className="px-4 py-3 font-medium">קריאה</th>
@@ -656,15 +718,22 @@ function TicketList({
             <th className="px-4 py-3 font-medium">עדיפות</th>
             <th className="px-4 py-3 font-medium">נוצר בתאריך</th>
             <th className="px-4 py-3 font-medium">עודכן בתאריך</th>
-            <th className="px-4 py-3 font-medium w-10"></th>
+            <th className="px-4 py-3 font-medium w-10"><span className="sr-only">פעולות</span></th>
           </tr>
         </thead>
         <tbody className="divide-y">
           {tickets.map((ticket) => (
             <tr
               key={ticket.id}
-              className="hover:bg-slate-50/50 cursor-pointer transition-colors"
+              className="hover:bg-slate-50/50 cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4f95ff] focus-visible:-outline-offset-2"
+              tabIndex={0}
               onClick={() => onSelect(ticket)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(ticket);
+                }
+              }}
             >
               <td className="px-4 py-3">
                 <div className="font-medium text-[#000000]">{ticket.title}</div>
@@ -716,6 +785,7 @@ function TicketList({
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label="מחק קריאה"
                   className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"
                   onClick={async (e) => {
                     e.stopPropagation();

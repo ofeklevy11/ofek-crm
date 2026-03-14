@@ -14,14 +14,17 @@ const rubik = Rubik({
 });
 
 export const metadata: Metadata = {
-  title: "BizlyCRM",
+  title: {
+    default: "BizlyCRM",
+    template: "%s | BizlyCRM",
+  },
   description:
     "BizlyCRM — A cloud-based CRM platform for small and medium businesses. Manage leads, customers, sales, invoicing, tasks, scheduling, and analytics in one place. | מערכת ניהול קשרי לקוחות לעסקים קטנים ובינוניים.",
 };
 
 function NavbarSkeleton() {
   return (
-    <nav className="bg-background/95 border-b border-border/40 sticky top-0 z-50">
+    <nav aria-label="ניווט ראשי" className="bg-background/95 border-b border-border/40 sticky top-0 z-50">
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div className="h-16" />
       </div>
@@ -40,11 +43,17 @@ export default function RootLayout({
         className={`${rubik.variable} antialiased font-rubik`}
         suppressHydrationWarning
       >
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:z-100 focus:top-2 focus:right-2 focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg"
+        >
+          דלג לתוכן הראשי
+        </a>
         <MobileFeatureDisclaimer />
         <Suspense fallback={<NavbarSkeleton />}>
           <Navbar />
         </Suspense>
-        <main>{children}</main>
+        <main id="main-content">{children}</main>
         <MiniFooter />
         <SonnerToaster />
         <ModalProvider />

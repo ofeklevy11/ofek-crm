@@ -196,7 +196,7 @@ export function WorkflowManager({
                     }}
                     className="flex items-center gap-2 text-red-500 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={16} aria-hidden="true" />
                     מחק תבנית
                   </button>
                 </div>

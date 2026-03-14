@@ -12,6 +12,7 @@ import { getUserFriendlyError } from "@/lib/errors";
 import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 
 const PAGE_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 400;
 
 export interface UseNurtureSubscribersReturn {
   customers: NurtureSubscriberResult[];
@@ -42,16 +43,20 @@ export function useNurtureSubscribers(slug: string): UseNurtureSubscribersReturn
   const [search, setSearchState] = useState("");
   const [filters, setFiltersState] = useState<NurtureSubscriberFilter[]>([]);
   const fetchIdRef = useRef(0);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track last cursor for cursor-based pagination
+  const lastCursorRef = useRef<string | undefined>(undefined);
 
   const fetchSubscribers = useCallback(
-    async (skip: number, append: boolean, currentSearch: string, currentFilters: NurtureSubscriberFilter[]) => {
+    async (skip: number, append: boolean, currentSearch: string, currentFilters: NurtureSubscriberFilter[], cursor?: string) => {
       const fetchId = ++fetchIdRef.current;
       try {
         const result = await getNurtureSubscribers(slug, {
-          skip,
+          skip: cursor ? undefined : skip,
           take: PAGE_SIZE,
           search: currentSearch || undefined,
           filters: currentFilters.length > 0 ? currentFilters : undefined,
+          cursor,
         });
         // Ignore stale responses
         if (fetchId !== fetchIdRef.current) return;
@@ -62,6 +67,10 @@ export function useNurtureSubscribers(slug: string): UseNurtureSubscribersReturn
         }
         setTotal(result.total);
         setHasMore(result.hasMore);
+        // Track cursor for next loadMore
+        if (result.subscribers.length > 0) {
+          lastCursorRef.current = result.subscribers[result.subscribers.length - 1].id;
+        }
       } catch (err: any) {
         if (fetchId !== fetchIdRef.current) return;
         if (isRateLimitError(err)) toast.error(RATE_LIMIT_MESSAGE);
@@ -73,22 +82,29 @@ export function useNurtureSubscribers(slug: string): UseNurtureSubscribersReturn
 
   // Initial load + lastSentMap
   useEffect(() => {
+    lastCursorRef.current = undefined;
     setIsLoading(true);
     fetchSubscribers(0, false, "", []).finally(() => setIsLoading(false));
     getSubscriberLastSentMap(slug).then(setLastSentMap).catch(() => {});
   }, [slug, fetchSubscribers]);
 
-  // Re-fetch on search/filter change
+  // Re-fetch on search change with debounce
   const setSearch = useCallback((s: string) => {
     setSearchState(s);
     setSelectedCustomerIds(new Set());
-    setIsLoading(true);
-    fetchSubscribers(0, false, s, filters).finally(() => setIsLoading(false));
+    // Debounce search to reduce server load
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      lastCursorRef.current = undefined;
+      setIsLoading(true);
+      fetchSubscribers(0, false, s, filters).finally(() => setIsLoading(false));
+    }, SEARCH_DEBOUNCE_MS);
   }, [filters, fetchSubscribers]);
 
   const setFilters = useCallback((f: NurtureSubscriberFilter[]) => {
     setFiltersState(f);
     setSelectedCustomerIds(new Set());
+    lastCursorRef.current = undefined;
     setIsLoading(true);
     fetchSubscribers(0, false, search, f).finally(() => setIsLoading(false));
   }, [search, fetchSubscribers]);
@@ -96,10 +112,19 @@ export function useNurtureSubscribers(slug: string): UseNurtureSubscribersReturn
   const loadMore = useCallback(() => {
     if (isLoadingMore || !hasMore) return;
     setIsLoadingMore(true);
-    fetchSubscribers(customers.length, true, search, filters).finally(() => setIsLoadingMore(false));
+    // Use cursor-based pagination when no search/filter is active (O(1) vs O(n) offset)
+    const usesCursor = !search && filters.length === 0 && lastCursorRef.current;
+    fetchSubscribers(
+      usesCursor ? 0 : customers.length,
+      true,
+      search,
+      filters,
+      usesCursor ? lastCursorRef.current : undefined
+    ).finally(() => setIsLoadingMore(false));
   }, [isLoadingMore, hasMore, customers.length, search, filters, fetchSubscribers]);
 
   const refreshData = useCallback(() => {
+    lastCursorRef.current = undefined;
     setIsLoading(true);
     fetchSubscribers(0, false, search, filters).finally(() => setIsLoading(false));
     getSubscriberLastSentMap(slug).then(setLastSentMap).catch(() => {});

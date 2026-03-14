@@ -9,6 +9,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Download, FileText } from "lucide-react";
 import { TextPreview } from "./previews/text-preview";
 import { ImagePreview } from "./previews/image-preview";
@@ -73,7 +74,7 @@ export function FilePreviewModal({
       <DialogContent className="sm:max-w-5xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5 shrink-0" />
+            <FileText className="w-5 h-5 shrink-0" aria-hidden="true" />
             <span className="truncate">
               {(file as any).displayName || file.name}
             </span>
@@ -87,40 +88,38 @@ export function FilePreviewModal({
         </DialogHeader>
 
         <div className="flex-1 min-h-0">
-          {previewType === "image" && <ImagePreview fileId={file.id} />}
+          {previewType === "image" && <ImagePreview fileId={file.id} filename={(file as any).displayName || file.name} />}
           {previewType === "pdf" && <PdfPreview fileId={file.id} />}
           {previewType === "csv" && <CsvPreview fileId={file.id} />}
           {previewType === "excel" && <ExcelPreview fileId={file.id} />}
           {previewType === "text" && <TextPreview fileId={file.id} />}
           {previewType === "unsupported" && (
             <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-muted-foreground">
-              <FileText className="w-16 h-16" />
+              <FileText className="w-16 h-16" aria-hidden="true" />
               <p>אין תצוגה מקדימה זמינה לסוג קובץ זה</p>
-              <button
-                onClick={onDownload}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-              >
+              <Button onClick={onDownload} className="gap-2">
                 <Download className="w-4 h-4" />
                 הורד קובץ
-              </button>
+              </Button>
             </div>
           )}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <button
+          <Button
+            variant="ghost"
             onClick={onDownload}
-            className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium bg-[#4f95ff]/10 text-[#4f95ff] rounded-md hover:bg-[#4f95ff]/20 transition-colors"
+            className="gap-2 bg-[#4f95ff]/10 text-[#4f95ff] hover:bg-[#4f95ff]/20"
           >
             <Download className="w-4 h-4" />
             הורד
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="secondary"
             onClick={() => onOpenChange(false)}
-            className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium bg-muted text-muted-foreground rounded-md hover:bg-muted/80 transition-colors"
           >
             סגור
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

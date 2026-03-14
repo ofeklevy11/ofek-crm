@@ -19,18 +19,16 @@ import { ChevronRight } from "lucide-react";
 
 export default function MakeAppCalendarGuide() {
   return (
-    <div className="min-h-screen bg-slate-50" dir="rtl">
+    <div className="min-h-screen bg-slate-50">
       <main className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Breadcrumbs */}
-        <div className="flex items-center text-sm text-slate-500 mb-6">
-          <Link href="/guides" className="hover:text-blue-600">
-            מדריכים
-          </Link>
-          <ChevronRight className="w-4 h-4 mx-2" />
-          <span className="text-slate-900 font-medium">
-            יצירת אירועים ביומן דרך אפליקציית Make
-          </span>
-        </div>
+        <nav aria-label="ניווט פירורי לחם" className="mb-6">
+          <ol className="flex items-center text-sm text-slate-500">
+            <li><Link href="/guides" className="hover:text-blue-600">מדריכים</Link></li>
+            <li aria-hidden="true"><ChevronRight className="w-4 h-4 mx-2" /></li>
+            <li aria-current="page"><span className="text-slate-900 font-medium">יצירת אירועים ביומן דרך אפליקציית Make</span></li>
+          </ol>
+        </nav>
 
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-slate-900 mb-4">
@@ -43,8 +41,8 @@ export default function MakeAppCalendarGuide() {
         </div>
 
         {/* Advantage alert */}
-        <Alert className="mb-8 bg-green-50 border-green-200 text-green-900">
-          <Sparkles className="h-4 w-4 text-green-600" />
+        <Alert className="mb-8 bg-green-50 border-green-200 text-green-900" role="note">
+          <Sparkles className="h-4 w-4 text-green-600" aria-hidden="true" />
           <AlertTitle>יתרון האפליקציה המותאמת</AlertTitle>
           <AlertDescription>
             בניגוד למדריך HTTP לאירועי יומן, כאן אין צורך לכתוב JSON או להגדיר
@@ -77,8 +75,8 @@ export default function MakeAppCalendarGuide() {
                     המשתמש שביומן שלו ייווצר האירוע. חייב להיות משתמש קיים במערכת.
                   </li>
                 </ul>
-                <Alert className="mt-4 bg-blue-50 border-blue-200 text-blue-900">
-                  <Info className="h-4 w-4 text-blue-600" />
+                <Alert className="mt-4 bg-blue-50 border-blue-200 text-blue-900" role="note">
+                  <Info className="h-4 w-4 text-blue-600" aria-hidden="true" />
                   <AlertDescription>
                     בניגוד לחיבור HTTP ידני, כאן <strong>אין צורך</strong> לדעת
                     כתובות URL, Headers, או מבנה JSON — האפליקציה מטפלת בכל זה
@@ -100,7 +98,7 @@ export default function MakeAppCalendarGuide() {
             <Card>
               <CardContent className="pt-6 space-y-4">
                 <div className="flex items-start gap-3">
-                  <Search className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" />
+                  <Search className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p className="mb-2">
                       ב-Scenario שלך, לחץ על כפתור <strong>&quot;+&quot;</strong>{" "}
@@ -111,8 +109,8 @@ export default function MakeAppCalendarGuide() {
                     </div>
                   </div>
                 </div>
-                <Alert className="bg-amber-50 border-amber-200 text-amber-900">
-                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <Alert className="bg-amber-50 border-amber-200 text-amber-900" role="note">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" aria-hidden="true" />
                   <AlertTitle>שימו לב</AlertTitle>
                   <AlertDescription>
                     שם האפליקציה עשוי להשתנות בקרוב. אם לא מוצאים אותה, פנו
@@ -134,7 +132,7 @@ export default function MakeAppCalendarGuide() {
             <Card>
               <CardContent className="pt-6 space-y-4">
                 <div className="flex items-start gap-3">
-                  <Key className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" />
+                  <Key className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p className="mb-2">
                       בפעם הראשונה שתשתמש באפליקציה, Make יבקש ממך ליצור חיבור
@@ -147,8 +145,8 @@ export default function MakeAppCalendarGuide() {
                     </p>
                   </div>
                 </div>
-                <Alert className="bg-red-50 border-red-200 text-red-900">
-                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                <Alert className="bg-red-50 border-red-200 text-red-900" role="note">
+                  <AlertTriangle className="h-4 w-4 text-red-600" aria-hidden="true" />
                   <AlertTitle>החיבור נכשל?</AlertTitle>
                   <AlertDescription>
                     וודא שמפתח ה-API שהזנת מדויק ופעיל. ניתן לקבל מפתח חדש
@@ -176,7 +174,7 @@ export default function MakeAppCalendarGuide() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-start gap-3">
-                  <MousePointerClick className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" />
+                  <MousePointerClick className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p className="mb-2">
                       לאחר שהחיבור נוצר, בחר את הפעולה{" "}
@@ -184,8 +182,8 @@ export default function MakeAppCalendarGuide() {
                       Calendar Event). פעולה זו תאפשר לך ליצור אירועים ישירות
                       ביומן של המערכת.
                     </p>
-                    <Alert className="mt-3 bg-amber-50 border-amber-200 text-amber-900">
-                      <Info className="h-4 w-4 text-amber-600" />
+                    <Alert className="mt-3 bg-amber-50 border-amber-200 text-amber-900" role="note">
+                      <Info className="h-4 w-4 text-amber-600" aria-hidden="true" />
                       <AlertDescription>
                         שימו לב: פעולה זו שונה מ-&quot;יצירת רשומה
                         בטבלה&quot; ומ-&quot;יצירת משימה&quot;. האירועים נוצרים
@@ -209,7 +207,7 @@ export default function MakeAppCalendarGuide() {
             <Card>
               <CardContent className="pt-6 space-y-4">
                 <div className="flex items-start gap-3">
-                  <CalendarPlus className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" />
+                  <CalendarPlus className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p className="mb-2">
                       לאחר בחירת הפעולה, יופיעו השדות הבאים בממשק הויזואלי. מפה
@@ -219,7 +217,7 @@ export default function MakeAppCalendarGuide() {
                 </div>
 
                 <div className="bg-slate-50 rounded-lg p-4 space-y-3">
-                  <h4 className="font-semibold text-sm mb-3">שדות האירוע:</h4>
+                  <h3 className="font-semibold text-sm mb-3">שדות האירוע:</h3>
                   <div className="space-y-3 text-sm">
                     <div className="flex items-start gap-2 border-b border-slate-200 pb-2">
                       <Badge
@@ -305,8 +303,8 @@ export default function MakeAppCalendarGuide() {
                   </div>
                 </div>
 
-                <Alert className="bg-amber-50 border-amber-200 text-amber-900">
-                  <Info className="h-4 w-4 text-amber-600" />
+                <Alert className="bg-amber-50 border-amber-200 text-amber-900" role="note">
+                  <Info className="h-4 w-4 text-amber-600" aria-hidden="true" />
                   <AlertTitle>פורמט תאריך ושעה — ISO-8601</AlertTitle>
                   <AlertDescription>
                     שדות start_time ו-end_time חייבים להיות בפורמט ISO-8601 מלא:
@@ -316,8 +314,8 @@ export default function MakeAppCalendarGuide() {
                   </AlertDescription>
                 </Alert>
 
-                <Alert className="bg-red-50 border-red-200 text-red-900">
-                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                <Alert className="bg-red-50 border-red-200 text-red-900" role="note">
+                  <AlertTriangle className="h-4 w-4 text-red-600" aria-hidden="true" />
                   <AlertTitle>שדה email קריטי</AlertTitle>
                   <AlertDescription>
                     שדה email חייב להכיל כתובת אימייל של משתמש קיים במערכת. אם
@@ -325,8 +323,8 @@ export default function MakeAppCalendarGuide() {
                   </AlertDescription>
                 </Alert>
 
-                <Alert className="bg-blue-50 border-blue-200 text-blue-900">
-                  <Info className="h-4 w-4 text-blue-600" />
+                <Alert className="bg-blue-50 border-blue-200 text-blue-900" role="note">
+                  <Info className="h-4 w-4 text-blue-600" aria-hidden="true" />
                   <AlertDescription>
                     מועד הסיום (end_time) חייב להיות מאוחר ממועד ההתחלה
                     (start_time). אם לא תמלא צבע, ייקבע אוטומטית כחול (blue).
@@ -347,7 +345,7 @@ export default function MakeAppCalendarGuide() {
             <Card>
               <CardContent className="pt-6 space-y-4">
                 <div className="flex items-start gap-3">
-                  <PlayCircle className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" />
+                  <PlayCircle className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p className="mb-2">
                       לחץ על <strong>&quot;Run once&quot;</strong> בתחתית המסך של
@@ -356,7 +354,7 @@ export default function MakeAppCalendarGuide() {
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-green-500 mt-1 flex-shrink-0" />
+                  <CheckCircle2 className="w-5 h-5 text-green-500 mt-1 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p className="mb-2">
                       אם הכל הוגדר נכון, תראה <strong>בועה ירוקה</strong> על
@@ -386,7 +384,7 @@ export default function MakeAppCalendarGuide() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg text-red-600 flex items-center">
-                    <Key className="w-5 h-5 ml-2" />
+                    <Key className="w-5 h-5 ml-2" aria-hidden="true" />
                     שגיאת חיבור (Connection Error)
                   </CardTitle>
                 </CardHeader>
@@ -399,7 +397,7 @@ export default function MakeAppCalendarGuide() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg text-amber-600 flex items-center">
-                    <CalendarPlus className="w-5 h-5 ml-2" />
+                    <CalendarPlus className="w-5 h-5 ml-2" aria-hidden="true" />
                     האירוע לא מופיע ביומן
                   </CardTitle>
                 </CardHeader>
@@ -413,7 +411,7 @@ export default function MakeAppCalendarGuide() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg text-blue-600 flex items-center">
-                    <AlertTriangle className="w-5 h-5 ml-2" />
+                    <AlertTriangle className="w-5 h-5 ml-2" aria-hidden="true" />
                     שגיאת אימייל לא נמצא
                   </CardTitle>
                 </CardHeader>
@@ -426,7 +424,7 @@ export default function MakeAppCalendarGuide() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg text-purple-600 flex items-center">
-                    <AlertTriangle className="w-5 h-5 ml-2" />
+                    <AlertTriangle className="w-5 h-5 ml-2" aria-hidden="true" />
                     ה-Scenario נכשל בהרצה
                   </CardTitle>
                 </CardHeader>

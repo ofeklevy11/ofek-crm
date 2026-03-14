@@ -304,12 +304,19 @@
     animation: none !important;
   }
   .animate-blob,
-  .animate-pulse {
+  .animate-pulse,
+  .animate-spin {
     animation: none !important;
   }
   .queue-progress-glow,
   .queue-autosend-glow {
     box-shadow: none !important;
+  }
+  .animate-in,
+  [class*="slide-in-from-"],
+  [class*="fade-in"] {
+    animation: none !important;
+    transition: none !important;
   }
 }
 

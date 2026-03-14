@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { getUsers } from "@/app/actions/users";
 import { getMeetingTypes } from "@/app/actions/meetings";
+import { getGoogleCalendarStatus } from "@/app/actions/google-calendar";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -331,6 +332,10 @@ export default function MiniWidgetConfigModal({
   const [calCustomTo, setCalCustomTo] = useState<string | undefined>(
     currentSettings?.customTo
   );
+  const [calSource, setCalSource] = useState<"crm" | "google" | "all">(
+    currentSettings?.calendarSource || "crm"
+  );
+  const [googleCalConnected, setGoogleCalConnected] = useState<boolean | null>(null);
 
   // Tasks state
   const [taskPreset, setTaskPreset] = useState(
@@ -483,6 +488,15 @@ export default function MiniWidgetConfigModal({
     }
   }, [widgetType]);
 
+  // Check Google Calendar connection status
+  useEffect(() => {
+    if (widgetType === "MINI_CALENDAR") {
+      getGoogleCalendarStatus().then((res) => {
+        setGoogleCalConnected(res.connected);
+      });
+    }
+  }, [widgetType]);
+
   // Switch to custom when advanced field changes
   const goCustom = useCallback(() => {
     if (widgetType === "MINI_CALENDAR") setCalPreset("custom");
@@ -500,6 +514,7 @@ export default function MiniWidgetConfigModal({
         preset: calPreset,
         ...(calPreset === "custom" ? { customFrom: calCustomFrom, customTo: calCustomTo } : {}),
         maxEvents: calMaxEvents,
+        calendarSource: calSource,
       };
     }
     if (widgetType === "MINI_TASKS") {
@@ -636,6 +651,28 @@ export default function MiniWidgetConfigModal({
               {/* ── Calendar Advanced ─────────────────── */}
               {widgetType === "MINI_CALENDAR" && (
                 <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">
+                      מקור יומן
+                    </label>
+                    <SegmentedControl
+                      options={[
+                        { value: "crm", label: "יומן מערכת" },
+                        { value: "google", label: "Google Calendar" },
+                        { value: "all", label: "הכל" },
+                      ]}
+                      value={calSource}
+                      onChange={(v: string) => setCalSource(v as "crm" | "google" | "all")}
+                    />
+                    {googleCalConnected === false && calSource !== "crm" && (
+                      <p className="mt-1.5 text-xs text-amber-600">
+                        יש לחבר Google Calendar בהגדרות היומן —{" "}
+                        <a href="/calendar" className="underline hover:text-amber-700">
+                          לחץ כאן
+                        </a>
+                      </p>
+                    )}
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-2">
                       טווח תאריכים מותאם

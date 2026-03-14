@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withMetrics } from "@/lib/with-metrics";
-
-const TOKEN_RE = /^[a-zA-Z0-9]{10,50}$/;
+import { SECURE_TOKEN_RE } from "@/lib/crypto-tokens";
 
 async function handleGET(
   _request: NextRequest,
@@ -10,8 +9,8 @@ async function handleGET(
 ) {
   const { token } = await params;
 
-  if (!TOKEN_RE.test(token)) {
-    return NextResponse.json({ error: "Invalid token" }, { status: 400 });
+  if (!SECURE_TOKEN_RE.test(token)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const meetingType = await prisma.meetingType.findFirst({
@@ -66,7 +65,9 @@ async function handleGET(
   // Omit internal fields from response
   const { availabilityOverride: _, companyId: __, ...rest } = meetingType;
 
-  return NextResponse.json({ ...rest, availableDays });
+  const response = NextResponse.json({ ...rest, availableDays });
+  response.headers.set("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+  return response;
 }
 
 export const GET = withMetrics("/api/p/meetings/[token]", handleGET);

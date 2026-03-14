@@ -33,13 +33,13 @@ export default function FinancialStats({
     <div role="region" aria-label="מדדים פיננסיים" className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <h3 className="tracking-tight text-sm font-medium text-gray-500">
+          <h3 id="stat-mrr" className="tracking-tight text-sm font-medium text-gray-500">
             הכנסה חודשית קבועה (MRR)
           </h3>
           <DollarSign className="h-4 w-4 text-gray-500" aria-hidden="true" />
         </div>
         <div className="pt-2">
-          <div className="text-2xl font-bold text-gray-900">
+          <div aria-labelledby="stat-mrr" className="text-2xl font-bold text-gray-900">
             ₪{totalRevenue.toLocaleString()}
           </div>
           <p className="text-xs text-gray-500 mt-1">
@@ -52,13 +52,13 @@ export default function FinancialStats({
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <h3 className="tracking-tight text-sm font-medium text-gray-500">
+          <h3 id="stat-debt" className="tracking-tight text-sm font-medium text-gray-500">
             חובות פתוחים
           </h3>
           <CreditCard className="h-4 w-4 text-gray-500" aria-hidden="true" />
         </div>
         <div className="pt-2">
-          <div className="text-2xl font-bold text-[#a24ec1]">
+          <div aria-labelledby="stat-debt" className="text-2xl font-bold text-[#a24ec1]">
             ₪{outstandingDebt.toLocaleString()}
           </div>
           <p className="text-xs text-gray-500 mt-1">
@@ -69,13 +69,13 @@ export default function FinancialStats({
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <h3 className="tracking-tight text-sm font-medium text-gray-500">
+          <h3 id="stat-active-retainers" className="tracking-tight text-sm font-medium text-gray-500">
             ריטיינרים פעילים
           </h3>
           <Activity className="h-4 w-4 text-gray-500" aria-hidden="true" />
         </div>
         <div className="pt-2">
-          <div className="text-2xl font-bold text-gray-900">
+          <div aria-labelledby="stat-active-retainers" className="text-2xl font-bold text-gray-900">
             {activeRetainers}
           </div>
           <p className="text-xs text-gray-500 mt-1">
@@ -86,13 +86,13 @@ export default function FinancialStats({
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <h3 className="tracking-tight text-sm font-medium text-gray-500">
+          <h3 id="stat-churn" className="tracking-tight text-sm font-medium text-gray-500">
             שיעור עזיבת ריטיינרים
           </h3>
           <TrendingUp className="h-4 w-4 text-gray-500" aria-hidden="true" />
         </div>
         <div className="pt-2">
-          <div className="text-2xl font-bold text-gray-900">{churnRate}%</div>
+          <div aria-labelledby="stat-churn" className="text-2xl font-bold text-gray-900">{churnRate}%</div>
           <p className="text-xs text-gray-500 mt-1">
             {cancelledRetainersCount} ריטיינרים עזבו
           </p>

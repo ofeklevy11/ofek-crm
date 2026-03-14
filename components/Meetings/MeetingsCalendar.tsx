@@ -40,6 +40,7 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
   const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
+  // Fetch all meetings for the month once, filter client-side
   const fetchMeetings = useCallback(async () => {
     setLoading(true);
     try {
@@ -47,32 +48,41 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
       const start = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
       const end = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 23, 59, 59);
 
-      const filters: any = {
+      const result = await getMeetings({
         startDate: start.toISOString(),
         endDate: end.toISOString(),
         limit: 500,
-      };
-      if (statusFilter !== "all") filters.status = statusFilter;
-      if (typeFilter !== "all") filters.meetingTypeId = Number(typeFilter);
-
-      const result = await getMeetings(filters);
+      });
       if (result.success && result.data) {
-        setMeetings(result.data.meetings);
+        // Stabilize reference — only replace if meeting IDs changed
+        setMeetings(prev => {
+          const newMeetings = result.data.meetings;
+          if (prev.length === newMeetings.length &&
+              prev.every((m: any, i: number) => m.id === newMeetings[i]?.id)) {
+            return prev;
+          }
+          return newMeetings;
+        });
       }
     } catch {
       toast.error("שגיאה בטעינת פגישות");
     }
     setLoading(false);
-  }, [currentMonth, statusFilter, typeFilter]);
+  }, [currentMonth]); // Only re-fetch on month change, filter client-side
 
   useEffect(() => {
     fetchMeetings();
   }, [fetchMeetings]);
 
-  // Group meetings by date key
+  // Group meetings by date key with client-side filtering
   const meetingsByDate = useMemo(() => {
     const map = new Map<string, any[]>();
     for (const m of meetings) {
+      // Client-side filter: status
+      if (statusFilter !== "all" && m.status !== statusFilter) continue;
+      // Client-side filter: type
+      if (typeFilter !== "all" && String(m.meetingType?.id ?? m.meetingTypeId) !== typeFilter) continue;
+
       const d = new Date(m.startTime);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       if (!map.has(key)) map.set(key, []);
@@ -83,7 +93,7 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
       arr.sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
     }
     return map;
-  }, [meetings]);
+  }, [meetings, statusFilter, typeFilter]);
 
   // Dates that have meetings (for modifiers)
   const datesWithMeetings = useMemo(() => {
@@ -217,7 +227,7 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
     <div className="space-y-4">
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
-        <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setSelectedDate(undefined); }}>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-36 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white" aria-label="סינון לפי סטטוס">
             <SelectValue placeholder="סטטוס" />
           </SelectTrigger>
@@ -231,7 +241,7 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
           </SelectContent>
         </Select>
 
-        <Select value={typeFilter} onValueChange={v => { setTypeFilter(v); setSelectedDate(undefined); }}>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
           <SelectTrigger className="w-44 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white" aria-label="סינון לפי סוג פגישה">
             <SelectValue placeholder="סוג פגישה" />
           </SelectTrigger>

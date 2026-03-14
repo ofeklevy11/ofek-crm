@@ -994,7 +994,7 @@ export default function DashboardClient({
                   : "hover:shadow-md"
               }`}
             >
-              <LayoutGrid size={16} />
+              <LayoutGrid size={16} aria-hidden="true" />
               הוסף מיני דאשבורד (תצוגות טבלה)
             </button>
             <button
@@ -1006,7 +1006,7 @@ export default function DashboardClient({
                   : "hover:shadow-md"
               }`}
             >
-              <Target size={16} />
+              <Target size={16} aria-hidden="true" />
               הוסף טבלת יעדים
             </button>
             <button
@@ -1018,7 +1018,7 @@ export default function DashboardClient({
                   : "hover:shadow-md"
               }`}
             >
-              <BarChart3 size={16} />
+              <BarChart3 size={16} aria-hidden="true" />
               הוסף טבלת אנליטיקות
             </button>
             {hasUserFlag(user, "canViewCalendar") && (
@@ -1031,7 +1031,7 @@ export default function DashboardClient({
                     : "hover:shadow-md"
                 }`}
               >
-                <Calendar size={16} />
+                <Calendar size={16} aria-hidden="true" />
                 מיני יומן
               </button>
             )}
@@ -1045,7 +1045,7 @@ export default function DashboardClient({
                     : "hover:shadow-md"
                 }`}
               >
-                <CheckSquare size={16} />
+                <CheckSquare size={16} aria-hidden="true" />
                 מיני משימות
               </button>
             )}
@@ -1059,7 +1059,7 @@ export default function DashboardClient({
                     : "hover:shadow-md"
                 }`}
               >
-                <FileText size={16} />
+                <FileText size={16} aria-hidden="true" />
                 מיני הצעות מחיר
               </button>
             )}
@@ -1073,7 +1073,7 @@ export default function DashboardClient({
                     : "hover:shadow-md"
                 }`}
               >
-                <Calendar size={16} />
+                <Calendar size={16} aria-hidden="true" />
                 מיני פגישות
               </button>
             )}
@@ -1086,7 +1086,7 @@ export default function DashboardClient({
                   : "hover:bg-blue-700"
               }`}
             >
-              <Plus size={16} />
+              <Plus size={16} aria-hidden="true" />
               הוסף וידג׳ט
             </button>
           </div>
@@ -1337,9 +1337,9 @@ export default function DashboardClient({
                     </div>
                   </div>
 
-                  <h3 className="text-3xl font-bold text-gray-900 mb-4">
+                  <h2 className="text-3xl font-bold text-gray-900 mb-4">
                     {!canAddWidget ? "אין גישה לעריכה" : "הדאשבורד שלך ריק"}
-                  </h3>
+                  </h2>
 
                   <p className="text-gray-500 text-lg mb-10 leading-relaxed">
                     {!canAddWidget
@@ -1983,7 +1983,7 @@ export default function DashboardClient({
                     בחר אנליטיקות להצגה ({analyticsTableSelectedIds.length})
                   </label>
                 </div>
-                <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col max-h-[400px]">
+                <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col max-h-[400px]" role="group" aria-label="בחר אנליטיקות להצגה">
                   <div className="overflow-y-auto p-2">
                     {(() => {
                       const availableAnalytics = initialAnalytics.filter(

@@ -70,8 +70,9 @@ export default function ConversationHeader({
           <button
             onClick={onBack}
             className="p-1 hover:bg-gray-100 rounded md:hidden"
+            aria-label="חזור לרשימת השיחות"
           >
-            <ChevronRight className="w-5 h-5" />
+            <ChevronRight className="w-5 h-5" aria-hidden="true" />
           </button>
         )}
         <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
@@ -101,13 +102,17 @@ export default function ConversationHeader({
             onClick={() => setShowAssignMenu(!showAssignMenu)}
             className="p-2 hover:bg-gray-100 rounded-lg text-gray-500"
             title="שייך סוכן"
+            aria-label="שייך סוכן"
+            aria-expanded={showAssignMenu}
+            aria-haspopup="true"
           >
-            <UserPlus className="w-4 h-4" />
+            <UserPlus className="w-4 h-4" aria-hidden="true" />
           </button>
 
           {showAssignMenu && (
-            <div className="absolute left-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border z-50 max-h-60 overflow-y-auto">
+            <div role="menu" aria-label="שייך סוכן" className="absolute left-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border z-50 max-h-60 overflow-y-auto">
               <button
+                role="menuitem"
                 onClick={() => handleAssign(null)}
                 className="w-full text-right px-3 py-2 text-sm hover:bg-gray-50 text-gray-500"
               >
@@ -116,7 +121,9 @@ export default function ConversationHeader({
               {companyUsers.map((u) => (
                 <button
                   key={u.id}
+                  role="menuitem"
                   onClick={() => handleAssign(u.id)}
+                  aria-current={assignedUser?.id === u.id ? "true" : undefined}
                   className={`w-full text-right px-3 py-2 text-sm hover:bg-gray-50 ${
                     assignedUser?.id === u.id
                       ? "bg-green-50 text-green-700"
@@ -136,16 +143,18 @@ export default function ConversationHeader({
             onClick={handleClose}
             className="p-2 hover:bg-gray-100 rounded-lg text-gray-500"
             title="סגור שיחה"
+            aria-label="סגור שיחה"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         ) : (
           <button
             onClick={handleReopen}
             className="p-2 hover:bg-gray-100 rounded-lg text-gray-500"
             title="פתח שיחה מחדש"
+            aria-label="פתח שיחה מחדש"
           >
-            <RotateCcw className="w-4 h-4" />
+            <RotateCcw className="w-4 h-4" aria-hidden="true" />
           </button>
         )}
       </div>

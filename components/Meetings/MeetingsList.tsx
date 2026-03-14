@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useDeferredValue } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -61,6 +61,7 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearch = useDeferredValue(searchQuery);
   const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
@@ -135,10 +136,10 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
 
   const totalPages = Math.ceil(total / limit);
 
-  const filteredMeetings = searchQuery.trim()
+  const filteredMeetings = deferredSearch.trim()
     ? meetings.filter(m =>
-        m.participantName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        m.participantEmail?.toLowerCase().includes(searchQuery.toLowerCase())
+        m.participantName?.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        m.participantEmail?.toLowerCase().includes(deferredSearch.toLowerCase())
       )
     : meetings;
 

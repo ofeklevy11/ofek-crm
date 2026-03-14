@@ -24,7 +24,7 @@ export default function PendingPaymentsTable({
     <>
       <div className="overflow-x-auto flex-1">
         <table className="min-w-full divide-y divide-gray-200">
-          <caption className="sr-only">תשלומים בהמתנה</caption>
+          <caption className="sr-only">תשלומים ממתינים</caption>
           <thead className="bg-gray-50">
             <tr>
               <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">

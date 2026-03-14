@@ -197,6 +197,15 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
             onDragLeave={onDragLeave}
             onDrop={onDrop}
             onClick={() => fileInputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                fileInputRef.current?.click();
+              }
+            }}
+            aria-label="אזור גרירה - לחץ או הקש Enter לבחירת קבצים"
           >
             <input
               type="file"
@@ -204,6 +213,7 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
               className="hidden"
               multiple
               onChange={handleFileSelect}
+              aria-label="בחר קבצים להעלאה"
             />
 
             <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4">
@@ -256,6 +266,7 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
                             e.stopPropagation();
                             removeFile(idx);
                           }}
+                          aria-label={`הסר קובץ ${file.name}`}
                         >
                           <X className="w-4 h-4" />
                         </Button>
@@ -263,10 +274,11 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
                     </div>
                     {/* Custom Display Name Input */}
                     <div className="flex items-center gap-2 bg-muted/50 rounded-md p-2">
-                      <span className="text-xs text-muted-foreground shrink-0">
+                      <label htmlFor={`display-name-${idx}`} className="text-xs text-muted-foreground shrink-0">
                         שם לתצוגה:
-                      </span>
+                      </label>
                       <input
+                        id={`display-name-${idx}`}
                         type="text"
                         placeholder="השאר ריק לשימוש בשם המקורי..."
                         value={fileDisplayNames[idx] || ""}
@@ -288,14 +300,14 @@ export function UploadFileModal({ currentFolderId }: UploadFileModalProps) {
 
           {/* Progress Bar */}
           {isUploading && (
-            <div className="space-y-2">
+            <div className="space-y-2" role="status" aria-live="polite">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-[#4f95ff]">
                   {uploadProgress >= 100 ? "מעבד..." : "מעלה..."}
                 </span>
                 <span>{Math.round(uploadProgress)}%</span>
               </div>
-              <Progress value={uploadProgress} className="h-2" />
+              <Progress value={uploadProgress} className="h-2" aria-label={`התקדמות העלאה: ${Math.round(uploadProgress)}%`} />
               {isStuck && (
                 <div className="pt-2 flex flex-col gap-2 items-center text-center animate-in fade-in slide-in-from-top-2 duration-300">
                   <p className="text-xs text-amber-600">ממתין לשרת...</p>

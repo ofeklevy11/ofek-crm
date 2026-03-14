@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -200,6 +201,7 @@ export default function TableSettingsModal({
           <DialogTitle className="text-xl font-bold">
             הגדרות טבלה
           </DialogTitle>
+          <DialogDescription className="sr-only">נהל טאבים, עמודות והגדרות תצוגה של הטבלה</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-8 py-4">
@@ -208,7 +210,7 @@ export default function TableSettingsModal({
             <div className="border border-primary/20 bg-primary/5 rounded-xl p-4">
               <div className="flex items-center gap-3">
                 <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <LayoutGrid className="h-4 w-4 text-primary" />
+                  <LayoutGrid className="h-4 w-4 text-primary" aria-hidden="true" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold">טאבים</h3>
@@ -243,12 +245,13 @@ export default function TableSettingsModal({
                     key={tab.id}
                     className="flex items-center gap-2 p-3 bg-muted/20 rounded-lg border"
                   >
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
                     <Input
                       value={tab.label}
                       onChange={(e) => handleRenameTab(tab.id, e.target.value)}
                       className="h-8 flex-1"
                       placeholder="שם הטאב"
+                      aria-label={`שם טאב ${tab.label}`}
                     />
                     <Badge variant="secondary" className="text-xs shrink-0">
                       {schema.filter((f) => fieldTabs[f.name] === tab.id).length} שדות
@@ -261,8 +264,9 @@ export default function TableSettingsModal({
                         className="h-7 w-7"
                         onClick={() => handleMoveTab(index, "up")}
                         disabled={index === 0}
+                        aria-label={`הזז טאב ${tab.label} למעלה`}
                       >
-                        <ArrowUp className="h-3 w-3" />
+                        <ArrowUp className="h-3 w-3" aria-hidden="true" />
                       </Button>
                       <Button
                         type="button"
@@ -271,8 +275,9 @@ export default function TableSettingsModal({
                         className="h-7 w-7"
                         onClick={() => handleMoveTab(index, "down")}
                         disabled={index === tabs.length - 1}
+                        aria-label={`הזז טאב ${tab.label} למטה`}
                       >
-                        <ArrowDown className="h-3 w-3" />
+                        <ArrowDown className="h-3 w-3" aria-hidden="true" />
                       </Button>
                       <Button
                         type="button"
@@ -280,8 +285,9 @@ export default function TableSettingsModal({
                         size="icon"
                         className="h-7 w-7 text-destructive hover:bg-destructive/10"
                         onClick={() => handleRemoveTab(tab.id)}
+                        aria-label={`מחק טאב ${tab.label}`}
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-3 w-3" aria-hidden="true" />
                       </Button>
                     </div>
                   </div>
@@ -295,7 +301,7 @@ export default function TableSettingsModal({
                   disabled={tabs.length >= MAX_TABS}
                   className="gap-2"
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-4 w-4" aria-hidden="true" />
                   הוסף טאב
                 </Button>
 
@@ -314,6 +320,7 @@ export default function TableSettingsModal({
                           </span>
                           <select
                             value={fieldTabs[field.name] || ""}
+                            aria-label={`טאב עבור שדה ${field.label}`}
                             onChange={(e) => {
                               const newFieldTabs = { ...fieldTabs };
                               if (e.target.value) {
@@ -362,6 +369,7 @@ export default function TableSettingsModal({
                     <Checkbox
                       checked={true}
                       onCheckedChange={() => handleToggleVisible(fieldName)}
+                      aria-label={`הסתר עמודה ${field.label}`}
                     />
                     <span className="flex-1 font-medium">{field.label}</span>
                     <div className="flex gap-1">
@@ -372,8 +380,9 @@ export default function TableSettingsModal({
                         className="h-6 w-6"
                         onClick={() => handleMoveColumn(idx, "up")}
                         disabled={idx === 0}
+                        aria-label={`הזז עמודה ${field.label} למעלה`}
                       >
-                        <ArrowUp className="h-3 w-3" />
+                        <ArrowUp className="h-3 w-3" aria-hidden="true" />
                       </Button>
                       <Button
                         type="button"
@@ -382,8 +391,9 @@ export default function TableSettingsModal({
                         className="h-6 w-6"
                         onClick={() => handleMoveColumn(idx, "down")}
                         disabled={idx === orderedVisibleColumns.length - 1}
+                        aria-label={`הזז עמודה ${field.label} למטה`}
                       >
-                        <ArrowDown className="h-3 w-3" />
+                        <ArrowDown className="h-3 w-3" aria-hidden="true" />
                       </Button>
                     </div>
                   </div>
@@ -408,6 +418,7 @@ export default function TableSettingsModal({
                         checked={false}
                         onCheckedChange={() => handleToggleVisible(field.name)}
                         disabled={visibleColumns.length >= MAX_VISIBLE_COLUMNS}
+                        aria-label={`הצג עמודה ${field.label}`}
                       />
                       <span className="flex-1 text-muted-foreground">
                         {field.label}
@@ -429,12 +440,12 @@ export default function TableSettingsModal({
           <Button onClick={handleSave} disabled={saving} className="gap-2">
             {saving ? (
               <>
-                <RotateCw className="h-4 w-4 animate-spin" />
+                <RotateCw className="h-4 w-4 animate-spin" aria-hidden="true" />
                 שומר...
               </>
             ) : (
               <>
-                <Save className="h-4 w-4" />
+                <Save className="h-4 w-4" aria-hidden="true" />
                 שמור הגדרות
               </>
             )}

@@ -22,6 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -178,17 +179,18 @@ export function FolderCard({
           >
             <div className="flex items-start justify-between">
               <div className="p-2 rounded-lg bg-blue-100 text-[#4f95ff]">
-                <FolderIcon className="w-6 h-6" fill="currentColor" />
+                <FolderIcon className="w-6 h-6" fill="currentColor" aria-hidden="true" />
               </div>
               {!isDrive && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded-md transition-opacity"
+                      className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 p-1 hover:bg-muted rounded-md transition-opacity"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                       }}
+                      aria-label={`תפריט פעולות - ${folder.name}`}
                     >
                       <MoreVertical className="w-4 h-4 text-muted-foreground" />
                     </button>
@@ -239,6 +241,7 @@ export function FolderCard({
             <DialogContent className="sm:max-w-[400px] text-right">
               <DialogHeader>
                 <DialogTitle>שינוי שם תיקייה</DialogTitle>
+                <DialogDescription className="sr-only">הזן שם חדש לתיקייה</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -300,7 +303,7 @@ export function FolderCard({
           >
             <div className="w-4" />
             <div className="p-2 rounded-lg bg-blue-100 text-[#4f95ff] shrink-0">
-              <FolderIcon className="w-6 h-6" fill="currentColor" />
+              <FolderIcon className="w-6 h-6" fill="currentColor" aria-hidden="true" />
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="font-medium truncate" title={folder.name}>
@@ -327,11 +330,12 @@ export function FolderCard({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded-md transition-opacity shrink-0"
+                    className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 p-1 hover:bg-muted rounded-md transition-opacity shrink-0"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                     }}
+                    aria-label={`תפריט פעולות - ${folder.name}`}
                   >
                     <MoreVertical className="w-4 h-4 text-muted-foreground" />
                   </button>
@@ -370,6 +374,7 @@ export function FolderCard({
             <DialogContent className="sm:max-w-[400px] text-right">
               <DialogHeader>
                 <DialogTitle>שינוי שם תיקייה</DialogTitle>
+                <DialogDescription className="sr-only">הזן שם חדש לתיקייה</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -428,36 +433,39 @@ export function FolderCard({
               !isDrive && isDragOver && "bg-primary/10",
             )}
             dir="rtl"
+            role="row"
           >
-            <div className="col-span-6 flex items-center gap-3 min-w-0">
+            <div className="col-span-6 flex items-center gap-3 min-w-0" role="cell">
               <div className="w-4" />
               <FolderIcon
                 className="w-4 h-4 text-[#4f95ff] shrink-0"
                 fill="currentColor"
+                aria-hidden="true"
               />
               <span className="truncate font-medium" title={folder.name}>
                 {folder.name}
               </span>
             </div>
 
-            <div className="col-span-2 text-sm text-muted-foreground text-left">
+            <div className="col-span-2 text-sm text-muted-foreground text-left" role="cell">
               {isDrive ? "-" : formatSize(folder.totalSize)}
             </div>
 
-            <div className="col-span-3 text-sm text-muted-foreground text-left">
+            <div className="col-span-3 text-sm text-muted-foreground text-left" role="cell">
               {formatDate(folder.updatedAt)}
             </div>
 
-            <div className="col-span-1 flex justify-end">
+            <div className="col-span-1 flex justify-end" role="cell">
               {!isDrive && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded-md transition-opacity"
+                      className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 p-1 hover:bg-muted rounded-md transition-opacity"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                       }}
+                      aria-label={`תפריט פעולות - ${folder.name}`}
                     >
                       <MoreVertical className="w-4 h-4 text-muted-foreground" />
                     </button>
@@ -500,6 +508,7 @@ export function FolderCard({
             <DialogContent className="sm:max-w-[400px] text-right">
               <DialogHeader>
                 <DialogTitle>שינוי שם תיקייה</DialogTitle>
+                <DialogDescription className="sr-only">הזן שם חדש לתיקייה</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">

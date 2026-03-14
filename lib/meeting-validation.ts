@@ -169,7 +169,38 @@ export function validateMeetingTypeInput(
 
   // Availability override
   if (input.availabilityOverride !== undefined) {
-    data.availabilityOverride = input.availabilityOverride;
+    if (input.availabilityOverride === null) {
+      data.availabilityOverride = null;
+    } else {
+      if (typeof input.availabilityOverride !== "object" || Array.isArray(input.availabilityOverride)) {
+        return { valid: false, error: "לוח זמינות חייב להיות אובייקט" };
+      }
+      const override = input.availabilityOverride as Record<string, unknown>;
+      const validDays = new Set(["0", "1", "2", "3", "4", "5", "6"]);
+      const timeRe = /^([01]\d|2[0-3]):[0-5]\d$/;
+      for (const [key, val] of Object.entries(override)) {
+        if (!validDays.has(key)) {
+          return { valid: false, error: `מפתח יום לא תקין: ${key}` };
+        }
+        if (!Array.isArray(val)) {
+          return { valid: false, error: `ערך יום ${key} חייב להיות מערך` };
+        }
+        if (val.length > 10) {
+          return { valid: false, error: `מקסימום 10 חלונות ביום ${key}` };
+        }
+        for (const slot of val) {
+          if (typeof slot !== "object" || slot === null) {
+            return { valid: false, error: "חלון זמן לא תקין" };
+          }
+          const s = slot as Record<string, unknown>;
+          if (typeof s.start !== "string" || !timeRe.test(s.start) ||
+              typeof s.end !== "string" || !timeRe.test(s.end)) {
+            return { valid: false, error: "פורמט שעה לא תקין (נדרש HH:MM)" };
+          }
+        }
+      }
+      data.availabilityOverride = input.availabilityOverride;
+    }
   }
 
   // isActive
@@ -246,6 +277,10 @@ export function validateBookingInput(
   const startDate = new Date(input.startTime);
   if (isNaN(startDate.getTime())) {
     return { valid: false, error: "שעת התחלה לא תקינה" };
+  }
+  // Reject past dates — cannot book meetings in the past
+  if (startDate.getTime() < Date.now()) {
+    return { valid: false, error: "לא ניתן לקבוע פגישה בעבר" };
   }
 
   return {

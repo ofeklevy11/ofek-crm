@@ -376,12 +376,12 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
 
         {/* Empty State */}
         {filteredQuotes.length === 0 && (
-          <div className="text-center py-16 px-6">
+          <div className="text-center py-16 px-6" role="status">
             <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
               {showTrashed ? (
-                <Archive className="w-8 h-8 text-gray-400" />
+                <Archive className="w-8 h-8 text-gray-400" aria-hidden="true" />
               ) : (
-                <FileText className="w-8 h-8 text-gray-400" />
+                <FileText className="w-8 h-8 text-gray-400" aria-hidden="true" />
               )}
             </div>
             <h2 className="text-lg font-medium text-gray-900 mb-1">

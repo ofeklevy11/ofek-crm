@@ -50,7 +50,8 @@ export function TextPreview({ fileId }: TextPreviewProps) {
 
   if (loading) {
     return (
-      <div className="space-y-2 p-4">
+      <div className="space-y-2 p-4" role="status" aria-label="טוען תצוגה מקדימה...">
+        <span className="sr-only">טוען תצוגה מקדימה...</span>
         <Skeleton className="h-4 w-full" />
         <Skeleton className="h-4 w-3/4" />
         <Skeleton className="h-4 w-5/6" />

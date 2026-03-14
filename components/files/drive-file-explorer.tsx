@@ -307,7 +307,8 @@ export function DriveFileExplorer({
 
   if (isLoading) {
     return (
-      <div className="space-y-6" dir="rtl">
+      <div className="space-y-6" dir="rtl" role="status" aria-label="טוען קבצים...">
+        <span className="sr-only">טוען קבצים...</span>
         <div className="h-10 w-full bg-muted rounded-lg animate-pulse" />
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {[...Array(5)].map((_, i) => (
@@ -351,7 +352,7 @@ export function DriveFileExplorer({
 
       {/* Breadcrumbs and Controls Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-2 border-b">
-        <nav className="flex items-center gap-1">
+        <nav className="flex items-center gap-1" aria-label="ניווט נתיב">
           <button
             onClick={navigateToRoot}
             className={cn(
@@ -367,7 +368,7 @@ export function DriveFileExplorer({
 
           {breadcrumbs.map((crumb, index) => (
             <div key={crumb.id} className="flex items-center">
-              <ChevronLeft className="w-4 h-4 text-muted-foreground/50" />
+              <ChevronLeft className="w-4 h-4 text-muted-foreground/50" aria-hidden="true" />
               <button
                 onClick={() => navigateToFolder(crumb.id)}
                 className={cn(
@@ -403,6 +404,7 @@ export function DriveFileExplorer({
             className="h-8"
             onClick={() => setShowSettings((v) => !v)}
             title="הגדרות Google Drive"
+            aria-label="הגדרות Google Drive"
           >
             <Settings className="w-4 h-4" />
           </Button>
@@ -422,6 +424,8 @@ export function DriveFileExplorer({
                 )}
                 onClick={() => setViewMode(mode)}
                 title={label}
+                aria-label={label}
+                aria-pressed={viewMode === mode}
               >
                 {icon}
               </Button>
@@ -431,7 +435,7 @@ export function DriveFileExplorer({
       </div>
 
       {/* File Type Filter Tabs */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="סינון לפי סוג קובץ">
         {FILE_FILTERS.map((filter) => {
           const count = fileCounts[filter.id] || 0;
           const isActive = fileFilter === filter.id;
@@ -450,6 +454,9 @@ export function DriveFileExplorer({
                 !isActive && filter.color,
               )}
               onClick={() => setFileFilter(filter.id)}
+              role="tab"
+              id={`tab-${filter.id}`}
+              aria-selected={isActive}
             >
               {filter.icon}
               <span>{filter.label}</span>
@@ -469,7 +476,8 @@ export function DriveFileExplorer({
       </div>
 
       {/* Content */}
-      <div className="min-h-[200px]">
+      <h2 className="sr-only">תוכן Google Drive</h2>
+      <div className="min-h-[200px]" role="tabpanel" aria-labelledby={`tab-${fileFilter}`} aria-live="polite">
         {filteredFolders.length === 0 && filteredFiles.length === 0 ? (
           <div className="text-center py-20">
             <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -542,14 +550,16 @@ export function DriveFileExplorer({
             )}
 
             {viewMode === "compact" && (
-              <div className="border rounded-lg overflow-hidden">
-                <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-muted/50 text-sm font-medium text-muted-foreground border-b text-right">
-                  <div className="col-span-6">שם</div>
-                  <div className="col-span-2">גודל</div>
-                  <div className="col-span-3">תאריך שינוי</div>
-                  <div className="col-span-1"></div>
+              <div className="border rounded-lg overflow-hidden" role="table" aria-label="רשימת קבצים">
+                <div role="rowgroup">
+                  <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-muted/50 text-sm font-medium text-muted-foreground border-b text-right" role="row">
+                    <div className="col-span-6" role="columnheader">שם</div>
+                    <div className="col-span-2" role="columnheader">גודל</div>
+                    <div className="col-span-3" role="columnheader">תאריך שינוי</div>
+                    <div className="col-span-1" role="columnheader"><span className="sr-only">פעולות</span></div>
+                  </div>
                 </div>
-                <div className="divide-y">
+                <div className="divide-y" role="rowgroup">
                   {filteredFolders.map((folder) => (
                     <FolderCard
                       key={folder.id}

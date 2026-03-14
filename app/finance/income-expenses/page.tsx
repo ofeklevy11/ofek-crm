@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+import type { Metadata } from "next";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
 import FinanceLedger from "@/components/finance/FinanceLedger";
@@ -19,6 +20,8 @@ import { getSyncRules } from "@/app/actions/finance-sync";
 import SyncRulesDialog from "@/components/finance/SyncRulesDialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info } from "lucide-react";
+
+export const metadata: Metadata = { title: "הכנסות והוצאות" };
 
 export default async function IncomeExpensesPage() {
   const user = await getCurrentUser();
@@ -121,13 +124,13 @@ export default async function IncomeExpensesPage() {
         <Card className="p-6 border-l-4 border-l-[#4f95ff] shadow-sm hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-sm font-medium text-gray-500">סה״כ הכנסות</p>
-              <h3 className="text-3xl font-bold text-gray-900 mt-2">
+              <p id="stat-income" className="text-sm font-medium text-gray-500">סה״כ הכנסות</p>
+              <h3 aria-labelledby="stat-income" className="text-3xl font-bold text-gray-900 mt-2">
                 ₪{stats.income.toLocaleString()}
               </h3>
             </div>
             <div className="p-3 bg-[#4f95ff]/10 rounded-lg">
-              <ArrowUpCircle className="w-6 h-6 text-[#4f95ff]" />
+              <ArrowUpCircle className="w-6 h-6 text-[#4f95ff]" aria-hidden="true" />
             </div>
           </div>
         </Card>
@@ -135,13 +138,13 @@ export default async function IncomeExpensesPage() {
         <Card className="p-6 border-l-4 border-l-[#a24ec1] shadow-sm hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-sm font-medium text-gray-500">סה״כ הוצאות</p>
-              <h3 className="text-3xl font-bold text-gray-900 mt-2">
+              <p id="stat-expense" className="text-sm font-medium text-gray-500">סה״כ הוצאות</p>
+              <h3 aria-labelledby="stat-expense" className="text-3xl font-bold text-gray-900 mt-2">
                 ₪{stats.expense.toLocaleString()}
               </h3>
             </div>
             <div className="p-3 bg-[#a24ec1]/10 rounded-lg">
-              <ArrowDownCircle className="w-6 h-6 text-[#a24ec1]" />
+              <ArrowDownCircle className="w-6 h-6 text-[#a24ec1]" aria-hidden="true" />
             </div>
           </div>
         </Card>
@@ -149,8 +152,9 @@ export default async function IncomeExpensesPage() {
         <Card className="p-6 border-l-4 border-l-gray-500 shadow-sm hover:shadow-md transition-shadow bg-gray-50">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-sm font-medium text-gray-500">רווח נקי</p>
+              <p id="stat-profit" className="text-sm font-medium text-gray-500">רווח נקי</p>
               <h3
+                aria-labelledby="stat-profit"
                 className={`text-3xl font-bold mt-2 ${
                   stats.profit >= 0 ? "text-[#4f95ff]" : "text-[#a24ec1]"
                 }`}
@@ -159,7 +163,7 @@ export default async function IncomeExpensesPage() {
               </h3>
             </div>
             <div className="p-3 bg-gray-200 rounded-lg">
-              <Wallet className="w-6 h-6 text-gray-600" />
+              <Wallet className="w-6 h-6 text-gray-600" aria-hidden="true" />
             </div>
           </div>
         </Card>

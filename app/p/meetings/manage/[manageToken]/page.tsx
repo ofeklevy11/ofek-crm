@@ -252,12 +252,12 @@ export default function ManageMeetingPage({
       >
         <div className="w-full max-w-[520px] bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] border border-gray-100/80 p-8 text-center">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center">
-            <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">שגיאה</h2>
-          <p className="text-gray-500">{error}</p>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">שגיאה</h1>
+          <p role="alert" className="text-gray-500">{error}</p>
         </div>
       </div>
     );
@@ -280,13 +280,13 @@ export default function ManageMeetingPage({
       >
         <div className="w-full max-w-[520px] bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] border border-gray-100/80 p-8 text-center">
           <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-red-50 flex items-center justify-center">
-            <svg className="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
             הפגישה בוטלה
-          </h2>
+          </h1>
           <p className="text-gray-500 text-sm">הפגישה בוטלה בהצלחה.</p>
           <div className="mt-6 bg-[#F8FAFC] rounded-xl p-4 space-y-2 text-sm text-gray-700">
             <p>
@@ -318,13 +318,13 @@ export default function ManageMeetingPage({
       >
         <div className="w-full max-w-[520px] bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] border border-gray-100/80 p-8 text-center">
           <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-50 flex items-center justify-center">
-            <svg className="w-10 h-10 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-10 h-10 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
             המועד עודכן בהצלחה!
-          </h2>
+          </h1>
           <div className="mt-6 bg-[#F8FAFC] rounded-xl p-4 space-y-2 text-sm text-gray-700">
             <p>
               <span className="font-medium">סוג פגישה:</span>{" "}
@@ -508,7 +508,7 @@ export default function ManageMeetingPage({
 
           {/* ── Error message ── */}
           {error && (
-            <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">
+            <p role="alert" className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
@@ -540,7 +540,9 @@ export default function ManageMeetingPage({
               <p className="text-xs text-gray-500">
                 האם ברצונכם לבטל את הפגישה? ניתן לציין סיבה.
               </p>
+              <label htmlFor="cancel-reason-manage" className="sr-only">סיבת הביטול</label>
               <textarea
+                id="cancel-reason-manage"
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
                 rows={3}

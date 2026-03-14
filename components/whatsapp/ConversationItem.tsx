@@ -28,7 +28,10 @@ export default function ConversationItem({
 
   return (
     <button
+      role="listitem"
       onClick={onClick}
+      aria-current={isSelected ? "true" : undefined}
+      aria-label={`${contactName || contactPhone}${unreadCount > 0 ? `, ${unreadCount} הודעות שלא נקראו` : ""}`}
       className={`w-full text-right px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${
         isSelected ? "bg-green-50 border-r-2 border-r-green-500" : ""
       }`}
@@ -67,7 +70,7 @@ export default function ConversationItem({
         <div className="flex flex-col items-end gap-1 shrink-0">
           <span className="text-[10px] text-gray-400">{time}</span>
           {unreadCount > 0 && (
-            <span className="min-w-[20px] h-5 flex items-center justify-center rounded-full bg-green-500 text-white text-[10px] font-bold px-1">
+            <span aria-hidden="true" className="min-w-[20px] h-5 flex items-center justify-center rounded-full bg-green-500 text-white text-[10px] font-bold px-1">
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}

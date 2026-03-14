@@ -50,6 +50,23 @@ export interface SlotsByDate {
 }
 
 /**
+ * O(n) merge of sorted intervals. Replaces the O(n²) splice-based approach.
+ */
+function mergeIntervals(sorted: { start: number; end: number }[]): { start: number; end: number }[] {
+  if (sorted.length <= 1) return sorted;
+  const merged = [sorted[0]];
+  for (let i = 1; i < sorted.length; i++) {
+    const last = merged[merged.length - 1];
+    if (sorted[i].start <= last.end) {
+      last.end = Math.max(last.end, sorted[i].end);
+    } else {
+      merged.push(sorted[i]);
+    }
+  }
+  return merged;
+}
+
+/**
  * Binary search to check if any interval in a sorted, non-overlapping array overlaps [start, end).
  * IMPORTANT: intervals must be sorted by start AND merged (no overlaps) before calling this.
  */
@@ -137,30 +154,30 @@ export function getAvailableSlots(params: {
   }
 
   busyIntervals.sort((a, b) => a.start - b.start);
-  // Merge overlapping busy intervals so binary search is correct
-  for (let i = 1; i < busyIntervals.length; i++) {
-    if (busyIntervals[i].start <= busyIntervals[i - 1].end) {
-      busyIntervals[i - 1].end = Math.max(busyIntervals[i - 1].end, busyIntervals[i].end);
-      busyIntervals.splice(i, 1);
-      i--;
-    }
-  }
+  // Merge overlapping busy intervals with O(n) algorithm
+  const mergedBusy = mergeIntervals(busyIntervals);
 
   // Build blocked intervals (sorted + merged for binary search)
-  const blockedIntervals: { start: number; end: number }[] = blocks.map(b => ({
+  const blockedRaw: { start: number; end: number }[] = blocks.map(b => ({
     start: b.startDate.getTime(),
     end: b.endDate.getTime(),
   }));
-  blockedIntervals.sort((a, b) => a.start - b.start);
-  for (let i = 1; i < blockedIntervals.length; i++) {
-    if (blockedIntervals[i].start <= blockedIntervals[i - 1].end) {
-      blockedIntervals[i - 1].end = Math.max(blockedIntervals[i - 1].end, blockedIntervals[i].end);
-      blockedIntervals.splice(i, 1);
-      i--;
-    }
-  }
+  blockedRaw.sort((a, b) => a.start - b.start);
+  const blockedIntervals = mergeIntervals(blockedRaw);
 
   const result: SlotsByDate = {};
+
+  // Cache timezone offset per day to avoid redundant Date object creation
+  const tzOffsetCache = new Map<string, number>();
+  function getCachedTzOffset(tz: string, day: Date): number {
+    const key = `${tz}:${day.toISOString().slice(0, 10)}`;
+    let cached = tzOffsetCache.get(key);
+    if (cached === undefined) {
+      cached = getTzOffsetMs(tz, day);
+      tzOffsetCache.set(key, cached);
+    }
+    return cached;
+  }
 
   // Iterate day by day
   const currentDay = new Date(effectiveStart);
@@ -168,7 +185,7 @@ export function getAvailableSlots(params: {
 
   while (currentDay <= effectiveEnd) {
     // Calculate timezone-aware day-of-week
-    const offsetMs = getTzOffsetMs(timezone, currentDay);
+    const offsetMs = getCachedTzOffset(timezone, currentDay);
     const localDay = new Date(currentDay.getTime() + offsetMs);
     const dayOfWeek = localDay.getUTCDay().toString();
     const windows = weeklySchedule[dayOfWeek];
@@ -187,11 +204,27 @@ export function getAvailableSlots(params: {
       continue;
     }
 
-    // Check if entire day is blocked
+    // Check if entire day is blocked (using binary search on merged intervals)
     const dayStart = currentDay.getTime();
     const dayEnd = dayStart + 24 * 60 * 60 * 1000;
-    // Check if a single block entirely covers the day (not just partial overlap)
-    const isDayBlocked = blockedIntervals.some(b => b.start <= dayStart && b.end >= dayEnd);
+    // A block that fully covers the day must overlap [dayStart, dayEnd) — use binary search
+    // then verify the found block entirely covers the day
+    let isDayBlocked = false;
+    {
+      let lo = 0, hi = blockedIntervals.length - 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (blockedIntervals[mid].end <= dayStart) lo = mid + 1;
+        else if (blockedIntervals[mid].start > dayStart) hi = mid - 1;
+        else {
+          // Found overlapping block — check if it fully covers the day
+          if (blockedIntervals[mid].start <= dayStart && blockedIntervals[mid].end >= dayEnd) {
+            isDayBlocked = true;
+          }
+          break;
+        }
+      }
+    }
     if (isDayBlocked) {
       currentDay.setDate(currentDay.getDate() + 1);
       continue;
@@ -221,7 +254,7 @@ export function getAvailableSlots(params: {
         // Check if slot is in the future (past earliestBookable)
         if (slotStart >= earliestBookable) {
           // Check no overlap with busy intervals (binary search)
-          const hasConflict = hasOverlap(busyIntervals, occupiedStart, occupiedEnd);
+          const hasConflict = hasOverlap(mergedBusy, occupiedStart, occupiedEnd);
 
           // Check no overlap with blocked intervals (binary search)
           const isBlocked = hasOverlap(blockedIntervals, slotStart.getTime(), slotEnd.getTime());
@@ -271,6 +304,7 @@ function formatDateStr(d: Date): string {
 
 /**
  * Check if a specific slot is available (for booking confirmation - race condition protection).
+ * Uses sort + merge + binary search for O(n log n) instead of O(n) linear scan.
  */
 export function isSlotAvailable(params: {
   slotStart: Date;
@@ -283,17 +317,18 @@ export function isSlotAvailable(params: {
   const occupiedStart = params.slotStart.getTime() - params.bufferBefore * 60_000;
   const occupiedEnd = params.slotEnd.getTime() + params.bufferAfter * 60_000;
 
+  // Build sorted busy intervals and merge (same approach as getAvailableSlots)
+  const busyIntervals: { start: number; end: number }[] = [];
+
   for (const m of params.existingMeetings) {
-    if (m.startTime.getTime() < occupiedEnd && m.endTime.getTime() > occupiedStart) {
-      return false;
-    }
+    busyIntervals.push({ start: m.startTime.getTime(), end: m.endTime.getTime() });
   }
-
   for (const e of params.existingEvents) {
-    if (e.startTime.getTime() < occupiedEnd && e.endTime.getTime() > occupiedStart) {
-      return false;
-    }
+    busyIntervals.push({ start: e.startTime.getTime(), end: e.endTime.getTime() });
   }
 
-  return true;
+  busyIntervals.sort((a, b) => a.start - b.start);
+  const merged = mergeIntervals(busyIntervals);
+
+  return !hasOverlap(merged, occupiedStart, occupiedEnd);
 }

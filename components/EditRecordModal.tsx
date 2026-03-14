@@ -533,6 +533,7 @@ export default function EditRecordModal({
                           className="fill-current h-4 w-4"
                           xmlns="http://www.w3.org/2000/svg"
                           viewBox="0 0 20 20"
+                          aria-hidden="true"
                         >
                           <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                         </svg>
@@ -564,6 +565,7 @@ export default function EditRecordModal({
                           className="fill-current h-4 w-4"
                           xmlns="http://www.w3.org/2000/svg"
                           viewBox="0 0 20 20"
+                          aria-hidden="true"
                         >
                           <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                         </svg>
@@ -830,13 +832,13 @@ export default function EditRecordModal({
                             }
                             className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors shadow-sm"
                           >
-                            <Phone className="w-3 h-3" />
+                            <Phone className="w-3 h-3" aria-hidden="true" />
                             חיוג ישיר
                           </button>
                           {/* Display who last made the call */}
                           {dialedByName && (
                             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 px-2 py-1.5 rounded border border-border">
-                              <Phone className="w-3 h-3 text-green-600" />
+                              <Phone className="w-3 h-3 text-green-600" aria-hidden="true" />
                               <span>
                                 <span className="font-medium">
                                   יצר קשר אחרון:{" "}
@@ -999,7 +1001,7 @@ export default function EditRecordModal({
 
           <div className="border-t border-border pt-4 mt-4 space-y-3">
             <h4 className="font-semibold text-sm flex items-center gap-2">
-              <Paperclip className="h-4 w-4" /> קבצים ולינקים
+              <Paperclip className="h-4 w-4" aria-hidden="true" /> קבצים ולינקים
             </h4>
 
             {/* Display Existing Attachments (Links) & Files */}
@@ -1059,7 +1061,7 @@ export default function EditRecordModal({
                             setEditLinkName("");
                           }}
                         >
-                          <X className="h-4 w-4 mr-1" /> ביטול
+                          <X className="h-4 w-4 mr-1" aria-hidden="true" /> ביטול
                         </Button>
                         <Button
                           type="button"
@@ -1067,7 +1069,7 @@ export default function EditRecordModal({
                           onClick={() => handleUpdateAttachment(att.id)}
                           disabled={!editLinkUrl.trim() || uploading}
                         >
-                          <Check className="h-4 w-4 mr-1" /> שמור
+                          <Check className="h-4 w-4 mr-1" aria-hidden="true" /> שמור
                         </Button>
                       </div>
                     </div>
@@ -1082,7 +1084,7 @@ export default function EditRecordModal({
                         title={att.displayName || att.filename}
                       >
                         {att.displayName || att.filename}{" "}
-                        <ExternalLink className="h-3 w-3" />
+                        <ExternalLink className="h-3 w-3" aria-hidden="true" />
                       </a>
                       <div className="flex items-center gap-2">
                         <span className="text-muted-foreground text-xs">
@@ -1100,7 +1102,7 @@ export default function EditRecordModal({
                             setEditLinkName(att.displayName || "");
                           }}
                         >
-                          <Pencil className="h-3 w-3" />
+                          <Pencil className="h-3 w-3" aria-hidden="true" />
                         </Button>
                         <Button
                           type="button"
@@ -1110,7 +1112,7 @@ export default function EditRecordModal({
                           className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
                           onClick={() => handleDeleteAttachment(att.id)}
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <Trash2 className="h-3 w-3" aria-hidden="true" />
                         </Button>
                       </div>
                     </div>
@@ -1159,7 +1161,7 @@ export default function EditRecordModal({
                           }}
                           disabled={uploading}
                         >
-                          <X className="h-3 w-3 mr-1" />
+                          <X className="h-3 w-3 mr-1" aria-hidden="true" />
                           ביטול
                         </Button>
                         <Button
@@ -1169,7 +1171,7 @@ export default function EditRecordModal({
                           onClick={() => handleUpdateFile(file.id)}
                           disabled={uploading}
                         >
-                          <Check className="h-3 w-3 mr-1" />
+                          <Check className="h-3 w-3 mr-1" aria-hidden="true" />
                           {uploading ? "שומר..." : "שמור"}
                         </Button>
                       </div>
@@ -1204,7 +1206,7 @@ export default function EditRecordModal({
                           }}
                           title="ערוך שם"
                         >
-                          <Pencil className="h-3 w-3" />
+                          <Pencil className="h-3 w-3" aria-hidden="true" />
                         </Button>
                         <Button
                           type="button"
@@ -1214,7 +1216,7 @@ export default function EditRecordModal({
                           className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
                           onClick={() => handleDeleteFile(file.id)}
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <Trash2 className="h-3 w-3" aria-hidden="true" />
                         </Button>
                       </div>
                     </div>
@@ -1237,6 +1239,7 @@ export default function EditRecordModal({
                   type="file"
                   id={`edit-file-upload-${record.id}`}
                   className="hidden"
+                  aria-label="העלה קובץ"
                   onChange={handleFileUpload}
                 />
                 <Button
@@ -1250,7 +1253,7 @@ export default function EditRecordModal({
                   }
                   disabled={uploading}
                 >
-                  <Plus className="h-4 w-4" /> העלה קובץ (עד 1MB)
+                  <Plus className="h-4 w-4" aria-hidden="true" /> העלה קובץ (עד 1MB)
                 </Button>
               </div>
 

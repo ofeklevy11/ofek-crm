@@ -152,9 +152,9 @@ export default function SlaConfigModal({
       >
         <DialogHeader className="bg-slate-50 p-6 border-b text-right relative">
           {/* Custom Close Button on Left */}
-          <DialogClose className="absolute left-4 top-4 opacity-70 transition-opacity hover:opacity-100 focus:outline-none">
+          <DialogClose className="absolute left-4 top-4 opacity-70 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400 rounded-sm">
             <X className="h-5 w-5 text-slate-500 hover:text-slate-800" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">סגור</span>
           </DialogClose>
 
           <div className="flex flex-row items-center gap-3 mb-2">
@@ -202,11 +202,12 @@ export default function SlaConfigModal({
 
                 <div className="flex-1 grid grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="text-xs font-medium text-slate-500 block text-right">
+                    <Label htmlFor={`response-${priority}`} className="text-xs font-medium text-slate-500 block text-right">
                       זמן תגובה (דקות)
                     </Label>
                     <div className="relative">
                       <Input
+                        id={`response-${priority}`}
                         type="number"
                         min={1}
                         className="text-right pl-4 pr-3 font-medium h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400/20"
@@ -232,11 +233,12 @@ export default function SlaConfigModal({
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-medium text-slate-500 block text-right">
+                    <Label htmlFor={`resolve-${priority}`} className="text-xs font-medium text-slate-500 block text-right">
                       זמן פתרון (דקות)
                     </Label>
                     <div className="relative">
                       <Input
+                        id={`resolve-${priority}`}
                         type="number"
                         min={1}
                         className="text-right pl-4 pr-3 font-medium h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400/20"

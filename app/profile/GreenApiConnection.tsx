@@ -115,8 +115,9 @@ export default function GreenApiConnection() {
 
   if (loading) {
     return (
-      <div className="flex justify-center p-12">
+      <div className="flex justify-center p-12" role="status">
         <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+        <span className="sr-only">טוען הגדרות חיבור...</span>
       </div>
     );
   }
@@ -162,7 +163,7 @@ export default function GreenApiConnection() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6" dir="rtl">
+    <main className="max-w-3xl mx-auto space-y-6" dir="rtl">
       <div className="flex items-center gap-2 mb-6">
         <Button variant="ghost" size="sm" onClick={() => router.back()}>
           <ArrowRight className="w-4 h-4 ml-2" />
@@ -202,13 +203,14 @@ export default function GreenApiConnection() {
           </Alert>
 
           {!connected ? (
-            <div className="space-y-6 max-w-lg mx-auto py-4">
+            <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-6 max-w-lg mx-auto py-4">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700 block">
+                  <label htmlFor="greenapi-instance-id" className="text-sm font-semibold text-slate-700 block">
                     מזהה אינסטנס (idInstance)
                   </label>
                   <Input
+                    id="greenapi-instance-id"
                     value={instanceId}
                     onChange={(e) => setInstanceId(e.target.value)}
                     placeholder="לדוגמה: 1101823921"
@@ -217,10 +219,11 @@ export default function GreenApiConnection() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700 block">
+                  <label htmlFor="greenapi-token" className="text-sm font-semibold text-slate-700 block">
                     טוקן אינסטנס (apiTokenInstance)
                   </label>
                   <Input
+                    id="greenapi-token"
                     value={token}
                     onChange={(e) => setToken(e.target.value)}
                     placeholder="הזדבק את הטוקן כאן..."
@@ -231,7 +234,7 @@ export default function GreenApiConnection() {
                 </div>
 
                 <Button
-                  onClick={handleSave}
+                  type="submit"
                   disabled={saving}
                   className="w-full bg-green-600 hover:bg-green-700 text-white h-11 text-base shadow-sm mt-4"
                 >
@@ -247,7 +250,7 @@ export default function GreenApiConnection() {
                   פרטים אלו זמינים באזור האישי באתר Green API
                 </p>
               </div>
-            </div>
+            </form>
           ) : (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-xl border border-slate-200">
@@ -313,6 +316,6 @@ export default function GreenApiConnection() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }

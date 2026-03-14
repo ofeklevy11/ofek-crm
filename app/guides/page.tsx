@@ -1,12 +1,14 @@
+import type { Metadata } from "next";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { ArrowRight, Workflow, CheckSquare, Calendar, Info, Puzzle, ListTodo, CalendarPlus } from "lucide-react";
 import Link from "next/link";
+
+export const metadata: Metadata = { title: "מדריכים" };
 
 export default function GuidesPage() {
   const guides = [
@@ -67,7 +69,7 @@ export default function GuidesPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50" dir="rtl">
+    <div className="min-h-screen bg-slate-50">
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900">מדריכים ותיעוד</h1>
@@ -76,10 +78,10 @@ export default function GuidesPage() {
           </p>
         </div>
 
-        <Card className="mb-8 border-amber-200 bg-amber-50">
+        <Card className="mb-8 border-amber-200 bg-amber-50" role="note">
           <CardContent className="pt-6">
             <div className="flex items-start gap-3">
-              <Info className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+              <Info className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
               <div>
                 <p className="text-amber-900 font-medium">
                   על מנת לעבוד מול Make או לבצע קריאות אחרות למערכת יש לדבר עם אופק מנהל המערכת{" "}
@@ -103,17 +105,17 @@ export default function GuidesPage() {
                   <div
                     className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 ${guide.bgColor}`}
                   >
-                    <guide.icon className={`w-6 h-6 ${guide.color}`} />
+                    <guide.icon className={`w-6 h-6 ${guide.color}`} aria-hidden="true" />
                   </div>
-                  <CardTitle className="text-xl group-hover:text-blue-600 transition-colors">
+                  <h2 className="text-xl font-semibold leading-none tracking-tight group-hover:text-blue-600 transition-colors">
                     {guide.title}
-                  </CardTitle>
+                  </h2>
                   <CardDescription>{guide.description}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center text-sm font-medium text-blue-600">
                     קרא את המדריך
-                    <ArrowRight className="w-4 h-4 mr-1 transition-transform group-hover:translate-x-1" />
+                    <ArrowRight className="w-4 h-4 mr-1 transition-transform group-hover:-translate-x-1" aria-hidden="true" />
                   </div>
                 </CardContent>
               </Card>

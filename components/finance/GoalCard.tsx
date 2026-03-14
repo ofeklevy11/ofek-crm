@@ -168,25 +168,25 @@ export default function GoalCard({
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             {goal.metricType === "REVENUE" && (
-              <DollarSign className="w-5 h-5 text-[#4f95ff]" />
+              <DollarSign className="w-5 h-5 text-[#4f95ff]" aria-hidden="true" />
             )}
             {goal.metricType === "RETAINERS" && (
-              <Briefcase className="w-5 h-5 text-[#4f95ff]" />
+              <Briefcase className="w-5 h-5 text-[#4f95ff]" aria-hidden="true" />
             )}
             {goal.metricType === "CUSTOMERS" && (
-              <Users className="w-5 h-5 text-[#4f95ff]" />
+              <Users className="w-5 h-5 text-[#4f95ff]" aria-hidden="true" />
             )}
             {goal.metricType === "QUOTES" && (
-              <FileText className="w-5 h-5 text-[#4f95ff]" />
+              <FileText className="w-5 h-5 text-[#4f95ff]" aria-hidden="true" />
             )}
             {goal.metricType === "TASKS" && (
-              <CheckSquare className="w-5 h-5 text-[#4f95ff]" />
+              <CheckSquare className="w-5 h-5 text-[#4f95ff]" aria-hidden="true" />
             )}
             {goal.metricType === "CALENDAR" && (
-              <Calendar className="w-5 h-5 text-[#4f95ff]" />
+              <Calendar className="w-5 h-5 text-[#4f95ff]" aria-hidden="true" />
             )}
             {goal.metricType === "RECORDS" && (
-              <Table className="w-5 h-5 text-[#4f95ff]" />
+              <Table className="w-5 h-5 text-[#4f95ff]" aria-hidden="true" />
             )}
             <h3 className="font-bold text-lg text-gray-900">{goal.name}</h3>
             {goal.isArchived && (
@@ -230,7 +230,7 @@ export default function GoalCard({
                 className="h-8 w-8 hover:bg-gray-100"
                 aria-label="אפשרויות יעד"
               >
-                <MoreVertical className="w-4 h-4 text-gray-500" />
+                <MoreVertical className="w-4 h-4 text-gray-500" aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="text-right">
@@ -247,12 +247,12 @@ export default function GoalCard({
               <DropdownMenuItem onClick={handleArchive} disabled={isArchiving}>
                 {goal.isArchived ? (
                   <>
-                    <RefreshCcw className="w-4 h-4 ml-2" />
+                    <RefreshCcw className="w-4 h-4 ml-2" aria-hidden="true" />
                     שחזר יעד
                   </>
                 ) : (
                   <>
-                    <Archive className="w-4 h-4 ml-2" />
+                    <Archive className="w-4 h-4 ml-2" aria-hidden="true" />
                     העבר לארכיון
                   </>
                 )}
@@ -262,7 +262,7 @@ export default function GoalCard({
                 className="text-red-700 focus:text-red-700 bg-red-50 focus:bg-red-100"
                 onClick={handleDelete}
               >
-                <Trash2 className="w-4 h-4 ml-2" />
+                <Trash2 className="w-4 h-4 ml-2" aria-hidden="true" />
                 מחק לצמיתות
               </DropdownMenuItem>
             </DropdownMenuContent>

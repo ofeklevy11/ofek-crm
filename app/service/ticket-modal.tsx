@@ -123,7 +123,7 @@ export default function TicketModal({
                   setFormData((d) => ({ ...d, type: val }))
                 }
               >
-                <SelectTrigger className="text-right">
+                <SelectTrigger aria-label="סוג" className="text-right">
                   <SelectValue placeholder="בחר סוג" />
                 </SelectTrigger>
                 <SelectContent>
@@ -145,7 +145,7 @@ export default function TicketModal({
                   setFormData((d) => ({ ...d, priority: val }))
                 }
               >
-                <SelectTrigger className="text-right">
+                <SelectTrigger aria-label="עדיפות" className="text-right">
                   <SelectValue placeholder="בחר עדיפות" />
                 </SelectTrigger>
                 <SelectContent>
@@ -168,7 +168,7 @@ export default function TicketModal({
                 setFormData((d) => ({ ...d, status: val }))
               }
             >
-              <SelectTrigger className="text-right">
+              <SelectTrigger aria-label="סטטוס" className="text-right">
                 <SelectValue placeholder="בחר סטטוס" />
               </SelectTrigger>
               <SelectContent>
@@ -190,7 +190,7 @@ export default function TicketModal({
                 setFormData((d) => ({ ...d, clientId: val }))
               }
             >
-              <SelectTrigger className="text-right">
+              <SelectTrigger aria-label="לקוח" className="text-right">
                 <SelectValue placeholder="ללא לקוח" />
               </SelectTrigger>
               <SelectContent>
@@ -214,7 +214,7 @@ export default function TicketModal({
                 setFormData((d) => ({ ...d, assigneeId: val }))
               }
             >
-              <SelectTrigger className="text-right">
+              <SelectTrigger aria-label="נציג מטפל" className="text-right">
                 <SelectValue placeholder="לא משויך" />
               </SelectTrigger>
               <SelectContent>

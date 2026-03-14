@@ -12,8 +12,22 @@ import {
   MAX_MEETING_TYPES_PER_COMPANY,
 } from "@/lib/meeting-validation";
 import { createLogger } from "@/lib/logger";
+import { generateSecureToken } from "@/lib/crypto-tokens";
+import { logSecurityEvent, SEC_MEETING_TYPE_CREATED, SEC_MEETING_TYPE_DELETED } from "@/lib/security/audit-security";
 
 const log = createLogger("Meetings");
+
+async function invalidateMeetingStatsCache(companyId: number) {
+  try {
+    const { redis } = await import("@/lib/redis");
+    const todayKey = new Date().toISOString().slice(0, 10);
+    await Promise.all([
+      redis.del(`cache:metric:${companyId}:meeting-stats:week`),
+      redis.del(`cache:metric:${companyId}:meeting-stats:month`),
+      redis.del(`cache:metric:${companyId}:todays-meetings:${todayKey}`),
+    ]);
+  } catch { /* cache invalidation is best-effort */ }
+}
 
 // ============================================
 // MEETING TYPES CRUD
@@ -74,7 +88,15 @@ export async function createMeetingType(data: Record<string, unknown>) {
         availabilityOverride: validation.data.availabilityOverride as any,
         isActive: validation.data.isActive ?? true,
         order: validation.data.order ?? 0,
+        shareToken: generateSecureToken(),
       },
+    });
+
+    logSecurityEvent({
+      action: SEC_MEETING_TYPE_CREATED,
+      companyId: user.companyId,
+      userId: user.id,
+      details: { meetingTypeId: meetingType.id, slug: meetingType.slug },
     });
 
     revalidatePath("/meetings");
@@ -150,6 +172,13 @@ export async function deleteMeetingType(id: number) {
       data: { isActive: false },
     });
 
+    logSecurityEvent({
+      action: SEC_MEETING_TYPE_DELETED,
+      companyId: user.companyId,
+      userId: user.id,
+      details: { meetingTypeId: id },
+    });
+
     revalidatePath("/meetings");
     return { success: true };
   } catch (error: any) {
@@ -185,6 +214,10 @@ export async function getMeetings(filters?: {
     const where: any = { companyId: user.companyId };
 
     if (filters?.status) {
+      const validStatuses = ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED", "NO_SHOW"];
+      if (!validStatuses.includes(filters.status)) {
+        return { success: false, error: "סטטוס לא תקין" };
+      }
       where.status = filters.status;
     }
     if (filters?.meetingTypeId) {
@@ -192,8 +225,16 @@ export async function getMeetings(filters?: {
     }
     if (filters?.startDate || filters?.endDate) {
       where.startTime = {};
-      if (filters.startDate) where.startTime.gte = new Date(filters.startDate);
-      if (filters.endDate) where.startTime.lte = new Date(filters.endDate);
+      if (filters.startDate) {
+        const d = new Date(filters.startDate);
+        if (isNaN(d.getTime())) return { success: false, error: "תאריך התחלה לא תקין" };
+        where.startTime.gte = d;
+      }
+      if (filters.endDate) {
+        const d = new Date(filters.endDate);
+        if (isNaN(d.getTime())) return { success: false, error: "תאריך סיום לא תקין" };
+        where.startTime.lte = d;
+      }
     }
 
     const [meetings, total] = await Promise.all([
@@ -278,7 +319,7 @@ export async function updateMeetingStatus(id: string, status: string) {
         const admins = await prisma.user.findMany({
           where: { companyId: user.companyId, role: "admin" },
           select: { id: true },
-          take: 10,
+          take: 25,
         });
         const statusLabels: Record<string, string> = {
           PENDING: "ממתין", CONFIRMED: "מאושר", COMPLETED: "הושלם", CANCELLED: "בוטל", NO_SHOW: "לא הגיע",
@@ -300,6 +341,7 @@ export async function updateMeetingStatus(id: string, status: string) {
 
     revalidatePath("/meetings");
     revalidatePath("/calendar");
+    invalidateMeetingStatsCache(user.companyId).catch(() => {});
     return { success: true, data: meeting };
   } catch (error: any) {
     if (error?.code === "P2025") return { success: false, error: "פגישה לא נמצאה" };
@@ -375,7 +417,7 @@ export async function cancelMeeting(id: string, reason?: string) {
         const admins = await prisma.user.findMany({
           where: { companyId: user.companyId, role: "admin" },
           select: { id: true },
-          take: 10,
+          take: 25,
         });
         await Promise.all(
           admins.map(admin =>
@@ -409,6 +451,7 @@ export async function cancelMeeting(id: string, reason?: string) {
 
     revalidatePath("/meetings");
     revalidatePath("/calendar");
+    invalidateMeetingStatsCache(user.companyId).catch(() => {});
     return { success: true, data: meeting };
   } catch (error: any) {
     if (error?.code === "P2025") return { success: false, error: "פגישה לא נמצאה" };
@@ -436,6 +479,10 @@ export async function rescheduleMeeting(id: string, newStart: string, newEnd: st
     if (endTime <= startTime) {
       return { success: false, error: "שעת סיום חייבת להיות אחרי שעת התחלה" };
     }
+    // Reject past dates
+    if (startTime.getTime() < Date.now()) {
+      return { success: false, error: "לא ניתן לדחות פגישה לעבר" };
+    }
 
     const meeting = await prisma.meeting.update({
       where: { id, companyId: user.companyId },
@@ -458,7 +505,7 @@ export async function rescheduleMeeting(id: string, newStart: string, newEnd: st
         const admins = await prisma.user.findMany({
           where: { companyId: user.companyId, role: "admin" },
           select: { id: true },
-          take: 10,
+          take: 25,
         });
         const timeStr = startTime.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" });
         await Promise.all(
@@ -494,6 +541,8 @@ export async function linkMeetingToClient(meetingId: string, clientId: number) {
 
     const limited = await checkActionRateLimit(String(user.id), RATE_LIMITS.meetingMutation);
     if (limited) return { success: false, error: "Rate limit exceeded. Please try again later." };
+
+    if (!Number.isInteger(clientId) || clientId <= 0) return { success: false, error: "Invalid client ID" };
 
     // Verify client belongs to company
     const client = await prisma.client.findFirst({
@@ -563,18 +612,26 @@ export async function getTodaysMeetings() {
     const endOfDay = new Date(now);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const meetings = await prisma.meeting.findMany({
-      where: {
-        companyId: user.companyId,
-        startTime: { gte: startOfDay, lte: endOfDay },
-        status: { notIn: ["CANCELLED"] },
+    const { getCachedMetric } = await import("@/lib/services/cache-service");
+    const meetings = await getCachedMetric(
+      user.companyId,
+      ["todays-meetings", startOfDay.toISOString().slice(0, 10)],
+      async () => {
+        return prisma.meeting.findMany({
+          where: {
+            companyId: user.companyId,
+            startTime: { gte: startOfDay, lte: endOfDay },
+            status: { notIn: ["CANCELLED"] },
+          },
+          include: {
+            meetingType: { select: { name: true, color: true } },
+          },
+          orderBy: { startTime: "asc" },
+          take: 20,
+        });
       },
-      include: {
-        meetingType: { select: { name: true, color: true } },
-      },
-      orderBy: { startTime: "asc" },
-      take: 20,
-    });
+      60 // 60s TTL
+    );
 
     return { success: true, data: meetings };
   } catch (error) {
@@ -600,36 +657,54 @@ export async function getMeetingStats(period?: "week" | "month") {
       periodStart.setMonth(periodStart.getMonth() - 1);
     }
 
-    const meetings = await prisma.meeting.findMany({
-      where: {
-        companyId: user.companyId,
-        startTime: { gte: periodStart },
-      },
-      select: { status: true, meetingTypeId: true },
-    });
+    const { getCachedMetric } = await import("@/lib/services/cache-service");
+    const data = await getCachedMetric(
+      user.companyId,
+      ["meeting-stats", period || "month"],
+      async () => {
+        // Use groupBy instead of fetching all meetings into memory
+        const [statusGroups, typeGroups] = await Promise.all([
+          prisma.meeting.groupBy({
+            by: ["status"],
+            where: { companyId: user.companyId, startTime: { gte: periodStart } },
+            _count: { _all: true },
+          }),
+          prisma.meeting.groupBy({
+            by: ["meetingTypeId"],
+            where: { companyId: user.companyId, startTime: { gte: periodStart } },
+            _count: { _all: true },
+          }),
+        ]);
 
-    const total = meetings.length;
-    const byStatus: Record<string, number> = {};
-    const byType: Record<number, number> = {};
-    for (const m of meetings) {
-      byStatus[m.status] = (byStatus[m.status] || 0) + 1;
-      byType[m.meetingTypeId] = (byType[m.meetingTypeId] || 0) + 1;
-    }
-    const cancelled = byStatus["CANCELLED"] || 0;
-    const noShow = byStatus["NO_SHOW"] || 0;
-    const completed = byStatus["COMPLETED"] || 0;
+        const byStatus: Record<string, number> = {};
+        let total = 0;
+        for (const g of statusGroups) {
+          byStatus[g.status] = g._count._all;
+          total += g._count._all;
+        }
 
-    return {
-      success: true,
-      data: {
-        total,
-        cancellationRate: total > 0 ? Math.round((cancelled / total) * 100) : 0,
-        noShowRate: total > 0 ? Math.round((noShow / total) * 100) : 0,
-        completedRate: total > 0 ? Math.round((completed / total) * 100) : 0,
-        byType,
-        byStatus,
+        const byType: Record<number, number> = {};
+        for (const g of typeGroups) {
+          byType[g.meetingTypeId] = g._count._all;
+        }
+
+        const cancelled = byStatus["CANCELLED"] || 0;
+        const noShow = byStatus["NO_SHOW"] || 0;
+        const completed = byStatus["COMPLETED"] || 0;
+
+        return {
+          total,
+          cancellationRate: total > 0 ? Math.round((cancelled / total) * 100) : 0,
+          noShowRate: total > 0 ? Math.round((noShow / total) * 100) : 0,
+          completedRate: total > 0 ? Math.round((completed / total) * 100) : 0,
+          byType,
+          byStatus,
+        };
       },
-    };
+      300 // 5-min TTL
+    );
+
+    return { success: true, data };
   } catch (error) {
     log.error("Error fetching meeting stats", { error: String(error) });
     return { success: false, error: "Failed to fetch meeting stats" };

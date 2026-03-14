@@ -4,7 +4,7 @@ import LoginForm from "./LoginForm";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "התחברות למערכת | BizlyCRM",
+  title: "התחברות למערכת",
   description: "התחבר לחשבון שלך ונהל את העסק בקלות",
 };
 
@@ -27,9 +27,9 @@ export default async function LoginPage() {
       <div className="max-w-md w-full relative z-10 animate-in fade-in zoom-in-95 duration-500">
         <div className="bg-card p-8 sm:p-10 rounded-2xl shadow-xl border border-border/50 backdrop-blur-sm">
           <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold bg-linear-to-r from-primary to-secondary bg-clip-text text-transparent inline-block tracking-tight">
+            <h1 className="text-3xl font-bold bg-linear-to-r from-primary to-secondary bg-clip-text text-transparent inline-block tracking-tight">
               ברוכים הבאים
-            </h2>
+            </h1>
             <p className="mt-3 text-sm text-muted-foreground">
               הזן את פרטי ההתחברות שלך כדי להמשיך
             </p>

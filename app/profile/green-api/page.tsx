@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
 import GreenApiConnection from "../GreenApiConnection";
+
+export const metadata: Metadata = { title: "חיבור Green API" };
 
 export default async function GreenApiPage() {
   const user = await getCurrentUser();

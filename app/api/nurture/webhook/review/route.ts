@@ -4,6 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { inngest } from "@/lib/inngest/client";
 import { createLogger } from "@/lib/logger";
 import { migrateConfigMessages, getActiveMessage, NURTURE_TIMING_MAP } from "@/lib/nurture-messages";
+import { normalizeToE164 } from "@/lib/utils/phone";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { logSecurityEvent, SEC_NURTURE_WEBHOOK_RECEIVED } from "@/lib/security/audit-security";
+import { getClientIp } from "@/lib/request-ip";
 
 const log = createLogger("NurtureWebhook:Review");
 
@@ -26,6 +30,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Request body size guard (10KB)
+    const contentLength = request.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > 10240) {
+      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+    }
+
     const body = await request.json();
     const { companyId, phone, name } = body;
 
@@ -35,6 +45,21 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // Input validation
+    if (typeof companyId !== "number" || !Number.isInteger(companyId) || companyId <= 0) {
+      return NextResponse.json({ error: "Invalid companyId" }, { status: 400 });
+    }
+    if (typeof name !== "string" || name.length > 200) {
+      return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+    }
+    if (typeof phone !== "string" || phone.length > 50) {
+      return NextResponse.json({ error: "Invalid phone" }, { status: 400 });
+    }
+
+    // Rate limit per company
+    const rateLimited = await checkRateLimit(String(companyId), RATE_LIMITS.nurtureWebhook);
+    if (rateLimited) return rateLimited;
 
     // Find the review nurture list
     const list = await prisma.nurtureList.findFirst({
@@ -52,10 +77,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No channels configured" }, { status: 400 });
     }
 
-    // Add subscriber if not exists
-    const conditions: any[] = [{ phone }];
+    // Normalize phone to E164 before storage/lookup
+    const normalizedPhone = normalizeToE164(phone) || phone;
+
+    // Add subscriber if not exists (search both normalized and raw for dedup)
+    const phoneVariants = [normalizedPhone];
+    if (normalizedPhone !== phone) phoneVariants.push(phone);
     const existing = await prisma.nurtureSubscriber.findFirst({
-      where: { nurtureListId: list.id, OR: conditions },
+      where: { nurtureListId: list.id, OR: phoneVariants.map(p => ({ phone: p })) },
     });
 
     let subscriberId: number;
@@ -63,8 +92,8 @@ export async function POST(request: Request) {
       const sub = await prisma.nurtureSubscriber.create({
         data: {
           nurtureListId: list.id,
-          name,
-          phone,
+          name: name.trim(),
+          phone: normalizedPhone,
           sourceType: "WEBHOOK",
         },
       });
@@ -85,8 +114,8 @@ export async function POST(request: Request) {
         companyId,
         subscriberId,
         nurtureListId: list.id,
-        subscriberPhone: phone,
-        subscriberName: name,
+        subscriberPhone: normalizedPhone,
+        subscriberName: name.trim(),
         channels,
         smsBody: activeMsg?.smsBody || "",
         whatsappGreenBody: activeMsg?.whatsappGreenBody || "",
@@ -101,7 +130,15 @@ export async function POST(request: Request) {
       },
     });
 
-    log.info("Review webhook processed", { companyId, phone, delayMs });
+    log.info("Review webhook processed", { companyId, phone: normalizedPhone, delayMs });
+
+    // Security audit log (fire-and-forget)
+    logSecurityEvent({
+      action: SEC_NURTURE_WEBHOOK_RECEIVED,
+      companyId,
+      ip: getClientIp(request),
+      details: { slug: "review", subscriberId },
+    });
 
     return NextResponse.json({ success: true, delayMs });
   } catch (error) {

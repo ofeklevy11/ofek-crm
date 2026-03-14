@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { getNotifications } from "@/app/actions/notifications";
 import { redirect } from "next/navigation";
 import NotificationsList from "@/components/NotificationsList";
 import { isRateLimitError, throwIfAnyRateLimited } from "@/lib/rate-limit-utils";
 import RateLimitFallback from "@/components/RateLimitFallback";
+
+export const metadata: Metadata = { title: "התראות" };
 
 export default async function NotificationsPage() {
   const user = await getCurrentUser();

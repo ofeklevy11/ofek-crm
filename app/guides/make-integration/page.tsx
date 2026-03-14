@@ -4,11 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Copy, Info, Terminal } from "lucide-react";
+import { Check, Copy, Info, Terminal, ChevronRight } from "lucide-react";
 
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
 
 export default function MakeIntegrationGuide() {
   const [copied, setCopied] = useState<string | null>(null);
@@ -30,16 +29,16 @@ export default function MakeIntegrationGuide() {
 }`;
 
   return (
-    <div className="min-h-screen bg-slate-50" dir="rtl">
+    <div className="min-h-screen bg-slate-50">
       <main className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Breadcrumbs */}
-        <div className="flex items-center text-sm text-slate-500 mb-6">
-          <Link href="/guides" className="hover:text-blue-600">
-            מדריכים
-          </Link>
-          <ChevronRight className="w-4 h-4 mx-2" />
-          <span className="text-slate-900 font-medium">חיבור Make לטבלאות</span>
-        </div>
+        <nav aria-label="ניווט פירורי לחם" className="mb-6">
+          <ol className="flex items-center text-sm text-slate-500">
+            <li><Link href="/guides" className="hover:text-blue-600">מדריכים</Link></li>
+            <li aria-hidden="true"><ChevronRight className="w-4 h-4 mx-2" /></li>
+            <li aria-current="page"><span className="text-slate-900 font-medium">חיבור Make לטבלאות</span></li>
+          </ol>
+        </nav>
 
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-slate-900 mb-4">
@@ -54,7 +53,7 @@ export default function MakeIntegrationGuide() {
             <Link href="/guides/make-integration/generator">
               <Button className="w-full sm:w-auto h-12 text-lg px-8 gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-md transition-all hover:scale-[1.02]">
                 <div className="bg-white/20 p-1 rounded">
-                  <Terminal className="w-5 h-5 text-white" />
+                  <Terminal className="w-5 h-5 text-white" aria-hidden="true" />
                 </div>
                 לממשק יצירת קריאת POST
               </Button>
@@ -113,40 +112,40 @@ export default function MakeIntegrationGuide() {
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-4">
                     <h3 className="font-semibold text-lg">הגדרות הבקשה:</h3>
-                    <div className="space-y-4 text-sm">
+                    <dl className="space-y-4 text-sm">
                       <div className="grid grid-cols-3 gap-2 border-b pb-2">
-                        <span className="font-medium text-slate-500">URL</span>
-                        <div className="col-span-2 font-mono bg-slate-100 px-2 py-1 rounded select-all">
+                        <dt className="font-medium text-slate-500">URL</dt>
+                        <dd className="col-span-2 font-mono bg-slate-100 px-2 py-1 rounded select-all">
                           https://your-domain.com/api/make/leads
-                        </div>
+                        </dd>
                       </div>
                       <div className="grid grid-cols-3 gap-2 border-b pb-2">
-                        <span className="font-medium text-slate-500">
+                        <dt className="font-medium text-slate-500">
                           Method
-                        </span>
-                        <div className="col-span-2 font-mono">POST</div>
+                        </dt>
+                        <dd className="col-span-2 font-mono">POST</dd>
                       </div>
                       <div className="grid grid-cols-3 gap-2 border-b pb-2">
-                        <span className="font-medium text-slate-500">
+                        <dt className="font-medium text-slate-500">
                           Body type
-                        </span>
-                        <div className="col-span-2 font-mono">Raw</div>
+                        </dt>
+                        <dd className="col-span-2 font-mono">Raw</dd>
                       </div>
                       <div className="grid grid-cols-3 gap-2 border-b pb-2">
-                        <span className="font-medium text-slate-500">
+                        <dt className="font-medium text-slate-500">
                           Content type
-                        </span>
-                        <div className="col-span-2 font-mono">
+                        </dt>
+                        <dd className="col-span-2 font-mono">
                           JSON (application/json)
-                        </div>
+                        </dd>
                       </div>
-                    </div>
+                    </dl>
                   </div>
 
                   <div className="space-y-4">
                     <h3 className="font-semibold text-lg">אבטחה (Headers):</h3>
-                    <Alert className="bg-amber-50 border-amber-200 text-amber-900">
-                      <Info className="h-4 w-4 text-amber-600" />
+                    <Alert className="bg-amber-50 border-amber-200 text-amber-900" role="note">
+                      <Info className="h-4 w-4 text-amber-600" aria-hidden="true" />
                       <AlertTitle>חובה להוסיף!</AlertTitle>
                       <AlertDescription>
                         בלי ה-Header הזה הבקשה תיחסם (שגיאה 401).
@@ -197,9 +196,9 @@ export default function MakeIntegrationGuide() {
                       onClick={() => copyToClipboard(jsonExample, "json")}
                     >
                       {copied === "json" ? (
-                        <Check className="w-4 h-4 ml-2 text-green-500" />
+                        <Check className="w-4 h-4 ml-2 text-green-500" aria-hidden="true" />
                       ) : (
-                        <Copy className="w-4 h-4 ml-2" />
+                        <Copy className="w-4 h-4 ml-2" aria-hidden="true" />
                       )}
                       {copied === "json" ? "הועתק!" : "העתק קוד"}
                     </Button>
@@ -207,13 +206,15 @@ export default function MakeIntegrationGuide() {
                   <pre
                     className="bg-slate-900 text-slate-50 p-6 rounded-lg overflow-x-auto font-mono text-sm leading-relaxed"
                     dir="ltr"
+                    role="group"
+                    aria-label="דוגמת JSON לשליחת רשומה לטבלה"
                   >
                     <code>{jsonExample}</code>
                   </pre>
                 </div>
 
                 <div className="mt-4">
-                  <h4 className="font-semibold mb-2">דגשים חשובים:</h4>
+                  <h3 className="font-semibold mb-2">דגשים חשובים:</h3>
                   <ul className="list-disc list-inside text-sm text-slate-600 space-y-1">
                     <li>
                       המפתחות <code>table_slug</code> ו-<code>company_id</code>{" "}
@@ -247,7 +248,7 @@ export default function MakeIntegrationGuide() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg text-red-600 flex items-center">
-                    <Terminal className="w-5 h-5 ml-2" />
+                    <Terminal className="w-5 h-5 ml-2" aria-hidden="true" />
                     שגיאה 401 Unauthorized
                   </CardTitle>
                 </CardHeader>
@@ -260,7 +261,7 @@ export default function MakeIntegrationGuide() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg text-amber-600 flex items-center">
-                    <Terminal className="w-5 h-5 ml-2" />
+                    <Terminal className="w-5 h-5 ml-2" aria-hidden="true" />
                     שגיאה 404 Not Found
                   </CardTitle>
                 </CardHeader>
@@ -272,6 +273,10 @@ export default function MakeIntegrationGuide() {
             </div>
           </section>
         </div>
+
+        <span className="sr-only" aria-live="polite" aria-atomic="true">
+          {copied ? "הטקסט הועתק ללוח" : ""}
+        </span>
       </main>
     </div>
   );

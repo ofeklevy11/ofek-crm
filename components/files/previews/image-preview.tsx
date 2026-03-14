@@ -5,9 +5,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 interface ImagePreviewProps {
   fileId: number;
+  filename?: string;
 }
 
-export function ImagePreview({ fileId }: ImagePreviewProps) {
+export function ImagePreview({ fileId, filename }: ImagePreviewProps) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,7 +46,8 @@ export function ImagePreview({ fileId }: ImagePreviewProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
+      <div className="flex items-center justify-center h-[60vh]" role="status" aria-label="טוען תצוגה מקדימה...">
+        <span className="sr-only">טוען תצוגה מקדימה...</span>
         <Skeleton className="w-64 h-64 rounded-lg" />
       </div>
     );
@@ -64,7 +66,7 @@ export function ImagePreview({ fileId }: ImagePreviewProps) {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={url}
-        alt="Preview"
+        alt={filename ? `תצוגה מקדימה: ${filename}` : "תצוגה מקדימה"}
         className="max-h-full max-w-full object-contain rounded-lg"
       />
     </div>

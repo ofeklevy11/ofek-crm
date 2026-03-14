@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getProductsForDropdown } from "@/app/actions/products";
 import { getClientsForDropdown } from "@/app/actions/quotes";
 import { getBusinessSettings } from "@/app/actions/business-settings";
@@ -5,6 +6,8 @@ import QuoteEditor from "../editor";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
 import BusinessSettingsRequired from "../business-settings-required";
+
+export const metadata: Metadata = { title: "הצעת מחיר חדשה" };
 
 export default async function NewQuotePage() {
   const user = await getCurrentUser();

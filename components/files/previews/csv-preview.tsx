@@ -90,7 +90,8 @@ export function CsvPreview({ fileId }: CsvPreviewProps) {
 
   if (loading) {
     return (
-      <div className="space-y-2 p-4">
+      <div className="space-y-2 p-4" role="status" aria-label="טוען תצוגה מקדימה...">
+        <span className="sr-only">טוען תצוגה מקדימה...</span>
         <Skeleton className="h-8 w-full" />
         <Skeleton className="h-6 w-full" />
         <Skeleton className="h-6 w-full" />
@@ -110,7 +111,7 @@ export function CsvPreview({ fileId }: CsvPreviewProps) {
   return (
     <div>
       <ScrollArea className="h-[60vh] rounded-md border" dir="ltr">
-        <Table>
+        <Table aria-label="תצוגה מקדימה של נתונים">
           <TableHeader>
             <TableRow>
               {headers.map((h, i) => (

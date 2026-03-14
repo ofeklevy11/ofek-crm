@@ -48,6 +48,7 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200">
+        <caption className="sr-only">רשימת לקוחות</caption>
         <thead className="bg-[#f4f8f8]">
           <tr>
             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -95,6 +96,9 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
               <tr
                 key={client.id}
                 onClick={() => router.push(`/finance/clients/${client.id}`)}
+                onKeyDown={(e) => { if (e.key === "Enter") router.push(`/finance/clients/${client.id}`); }}
+                role="link"
+                tabIndex={0}
                 className="hover:bg-gray-50 transition-colors group cursor-pointer"
               >
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -146,6 +150,7 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
                       prefetch={false}
                       className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
                       title="צפה בלקוח"
+                      aria-label="צפה בלקוח"
                     >
                       <Eye className="w-4 h-4" />
                     </Link>
@@ -154,6 +159,7 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
                       prefetch={false}
                       className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
                       title="ערוך לקוח"
+                      aria-label="ערוך לקוח"
                     >
                       <Edit2 className="w-4 h-4" />
                     </Link>
@@ -162,6 +168,7 @@ export default function ClientsTable({ clients }: ClientsTableProps) {
                       disabled={deletingId === client.id}
                       className="p-2 text-gray-600 hover:text-[#a24ec1] hover:bg-purple-50 rounded-lg transition-all disabled:opacity-50"
                       title="מחק לקוח"
+                      aria-label="מחק לקוח"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

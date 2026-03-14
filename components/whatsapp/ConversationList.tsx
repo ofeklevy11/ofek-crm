@@ -64,7 +64,7 @@ export default function ConversationList({
   }, [conversations, filter, searchQuery, currentUserId]);
 
   return (
-    <div className="flex flex-col h-full bg-white border-l border-gray-200">
+    <nav aria-label="רשימת שיחות וואטסאפ" className="flex flex-col h-full bg-white border-l border-gray-200">
       {/* Header */}
       <div className="p-4 border-b">
         <h2 className="text-lg font-bold text-gray-900 mb-3">
@@ -73,18 +73,19 @@ export default function ConversationList({
 
         {/* Search */}
         <div className="relative mb-3">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="חפש שיחות..."
+            aria-label="חפש שיחות"
             className="w-full pr-9 pl-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
           />
         </div>
 
         {/* Filter tabs */}
-        <div className="flex gap-1">
+        <div className="flex gap-1" role="tablist" aria-label="סינון שיחות">
           {(
             [
               ["all", "הכל"],
@@ -94,6 +95,8 @@ export default function ConversationList({
           ).map(([key, label]) => (
             <button
               key={key}
+              role="tab"
+              aria-selected={filter === key}
               onClick={() => setFilter(key)}
               className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors ${
                 filter === key
@@ -108,9 +111,9 @@ export default function ConversationList({
       </div>
 
       {/* Conversation list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" role="list" aria-label="שיחות">
         {filtered.length === 0 ? (
-          <div className="flex items-center justify-center h-32 text-sm text-gray-400">
+          <div className="flex items-center justify-center h-32 text-sm text-gray-400" role="status">
             {searchQuery ? "לא נמצאו תוצאות" : "אין שיחות"}
           </div>
         ) : (
@@ -130,6 +133,6 @@ export default function ConversationList({
           ))
         )}
       </div>
-    </div>
+    </nav>
   );
 }

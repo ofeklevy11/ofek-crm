@@ -1,6 +1,9 @@
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import ProfileContent from "./ProfileContent";
+
+export const metadata: Metadata = { title: "פרופיל" };
 
 export default async function ProfilePage() {
   const user = await getCurrentUser();

@@ -4,7 +4,7 @@ import RegisterForm from "./RegisterForm";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "הרשמה למערכת | BizlyCRM",
+  title: "הרשמה למערכת",
   description: "פתח חשבון חדש והתחל לנהל את הארגון שלך בצורה חכמה",
 };
 
@@ -27,9 +27,9 @@ export default async function RegisterPage() {
       <div className="max-w-lg w-full relative z-10 animate-in fade-in zoom-in-95 duration-500">
         <div className="bg-card p-8 sm:p-10 rounded-2xl shadow-xl border border-border/50 backdrop-blur-sm">
           <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold bg-linear-to-r from-secondary to-primary bg-clip-text text-transparent inline-block tracking-tight">
+            <h1 className="text-3xl font-bold bg-linear-to-r from-secondary to-primary bg-clip-text text-transparent inline-block tracking-tight">
               יצירת חשבון חדש
-            </h2>
+            </h1>
             <p className="mt-3 text-sm text-muted-foreground">
               הצטרף למאות עסקים שמנהלים את הארגון שלהם בצורה חכמה
             </p>

@@ -12,7 +12,7 @@ import { isRateLimitError } from "@/lib/rate-limit-utils";
 import RateLimitFallback from "@/components/RateLimitFallback";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "משימות | BizlyCRM" };
+export const metadata: Metadata = { title: "משימות" };
 
 async function getUsers(companyId: number) {
   const users = await prisma.user.findMany({

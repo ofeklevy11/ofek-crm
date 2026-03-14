@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import { getFixedExpenses } from "@/app/actions/fixed-expenses";
 import FixedExpensesTable from "@/components/finance/FixedExpensesTable";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight } from "lucide-react";
+
+export const metadata: Metadata = { title: "הוצאות קבועות" };
 
 export default async function FixedExpensesPage() {
   const user = await getCurrentUser();
@@ -37,10 +40,10 @@ export default async function FixedExpensesPage() {
 
           <div className="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
             <div className="text-right">
-              <p className="text-sm text-gray-500 font-medium">
+              <p id="stat-monthly-total" className="text-sm text-gray-500 font-medium">
                 סך הכל חודשי (משוער)
               </p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p aria-labelledby="stat-monthly-total" className="text-2xl font-bold text-gray-900">
                 ₪
                 {expenses
                   .filter(
@@ -51,10 +54,10 @@ export default async function FixedExpensesPage() {
                   .toLocaleString()}
               </p>
             </div>
-            <div className="h-10 w-px bg-gray-200" />
+            <div className="h-10 w-px bg-gray-200" aria-hidden="true" />
             <div className="text-right">
-              <p className="text-sm text-gray-500 font-medium">הוצאות פעילות</p>
-              <p className="text-2xl font-bold text-[#4f95ff]">
+              <p id="stat-active-expenses" className="text-sm text-gray-500 font-medium">הוצאות פעילות</p>
+              <p aria-labelledby="stat-active-expenses" className="text-2xl font-bold text-[#4f95ff]">
                 {expenses.filter((e: any) => e.status === "ACTIVE").length}
               </p>
             </div>

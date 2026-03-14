@@ -55,6 +55,9 @@ export default function MobileMenu({ user }: MobileMenuProps) {
         side="right"
         className="flex flex-col h-full w-[80%] sm:w-[350px]"
       >
+        <SheetHeader className="sr-only">
+          <SheetTitle>תפריט ניווט</SheetTitle>
+        </SheetHeader>
         <div className="flex flex-col flex-1 gap-1 mt-6 overflow-y-auto no-scrollbar">
           <div className="bg-[#f4f8f8] p-3 rounded-md mb-4 text-xs text-center text-muted-foreground border border-border/50">
             <p className="font-medium text-foreground mb-1">שים לב!</p>

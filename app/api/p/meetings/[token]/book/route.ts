@@ -6,8 +6,11 @@ import { isSlotAvailable } from "@/lib/meeting-slots";
 import { createNotificationForCompany } from "@/lib/notifications-internal";
 import { parseNotificationSettings } from "@/lib/notification-settings";
 import { withMetrics } from "@/lib/with-metrics";
-
-const TOKEN_RE = /^[a-zA-Z0-9]{10,50}$/;
+import { SECURE_TOKEN_RE } from "@/lib/crypto-tokens";
+import { generateSecureToken } from "@/lib/crypto-tokens";
+import { getClientIp } from "@/lib/request-ip";
+import { validateJsonValue } from "@/lib/server-action-utils";
+import { logSecurityEvent, SEC_MEETING_BOOKED } from "@/lib/security/audit-security";
 
 async function handlePOST(
   request: NextRequest,
@@ -16,14 +19,24 @@ async function handlePOST(
   try {
     const { token } = await params;
 
-    if (!TOKEN_RE.test(token)) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 400 });
+    if (!SECURE_TOKEN_RE.test(token)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    // CSRF protection: require JSON content-type
+    const contentType = request.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
+    }
+
+    // Request body size limit (10KB)
+    const contentLength = request.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > 10000) {
+      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
     }
 
     // Rate limit by IP
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      "unknown";
+    const ip = getClientIp(request);
     const rateLimited = await checkRateLimit(ip, RATE_LIMITS.publicBooking);
     if (rateLimited) return rateLimited;
 
@@ -36,7 +49,7 @@ async function handlePOST(
     const { participantName, participantEmail, participantPhone, startTime, customFieldData } =
       validation.data;
 
-    // Look up meeting type
+    // Look up meeting type (include customFields for validation)
     const meetingType = await prisma.meetingType.findFirst({
       where: { shareToken: token, isActive: true },
       select: {
@@ -47,12 +60,42 @@ async function handlePOST(
         color: true,
         bufferBefore: true,
         bufferAfter: true,
+        customFields: true,
+        dailyLimit: true,
         company: { select: { notificationSettings: true } },
       },
     });
 
     if (!meetingType) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    // Sanitize customFieldData before processing
+    if (customFieldData !== undefined && customFieldData !== null) {
+      try {
+        validateJsonValue(customFieldData, 3, 51200, "customFieldData");
+      } catch {
+        return NextResponse.json({ error: "Invalid custom field data" }, { status: 400 });
+      }
+    }
+
+    // Validate customFieldData against meeting type schema
+    if (meetingType.customFields && Array.isArray(meetingType.customFields)) {
+      const requiredFields = (meetingType.customFields as any[]).filter(
+        (f) => f.required
+      );
+      if (requiredFields.length > 0) {
+        const fieldData = customFieldData as Record<string, unknown> | undefined;
+        for (const field of requiredFields) {
+          const value = fieldData?.[field.name ?? field.label];
+          if (value === undefined || value === null || value === "") {
+            return NextResponse.json(
+              { error: `Missing required field: ${field.label || field.name}` },
+              { status: 400 },
+            );
+          }
+        }
+      }
     }
 
     // Calculate end time
@@ -99,6 +142,8 @@ async function handlePOST(
 
     // Transaction: re-verify slot + create meeting, find/create client, create calendar event
     const meeting = await prisma.$transaction(async (tx) => {
+      // Generate crypto-secure manage token inside transaction
+      const secureManageToken = generateSecureToken();
       // Re-verify slot availability INSIDE transaction to prevent double-booking
       const [txMeetings, txEvents] = await Promise.all([
         tx.meeting.findMany({
@@ -133,6 +178,26 @@ async function handlePOST(
         existingEvents: txEvents,
       })) {
         throw new Error("SLOT_TAKEN");
+      }
+
+      // Re-verify daily limit inside transaction to prevent race condition
+      if (meetingType.dailyLimit) {
+        const dayStart = new Date(startTime);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(startTime);
+        dayEnd.setHours(23, 59, 59, 999);
+
+        const dayCount = await tx.meeting.count({
+          where: {
+            companyId: meetingType.companyId,
+            status: { not: "CANCELLED" },
+            startTime: { gte: dayStart, lte: dayEnd },
+          },
+        });
+
+        if (dayCount >= meetingType.dailyLimit) {
+          throw new Error("DAILY_LIMIT_REACHED");
+        }
       }
 
       // 1. Create the calendar event
@@ -198,11 +263,20 @@ async function handlePOST(
           endTime,
           clientId: clientId ?? null,
           calendarEventId: calendarEvent.id,
+          manageToken: secureManageToken,
         },
         select: { id: true, manageToken: true },
       });
 
       return newMeeting;
+    }, { timeout: 10_000 });
+
+    // Security audit log (fire-and-forget)
+    logSecurityEvent({
+      action: SEC_MEETING_BOOKED,
+      companyId: meetingType.companyId,
+      ip,
+      details: { meetingId: meeting.id, meetingTypeId: meetingType.id, participantName },
     });
 
     // Send notifications to company admins (fire-and-forget, outside transaction)
@@ -223,7 +297,7 @@ async function handlePOST(
         .findMany({
           where: { companyId: meetingType.companyId, role: "admin" },
           select: { id: true },
-          take: 10,
+          take: 25,
         })
         .then((admins) => {
           for (const admin of admins) {
@@ -262,6 +336,12 @@ async function handlePOST(
     if (error?.message === "SLOT_TAKEN") {
       return NextResponse.json(
         { error: "Slot is no longer available" },
+        { status: 400 },
+      );
+    }
+    if (error?.message === "DAILY_LIMIT_REACHED") {
+      return NextResponse.json(
+        { error: "Daily limit reached for this day" },
         { status: 400 },
       );
     }

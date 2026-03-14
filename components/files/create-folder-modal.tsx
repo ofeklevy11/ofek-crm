@@ -9,6 +9,7 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,6 +57,7 @@ export function CreateFolderModal({ currentFolderId }: CreateFolderModalProps) {
       <DialogContent className="sm:max-w-[425px] text-right">
         <DialogHeader>
           <DialogTitle className="mt-4">יצירת תיקייה חדשה</DialogTitle>
+          <DialogDescription className="sr-only">הזן שם לתיקייה החדשה</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">

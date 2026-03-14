@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import CreateRetainerForm from "@/components/finance/CreateRetainerForm";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+
+export const metadata: Metadata = { title: "ריטיינר חדש" };
 
 export default function NewRetainerPage() {
   return (

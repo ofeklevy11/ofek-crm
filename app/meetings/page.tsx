@@ -6,7 +6,7 @@ import MeetingsBackgroundDecor from "@/components/Meetings/MeetingsBackgroundDec
 import { CalendarDays } from "lucide-react";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "פגישות | BizlyCRM" };
+export const metadata: Metadata = { title: "פגישות" };
 
 export default async function MeetingsPage() {
   const user = await getCurrentUser();

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
@@ -5,6 +6,8 @@ import Pagination from "@/components/Pagination";
 import PaymentsTable from "@/components/finance/PaymentsTable";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
+
+export const metadata: Metadata = { title: "תשלומים" };
 
 export default async function PaymentsPage({
   searchParams,
@@ -81,28 +84,28 @@ export default async function PaymentsPage({
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="text-sm text-gray-500">ממתין</div>
-          <div className="text-3xl font-bold text-gray-700 mt-2">
+          <p id="stat-pending" className="text-sm text-gray-500">ממתין</p>
+          <p aria-labelledby="stat-pending" className="text-3xl font-bold text-gray-700 mt-2">
             {pendingCount}
-          </div>
+          </p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="text-sm text-gray-500">באיחור</div>
-          <div className="text-3xl font-bold text-[#a24ec1] mt-2">
+          <p id="stat-overdue" className="text-sm text-gray-500">באיחור</p>
+          <p aria-labelledby="stat-overdue" className="text-3xl font-bold text-[#a24ec1] mt-2">
             {overdueCount}
-          </div>
+          </p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="text-sm text-gray-500">שולם</div>
-          <div className="text-3xl font-bold text-[#4f95ff] mt-2">
+          <p id="stat-paid" className="text-sm text-gray-500">שולם</p>
+          <p aria-labelledby="stat-paid" className="text-3xl font-bold text-[#4f95ff] mt-2">
             {paidCount}
-          </div>
+          </p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="text-sm text-gray-500">סה"כ לתשלום</div>
-          <div className="text-2xl font-bold text-gray-900 mt-2">
+          <p id="stat-total-outstanding" className="text-sm text-gray-500">סה"כ לתשלום</p>
+          <p aria-labelledby="stat-total-outstanding" className="text-2xl font-bold text-gray-900 mt-2">
             ₪{totalOutstanding.toLocaleString()}
-          </div>
+          </p>
         </div>
       </div>
 

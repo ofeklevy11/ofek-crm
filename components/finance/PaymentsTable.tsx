@@ -88,6 +88,7 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
+            <caption className="sr-only">רשימת תשלומים</caption>
             <thead className="bg-[#f4f8f8]">
               <tr>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -177,6 +178,7 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
                         prefetch={false}
                         className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
                         title="צפה בלקוח"
+                        aria-label="צפה בלקוח"
                       >
                         <Eye className="w-4 h-4" />
                       </Link>
@@ -184,6 +186,7 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
                         onClick={() => handleEdit(payment)}
                         className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
                         title="ערוך תשלום"
+                        aria-label="ערוך תשלום"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
@@ -192,6 +195,7 @@ export default function PaymentsTable({ payments }: PaymentsTableProps) {
                         disabled={deletingId === payment.id}
                         className="p-2 text-gray-600 hover:text-[#a24ec1] hover:bg-purple-50 rounded-lg transition-all disabled:opacity-50"
                         title="מחק תשלום"
+                        aria-label="מחק תשלום"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

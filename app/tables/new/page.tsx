@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import CreateTableForm from "@/components/CreateTableForm";
 import Link from "next/link";
+
+export const metadata: Metadata = { title: "טבלה חדשה" };
 
 export default function NewTablePage() {
   return (

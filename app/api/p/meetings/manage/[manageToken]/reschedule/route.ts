@@ -5,8 +5,9 @@ import { isSlotAvailable } from "@/lib/meeting-slots";
 import { createNotificationForCompany } from "@/lib/notifications-internal";
 import { isNotificationEnabled } from "@/lib/notification-settings";
 import { withMetrics } from "@/lib/with-metrics";
-
-const TOKEN_RE = /^[a-zA-Z0-9]{10,50}$/;
+import { SECURE_TOKEN_RE } from "@/lib/crypto-tokens";
+import { getClientIp } from "@/lib/request-ip";
+import { logSecurityEvent, SEC_MEETING_RESCHEDULED } from "@/lib/security/audit-security";
 
 async function handlePOST(
   request: NextRequest,
@@ -15,14 +16,24 @@ async function handlePOST(
   try {
     const { manageToken } = await params;
 
-    if (!TOKEN_RE.test(manageToken)) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 400 });
+    if (!SECURE_TOKEN_RE.test(manageToken)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    // CSRF protection: require JSON content-type
+    const contentType = request.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
+    }
+
+    // Request body size limit (10KB)
+    const contentLength = request.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > 10000) {
+      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
     }
 
     // Rate limit by IP
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      "unknown";
+    const ip = getClientIp(request);
     const rateLimited = await checkRateLimit(ip, RATE_LIMITS.publicBooking);
     if (rateLimited) return rateLimited;
 
@@ -40,6 +51,8 @@ async function handlePOST(
             duration: true,
             bufferBefore: true,
             bufferAfter: true,
+            minAdvanceHours: true,
+            maxAdvanceDays: true,
           },
         },
       },
@@ -71,6 +84,36 @@ async function handlePOST(
         { error: "Invalid startTime" },
         { status: 400 },
       );
+    }
+
+    // Reject past dates
+    if (newStart.getTime() < Date.now()) {
+      return NextResponse.json(
+        { error: "Cannot reschedule to a past date" },
+        { status: 400 },
+      );
+    }
+
+    // Enforce minimum advance hours
+    const minAdvanceMs = (meeting.meetingType.minAdvanceHours ?? 0) * 3600_000;
+    if (minAdvanceMs > 0 && newStart.getTime() < Date.now() + minAdvanceMs) {
+      return NextResponse.json(
+        { error: "Too soon — minimum advance time not met" },
+        { status: 400 },
+      );
+    }
+
+    // Enforce maximum advance days
+    const maxAdvanceDays = meeting.meetingType.maxAdvanceDays ?? 0;
+    if (maxAdvanceDays > 0) {
+      const maxDate = new Date();
+      maxDate.setDate(maxDate.getDate() + maxAdvanceDays);
+      if (newStart.getTime() > maxDate.getTime()) {
+        return NextResponse.json(
+          { error: "Date too far in advance" },
+          { status: 400 },
+        );
+      }
     }
 
     const newEnd = new Date(
@@ -126,6 +169,14 @@ async function handlePOST(
           data: { startTime: newStart, endTime: newEnd },
         });
       }
+    }, { timeout: 10_000 });
+
+    // Security audit log (fire-and-forget)
+    logSecurityEvent({
+      action: SEC_MEETING_RESCHEDULED,
+      companyId: meeting.companyId,
+      ip,
+      details: { meetingId: meeting.id, participantName: meeting.participantName, newStart: newStart.toISOString() },
     });
 
     // Notify admins (fire-and-forget) — guarded by toggle
@@ -147,7 +198,7 @@ async function handlePOST(
           .findMany({
             where: { companyId: meeting.companyId, role: "admin" },
             select: { id: true },
-            take: 10,
+            take: 25,
           })
           .then((admins) => {
             for (const admin of admins) {

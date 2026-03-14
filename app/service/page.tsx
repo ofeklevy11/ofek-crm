@@ -1,4 +1,5 @@
 // Service Page
+import type { Metadata } from "next";
 import {
   getTickets,
   getSlaPolicies,
@@ -11,6 +12,10 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
 import { isRateLimitError } from "@/lib/rate-limit-utils";
 import RateLimitFallback from "@/components/RateLimitFallback";
+
+export const metadata: Metadata = {
+  title: "שירות לקוחות",
+};
 
 export default async function ServicePage() {
   const user = await getCurrentUser();

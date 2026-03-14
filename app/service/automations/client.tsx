@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import {
@@ -86,6 +86,21 @@ export default function ServiceAutomationsClient({
     return isServiceRule && matchesSearch;
   });
 
+  // Search result announcement for screen readers
+  const [searchAnnouncement, setSearchAnnouncement] = useState("");
+  const isInitialRender = useRef(true);
+  useEffect(() => {
+    if (isInitialRender.current) {
+      isInitialRender.current = false;
+      return;
+    }
+    if (searchQuery) {
+      setSearchAnnouncement(`נמצאו ${filteredAutomations.length} אוטומציות`);
+    } else {
+      setSearchAnnouncement("");
+    }
+  }, [searchQuery, filteredAutomations.length]);
+
   const handleToggle = async (id: number, currentStatus: boolean) => {
     // Optimistic
     setAutomations((prev) =>
@@ -142,6 +157,7 @@ export default function ServiceAutomationsClient({
             <Link
               href="/service"
               className="text-slate-400 hover:text-slate-600 transition-colors"
+              aria-label="חזרה לשירות לקוחות"
             >
               <ArrowRight className="w-5 h-5" />
             </Link>
@@ -168,14 +184,17 @@ export default function ServiceAutomationsClient({
           <Search className="w-4 h-4 absolute right-3 text-slate-400" />
           <Input
             placeholder="חיפוש אוטומציות..."
-            className="pr-9 bg-transparent border-0 focus-visible:ring-0 max-w-sm text-right"
+            aria-label="חיפוש אוטומציות"
+            className="pr-9 bg-transparent border-0 focus-visible:ring-1 focus-visible:ring-slate-300 max-w-sm text-right"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
+          <div aria-live="polite" className="sr-only">{searchAnnouncement}</div>
         </div>
       </div>
 
       {/* List */}
+      <h2 className="sr-only">רשימת אוטומציות</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredAutomations.map((rule) => (
           <AutomationCard
@@ -187,7 +206,7 @@ export default function ServiceAutomationsClient({
           />
         ))}
         {filteredAutomations.length === 0 && (
-          <div className="col-span-full py-12 text-center text-slate-500 bg-white rounded-lg border border-dashed">
+          <div className="col-span-full py-12 text-center text-slate-500 bg-white rounded-lg border border-dashed" role="status">
             לא נמצאו אוטומציות. צור את הראשונה שלך!
           </div>
         )}
@@ -248,6 +267,8 @@ function AutomationCard({
 
   return (
     <div
+      role="article"
+      aria-label={`אוטומציה: ${rule.name}`}
       className={`bg-white p-5 rounded-xl border shadow-sm transition-all hover:shadow-md relative overflow-hidden group ${
         !rule.isActive && "opacity-75 grayscale-[0.5]"
       }`}
@@ -272,9 +293,9 @@ function AutomationCard({
             }`}
           >
             {rule.triggerType === "SLA_BREACH" ? (
-              <AlertTriangle className="w-5 h-5" />
+              <AlertTriangle className="w-5 h-5" aria-hidden="true" />
             ) : (
-              <CheckCircle2 className="w-5 h-5" />
+              <CheckCircle2 className="w-5 h-5" aria-hidden="true" />
             )}
           </div>
           {actionCount > 0 && (
@@ -292,6 +313,7 @@ function AutomationCard({
               variant="ghost"
               size="icon"
               className="h-8 w-8 text-slate-400 hover:text-slate-600"
+              aria-label="פעולות נוספות"
             >
               <MoreHorizontal className="w-4 h-4" />
             </Button>
@@ -332,6 +354,7 @@ function AutomationCard({
             checked={rule.isActive}
             onCheckedChange={onToggle}
             dir="ltr"
+            aria-label={`${rule.name} - ${rule.isActive ? "פועל" : "כבוי"}`}
           />
           <span className="text-xs font-medium text-slate-500">
             {rule.isActive ? "פועל" : "כבוי"}

@@ -93,6 +93,7 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
+            <caption className="sr-only">רשימת ריטיינרים</caption>
             <thead className="bg-[#f4f8f8]">
               <tr>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -238,6 +239,7 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
                         prefetch={false}
                         className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
                         title="צפה בלקוח"
+                        aria-label="צפה בלקוח"
                       >
                         <Eye className="w-4 h-4" />
                       </Link>
@@ -245,6 +247,7 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
                         onClick={() => handleEdit(retainer)}
                         className="p-2 text-gray-600 hover:text-[#4f95ff] hover:bg-blue-50 rounded-lg transition-all"
                         title="ערוך ריטיינר"
+                        aria-label="ערוך ריטיינר"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
@@ -253,6 +256,7 @@ export default function RetainersTable({ retainers }: RetainersTableProps) {
                         disabled={deletingId === retainer.id}
                         className="p-2 text-gray-600 hover:text-[#a24ec1] hover:bg-purple-50 rounded-lg transition-all disabled:opacity-50"
                         title="מחק ריטיינר"
+                        aria-label="מחק ריטיינר"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

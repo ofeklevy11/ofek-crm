@@ -224,20 +224,25 @@ export default function MessageView({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
+        role="log"
+        aria-live="polite"
+        aria-atomic="false"
+        aria-label="הודעות"
         className="flex-1 overflow-y-auto px-4 py-3"
       >
         {loading ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full" role="status" aria-label="טוען הודעות">
             <span className="animate-spin h-6 w-6 border-2 border-green-500 border-t-transparent rounded-full" />
           </div>
         ) : loadError && messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-500">
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-500" role="alert">
             <p className="text-sm">שגיאה בטעינת הודעות</p>
             <button
               onClick={() => loadMessages()}
+              aria-label="נסה שוב לטעון הודעות"
               className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg border hover:bg-gray-50 transition-colors"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className="w-4 h-4" aria-hidden="true" />
               נסה שוב
             </button>
           </div>
@@ -245,7 +250,7 @@ export default function MessageView({
           <>
             {/* Load more indicator */}
             {loadingMore && (
-              <div className="text-center py-2">
+              <div className="text-center py-2" role="status" aria-label="טוען הודעות נוספות">
                 <span className="animate-spin inline-block h-4 w-4 border-2 border-green-500 border-t-transparent rounded-full" />
               </div>
             )}
@@ -301,8 +306,9 @@ export default function MessageView({
             onClick={() => setShowTemplatePicker(true)}
             className="shrink-0 mr-1 mb-3 ml-3 flex items-center gap-1 px-2.5 py-2 text-xs rounded-lg border border-green-600 text-green-700 hover:bg-green-50 transition-colors"
             title="שלח הודעת תבנית"
+            aria-label="שלח הודעת תבנית"
           >
-            <FileText className="w-3.5 h-3.5" />
+            <FileText className="w-3.5 h-3.5" aria-hidden="true" />
             תבנית
           </button>
           <div className="flex-1">

@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
 import SmsIntegrationSettings from "@/components/sms/SmsIntegrationSettings";
+
+export const metadata: Metadata = { title: "הגדרות SMS" };
 
 export default async function SmsSettingsPage() {
   const user = await getCurrentUser();

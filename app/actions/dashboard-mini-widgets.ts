@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import { checkActionRateLimit, DASHBOARD_RATE_LIMITS } from "@/lib/rate-limit-action";
+import { getGoogleCalendarEvents } from "@/app/actions/google-calendar";
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -52,6 +53,7 @@ export interface CalendarFilters {
   customFrom?: string;
   customTo?: string;
   maxEvents?: number;
+  calendarSource?: "crm" | "google" | "all";
 }
 
 export async function getMiniCalendarData(filters?: CalendarFilters) {
@@ -100,19 +102,62 @@ export async function getMiniCalendarData(filters?: CalendarFilters) {
   }
 
   const maxEvents = clamp(filters?.maxEvents ?? 15, 1, 50);
+  const validSources = ["crm", "google", "all"];
+  const source = validSources.includes(filters?.calendarSource || "") ? filters!.calendarSource! : "crm";
 
-  const events = await prisma.calendarEvent.findMany({
-    where: {
-      companyId: user.companyId,
-      endTime: { gte: rangeStart },
-      startTime: { lte: rangeEnd },
-    },
-    orderBy: { startTime: "asc" },
-    take: maxEvents,
-    select: { id: true, title: true, description: true, startTime: true, endTime: true, color: true },
-  });
+  const fetchCrm = async () => {
+    const rows = await prisma.calendarEvent.findMany({
+      where: {
+        companyId: user.companyId,
+        endTime: { gte: rangeStart },
+        startTime: { lte: rangeEnd },
+      },
+      orderBy: { startTime: "asc" },
+      take: maxEvents,
+      select: { id: true, title: true, description: true, startTime: true, endTime: true, color: true },
+    });
+    return rows.map((e) => ({
+      id: String(e.id),
+      title: e.title,
+      description: e.description,
+      startTime: e.startTime instanceof Date ? e.startTime.toISOString() : String(e.startTime),
+      endTime: e.endTime instanceof Date ? e.endTime.toISOString() : String(e.endTime),
+      color: e.color,
+      source: "crm" as const,
+    }));
+  };
 
-  return { success: true, data: events };
+  const fetchGoogle = async () => {
+    const res = await getGoogleCalendarEvents(rangeStart.toISOString(), rangeEnd.toISOString());
+    if (!res.success || !res.data) return { events: [] as any[], connected: res.connected ?? false };
+    const events = res.data.map((e) => ({
+      id: String(e.id),
+      title: e.title,
+      description: e.description ?? null,
+      startTime: e.startTime instanceof Date ? e.startTime.toISOString() : String(e.startTime),
+      endTime: e.endTime instanceof Date ? e.endTime.toISOString() : String(e.endTime),
+      color: e.color ?? "#1a73e8",
+      source: "google" as const,
+    }));
+    return { events, connected: res.connected ?? true };
+  };
+
+  if (source === "crm") {
+    const events = await fetchCrm();
+    return { success: true, data: events };
+  }
+
+  if (source === "google") {
+    const { events, connected } = await fetchGoogle();
+    return { success: true, data: events.slice(0, maxEvents), googleConnected: connected };
+  }
+
+  // "all" — fetch both in parallel
+  const [crmEvents, googleResult] = await Promise.all([fetchCrm(), fetchGoogle()]);
+  const merged = [...crmEvents, ...googleResult.events]
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+    .slice(0, maxEvents);
+  return { success: true, data: merged, googleConnected: googleResult.connected };
 }
 
 // ── Mini Tasks ──────────────────────────────────────────────────────

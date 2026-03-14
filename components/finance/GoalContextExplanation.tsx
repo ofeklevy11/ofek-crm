@@ -115,7 +115,7 @@ export default function GoalContextExplanation({
             >
               <DetailRow label="מקור נתונים">
                 <Badge variant="gray">
-                  <Wallet className="w-3 h-3" />
+                  <Wallet className="w-3 h-3" aria-hidden="true" />
                   מודול כספים (תזרים)
                 </Badge>
               </DetailRow>
@@ -154,7 +154,7 @@ export default function GoalContextExplanation({
             >
               <DetailRow label="מקור נתונים">
                 <Badge variant="gray">
-                  <Database className="w-3 h-3" />
+                  <Database className="w-3 h-3" aria-hidden="true" />
                   טבלה: {tableName}
                 </Badge>
               </DetailRow>
@@ -182,7 +182,7 @@ export default function GoalContextExplanation({
             >
               <DetailRow label="מקור נתונים">
                 <Badge variant="gray">
-                  <Briefcase className="w-3 h-3" />
+                  <Briefcase className="w-3 h-3" aria-hidden="true" />
                   גביית ריטיינרים בלבד
                 </Badge>
               </DetailRow>
@@ -208,7 +208,7 @@ export default function GoalContextExplanation({
           >
             <DetailRow label="מקור נתונים">
               <Badge variant="gray">
-                <DollarSign className="w-3 h-3" />
+                <DollarSign className="w-3 h-3" aria-hidden="true" />
                 גביית תשלומים חד פעמיים
               </Badge>
             </DetailRow>
@@ -242,14 +242,14 @@ export default function GoalContextExplanation({
             >
               <DetailRow label="מקור הנתונים">
                 <Badge variant="gray">
-                  <Table className="w-3 h-3" />
+                  <Table className="w-3 h-3" aria-hidden="true" />
                   טבלה: {tableName}
                 </Badge>
               </DetailRow>
 
               <DetailRow label="שיטת חישוב">
                 <Badge variant="purple">
-                  <Hash className="w-3 h-3" />
+                  <Hash className="w-3 h-3" aria-hidden="true" />
                   {isSum ? "סיכום ערכים מספריים" : "ספירת כמות רשומות"}
                 </Badge>
               </DetailRow>
@@ -288,7 +288,7 @@ export default function GoalContextExplanation({
           >
             <DetailRow label="סוג היעד">
               <Badge variant={isReduce ? "purple" : "blue"}>
-                <CheckSquare className="w-3 h-3" />
+                <CheckSquare className="w-3 h-3" aria-hidden="true" />
                 {isReduce
                   ? "צמצום עומס (הורדת כמות)"
                   : "תפוקת עבודה (הגדלת כמות)"}
@@ -317,7 +317,7 @@ export default function GoalContextExplanation({
           >
             <DetailRow label="מקור נתונים">
               <Badge variant="gray">
-                <Calendar className="w-3 h-3" />
+                <Calendar className="w-3 h-3" aria-hidden="true" />
                 יומן פגישות מערכת
               </Badge>
             </DetailRow>
@@ -325,7 +325,7 @@ export default function GoalContextExplanation({
             <DetailRow label="סינון אירועים">
               {filters.searchQuery ? (
                 <Badge variant="yellow">
-                  <Filter className="w-3 h-3" />
+                  <Filter className="w-3 h-3" aria-hidden="true" />
                   שם/תיאור מכיל: "{filters.searchQuery}"
                 </Badge>
               ) : (
@@ -351,7 +351,7 @@ export default function GoalContextExplanation({
           >
             <DetailRow label="מקור נתונים">
               <Badge variant="gray">
-                <Users className="w-3 h-3" />
+                <Users className="w-3 h-3" aria-hidden="true" />
                 לקוחות פעילים
               </Badge>
             </DetailRow>
@@ -382,7 +382,7 @@ export default function GoalContextExplanation({
           >
             <DetailRow label="מקור נתונים">
               <Badge variant="gray">
-                <FileText className="w-3 h-3" />
+                <FileText className="w-3 h-3" aria-hidden="true" />
                 הצעות מחיר
               </Badge>
             </DetailRow>
@@ -415,7 +415,7 @@ export default function GoalContextExplanation({
           >
             <DetailRow label="מקור נתונים">
               <Badge variant="gray">
-                <Briefcase className="w-3 h-3" />
+                <Briefcase className="w-3 h-3" aria-hidden="true" />
                 מודול ריטיינרים
               </Badge>
             </DetailRow>
@@ -447,6 +447,8 @@ export default function GoalContextExplanation({
 
   return (
     <div
+      role="region"
+      aria-label="פרטי מקור נתונים"
       className={cn(
         mode === "card" &&
           "mt-4 pt-4 border-t border-gray-100 bg-gray-50/50 -mx-6 px-6 pb-4",

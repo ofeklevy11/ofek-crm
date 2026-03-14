@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   getUsers,
   getMessages,
@@ -14,6 +14,7 @@ import {
   getUnreadCounts,
 } from "@/app/actions/chat";
 import { useRealtime } from "@/hooks/use-realtime";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
 
@@ -80,6 +81,20 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
   const [editMemberIds, setEditMemberIds] = useState<number[]>([]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messageInputRef = useRef<HTMLInputElement>(null);
+  const liveRegionRef = useRef<HTMLDivElement>(null);
+  const tabUsersRef = useRef<HTMLButtonElement>(null);
+  const tabGroupsRef = useRef<HTMLButtonElement>(null);
+
+  // B3: Focus traps for modals
+  const createGroupModalRef = useFocusTrap(
+    () => setIsCreateGroupModalOpen(false),
+    isCreateGroupModalOpen,
+  );
+  const editGroupModalRef = useFocusTrap(
+    () => setIsEditGroupModalOpen(false),
+    isEditGroupModalOpen,
+  );
 
   // Fetch users and groups on mount
   useEffect(() => {
@@ -109,7 +124,7 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
      // ...
      const interval = setInterval(...)
      return () => clearInterval(interval);
-  }, [selectedUser, selectedGroup]); 
+  }, [selectedUser, selectedGroup]);
   */
 
   // Realtime Subscription
@@ -131,6 +146,14 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
         const data = await getGroupMessages(selectedGroup.id);
         setMessages(data);
         await markAsRead(selectedGroup.id, "group");
+      }
+
+      // B5: Announce new message to screen readers
+      if (liveRegionRef.current) {
+        liveRegionRef.current.textContent = "הודעה חדשה";
+        setTimeout(() => {
+          if (liveRegionRef.current) liveRegionRef.current.textContent = "";
+        }, 1000);
       }
 
       // Always update unread counts
@@ -181,6 +204,15 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // B4: Focus message input when conversation is selected
+  useEffect(() => {
+    if (selectedUser || selectedGroup) {
+      requestAnimationFrame(() => {
+        messageInputRef.current?.focus();
+      });
+    }
+  }, [selectedUser, selectedGroup]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -277,6 +309,7 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
     }
   };
 
+  // A6: Return both formatted string and ISO string for <time> elements
   const formatTime = (date: Date | string) => {
     if (!date) return "";
     return new Date(date).toLocaleTimeString([], {
@@ -285,10 +318,38 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
     });
   };
 
+  const toISOString = (date: Date | string) => {
+    if (!date) return "";
+    return new Date(date).toISOString();
+  };
+
   const getUnreadCount = (id: number, type: "user" | "group") => {
     const item = unreadCounts.find((c) => c.type === type && c.id === id);
     return item ? item.count : 0;
   };
+
+  // B2: Tab keyboard navigation (RTL: ArrowLeft = next, ArrowRight = previous)
+  // Fix 2: Focus the newly active tab after arrow key switch
+  const handleTabKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        const newTab = activeTab === "users" ? "groups" : "users";
+        setActiveTab(newTab);
+        requestAnimationFrame(() => {
+          (newTab === "users" ? tabUsersRef : tabGroupsRef).current?.focus();
+        });
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        const newTab = activeTab === "groups" ? "users" : "groups";
+        setActiveTab(newTab);
+        requestAnimationFrame(() => {
+          (newTab === "users" ? tabUsersRef : tabGroupsRef).current?.focus();
+        });
+      }
+    },
+    [activeTab],
+  );
 
   // ...
   const [showChatOnMobile, setShowChatOnMobile] = useState(false);
@@ -301,69 +362,115 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
     }
   }, [selectedUser, selectedGroup]);
 
+  // B4: Handle mobile back — focus first conversation item
+  const handleMobileBack = useCallback(() => {
+    setSelectedUser(null);
+    setSelectedGroup(null);
+  }, []);
+
   return (
     <div className="flex h-[calc(100vh-200px)] min-h-[500px] bg-white rounded-lg shadow-xl overflow-hidden border border-gray-200 relative">
-      {/* Sidebar */}
+      {/* B5: Live region for incoming message announcements */}
       <div
+        ref={liveRegionRef}
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      />
+
+      {/* A7: Sidebar wrapped in nav landmark */}
+      <nav
+        aria-label="רשימת שיחות"
         className={`md:w-1/3 border-r border-gray-200 bg-gray-50 flex-col ${
           showChatOnMobile ? "hidden md:flex" : "flex w-full"
         }`}
       >
         <div className="p-4 border-b border-gray-200 bg-white flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-800">צ'אט ארגוני</h2>
+          <h2 className="text-lg font-semibold text-gray-800">צ&apos;אט ארגוני</h2>
           <button
             onClick={() => setIsCreateGroupModalOpen(true)}
-            className="text-sm bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition"
+            className="text-sm bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
           >
             + קבוצה
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-gray-200 bg-white">
+        {/* B2: ARIA tabs pattern */}
+        <div
+          className="flex border-b border-gray-200 bg-white"
+          role="tablist"
+          aria-label="סוג שיחות"
+        >
           <button
-            className={`flex-1 py-3 text-sm font-medium relative ${
+            ref={tabUsersRef}
+            role="tab"
+            id="tab-users"
+            aria-selected={activeTab === "users"}
+            aria-controls="tabpanel-users"
+            tabIndex={activeTab === "users" ? 0 : -1}
+            className={`flex-1 py-3 text-sm font-medium relative focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
               activeTab === "users"
                 ? "text-blue-600 border-b-2 border-blue-600"
                 : "text-gray-500 hover:text-gray-700"
             }`}
             onClick={() => setActiveTab("users")}
+            onKeyDown={handleTabKeyDown}
           >
             משתמשים
-            {unreadCounts.filter((c) => c.type === "user").length >
-              0 /* Optional: show dot on tab */ && (
-              <span className="absolute top-2 left-1/4 w-2 h-2 bg-red-500 rounded-full"></span>
+            {unreadCounts.filter((c) => c.type === "user").length > 0 && (
+              <>
+                <span className="absolute top-2 left-1/4 w-2 h-2 bg-red-500 rounded-full" aria-hidden="true"></span>
+                <span className="sr-only">יש הודעות שלא נקראו</span>
+              </>
             )}
           </button>
           <button
-            className={`flex-1 py-3 text-sm font-medium relative ${
+            ref={tabGroupsRef}
+            role="tab"
+            id="tab-groups"
+            aria-selected={activeTab === "groups"}
+            aria-controls="tabpanel-groups"
+            tabIndex={activeTab === "groups" ? 0 : -1}
+            className={`flex-1 py-3 text-sm font-medium relative focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
               activeTab === "groups"
                 ? "text-blue-600 border-b-2 border-blue-600"
                 : "text-gray-500 hover:text-gray-700"
             }`}
             onClick={() => setActiveTab("groups")}
+            onKeyDown={handleTabKeyDown}
           >
             קבוצות
             {unreadCounts.filter((c) => c.type === "group").length > 0 && (
-              <span className="absolute top-2 left-1/4 w-2 h-2 bg-red-500 rounded-full"></span>
+              <>
+                <span className="absolute top-2 left-1/4 w-2 h-2 bg-red-500 rounded-full" aria-hidden="true"></span>
+                <span className="sr-only">יש הודעות שלא נקראו</span>
+              </>
             )}
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto w-full">
+        {/* Tab panels */}
+        <div
+          role="tabpanel"
+          id="tabpanel-users"
+          aria-labelledby="tab-users"
+          className={`flex-1 overflow-y-auto w-full ${activeTab !== "users" ? "hidden" : ""}`}
+        >
           {loading ? (
-            <div className="p-4 text-center text-gray-500">טוען...</div>
-          ) : activeTab === "users" ? (
+            <div className="p-4 text-center text-gray-500" role="status">טוען...</div>
+          ) : (
             (users || []).map((user) => {
               const unread = getUnreadCount(user.id, "user");
               return (
-                <div
+                <button
                   key={user.id}
+                  type="button"
                   onClick={() => {
                     setSelectedUser(user);
                     setSelectedGroup(null);
                   }}
-                  className={`p-4 cursor-pointer hover:bg-gray-100 transition-colors border-b border-gray-100 flex justify-between items-center ${
+                  aria-current={selectedUser?.id === user.id ? "true" : undefined}
+                  className={`w-full text-start p-4 hover:bg-gray-100 transition-colors border-b border-gray-100 flex justify-between items-center focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                     selectedUser?.id === user.id
                       ? "bg-blue-50 border-l-4 border-l-blue-500"
                       : ""
@@ -373,36 +480,52 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
                     <div className="font-medium text-gray-900 flex items-center gap-2">
                       {user.name}
                       {unread > 0 && (
-                        <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                          {unread}
-                        </span>
+                        <>
+                          <span aria-hidden="true" className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                            {unread}
+                          </span>
+                          <span className="sr-only">{unread} הודעות שלא נקראו</span>
+                        </>
                       )}
                     </div>
                     <div className="text-sm text-gray-500">{user.email}</div>
                   </div>
                   {user.lastMessageAt && (
-                    <div className="text-xs text-gray-400">
+                    <time dateTime={toISOString(user.lastMessageAt)} className="text-xs text-gray-500">
                       {formatTime(user.lastMessageAt)}
-                    </div>
+                    </time>
                   )}
-                </div>
+                </button>
               );
             })
+          )}
+        </div>
+
+        <div
+          role="tabpanel"
+          id="tabpanel-groups"
+          aria-labelledby="tab-groups"
+          className={`flex-1 overflow-y-auto w-full ${activeTab !== "groups" ? "hidden" : ""}`}
+        >
+          {loading ? (
+            <div className="p-4 text-center text-gray-500" role="status">טוען...</div>
           ) : (groups || []).length === 0 ? (
-            <div className="p-4 text-center text-gray-400 text-sm">
+            <div className="p-4 text-center text-gray-500 text-sm" role="status">
               אין קבוצות עדיין
             </div>
           ) : (
             (groups || []).map((group) => {
               const unread = getUnreadCount(group.id, "group");
               return (
-                <div
+                <button
                   key={group.id}
+                  type="button"
                   onClick={() => {
                     setSelectedGroup(group);
                     setSelectedUser(null);
                   }}
-                  className={`p-4 cursor-pointer hover:bg-gray-100 transition-colors border-b border-gray-100 flex items-center justify-between ${
+                  aria-current={selectedGroup?.id === group.id ? "true" : undefined}
+                  className={`w-full text-start p-4 hover:bg-gray-100 transition-colors border-b border-gray-100 flex items-center justify-between focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                     selectedGroup?.id === group.id
                       ? "bg-blue-50 border-l-4 border-l-blue-500"
                       : ""
@@ -416,7 +539,7 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
                         className="w-10 h-10 rounded-full object-cover border border-gray-200"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold" aria-hidden="true">
                         {group.name.substring(0, 2)}
                       </div>
                     )}
@@ -424,9 +547,12 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
                       <div className="font-medium text-gray-900 flex items-center gap-2">
                         {group.name}
                         {unread > 0 && (
-                          <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                            {unread}
-                          </span>
+                          <>
+                            <span aria-hidden="true" className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                              {unread}
+                            </span>
+                            <span className="sr-only">{unread} הודעות שלא נקראו</span>
+                          </>
                         )}
                       </div>
                       <div className="text-xs text-gray-500">
@@ -435,18 +561,21 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
                     </div>
                   </div>
                   {group.messages && group.messages.length > 0 && (
-                    <div className="text-xs text-gray-400">
+                    <time dateTime={toISOString(group.messages[0].createdAt)} className="text-xs text-gray-500">
                       {formatTime(group.messages[0].createdAt)}
-                    </div>
+                    </time>
                   )}
-                </div>
+                </button>
               );
             })
           )}
         </div>
-      </div>
+      </nav>
 
+      {/* A7: Chat area as region landmark */}
       <div
+        role="region"
+        aria-label="שיחה פעילה"
         className={`flex-1 flex-col bg-slate-50 relative ${
           showChatOnMobile ? "flex w-full" : "hidden md:flex"
         }`}
@@ -456,21 +585,20 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
             {/* Chat Header */}
             <div className="p-4 bg-white border-b border-gray-200 shadow-sm z-10 flex items-center justify-between sticky top-0">
               <div className="flex items-center gap-3">
-                {/* Back Button for Mobile */}
+                {/* A1: Back Button for Mobile with aria-label */}
                 <button
-                  className="md:hidden p-1 mr-[-8px] text-gray-500 hover:bg-gray-100 rounded-full"
-                  onClick={() => {
-                    setSelectedUser(null);
-                    setSelectedGroup(null);
-                  }}
+                  className="md:hidden p-1 mr-[-8px] text-gray-500 hover:bg-gray-100 rounded-full focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+                  onClick={handleMobileBack}
+                  aria-label="חזור לרשימת השיחות"
                 >
                   <svg
+                    aria-hidden="true"
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
                     strokeWidth={1.5}
                     stroke="currentColor"
-                    className="w-6 h-6 rotate-180" // rotate because RTL default maybe? arrow right is back in RTL
+                    className="w-6 h-6 rotate-180"
                   >
                     <path
                       strokeLinecap="round"
@@ -488,7 +616,7 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
                       className="w-10 h-10 rounded-full object-cover border border-gray-200"
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold shrink-0" aria-hidden="true">
                       {selectedGroup.name.substring(0, 2)}
                     </div>
                   ))}
@@ -496,7 +624,7 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
                   <h3 className="font-semibold text-gray-800">
                     {selectedUser ? selectedUser.name : selectedGroup?.name}
                   </h3>
-                  <span className="text-xs text-green-600">
+                  <span className="text-xs text-green-700">
                     {selectedUser
                       ? "מחובר (לכאורה)"
                       : `${selectedGroup?.members.length} חברים`}
@@ -504,14 +632,16 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
                 </div>
               </div>
 
-              {/* Edit Group Button */}
+              {/* A1: Edit Group Button with aria-label */}
               {selectedGroup && (
                 <button
                   onClick={openEditGroupModal}
-                  className="text-gray-400 hover:text-blue-600 p-2 rounded-full hover:bg-gray-100 transition"
+                  className="text-gray-500 hover:text-blue-600 p-2 rounded-full hover:bg-gray-100 transition focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
                   title="ערוך קבוצה"
+                  aria-label="ערוך קבוצה"
                 >
                   <svg
+                    aria-hidden="true"
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
@@ -529,17 +659,22 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
               )}
             </div>
 
-            {/* Messages */}
+            {/* A7: Messages container as log landmark */}
             <div
-              className="flex-1 p-4 overflow-y-auto space-y-4"
+              tabIndex={0}
+              className="flex-1 p-4 overflow-y-auto space-y-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
               ref={scrollRef}
+              role="log"
+              aria-live="polite"
+              aria-atomic="false"
+              aria-label="הודעות"
             >
               {loadingMessages ? (
-                <div className="flex justify-center items-center h-full text-gray-400">
+                <div className="flex justify-center items-center h-full text-gray-500" role="status">
                   טוען הודעות...
                 </div>
               ) : messages.length === 0 ? (
-                <div className="flex justify-center items-center h-full text-gray-400">
+                <div className="flex justify-center items-center h-full text-gray-500" role="status">
                   אין הודעות עדיין. תגיד שלום!
                 </div>
               ) : (
@@ -572,13 +707,15 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
                         >
                           {msg.content}
                         </div>
-                        <div
-                          className={`text-[10px] mt-1 text-right ${
-                            !isMe ? "text-gray-400" : "text-blue-200"
+                        {/* A6: Semantic time element */}
+                        <time
+                          dateTime={toISOString(msg.createdAt)}
+                          className={`block text-[10px] mt-1 text-right ${
+                            !isMe ? "text-gray-500" : "text-blue-50"
                           }`}
                         >
                           {formatTime(msg.createdAt)}
-                        </div>
+                        </time>
                       </div>
                     </div>
                   );
@@ -586,23 +723,29 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
               )}
             </div>
 
-            {/* Input Area */}
+            {/* A5: Input Area with label */}
             <div className="p-4 bg-white border-t border-gray-200">
               <form onSubmit={handleSendMessage} className="flex gap-2">
+                <label htmlFor="chat-message-input" className="sr-only">הקלד הודעה</label>
                 <input
+                  id="chat-message-input"
+                  ref={messageInputRef}
                   type="text"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   placeholder="הקלד הודעה..."
                   className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800"
                 />
+                {/* A1: Send button with aria-label */}
                 <button
                   type="submit"
                   disabled={!newMessage.trim()}
-                  className="bg-blue-600 text-white rounded-full p-2 w-10 h-10 flex items-center justify-center hover:bg-blue-700 transition disabled:opacity-50 shrink-0"
+                  className="bg-blue-600 text-white rounded-full p-2 w-10 h-10 flex items-center justify-center hover:bg-blue-700 transition disabled:opacity-50 shrink-0 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
                   title="שלח"
+                  aria-label="שלח הודעה"
                 >
                   <svg
+                    aria-hidden="true"
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 24 24"
                     fill="currentColor"
@@ -615,8 +758,10 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col justify-center items-center text-gray-400 bg-slate-50">
+          <div className="flex-1 flex flex-col justify-center items-center text-gray-500 bg-slate-50">
+            {/* A2: Decorative empty-state illustration */}
             <svg
+              aria-hidden="true"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -637,160 +782,186 @@ export default function ChatInterface({ currentUser }: ChatInterfaceProps) {
         )}
       </div>
 
-      {/* Create Group Modal */}
+      {/* B3: Create Group Modal with focus trap and ARIA dialog */}
       {isCreateGroupModalOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={() => setIsCreateGroupModalOpen(false)}>
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-xl font-bold mb-4 text-gray-800">
+          <div
+            ref={createGroupModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-group-title"
+            className="bg-white rounded-lg shadow-xl w-full max-w-md p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="create-group-title" className="text-xl font-bold mb-4 text-gray-800">
               יצירת קבוצה חדשה
             </h3>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                שם הקבוצה
-              </label>
-              <input
-                type="text"
-                className="w-full border border-gray-300 rounded px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="לדוגמה: צוות מכירות"
-                value={newGroupName}
-                onChange={(e) => setNewGroupName(e.target.value)}
-              />
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                קישור לתמונה (אופציונלי)
-              </label>
-              <input
-                type="text"
-                className="w-full border border-gray-300 rounded px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="https://example.com/image.jpg"
-                value={newGroupImage}
-                onChange={(e) => setNewGroupImage(e.target.value)}
-              />
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                בחר משתתפים
-              </label>
-              <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
-                {users.map((user) => (
-                  <div key={user.id} className="flex items-center gap-2 mb-2">
-                    <input
-                      type="checkbox"
-                      id={`user-${user.id}`}
-                      checked={selectedMemberIds.includes(user.id)}
-                      onChange={() => toggleMemberSelection(user.id)}
-                      className="rounded text-blue-600 focus:ring-blue-500"
-                    />
-                    <label
-                      htmlFor={`user-${user.id}`}
-                      className="text-sm text-gray-700 cursor-pointer select-none"
-                    >
-                      {user.name}
-                    </label>
-                  </div>
-                ))}
+            <form onSubmit={handleCreateGroup}>
+              <div className="mb-4">
+                <label htmlFor="create-group-name" className="block text-sm font-medium text-gray-700 mb-1">
+                  שם הקבוצה
+                </label>
+                <input
+                  id="create-group-name"
+                  type="text"
+                  required
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="לדוגמה: צוות מכירות"
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                />
               </div>
-            </div>
 
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setIsCreateGroupModalOpen(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
-              >
-                ביטול
-              </button>
-              <button
-                onClick={handleCreateGroup}
-                disabled={
-                  !newGroupName.trim() || selectedMemberIds.length === 0
-                }
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                צור קבוצה
-              </button>
-            </div>
+              <div className="mb-4">
+                <label htmlFor="create-group-image" className="block text-sm font-medium text-gray-700 mb-1">
+                  קישור לתמונה (אופציונלי)
+                </label>
+                <input
+                  id="create-group-image"
+                  type="text"
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="https://example.com/image.jpg"
+                  value={newGroupImage}
+                  onChange={(e) => setNewGroupImage(e.target.value)}
+                />
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  בחר משתתפים
+                </label>
+                <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
+                  {users.map((user) => (
+                    <div key={user.id} className="flex items-center gap-2 mb-2">
+                      <input
+                        type="checkbox"
+                        id={`user-${user.id}`}
+                        checked={selectedMemberIds.includes(user.id)}
+                        onChange={() => toggleMemberSelection(user.id)}
+                        className="rounded text-blue-600 focus:ring-blue-500"
+                      />
+                      <label
+                        htmlFor={`user-${user.id}`}
+                        className="text-sm text-gray-700 cursor-pointer select-none"
+                      >
+                        {user.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateGroupModalOpen(false)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 rounded"
+                >
+                  ביטול
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    !newGroupName.trim() || selectedMemberIds.length === 0
+                  }
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+                >
+                  צור קבוצה
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* Edit Group Modal */}
+      {/* B3: Edit Group Modal with focus trap and ARIA dialog */}
       {isEditGroupModalOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={() => setIsEditGroupModalOpen(false)}>
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-xl font-bold mb-4 text-gray-800">
+          <div
+            ref={editGroupModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-group-title"
+            className="bg-white rounded-lg shadow-xl w-full max-w-md p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="edit-group-title" className="text-xl font-bold mb-4 text-gray-800">
               עריכת קבוצה
             </h3>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                שם הקבוצה
-              </label>
-              <input
-                type="text"
-                className="w-full border border-gray-300 rounded px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="לדוגמה: צוות מכירות"
-                value={editGroupName}
-                onChange={(e) => setEditGroupName(e.target.value)}
-              />
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                קישור לתמונה (אופציונלי)
-              </label>
-              <input
-                type="text"
-                className="w-full border border-gray-300 rounded px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="https://example.com/image.jpg"
-                value={editGroupImage}
-                onChange={(e) => setEditGroupImage(e.target.value)}
-              />
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                בחר משתתפים
-              </label>
-              <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
-                {users.map((user) => (
-                  <div key={user.id} className="flex items-center gap-2 mb-2">
-                    <input
-                      type="checkbox"
-                      id={`edit-user-${user.id}`}
-                      checked={editMemberIds.includes(user.id)}
-                      onChange={() => toggleMemberSelection(user.id, true)}
-                      className="rounded text-blue-600 focus:ring-blue-500"
-                    />
-                    <label
-                      htmlFor={`edit-user-${user.id}`}
-                      className="text-sm text-gray-700 cursor-pointer select-none"
-                    >
-                      {user.name}
-                    </label>
-                  </div>
-                ))}
+            <form onSubmit={handleUpdateGroup}>
+              <div className="mb-4">
+                <label htmlFor="edit-group-name" className="block text-sm font-medium text-gray-700 mb-1">
+                  שם הקבוצה
+                </label>
+                <input
+                  id="edit-group-name"
+                  type="text"
+                  required
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="לדוגמה: צוות מכירות"
+                  value={editGroupName}
+                  onChange={(e) => setEditGroupName(e.target.value)}
+                />
               </div>
-            </div>
 
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setIsEditGroupModalOpen(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
-              >
-                ביטול
-              </button>
-              <button
-                onClick={handleUpdateGroup}
-                disabled={!editGroupName.trim() || editMemberIds.length === 0}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                שמור שינויים
-              </button>
-            </div>
+              <div className="mb-4">
+                <label htmlFor="edit-group-image" className="block text-sm font-medium text-gray-700 mb-1">
+                  קישור לתמונה (אופציונלי)
+                </label>
+                <input
+                  id="edit-group-image"
+                  type="text"
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="https://example.com/image.jpg"
+                  value={editGroupImage}
+                  onChange={(e) => setEditGroupImage(e.target.value)}
+                />
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  בחר משתתפים
+                </label>
+                <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
+                  {users.map((user) => (
+                    <div key={user.id} className="flex items-center gap-2 mb-2">
+                      <input
+                        type="checkbox"
+                        id={`edit-user-${user.id}`}
+                        checked={editMemberIds.includes(user.id)}
+                        onChange={() => toggleMemberSelection(user.id, true)}
+                        className="rounded text-blue-600 focus:ring-blue-500"
+                      />
+                      <label
+                        htmlFor={`edit-user-${user.id}`}
+                        className="text-sm text-gray-700 cursor-pointer select-none"
+                      >
+                        {user.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditGroupModalOpen(false)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 rounded"
+                >
+                  ביטול
+                </button>
+                <button
+                  type="submit"
+                  disabled={!editGroupName.trim() || editMemberIds.length === 0}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+                >
+                  שמור שינויים
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

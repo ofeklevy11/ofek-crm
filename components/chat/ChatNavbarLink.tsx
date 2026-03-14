@@ -68,13 +68,17 @@ export default function ChatNavbarLink({ userId }: ChatNavbarLinkProps) {
     <Link
       href="/chat"
       prefetch={false}
+      aria-label={totalUnread > 0 ? `Chat - ${totalUnread > 99 ? "99+" : totalUnread} הודעות שלא נקראו` : "Chat"}
       className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[#4f95ff]/10 to-blue-400/10 hover:from-[#4f95ff]/20 hover:to-blue-400/20 text-[#4f95ff] text-sm font-medium border border-[#4f95ff]/20 transition-all whitespace-nowrap shadow-sm hover:shadow-md flex items-center gap-2"
     >
       Chat
       {totalUnread > 0 && (
-        <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-          {totalUnread > 99 ? "99+" : totalUnread}
-        </span>
+        <>
+          <span aria-hidden="true" className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+            {totalUnread > 99 ? "99+" : totalUnread}
+          </span>
+          <span className="sr-only">{totalUnread > 99 ? "99+" : totalUnread} הודעות שלא נקראו</span>
+        </>
       )}
     </Link>
   );

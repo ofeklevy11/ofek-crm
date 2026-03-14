@@ -1,4 +1,12 @@
 ## Rules
-- never run prisma migrate dev, let me know when you want to run it by texting it in the end of your response
-- write the code in the most efficient way for resource usage and for good scaling
-- never run git stash
+- When working with Prisma migrations, do not run `npx prisma migrate dev` — instead, notify us that changes were made and instruct us to run it manually.
+- When connecting to the VPS, you have full SSH access and can always connect to it.
+- When writing any code, maintain legal-level accessibility standards and continue in our established accessibility direction.
+- When writing any code, keep it clean, scalable, and well-structured, making smart use of system resources.
+- When writing any code, write defensively against security vulnerabilities — hardened against breaches and not exploitable.
+- When writing tests, do not break existing ones and write tests for all new features and functionality.
+- When handling sensitive data, never hardcode secrets, API keys, or sensitive values — always use environment variables via `.env`.
+- When modifying existing API routes or database schema, always ask for explicit approval before making any changes.
+- When handling errors, use structured error handling, meaningful error messages, appropriate HTTP status codes, and never expose internal errors to the client.
+- When using git, never commit or push without our explicit approval.
+- When working with the database, always use proper indexes, avoid N+1 queries, use transactions where needed, and write efficient queries that minimize load on the database.

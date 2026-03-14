@@ -4,10 +4,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Copy, Info, Terminal, Calendar } from "lucide-react";
+import { Check, Copy, Info, Calendar, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
 
 export default function MakeCalendarGuide() {
   const [copied, setCopied] = useState<string | null>(null);
@@ -21,25 +20,23 @@ export default function MakeCalendarGuide() {
   const jsonExample = `{
   "title": "כותרת חופשית לבחירתכם",
   "description": "תיאור חופשי לבחירתכם",
-  "email": "your-email@example.com", 
+  "email": "your-email@example.com",
   "start_time": "2026-01-01T12:00:00",
   "end_time": "2026-01-01T13:00:00",
   "color": "blue"
 }`;
 
   return (
-    <div className="min-h-screen bg-slate-50" dir="rtl">
+    <div className="min-h-screen bg-slate-50">
       <main className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Breadcrumbs */}
-        <div className="flex items-center text-sm text-slate-500 mb-6">
-          <Link href="/guides" className="hover:text-blue-600">
-            מדריכים
-          </Link>
-          <ChevronRight className="w-4 h-4 mx-2" />
-          <span className="text-slate-900 font-medium">
-            יצירת אירועים ביומן
-          </span>
-        </div>
+        <nav aria-label="ניווט פירורי לחם" className="mb-6">
+          <ol className="flex items-center text-sm text-slate-500">
+            <li><Link href="/guides" className="hover:text-blue-600">מדריכים</Link></li>
+            <li aria-hidden="true"><ChevronRight className="w-4 h-4 mx-2" /></li>
+            <li aria-current="page"><span className="text-slate-900 font-medium">יצירת אירועים ביומן</span></li>
+          </ol>
+        </nav>
 
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-slate-900 mb-4">
@@ -54,7 +51,7 @@ export default function MakeCalendarGuide() {
             <Link href="/guides/make-integration/generator?mode=CALENDAR">
               <Button className="w-full sm:w-auto h-12 text-lg px-8 gap-2 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-md transition-all hover:scale-[1.02]">
                 <div className="bg-white/20 p-1 rounded">
-                  <Calendar className="w-5 h-5 text-white" />
+                  <Calendar className="w-5 h-5 text-white" aria-hidden="true" />
                 </div>
                 לממשק יצירת קריאת POST לאירועים
               </Button>
@@ -106,34 +103,34 @@ export default function MakeCalendarGuide() {
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-4">
                     <h3 className="font-semibold text-lg">פרטי הבקשה:</h3>
-                    <div className="space-y-4 text-sm">
+                    <dl className="space-y-4 text-sm">
                       <div className="grid grid-cols-3 gap-2 border-b pb-2">
-                        <span className="font-medium text-slate-500">URL</span>
-                        <div className="col-span-2 font-mono bg-slate-100 px-2 py-1 rounded select-all break-all">
+                        <dt className="font-medium text-slate-500">URL</dt>
+                        <dd className="col-span-2 font-mono bg-slate-100 px-2 py-1 rounded select-all break-all">
                           https://your-domain.com/api/make/calendar
-                        </div>
+                        </dd>
                       </div>
                       <div className="grid grid-cols-3 gap-2 border-b pb-2">
-                        <span className="font-medium text-slate-500">
+                        <dt className="font-medium text-slate-500">
                           Method
-                        </span>
-                        <div className="col-span-2 font-mono">POST</div>
+                        </dt>
+                        <dd className="col-span-2 font-mono">POST</dd>
                       </div>
                       <div className="grid grid-cols-3 gap-2 border-b pb-2">
-                        <span className="font-medium text-slate-500">
+                        <dt className="font-medium text-slate-500">
                           Body type
-                        </span>
-                        <div className="col-span-2 font-mono">Raw</div>
+                        </dt>
+                        <dd className="col-span-2 font-mono">Raw</dd>
                       </div>
                       <div className="grid grid-cols-3 gap-2 border-b pb-2">
-                        <span className="font-medium text-slate-500">
+                        <dt className="font-medium text-slate-500">
                           Content type
-                        </span>
-                        <div className="col-span-2 font-mono">
+                        </dt>
+                        <dd className="col-span-2 font-mono">
                           JSON (application/json)
-                        </div>
+                        </dd>
                       </div>
-                    </div>
+                    </dl>
                   </div>
 
                   <div className="space-y-4">
@@ -166,8 +163,8 @@ export default function MakeCalendarGuide() {
             </h2>
             <Card>
               <CardContent className="pt-6 space-y-4">
-                <Alert className="bg-amber-100 border-amber-200 text-amber-900">
-                  <Info className="h-4 w-4 text-amber-700" />
+                <Alert className="bg-amber-100 border-amber-200 text-amber-900" role="note">
+                  <Info className="h-4 w-4 text-amber-700" aria-hidden="true" />
                   <AlertDescription className="font-bold">
                     שימו לב: פורמט התאריך הוא ISO-8601 (שנה-חודש-יום).
                     <br />
@@ -176,16 +173,16 @@ export default function MakeCalendarGuide() {
                   </AlertDescription>
                 </Alert>
 
-                <Alert className="bg-blue-50 border-blue-200 text-blue-900">
-                  <Info className="h-4 w-4 text-blue-600" />
+                <Alert className="bg-blue-50 border-blue-200 text-blue-900" role="note">
+                  <Info className="h-4 w-4 text-blue-600" aria-hidden="true" />
                   <AlertDescription className="font-bold">
                     פורמט תאריכים: יש להקפיד על פורמט ISO-8601 מלא. לדוגמה:
                     2026-01-01T12:00:00 (תאריך ושעה מופרדים ב-T)
                   </AlertDescription>
                 </Alert>
 
-                <Alert className="bg-amber-50 border-amber-200 text-amber-900 mb-4">
-                  <Info className="h-4 w-4 text-amber-600" />
+                <Alert className="bg-amber-50 border-amber-200 text-amber-900 mb-4" role="note">
+                  <Info className="h-4 w-4 text-amber-600" aria-hidden="true" />
                   <AlertDescription>
                     שדה <strong>email</strong> הוא קריטי! בלי אימייל תקין של
                     משתמש קיים במערכת, הבקשה תיכשל.
@@ -201,9 +198,9 @@ export default function MakeCalendarGuide() {
                       onClick={() => copyToClipboard(jsonExample, "json")}
                     >
                       {copied === "json" ? (
-                        <Check className="w-4 h-4 ml-2 text-green-500" />
+                        <Check className="w-4 h-4 ml-2 text-green-500" aria-hidden="true" />
                       ) : (
-                        <Copy className="w-4 h-4 ml-2" />
+                        <Copy className="w-4 h-4 ml-2" aria-hidden="true" />
                       )}
                       {copied === "json" ? "הועתק!" : "העתק קוד"}
                     </Button>
@@ -211,15 +208,17 @@ export default function MakeCalendarGuide() {
                   <pre
                     className="bg-slate-900 text-slate-50 p-6 rounded-lg overflow-x-auto font-mono text-sm leading-relaxed"
                     dir="ltr"
+                    role="group"
+                    aria-label="דוגמת JSON ליצירת אירוע יומן"
                   >
                     <code>{jsonExample}</code>
                   </pre>
                 </div>
 
                 <div className="mt-4">
-                  <h4 className="font-semibold mb-2 text-slate-700">
+                  <h3 className="font-semibold mb-2 text-slate-700">
                     הסבר על השדות:
-                  </h4>
+                  </h3>
                   <ul className="list-disc list-inside text-sm text-slate-600 space-y-1">
                     <li>
                       <strong>title:</strong> כותרת האירוע (חובה).
@@ -253,6 +252,10 @@ export default function MakeCalendarGuide() {
             </Card>
           </section>
         </div>
+
+        <span className="sr-only" aria-live="polite" aria-atomic="true">
+          {copied ? "הטקסט הועתק ללוח" : ""}
+        </span>
       </main>
     </div>
   );

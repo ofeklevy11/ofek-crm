@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import CreateClientForm from "@/components/finance/CreateClientForm";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+
+export const metadata: Metadata = { title: "לקוח חדש" };
 
 export default function NewClientPage() {
   return (

@@ -15,6 +15,7 @@ import { applyFilters } from "@/lib/viewProcessor";
 import {
   Table,
   TableBody,
+  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
@@ -106,12 +107,12 @@ function SortableColumnItem({ id, label, onRemove }: { id: string; label: string
 
   return (
     <div ref={setNodeRef} style={style} className="flex items-center gap-2 px-2 py-1.5 rounded border bg-background text-sm">
-      <button type="button" {...attributes} {...listeners} aria-label="גרור לשינוי סדר עמודה" className="cursor-grab touch-none text-muted-foreground hover:text-foreground">
-        <GripVertical className="h-4 w-4" />
+      <button type="button" {...attributes} {...listeners} aria-label="גרור לשינוי סדר עמודה" aria-roledescription="כפתור גרירה" className="cursor-grab touch-none text-muted-foreground hover:text-foreground">
+        <GripVertical className="h-4 w-4" aria-hidden="true" />
       </button>
       <span className="flex-1 truncate">{label}</span>
       <button type="button" onClick={onRemove} aria-label={`הסר עמודה ${label}`} className="text-muted-foreground hover:text-destructive">
-        <X className="h-3.5 w-3.5" />
+        <X className="h-3.5 w-3.5" aria-hidden="true" />
       </button>
     </div>
   );
@@ -964,7 +965,7 @@ export default function RecordTable({
                 aria-expanded={isAdvancedSearchOpen}
                 onClick={() => setIsAdvancedSearchOpen(!isAdvancedSearchOpen)}
               >
-                <Search className="h-4 w-4 text-primary" />
+                <Search className="h-4 w-4 text-primary" aria-hidden="true" />
                 <span>
                   {isAdvancedSearchOpen ? "סגור חיפוש חכם" : "פתח חיפוש חכם"}
                 </span>
@@ -1056,7 +1057,7 @@ export default function RecordTable({
                               size="sm"
                               className="gap-2"
                             >
-                              <Download className="h-4 w-4" />
+                              <Download className="h-4 w-4" aria-hidden="true" />
                               ייצוא נבחרים
                             </Button>
                           </DropdownMenuTrigger>
@@ -1077,7 +1078,7 @@ export default function RecordTable({
                         disabled
                         aria-description="תכונה זו זמינה במחשב בלבד"
                       >
-                        <Download className="h-4 w-4" />
+                        <Download className="h-4 w-4" aria-hidden="true" />
                         ייצוא נבחרים (במחשב בלבד)
                       </Button>
                     </>
@@ -1091,7 +1092,7 @@ export default function RecordTable({
                       disabled={isDeleting}
                       className="gap-2"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                       {isDeleting ? "מוחק..." : "מחק נבחרים"}
                     </Button>
                   )}
@@ -1102,7 +1103,7 @@ export default function RecordTable({
                 <Dialog open={columnSelectorOpen} onOpenChange={handleColumnDialogOpen}>
                   <DialogTrigger asChild>
                     <Button variant="outline" size="sm" className="gap-2">
-                      <Columns3 className="h-4 w-4" />
+                      <Columns3 className="h-4 w-4" aria-hidden="true" />
                       עמודות ({visibleFields.length}/{uniqueFields.length})
                     </Button>
                   </DialogTrigger>
@@ -1158,9 +1159,10 @@ export default function RecordTable({
                                     setLocalOrder((prev) => [...prev, field.name]);
                                   }}
                                   disabled={localOrder.length >= 12}
+                                  aria-label={`הצג עמודה ${field.label}`}
                                   className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/50 text-sm w-full text-right disabled:opacity-50"
                                 >
-                                  <Eye className="h-4 w-4 text-muted-foreground shrink-0" />
+                                  <Eye className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
                                   <span className="truncate">{field.label}</span>
                                 </button>
                               ))}
@@ -1185,7 +1187,7 @@ export default function RecordTable({
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="sm" className="gap-2">
-                          <ArrowUpDown className="h-4 w-4" />
+                          <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
                           ייבוא / ייצוא נתונים
                         </Button>
                       </DropdownMenuTrigger>
@@ -1196,7 +1198,7 @@ export default function RecordTable({
                             <DropdownMenuItem
                               onClick={() => setShowImportModal(true)}
                             >
-                              <Upload className="h-4 w-4 ml-2" />
+                              <Upload className="h-4 w-4 ml-2" aria-hidden="true" />
                               ייבוא נתונים (CSV/TXT)
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -1206,13 +1208,13 @@ export default function RecordTable({
                         <DropdownMenuItem
                           onClick={() => handleExportAll("csv")}
                         >
-                          <FileDown className="h-4 w-4 ml-2" />
+                          <FileDown className="h-4 w-4 ml-2" aria-hidden="true" />
                           CSV (Excel)
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => handleExportAll("txt")}
                         >
-                          <FileDown className="h-4 w-4 ml-2" />
+                          <FileDown className="h-4 w-4 ml-2" aria-hidden="true" />
                           TXT (Text)
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -1225,7 +1227,7 @@ export default function RecordTable({
                     disabled
                     aria-description="תכונה זו זמינה במחשב בלבד"
                   >
-                    <ArrowUpDown className="h-4 w-4" />
+                    <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
                     ייבוא / ייצוא (במחשב בלבד)
                   </Button>
                 </>
@@ -1256,6 +1258,7 @@ export default function RecordTable({
             }}
           >
             <Table aria-label="טבלת רשומות">
+              <TableCaption className="sr-only">רשומות טבלה</TableCaption>
               <TableHeader className="bg-muted/30">
                 <TableRow>
                   <TableHead className="w-[50px] text-center">
@@ -1328,7 +1331,7 @@ export default function RecordTable({
                           }}
                           aria-label="ערוך רשומה"
                         >
-                          <Edit2 className="h-4 w-4" />
+                          <Edit2 className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       )}
                     </TableCell>
@@ -1719,7 +1722,7 @@ export default function RecordTable({
                                   title={att.displayName || att.filename}
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  <Paperclip className="h-3 w-3 shrink-0" />
+                                  <Paperclip className="h-3 w-3 shrink-0" aria-hidden="true" />
                                   <span className="truncate">
                                     {att.displayName || att.filename}
                                   </span>
@@ -1738,7 +1741,7 @@ export default function RecordTable({
                                         setEditLinkName(att.displayName || "");
                                       }}
                                     >
-                                      <Pencil className="h-3 w-3" />
+                                      <Pencil className="h-3 w-3" aria-hidden="true" />
                                     </Button>
                                     <Button
                                       variant="ghost"
@@ -1753,7 +1756,7 @@ export default function RecordTable({
                                         )
                                       }
                                     >
-                                      <Trash2 className="h-3 w-3" />
+                                      <Trash2 className="h-3 w-3" aria-hidden="true" />
                                     </Button>
                                   </div>
                                 )}
@@ -1830,7 +1833,7 @@ export default function RecordTable({
                                   title={file.displayName || file.name}
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  <FileIcon className="h-3 w-3 shrink-0" />
+                                  <FileIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
                                   <span className="truncate">
                                     {file.displayName || file.name}
                                   </span>
@@ -1849,7 +1852,7 @@ export default function RecordTable({
                                       }}
                                       aria-label="ערוך שם קובץ"
                                     >
-                                      <Pencil className="h-3 w-3" />
+                                      <Pencil className="h-3 w-3" aria-hidden="true" />
                                     </Button>
                                   </div>
                                 )}
@@ -1867,9 +1870,10 @@ export default function RecordTable({
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 px-2 text-[10px] text-muted-foreground hover:text-primary gap-1 mt-1"
+                                aria-label="הוסף קובץ או לינק"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <Plus className="h-3 w-3" />
+                                <Plus className="h-3 w-3" aria-hidden="true" />
                                 הוסף
                               </Button>
                             </PopoverTrigger>
@@ -1897,7 +1901,7 @@ export default function RecordTable({
                                     htmlFor={`file-upload-${record.id}`}
                                     className="cursor-pointer flex items-center gap-2 p-2 rounded-md border border-dashed border-muted-foreground/30 hover:border-primary hover:bg-primary/5 transition-colors"
                                   >
-                                    <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                    <Paperclip className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                                     <div className="flex-1">
                                       <div className="text-xs font-medium">
                                         העלה קובץ
@@ -1912,7 +1916,7 @@ export default function RecordTable({
                                 {/* Link Input */}
                                 <div className="space-y-2">
                                   <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                                    <Link className="h-3 w-3" />
+                                    <Link className="h-3 w-3" aria-hidden="true" />
                                     הוסף לינק
                                   </div>
                                   <Input
@@ -2016,7 +2020,7 @@ export default function RecordTable({
 
             {filteredRecords.length === 0 && (
               <div className="p-12 text-center text-muted-foreground bg-muted/10" role="status" aria-live="polite">
-                <Search className="h-10 w-10 mx-auto mb-3 opacity-20" />
+                <Search className="h-10 w-10 mx-auto mb-3 opacity-20" aria-hidden="true" />
                 <p>לא נמצאו רשומות התואמות את החיפוש</p>
               </div>
             )}

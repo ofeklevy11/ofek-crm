@@ -9,7 +9,7 @@ import { isRateLimitError } from "@/lib/rate-limit-utils";
 import RateLimitFallback from "@/components/RateLimitFallback";
 
 export const metadata = {
-  title: "תהליכי עבודה | BizlyCRM",
+  title: "תהליכי עבודה",
   description: "ניהול פייפליינים ותהליכי עבודה",
 };
 

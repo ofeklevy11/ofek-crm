@@ -194,7 +194,7 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
         <Button
           variant="ghost"
           size="icon"
-          aria-label="התראות"
+          aria-label={unreadCount > 0 ? `התראות - ${unreadCount} חדשות` : "התראות"}
           className="relative text-muted-foreground hover:text-foreground rounded-full h-8 w-8 lg:h-9 lg:w-9"
         >
           <Bell className="h-5 w-5" />
@@ -237,6 +237,14 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
               {notifications.map((notification) => (
                 <div
                   key={notification.id}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleNotificationClick(notification);
+                    }
+                  }}
                   className={cn(
                     "relative px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer group",
                     !notification.read && "bg-primary/5",
@@ -279,7 +287,7 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
                           link: null,
                         });
                       }}
-                      title="סמן כנקרא"
+                      aria-label="סמן כנקרא"
                     >
                       <span className="sr-only">סמן כנקרא</span>
                       <div className="h-2 w-2 rounded-full bg-primary" />

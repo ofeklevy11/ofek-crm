@@ -1,15 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import MeetingsList from "@/components/Meetings/MeetingsList";
-import MeetingsCalendar from "@/components/Meetings/MeetingsCalendar";
-import MeetingTypesList from "@/components/Meetings/MeetingTypesList";
-import AvailabilityEditor from "@/components/Meetings/AvailabilityEditor";
-import AvailabilityBlocksList from "@/components/Meetings/AvailabilityBlocksList";
-import GlobalMeetingAutomationsModal from "@/components/Meetings/GlobalMeetingAutomationsModal";
 import { CalendarDays, List, Layers, Clock, Zap } from "lucide-react";
+
+// Lazy-load non-default-tab components to reduce initial bundle
+const MeetingsCalendar = dynamic(() => import("@/components/Meetings/MeetingsCalendar"), { ssr: false });
+const MeetingTypesList = dynamic(() => import("@/components/Meetings/MeetingTypesList"), { ssr: false });
+const AvailabilityEditor = dynamic(() => import("@/components/Meetings/AvailabilityEditor"), { ssr: false });
+const AvailabilityBlocksList = dynamic(() => import("@/components/Meetings/AvailabilityBlocksList"), { ssr: false });
+const GlobalMeetingAutomationsModal = dynamic(() => import("@/components/Meetings/GlobalMeetingAutomationsModal"), { ssr: false });
 
 interface MeetingsPageClientProps {
   canManage: boolean;
@@ -129,16 +132,16 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
           <div className="overflow-x-auto scrollbar-hide max-w-full">
           <TabsList className="bg-white/[0.08] border border-white/20 p-1 rounded-xl">
             <TabsTrigger value="meetings" className="gap-1.5 text-white/60 data-[state=active]:bg-white/[0.12] data-[state=active]:shadow-none data-[state=active]:text-white">
-              <List className="size-4" />
+              <List className="size-4" aria-hidden="true" />
               פגישות
             </TabsTrigger>
             <TabsTrigger value="calendar" className="gap-1.5 text-white/60 data-[state=active]:bg-white/[0.12] data-[state=active]:shadow-none data-[state=active]:text-white">
-              <CalendarDays className="size-4" />
+              <CalendarDays className="size-4" aria-hidden="true" />
               יומן פגישות
             </TabsTrigger>
             {canManage && (
               <TabsTrigger value="types" className="gap-1.5 text-white/60 data-[state=active]:bg-white/[0.12] data-[state=active]:shadow-none data-[state=active]:text-white">
-                <Layers className="size-4" />
+                <Layers className="size-4" aria-hidden="true" />
                 סוגי פגישות
                 {meetingTypes.length > 0 && (
                   <span className="mr-1 inline-flex items-center justify-center rounded-full bg-white/[0.12] px-1.5 py-0.5 text-xs font-medium leading-none text-white/70">
@@ -149,7 +152,7 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
             )}
             {canManage && (
               <TabsTrigger value="availability" className="gap-1.5 text-white/60 data-[state=active]:bg-white/[0.12] data-[state=active]:shadow-none data-[state=active]:text-white">
-                <Clock className="size-4" />
+                <Clock className="size-4" aria-hidden="true" />
                 זמינות
               </TabsTrigger>
             )}
@@ -163,7 +166,7 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
               className="hidden sm:inline-flex gap-1.5 bg-white/[0.08] hover:bg-white/[0.15] text-white/80 border-white/20"
               onClick={() => setAutomationsOpen(true)}
             >
-              <Zap className="size-4" />
+              <Zap className="size-4" aria-hidden="true" />
               אוטומציות
             </Button>
           )}
@@ -205,7 +208,7 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
         )}
       </Tabs>
 
-      {canManage && (
+      {canManage && automationsOpen && (
         <GlobalMeetingAutomationsModal
           open={automationsOpen}
           onClose={() => setAutomationsOpen(false)}

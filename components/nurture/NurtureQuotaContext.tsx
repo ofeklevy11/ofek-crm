@@ -1,19 +1,24 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { UserTier } from "@/lib/nurture-rate-limit";
 
-interface QuotaState {
+// Split into two contexts to prevent timer re-renders from cascading to all consumers
+interface QuotaDataState {
   used: number;
   limit: number;
   remaining: number;
-  resetInSeconds: number;
   tier: UserTier;
   isUnlimited: boolean;
   refreshQuota: () => Promise<void>;
 }
 
-const NurtureQuotaContext = createContext<QuotaState | null>(null);
+interface QuotaTimerState {
+  resetInSeconds: number;
+}
+
+const NurtureQuotaDataContext = createContext<QuotaDataState | null>(null);
+const NurtureQuotaTimerContext = createContext<QuotaTimerState | null>(null);
 
 const TIER_LIMITS: Record<UserTier, number> = {
   basic: 3,
@@ -84,17 +89,35 @@ export function NurtureQuotaProvider({
     await fetchQuota();
   }, [fetchQuota]);
 
+  // Memoize data context value so it only changes when data fields change (not on timer tick)
+  const dataValue = useMemo(
+    () => ({ used, limit, remaining, tier, isUnlimited, refreshQuota }),
+    [used, limit, remaining, tier, isUnlimited, refreshQuota]
+  );
+
+  // Timer value changes every second (only NurtureQuotaBadge subscribes)
+  const timerValue = useMemo(() => ({ resetInSeconds }), [resetInSeconds]);
+
   return (
-    <NurtureQuotaContext.Provider
-      value={{ used, limit, remaining, resetInSeconds, tier, isUnlimited, refreshQuota }}
-    >
-      {children}
-    </NurtureQuotaContext.Provider>
+    <NurtureQuotaDataContext.Provider value={dataValue}>
+      <NurtureQuotaTimerContext.Provider value={timerValue}>
+        {children}
+      </NurtureQuotaTimerContext.Provider>
+    </NurtureQuotaDataContext.Provider>
   );
 }
 
-export function useNurtureQuota(): QuotaState {
-  const ctx = useContext(NurtureQuotaContext);
-  if (!ctx) throw new Error("useNurtureQuota must be used within NurtureQuotaProvider");
+/** Use quota data (used/limit/remaining) — does NOT re-render on timer tick */
+export function useNurtureQuota(): QuotaDataState & { resetInSeconds: number } {
+  const data = useContext(NurtureQuotaDataContext);
+  const timer = useContext(NurtureQuotaTimerContext);
+  if (!data || !timer) throw new Error("useNurtureQuota must be used within NurtureQuotaProvider");
+  return { ...data, resetInSeconds: timer.resetInSeconds };
+}
+
+/** Use only the timer countdown — for badge/countdown display components */
+export function useNurtureQuotaTimer(): QuotaTimerState {
+  const ctx = useContext(NurtureQuotaTimerContext);
+  if (!ctx) throw new Error("useNurtureQuotaTimer must be used within NurtureQuotaProvider");
   return ctx;
 }

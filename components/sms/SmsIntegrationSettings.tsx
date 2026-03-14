@@ -208,8 +208,9 @@ export default function SmsIntegrationSettings() {
 
   if (loading) {
     return (
-      <div className="flex justify-center p-12">
+      <div className="flex justify-center p-12" role="status">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <span className="sr-only">טוען הגדרות SMS...</span>
       </div>
     );
   }

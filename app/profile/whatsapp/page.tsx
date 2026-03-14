@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import WhatsAppEmbeddedSignup from "@/components/whatsapp/WhatsAppEmbeddedSignup";
+
+export const metadata: Metadata = { title: "הגדרות וואטסאפ" };
 
 export default async function WhatsAppSettingsPage() {
   const user = await getCurrentUser();

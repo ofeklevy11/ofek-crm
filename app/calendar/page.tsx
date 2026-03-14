@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "יומן | BizlyCRM" };
+export const metadata: Metadata = { title: "יומן" };
 
 export default async function CalendarPage() {
   const user = await getCurrentUser();

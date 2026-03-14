@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -271,7 +272,7 @@ export function DriveFolderPickerModal({
     const isSelected = selected.some((s) => s.id === node.id);
 
     return (
-      <div key={node.id}>
+      <div key={node.id} role="treeitem" aria-level={depth} aria-expanded={node.isExpanded}>
         <div
           className={cn(
             "flex items-center gap-2 py-2 px-3 hover:bg-muted/50 rounded-lg transition-colors cursor-pointer",
@@ -283,6 +284,8 @@ export function DriveFolderPickerModal({
             type="button"
             onClick={() => toggleExpand(node.id)}
             className="p-0.5 hover:bg-muted rounded shrink-0"
+            aria-expanded={node.isExpanded}
+            aria-label={`${node.isExpanded ? 'כווץ' : 'הרחב'} תיקייה ${node.name}`}
           >
             {node.isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
@@ -297,23 +300,24 @@ export function DriveFolderPickerModal({
             checked={isSelected}
             onCheckedChange={() => toggleSelect(node)}
             className="shrink-0"
+            aria-label={`בחר תיקייה ${node.name}`}
           />
 
           <Folder
             className="w-4 h-4 text-[#4f95ff] shrink-0"
             fill="currentColor"
+            aria-hidden="true"
           />
 
           <span
             className="text-sm truncate flex-1"
-            onClick={() => toggleSelect(node)}
           >
             {node.name}
           </span>
         </div>
 
         {node.isExpanded && node.children && (
-          <div>
+          <div role="group">
             {node.children.length === 0 ? (
               <div
                 className="text-xs text-muted-foreground py-2"
@@ -335,6 +339,7 @@ export function DriveFolderPickerModal({
       <DialogContent className="sm:max-w-[600px] max-h-[80vh] flex flex-col text-right">
         <DialogHeader>
           <DialogTitle>בחר תיקיות מ-Google Drive</DialogTitle>
+          <DialogDescription className="sr-only">בחר תיקיות לסנכרון מ-Google Drive</DialogDescription>
           <p className="text-sm text-muted-foreground">{email}</p>
         </DialogHeader>
 
@@ -346,7 +351,7 @@ export function DriveFolderPickerModal({
                 key={s.id}
                 className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-md"
               >
-                <Folder className="w-3 h-3" />
+                <Folder className="w-3 h-3" aria-hidden="true" />
                 {s.name}
                 <button
                   type="button"
@@ -354,6 +359,7 @@ export function DriveFolderPickerModal({
                     setSelected((prev) => prev.filter((p) => p.id !== s.id))
                   }
                   className="hover:bg-blue-100 rounded p-0.5"
+                  aria-label={`הסר ${s.name}`}
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -368,7 +374,8 @@ export function DriveFolderPickerModal({
         {/* Folder tree */}
         <div className="flex-1 overflow-y-auto min-h-[200px] max-h-[400px]">
           {isRootLoading ? (
-            <div className="space-y-2 p-3">
+            <div className="space-y-2 p-3" role="status" aria-label="טוען תיקיות...">
+              <span className="sr-only">טוען תיקיות...</span>
               {[...Array(5)].map((_, i) => (
                 <Skeleton key={i} className="h-8 w-full" />
               ))}
@@ -392,7 +399,7 @@ export function DriveFolderPickerModal({
               לא נמצאו תיקיות
             </div>
           ) : (
-            <div className="py-1">
+            <div className="py-1" role="tree" aria-label="תיקיות Google Drive">
               {SECTION_CONFIG.map(({ key, label, Icon }) => {
                 const sectionFolders = sections[key];
                 if (sectionFolders.length === 0) return null;
@@ -405,11 +412,12 @@ export function DriveFolderPickerModal({
                       onClick={() =>
                         setCollapsedSections((prev) => ({ ...prev, [key]: !prev[key] }))
                       }
+                      aria-expanded={!isCollapsed}
                     >
                       {isCollapsed ? (
-                        <ChevronLeft className="w-4 h-4" />
+                        <ChevronLeft className="w-4 h-4" aria-hidden="true" />
                       ) : (
-                        <ChevronDown className="w-4 h-4" />
+                        <ChevronDown className="w-4 h-4" aria-hidden="true" />
                       )}
                       <Icon className="w-4 h-4" />
                       <span>{label}</span>
@@ -418,7 +426,7 @@ export function DriveFolderPickerModal({
                       </span>
                     </button>
                     {!isCollapsed && (
-                      <div>
+                      <div role="group" aria-label={label}>
                         {sectionFolders.map((f) => renderFolder(f, 1))}
                       </div>
                     )}

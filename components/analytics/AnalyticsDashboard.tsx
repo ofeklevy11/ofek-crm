@@ -402,7 +402,7 @@ function AnalyticsCard({
                 aria-label="העבר לתיקייה"
                 aria-expanded={showFolderPicker}
               >
-                <Move size={14} />
+                <Move size={14} aria-hidden="true" />
               </button>
               {!isAutomation && (
                 <button
@@ -411,7 +411,7 @@ function AnalyticsCard({
                   onClick={() => onAddAutomation(view)}
                   aria-label="הוסף אוטומציה"
                 >
-                  <Zap size={14} />
+                  <Zap size={14} aria-hidden="true" />
                 </button>
               )}
               <button
@@ -420,7 +420,7 @@ function AnalyticsCard({
                 onClick={() => onEdit(view)}
                 aria-label={isAutomation ? "ערוך אוטומציה" : "ערוך תצוגה"}
               >
-                {isAutomation ? <Settings size={14} /> : <Edit3 size={14} />}
+                {isAutomation ? <Settings size={14} aria-hidden="true" /> : <Edit3 size={14} aria-hidden="true" />}
               </button>
               <button
                 className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
@@ -429,7 +429,7 @@ function AnalyticsCard({
                 aria-label="שנה צבע"
                 aria-expanded={showColorPicker}
               >
-                <Palette size={14} />
+                <Palette size={14} aria-hidden="true" />
               </button>
               <button
                 className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
@@ -437,7 +437,7 @@ function AnalyticsCard({
                 onClick={() => onDelete(view)}
                 aria-label="מחק תצוגה"
               >
-                <Trash2 size={14} />
+                <Trash2 size={14} aria-hidden="true" />
               </button>
 
               {/* Popups */}
@@ -495,7 +495,7 @@ function AnalyticsCard({
                       setShowFolderPicker(false);
                     }}
                   >
-                    <Folder size={14} className="text-gray-400" />
+                    <Folder size={14} className="text-gray-400" aria-hidden="true" />
                     ראשי (ללא תיקייה)
                   </button>
                   {folders.map((f) => (
@@ -512,6 +512,7 @@ function AnalyticsCard({
                       <Folder
                         size={14}
                         className="text-yellow-500 fill-yellow-100"
+                        aria-hidden="true"
                       />
                       {f.name}
                     </button>
@@ -658,7 +659,7 @@ function SortableGraphCard({ view }: { view: any }) {
             className="cursor-grab active:cursor-grabbing p-1 text-gray-300 hover:text-gray-500 mt-1"
             aria-label="גרור לשינוי סדר"
           >
-            <GripVertical size={18} />
+            <GripVertical size={18} aria-hidden="true" />
           </button>
           <div>
             <h3 className="font-bold text-gray-900 text-lg">{view.ruleName}</h3>
@@ -1018,7 +1019,7 @@ export default function AnalyticsDashboard({
                   href="/analytics/graphs"
                   className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-xl shadow-sm transition-all font-medium text-sm"
                 >
-                  <BarChart2 size={16} />
+                  <BarChart2 size={16} aria-hidden="true" />
                   <span>גרפים</span>
                 </Link>
 
@@ -1027,7 +1028,7 @@ export default function AnalyticsDashboard({
                   disabled={true}
                   className="flex items-center gap-2 px-4 py-2.5 bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white rounded-xl shadow-lg shadow-violet-200 transition-all font-medium text-sm cursor-not-allowed opacity-50"
                 >
-                  <Sparkles size={16} />
+                  <Sparkles size={16} aria-hidden="true" />
                   <span>דוח AI (בקרוב...)</span>
                 </button>
 
@@ -1035,7 +1036,7 @@ export default function AnalyticsDashboard({
                   onClick={() => setIsAIMode(true)}
                   className="hidden md:flex items-center gap-2 px-4 py-2.5 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl shadow-lg shadow-purple-200 transition-all font-medium text-sm"
                 >
-                  <Sparkles size={16} />
+                  <Sparkles size={16} aria-hidden="true" />
                   <span>צור עם AI</span>
                 </button>
 
@@ -1046,7 +1047,7 @@ export default function AnalyticsDashboard({
                   }}
                   className="hidden md:flex items-center gap-2 px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl shadow-lg shadow-gray-200 transition-all font-medium text-sm"
                 >
-                  <Plus size={16} />
+                  <Plus size={16} aria-hidden="true" />
                   <span>חדש</span>
                 </button>
               </div>
@@ -1066,7 +1067,7 @@ export default function AnalyticsDashboard({
                 className="hidden md:block shrink-0 p-3 text-gray-400 hover:bg-gray-50 hover:text-gray-600 rounded-xl transition-colors bg-gray-50/50 border border-gray-100"
                 aria-label="צור תיקייה חדשה"
               >
-                <FolderPlus size={20} />
+                <FolderPlus size={20} aria-hidden="true" />
               </button>
             )}
 
@@ -1104,6 +1105,7 @@ export default function AnalyticsDashboard({
               >
                 <Folder
                   size={18}
+                  aria-hidden="true"
                   className={`ml-2 ${
                     currentFolder === folder.id
                       ? "fill-yellow-500 text-yellow-600"
@@ -1131,7 +1133,7 @@ export default function AnalyticsDashboard({
                       }
                     }}
                   >
-                    <X size={12} />
+                    <X size={12} aria-hidden="true" />
                   </span>
                 )}
               </button>
@@ -1192,7 +1194,7 @@ export default function AnalyticsDashboard({
         {/* Content Details (Active Folder Name) */}
         {currentFolder !== "all" && (
           <div className="mb-6 flex items-center gap-2 text-gray-400 text-sm">
-            <ArrowLeft size={14} />
+            <ArrowLeft size={14} aria-hidden="true" />
             <span>
               מציג תיקייה:{" "}
               <span className="font-bold text-gray-900">
@@ -1219,7 +1221,7 @@ export default function AnalyticsDashboard({
         {/* Automations Guide Banner */}
         <div className="bg-gradient-to-l from-amber-50 to-orange-50 border border-amber-100/80 rounded-xl px-5 py-3.5 mt-6 flex items-start gap-3" role="region" aria-label="מידע על אוטומציות">
           <div className="bg-amber-100 rounded-lg p-2 shrink-0">
-            <Zap size={16} className="text-amber-600" />
+            <Zap size={16} className="text-amber-600" aria-hidden="true" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm text-amber-900 font-semibold">
@@ -1245,7 +1247,7 @@ export default function AnalyticsDashboard({
         {/* Cache Info Banner */}
         <div className="bg-gradient-to-l from-blue-50 to-indigo-50 border border-blue-100/80 rounded-xl px-5 py-3.5 mt-3 flex items-start gap-3" role="region" aria-label="מידע על מערכת קאש">
           <div className="bg-blue-100 rounded-lg p-2 shrink-0">
-            <RefreshCw size={16} className="text-blue-600" />
+            <RefreshCw size={16} className="text-blue-600" aria-hidden="true" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm text-blue-900 font-semibold">
@@ -1289,7 +1291,7 @@ export default function AnalyticsDashboard({
         {loadError && /rate.?limit/i.test(loadError) && (
           <div className="bg-gradient-to-l from-red-50 to-orange-50 border border-red-100/80 rounded-xl px-5 py-3.5 mt-3 flex items-start gap-3" role="alert">
             <div className="bg-red-100 rounded-lg p-2 shrink-0">
-              <AlertCircle size={16} className="text-red-600" />
+              <AlertCircle size={16} className="text-red-600" aria-hidden="true" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm text-red-900 font-semibold">יותר מדי בקשות</p>
@@ -1301,7 +1303,7 @@ export default function AnalyticsDashboard({
 
       {loading ? (
         <div className="flex justify-center items-center h-64" role="status" aria-label="טוען נתונים">
-          <Loader2 className="animate-spin text-blue-500" size={48} />
+          <Loader2 className="animate-spin text-blue-500" size={48} aria-hidden="true" />
         </div>
       ) : (
         <div className="max-w-7xl mx-auto pb-20">
@@ -1320,7 +1322,7 @@ export default function AnalyticsDashboard({
                   loadError ? (
                     <div className="col-span-full py-16 text-center bg-white rounded-2xl border border-red-100" role="alert">
                       <div className="bg-red-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <BarChart2 className="text-red-400" size={32} />
+                        <BarChart2 className="text-red-400" size={32} aria-hidden="true" />
                       </div>
                       <h3 className="text-lg font-medium text-gray-900">
                         שגיאה בטעינת הנתונים
@@ -1332,14 +1334,14 @@ export default function AnalyticsDashboard({
                         onClick={() => router.refresh()}
                         className="px-6 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200 inline-flex items-center gap-2"
                       >
-                        <RefreshCw size={16} />
+                        <RefreshCw size={16} aria-hidden="true" />
                         נסה שוב
                       </button>
                     </div>
                   ) : (
                   <div className="col-span-full py-16 text-center bg-white rounded-2xl border border-dashed border-gray-200" role="status">
                     <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <BarChart2 className="text-gray-300" size={32} />
+                      <BarChart2 className="text-gray-300" size={32} aria-hidden="true" />
                     </div>
                     <h3 className="text-lg font-medium text-gray-900">
                       אין נתונים להצגה

@@ -52,7 +52,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import CustomerListManager from "@/components/nurture/CustomerListManager";
+import dynamic from "next/dynamic";
+const CustomerListManager = dynamic(() => import("@/components/nurture/CustomerListManager"), { ssr: false });
 import NurtureChannelSelector from "@/components/nurture/NurtureChannelSelector";
 import NurtureMessageEditor, { migrateConfigMessages, getActiveMessage, NurtureMessage } from "@/components/nurture/NurtureMessageEditor";
 import NurtureTriggerInfo from "@/components/nurture/NurtureTriggerInfo";
@@ -358,12 +359,13 @@ export default function BirthdayAutomationPage() {
           <Link
             href="/nurture-hub"
             className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:border-indigo-100 transition-all"
+            aria-label="חזרה ל-Nurture Hub"
           >
-            <ArrowRight className="w-5 h-5" />
+            <ArrowRight className="w-5 h-5" aria-hidden="true" />
           </Link>
           <div>
             <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2">
-              <Gift className="w-8 h-8 text-pink-500" />
+              <Gift className="w-8 h-8 text-pink-500" aria-hidden="true" />
               אוטומציית יום הולדת
             </h1>
             <p className="text-slate-500">
@@ -386,11 +388,11 @@ export default function BirthdayAutomationPage() {
               disabled={sending || customers.length === 0 || (!config.channels.sms && !config.channels.whatsappGreen && !config.channels.whatsappCloud && !config.channels.email)}
               className="bg-pink-600 hover:bg-pink-700 gap-2"
             >
-              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Send className="w-4 h-4" aria-hidden="true" />}
               שלח לכולם
             </Button>
             <Button onClick={handleSave} disabled={saving} variant="outline" className="gap-2">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Save className="w-4 h-4" aria-hidden="true" />}
               שמור
             </Button>
           </div>
@@ -478,7 +480,7 @@ export default function BirthdayAutomationPage() {
               <Card>
                 <CardHeader>
                   <h2 className="font-semibold leading-none tracking-tight text-lg flex items-center gap-2">
-                    <Zap className="w-5 h-5 text-amber-500 fill-amber-500" />
+                    <Zap className="w-5 h-5 text-amber-500 fill-amber-500" aria-hidden="true" />
                     חוקי אוטומציה פעילים ({rules.length})
                   </h2>
                   <CardDescription>
@@ -523,7 +525,7 @@ export default function BirthdayAutomationPage() {
                               className="p-1.5 rounded-md text-indigo-600 hover:bg-indigo-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                               title="ערוך ונהל אוטומציות"
                             >
-                              <Pencil className="w-4 h-4" />
+                              <Pencil className="w-4 h-4" aria-hidden="true" />
                             </button>
                             {/* Toggle Active/Inactive */}
                             <button
@@ -548,9 +550,9 @@ export default function BirthdayAutomationPage() {
                               title={rule.isActive ? "השבת" : "הפעל"}
                             >
                               {rule.isActive ? (
-                                <ToggleRight className="w-5 h-5" />
+                                <ToggleRight className="w-5 h-5" aria-hidden="true" />
                               ) : (
-                                <ToggleLeft className="w-5 h-5" />
+                                <ToggleLeft className="w-5 h-5" aria-hidden="true" />
                               )}
                             </button>
                             {/* Delete */}
@@ -583,7 +585,7 @@ export default function BirthdayAutomationPage() {
                                   aria-label="ביטול מחיקה"
                                   className="p-1 rounded-md text-slate-500 hover:bg-slate-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
-                                  <X className="w-3.5 h-3.5" />
+                                  <X className="w-3.5 h-3.5" aria-hidden="true" />
                                 </button>
                               </div>
                             ) : (
@@ -593,7 +595,7 @@ export default function BirthdayAutomationPage() {
                                 className="p-1.5 rounded-md text-red-500 hover:bg-red-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 title="מחק"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-4 h-4" aria-hidden="true" />
                               </button>
                             )}
                             <Badge
@@ -639,7 +641,7 @@ export default function BirthdayAutomationPage() {
                   <div className="space-y-2">
                     <Label>שעת שליחה</Label>
                     <div className="relative">
-                      <Clock className="absolute right-3 top-2.5 w-4 h-4 text-slate-400" />
+                      <Clock className="absolute right-3 top-2.5 w-4 h-4 text-slate-400" aria-hidden="true" />
                       <Input
                         type="time"
                         value={config.timing}
@@ -777,7 +779,7 @@ export default function BirthdayAutomationPage() {
               </div>
 
               <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <AlertCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" aria-hidden="true" />
                 <div className="text-sm text-blue-800">
                   <strong>טיפ:</strong> הודעות יום הולדת עם קופון אישי משיגות את
                   אחוזי ההמרה הגבוהים ביותר (כ-25% בממוצע).
@@ -840,7 +842,7 @@ export default function BirthdayAutomationPage() {
                   className="p-2 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   title="ערוך"
                 >
-                  <Pencil className="w-4 h-4 text-slate-600" />
+                  <Pencil className="w-4 h-4 text-slate-600" aria-hidden="true" />
                 </button>
               )}
             </div>
@@ -903,7 +905,7 @@ export default function BirthdayAutomationPage() {
                   <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
-                        <Mail className="w-4 h-4 text-blue-600" />
+                        <Mail className="w-4 h-4 text-blue-600" aria-hidden="true" />
                       </div>
                       <div className="text-sm font-medium text-slate-900">אימייל</div>
                     </div>
@@ -922,9 +924,9 @@ export default function BirthdayAutomationPage() {
                       }`}
                     >
                       {editingCustomer.emailActive ? (
-                        <ToggleRight className="w-6 h-6" />
+                        <ToggleRight className="w-6 h-6" aria-hidden="true" />
                       ) : (
-                        <ToggleLeft className="w-6 h-6" />
+                        <ToggleLeft className="w-6 h-6" aria-hidden="true" />
                       )}
                     </button>
                   </div>
@@ -935,7 +937,7 @@ export default function BirthdayAutomationPage() {
                   <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center">
-                        <Phone className="w-4 h-4 text-green-600" />
+                        <Phone className="w-4 h-4 text-green-600" aria-hidden="true" />
                       </div>
                       <div className="text-sm font-medium text-slate-900">טלפון (SMS/WhatsApp)</div>
                     </div>
@@ -954,9 +956,9 @@ export default function BirthdayAutomationPage() {
                       }`}
                     >
                       {editingCustomer.phoneActive ? (
-                        <ToggleRight className="w-6 h-6" />
+                        <ToggleRight className="w-6 h-6" aria-hidden="true" />
                       ) : (
-                        <ToggleLeft className="w-6 h-6" />
+                        <ToggleLeft className="w-6 h-6" aria-hidden="true" />
                       )}
                     </button>
                   </div>
@@ -1017,7 +1019,7 @@ export default function BirthdayAutomationPage() {
                 <div className="space-y-3 border-t pt-4">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
-                      <Mail className="w-4 h-4 text-blue-600" />
+                      <Mail className="w-4 h-4 text-blue-600" aria-hidden="true" />
                     </div>
                     <div>
                       <div className="text-xs text-slate-500">אימייל</div>
@@ -1029,7 +1031,7 @@ export default function BirthdayAutomationPage() {
 
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center">
-                      <Phone className="w-4 h-4 text-green-600" />
+                      <Phone className="w-4 h-4 text-green-600" aria-hidden="true" />
                     </div>
                     <div>
                       <div className="text-xs text-slate-500">טלפון</div>
@@ -1043,7 +1045,7 @@ export default function BirthdayAutomationPage() {
                 {lastSentMap[selectedCustomer.id] && (
                   <div className="flex items-center gap-3 border-t pt-3">
                     <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center">
-                      <Clock className="w-4 h-4 text-orange-600" />
+                      <Clock className="w-4 h-4 text-orange-600" aria-hidden="true" />
                     </div>
                     <div>
                       <div className="text-xs text-slate-500">נשלח לאחרונה</div>
@@ -1097,7 +1099,7 @@ export default function BirthdayAutomationPage() {
                       onClick={() => setConfirmingDelete(true)}
                       className="w-full flex items-center justify-center gap-2 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4" aria-hidden="true" />
                       מחק מהרשימה
                     </button>
                   )}
@@ -1172,7 +1174,7 @@ export default function BirthdayAutomationPage() {
               <div className="space-y-4">
                 {fetchingFields ? (
                   <div role="status" aria-live="polite" className="text-center py-8 text-slate-500">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" aria-hidden="true" />
                     טוען שדות...
                   </div>
                 ) : (
@@ -1541,7 +1543,7 @@ export default function BirthdayAutomationPage() {
                 >
                   {isSaving ? (
                     <>
-                      <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                      <Loader2 className="w-4 h-4 ml-2 animate-spin" aria-hidden="true" />
                       שומר...
                     </>
                   ) : (

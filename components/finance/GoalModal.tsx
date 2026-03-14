@@ -112,6 +112,7 @@ export default function GoalModal({
   const [previewValue, setPreviewValue] = useState<number | null>(null);
   const [previewState, setPreviewState] = useState<PreviewState>("idle");
   const [refreshCount, setRefreshCount] = useState(0);
+  const [invalidFields, setInvalidFields] = useState<Set<string>>(new Set());
   const [lastRefreshedDates, setLastRefreshedDates] = useState<{
     start: string;
     end: string;
@@ -203,17 +204,22 @@ export default function GoalModal({
       setPreviewState("idle");
       setRefreshCount(0);
       setLastRefreshedDates(null);
+      setInvalidFields(new Set());
     }
   }, [existingGoal, open]);
 
   const handleSubmit = async () => {
     // Allow 0 as a valid targetValue (for REDUCE mode)
-    if (
-      !formData.name ||
-      formData.targetValue === undefined ||
-      formData.targetValue === null
-    ) {
+    const newInvalid = new Set<string>();
+    if (!formData.name) newInvalid.add("goal-name");
+    if (formData.targetValue === undefined || formData.targetValue === null)
+      newInvalid.add("goal-target-value");
+
+    if (newInvalid.size > 0) {
+      setInvalidFields(newInvalid);
       toast.error("נא למלא את כל שדות החובה");
+      const firstId = newInvalid.values().next().value;
+      if (firstId) document.getElementById(firstId)?.focus();
       return;
     }
 
@@ -295,14 +301,14 @@ export default function GoalModal({
             disabled={isRefreshDisabled}
             className="flex items-center gap-2 px-4 py-2 bg-[#4f95ff] text-white rounded-lg text-sm font-medium hover:bg-[#3d7ccc] transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#4f95ff]"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-4 h-4" aria-hidden="true" />
             חשב מצב נוכחי
           </button>
         </div>
       ) : previewState === "loading" ? (
         // Loading state
         <div className="flex items-center justify-center gap-2 py-2">
-          <Loader2 className="w-5 h-5 text-[#4f95ff] animate-spin" />
+          <Loader2 className="w-5 h-5 text-[#4f95ff] animate-spin" aria-hidden="true" />
           <span className="text-sm text-gray-600">מחשב...</span>
         </div>
       ) : (
@@ -311,7 +317,7 @@ export default function GoalModal({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-[#4f95ff]/20 rounded-md">
-                <Check className="w-4 h-4 text-[#4f95ff]" />
+                <Check className="w-4 h-4 text-[#4f95ff]" aria-hidden="true" />
               </div>
               <div>
                 <span className="text-xs text-[#4f95ff] font-medium uppercase tracking-wider block">
@@ -347,17 +353,17 @@ export default function GoalModal({
                   : "חשב מחדש"
               }
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
           {!datesChanged && previewState === "done" && (
             <p className="text-xs text-gray-500 mt-2 text-center">
-              ℹ️ שנה תאריכים כדי לחשב מחדש
+              <span aria-hidden="true">ℹ️</span> שנה תאריכים כדי לחשב מחדש
             </p>
           )}
           {previewValue === 0 && (
             <p className="text-xs text-[#a24ec1] mt-2 pr-9">
-              💡 {getZeroResultMessage()}
+              <span aria-hidden="true">💡</span> {getZeroResultMessage()}
             </p>
           )}
         </>
@@ -461,7 +467,7 @@ export default function GoalModal({
                   : "bg-gray-100 text-gray-600",
               )}
             >
-              <m.icon className="w-6 h-6" />
+              <m.icon className="w-6 h-6" aria-hidden="true" />
             </div>
             <span className="font-bold text-gray-900 text-sm">{m.label}</span>
             <span className="text-xs text-gray-600 mt-1 text-center">
@@ -473,7 +479,7 @@ export default function GoalModal({
 
       <div className="pt-2 border-t border-gray-100 mt-2">
         <p className="text-xs text-gray-600 text-center flex items-center justify-center gap-1">
-          <TrendingDown className="w-3 h-3" />
+          <TrendingDown className="w-3 h-3" aria-hidden="true" />
           יעדי הוצאות וצמצום עלויות - בקרוב
         </p>
       </div>
@@ -535,7 +541,7 @@ export default function GoalModal({
           {formData.metricType === "REVENUE" && (
             <div className="space-y-3 p-4 bg-[#f4f8f8] rounded-lg border border-gray-100">
               <div className="flex items-start gap-2 p-3 bg-white rounded-lg border border-gray-100 mb-2">
-                <DollarSign className="w-5 h-5 text-[#a24ec1] mt-0.5 shrink-0" />
+                <DollarSign className="w-5 h-5 text-[#a24ec1] mt-0.5 shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-sm text-gray-800 font-medium">
                     יעד הכנסות
@@ -565,7 +571,7 @@ export default function GoalModal({
                       : "border-gray-200 text-gray-600 hover:bg-white",
                   )}
                 >
-                  <DollarSign className="w-5 h-5 mb-1" />
+                  <DollarSign className="w-5 h-5 mb-1" aria-hidden="true" />
                   <span className="text-xs text-center">
                     גביית תשלומים חד פעמיים
                   </span>
@@ -584,7 +590,7 @@ export default function GoalModal({
                       : "border-gray-200 text-gray-600 hover:bg-white",
                   )}
                 >
-                  <Briefcase className="w-5 h-5 mb-1" />
+                  <Briefcase className="w-5 h-5 mb-1" aria-hidden="true" />
                   <span className="text-xs text-center">גביית ריטיינרים</span>
                 </button>
 
@@ -602,7 +608,7 @@ export default function GoalModal({
                       : "border-gray-200 text-gray-600 hover:bg-white",
                   )}
                 >
-                  <Wallet className="w-5 h-5 mb-1" />
+                  <Wallet className="w-5 h-5 mb-1" aria-hidden="true" />
                   <span className="text-xs text-center">
                     מודול הכנסות/הוצאות
                   </span>
@@ -623,7 +629,7 @@ export default function GoalModal({
                       : "border-gray-200 text-gray-600 hover:bg-white",
                   )}
                 >
-                  <Database className="w-5 h-5 mb-1" />
+                  <Database className="w-5 h-5 mb-1" aria-hidden="true" />
                   <span className="text-xs text-center">טבלה מותאמת</span>
                 </button>
               </div>
@@ -635,7 +641,7 @@ export default function GoalModal({
                 <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-top-2">
                   <div className="flex items-start gap-3 bg-white p-3.5 rounded-lg border border-gray-200 shadow-sm">
                     <div className="p-1.5 bg-[#4f95ff]/10 rounded-full shrink-0 mt-0.5">
-                      <Check className="w-3.5 h-3.5 text-[#4f95ff]" />
+                      <Check className="w-3.5 h-3.5 text-[#4f95ff]" aria-hidden="true" />
                     </div>
                     <p className="text-sm text-gray-700 leading-relaxed">
                       המערכת תסכום תשלומים שהם תחת סטטוס
@@ -653,7 +659,7 @@ export default function GoalModal({
                 <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-top-2">
                   <div className="flex items-start gap-3 bg-white p-3.5 rounded-lg border border-gray-200 shadow-sm">
                     <div className="p-1.5 bg-[#4f95ff]/10 rounded-full shrink-0 mt-0.5">
-                      <Check className="w-3.5 h-3.5 text-[#4f95ff]" />
+                      <Check className="w-3.5 h-3.5 text-[#4f95ff]" aria-hidden="true" />
                     </div>
                     <p className="text-sm text-gray-700 leading-relaxed">
                       המערכת תסכום תשלומים שנגבו מתוך
@@ -671,7 +677,7 @@ export default function GoalModal({
                 <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-top-2">
                   <div className="flex items-start gap-3 bg-white p-3.5 rounded-lg border border-gray-200 shadow-sm">
                     <div className="p-1.5 bg-[#4f95ff]/10 rounded-full shrink-0 mt-0.5">
-                      <Check className="w-3.5 h-3.5 text-[#4f95ff]" />
+                      <Check className="w-3.5 h-3.5 text-[#4f95ff]" aria-hidden="true" />
                     </div>
                     <p className="text-sm text-gray-700 leading-relaxed">
                       המערכת תסכום אוטומטית את כל ה
@@ -713,7 +719,7 @@ export default function GoalModal({
               {formData.metricType === "RECORDS" && (
                 <div className="animate-in fade-in slide-in-from-top-2 mb-4 space-y-3">
                   <div className="flex items-start gap-2 p-3 bg-white rounded-lg border border-gray-100">
-                    <Table className="w-5 h-5 text-[#a24ec1] mt-0.5 shrink-0" />
+                    <Table className="w-5 h-5 text-[#a24ec1] mt-0.5 shrink-0" aria-hidden="true" />
                     <div>
                       <p className="text-sm text-gray-800 font-medium">
                         {formData.targetType === "SUM"
@@ -731,7 +737,7 @@ export default function GoalModal({
                   {formData.targetType === "SUM" && (
                     <div className="flex items-start gap-3 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
                       <div className="p-1 bg-[#4f95ff]/10 rounded-full shrink-0 mt-0.5">
-                        <Check className="w-3 h-3 text-[#4f95ff]" />
+                        <Check className="w-3 h-3 text-[#4f95ff]" aria-hidden="true" />
                       </div>
                       <p className="text-xs text-gray-600 leading-relaxed">
                         <span className="font-semibold text-[#4f95ff] block mb-1">
@@ -820,7 +826,7 @@ export default function GoalModal({
                         ),
                       ).length === 0) && (
                       <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                        <Minus className="w-3 h-3" />
+                        <Minus className="w-3 h-3" aria-hidden="true" />
                         בטבלה זו אין עמודות מסוג מספר/כסף שניתן לסכום
                       </p>
                     )}
@@ -833,7 +839,7 @@ export default function GoalModal({
           {formData.metricType === "CALENDAR" && (
             <div className="space-y-3 p-4 bg-[#f4f8f8] rounded-lg border border-gray-100 animate-in fade-in slide-in-from-top-2">
               <div className="flex items-start gap-2 p-3 bg-white rounded-lg border border-gray-100 mb-2">
-                <Calendar className="w-5 h-5 text-[#a24ec1] mt-0.5 shrink-0" />
+                <Calendar className="w-5 h-5 text-[#a24ec1] mt-0.5 shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-sm text-gray-800 font-medium">
                     יעד פגישות ויומן
@@ -847,7 +853,7 @@ export default function GoalModal({
               <div className="space-y-1">
                 <Label htmlFor="goal-calendar-search">סינון שם/תיאור אירוע (אופציונלי)</Label>
                 <div className="relative">
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" aria-hidden="true" />
                   <Input
                     id="goal-calendar-search"
                     placeholder="למשל: 'פגישת מכירה', 'זום'..."
@@ -860,7 +866,7 @@ export default function GoalModal({
                 </div>
                 {/* Recommended filter disclaimer */}
                 <div className="flex items-start gap-2 p-2.5 bg-[#a24ec1]/10 border border-[#a24ec1]/20 rounded-lg mt-2">
-                  <span className="text-[#a24ec1] text-sm">💡</span>
+                  <span className="text-[#a24ec1] text-sm" aria-hidden="true">💡</span>
                   <p className="text-xs text-[#a24ec1] font-medium">
                     הסינון הזה <strong>אופציונלי אך מומלץ מאוד!</strong> הגדרת
                     שם/תיאור מאפשרת מעקב מדויק אחרי סוג פגישות ספציפי (למשל: רק
@@ -879,7 +885,7 @@ export default function GoalModal({
             <div className="space-y-4 p-4 bg-[#f4f8f8] rounded-lg border border-gray-100 animate-in fade-in slide-in-from-top-2">
               {/* Header */}
               <div className="flex items-start gap-2 p-3 bg-white rounded-lg border border-gray-100">
-                <CheckSquare className="w-5 h-5 text-[#a24ec1] mt-0.5 shrink-0" />
+                <CheckSquare className="w-5 h-5 text-[#a24ec1] mt-0.5 shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-sm text-gray-800 font-medium">
                     יעד משימות
@@ -919,7 +925,7 @@ export default function GoalModal({
                           : "bg-gray-100 text-gray-500",
                       )}
                     >
-                      <TrendingUp className="w-5 h-5" />
+                      <TrendingUp className="w-5 h-5" aria-hidden="true" />
                     </div>
                     <div>
                       <p className="font-bold text-sm text-gray-900">
@@ -951,7 +957,7 @@ export default function GoalModal({
                           : "bg-gray-100 text-gray-500",
                       )}
                     >
-                      <Target className="w-5 h-5" />
+                      <Target className="w-5 h-5" aria-hidden="true" />
                     </div>
                     <div>
                       <p className="font-bold text-sm text-gray-900">
@@ -970,7 +976,7 @@ export default function GoalModal({
                 !formData.filters?.taskGoalMode) && (
                 <div className="p-3 bg-[#4f95ff]/10 rounded-lg border border-[#4f95ff]/20 animate-in fade-in">
                   <div className="flex items-start gap-2">
-                    <TrendingUp className="w-4 h-4 text-[#4f95ff] mt-0.5 shrink-0" />
+                    <TrendingUp className="w-4 h-4 text-[#4f95ff] mt-0.5 shrink-0" aria-hidden="true" />
                     <div className="text-xs text-gray-700">
                       <p className="font-medium text-[#4f95ff]">איך זה עובד?</p>
                       <p className="mt-1">
@@ -978,7 +984,7 @@ export default function GoalModal({
                         התאריכים.
                       </p>
                       <p className="mt-1.5 text-gray-600 bg-white/60 p-2 rounded border border-[#4f95ff]/10">
-                        💡 <strong>לדוגמה:</strong> יעד של 100 משימות שהושלמו
+                        <span aria-hidden="true">💡</span> <strong>לדוגמה:</strong> יעד של 100 משימות שהושלמו
                         בחודש - המערכת תספור כל משימה שעברה לסטטוס "הושלמו".
                       </p>
                     </div>
@@ -989,7 +995,7 @@ export default function GoalModal({
               {formData.filters?.taskGoalMode === "REDUCE" && (
                 <div className="p-3 bg-[#a24ec1]/10 rounded-lg border border-[#a24ec1]/20 animate-in fade-in">
                   <div className="flex items-start gap-2">
-                    <Target className="w-4 h-4 text-[#a24ec1] mt-0.5 shrink-0" />
+                    <Target className="w-4 h-4 text-[#a24ec1] mt-0.5 shrink-0" aria-hidden="true" />
                     <div className="text-xs text-gray-700">
                       <p className="font-medium text-[#a24ec1]">
                         איך זה עובד? (ספירה הפוכה)
@@ -999,12 +1005,12 @@ export default function GoalModal({
                         שבחרת. היעד הוא להגיע לכמות <strong>נמוכה יותר</strong>.
                       </p>
                       <p className="mt-1.5 text-gray-600 bg-white/60 p-2 rounded border border-[#a24ec1]/10">
-                        💡 <strong>לדוגמה:</strong> יש לך 10 משימות בהשהייה ואתה
+                        <span aria-hidden="true">💡</span> <strong>לדוגמה:</strong> יש לך 10 משימות בהשהייה ואתה
                         רוצה לצמצם ל-2. הגדר יעד של 2 משימות - וככל שתסיים יותר,
                         כך תתקרב ליעד!
                       </p>
                       <p className="mt-1.5 text-[#a24ec1] flex items-center gap-1">
-                        <Minus className="w-3 h-3" />
+                        <Minus className="w-3 h-3" aria-hidden="true" />
                         מתאים ליעדי ניקוי, הורדת עומס, וצמצום backlogs
                       </p>
                     </div>
@@ -1043,7 +1049,7 @@ export default function GoalModal({
                 </Select>
                 {formData.filters?.taskGoalMode === "REDUCE" && (
                   <p className="text-[10px] text-gray-500 mt-1">
-                    ⚠️ במצב צמצום, היעד הוא הכמות הסופית שתרצה להגיע אליה (לא
+                    <span aria-hidden="true">⚠️</span> במצב צמצום, היעד הוא הכמות הסופית שתרצה להגיע אליה (לא
                     כמה לסיים)
                   </p>
                 )}
@@ -1055,7 +1061,7 @@ export default function GoalModal({
           {formData.metricType === "RETAINERS" && (
             <div className="space-y-3 p-4 bg-[#f4f8f8] rounded-lg border border-gray-100 animate-in fade-in slide-in-from-top-2">
               <div className="flex items-start gap-2 p-3 bg-white rounded-lg border border-gray-100 mb-2">
-                <Briefcase className="w-5 h-5 text-[#a24ec1] mt-0.5 shrink-0" />
+                <Briefcase className="w-5 h-5 text-[#a24ec1] mt-0.5 shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-sm text-gray-800 font-medium">
                     יעד ריטיינרים
@@ -1090,7 +1096,7 @@ export default function GoalModal({
           {formData.metricType === "CUSTOMERS" && (
             <div className="space-y-3 p-4 bg-[#f4f8f8] rounded-lg border border-gray-100 animate-in fade-in slide-in-from-top-2">
               <div className="flex items-start gap-2 p-3 bg-white rounded-lg border border-gray-100">
-                <Users className="w-5 h-5 text-[#a24ec1] mt-0.5 shrink-0" />
+                <Users className="w-5 h-5 text-[#a24ec1] mt-0.5 shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-sm text-gray-800 font-medium">
                     יעד לקוחות
@@ -1100,7 +1106,7 @@ export default function GoalModal({
                     לדוגמה: יעד של 50 לקוחות חדשים בחודש.
                   </p>
                   <p className="text-xs text-[#a24ec1] mt-2 flex items-center gap-1">
-                    ℹ️ הנתונים נלקחים מרשימת הלקוחות בעמוד כספים
+                    <span aria-hidden="true">ℹ️</span> הנתונים נלקחים מרשימת הלקוחות בעמוד כספים
                   </p>
                 </div>
               </div>
@@ -1111,7 +1117,7 @@ export default function GoalModal({
           {formData.metricType === "QUOTES" && (
             <div className="space-y-3 p-4 bg-[#f4f8f8] rounded-lg border border-gray-100 animate-in fade-in slide-in-from-top-2">
               <div className="flex items-start gap-2 p-3 bg-white rounded-lg border border-gray-100">
-                <FileText className="w-5 h-5 text-[#a24ec1] mt-0.5 shrink-0" />
+                <FileText className="w-5 h-5 text-[#a24ec1] mt-0.5 shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-sm text-gray-800 font-medium">
                     יעד הצעות מחיר
@@ -1153,12 +1159,14 @@ export default function GoalModal({
             <Input
               id="goal-name"
               value={formData.name}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, name: e.target.value }))
-              }
+              onChange={(e) => {
+                setFormData((prev) => ({ ...prev, name: e.target.value }));
+                if (e.target.value) setInvalidFields((prev) => { const next = new Set(prev); next.delete("goal-name"); return next; });
+              }}
               placeholder="תן שם ליעד..."
               required
               aria-required="true"
+              aria-invalid={invalidFields.has("goal-name") || undefined}
             />
           </div>
 
@@ -1168,6 +1176,7 @@ export default function GoalModal({
               className="flex-1"
               onClick={() => setStep(1)}
               type="button"
+              aria-label="חזרה לשלב הקודם"
             >
               חזרה
             </Button>
@@ -1175,8 +1184,9 @@ export default function GoalModal({
               className="flex-[2] bg-[#4f95ff] hover:bg-blue-600"
               onClick={() => setStep(3)}
               type="button"
+              aria-label="המשך לשלב הבא"
             >
-              המשך <ArrowRight className="w-4 h-4 ml-2" />
+              המשך <ArrowRight className="w-4 h-4 ml-2" aria-hidden="true" />
             </Button>
           </div>
         </div>
@@ -1201,6 +1211,7 @@ export default function GoalModal({
             type="number"
             className="text-2xl font-bold h-14 pl-10"
             aria-required="true"
+            aria-invalid={invalidFields.has("goal-target-value") || undefined}
             min={
               formData.metricType === "TASKS" &&
               formData.filters?.taskGoalMode === "REDUCE"
@@ -1210,13 +1221,14 @@ export default function GoalModal({
             value={
               formData.targetValue !== undefined ? formData.targetValue : ""
             }
-            onChange={(e) =>
+            onChange={(e) => {
               setFormData((prev) => ({
                 ...prev,
                 targetValue:
                   e.target.value === "" ? undefined : Number(e.target.value),
-              }))
-            }
+              }));
+              if (e.target.value !== "") setInvalidFields((prev) => { const next = new Set(prev); next.delete("goal-target-value"); return next; });
+            }}
             autoFocus
           />
           {formData.targetType === "SUM" && (
@@ -1228,7 +1240,7 @@ export default function GoalModal({
         {formData.metricType === "TASKS" &&
           formData.filters?.taskGoalMode === "REDUCE" && (
             <p className="text-xs text-[#a24ec1] bg-[#a24ec1]/10 p-2 rounded-lg">
-              💡 הזן 0 אם המטרה היא לסיים את כל המשימות בסטטוס הזה
+              <span aria-hidden="true">💡</span> הזן 0 אם המטרה היא לסיים את כל המשימות בסטטוס הזה
             </p>
           )}
       </div>
@@ -1274,6 +1286,7 @@ export default function GoalModal({
           className="flex-1"
           onClick={() => setStep(2)}
           type="button"
+          aria-label="חזרה לשלב הקודם"
         >
           חזרה
         </Button>
@@ -1284,11 +1297,14 @@ export default function GoalModal({
           type="button"
         >
           {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+              <span className="sr-only">{existingGoal ? "מעדכן יעד..." : "יוצר יעד..."}</span>
+            </>
           ) : (
             <>
               {existingGoal ? "עדכן יעד" : "צור יעד"}{" "}
-              <Check className="w-4 h-4 ml-2" />
+              <Check className="w-4 h-4 ml-2" aria-hidden="true" />
             </>
           )}
         </Button>
@@ -1307,7 +1323,7 @@ export default function GoalModal({
       <DialogTrigger asChild>
         {trigger || (
           <Button className="bg-[#4f95ff] hover:bg-[#3d7ccc] text-white shadow-lg shadow-blue-200">
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
             יעד חדש
           </Button>
         )}
@@ -1325,6 +1341,8 @@ export default function GoalModal({
             הגדרת יעדים חכמה
           </DialogDescription>
         </DialogHeader>
+
+        <div aria-live="polite" className="sr-only">{stepLabel}</div>
 
         {step === 1 && renderStep1()}
         {step === 2 && renderStep2()}

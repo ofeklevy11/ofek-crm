@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import {
   createAutomationRule,
   updateAutomationRule,
@@ -433,18 +434,20 @@ export default function SlaAutomationModal({
   const canSubmit =
     actions.length > 0 || (isAddingAction && validateCurrentAction());
 
+  const focusTrapRef = useFocusTrap(() => onOpenChange(false), open);
+
   if (!open) return null;
 
   // Step 1: Name & Trigger Type
   const renderStep1 = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="sla-auto-name" className="block text-sm font-medium text-gray-700 mb-2">
           איך נקרא לאוטומציה הזו?
         </label>
         <input
+          id="sla-auto-name"
           type="text"
-          autoFocus
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="w-full px-4 py-3 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-[#4f95ff] transition-colors"
@@ -504,10 +507,11 @@ export default function SlaAutomationModal({
       {triggerType === "SLA_BREACH" && (
         <div className="space-y-5 p-5 border rounded-xl bg-red-50 border-red-100">
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label htmlFor="sla-auto-breach-type" className="block text-sm font-medium text-gray-700">
               סוג חריגת SLA
             </label>
             <select
+              id="sla-auto-breach-type"
               value={slaBreachType}
               onChange={(e) => setSlaBreachType(e.target.value as any)}
               className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
@@ -536,10 +540,11 @@ export default function SlaAutomationModal({
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label htmlFor="sla-auto-priority" className="block text-sm font-medium text-gray-700">
               עבור איזה עדיפות?
             </label>
             <select
+              id="sla-auto-priority"
               value={slaPriority}
               onChange={(e) => setSlaPriority(e.target.value)}
               className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
@@ -557,10 +562,11 @@ export default function SlaAutomationModal({
       {triggerType === "TICKET_STATUS_CHANGE" && (
         <div className="grid grid-cols-2 gap-4 p-5 border rounded-xl bg-blue-50 border-blue-100">
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label htmlFor="sla-auto-from-status" className="block text-sm font-medium text-gray-700">
               מסטטוס
             </label>
             <select
+              id="sla-auto-from-status"
               value={fromStatus}
               onChange={(e) => setFromStatus(e.target.value)}
               className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -574,10 +580,11 @@ export default function SlaAutomationModal({
             </select>
           </div>
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label htmlFor="sla-auto-to-status" className="block text-sm font-medium text-gray-700">
               לסטטוס
             </label>
             <select
+              id="sla-auto-to-status"
               value={toStatus}
               onChange={(e) => setToStatus(e.target.value)}
               className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -655,6 +662,7 @@ export default function SlaAutomationModal({
                     onClick={() => editAction(idx)}
                     className="text-[#4f95ff] hover:text-blue-700 p-2 hover:bg-blue-50 rounded-full transition-colors"
                     title="ערוך פעולה"
+                    aria-label={`ערוך פעולה #${idx + 1}`}
                   >
                     <Pencil size={18} />
                   </button>
@@ -662,6 +670,7 @@ export default function SlaAutomationModal({
                     onClick={() => removeAction(idx)}
                     className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-full transition-colors"
                     title="מחק פעולה"
+                    aria-label={`מחק פעולה #${idx + 1}`}
                   >
                     <X size={18} />
                   </button>
@@ -745,10 +754,11 @@ export default function SlaAutomationModal({
           {currentActionType === "SEND_NOTIFICATION" && (
             <div className="bg-yellow-50 p-5 rounded-xl border border-yellow-100 space-y-4 animate-in fade-in slide-in-from-top-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="sla-auto-notify-user" className="block text-sm font-medium text-gray-700 mb-1">
                   למי לשלוח?
                 </label>
                 <select
+                  id="sla-auto-notify-user"
                   value={recipientId}
                   onChange={(e) => setRecipientId(e.target.value)}
                   className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg"
@@ -762,10 +772,11 @@ export default function SlaAutomationModal({
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="sla-auto-message" className="block text-sm font-medium text-gray-700 mb-1">
                   הודעה
                 </label>
                 <textarea
+                  id="sla-auto-message"
                   value={messageTemplate}
                   onChange={(e) => setMessageTemplate(e.target.value)}
                   rows={3}
@@ -795,6 +806,7 @@ export default function SlaAutomationModal({
                   <label className="flex items-center gap-2 p-3 bg-white rounded-lg border cursor-pointer hover:border-green-300 flex-1">
                     <input
                       type="radio"
+                      name="waTargetType"
                       checked={waTargetType === "private"}
                       onChange={() => {
                         setWaTargetType("private");
@@ -807,6 +819,7 @@ export default function SlaAutomationModal({
                   <label className="flex items-center gap-2 p-3 bg-white rounded-lg border cursor-pointer hover:border-green-300 flex-1">
                     <input
                       type="radio"
+                      name="waTargetType"
                       checked={waTargetType === "group"}
                       onChange={() => {
                         setWaTargetType("group");
@@ -820,10 +833,11 @@ export default function SlaAutomationModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="sla-auto-wa-phone" className="block text-sm font-medium text-gray-700 mb-2">
                   {waTargetType === "group" ? "מזהה קבוצה" : "מספר טלפון"}
                 </label>
                 <input
+                  id="sla-auto-wa-phone"
                   type="text"
                   value={waPhoneColumnId.replace("manual:", "")}
                   onChange={(e) =>
@@ -863,6 +877,7 @@ export default function SlaAutomationModal({
                         type="number"
                         min={minDelay}
                         value={waDelay}
+                        aria-label="השהייה בשניות"
                         onChange={(e) =>
                           setWaDelay(parseInt(e.target.value) || 0)
                         }
@@ -886,6 +901,7 @@ export default function SlaAutomationModal({
                   <label className="flex items-center gap-2 p-3 bg-white rounded-lg border cursor-pointer hover:border-green-300 flex-1">
                     <input
                       type="radio"
+                      name="waMessageType"
                       checked={waMessageType === "private"}
                       onChange={() => setWaMessageType("private")}
                       className="text-green-600"
@@ -897,6 +913,7 @@ export default function SlaAutomationModal({
                   <label className="flex items-center gap-2 p-3 bg-white rounded-lg border cursor-pointer hover:border-green-300 flex-1">
                     <input
                       type="radio"
+                      name="waMessageType"
                       checked={waMessageType === "media"}
                       onChange={() => setWaMessageType("media")}
                       className="text-green-600"
@@ -910,7 +927,7 @@ export default function SlaAutomationModal({
 
               {waMessageType === "media" && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="sla-auto-wa-file" className="block text-sm font-medium text-gray-700 mb-1">
                     בחר קובץ לשליחה
                   </label>
                   {loadingFiles ? (
@@ -920,6 +937,7 @@ export default function SlaAutomationModal({
                     </div>
                   ) : (
                     <select
+                      id="sla-auto-wa-file"
                       value={waMediaFileId}
                       onChange={(e) => setWaMediaFileId(e.target.value)}
                       className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg"
@@ -936,12 +954,13 @@ export default function SlaAutomationModal({
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="sla-auto-wa-content" className="block text-sm font-medium text-gray-700 mb-1">
                   {waMessageType === "media"
                     ? "כיתוב (Caption)"
                     : "תוכן ההודעה"}
                 </label>
                 <textarea
+                  id="sla-auto-wa-content"
                   value={waContent}
                   onChange={(e) => setWaContent(e.target.value)}
                   rows={4}
@@ -965,10 +984,11 @@ export default function SlaAutomationModal({
 
               {/* Email recipient */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="sla-auto-email-to" className="block text-sm font-medium text-gray-700 mb-2">
                   כתובת אימייל הנמען
                 </label>
                 <input
+                  id="sla-auto-email-to"
                   type="email"
                   value={emailColumnId.startsWith("manual:") ? emailColumnId.replace("manual:", "") : emailColumnId}
                   onChange={(e) => setEmailColumnId(`manual:${e.target.value}`)}
@@ -980,10 +1000,11 @@ export default function SlaAutomationModal({
 
               {/* Subject */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="sla-auto-email-subject" className="block text-sm font-medium text-gray-700 mb-1">
                   נושא
                 </label>
                 <input
+                  id="sla-auto-email-subject"
                   type="text"
                   value={emailSubject}
                   onChange={(e) => setEmailSubject(e.target.value)}
@@ -994,10 +1015,11 @@ export default function SlaAutomationModal({
 
               {/* Content */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="sla-auto-email-body" className="block text-sm font-medium text-gray-700 mb-1">
                   תוכן האימייל
                 </label>
                 <textarea
+                  id="sla-auto-email-body"
                   value={emailContent}
                   onChange={(e) => setEmailContent(e.target.value)}
                   rows={4}
@@ -1012,10 +1034,11 @@ export default function SlaAutomationModal({
 
               {/* Delay */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="sla-auto-email-delay" className="block text-sm font-medium text-gray-700 mb-1">
                   השהייה (שניות) — אופציונלי
                 </label>
                 <input
+                  id="sla-auto-email-delay"
                   type="number"
                   min={0}
                   value={emailDelay}
@@ -1032,10 +1055,11 @@ export default function SlaAutomationModal({
                 Webhook Configuration
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="sla-auto-webhook-url" className="block text-sm font-medium text-gray-700 mb-2">
                   כתובת ה-URL לשליחה (POST)
                 </label>
                 <input
+                  id="sla-auto-webhook-url"
                   type="url"
                   value={webhookUrl}
                   onChange={(e) => setWebhookUrl(e.target.value)}
@@ -1059,10 +1083,11 @@ export default function SlaAutomationModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="sla-auto-task-title" className="block text-sm font-medium text-gray-700 mb-1">
                   כותרת המשימה
                 </label>
                 <input
+                  id="sla-auto-task-title"
                   type="text"
                   value={taskTitle}
                   onChange={(e) => setTaskTitle(e.target.value)}
@@ -1072,10 +1097,11 @@ export default function SlaAutomationModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="sla-auto-task-desc" className="block text-sm font-medium text-gray-700 mb-1">
                   תיאור
                 </label>
                 <textarea
+                  id="sla-auto-task-desc"
                   value={taskDescription}
                   onChange={(e) => setTaskDescription(e.target.value)}
                   className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg"
@@ -1086,10 +1112,11 @@ export default function SlaAutomationModal({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="sla-auto-task-status" className="block text-sm font-medium text-gray-700 mb-1">
                     סטטוס
                   </label>
                   <select
+                    id="sla-auto-task-status"
                     value={taskStatus}
                     onChange={(e) => setTaskStatus(e.target.value)}
                     className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg"
@@ -1103,10 +1130,11 @@ export default function SlaAutomationModal({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="sla-auto-task-priority" className="block text-sm font-medium text-gray-700 mb-1">
                     עדיפות
                   </label>
                   <select
+                    id="sla-auto-task-priority"
                     value={taskPriority}
                     onChange={(e) => setTaskPriority(e.target.value)}
                     className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg"
@@ -1120,10 +1148,11 @@ export default function SlaAutomationModal({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="sla-auto-task-assignee" className="block text-sm font-medium text-gray-700 mb-1">
                     אחראי
                   </label>
                   <select
+                    id="sla-auto-task-assignee"
                     value={taskAssigneeId}
                     onChange={(e) => setTaskAssigneeId(e.target.value)}
                     className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg"
@@ -1137,10 +1166,11 @@ export default function SlaAutomationModal({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="sla-auto-task-due" className="block text-sm font-medium text-gray-700 mb-1">
                     תאריך יעד (ימים מהיצירה)
                   </label>
                   <input
+                    id="sla-auto-task-due"
                     type="number"
                     min="0"
                     value={taskDueDays}
@@ -1152,11 +1182,12 @@ export default function SlaAutomationModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="sla-auto-task-tag" className="block text-sm font-medium text-gray-700 mb-2">
                   תגיות
                 </label>
                 <div className="flex gap-2 mb-2">
                   <input
+                    id="sla-auto-task-tag"
                     value={taskTagInput}
                     onChange={(e) => setTaskTagInput(e.target.value)}
                     onKeyDown={handleAddTaskTag}
@@ -1183,6 +1214,7 @@ export default function SlaAutomationModal({
                         onClick={() =>
                           setTaskTags(taskTags.filter((t) => t !== tag))
                         }
+                        aria-label={`הסר תגית ${tag}`}
                         className="hover:text-blue-900 font-bold px-1"
                       >
                         ×
@@ -1232,19 +1264,24 @@ export default function SlaAutomationModal({
     <div
       className="fixed inset-0 bg-black/60 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4"
       dir="rtl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="sla-modal-title"
       onClick={() => onOpenChange(false)}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+      <div ref={focusTrapRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="bg-[#f4f8f8] px-8 py-5 border-b border-gray-100 flex justify-between items-center">
           <div className="flex flex-col">
-            <h3 className="text-xl font-bold text-[#000000]">
+            <h3 id="sla-modal-title" className="text-xl font-bold text-[#000000]">
               {initialData ? "עריכת אוטומציית שירות" : "אשף אוטומציות השירות"}
             </h3>
-            <div className="flex gap-2 mt-2">
+            <div className="flex gap-2 mt-2" aria-label={`שלב ${step} מתוך ${totalSteps}`} role="status">
+              <span className="sr-only">שלב {step} מתוך {totalSteps}</span>
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
+                  aria-hidden="true"
                   className={`h-1.5 rounded-full transition-all duration-300 ${
                     i <= step ? "w-8 bg-[#4f95ff]" : "w-2 bg-gray-200"
                   }`}
@@ -1254,6 +1291,7 @@ export default function SlaAutomationModal({
           </div>
           <button
             onClick={() => onOpenChange(false)}
+            aria-label="סגור"
             className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors"
           >
             <X size={24} />
@@ -1323,7 +1361,11 @@ function TriggerCard({
 }) {
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
       onClick={onClick}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
       className={`relative p-5 rounded-xl border-2 cursor-pointer transition-all duration-200 group ${
         selected
           ? "border-[#4f95ff] bg-blue-50 shadow-md ring-2 ring-blue-200 ring-offset-2"
@@ -1378,7 +1420,11 @@ function ActionCard({
 }) {
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
       onClick={onClick}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
       className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 group ${
         selected
           ? "border-[#4f95ff] bg-blue-50 shadow-md ring-2 ring-blue-200 ring-offset-1"

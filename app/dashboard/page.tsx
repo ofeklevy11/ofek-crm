@@ -8,7 +8,7 @@ import { isRateLimitError } from "@/lib/rate-limit-utils";
 import RateLimitFallback from "@/components/RateLimitFallback";
 import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "לוח בקרה | BizlyCRM" };
+export const metadata: Metadata = { title: "לוח בקרה" };
 
 export const dynamic = "force-dynamic";
 

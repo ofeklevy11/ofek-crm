@@ -78,7 +78,7 @@ export function FilesPageClient({ searchParams }: FilesPageClientProps) {
   };
 
   return (
-    <div className="container mx-auto py-8" dir="rtl">
+    <main className="container mx-auto py-8" dir="rtl">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-black">
@@ -94,7 +94,8 @@ export function FilesPageClient({ searchParams }: FilesPageClientProps) {
       </div>
 
       {isLoading ? (
-        <div className="space-y-6">
+        <div className="space-y-6" role="status" aria-label="טוען קבצים...">
+          <span className="sr-only">טוען קבצים...</span>
           <div className="h-10 w-full bg-muted rounded-lg animate-pulse" />
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {[...Array(5)].map((_, i) => (
@@ -110,6 +111,6 @@ export function FilesPageClient({ searchParams }: FilesPageClientProps) {
           onStatusChange={handleStatusChange}
         />
       )}
-    </div>
+    </main>
   );
 }

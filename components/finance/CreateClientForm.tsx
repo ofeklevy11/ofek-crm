@@ -50,7 +50,7 @@ export default function CreateClientForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6 text-right">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
+        <div role="alert" className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
           {error}
         </div>
       )}
@@ -69,6 +69,7 @@ export default function CreateClientForm() {
               name="name"
               id="name"
               required
+              aria-required="true"
               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
               placeholder="לדוגמה: ישראל ישראלי"
             />

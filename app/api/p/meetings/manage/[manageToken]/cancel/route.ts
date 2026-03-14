@@ -4,8 +4,9 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createNotificationForCompany } from "@/lib/notifications-internal";
 import { isNotificationEnabled } from "@/lib/notification-settings";
 import { withMetrics } from "@/lib/with-metrics";
-
-const TOKEN_RE = /^[a-zA-Z0-9]{10,50}$/;
+import { SECURE_TOKEN_RE } from "@/lib/crypto-tokens";
+import { getClientIp } from "@/lib/request-ip";
+import { logSecurityEvent, SEC_MEETING_CANCELLED } from "@/lib/security/audit-security";
 
 async function handlePOST(
   request: NextRequest,
@@ -14,14 +15,24 @@ async function handlePOST(
   try {
     const { manageToken } = await params;
 
-    if (!TOKEN_RE.test(manageToken)) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 400 });
+    if (!SECURE_TOKEN_RE.test(manageToken)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    // CSRF protection: require JSON content-type
+    const contentType = request.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
+    }
+
+    // Request body size limit (10KB)
+    const contentLength = request.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > 10000) {
+      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
     }
 
     // Rate limit by IP
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      "unknown";
+    const ip = getClientIp(request);
     const rateLimited = await checkRateLimit(ip, RATE_LIMITS.publicBooking);
     if (rateLimited) return rateLimited;
 
@@ -73,6 +84,14 @@ async function handlePOST(
       },
     });
 
+    // Security audit log (fire-and-forget)
+    logSecurityEvent({
+      action: SEC_MEETING_CANCELLED,
+      companyId: meeting.companyId,
+      ip,
+      details: { meetingId: meeting.id, participantName: meeting.participantName },
+    });
+
     // Notify admins (fire-and-forget) — guarded by toggle
     isNotificationEnabled(meeting.companyId, "notifyOnMeetingCancelled")
       .then((enabled) => {
@@ -92,7 +111,7 @@ async function handlePOST(
           .findMany({
             where: { companyId: meeting.companyId, role: "admin" },
             select: { id: true },
-            take: 10,
+            take: 25,
           })
           .then((admins) => {
             for (const admin of admins) {

@@ -7,7 +7,7 @@ import { buildTablePermissionWhere } from "@/lib/table-permissions";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "טבלאות | BizlyCRM" };
+export const metadata: Metadata = { title: "טבלאות" };
 
 export default async function TablesPage() {
   const user = await getCurrentUser();

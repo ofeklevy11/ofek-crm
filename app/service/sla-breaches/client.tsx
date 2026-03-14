@@ -27,6 +27,7 @@ import Link from "next/link";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -39,6 +40,13 @@ import { getUserFriendlyError } from "@/lib/errors";
 interface SlaBreachesClientProps {
   initialBreaches: any[];
 }
+
+const priorityLabels: Record<string, string> = {
+  CRITICAL: "קריטי",
+  HIGH: "גבוה",
+  MEDIUM: "בינוני",
+  LOW: "נמוך",
+};
 
 export default function SlaBreachesClient({
   initialBreaches,
@@ -110,6 +118,7 @@ export default function SlaBreachesClient({
             <Link
               href="/service"
               className="text-slate-400 hover:text-slate-600 transition-colors"
+              aria-label="חזרה לשירות לקוחות"
             >
               <ArrowRight className="w-5 h-5" />
             </Link>
@@ -127,7 +136,8 @@ export default function SlaBreachesClient({
           <Search className="w-4 h-4 absolute right-3 text-slate-400" />
           <Input
             placeholder="חיפוש לפי מספר קריאה או כותרת..."
-            className="pr-9 bg-transparent border-0 focus-visible:ring-0 max-w-sm text-right"
+            aria-label="חיפוש חריגות SLA"
+            className="pr-9 bg-transparent border-0 focus-visible:ring-1 focus-visible:ring-slate-300 max-w-sm text-right"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -136,6 +146,7 @@ export default function SlaBreachesClient({
           <Button
             variant="ghost"
             size="sm"
+            aria-pressed={statusFilter === "all"}
             className={
               statusFilter === "all"
                 ? "bg-slate-100 font-medium"
@@ -148,6 +159,7 @@ export default function SlaBreachesClient({
           <Button
             variant="ghost"
             size="sm"
+            aria-pressed={statusFilter === "PENDING"}
             className={
               statusFilter === "PENDING"
                 ? "bg-red-50 text-red-600 font-medium"
@@ -160,6 +172,7 @@ export default function SlaBreachesClient({
           <Button
             variant="ghost"
             size="sm"
+            aria-pressed={statusFilter === "REVIEWED"}
             className={
               statusFilter === "REVIEWED"
                 ? "bg-blue-50 text-blue-600 font-medium"
@@ -173,8 +186,9 @@ export default function SlaBreachesClient({
       </div>
 
       {/* Table */}
+      <h2 className="sr-only">טבלת חריגות SLA</h2>
       <div className="bg-white rounded-lg border shadow-sm overflow-hidden flex-1">
-        <table className="w-full text-right text-sm">
+        <table className="w-full text-right text-sm" aria-label="חריגות SLA">
           <thead className="bg-slate-50 text-slate-500 border-b">
             <tr>
               <th className="px-4 py-3 font-medium">קריאה</th>
@@ -183,7 +197,7 @@ export default function SlaBreachesClient({
               <th className="px-4 py-3 font-medium">מועד יעד מקורי</th>
               <th className="px-4 py-3 font-medium">זמן חריגה</th>
               <th className="px-4 py-3 font-medium">סטטוס חריגה</th>
-              <th className="px-4 py-3 font-medium w-10"></th>
+              <th className="px-4 py-3 font-medium w-10"><span className="sr-only">פעולות</span></th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -192,6 +206,7 @@ export default function SlaBreachesClient({
                 <td
                   colSpan={7}
                   className="px-4 py-12 text-center text-slate-500"
+                  role="status"
                 >
                   לא נמצאו חריגות SLA התואמות את החיפוש
                 </td>
@@ -240,7 +255,7 @@ export default function SlaBreachesClient({
                           : "text-blue-600 bg-blue-50 border-blue-200"
                       }`}
                     >
-                      {breach.priority}
+                      {priorityLabels[breach.priority] || breach.priority}
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-slate-600">
@@ -264,10 +279,10 @@ export default function SlaBreachesClient({
                       }`}
                     >
                       {breach.status === "PENDING" && (
-                        <AlertTriangle className="w-3 h-3 ml-1" />
+                        <AlertTriangle className="w-3 h-3 ml-1" aria-hidden="true" />
                       )}
                       {breach.status === "REVIEWED" && (
-                        <CheckCircle className="w-3 h-3 ml-1" />
+                        <CheckCircle className="w-3 h-3 ml-1" aria-hidden="true" />
                       )}
                       {breach.status === "PENDING"
                         ? "נדרשת בדיקה"
@@ -283,6 +298,7 @@ export default function SlaBreachesClient({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-slate-400 hover:text-slate-600"
+                          aria-label="פעולות נוספות"
                         >
                           <MoreHorizontal className="w-4 h-4" />
                         </Button>
@@ -317,11 +333,13 @@ export default function SlaBreachesClient({
         <DialogContent>
           <DialogHeader className="text-right">
             <DialogTitle>סקירת חריגת SLA</DialogTitle>
+            <DialogDescription className="sr-only">הוסף הערות בדיקה וסמן את החריגה כנבדקת</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>הערות בדיקה</Label>
+              <Label htmlFor="review-notes">הערות בדיקה</Label>
               <Textarea
+                id="review-notes"
                 value={reviewNotes}
                 onChange={(e) => setReviewNotes(e.target.value)}
                 placeholder="הוסף הערות לגבי סיבת החריגה ופעולות שננקטו..."

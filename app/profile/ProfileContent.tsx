@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { User } from "@/lib/permissions";
 import {
@@ -10,7 +10,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -67,7 +68,7 @@ import type { NotificationSettings } from "@/lib/notification-settings";
 import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import GreenApiConnection from "./GreenApiConnection";
 import { getFriendlyResultError, getUserFriendlyError } from "@/lib/errors";
 import { showDestructiveConfirm } from "@/hooks/use-modal";
@@ -140,6 +141,13 @@ export default function ProfileContent({ user }: ProfileContentProps) {
 
   const isAdmin = user.role === "admin";
   const router = useRouter();
+  const newKeyAlertRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (newFullKey && newKeyAlertRef.current) {
+      newKeyAlertRef.current.focus();
+    }
+  }, [newFullKey]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -472,11 +480,13 @@ export default function ProfileContent({ user }: ProfileContentProps) {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8" dir="rtl">
+    <main className="max-w-5xl mx-auto space-y-8" dir="rtl">
+      <div aria-live="polite" className="sr-only">
+        {copiedKey ? "הועתק ללוח" : ""}
+      </div>
       {/* Header Section */}
       <div className="flex flex-col md:flex-row gap-6 items-center md:items-start bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-        <Avatar className="w-24 h-24 border-4 border-slate-50 shadow-md">
-          <AvatarImage src="" />
+        <Avatar className="w-24 h-24 border-4 border-slate-50 shadow-md" aria-hidden="true">
           <AvatarFallback className="text-3xl bg-linear-to-br from-blue-500 to-purple-600 text-white">
             {user.name.charAt(0).toUpperCase()}
           </AvatarFallback>
@@ -489,7 +499,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
               if (open) setNewName(user.name);
             }}>
               <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600" aria-label="ערוך שם">
                   <Pencil className="w-4 h-4" />
                 </Button>
               </DialogTrigger>
@@ -498,16 +508,20 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                   <DialogTitle>שינוי שם</DialogTitle>
                   <DialogDescription>עדכן את השם שלך במערכת.</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 pt-4">
-                  <Input
-                    placeholder="שם מלא"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    disabled={updatingName}
-                    className="bg-white"
-                  />
+                <form onSubmit={(e) => { e.preventDefault(); handleUpdateName(); }} className="space-y-4 pt-4">
+                  <div className="space-y-2">
+                    <label htmlFor="profile-name-input" className="text-sm font-medium text-slate-700">שם מלא</label>
+                    <Input
+                      id="profile-name-input"
+                      placeholder="שם מלא"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      disabled={updatingName}
+                      className="bg-white"
+                    />
+                  </div>
                   <Button
-                    onClick={handleUpdateName}
+                    type="submit"
                     disabled={updatingName || !newName.trim() || newName.trim() === user.name}
                     className="w-full"
                   >
@@ -515,7 +529,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                       <><Loader2 className="w-4 h-4 ml-2 animate-spin" />מעדכן...</>
                     ) : "עדכן שם"}
                   </Button>
-                </div>
+                </form>
               </DialogContent>
             </Dialog>
           </div>
@@ -538,6 +552,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
         </div>
       </div>
 
+      <h2 className="sr-only">פרטי ארגון ואינטגרציות</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {/* Left Column: Organization & Identity */}
         <div className="space-y-6">
@@ -550,17 +565,17 @@ export default function ProfileContent({ user }: ProfileContentProps) {
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">
                   שם הארגון
-                </label>
+                </span>
                 <div className="font-medium text-slate-900">
                   {user.company?.name || "לא משויך"}
                 </div>
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">
                   מזהה ארגון (Company ID)
-                </label>
+                </span>
                 <div className="flex items-center gap-2">
                   <div className="font-mono text-sm bg-slate-100 px-3 py-1.5 rounded-md text-slate-700 border border-slate-200">
                     {user.companyId}
@@ -570,6 +585,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                     size="icon"
                     className="h-8 w-8"
                     onClick={() => copyToClipboard(String(user.companyId))}
+                    aria-label="העתק מזהה ארגון"
                   >
                     {copiedKey === String(user.companyId) ? (
                       <Check className="w-3.5 h-3.5 text-green-500" />
@@ -594,9 +610,9 @@ export default function ProfileContent({ user }: ProfileContentProps) {
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">
                   מזהה משתמש (User ID)
-                </label>
+                </span>
                 <div className="font-mono text-sm text-slate-700">
                   {user.id}
                 </div>
@@ -631,21 +647,22 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                         שנה את שם הארגון. נדרשת אימות סיסמה לאישור השינוי.
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4 pt-4">
+                    <form onSubmit={(e) => { e.preventDefault(); handleUpdateCompanyName(); }} className="space-y-4 pt-4">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">
+                        <span className="text-sm font-medium text-slate-700">
                           שם ארגון נוכחי
-                        </label>
+                        </span>
                         <div className="p-3 bg-slate-50 rounded-md border border-slate-200 text-slate-900 font-medium">
                           {user.company?.name || "לא משויך"}
                         </div>
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">
+                        <label htmlFor="profile-company-name" className="text-sm font-medium text-slate-700">
                           שם ארגון חדש
                         </label>
                         <Input
+                          id="profile-company-name"
                           placeholder="הזן שם ארגון חדש"
                           value={newCompanyName}
                           onChange={(e) => setNewCompanyName(e.target.value)}
@@ -655,10 +672,11 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">
+                        <label htmlFor="profile-company-password" className="text-sm font-medium text-slate-700">
                           סיסמה לאימות
                         </label>
                         <Input
+                          id="profile-company-password"
                           type="password"
                           placeholder="הזן את הסיסמה שלך"
                           value={password}
@@ -686,7 +704,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                       )}
 
                       <Button
-                        onClick={handleUpdateCompanyName}
+                        type="submit"
                         disabled={
                           updatingCompanyName ||
                           !newCompanyName.trim() ||
@@ -706,7 +724,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                           </>
                         )}
                       </Button>
-                    </div>
+                    </form>
                   </DialogContent>
                 </Dialog>
               </CardContent>
@@ -724,18 +742,19 @@ export default function ProfileContent({ user }: ProfileContentProps) {
               </CardHeader>
               <CardContent className="pt-6 space-y-4">
                 {loadingBusiness ? (
-                  <div className="flex items-center justify-center py-6">
+                  <div className="flex items-center justify-center py-6" role="status">
                     <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                    <span className="sr-only">טוען פרטי עסק...</span>
                   </div>
                 ) : (
-                  <>
+                  <form onSubmit={(e) => { e.preventDefault(); handleSaveBusinessSettings(); }} className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">סוג עסק</label>
+                      <label id="profile-business-type-label" className="text-sm font-medium text-slate-700">סוג עסק</label>
                       <Select
                         value={businessForm.businessType}
                         onValueChange={(v) => setBusinessForm((p) => ({ ...p, businessType: v }))}
                       >
-                        <SelectTrigger className="bg-white">
+                        <SelectTrigger className="bg-white" aria-labelledby="profile-business-type-label">
                           <SelectValue placeholder="בחר סוג עסק" />
                         </SelectTrigger>
                         <SelectContent>
@@ -746,8 +765,9 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">ח.פ / מספר עוסק</label>
+                      <label htmlFor="profile-business-taxid" className="text-sm font-medium text-slate-700">ח.פ / מספר עוסק</label>
                       <Input
+                        id="profile-business-taxid"
                         placeholder="מספר עוסק או ח.פ"
                         value={businessForm.taxId}
                         onChange={(e) => setBusinessForm((p) => ({ ...p, taxId: e.target.value }))}
@@ -755,8 +775,9 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">כתובת עסק</label>
+                      <label htmlFor="profile-business-address" className="text-sm font-medium text-slate-700">כתובת עסק</label>
                       <Input
+                        id="profile-business-address"
                         placeholder="כתובת העסק"
                         value={businessForm.businessAddress}
                         onChange={(e) => setBusinessForm((p) => ({ ...p, businessAddress: e.target.value }))}
@@ -764,8 +785,9 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">אתר אינטרנט (אופציונלי)</label>
+                      <label htmlFor="profile-business-website" className="text-sm font-medium text-slate-700">אתר אינטרנט (אופציונלי)</label>
                       <Input
+                        id="profile-business-website"
                         placeholder="https://example.com"
                         value={businessForm.businessWebsite}
                         onChange={(e) => setBusinessForm((p) => ({ ...p, businessWebsite: e.target.value }))}
@@ -774,8 +796,9 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">אימייל עסקי (אופציונלי)</label>
+                      <label htmlFor="profile-business-email" className="text-sm font-medium text-slate-700">אימייל עסקי (אופציונלי)</label>
                       <Input
+                        id="profile-business-email"
                         placeholder="info@example.com"
                         value={businessForm.businessEmail}
                         onChange={(e) => setBusinessForm((p) => ({ ...p, businessEmail: e.target.value }))}
@@ -784,7 +807,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                       />
                     </div>
                     <Button
-                      onClick={handleSaveBusinessSettings}
+                      type="submit"
                       disabled={savingBusiness}
                       className="w-full"
                     >
@@ -792,7 +815,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                         <><Loader2 className="w-4 h-4 ml-2 animate-spin" />שומר...</>
                       ) : "שמור פרטי עסק"}
                     </Button>
-                  </>
+                  </form>
                 )}
               </CardContent>
             </Card>
@@ -826,13 +849,12 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                     </div>
                   </div>
                   {isAdmin ? (
-                    <Button
-                      variant="outline"
-                      className="bg-white hover:bg-slate-50 text-indigo-600 border-indigo-200 hover:border-indigo-300"
-                      onClick={() => router.push("/profile/green-api")}
+                    <Link
+                      href="/profile/green-api"
+                      className={buttonVariants({ variant: "outline" }) + " bg-white hover:bg-slate-50 text-indigo-600 border-indigo-200 hover:border-indigo-300"}
                     >
                       הגדרות
-                    </Button>
+                    </Link>
                   ) : (
                     <Badge
                       variant="secondary"
@@ -858,13 +880,12 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                     </div>
                   </div>
                   {isAdmin ? (
-                    <Button
-                      variant="outline"
-                      className="bg-white hover:bg-slate-50 text-indigo-600 border-indigo-200 hover:border-indigo-300"
-                      onClick={() => router.push("/profile/whatsapp")}
+                    <Link
+                      href="/profile/whatsapp"
+                      className={buttonVariants({ variant: "outline" }) + " bg-white hover:bg-slate-50 text-indigo-600 border-indigo-200 hover:border-indigo-300"}
                     >
                       הגדרות
-                    </Button>
+                    </Link>
                   ) : (
                     <Badge
                       variant="secondary"
@@ -890,13 +911,12 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                     </div>
                   </div>
                   {isAdmin ? (
-                    <Button
-                      variant="outline"
-                      className="bg-white hover:bg-slate-50 text-indigo-600 border-indigo-200 hover:border-indigo-300"
-                      onClick={() => router.push("/profile/sms")}
+                    <Link
+                      href="/profile/sms"
+                      className={buttonVariants({ variant: "outline" }) + " bg-white hover:bg-slate-50 text-indigo-600 border-indigo-200 hover:border-indigo-300"}
                     >
                       הגדרות
-                    </Button>
+                    </Link>
                   ) : (
                     <Badge
                       variant="secondary"
@@ -927,37 +947,40 @@ export default function ProfileContent({ user }: ProfileContentProps) {
               </CardHeader>
               <CardContent className="pt-6 space-y-6">
                 {/* Create New Key */}
-                <div className="flex gap-3 items-end bg-slate-50 p-5 rounded-xl border border-slate-200">
-                  <div className="flex-1 space-y-2">
-                    <label className="text-sm font-medium text-slate-700">
-                      צור מפתח חדש
-                    </label>
-                    <Input
-                      placeholder="שם המפתח (לדוגמה: Make Integration)"
-                      value={newKeyName}
-                      onChange={(e) => setNewKeyName(e.target.value)}
-                      className="bg-white"
-                    />
+                <form onSubmit={(e) => { e.preventDefault(); handleCreateKey(); }}>
+                  <div className="flex gap-3 items-end bg-slate-50 p-5 rounded-xl border border-slate-200">
+                    <div className="flex-1 space-y-2">
+                      <label htmlFor="profile-apikey-name" className="text-sm font-medium text-slate-700">
+                        צור מפתח חדש
+                      </label>
+                      <Input
+                        id="profile-apikey-name"
+                        placeholder="שם המפתח (לדוגמה: Make Integration)"
+                        value={newKeyName}
+                        onChange={(e) => setNewKeyName(e.target.value)}
+                        className="bg-white"
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      disabled={creating || !newKeyName}
+                      className="bg-purple-600 hover:bg-purple-700 text-white min-w-[120px]"
+                    >
+                      {creating ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 ml-1.5" />
+                          צור מפתח
+                        </>
+                      )}
+                    </Button>
                   </div>
-                  <Button
-                    onClick={handleCreateKey}
-                    disabled={creating || !newKeyName}
-                    className="bg-purple-600 hover:bg-purple-700 text-white min-w-[120px]"
-                  >
-                    {creating ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        <Plus className="w-4 h-4 ml-1.5" />
-                        צור מפתח
-                      </>
-                    )}
-                  </Button>
-                </div>
+                </form>
 
                 {/* Show full key once after creation */}
                 {newFullKey && (
-                  <Alert className="bg-green-50 border-green-300">
+                  <Alert ref={newKeyAlertRef} tabIndex={-1} className="bg-green-50 border-green-300">
                     <Key className="w-4 h-4 text-green-600" />
                     <AlertTitle className="text-green-800">
                       המפתח נוצר בהצלחה
@@ -975,6 +998,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                           size="icon"
                           className="h-8 w-8 shrink-0"
                           onClick={() => copyToClipboard(newFullKey)}
+                          aria-label="העתק מפתח"
                         >
                           {copiedKey === newFullKey ? (
                             <Check className="w-4 h-4 text-green-500" />
@@ -997,18 +1021,19 @@ export default function ProfileContent({ user }: ProfileContentProps) {
 
                 {/* Keys List */}
                 <div className="space-y-4">
-                  <h3 className="font-semibold text-slate-900">
+                  <h4 className="font-semibold text-slate-900">
                     מפתחות פעילים
-                  </h3>
+                  </h4>
 
                   {loadingKeys ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-2">
+                    <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-2" role="status">
                       <Loader2 className="w-8 h-8 animate-spin" />
                       <span className="text-sm">טוען מפתחות...</span>
                     </div>
                   ) : keys.length > 0 ? (
                     <div className="rounded-lg border border-slate-200 overflow-hidden">
                       <Table>
+                        <caption className="sr-only">מפתחות API פעילים</caption>
                         <TableHeader className="bg-slate-50">
                           <TableRow>
                             <TableHead className="text-right w-[30%]">
@@ -1020,7 +1045,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                             <TableHead className="text-right">
                               נוצר בתאריך
                             </TableHead>
-                            <TableHead className="w-[50px]"></TableHead>
+                            <TableHead className="w-[50px]"><span className="sr-only">פעולות</span></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1031,7 +1056,8 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                             >
                               <TableCell className="font-medium text-slate-900">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                  <div className="w-2 h-2 rounded-full bg-green-500" aria-hidden="true"></div>
+                                  <span className="sr-only">פעיל</span>
                                   {apiKey.name}
                                 </div>
                               </TableCell>
@@ -1045,6 +1071,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                                     size="icon"
                                     className="h-6 w-6 hover:bg-slate-100"
                                     onClick={() => copyToClipboard(apiKey.key)}
+                                    aria-label="העתק מפתח"
                                   >
                                     {copiedKey === apiKey.key ? (
                                       <Check className="w-3 h-3 text-green-500" />
@@ -1064,8 +1091,9 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                                  className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all"
                                   onClick={() => handleDeleteKey(apiKey.id)}
+                                  aria-label={`מחק מפתח ${apiKey.name}`}
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
@@ -1104,6 +1132,8 @@ export default function ProfileContent({ user }: ProfileContentProps) {
 
       {/* Notification Settings (admin only) */}
       {isAdmin && (
+        <>
+        <h2 className="sr-only">הגדרות התראות</h2>
         <Card className="border-slate-200 shadow-sm overflow-hidden">
           <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
             <CardTitle className="text-lg flex items-center gap-2">
@@ -1114,7 +1144,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
           </CardHeader>
           <CardContent className="pt-6">
             {loadingNotif ? (
-              <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
+              <div className="flex items-center justify-center py-8 text-slate-400 gap-2" role="status">
                 <Loader2 className="w-6 h-6 animate-spin" />
                 <span className="text-sm">טוען הגדרות...</span>
               </div>
@@ -1130,70 +1160,70 @@ export default function ProfileContent({ user }: ProfileContentProps) {
               <div className="space-y-8">
                 {/* Meetings section */}
                 <div className="space-y-4">
-                  <h3 className="font-semibold text-slate-900 border-b border-slate-100 pb-2">פגישות</h3>
+                  <h4 className="font-semibold text-slate-900 border-b border-slate-100 pb-2">פגישות</h4>
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-slate-800 text-sm">התראה על פגישה חדשה</p>
-                        <p className="text-xs text-slate-500">כשלקוח קובע פגישה</p>
+                        <p id="notif-meeting-booked-label" className="font-medium text-slate-800 text-sm">התראה על פגישה חדשה</p>
+                        <p id="notif-meeting-booked-desc" className="text-xs text-slate-500">כשלקוח קובע פגישה</p>
                       </div>
-                      <Switch checked={notifSettings.notifyOnMeetingBooked} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnMeetingBooked", v)} />
+                      <Switch checked={notifSettings.notifyOnMeetingBooked} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnMeetingBooked", v)} aria-labelledby="notif-meeting-booked-label" aria-describedby="notif-meeting-booked-desc" />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-slate-800 text-sm">התראה על ביטול פגישה</p>
-                        <p className="text-xs text-slate-500">כשפגישה מבוטלת</p>
+                        <p id="notif-meeting-cancelled-label" className="font-medium text-slate-800 text-sm">התראה על ביטול פגישה</p>
+                        <p id="notif-meeting-cancelled-desc" className="text-xs text-slate-500">כשפגישה מבוטלת</p>
                       </div>
-                      <Switch checked={notifSettings.notifyOnMeetingCancelled} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnMeetingCancelled", v)} />
+                      <Switch checked={notifSettings.notifyOnMeetingCancelled} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnMeetingCancelled", v)} aria-labelledby="notif-meeting-cancelled-label" aria-describedby="notif-meeting-cancelled-desc" />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-slate-800 text-sm">התראה על דחיית פגישה</p>
-                        <p className="text-xs text-slate-500">כשפגישה נדחית</p>
+                        <p id="notif-meeting-rescheduled-label" className="font-medium text-slate-800 text-sm">התראה על דחיית פגישה</p>
+                        <p id="notif-meeting-rescheduled-desc" className="text-xs text-slate-500">כשפגישה נדחית</p>
                       </div>
-                      <Switch checked={notifSettings.notifyOnMeetingRescheduled} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnMeetingRescheduled", v)} />
+                      <Switch checked={notifSettings.notifyOnMeetingRescheduled} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnMeetingRescheduled", v)} aria-labelledby="notif-meeting-rescheduled-label" aria-describedby="notif-meeting-rescheduled-desc" />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-slate-800 text-sm">התראה על שינוי סטטוס פגישה</p>
-                        <p className="text-xs text-slate-500">כששינוי סטטוס פגישה ידני</p>
+                        <p id="notif-meeting-status-label" className="font-medium text-slate-800 text-sm">התראה על שינוי סטטוס פגישה</p>
+                        <p id="notif-meeting-status-desc" className="text-xs text-slate-500">כששינוי סטטוס פגישה ידני</p>
                       </div>
-                      <Switch checked={notifSettings.notifyOnMeetingStatusChange} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnMeetingStatusChange", v)} />
+                      <Switch checked={notifSettings.notifyOnMeetingStatusChange} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnMeetingStatusChange", v)} aria-labelledby="notif-meeting-status-label" aria-describedby="notif-meeting-status-desc" />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-slate-800 text-sm">יצירת לקוח אוטומטית בקביעת פגישה</p>
-                        <p className="text-xs text-slate-500">יוצר לקוח חדש כשלקוח קובע פגישה</p>
+                        <p id="notif-auto-create-label" className="font-medium text-slate-800 text-sm">יצירת לקוח אוטומטית בקביעת פגישה</p>
+                        <p id="notif-auto-create-desc" className="text-xs text-slate-500">יוצר לקוח חדש כשלקוח קובע פגישה</p>
                       </div>
-                      <Switch checked={notifSettings.autoCreateClientOnBooking} onCheckedChange={(v) => handleToggleNotifSetting("autoCreateClientOnBooking", v)} />
+                      <Switch checked={notifSettings.autoCreateClientOnBooking} onCheckedChange={(v) => handleToggleNotifSetting("autoCreateClientOnBooking", v)} aria-labelledby="notif-auto-create-label" aria-describedby="notif-auto-create-desc" />
                     </div>
                   </div>
                 </div>
 
                 {/* Tickets section */}
                 <div className="space-y-4">
-                  <h3 className="font-semibold text-slate-900 border-b border-slate-100 pb-2">קריאות שירות</h3>
+                  <h4 className="font-semibold text-slate-900 border-b border-slate-100 pb-2">קריאות שירות</h4>
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-slate-800 text-sm">התראה על הקצאת קריאה</p>
-                        <p className="text-xs text-slate-500">כשקריאה חדשה מוקצית</p>
+                        <p id="notif-ticket-assigned-label" className="font-medium text-slate-800 text-sm">התראה על הקצאת קריאה</p>
+                        <p id="notif-ticket-assigned-desc" className="text-xs text-slate-500">כשקריאה חדשה מוקצית</p>
                       </div>
-                      <Switch checked={notifSettings.notifyOnTicketAssigned} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnTicketAssigned", v)} />
+                      <Switch checked={notifSettings.notifyOnTicketAssigned} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnTicketAssigned", v)} aria-labelledby="notif-ticket-assigned-label" aria-describedby="notif-ticket-assigned-desc" />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-slate-800 text-sm">התראה על שינוי הקצאה</p>
-                        <p className="text-xs text-slate-500">כשקריאה מועברת למשתמש אחר</p>
+                        <p id="notif-ticket-reassigned-label" className="font-medium text-slate-800 text-sm">התראה על שינוי הקצאה</p>
+                        <p id="notif-ticket-reassigned-desc" className="text-xs text-slate-500">כשקריאה מועברת למשתמש אחר</p>
                       </div>
-                      <Switch checked={notifSettings.notifyOnTicketReassigned} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnTicketReassigned", v)} />
+                      <Switch checked={notifSettings.notifyOnTicketReassigned} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnTicketReassigned", v)} aria-labelledby="notif-ticket-reassigned-label" aria-describedby="notif-ticket-reassigned-desc" />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-slate-800 text-sm">התראה על תגובה בקריאה</p>
-                        <p className="text-xs text-slate-500">כשמישהו מגיב בקריאה</p>
+                        <p id="notif-ticket-comment-label" className="font-medium text-slate-800 text-sm">התראה על תגובה בקריאה</p>
+                        <p id="notif-ticket-comment-desc" className="text-xs text-slate-500">כשמישהו מגיב בקריאה</p>
                       </div>
-                      <Switch checked={notifSettings.notifyOnTicketComment} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnTicketComment", v)} />
+                      <Switch checked={notifSettings.notifyOnTicketComment} onCheckedChange={(v) => handleToggleNotifSetting("notifyOnTicketComment", v)} aria-labelledby="notif-ticket-comment-label" aria-describedby="notif-ticket-comment-desc" />
                     </div>
                   </div>
                 </div>
@@ -1201,9 +1231,11 @@ export default function ProfileContent({ user }: ProfileContentProps) {
             )}
           </CardContent>
         </Card>
+        </>
       )}
 
       {/* Account Settings (full width) */}
+      <h2 className="sr-only">הגדרות חשבון</h2>
       <Card className="border-slate-200 shadow-sm overflow-hidden">
         <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
           <CardTitle className="text-lg flex items-center gap-2">
@@ -1236,10 +1268,11 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                     לאחר שינוי הסיסמה תתנתק מכל המכשירים.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 pt-4">
+                <form onSubmit={(e) => { e.preventDefault(); handleChangePassword(); }} className="space-y-4 pt-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">סיסמה נוכחית</label>
+                    <label htmlFor="profile-current-password" className="text-sm font-medium text-slate-700">סיסמה נוכחית</label>
                     <Input
+                      id="profile-current-password"
                       type="password"
                       placeholder="הזן סיסמה נוכחית"
                       value={currentPassword}
@@ -1249,8 +1282,9 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">סיסמה חדשה</label>
+                    <label htmlFor="profile-new-password" className="text-sm font-medium text-slate-700">סיסמה חדשה</label>
                     <Input
+                      id="profile-new-password"
                       type="password"
                       placeholder="לפחות 10 תווים"
                       value={newPassword}
@@ -1260,8 +1294,9 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">אימות סיסמה חדשה</label>
+                    <label htmlFor="profile-confirm-password" className="text-sm font-medium text-slate-700">אימות סיסמה חדשה</label>
                     <Input
+                      id="profile-confirm-password"
                       type="password"
                       placeholder="הזן שוב את הסיסמה החדשה"
                       value={confirmNewPassword}
@@ -1278,7 +1313,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                   )}
 
                   <Button
-                    onClick={handleChangePassword}
+                    type="submit"
                     disabled={updatingPassword || !currentPassword || !newPassword || !confirmNewPassword}
                     className="w-full"
                   >
@@ -1286,7 +1321,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                       <><Loader2 className="w-4 h-4 ml-2 animate-spin" />מעדכן...</>
                     ) : "שנה סיסמה"}
                   </Button>
-                </div>
+                </form>
               </DialogContent>
             </Dialog>
 
@@ -1312,16 +1347,18 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                 </DialogHeader>
                 <div className="space-y-4 pt-4">
                   {emailStep === "form" ? (
-                    <>
+                    <form onSubmit={(e) => { e.preventDefault(); handleRequestEmailChange(); }}>
+                      <div className="space-y-4">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">אימייל נוכחי</label>
+                        <span className="text-sm font-medium text-slate-700">אימייל נוכחי</span>
                         <div className="p-3 bg-slate-50 rounded-md border border-slate-200 text-slate-700 text-sm" dir="ltr">
                           {user.email}
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">אימייל חדש</label>
+                        <label htmlFor="profile-new-email" className="text-sm font-medium text-slate-700">אימייל חדש</label>
                         <Input
+                          id="profile-new-email"
                           type="email"
                           placeholder="new@email.com"
                           value={newEmail}
@@ -1332,8 +1369,9 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">סיסמה לאימות</label>
+                        <label htmlFor="profile-email-password" className="text-sm font-medium text-slate-700">סיסמה לאימות</label>
                         <Input
+                          id="profile-email-password"
                           type="password"
                           placeholder="הזן את הסיסמה שלך"
                           value={emailPassword}
@@ -1350,7 +1388,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                       )}
 
                       <Button
-                        onClick={handleRequestEmailChange}
+                        type="submit"
                         disabled={updatingEmail || !newEmail.trim() || !emailPassword}
                         className="w-full"
                       >
@@ -1358,16 +1396,18 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                           <><Loader2 className="w-4 h-4 ml-2 animate-spin" />שולח...</>
                         ) : "שלח קוד אימות"}
                       </Button>
-                    </>
+                      </div>
+                    </form>
                   ) : (
-                    <>
+                    <form onSubmit={(e) => { e.preventDefault(); handleVerifyEmailChange(); }}>
+                      <div className="space-y-4">
                       <div className="text-center">
                         <p className="text-sm text-muted-foreground mb-1">קוד אימות נשלח אל</p>
                         <p className="font-medium" dir="ltr">{newEmail}</p>
                       </div>
 
                       <div className="flex justify-center" dir="ltr">
-                        <InputOTP maxLength={6} value={emailOtp} onChange={setEmailOtp}>
+                        <InputOTP maxLength={6} value={emailOtp} onChange={setEmailOtp} aria-label="קוד אימות בן 6 ספרות">
                           <InputOTPGroup>
                             <InputOTPSlot index={0} />
                             <InputOTPSlot index={1} />
@@ -1386,7 +1426,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                       )}
 
                       <Button
-                        onClick={handleVerifyEmailChange}
+                        type="submit"
                         disabled={updatingEmail || emailOtp.length !== 6}
                         className="w-full"
                       >
@@ -1394,7 +1434,8 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                           <><Loader2 className="w-4 h-4 ml-2 animate-spin" />מאמת...</>
                         ) : "אמת ושנה אימייל"}
                       </Button>
-                    </>
+                      </div>
+                    </form>
                   )}
                 </div>
               </DialogContent>
@@ -1404,6 +1445,7 @@ export default function ProfileContent({ user }: ProfileContentProps) {
       </Card>
 
       {/* Danger Zone (full width) */}
+      <h2 className="sr-only">אזור מסוכן</h2>
       <Card className="border-red-200 shadow-sm overflow-hidden">
         <CardHeader className="bg-red-50 border-b border-red-100 pb-4">
           <CardTitle className="text-lg flex items-center gap-2 text-red-700">
@@ -1448,15 +1490,19 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                     הזן את הסיסמה שלך כדי לאשר את מחיקת החשבון.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 pt-4">
-                  <Input
-                    type="password"
-                    placeholder="הזן את הסיסמה שלך"
-                    value={deletePassword}
-                    onChange={(e) => setDeletePassword(e.target.value)}
-                    disabled={deletingAccount}
-                    className="bg-white"
-                  />
+                <form onSubmit={(e) => { e.preventDefault(); handleConfirmDelete(); }} className="space-y-4 pt-4">
+                  <div className="space-y-2">
+                    <label htmlFor="profile-delete-password" className="text-sm font-medium text-slate-700">סיסמה לאימות</label>
+                    <Input
+                      id="profile-delete-password"
+                      type="password"
+                      placeholder="הזן את הסיסמה שלך"
+                      value={deletePassword}
+                      onChange={(e) => setDeletePassword(e.target.value)}
+                      disabled={deletingAccount}
+                      className="bg-white"
+                    />
+                  </div>
 
                   {deleteError && (
                     <Alert className="bg-red-50 border-red-200">
@@ -1465,8 +1511,8 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                   )}
 
                   <Button
+                    type="submit"
                     variant="destructive"
-                    onClick={handleConfirmDelete}
                     disabled={deletingAccount || !deletePassword}
                     className="w-full"
                   >
@@ -1474,12 +1520,12 @@ export default function ProfileContent({ user }: ProfileContentProps) {
                       <><Loader2 className="w-4 h-4 ml-2 animate-spin" />מוחק...</>
                     ) : "מחק את החשבון לצמיתות"}
                   </Button>
-                </div>
+                </form>
               </DialogContent>
             </Dialog>
           </div>
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }

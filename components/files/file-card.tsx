@@ -32,6 +32,8 @@ import { toast } from "sonner";
 import { showConfirm } from "@/hooks/use-modal";
 import { getUserFriendlyError } from "@/lib/errors";
 import { FilePreviewModal } from "./file-preview-modal";
+import { MoveToFolderDialog } from "./move-to-folder-dialog";
+import { FolderInput } from "lucide-react";
 
 // Secure download function that uses API route
 const downloadFile = async (fileId: number, fileName: string) => {
@@ -110,6 +112,8 @@ interface FileCardProps {
   onDragEnd?: () => void;
   isDragging?: boolean;
   source?: "internal" | "google-drive";
+  availableFolders?: { id: number; name: string }[];
+  currentFolderId?: number | null;
 }
 
 // Drive file download function
@@ -143,9 +147,12 @@ export function FileCard({
   onDragEnd,
   isDragging = false,
   source = "internal",
+  availableFolders,
+  currentFolderId,
 }: FileCardProps) {
   const isDrive = source === "google-drive";
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editDisplayName, setEditDisplayName] = useState(
@@ -235,6 +242,7 @@ export function FileCard({
         <button
           className="p-1 hover:bg-muted rounded-md transition-opacity"
           onClick={(e) => e.stopPropagation()}
+          aria-label={`תפריט פעולות - ${(file as any).displayName || file.name}`}
         >
           <MoreVertical className="w-4 h-4 text-muted-foreground" />
         </button>
@@ -290,6 +298,18 @@ export function FileCard({
               <Pencil className="w-4 h-4 ml-2" />
               ערוך שם
             </DropdownMenuItem>
+            {availableFolders && (
+              <DropdownMenuItem
+                className="gap-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMoveDialogOpen(true);
+                }}
+              >
+                <FolderInput className="w-4 h-4 ml-2" />
+                העבר לתיקייה
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive gap-2"
@@ -314,6 +334,17 @@ export function FileCard({
         handleDownload();
         setPreviewOpen(false);
       }}
+    />
+  );
+
+  const moveDialog = !isDrive && availableFolders && (
+    <MoveToFolderDialog
+      open={moveDialogOpen}
+      onOpenChange={setMoveDialogOpen}
+      fileId={file.id}
+      fileName={(file as any).displayName || file.name}
+      folders={availableFolders}
+      currentFolderId={currentFolderId ?? null}
     />
   );
 
@@ -343,14 +374,14 @@ export function FileCard({
               alt={(file as any).displayName || file.name}
               size="lg"
             />
-            <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+            <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity z-10">
               <ActionsMenu align="start" />
             </div>
           </div>
         ) : (
           <div className="flex items-start justify-between">
             <div className="p-2 rounded-lg bg-muted">{getIcon()}</div>
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
               <ActionsMenu align="start" />
             </div>
           </div>
@@ -360,10 +391,11 @@ export function FileCard({
           // Edit Mode
           <div className="mt-4 space-y-3">
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">
+              <label htmlFor={`edit-display-name-${file.id}`} className="text-xs text-muted-foreground">
                 שם לתצוגה:
               </label>
               <input
+                id={`edit-display-name-${file.id}`}
                 type="text"
                 placeholder={file.name}
                 value={editDisplayName}
@@ -432,7 +464,7 @@ export function FileCard({
             </div>
 
             {/* Direct action buttons */}
-            <div className="mt-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="mt-3 flex gap-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
               {isDrive ? (
                 openUrl && (
                   <a
@@ -467,6 +499,7 @@ export function FileCard({
           </>
         )}
         {previewModal}
+        {moveDialog}
       </div>
     );
   }
@@ -490,7 +523,7 @@ export function FileCard({
         dir="rtl"
       >
         {!isDrive && (
-          <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+          <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" aria-hidden="true" />
         )}
 
         <div
@@ -538,7 +571,7 @@ export function FileCard({
         </div>
 
         {/* Direct action buttons */}
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity shrink-0">
           {isDrive ? (
             openUrl && (
               <a
@@ -547,6 +580,7 @@ export function FileCard({
                 rel="noopener noreferrer"
                 className="p-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                 title="פתח"
+                aria-label="פתח"
               >
                 <ExternalLink className="w-4 h-4" />
               </a>
@@ -557,6 +591,7 @@ export function FileCard({
               onClick={() => setPreviewOpen(true)}
               className="p-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
               title="פתח"
+              aria-label="פתח"
             >
               <ExternalLink className="w-4 h-4" />
             </button>
@@ -566,15 +601,17 @@ export function FileCard({
             onClick={() => handleDownload()}
             className="p-1.5 rounded-md bg-[#4f95ff]/10 text-[#4f95ff] hover:bg-[#4f95ff]/20 transition-colors"
             title="הורד"
+            aria-label="הורד"
           >
             <Download className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <div className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity shrink-0">
           <ActionsMenu />
         </div>
         {previewModal}
+        {moveDialog}
       </div>
     );
   }
@@ -596,10 +633,11 @@ export function FileCard({
           isDragging && "opacity-50 bg-primary/10",
         )}
         dir="rtl"
+        role="row"
       >
-        <div className="col-span-6 flex items-center gap-3 min-w-0">
+        <div className="col-span-6 flex items-center gap-3 min-w-0" role="cell">
           {!isDrive && (
-            <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+            <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity shrink-0" aria-hidden="true" />
           )}
           {getIcon("sm")}
           <div className="flex flex-col min-w-0">
@@ -624,18 +662,19 @@ export function FileCard({
           </div>
         </div>
 
-        <div className="col-span-2 text-sm text-muted-foreground text-left">
+        <div className="col-span-2 text-sm text-muted-foreground text-left" role="cell">
           {formatFileSize(file.size)}
         </div>
 
-        <div className="col-span-3 text-sm text-muted-foreground text-left">
+        <div className="col-span-3 text-sm text-muted-foreground text-left" role="cell">
           {formatDate(file.createdAt)}
         </div>
 
-        <div className="col-span-1 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="col-span-1 flex justify-end opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" role="cell">
           <ActionsMenu />
         </div>
         {previewModal}
+        {moveDialog}
       </div>
     );
   }

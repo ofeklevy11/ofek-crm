@@ -15,6 +15,7 @@ interface CalendarEvent {
   startTime: string;
   endTime: string;
   color: string | null;
+  source?: "crm" | "google";
 }
 
 interface MiniCalendarWidgetProps {
@@ -31,6 +32,12 @@ const PRESET_LABELS: Record<string, string> = {
   "14d": "14 ימים הקרובים",
   this_month: "החודש",
   custom: "טווח מותאם",
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  crm: "יומן מערכת",
+  google: "Google Calendar",
+  all: "כל היומנים",
 };
 
 function MiniCalendarWidget({
@@ -59,6 +66,7 @@ function MiniCalendarWidget({
   const [isCollapsed, setIsCollapsed] = useState(settings?.collapsed || false);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [googleConnected, setGoogleConnected] = useState(true);
 
   // Build filters from settings
   const filters = useMemo(() => {
@@ -68,6 +76,7 @@ function MiniCalendarWidget({
       customFrom: settings.customFrom,
       customTo: settings.customTo,
       maxEvents: settings.maxEvents,
+      calendarSource: settings.calendarSource,
     };
   }, [settings]);
 
@@ -82,6 +91,7 @@ function MiniCalendarWidget({
     getMiniCalendarData(filters)
       .then((res) => {
         if (res.success && res.data) setEvents(res.data as unknown as CalendarEvent[]);
+        if ("googleConnected" in res) setGoogleConnected(res.googleConnected as boolean);
       })
       .finally(() => setLoading(false));
   }, [settingsKey]);
@@ -143,9 +153,9 @@ function MiniCalendarWidget({
             </button>
           </div>
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className="text-sm font-bold px-2 py-0.5 rounded-full border bg-cyan-50 text-cyan-700 border-cyan-100">
-                יומן
+                {SOURCE_LABELS[settings?.calendarSource || "crm"] || "יומן מערכת"}
               </span>
               <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-cyan-50 text-cyan-600 border border-cyan-100">
                 {filterSummary}
@@ -209,7 +219,11 @@ function MiniCalendarWidget({
               </div>
             ) : events.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-gray-400">
-                <p className="text-sm">אין אירועים קרובים</p>
+                {!googleConnected && settings?.calendarSource && settings.calendarSource !== "crm" ? (
+                  <p className="text-sm">Google Calendar לא מחובר</p>
+                ) : (
+                  <p className="text-sm">אין אירועים קרובים</p>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
@@ -221,7 +235,7 @@ function MiniCalendarWidget({
                     <div className="flex items-center gap-2 mb-1">
                       <div
                         className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: ev.color || "#06b6d4" }}
+                        style={{ backgroundColor: ev.source === "google" ? "#1a73e8" : (ev.color || "#06b6d4") }}
                         aria-hidden="true"
                       />
                       <p className="text-base font-medium text-gray-800 truncate">

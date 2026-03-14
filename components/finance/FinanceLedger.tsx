@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
+  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
@@ -132,6 +133,7 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
 
       <div className="overflow-x-auto">
         <Table>
+          <TableCaption className="sr-only">תנועות כספיות</TableCaption>
           <TableHeader>
             <TableRow>
               <TableHead className="w-[100px] text-right">תאריך</TableHead>
@@ -184,6 +186,8 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
                       {record.syncRule?.sourceType === "TABLE" && (
                         <div
                           title={`סונכרן אוטומטית מהטבלה: ${record.syncRule.name}`}
+                          aria-label={`סונכרן אוטומטית מהטבלה: ${record.syncRule.name}`}
+                          role="img"
                           className="text-[#4f95ff]"
                         >
                           <TableIcon className="w-4 h-4" />
@@ -254,6 +258,7 @@ export default function FinanceLedger({ initialRecords }: FinanceLedgerProps) {
                       disabled={isDeleting === record.id}
                       onClick={() => setDeleteRecord(record)}
                       className="h-8 w-8 text-gray-400 hover:text-[#a24ec1] opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all"
+                      aria-label="מחק תנועה"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>

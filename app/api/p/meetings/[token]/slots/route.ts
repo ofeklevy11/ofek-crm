@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAvailableSlots } from "@/lib/meeting-slots";
 import { withMetrics } from "@/lib/with-metrics";
-
-const TOKEN_RE = /^[a-zA-Z0-9]{10,50}$/;
+import { SECURE_TOKEN_RE } from "@/lib/crypto-tokens";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request-ip";
 
 // Default schedule: Sun-Thu 09:00-17:00, Fri-Sat off
 const DEFAULT_SCHEDULE: Record<string, { start: string; end: string }[]> = {
@@ -16,15 +17,23 @@ const DEFAULT_SCHEDULE: Record<string, { start: string; end: string }[]> = {
   "6": [],                                  // Sat
 };
 
+/** Max date range: 90 days in ms */
+const MAX_RANGE_MS = 90 * 24 * 60 * 60 * 1000;
+
 async function handleGET(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> },
 ) {
   const { token } = await params;
 
-  if (!TOKEN_RE.test(token)) {
-    return NextResponse.json({ error: "Invalid token" }, { status: 400 });
+  if (!SECURE_TOKEN_RE.test(token)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  // Rate limit by IP
+  const ip = getClientIp(request);
+  const rateLimited = await checkRateLimit(ip, RATE_LIMITS.publicSlots);
+  if (rateLimited) return rateLimited;
 
   const { searchParams } = new URL(request.url);
   const startParam = searchParams.get("start");
@@ -42,6 +51,14 @@ async function handleGET(
 
   if (isNaN(dateStart.getTime()) || isNaN(dateEnd.getTime())) {
     return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
+  }
+
+  // Validate date range: end must be after start, max 90 days
+  if (dateEnd.getTime() <= dateStart.getTime()) {
+    return NextResponse.json({ error: "end must be after start" }, { status: 400 });
+  }
+  if (dateEnd.getTime() - dateStart.getTime() > MAX_RANGE_MS) {
+    return NextResponse.json({ error: "Date range cannot exceed 90 days" }, { status: 400 });
   }
 
   // Extend dateEnd to cover the full day (clients send same date for single-day queries)
@@ -120,30 +137,50 @@ async function handleGET(
 
   const timezone = companyAvailability?.timezone ?? "Asia/Jerusalem";
 
-  const slots = getAvailableSlots({
-    weeklySchedule,
-    timezone,
-    duration: meetingType.duration,
-    bufferBefore: meetingType.bufferBefore,
-    bufferAfter: meetingType.bufferAfter,
-    dailyLimit: meetingType.dailyLimit,
-    minAdvanceHours: meetingType.minAdvanceHours,
-    maxAdvanceDays: meetingType.maxAdvanceDays,
-    dateStart,
-    dateEnd,
-    blocks,
-    existingMeetings: existingMeetings.map((m) => ({
-      startTime: m.startTime,
-      endTime: m.endTime,
-      bufferBefore: m.meetingType.bufferBefore,
-      bufferAfter: m.meetingType.bufferAfter,
-    })),
-    existingEvents,
-    meetingsPerDay,
-  });
+  // Wrap slot computation in a timeout to prevent abuse with edge-case queries
+  const SLOT_TIMEOUT_MS = 5_000;
+  const slotsPromise = Promise.resolve(
+    getAvailableSlots({
+      weeklySchedule,
+      timezone,
+      duration: meetingType.duration,
+      bufferBefore: meetingType.bufferBefore,
+      bufferAfter: meetingType.bufferAfter,
+      dailyLimit: meetingType.dailyLimit,
+      minAdvanceHours: meetingType.minAdvanceHours,
+      maxAdvanceDays: meetingType.maxAdvanceDays,
+      dateStart,
+      dateEnd,
+      blocks,
+      existingMeetings: existingMeetings.map((m) => ({
+        startTime: m.startTime,
+        endTime: m.endTime,
+        bufferBefore: m.meetingType.bufferBefore,
+        bufferAfter: m.meetingType.bufferAfter,
+      })),
+      existingEvents,
+      meetingsPerDay,
+    })
+  );
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("SLOT_TIMEOUT")), SLOT_TIMEOUT_MS)
+  );
+
+  let slots: Record<string, unknown[]>;
+  try {
+    slots = await Promise.race([slotsPromise, timeoutPromise]) as Record<string, unknown[]>;
+  } catch (err: any) {
+    if (err?.message === "SLOT_TIMEOUT") {
+      return NextResponse.json({ error: "Slot computation timed out" }, { status: 503 });
+    }
+    throw err;
+  }
 
   const flatSlots = Object.values(slots).flat();
-  return NextResponse.json({ slots: flatSlots });
+
+  const response = NextResponse.json({ slots: flatSlots });
+  response.headers.set("Cache-Control", "public, s-maxage=30, stale-while-revalidate=60");
+  return response;
 }
 
 export const GET = withMetrics("/api/p/meetings/[token]/slots", handleGET);

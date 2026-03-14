@@ -26,7 +26,7 @@ export function SourceSwitcher({ driveConnected }: SourceSwitcherProps) {
   };
 
   return (
-    <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
+    <div className="flex items-center gap-1 p-1 bg-muted rounded-lg" role="group" aria-label="בחירת מקור קבצים">
       <Button
         variant={currentSource === "internal" ? "default" : "ghost"}
         size="sm"
@@ -37,6 +37,8 @@ export function SourceSwitcher({ driveConnected }: SourceSwitcherProps) {
             : "hover:bg-white/50",
         )}
         onClick={() => handleSwitch("internal")}
+        aria-label="ספריית קבצים"
+        aria-pressed={currentSource === "internal"}
       >
         <HardDrive className="w-4 h-4" />
         <span className="hidden sm:inline">ספריית קבצים</span>
@@ -51,11 +53,16 @@ export function SourceSwitcher({ driveConnected }: SourceSwitcherProps) {
             : "hover:bg-white/50",
         )}
         onClick={() => handleSwitch("drive")}
+        aria-label="Google Drive"
+        aria-pressed={currentSource === "drive"}
       >
         <Cloud className="w-4 h-4" />
         <span className="hidden sm:inline">Google Drive</span>
         {!driveConnected && currentSource !== "drive" && (
-          <span className="w-2 h-2 rounded-full bg-orange-400" />
+          <>
+            <span className="w-2 h-2 rounded-full bg-orange-400" aria-hidden="true" />
+            <span className="sr-only">לא מחובר</span>
+          </>
         )}
       </Button>
     </div>

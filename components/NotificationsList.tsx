@@ -146,7 +146,7 @@ export default function NotificationsList({
               disabled={isProcessing}
               className="flex items-center gap-1 text-red-600 hover:text-red-700 text-sm font-medium transition-colors"
             >
-              <Trash2 size={16} />
+              <Trash2 size={16} aria-hidden="true" />
               <span>מחק נבחרים ({selectedIds.length})</span>
             </button>
           )}
@@ -161,14 +161,14 @@ export default function NotificationsList({
           }
           className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <CheckCircle size={16} />
+          <CheckCircle size={16} aria-hidden="true" />
           <span>סמן הכל כנקרא</span>
         </button>
       </div>
 
       <div className="bg-white shadow overflow-hidden sm:rounded-md">
         {notifications.length > 0 ? (
-          <ul className="divide-y divide-gray-200">
+          <ul className="divide-y divide-gray-200" aria-label="רשימת התראות">
             {notifications.map((notification) => (
               <li
                 key={notification.id}
@@ -188,6 +188,7 @@ export default function NotificationsList({
                         type="checkbox"
                         checked={selectedIds.includes(notification.id)}
                         onChange={() => toggleSelect(notification.id)}
+                        aria-label={`בחר התראה: ${notification.title}`}
                         className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
                       />
                     </div>
@@ -207,8 +208,9 @@ export default function NotificationsList({
                               onClick={() => handleDelete(notification.id)}
                               className="text-gray-400 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-red-50"
                               title="מחק התראה"
+                              aria-label={`מחק התראה: ${notification.title}`}
                             >
-                              <Trash2 size={16} />
+                              <Trash2 size={16} aria-hidden="true" />
                             </button>
 
                             {!notification.read && (
@@ -218,12 +220,15 @@ export default function NotificationsList({
                                 }
                                 className="text-gray-400 hover:text-green-600 transition-colors p-1 rounded-full hover:bg-green-50"
                                 title="סמן כנקרא"
+                                aria-label={`סמן כנקרא: ${notification.title}`}
                               >
-                                <Check size={18} />
+                                <Check size={18} aria-hidden="true" />
                               </button>
                             )}
 
                             <span
+                              role="status"
+                              aria-label={notification.read ? "סטטוס: נקרא" : "סטטוס: חדש"}
                               className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                 notification.read
                                   ? "bg-gray-100 text-gray-800"
@@ -268,7 +273,7 @@ export default function NotificationsList({
             ))}
           </ul>
         ) : (
-          <div className="text-center py-12">
+          <div className="text-center py-12" role="status">
             <p className="text-gray-500">אין התראות להצגה</p>
           </div>
         )}

@@ -179,7 +179,7 @@ export default function WhatsAppChatInterface({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+      <div className="flex items-center justify-center h-[calc(100vh-120px)]" role="status" aria-label="טוען שיחות וואטסאפ">
         <span className="animate-spin h-8 w-8 border-3 border-green-500 border-t-transparent rounded-full" />
       </div>
     );
@@ -188,8 +188,8 @@ export default function WhatsAppChatInterface({
   return (
     <div className="flex flex-col h-[calc(100vh-120px)] bg-white rounded-xl shadow-sm border overflow-hidden">
       {hasGivenUp && (
-        <div className="flex items-center justify-center gap-2 px-3 py-2 bg-red-50 border-b border-red-200 text-red-700 text-sm">
-          <WifiOff className="w-4 h-4" />
+        <div role="alert" className="flex items-center justify-center gap-2 px-3 py-2 bg-red-50 border-b border-red-200 text-red-700 text-sm">
+          <WifiOff className="w-4 h-4" aria-hidden="true" />
           <span>החיבור לעדכונים בזמן אמת נותק.</span>
           <button
             onClick={() => window.location.reload()}
@@ -235,8 +235,8 @@ export default function WhatsAppChatInterface({
             realtimeStatusUpdates={realtimeStatusUpdates}
           />
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-            <MessageSquare className="w-16 h-16 mb-4 opacity-30" />
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-400" role="status">
+            <MessageSquare className="w-16 h-16 mb-4 opacity-30" aria-hidden="true" />
             <p className="text-lg font-medium">וואטסאפ עסקי</p>
             <p className="text-sm">בחר שיחה מהרשימה כדי להתחיל</p>
           </div>

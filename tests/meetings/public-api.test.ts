@@ -480,7 +480,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
     expect((prisma as any).user.findMany).toHaveBeenCalledWith({
       where: { companyId: 10, role: "admin" },
       select: { id: true },
-      take: 10,
+      take: 25,
     });
     expect(createNotificationForCompany).toHaveBeenCalledTimes(2);
     expect(createNotificationForCompany).toHaveBeenCalledWith(
@@ -922,7 +922,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
     expect((prisma as any).user.findMany).toHaveBeenCalledWith({
       where: { companyId: 10, role: "admin" },
       select: { id: true },
-      take: 10,
+      take: 25,
     });
     expect(createNotificationForCompany).toHaveBeenCalledTimes(2);
     expect(createNotificationForCompany).toHaveBeenCalledWith(
@@ -1165,7 +1165,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
     expect((prisma as any).user.findMany).toHaveBeenCalledWith({
       where: { companyId: 10, role: "admin" },
       select: { id: true },
-      take: 10,
+      take: 25,
     });
     expect(createNotificationForCompany).toHaveBeenCalledTimes(2);
     expect(createNotificationForCompany).toHaveBeenCalledWith(

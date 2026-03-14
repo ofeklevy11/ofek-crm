@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "מדיניות פרטיות | BizlyCRM",
+  title: "מדיניות פרטיות",
   description: "מדיניות הפרטיות של BizlyCRM - מערכת ניהול לעסקים",
 };
 

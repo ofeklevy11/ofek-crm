@@ -20,18 +20,16 @@ import { ChevronRight } from "lucide-react";
 
 export default function MakeAppGuide() {
   return (
-    <div className="min-h-screen bg-slate-50" dir="rtl">
+    <div className="min-h-screen bg-slate-50">
       <main className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Breadcrumbs */}
-        <div className="flex items-center text-sm text-slate-500 mb-6">
-          <Link href="/guides" className="hover:text-blue-600">
-            מדריכים
-          </Link>
-          <ChevronRight className="w-4 h-4 mx-2" />
-          <span className="text-slate-900 font-medium">
-            הוספת רשומות לטבלאות דרך אפליקציית Make
-          </span>
-        </div>
+        <nav aria-label="ניווט פירורי לחם" className="mb-6">
+          <ol className="flex items-center text-sm text-slate-500">
+            <li><Link href="/guides" className="hover:text-blue-600">מדריכים</Link></li>
+            <li aria-hidden="true"><ChevronRight className="w-4 h-4 mx-2" /></li>
+            <li aria-current="page"><span className="text-slate-900 font-medium">הוספת רשומות לטבלאות דרך אפליקציית Make</span></li>
+          </ol>
+        </nav>
 
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-slate-900 mb-4">
@@ -44,8 +42,8 @@ export default function MakeAppGuide() {
         </div>
 
         {/* Advantage alert */}
-        <Alert className="mb-8 bg-green-50 border-green-200 text-green-900">
-          <Sparkles className="h-4 w-4 text-green-600" />
+        <Alert className="mb-8 bg-green-50 border-green-200 text-green-900" role="note">
+          <Sparkles className="h-4 w-4 text-green-600" aria-hidden="true" />
           <AlertTitle>יתרון האפליקציה המותאמת</AlertTitle>
           <AlertDescription>
             בניגוד למדריכים האחרים שמשתמשים ב-HTTP Request ידני, כאן תעבוד עם
@@ -75,8 +73,8 @@ export default function MakeAppGuide() {
                     לזיהוי החברה שלך. תזדקק לו בשלב יצירת החיבור.
                   </li>
                 </ul>
-                <Alert className="mt-4 bg-blue-50 border-blue-200 text-blue-900">
-                  <Info className="h-4 w-4 text-blue-600" />
+                <Alert className="mt-4 bg-blue-50 border-blue-200 text-blue-900" role="note">
+                  <Info className="h-4 w-4 text-blue-600" aria-hidden="true" />
                   <AlertDescription>
                     בניגוד לחיבור HTTP ידני, כאן <strong>אין צורך</strong>{" "}
                     לדעת את ה-company_id, table_slug, או מבנה JSON — האפליקציה
@@ -98,7 +96,7 @@ export default function MakeAppGuide() {
             <Card>
               <CardContent className="pt-6 space-y-4">
                 <div className="flex items-start gap-3">
-                  <Search className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" />
+                  <Search className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p className="mb-2">
                       ב-Scenario שלך, לחץ על כפתור <strong>&quot;+&quot;</strong>{" "}
@@ -109,8 +107,8 @@ export default function MakeAppGuide() {
                     </div>
                   </div>
                 </div>
-                <Alert className="bg-amber-50 border-amber-200 text-amber-900">
-                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <Alert className="bg-amber-50 border-amber-200 text-amber-900" role="note">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" aria-hidden="true" />
                   <AlertTitle>שימו לב</AlertTitle>
                   <AlertDescription>
                     שם האפליקציה עשוי להשתנות בקרוב. אם לא מוצאים אותה, פנו
@@ -132,7 +130,7 @@ export default function MakeAppGuide() {
             <Card>
               <CardContent className="pt-6 space-y-4">
                 <div className="flex items-start gap-3">
-                  <Key className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" />
+                  <Key className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p className="mb-2">
                       בפעם הראשונה שתשתמש באפליקציה, Make יבקש ממך ליצור חיבור
@@ -145,8 +143,8 @@ export default function MakeAppGuide() {
                     </p>
                   </div>
                 </div>
-                <Alert className="bg-red-50 border-red-200 text-red-900">
-                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                <Alert className="bg-red-50 border-red-200 text-red-900" role="note">
+                  <AlertTriangle className="h-4 w-4 text-red-600" aria-hidden="true" />
                   <AlertTitle>החיבור נכשל?</AlertTitle>
                   <AlertDescription>
                     וודא שמפתח ה-API שהזנת מדויק ופעיל. ניתן לקבל מפתח חדש
@@ -174,7 +172,7 @@ export default function MakeAppGuide() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-start gap-3">
-                  <MousePointerClick className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" />
+                  <MousePointerClick className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p>
                       לאחר שהחיבור נוצר, בחר את הפעולה{" "}
@@ -199,7 +197,7 @@ export default function MakeAppGuide() {
             <Card>
               <CardContent className="pt-6 space-y-4">
                 <div className="flex items-start gap-3">
-                  <Table2 className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" />
+                  <Table2 className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p className="mb-2">
                       תראה רשימה נפתחת (Dropdown) עם כל הטבלאות שקיימות בחשבון
@@ -226,7 +224,7 @@ export default function MakeAppGuide() {
             <Card>
               <CardContent className="pt-6 space-y-4">
                 <div className="flex items-start gap-3">
-                  <ArrowLeftRight className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" />
+                  <ArrowLeftRight className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p className="mb-2">
                       לאחר בחירת הטבלה, השדות שלה ייטענו אוטומטית. כל שנותר הוא
@@ -240,7 +238,7 @@ export default function MakeAppGuide() {
                 </div>
 
                 <div className="bg-slate-50 rounded-lg p-4 space-y-2">
-                  <h4 className="font-semibold text-sm">דגשים לסוגי שדות:</h4>
+                  <h3 className="font-semibold text-sm">דגשים לסוגי שדות:</h3>
                   <ul className="list-disc list-inside text-sm text-slate-600 space-y-1">
                     <li>
                       <strong>שדות בחירה (Select):</strong> הזן את הערך המדויק
@@ -257,8 +255,8 @@ export default function MakeAppGuide() {
                   </ul>
                 </div>
 
-                <Alert className="bg-blue-50 border-blue-200 text-blue-900">
-                  <Info className="h-4 w-4 text-blue-600" />
+                <Alert className="bg-blue-50 border-blue-200 text-blue-900" role="note">
+                  <Info className="h-4 w-4 text-blue-600" aria-hidden="true" />
                   <AlertDescription>
                     שדות מסוג קישור (Relation), נוסחה (Lookup), ואוטומציה לא
                     יופיעו ברשימת השדות — הם מנוהלים אוטומטית על ידי המערכת.
@@ -279,7 +277,7 @@ export default function MakeAppGuide() {
             <Card>
               <CardContent className="pt-6 space-y-4">
                 <div className="flex items-start gap-3">
-                  <PlayCircle className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" />
+                  <PlayCircle className="w-5 h-5 text-slate-500 mt-1 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p className="mb-2">
                       לחץ על <strong>&quot;Run once&quot;</strong> בתחתית המסך של
@@ -288,7 +286,7 @@ export default function MakeAppGuide() {
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-green-500 mt-1 flex-shrink-0" />
+                  <CheckCircle2 className="w-5 h-5 text-green-500 mt-1 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p className="mb-2">
                       אם הכל הוגדר נכון, תראה <strong>בועה ירוקה</strong> על
@@ -319,7 +317,7 @@ export default function MakeAppGuide() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg text-red-600 flex items-center">
-                    <Key className="w-5 h-5 ml-2" />
+                    <Key className="w-5 h-5 ml-2" aria-hidden="true" />
                     שגיאת חיבור (Connection Error)
                   </CardTitle>
                 </CardHeader>
@@ -332,7 +330,7 @@ export default function MakeAppGuide() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg text-amber-600 flex items-center">
-                    <Table2 className="w-5 h-5 ml-2" />
+                    <Table2 className="w-5 h-5 ml-2" aria-hidden="true" />
                     רשימת הטבלאות ריקה
                   </CardTitle>
                 </CardHeader>
@@ -346,7 +344,7 @@ export default function MakeAppGuide() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg text-blue-600 flex items-center">
-                    <ArrowLeftRight className="w-5 h-5 ml-2" />
+                    <ArrowLeftRight className="w-5 h-5 ml-2" aria-hidden="true" />
                     השדות לא נטענים
                   </CardTitle>
                 </CardHeader>
@@ -359,7 +357,7 @@ export default function MakeAppGuide() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg text-purple-600 flex items-center">
-                    <AlertTriangle className="w-5 h-5 ml-2" />
+                    <AlertTriangle className="w-5 h-5 ml-2" aria-hidden="true" />
                     ה-Scenario נכשל בהרצה
                   </CardTitle>
                 </CardHeader>

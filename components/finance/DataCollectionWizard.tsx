@@ -180,19 +180,25 @@ export default function DataCollectionWizard({
           style={{ width: `${((step - 1) / 2) * 100}%` }}
         />
 
-        <div className="flex justify-between items-center px-2">
+        <div className="flex justify-between items-center px-2" role="navigation" aria-label="שלבי האשף">
           {[1, 2, 3].map((s) => {
             const isActive = step >= s;
             const isCurrent = step === s;
+            const stepLabel = s === 1
+              ? "בחירת מקור"
+              : s === 2
+                ? "מיפוי נתונים"
+                : "סיכום והרצה";
 
             return (
-              <div key={s} className="flex flex-col items-center gap-2">
+              <div key={s} className="flex flex-col items-center gap-2" {...(isCurrent ? { "aria-current": "step" as const } : {})}>
                 <div
                   className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg border-4 transition-all duration-300 shadow-sm ${
                     isActive
                       ? "border-[#4f95ff] bg-white text-[#4f95ff] shadow-[#4f95ff]/20"
                       : "border-white bg-gray-50 text-gray-300"
                   } ${isCurrent ? "scale-110 ring-4 ring-[#4f95ff]/10" : ""}`}
+                  aria-label={`שלב ${s}: ${stepLabel}`}
                 >
                   {step > s ? <Check className="w-6 h-6" /> : s}
                 </div>
@@ -201,15 +207,14 @@ export default function DataCollectionWizard({
                     isActive ? "text-[#4f95ff]" : "text-gray-300"
                   }`}
                 >
-                  {s === 1
-                    ? "בחירת מקור"
-                    : s === 2
-                      ? "מיפוי נתונים"
-                      : "סיכום והרצה"}
+                  {stepLabel}
                 </div>
               </div>
             );
           })}
+        </div>
+        <div aria-live="polite" className="sr-only">
+          {`שלב ${step} מתוך 3: ${step === 1 ? "בחירת מקור" : step === 2 ? "מיפוי נתונים" : "סיכום והרצה"}`}
         </div>
       </div>
 
@@ -231,20 +236,22 @@ export default function DataCollectionWizard({
 
             <div className="space-y-6 max-w-lg mx-auto w-full pt-4">
               <div className="space-y-2">
-                <Label className="text-base">שם לחוק האיסוף</Label>
+                <Label htmlFor="rule-name" className="text-base">שם לחוק האיסוף</Label>
                 <Input
+                  id="rule-name"
                   value={formData.name}
                   onChange={(e) =>
                     setFormData((p) => ({ ...p, name: e.target.value }))
                   }
                   placeholder="למשל: ייבוא לידים כהכנסה"
+                  aria-required="true"
                   className="text-right h-12 text-lg bg-gray-50/50 border-gray-200 focus:border-[#4f95ff] focus:ring-[#4f95ff]/20 transition-all"
                 />
               </div>
 
               <div className="space-y-3">
-                <Label className="text-base">הנתונים יישמרו כ:</Label>
-                <div className="grid grid-cols-2 gap-4 p-1 bg-gray-100 rounded-xl">
+                <Label id="target-type-label" className="text-base">הנתונים יישמרו כ:</Label>
+                <div className="grid grid-cols-2 gap-4 p-1 bg-gray-100 rounded-xl" role="group" aria-labelledby="target-type-label">
                   <button
                     onClick={() =>
                       setFormData((p) => ({ ...p, targetType: "INCOME" }))
@@ -273,7 +280,7 @@ export default function DataCollectionWizard({
               </div>
 
               <div className="space-y-2">
-                <Label className="text-base">בחר טבלת מקור</Label>
+                <Label htmlFor="source-table" className="text-base">בחר טבלת מקור</Label>
                 <Select
                   value={formData.sourceId}
                   onValueChange={(val) =>
@@ -281,6 +288,8 @@ export default function DataCollectionWizard({
                   }
                 >
                   <SelectTrigger
+                    id="source-table"
+                    aria-required="true"
                     className="text-right h-12 bg-gray-50/50 border-gray-200"
                   >
                     <SelectValue placeholder="בחר טבלה..." />
@@ -338,8 +347,8 @@ export default function DataCollectionWizard({
             ) : (
               <div className="space-y-6 max-w-2xl mx-auto w-full">
                 <div className="space-y-2 p-6 bg-blue-50/50 rounded-2xl border border-blue-100">
-                  <Label className="text-[#4f95ff] font-bold text-lg flex items-center gap-2">
-                    <Database className="w-4 h-4" /> עמודת סכום (חובה)
+                  <Label htmlFor="amount-field" className="text-[#4f95ff] font-bold text-lg flex items-center gap-2">
+                    <Database className="w-4 h-4" aria-hidden="true" /> עמודת סכום (חובה)
                   </Label>
                   <Select
                     value={formData.mapping.amountField}
@@ -351,6 +360,8 @@ export default function DataCollectionWizard({
                     }
                   >
                     <SelectTrigger
+                      id="amount-field"
+                      aria-required="true"
                       className="text-right h-12 bg-white border-blue-200"
                     >
                       <SelectValue placeholder="בחר עמודת מספרים..." />
@@ -373,7 +384,7 @@ export default function DataCollectionWizard({
 
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="text-base text-gray-600">
+                    <Label htmlFor="date-field" className="text-base text-gray-600">
                       תאריך העסקה
                     </Label>
                     <Select
@@ -386,6 +397,7 @@ export default function DataCollectionWizard({
                       }
                     >
                       <SelectTrigger
+                        id="date-field"
                         className="text-right h-12 bg-gray-50 border-gray-200"
                       >
                         <SelectValue placeholder="תאריך יצירה (ברירת מחדל)" />
@@ -401,7 +413,7 @@ export default function DataCollectionWizard({
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-base text-gray-600">
+                    <Label htmlFor="title-field" className="text-base text-gray-600">
                       תיאור/כותרת
                     </Label>
                     <Select
@@ -414,6 +426,7 @@ export default function DataCollectionWizard({
                       }
                     >
                       <SelectTrigger
+                        id="title-field"
                         className="text-right h-12 bg-gray-50 border-gray-200"
                       >
                         <SelectValue placeholder="בחר עמודת תיאור..." />
@@ -432,7 +445,7 @@ export default function DataCollectionWizard({
                 <div className="pt-6 border-t border-gray-100">
                   <div className="flex items-center gap-2 mb-4">
                     <Label className="font-bold text-gray-900 text-lg flex items-center gap-2">
-                      <Settings2 className="w-5 h-5 text-[#a24ec1]" /> סיווג
+                      <Settings2 className="w-5 h-5 text-[#a24ec1]" aria-hidden="true" /> סיווג
                       קטגוריה
                     </Label>
                   </div>
@@ -440,7 +453,7 @@ export default function DataCollectionWizard({
                   <div className="grid gap-4">
                     <div className="flex gap-4 items-start">
                       <div className="w-1/3 space-y-2">
-                        <Label className="text-xs text-gray-400">
+                        <Label htmlFor="category-method" className="text-xs text-gray-400">
                           שיטת סיווג
                         </Label>
                         <Select
@@ -453,6 +466,7 @@ export default function DataCollectionWizard({
                           }
                         >
                           <SelectTrigger
+                            id="category-method"
                             className="text-right h-11 bg-white"
                           >
                             <SelectValue />
@@ -469,13 +483,14 @@ export default function DataCollectionWizard({
                       </div>
 
                       <div className="flex-1 space-y-2">
-                        <Label className="text-xs text-gray-400">
+                        <Label htmlFor="category-value" className="text-xs text-gray-400">
                           {formData.mapping.categoryField === "static"
                             ? "שם הקטגוריה"
                             : "מידע"}
                         </Label>
                         {formData.mapping.categoryField === "static" ? (
                           <Input
+                            id="category-value"
                             placeholder="למשל: מכירות, שיווק..."
                             value={formData.mapping.categoryValue}
                             onChange={(e) =>

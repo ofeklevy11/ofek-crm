@@ -105,6 +105,7 @@ export default function TransactionsTable({
             className="text-sm border-gray-300 border rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 p-1.5"
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
+            aria-label="סנן לפי סטטוס"
           >
             <option value="all">כל הסטטוסים</option>
             <option value="pending">ממתין</option>
@@ -115,6 +116,7 @@ export default function TransactionsTable({
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
+          <caption className="sr-only">תנועות כספיות</caption>
           <thead className="bg-[#f4f8f8]">
             <tr>
               <th
@@ -202,7 +204,11 @@ export default function TransactionsTable({
                         סמן כשולם
                       </button>
                     )}
-                    <button className="text-gray-400 hover:text-gray-600">
+                    <button
+                      className="text-gray-400 hover:text-gray-600"
+                      aria-label="פרטי עסקה"
+                      title="פרטי עסקה"
+                    >
                       <FileText className="w-4 h-4" />
                     </button>
                   </div>

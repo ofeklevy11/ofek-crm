@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getStorageData } from "@/app/actions/storage";
 import { FileExplorer } from "@/components/files/file-explorer";
@@ -8,6 +9,8 @@ import { isRateLimitError } from "@/lib/rate-limit-utils";
 import RateLimitFallback from "@/components/RateLimitFallback";
 import { FilesPageClient } from "@/components/files/files-page-client";
 import { SourceSwitcherWrapper } from "@/components/files/source-switcher-wrapper";
+
+export const metadata: Metadata = { title: "קבצים" };
 
 interface PageProps {
   searchParams: Promise<{
@@ -47,7 +50,7 @@ export default async function FilesPage({ searchParams }: PageProps) {
   }
 
   return (
-    <div className="container mx-auto py-8" dir="rtl">
+    <main className="container mx-auto py-8" dir="rtl">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-black">
@@ -67,13 +70,14 @@ export default async function FilesPage({ searchParams }: PageProps) {
       <Suspense fallback={<FilesSkeleton />}>
         <FileExplorer data={data} currentFolderId={folderId} />
       </Suspense>
-    </div>
+    </main>
   );
 }
 
 function FilesSkeleton() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" role="status" aria-label="טוען קבצים...">
+      <span className="sr-only">טוען קבצים...</span>
       <div className="h-10 w-full bg-muted rounded-lg" />
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
         {[...Array(5)].map((_, i) => (

@@ -39,8 +39,20 @@ export async function GET(request: Request) {
     const slug = url.searchParams.get("slug");
     const rawPhone = url.searchParams.get("phone");
 
-    if (!slug) {
-      return NextResponse.json({ error: "slug param required (renewal|winback|birthday)" }, { status: 400 });
+    if (rawPhone && rawPhone.length > 50) {
+      return NextResponse.json({ error: "Invalid phone parameter" }, { status: 400 });
+    }
+
+    // Validate slug against whitelist
+    const VALID_SLUGS = ["birthday", "renewal", "winback", "review", "referral", "upsell"];
+    if (!slug || !VALID_SLUGS.includes(slug)) {
+      return NextResponse.json({ error: "slug param required (birthday|renewal|winback|review|referral|upsell)" }, { status: 400 });
+    }
+
+    // Validate mode against whitelist
+    const VALID_MODES = ["dry", "force", "cleanup", "live"];
+    if (!VALID_MODES.includes(mode)) {
+      return NextResponse.json({ error: "Invalid mode (dry|force|cleanup|live)" }, { status: 400 });
     }
 
     if (mode === "live") return handleLiveMode(slug);
@@ -49,7 +61,7 @@ export async function GET(request: Request) {
     return handleDryMode(slug, rawPhone);
   } catch (error) {
     log.error("Nurture test endpoint error", { error: String(error) });
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -151,10 +163,13 @@ async function handleDryMode(slug: string, rawPhone: string | null) {
         isDuplicate = list.sendLogs.some((l) => l.subscriberId === sub.id && l.triggerKey === triggerKey);
       }
 
+      // Mask phone number — show only last 4 digits
+      const maskedPhone = sub.phone ? "****" + sub.phone.slice(-4) : null;
+
       subscribers.push({
         id: sub.id,
         name: sub.name,
-        phone: sub.phone,
+        phone: maskedPhone,
         triggerDate: fmtDate(triggerDate),
         isEligible,
         isDuplicate,
@@ -261,7 +276,7 @@ async function handleForceMode(slug: string, rawPhone: string | null) {
   return NextResponse.json({
     mode: "force",
     sent: true,
-    subscriber: { id: sub.id, name: sub.name, phone: sub.phone },
+    subscriber: { id: sub.id, name: sub.name, phone: sub.phone ? "****" + sub.phone.slice(-4) : null },
     triggerKey,
     channels,
     message: activeMsg.name,

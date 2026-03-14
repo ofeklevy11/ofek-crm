@@ -799,7 +799,9 @@ export default function MeetingBookingPage({
               <p className="text-sm text-white/50">
                 האם ברצונכם לבטל את הפגישה? ניתן לציין סיבה.
               </p>
+              <label htmlFor="cancel-reason-booking" className="sr-only">סיבת הביטול</label>
               <textarea
+                id="cancel-reason-booking"
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
                 rows={3}
@@ -807,7 +809,7 @@ export default function MeetingBookingPage({
                 placeholder="סיבת הביטול (אופציונלי)..."
               />
               {manageError && (
-                <p className="text-sm text-red-300 bg-red-500/15 border border-red-500/20 rounded-lg px-3 py-2">
+                <p role="alert" className="text-sm text-red-300 bg-red-500/15 border border-red-500/20 rounded-lg px-3 py-2">
                   {manageError}
                 </p>
               )}
@@ -924,7 +926,7 @@ export default function MeetingBookingPage({
 
               {/* Error */}
               {manageError && (
-                <p className="text-sm text-red-300 bg-red-500/15 border border-red-500/20 rounded-lg px-3 py-2">
+                <p role="alert" className="text-sm text-red-300 bg-red-500/15 border border-red-500/20 rounded-lg px-3 py-2">
                   {manageError}
                 </p>
               )}
@@ -1076,12 +1078,14 @@ export default function MeetingBookingPage({
                 <form onSubmit={handleSubmit} className="space-y-3">
                   {/* Name */}
                   <div>
-                    <label className="block text-xs text-white/50 mb-1">
+                    <label htmlFor="booking-name" className="block text-xs text-white/50 mb-1">
                       {"\u05E9\u05DD \u05DE\u05DC\u05D0"} <span className="text-red-300">*</span>
                     </label>
                     <input
+                      id="booking-name"
                       type="text"
                       required
+                      aria-required="true"
                       value={formData.name}
                       onChange={(e) =>
                         setFormData((p) => ({ ...p, name: e.target.value }))
@@ -1093,10 +1097,11 @@ export default function MeetingBookingPage({
 
                   {/* Email */}
                   <div>
-                    <label className="block text-xs text-white/50 mb-1">
+                    <label htmlFor="booking-email" className="block text-xs text-white/50 mb-1">
                       {"\u05D0\u05D9\u05DE\u05D9\u05D9\u05DC"}
                     </label>
                     <input
+                      id="booking-email"
                       type="email"
                       value={formData.email}
                       onChange={(e) =>
@@ -1110,10 +1115,11 @@ export default function MeetingBookingPage({
 
                   {/* Phone */}
                   <div>
-                    <label className="block text-xs text-white/50 mb-1">
+                    <label htmlFor="booking-phone" className="block text-xs text-white/50 mb-1">
                       {"\u05D8\u05DC\u05E4\u05D5\u05DF"}
                     </label>
                     <input
+                      id="booking-phone"
                       type="tel"
                       value={formData.phone}
                       onChange={(e) =>
@@ -1128,7 +1134,7 @@ export default function MeetingBookingPage({
                   {/* Custom fields */}
                   {info.customFields.map((field) => (
                     <div key={field.id}>
-                      <label className="block text-xs text-white/50 mb-1">
+                      <label htmlFor={`custom-field-${field.id}`} className="block text-xs text-white/50 mb-1">
                         {field.label}
                         {field.required && (
                           <span className="text-red-300"> *</span>
@@ -1136,7 +1142,9 @@ export default function MeetingBookingPage({
                       </label>
                       {field.type === "textarea" ? (
                         <textarea
+                          id={`custom-field-${field.id}`}
                           required={field.required}
+                          aria-required={field.required ? "true" : undefined}
                           value={formData.customFields[field.id] || ""}
                           onChange={(e) =>
                             setFormData((p) => ({
@@ -1153,7 +1161,9 @@ export default function MeetingBookingPage({
                         />
                       ) : field.type === "select" ? (
                         <select
+                          id={`custom-field-${field.id}`}
                           required={field.required}
+                          aria-required={field.required ? "true" : undefined}
                           value={formData.customFields[field.id] || ""}
                           onChange={(e) =>
                             setFormData((p) => ({
@@ -1175,8 +1185,10 @@ export default function MeetingBookingPage({
                         </select>
                       ) : (
                         <input
+                          id={`custom-field-${field.id}`}
                           type={field.type}
                           required={field.required}
+                          aria-required={field.required ? "true" : undefined}
                           value={formData.customFields[field.id] || ""}
                           onChange={(e) =>
                             setFormData((p) => ({
@@ -1201,10 +1213,11 @@ export default function MeetingBookingPage({
 
                   {/* Notes */}
                   <div>
-                    <label className="block text-xs text-white/50 mb-1">
+                    <label htmlFor="booking-notes" className="block text-xs text-white/50 mb-1">
                       {"\u05D4\u05E2\u05E8\u05D5\u05EA (\u05D0\u05D5\u05E4\u05E6\u05D9\u05D5\u05E0\u05DC\u05D9)"}
                     </label>
                     <textarea
+                      id="booking-notes"
                       value={formData.notes}
                       onChange={(e) =>
                         setFormData((p) => ({ ...p, notes: e.target.value }))
@@ -1217,7 +1230,7 @@ export default function MeetingBookingPage({
 
                   {/* Error */}
                   {formError && (
-                    <p className="text-sm text-red-300 bg-red-500/15 border border-red-500/20 rounded-lg px-3 py-2">
+                    <p role="alert" className="text-sm text-red-300 bg-red-500/15 border border-red-500/20 rounded-lg px-3 py-2">
                       {formError}
                     </p>
                   )}

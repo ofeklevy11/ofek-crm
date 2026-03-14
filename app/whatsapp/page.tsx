@@ -23,7 +23,7 @@ export default async function WhatsAppPage() {
       <div className="container mx-auto p-4 md:p-6 max-w-7xl">
         <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)] text-center" dir="rtl">
           <div className="p-4 bg-slate-100 rounded-full mb-6">
-            <MessageSquareOff className="w-16 h-16 text-slate-400" />
+            <MessageSquareOff className="w-16 h-16 text-slate-400" aria-hidden="true" />
           </div>
           <h2 className="text-2xl font-bold text-slate-900 mb-2">
             WhatsApp Business לא מחובר
@@ -44,6 +44,7 @@ export default async function WhatsAppPage() {
 
   return (
     <div className="container mx-auto p-4 md:p-6 max-w-7xl">
+      <h1 className="sr-only">וואטסאפ עסקי</h1>
       <WhatsAppChatInterface
         currentUser={{
           id: user.id,

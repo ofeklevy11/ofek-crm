@@ -286,7 +286,11 @@ export default function AnalyticsGraph({
   return (
     <div style={{ width: "100%", height }} role="img" aria-label={title || "גרף אנליטיקה"}>
       <ResponsiveContainer>{renderChart()}</ResponsiveContainer>
-      <div className="sr-only">{data.map(d => `${d.name}: ${d.value}`).join(', ')}</div>
+      <table className="sr-only">
+        <caption>{title || "נתוני גרף"}</caption>
+        <thead><tr><th scope="col">קטגוריה</th><th scope="col">ערך</th></tr></thead>
+        <tbody>{data.map((d, i) => <tr key={i}><td>{d.name}</td><td>{d.value}</td></tr>)}</tbody>
+      </table>
     </div>
   );
 }

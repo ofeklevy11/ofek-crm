@@ -54,13 +54,14 @@ export default function LoginForm() {
         <div className="space-y-2">
           <Label htmlFor="email">כתובת אימייל</Label>
           <div className="relative">
-            <Mail className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" />
+            <Mail className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
             <Input
               id="email"
               name="email"
               type="email"
               autoComplete="email"
               required
+              aria-required="true"
               placeholder="name@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -80,13 +81,14 @@ export default function LoginForm() {
             </Link>
           </div>
           <div className="relative">
-            <Lock className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" />
+            <Lock className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
             <Input
               id="password"
               name="password"
               type="password"
               autoComplete="current-password"
               required
+              aria-required="true"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -97,7 +99,7 @@ export default function LoginForm() {
       </div>
 
       {error && (
-        <div className={cn(
+        <div role="alert" className={cn(
           "text-sm p-3 rounded-lg text-center animate-in fade-in slide-in-from-top-1 border",
           isRateLimited
             ? "bg-red-50 border-red-200 text-red-700"

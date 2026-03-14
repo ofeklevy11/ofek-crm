@@ -35,9 +35,10 @@ export default function GlobalError({
     return (
       <div
         dir="rtl"
+        role="alert"
         className="flex min-h-screen flex-col items-center justify-center gap-4 p-8"
       >
-        <span className="text-4xl">&#9203;</span>
+        <span className="text-4xl" aria-hidden="true">&#9203;</span>
         <h2 className="text-xl font-semibold text-amber-700 dark:text-amber-400">
           בוצעו יותר מדי פניות
         </h2>
@@ -58,6 +59,7 @@ export default function GlobalError({
   return (
     <div
       dir="rtl"
+      role="alert"
       className="flex min-h-screen flex-col items-center justify-center gap-4 p-8"
     >
       <h2 className="text-xl font-semibold">אירעה שגיאה</h2>

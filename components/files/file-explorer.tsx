@@ -178,6 +178,11 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
     return counts;
   }, [files, folders]);
 
+  const folderOptions = useMemo(
+    () => folders.map((f) => ({ id: f.id, name: f.name })),
+    [folders],
+  );
+
   const handleDragStart = (fileId: number) => {
     setDraggedFileId(fileId);
   };
@@ -265,7 +270,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
       {/* Breadcrumbs and Controls Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-2 border-b">
         {/* Enhanced Breadcrumbs */}
-        <nav className="flex items-center gap-1">
+        <nav className="flex items-center gap-1" aria-label="ניווט נתיב">
           <Link
             href="/files"
             className={cn(
@@ -290,8 +295,7 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
 
           {breadcrumbs.map((crumb, index) => (
             <div key={crumb.id} className="flex items-center">
-              <ChevronLeft className="w-4 h-4 text-muted-foreground/50" />{" "}
-              {/* RTL Chevron */}
+              <ChevronLeft className="w-4 h-4 text-muted-foreground/50" aria-hidden="true" />{" "}
               <Link
                 href={`/files?folderId=${crumb.id}`}
                 prefetch={false}
@@ -337,6 +341,8 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
                 )}
                 onClick={() => setViewMode(mode)}
                 title={label}
+                aria-label={label}
+                aria-pressed={viewMode === mode}
               >
                 {icon}
               </Button>
@@ -359,13 +365,14 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
                 "h-2 bg-white [&>div]:bg-[#a24ec1] rotate-180",
                 usagePercent > 90 && "bg-red-100 [&>div]:bg-red-500",
               )}
+              aria-label={`אחסון בשימוש: ${formatFileSize(totalUsage)} מתוך 100 MB`}
             />
           </div>
         </div>
       </div>
 
       {/* File Type Filter Tabs */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="סינון לפי סוג קובץ">
         {FILE_FILTERS.map((filter) => {
           const count = fileCounts[filter.id] || 0;
           const isActive = fileFilter === filter.id;
@@ -388,6 +395,9 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
                 !isActive && filter.color,
               )}
               onClick={() => setFileFilter(filter.id)}
+              role="tab"
+              id={`tab-${filter.id}`}
+              aria-selected={isActive}
             >
               {filter.icon}
               <span>{filter.label}</span>
@@ -407,7 +417,8 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
       </div>
 
       {/* Content */}
-      <div className="min-h-[200px]">
+      <h2 className="sr-only">תוכן הספרייה</h2>
+      <div className="min-h-[200px]" role="tabpanel" aria-labelledby={`tab-${fileFilter}`} aria-live="polite">
         {filteredFolders.length === 0 && filteredFiles.length === 0 ? (
           <div className="text-center py-20">
             <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -460,6 +471,8 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
                     onDragStart={() => handleDragStart(file.id)}
                     onDragEnd={handleDragEnd}
                     isDragging={draggedFileId === file.id}
+                    availableFolders={folderOptions}
+                    currentFolderId={currentFolderId}
                   />
                 ))}
               </div>
@@ -487,22 +500,26 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
                     onDragStart={() => handleDragStart(file.id)}
                     onDragEnd={handleDragEnd}
                     isDragging={draggedFileId === file.id}
+                    availableFolders={folderOptions}
+                    currentFolderId={currentFolderId}
                   />
                 ))}
               </div>
             )}
 
             {viewMode === "compact" && (
-              <div className="border rounded-lg overflow-hidden">
+              <div className="border rounded-lg overflow-hidden" role="table" aria-label="רשימת קבצים">
                 {/* Header */}
-                <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-muted/50 text-sm font-medium text-muted-foreground border-b text-right">
-                  <div className="col-span-6">שם</div>
-                  <div className="col-span-2">גודל</div>
-                  <div className="col-span-3">תאריך שינוי</div>
-                  <div className="col-span-1"></div>
+                <div role="rowgroup">
+                  <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-muted/50 text-sm font-medium text-muted-foreground border-b text-right" role="row">
+                    <div className="col-span-6" role="columnheader">שם</div>
+                    <div className="col-span-2" role="columnheader">גודל</div>
+                    <div className="col-span-3" role="columnheader">תאריך שינוי</div>
+                    <div className="col-span-1" role="columnheader"><span className="sr-only">פעולות</span></div>
+                  </div>
                 </div>
                 {/* Items */}
-                <div className="divide-y">
+                <div className="divide-y" role="rowgroup">
                   {filteredFolders.map((folder) => (
                     <FolderCard
                       key={folder.id}
@@ -523,6 +540,8 @@ export function FileExplorer({ data, currentFolderId }: FileExplorerProps) {
                       onDragStart={() => handleDragStart(file.id)}
                       onDragEnd={handleDragEnd}
                       isDragging={draggedFileId === file.id}
+                      availableFolders={folderOptions}
+                      currentFolderId={currentFolderId}
                     />
                   ))}
                 </div>

@@ -175,6 +175,20 @@ export const RATE_LIMITS = {
   meetingMutation: { prefix: "mtg-mut", max: 30, windowSeconds: 60 } satisfies RateLimitConfig,
   /** Public booking: 10 per IP per minute */
   publicBooking: { prefix: "pub-book", max: 10, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** Public manage token read: 20 per IP per minute */
+  publicManageRead: { prefix: "pub-manage", max: 20, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** Public slots endpoint: 30 per IP per minute */
+  publicSlots: { prefix: "pub-slots", max: 30, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** Nurture reads: 60 per user per minute */
+  nurtureRead: { prefix: "nrt-read", max: 60, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** Nurture mutations: 20 per user per minute */
+  nurtureMutation: { prefix: "nrt-mut", max: 20, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** Nurture bulk operations: 5 per user per minute */
+  nurtureBulk: { prefix: "nrt-bulk", max: 5, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** Nurture sends: 10 per user per minute */
+  nurtureSend: { prefix: "nrt-send", max: 10, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** Nurture webhook: 30 per company per minute */
+  nurtureWebhook: { prefix: "nrt-wh", max: 30, windowSeconds: 60 } satisfies RateLimitConfig,
   /** AI job polling: 60 per user per minute (lightweight Redis GET, separate from general API) */
   aiJobPoll: { prefix: "ai-poll", max: 60, windowSeconds: 60 } satisfies RateLimitConfig,
   /** Forgot password: 3 per IP per 15 minutes */

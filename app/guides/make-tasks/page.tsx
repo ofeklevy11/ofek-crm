@@ -1,14 +1,12 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Copy, Info, Terminal, Sparkles } from "lucide-react";
-import Navbar from "@/components/Navbar";
+import { Check, Copy, Info, Sparkles, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
 
 export default function MakeTaskGuide() {
   const [copied, setCopied] = useState<string | null>(null);
@@ -22,25 +20,23 @@ export default function MakeTaskGuide() {
   const jsonExample = `{
   "title": "פנייה חדשה מאתר - {{1.name}}",
   "description": "טלפון: {{1.phone}}\\nנושא: {{1.subject}}",
-  "email": "your-email@example.com", 
+  "email": "your-email@example.com",
   "status": "todo",
   "priority": "medium",
   "due_date": "YYYY-MM-DD"
 }`;
 
   return (
-    <div className="min-h-screen bg-slate-50" dir="rtl">
+    <div className="min-h-screen bg-slate-50">
       <main className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Breadcrumbs */}
-        <div className="flex items-center text-sm text-slate-500 mb-6">
-          <Link href="/guides" className="hover:text-blue-600">
-            מדריכים
-          </Link>
-          <ChevronRight className="w-4 h-4 mx-2" />
-          <span className="text-slate-900 font-medium">
-            יצירת משימות אוטומטית
-          </span>
-        </div>
+        <nav aria-label="ניווט פירורי לחם" className="mb-6">
+          <ol className="flex items-center text-sm text-slate-500">
+            <li><Link href="/guides" className="hover:text-blue-600">מדריכים</Link></li>
+            <li aria-hidden="true"><ChevronRight className="w-4 h-4 mx-2" /></li>
+            <li aria-current="page"><span className="text-slate-900 font-medium">יצירת משימות אוטומטית</span></li>
+          </ol>
+        </nav>
 
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-slate-900 mb-4">
@@ -55,7 +51,7 @@ export default function MakeTaskGuide() {
             <Link href="/guides/make-integration/generator?mode=TASK">
               <Button className="w-full sm:w-auto h-12 text-lg px-8 gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-md transition-all hover:scale-[1.02]">
                 <div className="bg-white/20 p-1 rounded">
-                  <Sparkles className="w-5 h-5 text-white" />
+                  <Sparkles className="w-5 h-5 text-white" aria-hidden="true" />
                 </div>
                 לממשק יצירת קריאת POST למשימות
               </Button>
@@ -107,34 +103,34 @@ export default function MakeTaskGuide() {
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-4">
                     <h3 className="font-semibold text-lg">פרטי הבקשה:</h3>
-                    <div className="space-y-4 text-sm">
+                    <dl className="space-y-4 text-sm">
                       <div className="grid grid-cols-3 gap-2 border-b pb-2">
-                        <span className="font-medium text-slate-500">URL</span>
-                        <div className="col-span-2 font-mono bg-slate-100 px-2 py-1 rounded select-all break-all">
+                        <dt className="font-medium text-slate-500">URL</dt>
+                        <dd className="col-span-2 font-mono bg-slate-100 px-2 py-1 rounded select-all break-all">
                           https://your-domain.com/api/make/tasks
-                        </div>
+                        </dd>
                       </div>
                       <div className="grid grid-cols-3 gap-2 border-b pb-2">
-                        <span className="font-medium text-slate-500">
+                        <dt className="font-medium text-slate-500">
                           Method
-                        </span>
-                        <div className="col-span-2 font-mono">POST</div>
+                        </dt>
+                        <dd className="col-span-2 font-mono">POST</dd>
                       </div>
                       <div className="grid grid-cols-3 gap-2 border-b pb-2">
-                        <span className="font-medium text-slate-500">
+                        <dt className="font-medium text-slate-500">
                           Body type
-                        </span>
-                        <div className="col-span-2 font-mono">Raw</div>
+                        </dt>
+                        <dd className="col-span-2 font-mono">Raw</dd>
                       </div>
                       <div className="grid grid-cols-3 gap-2 border-b pb-2">
-                        <span className="font-medium text-slate-500">
+                        <dt className="font-medium text-slate-500">
                           Content type
-                        </span>
-                        <div className="col-span-2 font-mono">
+                        </dt>
+                        <dd className="col-span-2 font-mono">
                           JSON (application/json)
-                        </div>
+                        </dd>
                       </div>
-                    </div>
+                    </dl>
                   </div>
 
                   <div className="space-y-4">
@@ -167,8 +163,8 @@ export default function MakeTaskGuide() {
             </h2>
             <Card>
               <CardContent className="pt-6 space-y-4">
-                <Alert className="bg-red-50 border-red-200 text-red-900">
-                  <Info className="h-4 w-4 text-red-600" />
+                <Alert className="bg-red-50 border-red-200 text-red-900" role="note">
+                  <Info className="h-4 w-4 text-red-600" aria-hidden="true" />
                   <AlertDescription className="font-bold">
                     שים לב: ערכי status ו-priority חייבים להיות באותיות קטנות
                     בלבד (lowercase)! שימוש באותיות גדולות יגרום לשגיאה או
@@ -176,8 +172,8 @@ export default function MakeTaskGuide() {
                   </AlertDescription>
                 </Alert>
 
-                <Alert className="bg-amber-50 border-amber-200 text-amber-900 mb-4">
-                  <Info className="h-4 w-4 text-amber-600" />
+                <Alert className="bg-amber-50 border-amber-200 text-amber-900 mb-4" role="note">
+                  <Info className="h-4 w-4 text-amber-600" aria-hidden="true" />
                   <AlertDescription>
                     שדה <strong>email</strong> הוא קריטי! בלי אימייל תקין של
                     משתמש קיים במערכת, הבקשה תיכשל.
@@ -193,9 +189,9 @@ export default function MakeTaskGuide() {
                       onClick={() => copyToClipboard(jsonExample, "json")}
                     >
                       {copied === "json" ? (
-                        <Check className="w-4 h-4 ml-2 text-green-500" />
+                        <Check className="w-4 h-4 ml-2 text-green-500" aria-hidden="true" />
                       ) : (
-                        <Copy className="w-4 h-4 ml-2" />
+                        <Copy className="w-4 h-4 ml-2" aria-hidden="true" />
                       )}
                       {copied === "json" ? "הועתק!" : "העתק קוד"}
                     </Button>
@@ -203,15 +199,17 @@ export default function MakeTaskGuide() {
                   <pre
                     className="bg-slate-900 text-slate-50 p-6 rounded-lg overflow-x-auto font-mono text-sm leading-relaxed"
                     dir="ltr"
+                    role="group"
+                    aria-label="דוגמת JSON ליצירת משימה"
                   >
                     <code>{jsonExample}</code>
                   </pre>
                 </div>
 
                 <div className="mt-4">
-                  <h4 className="font-semibold mb-2 text-slate-700">
+                  <h3 className="font-semibold mb-2 text-slate-700">
                     הסבר על השדות:
-                  </h4>
+                  </h3>
                   <ul className="list-disc list-inside text-sm text-slate-600 space-y-1">
                     <li>
                       <strong>title:</strong> כותרת המשימה (חובה).
@@ -247,6 +245,10 @@ export default function MakeTaskGuide() {
             </Card>
           </section>
         </div>
+
+        <span className="sr-only" aria-live="polite" aria-atomic="true">
+          {copied ? "הטקסט הועתק ללוח" : ""}
+        </span>
       </main>
     </div>
   );

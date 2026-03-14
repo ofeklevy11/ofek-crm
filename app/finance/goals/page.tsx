@@ -105,22 +105,28 @@ export default async function GoalsPage() {
   ];
 
   return (
-    <div
+    <main
       className="p-8 space-y-8 bg-[#f4f8f8] min-h-screen text-right"
       dir="rtl"
     >
+      <a
+        href="#goals-board"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:right-4 focus:z-50 focus:bg-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:text-[#4f95ff] focus:font-medium"
+      >
+        דלג ללוח היעדים
+      </a>
       <div>
         <Link
           href="/finance"
           className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-2 transition-colors"
         >
-          <ArrowRight className="w-4 h-4 ml-1" />
+          <ArrowRight className="w-4 h-4 ml-1" aria-hidden="true" />
           חזרה למרכז הפיננסי
         </Link>
         <div className="flex flex-col md:flex-row md:justify-between md:items-center mt-4 gap-4 md:gap-0">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
-              <Target className="w-8 h-8 text-[#4f95ff]" />
+              <Target className="w-8 h-8 text-[#4f95ff]" aria-hidden="true" />
               תכנון יעדים
             </h1>
             <p className="text-gray-600 mt-2 text-lg">
@@ -137,7 +143,7 @@ export default async function GoalsPage() {
                 variant="outline"
                 className="w-full md:w-auto gap-2 bg-white hover:bg-gray-50"
               >
-                <Archive className="w-4 h-4" />
+                <Archive className="w-4 h-4" aria-hidden="true" />
                 ארכיון יעדים
               </Button>
             </Link>
@@ -147,7 +153,7 @@ export default async function GoalsPage() {
               clients={clients}
               trigger={
                 <Button className="w-full md:w-auto gap-2 bg-[#4f95ff] hover:bg-[#3d7ccc] text-white shadow-lg shadow-blue-200">
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-4 h-4" aria-hidden="true" />
                   יעד חדש
                 </Button>
               }
@@ -160,11 +166,11 @@ export default async function GoalsPage() {
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-[#4f95ff]/10 rounded-lg">
-              <Target className="w-5 h-5 text-[#4f95ff]" />
+              <Target className="w-5 h-5 text-[#4f95ff]" aria-hidden="true" />
             </div>
-            <h2 className="font-medium text-gray-600">יעדים פעילים</h2>
+            <h2 id="stat-active-goals" className="font-medium text-gray-600">יעדים פעילים</h2>
           </div>
-          <p className="text-3xl font-bold text-gray-900">
+          <p className="text-3xl font-bold text-gray-900" aria-labelledby="stat-active-goals">
             {activeCount}
           </p>
         </div>
@@ -172,21 +178,20 @@ export default async function GoalsPage() {
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-[#a24ec1]/10 rounded-lg">
-              <TrendingUp className="w-5 h-5 text-[#a24ec1]" />
+              <TrendingUp className="w-5 h-5 text-[#a24ec1]" aria-hidden="true" />
             </div>
-            <h2 className="font-medium text-gray-600">במסלול להצלחה</h2>
+            <h2 id="stat-on-track" className="font-medium text-gray-600">במסלול להצלחה</h2>
           </div>
-          <p className="text-3xl font-bold text-gray-900">
+          <p className="text-3xl font-bold text-gray-900" aria-labelledby="stat-on-track">
             {onTrackCount}
           </p>
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-4" id="goals-board">
         <h2 className="text-xl font-semibold text-gray-900">לוח היעדים שלך</h2>
-        {/* Pass metrics to GoalList if it needs them, otherwise update GoalList to not need them or use these static ones */}
         <GoalList goals={goals} metrics={metrics} tables={tables} clients={clients} />
       </div>
-    </div>
+    </main>
   );
 }

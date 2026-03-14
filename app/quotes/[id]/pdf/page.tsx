@@ -51,6 +51,7 @@ export default async function QuotePdfPage({
             חזור להצעות מחיר
           </a>
         </div>
+        <h1 className="sr-only">הצעת מחיר - תצוגה מקדימה</h1>
         <div className="flex justify-between items-center bg-gray-50 p-4 rounded-lg border">
           <div>
             <h2 className="font-semibold text-gray-900">תצוגה מקדימה להדפסה</h2>

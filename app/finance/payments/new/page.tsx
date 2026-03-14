@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import CreatePaymentForm from "@/components/finance/CreatePaymentForm";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+
+export const metadata: Metadata = { title: "תשלום חדש" };
 
 export default function NewPaymentPage() {
   return (

@@ -146,8 +146,8 @@ export default function CreatePaymentForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-8 text-right" dir="rtl">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
-          <Info className="w-4 h-4" />
+        <div role="alert" className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+          <Info className="w-4 h-4" aria-hidden="true" />
           {error}
         </div>
       )}
@@ -166,6 +166,7 @@ export default function CreatePaymentForm() {
               name="title"
               id="title"
               required
+              aria-required="true"
               className="block w-full rounded-xl border-gray-200 shadow-sm focus:border-[#4f95ff] focus:ring-[#4f95ff] text-sm py-3 px-4 border transition-all hover:border-[#4f95ff]/50"
               placeholder="לדוגמה: עיצוב אתר"
             />
@@ -241,6 +242,7 @@ export default function CreatePaymentForm() {
                     name="newClientName"
                     id="newClientName"
                     required={isNewClientMode}
+                    aria-required={isNewClientMode}
                     className="block w-full rounded-lg border-gray-200 shadow-sm focus:border-[#4f95ff] focus:ring-[#4f95ff] text-sm py-2.5 px-3 border transition-colors"
                     placeholder="שם מלא"
                   />
@@ -314,6 +316,7 @@ export default function CreatePaymentForm() {
                 name="amount"
                 id="amount"
                 required
+                aria-required="true"
                 step="0.01"
                 min="0"
                 className="block w-full pr-10 rounded-xl border-gray-200 focus:border-[#4f95ff] focus:ring-[#4f95ff] text-sm py-3 border transition-colors"
@@ -338,6 +341,7 @@ export default function CreatePaymentForm() {
                 name="dueDate"
                 id="dueDate"
                 required
+                aria-required="true"
                 className="block w-full pr-10 rounded-xl border-gray-200 focus:border-[#4f95ff] focus:ring-[#4f95ff] text-sm py-3 border transition-colors"
               />
             </div>

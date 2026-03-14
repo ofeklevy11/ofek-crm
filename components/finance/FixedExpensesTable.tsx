@@ -269,6 +269,7 @@ export default function FixedExpensesTable({
                       onClick={() => handleOpenModal(expense)}
                       className="p-1.5 text-gray-400 hover:text-[#4f95ff] transition-colors"
                       title="ערוך"
+                      aria-label="ערוך הוצאה"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
@@ -276,6 +277,7 @@ export default function FixedExpensesTable({
                       onClick={() => handleDelete(expense.id)}
                       className="p-1.5 text-gray-400 hover:text-red-600 transition-colors"
                       title="מחק"
+                      aria-label="מחק הוצאה"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -707,6 +709,7 @@ export default function FixedExpensesTable({
                         setPaymentCount(Math.max(1, paymentCount - 1))
                       }
                       className="p-2 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+                      aria-label="הפחת תשלום"
                     >
                       -
                     </button>
@@ -717,6 +720,7 @@ export default function FixedExpensesTable({
                       type="button"
                       onClick={() => setPaymentCount(paymentCount + 1)}
                       className="p-2 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+                      aria-label="הוסף תשלום"
                     >
                       +
                     </button>

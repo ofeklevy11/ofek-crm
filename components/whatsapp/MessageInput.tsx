@@ -60,6 +60,7 @@ export default function MessageInput({
         onKeyDown={handleKeyDown}
         onInput={handleInput}
         placeholder={placeholder}
+        aria-label="הקלד הודעה"
         disabled={disabled || sending}
         rows={1}
         className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-50"
@@ -68,12 +69,13 @@ export default function MessageInput({
       <button
         onClick={handleSend}
         disabled={!text.trim() || sending || disabled}
+        aria-label="שלח הודעה"
         className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         {sending ? (
-          <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+          <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" role="status" aria-label="שולח" />
         ) : (
-          <Send className="w-4 h-4" />
+          <Send className="w-4 h-4" aria-hidden="true" />
         )}
       </button>
     </div>

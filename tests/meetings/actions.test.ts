@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/prisma", () => {
   const meetingType = { findMany: vi.fn(), create: vi.fn(), update: vi.fn(), count: vi.fn() };
-  const meeting = { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn(), count: vi.fn() };
+  const meeting = { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn(), count: vi.fn(), groupBy: vi.fn() };
   const calendarEvent = { update: vi.fn() };
   const client = { findFirst: vi.fn() };
   const user = { findMany: vi.fn() };
@@ -30,6 +30,13 @@ vi.mock("@/lib/meeting-validation", () => ({
 }));
 vi.mock("@/lib/notifications-internal", () => ({
   createNotificationForCompany: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("@/lib/services/cache-service", () => ({
+  getCachedMetric: vi.fn(async (_companyId: number, _keyParts: string[], fetcher: () => Promise<any>) => fetcher()),
+  buildCacheKey: vi.fn((_companyId: number, keyParts: string[]) => `cache:metric:${keyParts.join(":")}`),
+}));
+vi.mock("@/lib/redis", () => ({
+  redis: { del: vi.fn().mockResolvedValue(1) },
 }));
 vi.mock("@/app/actions/meeting-automations", () => ({
   fireMeetingAutomations: vi.fn().mockResolvedValue(undefined),
@@ -58,6 +65,7 @@ import { validateMeetingTypeInput, validateNotes, validateTags } from "@/lib/mee
 import { fireMeetingAutomations } from "@/app/actions/meeting-automations";
 import { createNotificationForCompany } from "@/lib/notifications-internal";
 import { isNotificationEnabled } from "@/lib/notification-settings";
+import { getCachedMetric } from "@/lib/services/cache-service";
 
 import {
   getMeetingTypes,
@@ -706,7 +714,7 @@ describe("updateMeetingStatus", () => {
     expect(prisma.user.findMany).toHaveBeenCalledWith({
       where: { companyId: mockUser.companyId, role: "admin" },
       select: { id: true },
-      take: 10,
+      take: 25,
     });
     expect(createNotificationForCompany).toHaveBeenCalledTimes(2);
     expect(createNotificationForCompany).toHaveBeenCalledWith(
@@ -998,7 +1006,7 @@ describe("cancelMeeting", () => {
     expect(prisma.user.findMany).toHaveBeenCalledWith({
       where: { companyId: mockUser.companyId, role: "admin" },
       select: { id: true },
-      take: 10,
+      take: 25,
     });
     expect(createNotificationForCompany).toHaveBeenCalledTimes(1);
     expect(createNotificationForCompany).toHaveBeenCalledWith(
@@ -1158,7 +1166,7 @@ describe("rescheduleMeeting", () => {
     expect(prisma.user.findMany).toHaveBeenCalledWith({
       where: { companyId: mockUser.companyId, role: "admin" },
       select: { id: true },
-      take: 10,
+      take: 25,
     });
     expect(createNotificationForCompany).toHaveBeenCalledTimes(2);
     expect(createNotificationForCompany).toHaveBeenCalledWith(
@@ -1459,6 +1467,19 @@ describe("getTodaysMeetings", () => {
     (prisma.meeting.findMany as any).mockRejectedValue(new Error("DB"));
     expect((await getTodaysMeetings()).error).toBe("Failed to fetch today's meetings");
   });
+
+  it("uses getCachedMetric with 60s TTL and today's date key", async () => {
+    setupAuth();
+    (prisma.meeting.findMany as any).mockResolvedValue([]);
+    await getTodaysMeetings();
+    const call = (getCachedMetric as any).mock.calls.find(
+      (c: any[]) => c[1]?.[0] === "todays-meetings"
+    );
+    expect(call).toBeDefined();
+    expect(call[0]).toBe(mockUser.companyId);
+    expect(call[1][0]).toBe("todays-meetings");
+    expect(call[3]).toBe(60); // 60s TTL
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════
@@ -1482,7 +1503,7 @@ describe("getMeetingStats", () => {
 
   it("returns 0 rates when total=0", async () => {
     setupAuth();
-    (prisma.meeting.findMany as any).mockResolvedValue([]);
+    (prisma.meeting.groupBy as any).mockResolvedValue([]);
     const res = await getMeetingStats();
     expect(res.success).toBe(true);
     const data = (res as any).data;
@@ -1494,14 +1515,19 @@ describe("getMeetingStats", () => {
 
   it("calculates rates correctly (Math.round percentages)", async () => {
     setupAuth();
-    (prisma.meeting.findMany as any).mockResolvedValue([
-      { status: "COMPLETED", meetingTypeId: 1 },
-      { status: "COMPLETED", meetingTypeId: 1 },
-      { status: "CANCELLED", meetingTypeId: 2 },
-      { status: "NO_SHOW", meetingTypeId: 1 },
-      { status: "PENDING", meetingTypeId: 2 },
-      { status: "CONFIRMED", meetingTypeId: 1 },
-    ]);
+    // First call: groupBy status, second call: groupBy meetingTypeId
+    (prisma.meeting.groupBy as any)
+      .mockResolvedValueOnce([
+        { status: "COMPLETED", _count: { _all: 2 } },
+        { status: "CANCELLED", _count: { _all: 1 } },
+        { status: "NO_SHOW", _count: { _all: 1 } },
+        { status: "PENDING", _count: { _all: 1 } },
+        { status: "CONFIRMED", _count: { _all: 1 } },
+      ])
+      .mockResolvedValueOnce([
+        { meetingTypeId: 1, _count: { _all: 4 } },
+        { meetingTypeId: 2, _count: { _all: 2 } },
+      ]);
     const res = await getMeetingStats();
     const data = (res as any).data;
     expect(data.total).toBe(6);
@@ -1514,11 +1540,15 @@ describe("getMeetingStats", () => {
 
   it("groups by status and meetingTypeId", async () => {
     setupAuth();
-    (prisma.meeting.findMany as any).mockResolvedValue([
-      { status: "COMPLETED", meetingTypeId: 1 },
-      { status: "COMPLETED", meetingTypeId: 2 },
-      { status: "CANCELLED", meetingTypeId: 1 },
-    ]);
+    (prisma.meeting.groupBy as any)
+      .mockResolvedValueOnce([
+        { status: "COMPLETED", _count: { _all: 2 } },
+        { status: "CANCELLED", _count: { _all: 1 } },
+      ])
+      .mockResolvedValueOnce([
+        { meetingTypeId: 1, _count: { _all: 2 } },
+        { meetingTypeId: 2, _count: { _all: 1 } },
+      ]);
     const res = await getMeetingStats();
     const data = (res as any).data;
     expect(data.byStatus).toEqual({ COMPLETED: 2, CANCELLED: 1 });
@@ -1527,9 +1557,9 @@ describe("getMeetingStats", () => {
 
   it("uses ~30 days for default (month) period", async () => {
     setupAuth();
-    (prisma.meeting.findMany as any).mockResolvedValue([]);
+    (prisma.meeting.groupBy as any).mockResolvedValue([]);
     await getMeetingStats();
-    const where = (prisma.meeting.findMany as any).mock.calls[0][0].where;
+    const where = (prisma.meeting.groupBy as any).mock.calls[0][0].where;
     const gte = where.startTime.gte as Date;
     const diffDays = (Date.now() - gte.getTime()) / 86400000;
     // Should be approximately 30 days (28-31 depending on month)
@@ -1539,9 +1569,9 @@ describe("getMeetingStats", () => {
 
   it("uses 7 days for week period", async () => {
     setupAuth();
-    (prisma.meeting.findMany as any).mockResolvedValue([]);
+    (prisma.meeting.groupBy as any).mockResolvedValue([]);
     await getMeetingStats("week");
-    const where = (prisma.meeting.findMany as any).mock.calls[0][0].where;
+    const where = (prisma.meeting.groupBy as any).mock.calls[0][0].where;
     const gte = where.startTime.gte as Date;
     const diffDays = (Date.now() - gte.getTime()) / 86400000;
     expect(diffDays).toBeGreaterThanOrEqual(6.9);
@@ -1550,9 +1580,13 @@ describe("getMeetingStats", () => {
 
   it("calculates 100% cancellation rate when all cancelled (1/1)", async () => {
     setupAuth();
-    (prisma.meeting.findMany as any).mockResolvedValue([
-      { status: "CANCELLED", meetingTypeId: 1 },
-    ]);
+    (prisma.meeting.groupBy as any)
+      .mockResolvedValueOnce([
+        { status: "CANCELLED", _count: { _all: 1 } },
+      ])
+      .mockResolvedValueOnce([
+        { meetingTypeId: 1, _count: { _all: 1 } },
+      ]);
     const res = await getMeetingStats();
     const data = (res as any).data;
     expect(data.total).toBe(1);
@@ -1563,7 +1597,7 @@ describe("getMeetingStats", () => {
 
   it("returns generic error on failure", async () => {
     setupAuth();
-    (prisma.meeting.findMany as any).mockRejectedValue(new Error("DB"));
+    (prisma.meeting.groupBy as any).mockRejectedValue(new Error("DB"));
     expect((await getMeetingStats()).error).toBe("Failed to fetch meeting stats");
   });
 });

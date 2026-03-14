@@ -147,7 +147,7 @@ export default function TableCard({
 
         {/* Creator Badge */}
         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
-          <User size={12} />
+          <User size={12} aria-hidden="true" />
           נוצר על ידי {table.creator.name}
         </div>
 
@@ -161,7 +161,7 @@ export default function TableCard({
               aria-label="ערוך טבלה"
               disabled={isDeleting || isDuplicating}
             >
-              <Pencil size={16} />
+              <Pencil size={16} aria-hidden="true" />
             </button>
           )}
 
@@ -176,7 +176,7 @@ export default function TableCard({
               {isDuplicating ? (
                 <span className="animate-spin w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full block"></span>
               ) : (
-                <Copy size={16} />
+                <Copy size={16} aria-hidden="true" />
               )}
             </button>
           )}
@@ -192,7 +192,7 @@ export default function TableCard({
               {isDeleting ? (
                 <span className="animate-spin w-4 h-4 border-2 border-destructive border-t-transparent rounded-full block"></span>
               ) : (
-                <Trash2 size={16} />
+                <Trash2 size={16} aria-hidden="true" />
               )}
             </button>
           )}

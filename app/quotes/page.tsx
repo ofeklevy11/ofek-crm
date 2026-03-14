@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getQuotes } from "@/app/actions/quotes";
 import { getBusinessSettings } from "@/app/actions/business-settings";
 import QuotesPageClient from "./client";
@@ -5,6 +6,8 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
 import { isRateLimitError } from "@/lib/rate-limit-utils";
 import RateLimitFallback from "@/components/RateLimitFallback";
+
+export const metadata: Metadata = { title: "הצעות מחיר" };
 
 interface Props {
   searchParams: Promise<{ trash?: string }>;

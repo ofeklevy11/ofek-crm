@@ -463,7 +463,7 @@ export default function QuoteEditor({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label htmlFor="client-name" className="block text-sm font-medium text-gray-700">
-                  שם לקוח
+                  שם לקוח <span className="text-red-500" aria-hidden="true">*</span>
                 </label>
                 <input
                   id="client-name"
@@ -472,6 +472,7 @@ export default function QuoteEditor({
                   onChange={(e) =>
                     updateFormData({ clientName: e.target.value })
                   }
+                  aria-required="true"
                 />
               </div>
               <div className="space-y-2">
@@ -756,6 +757,7 @@ export default function QuoteEditor({
                     type="button"
                     onClick={() => setDescriptionPopupIndex(index)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md hover:border-[#4f95ff] outline-none text-sm bg-white text-right flex items-center justify-between gap-2 transition-colors"
+                    aria-label={`ערוך תיאור עבור פריט ${index + 1}`}
                   >
                     <span className="text-gray-400">
                       לחץ כאן להוספת/קריאת התיאור
@@ -866,7 +868,7 @@ export default function QuoteEditor({
           </div>
 
           <div className="flex justify-end pt-6">
-            <div className="w-72 space-y-2 bg-gray-50 p-4 rounded-lg border border-gray-100">
+            <div className="w-72 space-y-2 bg-gray-50 p-4 rounded-lg border border-gray-100" role="region" aria-label="סיכום מחירים" aria-live="polite">
               <div className="flex justify-between text-gray-600 text-sm">
                 <span>סה״כ פריטים:</span>
                 <span className="font-mono">{currencySymbol}{displaySubtotalBeforeDiscount.toFixed(2)}</span>

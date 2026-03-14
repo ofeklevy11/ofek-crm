@@ -295,7 +295,7 @@ export default function WorkersManager({
           onClick={handleNewClick}
           className="flex items-center gap-2 bg-linear-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-xl font-medium hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl hover:scale-[1.02]"
         >
-          <Plus className="h-5 w-5" />
+          <Plus className="h-5 w-5" aria-hidden="true" />
           {getNewButtonLabel()}
         </button>
       </div>
@@ -462,7 +462,7 @@ export default function WorkersManager({
                 }}
                 className="flex items-center gap-2 bg-linear-to-r from-purple-600 to-indigo-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1"
               >
-                <Plus className="h-6 w-6" />
+                <Plus className="h-6 w-6" aria-hidden="true" />
                 צור מחלקה חדשה
               </button>
             </div>

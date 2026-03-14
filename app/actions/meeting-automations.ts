@@ -506,13 +506,25 @@ export async function fireMeetingAutomations(
  */
 export async function processMeetingReminders() {
   try {
-    const rules = await prisma.automationRule.findMany({
-      where: {
-        triggerType: "MEETING_REMINDER",
-        isActive: true,
-      },
-      take: 500,
-    });
+    // Cursor-based pagination for rules (100 per batch) to avoid memory pressure
+    const RULES_BATCH_SIZE = 100;
+    let rules: any[] = [];
+    let rulesCursor: number | undefined;
+    while (true) {
+      const batch = await prisma.automationRule.findMany({
+        where: {
+          triggerType: "MEETING_REMINDER",
+          isActive: true,
+          ...(rulesCursor ? { id: { gt: rulesCursor } } : {}),
+        },
+        orderBy: { id: "asc" },
+        take: RULES_BATCH_SIZE,
+      });
+      if (batch.length === 0) break;
+      rules = rules.concat(batch);
+      rulesCursor = batch[batch.length - 1].id;
+      if (batch.length < RULES_BATCH_SIZE) break;
+    }
 
     if (rules.length === 0) return;
 
@@ -539,16 +551,38 @@ export async function processMeetingReminders() {
 
       const ruleIds = companyRules.map((r) => r.id);
 
-      // Fetch meetings first (need calendarEventIds for the logs filter)
-      const meetings = await prisma.meeting.findMany({
-        where: {
-          companyId,
-          status: { in: ["PENDING", "CONFIRMED"] },
-          startTime: { gt: now, lte: widestThreshold },
-        },
-        include: { meetingType: { select: { name: true } } },
-        take: 500,
-      });
+      // Fetch meetings with cursor-based pagination to handle companies with 500+ pending meetings
+      const MEETINGS_BATCH_SIZE = 500;
+      const meetings: any[] = [];
+      let meetingsCursor: string | undefined;
+      while (true) {
+        const batch = await prisma.meeting.findMany({
+          where: {
+            companyId,
+            status: { in: ["PENDING", "CONFIRMED"] },
+            startTime: { gt: now, lte: widestThreshold },
+            ...(meetingsCursor ? { id: { gt: meetingsCursor } } : {}),
+          },
+          select: {
+            id: true,
+            participantName: true,
+            participantEmail: true,
+            participantPhone: true,
+            startTime: true,
+            endTime: true,
+            calendarEventId: true,
+            meetingTypeId: true,
+            status: true,
+            meetingType: { select: { name: true } },
+          },
+          orderBy: { id: "asc" },
+          take: MEETINGS_BATCH_SIZE,
+        });
+        if (batch.length === 0) break;
+        meetings.push(...batch);
+        meetingsCursor = batch[batch.length - 1].id;
+        if (batch.length < MEETINGS_BATCH_SIZE) break;
+      }
       if (meetings.length === 0) return;
 
       // Fetch dedup logs only for relevant calendarEventIds
@@ -586,9 +620,9 @@ export async function processMeetingReminders() {
               return true;
             });
 
-            for (const meeting of ruleMeetings) {
-              totalProcessed++;
-              try {
+            totalProcessed += ruleMeetings.length;
+            const meetingResults = await Promise.allSettled(
+              ruleMeetings.map(async (meeting) => {
                 await executeRuleActions(rule, {
                   meetingId: meeting.id,
                   participantName: meeting.participantName,
@@ -598,19 +632,24 @@ export async function processMeetingReminders() {
                   meetingStart: `${formatDateHe(meeting.startTime)} ${formatTimeHe(meeting.startTime)}`,
                   meetingEnd: `${formatDateHe(meeting.endTime)} ${formatTimeHe(meeting.endTime)}`,
                 });
+                return meeting;
+              })
+            );
 
-                if (meeting.calendarEventId) {
-                  logsToCreate.push({
-                    automationRuleId: rule.id,
-                    companyId: rule.companyId,
-                    calendarEventId: meeting.calendarEventId,
-                  });
-                  dedupSet.add(`${rule.id}-${meeting.calendarEventId}`);
-                }
-              } catch (execErr) {
+            for (let mi = 0; mi < meetingResults.length; mi++) {
+              const result = meetingResults[mi];
+              const meeting = ruleMeetings[mi];
+              if (result.status === "fulfilled" && meeting.calendarEventId) {
+                logsToCreate.push({
+                  automationRuleId: rule.id,
+                  companyId: rule.companyId,
+                  calendarEventId: meeting.calendarEventId,
+                });
+                dedupSet.add(`${rule.id}-${meeting.calendarEventId}`);
+              } else if (result.status === "rejected") {
                 totalFailures++;
                 log.error("Error executing meeting reminder", {
-                  ruleId: rule.id, meetingId: meeting.id, error: String(execErr),
+                  ruleId: rule.id, meetingId: meeting.id, error: String(result.reason),
                 });
               }
             }

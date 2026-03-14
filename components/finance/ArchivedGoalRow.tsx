@@ -265,7 +265,7 @@ export default function ArchivedGoalRow({
                   className="h-9 w-9 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full"
                   aria-label="שחזר יעד"
                 >
-                  <RefreshCcw className="w-4 h-4" />
+                  <RefreshCcw className="w-4 h-4" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>שחזר יעד</TooltipContent>
@@ -281,7 +281,7 @@ export default function ArchivedGoalRow({
                   className="h-9 w-9 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full"
                   aria-label="מחק לצמיתות"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-4 h-4" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>מחק לצמיתות</TooltipContent>

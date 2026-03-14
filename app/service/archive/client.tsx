@@ -146,6 +146,7 @@ export default function ClosedTicketsClient({
             <Link
               href="/service"
               className="text-slate-400 hover:text-slate-600 transition-colors"
+              aria-label="חזרה לשירות לקוחות"
             >
               <ArrowRight className="w-5 h-5" />
             </Link>
@@ -169,7 +170,8 @@ export default function ClosedTicketsClient({
           <Search className="w-4 h-4 absolute right-3 text-slate-400" />
           <Input
             placeholder="חיפוש פניות..."
-            className="pr-9 bg-transparent border-0 focus-visible:ring-0 max-w-sm text-right"
+            aria-label="חיפוש פניות בארכיון"
+            className="pr-9 bg-transparent border-0 focus-visible:ring-1 focus-visible:ring-slate-300 max-w-sm text-right"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -179,13 +181,13 @@ export default function ClosedTicketsClient({
       {/* Tickets List */}
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
         {filteredTickets.length === 0 ? (
-          <div className="py-16 text-center text-slate-500">
+          <div className="py-16 text-center text-slate-500" role="status">
             <Archive className="w-12 h-12 mx-auto mb-4 text-slate-300" />
             <p className="text-lg font-medium">אין פניות בארכיון</p>
             <p className="text-sm">פניות שיסגרו יופיעו כאן</p>
           </div>
         ) : (
-          <table className="w-full">
+          <table className="w-full" aria-label="ארכיון פניות">
             <thead className="bg-slate-50 border-b">
               <tr>
                 <th className="px-4 py-3 text-right text-sm font-medium text-slate-600">
@@ -250,7 +252,7 @@ export default function ClosedTicketsClient({
                   <td className="px-4 py-3 text-center">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="פעולות נוספות">
                           <MoreHorizontal className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -290,7 +292,7 @@ export default function ClosedTicketsClient({
               בחר לאיזה סטטוס לשחזר את הפנייה "{selectedTicket?.title}"
             </p>
             <Select value={restoreStatus} onValueChange={setRestoreStatus}>
-              <SelectTrigger className="text-right">
+              <SelectTrigger aria-label="סטטוס שחזור" className="text-right">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

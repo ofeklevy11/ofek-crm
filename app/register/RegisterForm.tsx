@@ -161,7 +161,7 @@ export default function RegisterForm() {
 
   if (step === "verify") {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6" role="region" aria-live="polite" aria-label="אימות כתובת אימייל">
         <div className="text-center space-y-2">
           <h3 className="text-lg font-semibold">אימות כתובת אימייל</h3>
           <p className="text-sm text-muted-foreground">
@@ -175,6 +175,7 @@ export default function RegisterForm() {
             maxLength={6}
             value={otpCode}
             onChange={setOtpCode}
+            aria-label="קוד אימות בן 6 ספרות"
           >
             <InputOTPGroup>
               <InputOTPSlot index={0} />
@@ -199,7 +200,7 @@ export default function RegisterForm() {
         )}
 
         {error && (
-          <div className={cn(
+          <div role="alert" className={cn(
             "text-sm p-3 rounded-lg text-center animate-in fade-in slide-in-from-top-1 border",
             isRateLimited
               ? "bg-red-50 border-red-200 text-red-700"
@@ -260,7 +261,7 @@ export default function RegisterForm() {
         {/* Organization Section */}
         <div className="bg-muted/30 p-4 rounded-xl border border-muted-foreground/10 space-y-3">
           <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
-            <Building2 className="h-4 w-4" />
+            <Building2 className="h-4 w-4" aria-hidden="true" />
             פרטי ארגון
           </h3>
           <div className="space-y-2">
@@ -270,6 +271,7 @@ export default function RegisterForm() {
               name="companyName"
               type="text"
               required
+              aria-required="true"
               placeholder="לדוגמה: אופק פתרונות תוכנה בע״מ"
               value={formData.companyName}
               onChange={(e) =>
@@ -285,12 +287,13 @@ export default function RegisterForm() {
           <div className="space-y-2">
             <Label htmlFor="name">שם מלא</Label>
             <div className="relative">
-              <User className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" />
+              <User className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
               <Input
                 id="name"
                 name="name"
                 type="text"
                 required
+                aria-required="true"
                 placeholder="שם משתמש מלא"
                 value={formData.name}
                 onChange={(e) =>
@@ -304,12 +307,13 @@ export default function RegisterForm() {
           <div className="space-y-2">
             <Label htmlFor="email">כתובת אימייל</Label>
             <div className="relative">
-              <Mail className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" />
+              <Mail className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
               <Input
                 id="email"
                 name="email"
                 type="email"
                 required
+                aria-required="true"
                 placeholder="name@company.com"
                 value={formData.email}
                 onChange={(e) =>
@@ -324,12 +328,14 @@ export default function RegisterForm() {
             <div className="space-y-2">
               <Label htmlFor="password">סיסמא</Label>
               <div className="relative">
-                <Lock className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" />
+                <Lock className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
                 <Input
                   id="password"
                   name="password"
                   type="password"
                   required
+                  aria-required="true"
+                  aria-describedby="password-requirements"
                   placeholder="******"
                   value={formData.password}
                   onChange={(e) =>
@@ -338,6 +344,7 @@ export default function RegisterForm() {
                   className="h-11 pr-10"
                 />
               </div>
+              <p id="password-requirements" className="sr-only">הסיסמא חייבת להיות לפחות 10 תווים</p>
             </div>
 
             <div className="space-y-2">
@@ -347,6 +354,7 @@ export default function RegisterForm() {
                 name="confirmPassword"
                 type="password"
                 required
+                aria-required="true"
                 placeholder="******"
                 value={formData.confirmPassword}
                 onChange={(e) =>
@@ -360,7 +368,7 @@ export default function RegisterForm() {
       </div>
 
       {error && (
-        <div className={cn(
+        <div role="alert" className={cn(
           "text-sm p-3 rounded-lg text-center animate-in fade-in slide-in-from-top-1 border",
           isRateLimited
             ? "bg-red-50 border-red-200 text-red-700"

@@ -146,7 +146,7 @@ export default function GoalList({ goals, metrics, tables, clients }: GoalListPr
           clients={clients}
           trigger={
             <Button className="mt-4 gap-2 bg-[#4f95ff] hover:bg-[#3d7ccc] text-white">
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4" aria-hidden="true" />
               צור את היעד הראשון שלך
             </Button>
           }

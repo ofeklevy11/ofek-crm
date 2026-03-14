@@ -75,7 +75,8 @@ export function ExcelPreview({ fileId }: ExcelPreviewProps) {
 
   if (loading) {
     return (
-      <div className="space-y-2 p-4">
+      <div className="space-y-2 p-4" role="status" aria-label="טוען תצוגה מקדימה...">
+        <span className="sr-only">טוען תצוגה מקדימה...</span>
         <Skeleton className="h-8 w-full" />
         <Skeleton className="h-6 w-full" />
         <Skeleton className="h-6 w-full" />
@@ -104,11 +105,13 @@ export function ExcelPreview({ fileId }: ExcelPreviewProps) {
   return (
     <div>
       {sheets.length > 1 && (
-        <div className="flex gap-1 mb-2 flex-wrap" dir="ltr">
+        <div className="flex gap-1 mb-2 flex-wrap" dir="ltr" role="tablist" aria-label="גיליונות">
           {sheets.map((sheet, i) => (
             <button
               key={i}
               onClick={() => setActiveSheet(i)}
+              role="tab"
+              aria-selected={i === activeSheet}
               className={cn(
                 "px-3 py-1 text-xs rounded-md border transition-colors",
                 i === activeSheet
@@ -123,7 +126,7 @@ export function ExcelPreview({ fileId }: ExcelPreviewProps) {
       )}
 
       <ScrollArea className="h-[60vh] rounded-md border" dir="ltr">
-        <Table>
+        <Table aria-label="תצוגה מקדימה של נתונים">
           <TableHeader>
             <TableRow>
               {current.headers.map((h, i) => (

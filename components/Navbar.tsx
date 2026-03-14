@@ -17,10 +17,22 @@ export default async function Navbar() {
 
   const linkClass =
     "text-sm font-medium transition-colors hover:text-primary text-muted-foreground whitespace-nowrap";
-  const activeLinkClass = "text-sm font-medium text-primary whitespace-nowrap"; // You can add logic for active state later
+  const activeLinkClass =
+    "text-sm font-medium text-primary whitespace-nowrap";
+
+  const isActive = (href: string) => {
+    if (href === "/dashboard") return pathname === "/dashboard";
+    return pathname === href || pathname.startsWith(href + "/");
+  };
+
+  const getLinkClass = (href: string) =>
+    isActive(href) ? activeLinkClass : linkClass;
+
+  const getAriaCurrent = (href: string) =>
+    isActive(href) ? ("page" as const) : undefined;
 
   return (
-    <nav className="bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 border-b border-border/40 sticky top-0 z-50">
+    <nav aria-label="ניווט ראשי" className="bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 border-b border-border/40 sticky top-0 z-50">
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="shrink-0 flex items-center">
@@ -39,14 +51,14 @@ export default async function Navbar() {
           <div className="hidden md:flex items-center justify-center flex-1 px-8">
             <div className="flex items-center space-x-6 space-x-reverse overflow-x-auto scrollbar-hide py-2">
               {user && hasUserFlag(user, "canViewDashboardData") && (
-                <Link href="/dashboard" prefetch={false} className={linkClass}>
+                <Link href="/dashboard" prefetch={false} className={getLinkClass("/dashboard")} aria-current={getAriaCurrent("/dashboard")}>
                   לוח בקרה
                 </Link>
               )}
               {user && (
                 <>
                   {hasUserFlag(user, "canViewTables") && (
-                    <Link href="/tables" prefetch={false} className={linkClass}>
+                    <Link href="/tables" prefetch={false} className={getLinkClass("/tables")} aria-current={getAriaCurrent("/tables")}>
                       טבלאות
                     </Link>
                   )}
@@ -54,7 +66,8 @@ export default async function Navbar() {
                     <Link
                       href="/finance"
                       prefetch={false}
-                      className={linkClass}
+                      className={getLinkClass("/finance")}
+                      aria-current={getAriaCurrent("/finance")}
                     >
                       כספים
                     </Link>
@@ -63,7 +76,8 @@ export default async function Navbar() {
                     <Link
                       href="/calendar"
                       prefetch={false}
-                      className={linkClass}
+                      className={getLinkClass("/calendar")}
+                      aria-current={getAriaCurrent("/calendar")}
                     >
                       יומן
                     </Link>
@@ -72,13 +86,14 @@ export default async function Navbar() {
                     <Link
                       href="/meetings"
                       prefetch={false}
-                      className={linkClass}
+                      className={getLinkClass("/meetings")}
+                      aria-current={getAriaCurrent("/meetings")}
                     >
                       פגישות
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewTasks") && (
-                    <Link href="/tasks" prefetch={false} className={linkClass}>
+                    <Link href="/tasks" prefetch={false} className={getLinkClass("/tasks")} aria-current={getAriaCurrent("/tasks")}>
                       משימות
                     </Link>
                   )}
@@ -86,7 +101,8 @@ export default async function Navbar() {
                     <Link
                       href="/nurture-hub"
                       prefetch={false}
-                      className={linkClass}
+                      className={getLinkClass("/nurture-hub")}
+                      aria-current={getAriaCurrent("/nurture-hub")}
                     >
                       טיפוח לקוחות
                     </Link>
@@ -95,7 +111,8 @@ export default async function Navbar() {
                     <Link
                       href="/automations"
                       prefetch={false}
-                      className={linkClass}
+                      className={getLinkClass("/automations")}
+                      aria-current={getAriaCurrent("/automations")}
                     >
                       אוטומציות
                     </Link>
@@ -104,13 +121,14 @@ export default async function Navbar() {
                     <Link
                       href="/workflows"
                       prefetch={false}
-                      className={linkClass}
+                      className={getLinkClass("/workflows")}
+                      aria-current={getAriaCurrent("/workflows")}
                     >
                       תהליכים
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewUsers") && (
-                    <Link href="/users" prefetch={false} className={linkClass}>
+                    <Link href="/users" prefetch={false} className={getLinkClass("/users")} aria-current={getAriaCurrent("/users")}>
                       משתמשים
                     </Link>
                   )}
@@ -118,7 +136,8 @@ export default async function Navbar() {
                     <Link
                       href="/workers"
                       prefetch={false}
-                      className={linkClass}
+                      className={getLinkClass("/workers")}
+                      aria-current={getAriaCurrent("/workers")}
                     >
                       עובדים
                     </Link>
@@ -127,7 +146,8 @@ export default async function Navbar() {
                     <Link
                       href="/analytics"
                       prefetch={false}
-                      className={linkClass}
+                      className={getLinkClass("/analytics")}
+                      aria-current={getAriaCurrent("/analytics")}
                     >
                       אנליטיקה
                     </Link>
@@ -136,13 +156,14 @@ export default async function Navbar() {
                     <Link
                       href="/services"
                       prefetch={false}
-                      className={linkClass}
+                      className={getLinkClass("/services")}
+                      aria-current={getAriaCurrent("/services")}
                     >
                       מוצרים ושירותים
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewQuotes") && (
-                    <Link href="/quotes" prefetch={false} className={linkClass}>
+                    <Link href="/quotes" prefetch={false} className={getLinkClass("/quotes")} aria-current={getAriaCurrent("/quotes")}>
                       הצעות מחיר
                     </Link>
                   )}
@@ -150,13 +171,14 @@ export default async function Navbar() {
                     <Link
                       href="/service"
                       prefetch={false}
-                      className={linkClass}
+                      className={getLinkClass("/service")}
+                      aria-current={getAriaCurrent("/service")}
                     >
                       קריאות שירות
                     </Link>
                   )}
                   {hasUserFlag(user, "canViewFiles") && (
-                    <Link href="/files" prefetch={false} className={linkClass}>
+                    <Link href="/files" prefetch={false} className={getLinkClass("/files")} aria-current={getAriaCurrent("/files")}>
                       קבצים
                     </Link>
                   )}
@@ -164,6 +186,7 @@ export default async function Navbar() {
                     {hasUserFlag(user, "canViewGuides") && (
                       <a
                         href="/guides"
+                        aria-current={getAriaCurrent("/guides")}
                         className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[#4f95ff]/10 to-[#a24ec1]/10 hover:from-[#4f95ff]/20 hover:to-[#a24ec1]/20 text-[#a24ec1] text-sm font-medium border border-[#a24ec1]/20 transition-all whitespace-nowrap shadow-sm hover:shadow-md"
                       >
                         מדריכים
@@ -172,6 +195,7 @@ export default async function Navbar() {
                     {hasUserFlag(user, "canViewGoals") && (
                       <a
                         href="/finance/goals"
+                        aria-current={getAriaCurrent("/finance/goals")}
                         className="px-4 py-1.5 rounded-full bg-[#22c55e]/10 hover:bg-[#22c55e]/20 text-[#22c55e] text-sm font-medium border border-[#22c55e]/20 transition-all whitespace-nowrap shadow-sm hover:shadow-md"
                       >
                         תכנון יעדים

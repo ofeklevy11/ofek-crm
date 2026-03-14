@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
@@ -7,6 +8,8 @@ import { getSyncRules } from "@/app/actions/finance-sync";
 import { ArrowRight, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
+
+export const metadata: Metadata = { title: "גביית חובות" };
 
 export default async function CollectDataPage() {
   const user = await getCurrentUser();
@@ -84,17 +87,17 @@ export default async function CollectDataPage() {
           <div className="lg:col-span-4 space-y-6">
             {/* Sidebar / Active Rules / Tips could go here */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 h-full min-h-[400px]">
-              <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-[#a24ec1]" />
+              <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-[#a24ec1]" aria-hidden="true" />
                 חוקים פעילים
-              </h3>
+              </h2>
 
               {existingRules.length > 0 ? (
                 <ActiveSyncRules rules={existingRules} />
               ) : (
                 <div className="text-center text-gray-400 py-10 flex flex-col items-center justify-center h-full">
                   <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-4">
-                    <Sparkles className="w-6 h-6 text-gray-300" />
+                    <Sparkles className="w-6 h-6 text-gray-300" aria-hidden="true" />
                   </div>
                   <p className="font-medium">אין חוקים פעילים כרגע</p>
                   <p className="text-sm mt-2 max-w-xs">

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
@@ -5,6 +6,8 @@ import Pagination from "@/components/Pagination";
 import RetainersTable from "@/components/finance/RetainersTable";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
+
+export const metadata: Metadata = { title: "ריטיינרים" };
 
 export default async function RetainersPage({
   searchParams,
@@ -98,22 +101,22 @@ export default async function RetainersPage({
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="text-sm text-gray-500">ריטיינרים פעילים</div>
-          <div className="text-3xl font-bold text-[#4f95ff] mt-2">
+          <p id="stat-retainers-active" className="text-sm text-gray-500">ריטיינרים פעילים</p>
+          <p aria-labelledby="stat-retainers-active" className="text-3xl font-bold text-[#4f95ff] mt-2">
             {activeCount}
-          </div>
+          </p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="text-sm text-gray-500">ריטיינרים מושהים</div>
-          <div className="text-3xl font-bold text-gray-700 mt-2">
+          <p id="stat-retainers-paused" className="text-sm text-gray-500">ריטיינרים מושהים</p>
+          <p aria-labelledby="stat-retainers-paused" className="text-3xl font-bold text-gray-700 mt-2">
             {pausedCount}
-          </div>
+          </p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="text-sm text-gray-500">ריטיינרים לא פעילים</div>
-          <div className="text-3xl font-bold text-[#a24ec1] mt-2">
+          <p id="stat-retainers-cancelled" className="text-sm text-gray-500">ריטיינרים לא פעילים</p>
+          <p aria-labelledby="stat-retainers-cancelled" className="text-3xl font-bold text-[#a24ec1] mt-2">
             {cancelledCount}
-          </div>
+          </p>
         </div>
       </div>
 

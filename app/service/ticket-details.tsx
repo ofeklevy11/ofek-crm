@@ -36,6 +36,7 @@ import {
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -464,6 +465,10 @@ export default function TicketDetails({
         className="w-full sm:max-w-xl p-0 flex flex-col bg-[#f4f8f8]"
         dir="rtl"
       >
+        <SheetHeader className="sr-only">
+          <SheetTitle>{"פרטי קריאה #" + ticket.id}</SheetTitle>
+          <SheetDescription>פרטים ופעולות עבור קריאה זו</SheetDescription>
+        </SheetHeader>
         {/* Header with gradient */}
         <div className="bg-gradient-to-l from-[#4f95ff]/10 via-[#a24ec1]/5 to-white border-b">
           {/* Top bar with close and actions */}
@@ -485,6 +490,7 @@ export default function TicketDetails({
             <Button
               variant="ghost"
               size="icon"
+              aria-label="מחק קריאה"
               className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"
               onClick={async () => {
                 if (await showConfirm("האם אתה בטוח שברצונך למחוק קריאה זו?")) {
@@ -509,6 +515,7 @@ export default function TicketDetails({
               <div className="flex gap-2">
                 <Button
                   size="sm"
+                  aria-label="שמור כותרת"
                   className="bg-[#4f95ff] hover:bg-blue-600"
                   onClick={handleSaveTitle}
                 >
@@ -517,6 +524,7 @@ export default function TicketDetails({
                 <Button
                   size="sm"
                   variant="ghost"
+                  aria-label="בטל עריכה"
                   onClick={() => {
                     setTitleValue(ticket.title);
                     setEditingTitle(false);
@@ -527,6 +535,7 @@ export default function TicketDetails({
                 <Input
                   value={titleValue}
                   onChange={(e) => setTitleValue(e.target.value)}
+                  aria-label="כותרת הקריאה"
                   className="text-xl font-bold text-[#000000] text-right h-auto py-1"
                   autoFocus
                 />
@@ -539,6 +548,7 @@ export default function TicketDetails({
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label="ערוך כותרת"
                   className="h-6 w-6 text-slate-400 hover:text-[#4f95ff] mt-1 shrink-0"
                   onClick={() => {
                     setTitleValue(ticket.title);
@@ -559,6 +569,7 @@ export default function TicketDetails({
               onValueChange={handleStatusChange}
             >
               <SelectTrigger
+                aria-label="סטטוס"
                 className="w-[130px] h-9 bg-white border-slate-200 shadow-sm text-right"
               >
                 <SelectValue />
@@ -578,6 +589,7 @@ export default function TicketDetails({
               onValueChange={handlePriorityChange}
             >
               <SelectTrigger
+                aria-label="עדיפות"
                 className="w-[110px] h-9 bg-white border-slate-200 shadow-sm text-right"
               >
                 <SelectValue />
@@ -593,7 +605,7 @@ export default function TicketDetails({
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" aria-busy={loadingDetails}>
           <div className="p-5 space-y-5">
             {/* Description Card */}
             <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
@@ -606,6 +618,7 @@ export default function TicketDetails({
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label="ערוך תיאור"
                     className="h-6 w-6 text-slate-400 hover:text-[#4f95ff]"
                     onClick={() => {
                       setDescriptionValue(ticket.description || "");
@@ -621,6 +634,7 @@ export default function TicketDetails({
                   <Textarea
                     value={descriptionValue}
                     onChange={(e) => setDescriptionValue(e.target.value)}
+                    aria-label="תיאור הקריאה"
                     className="min-h-[100px] text-right resize-none"
                     placeholder="הוסף תיאור לקריאה..."
                   />
@@ -660,7 +674,8 @@ export default function TicketDetails({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-slate-400 hover:text-[#4f95ff] opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="שנה לקוח"
+                    className="h-6 w-6 text-slate-400 hover:text-[#4f95ff] opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
                     onClick={() => {
                       setClientSearch("");
                       setClientDialogOpen(true);
@@ -690,6 +705,7 @@ export default function TicketDetails({
                   onValueChange={handleAssigneeChange}
                 >
                   <SelectTrigger
+                    aria-label="נציג מטפל"
                     className="h-9 bg-slate-50 border-slate-200 text-right"
                   >
                     <SelectValue placeholder="לא משויך" />
@@ -779,10 +795,11 @@ export default function TicketDetails({
                                 </span>
                                 {canEditComment(item) &&
                                   editingCommentId !== item.id && (
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                                       <Button
                                         variant="ghost"
                                         size="icon"
+                                        aria-label="ערוך תגובה"
                                         className="h-6 w-6 text-slate-400 hover:text-[#4f95ff] hover:bg-blue-50"
                                         onClick={() => handleEditComment(item)}
                                       >
@@ -791,6 +808,7 @@ export default function TicketDetails({
                                       <Button
                                         variant="ghost"
                                         size="icon"
+                                        aria-label="מחק תגובה"
                                         className="h-6 w-6 text-slate-400 hover:text-red-600 hover:bg-red-50"
                                         onClick={() =>
                                           handleDeleteComment(item.id)
@@ -809,6 +827,7 @@ export default function TicketDetails({
                                   onChange={(e) =>
                                     setEditingCommentValue(e.target.value)
                                   }
+                                  aria-label="עריכת תגובה"
                                   className="min-h-[60px] text-right resize-none text-sm"
                                 />
                                 <div className="flex gap-2 justify-end">
@@ -866,7 +885,8 @@ export default function TicketDetails({
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-red-600 hover:bg-red-50"
+                                    aria-label="מחק לוג פעילות"
+                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-slate-400 hover:text-red-600 hover:bg-red-50"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleDeleteLog(item.id);
@@ -900,7 +920,7 @@ export default function TicketDetails({
                 ))}
 
                 {combinedActivity.length === 0 && (
-                  <div className="text-center py-8 text-slate-500 text-sm">
+                  <div className="text-center py-8 text-slate-500 text-sm" role="status">
                     אין פעילות עדיין. התחל את השיחה.
                   </div>
                 )}
@@ -918,10 +938,12 @@ export default function TicketDetails({
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="כתוב תגובה..."
+              aria-label="כתוב תגובה"
               className="resize-none min-h-[44px] max-h-32 bg-white text-right"
             />
             <Button
               size="icon"
+              aria-label="שלח תגובה"
               className="h-auto w-12 bg-[#4f95ff] hover:bg-blue-600"
               onClick={handleSendComment}
               disabled={submitting || !comment.trim()}
@@ -943,12 +965,13 @@ export default function TicketDetails({
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input
                 placeholder="חיפוש לקוח..."
+                aria-label="חיפוש לקוח"
                 value={clientSearch}
                 onChange={(e) => setClientSearch(e.target.value)}
                 className="pr-9 text-right"
               />
             </div>
-            <div className="max-h-[300px] overflow-y-auto space-y-1">
+            <div className="max-h-[300px] overflow-y-auto space-y-1" role="group" aria-label="רשימת לקוחות">
               {/* Option to remove client */}
               <button
                 onClick={() => handleClientChange(null)}

@@ -137,18 +137,19 @@ export default function ForgotPasswordForm() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" aria-live="polite">
       {step === "email" && (
         <form onSubmit={handleSendCode} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">כתובת אימייל</Label>
             <div className="relative">
-              <Mail className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" />
+              <Mail className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
               <Input
                 id="email"
                 type="email"
                 autoComplete="email"
                 required
+                aria-required="true"
                 placeholder="name@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -158,7 +159,7 @@ export default function ForgotPasswordForm() {
           </div>
 
           {error && (
-            <div className="text-sm p-3 rounded-lg text-center bg-destructive/10 border border-destructive/20 text-destructive animate-in fade-in">
+            <div role="alert" className="text-sm p-3 rounded-lg text-center bg-destructive/10 border border-destructive/20 text-destructive animate-in fade-in">
               {error}
             </div>
           )}
@@ -194,6 +195,7 @@ export default function ForgotPasswordForm() {
               maxLength={6}
               value={otpCode}
               onChange={setOtpCode}
+              aria-label="קוד אימות בן 6 ספרות"
             >
               <InputOTPGroup>
                 <InputOTPSlot index={0} />
@@ -207,7 +209,7 @@ export default function ForgotPasswordForm() {
           </div>
 
           {error && (
-            <div className="text-sm p-3 rounded-lg text-center bg-destructive/10 border border-destructive/20 text-destructive animate-in fade-in">
+            <div role="alert" className="text-sm p-3 rounded-lg text-center bg-destructive/10 border border-destructive/20 text-destructive animate-in fade-in">
               {error}
             </div>
           )}
@@ -248,28 +250,32 @@ export default function ForgotPasswordForm() {
           <div className="space-y-2">
             <Label htmlFor="new-password">סיסמה חדשה</Label>
             <div className="relative">
-              <Lock className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" />
+              <Lock className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
               <Input
                 id="new-password"
                 type="password"
                 autoComplete="new-password"
                 required
+                aria-required="true"
+                aria-describedby="reset-password-requirements"
                 placeholder="לפחות 10 תווים"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="h-11 pr-10 bg-muted/30 border-muted-foreground/20 focus-visible:ring-primary/30 transition-all hover:bg-muted/50"
               />
+              <p id="reset-password-requirements" className="sr-only">הסיסמה חייבת להכיל לפחות 10 תווים</p>
             </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirm-password">אימות סיסמה</Label>
             <div className="relative">
-              <Lock className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" />
+              <Lock className="absolute right-3 top-3 h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
               <Input
                 id="confirm-password"
                 type="password"
                 autoComplete="new-password"
                 required
+                aria-required="true"
                 placeholder="הזן שוב את הסיסמה"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -279,7 +285,7 @@ export default function ForgotPasswordForm() {
           </div>
 
           {error && (
-            <div className="text-sm p-3 rounded-lg text-center bg-destructive/10 border border-destructive/20 text-destructive animate-in fade-in">
+            <div role="alert" className="text-sm p-3 rounded-lg text-center bg-destructive/10 border border-destructive/20 text-destructive animate-in fade-in">
               {error}
             </div>
           )}

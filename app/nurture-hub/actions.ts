@@ -3,6 +3,16 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { normalizeToE164 } from "@/lib/utils/phone";
+import { checkActionRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { getCurrentUser } from "@/lib/permissions-server";
+import { validateStringLength, validateJsonValue, MAX_LENGTHS } from "@/lib/server-action-utils";
+import { logSecurityEvent, SEC_NURTURE_CAMPAIGN_SENT, SEC_NURTURE_BULK_IMPORT, SEC_NURTURE_CONFIG_CHANGED, SEC_NURTURE_BULK_DELETE } from "@/lib/security/audit-security";
+
+const VALID_NURTURE_SLUGS = new Set(["birthday", "renewal", "winback", "review", "referral", "upsell"]);
+
+function validateNurtureSlug(slug: string): boolean {
+  return VALID_NURTURE_SLUGS.has(slug);
+}
 
 function handleNurtureError(error: unknown, context: string): { success: false; error: string } {
   console.error(`[NurtureHub] ${context}:`, error);
@@ -40,6 +50,8 @@ export async function getDataSources(): Promise<DataSource[]> {
     if (!currentUser) {
       return sources; // Return only system sources if not authenticated
     }
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+    if (limited) return [];
 
     // CRITICAL: Filter tables by companyId for multi-tenancy
     const tables = await prisma.tableMeta.findMany({
@@ -77,6 +89,8 @@ export async function getDataSourceRecords(
   if (!currentUser) {
     return { records, hasMore: false };
   }
+  const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+  if (limited) return { records: [], hasMore: false };
 
   if (sourceId === "clients") {
     try {
@@ -93,6 +107,7 @@ export async function getDataSourceRecords(
               }
             : {}),
         },
+        select: { id: true, name: true, email: true, phone: true },
         skip,
         take,
       });
@@ -122,6 +137,7 @@ export async function getDataSourceRecords(
               }
             : {}),
         },
+        select: { id: true, name: true, email: true },
         skip,
         take,
       });
@@ -198,17 +214,21 @@ export async function getAllRecordIds(sourceId: string): Promise<string[]> {
   const { getCurrentUser } = await import("@/lib/permissions-server");
   const currentUser = await getCurrentUser();
   if (!currentUser) return [];
+  const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+  if (limited) return [];
 
   if (sourceId === "clients") {
     const rows = await prisma.client.findMany({
       where: { companyId: currentUser.companyId },
       select: { id: true },
+      take: 10000,
     });
     return rows.map((r) => r.id.toString());
   } else if (sourceId === "users") {
     const rows = await prisma.user.findMany({
       where: { companyId: currentUser.companyId },
       select: { id: true },
+      take: 10000,
     });
     return rows.map((r) => r.id.toString());
   } else {
@@ -217,6 +237,7 @@ export async function getAllRecordIds(sourceId: string): Promise<string[]> {
     const rows = await prisma.record.findMany({
       where: { tableId, companyId: currentUser.companyId },
       select: { id: true },
+      take: 10000,
     });
     return rows.map((r) => r.id.toString());
   }
@@ -230,10 +251,13 @@ export async function getRecordsByIds(
   const { getCurrentUser } = await import("@/lib/permissions-server");
   const currentUser = await getCurrentUser();
   if (!currentUser || ids.length === 0) return [];
+  const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+  if (limited) return [];
 
   if (sourceId === "clients") {
     const clients = await prisma.client.findMany({
       where: { id: { in: ids.map(Number) }, companyId: currentUser.companyId },
+      select: { id: true, name: true, email: true, phone: true },
     });
     return clients.map((c) => ({
       id: c.id.toString(),
@@ -245,6 +269,7 @@ export async function getRecordsByIds(
   } else if (sourceId === "users") {
     const users = await prisma.user.findMany({
       where: { id: { in: ids.map(Number) }, companyId: currentUser.companyId },
+      select: { id: true, name: true, email: true },
     });
     return users.map((u) => ({
       id: u.id.toString(),
@@ -258,11 +283,14 @@ export async function getRecordsByIds(
     const records = await prisma.record.findMany({
       where: { id: { in: ids.map(Number) }, tableId, companyId: currentUser.companyId },
     });
-    return records.map((r) => ({
-      id: r.id.toString(),
-      ...(r.data as any),
-      _rawData: r.data,
-    }));
+    return records.map((r) => {
+      const safeData = validateJsonValue(r.data, 3, 51200, "record data") as Record<string, unknown> ?? {};
+      return {
+        id: r.id.toString(),
+        ...(typeof safeData === "object" && safeData !== null ? safeData : {}),
+        _rawData: r.data,
+      };
+    });
   }
 }
 
@@ -280,6 +308,8 @@ export async function getTableFields(
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser) return [];
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+    if (limited) return [];
 
     const id = parseInt(tableId);
     if (isNaN(id)) return [];
@@ -326,6 +356,8 @@ export async function getRawTableRecords(
     if (!currentUser) {
       return { records: [], hasMore: false };
     }
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+    if (limited) return { records: [], hasMore: false };
 
     const id = parseInt(tableId);
     if (isNaN(id)) return { records: [], hasMore: false };
@@ -341,11 +373,14 @@ export async function getRawTableRecords(
     });
 
     // Return records with flattened data for easy access
-    const records = dbRecords.map((r) => ({
-      id: r.id.toString(),
-      ...(r.data as any), // Spread all data fields
-      _rawData: r.data, // Keep reference to raw data
-    }));
+    const records = dbRecords.map((r) => {
+      const safeData = validateJsonValue(r.data, 3, 51200, "record data") as Record<string, unknown> ?? {};
+      return {
+        id: r.id.toString(),
+        ...(typeof safeData === "object" && safeData !== null ? safeData : {}),
+        _rawData: r.data,
+      };
+    });
 
     return { records, hasMore: records.length === take };
   } catch (error) {
@@ -381,12 +416,16 @@ export async function getNurtureSubscribers(
     take?: number;
     search?: string;
     filters?: NurtureSubscriberFilter[];
+    cursor?: string; // subscriber ID for cursor-based pagination
   }
 ): Promise<{ subscribers: NurtureSubscriberResult[]; total: number; hasMore: boolean }> {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser) return { subscribers: [], total: 0, hasMore: false };
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+    if (limited) return { subscribers: [], total: 0, hasMore: false };
+    if (!validateNurtureSlug(slug)) return { subscribers: [], total: 0, hasMore: false };
 
     const list = await prisma.nurtureList.findFirst({
       where: { slug, companyId: currentUser.companyId },
@@ -394,8 +433,8 @@ export async function getNurtureSubscribers(
     });
     if (!list) return { subscribers: [], total: 0, hasMore: false };
 
-    const skip = options?.skip ?? 0;
-    const take = options?.take ?? 20;
+    const skip = Math.max(0, options?.skip ?? 0);
+    const take = Math.min(100, Math.max(1, options?.take ?? 20));
 
     // Build where clause
     const where: any = { nurtureListId: list.id };
@@ -414,8 +453,12 @@ export async function getNurtureSubscribers(
     }
 
     // Smart filters
+    const VALID_FILTER_FIELDS = new Set(["name", "email", "phone", "sourceType", "triggerDate", "phoneActive"]);
+    const VALID_FILTER_OPERATORS = new Set(["contains", "equals", "before", "after", "is"]);
     if (options?.filters?.length) {
       for (const f of options.filters) {
+        if (!VALID_FILTER_FIELDS.has(f.field) || !VALID_FILTER_OPERATORS.has(f.operator)) continue;
+        if (f.value) validateStringLength(f.value, 500, "filter value");
         if (!f.value && f.field !== "phoneActive") continue;
         switch (f.field) {
           case "name":
@@ -450,28 +493,44 @@ export async function getNurtureSubscribers(
 
     if (andConditions.length > 0) where.AND = andConditions;
 
+    // Use cursor-based pagination when cursor is provided (O(1) seek vs O(n) offset)
+    const cursorId = options?.cursor ? parseInt(options.cursor, 10) : undefined;
+    const useCursor = cursorId && !isNaN(cursorId) && !options?.search?.trim();
+
     // Parallel count + find
     const [total, subscribers] = await Promise.all([
       prisma.nurtureSubscriber.count({ where }),
       prisma.nurtureSubscriber.findMany({
-        where,
+        where: useCursor
+          ? { ...where, id: { lt: cursorId } }
+          : where,
         orderBy: { createdAt: "desc" },
-        skip,
+        ...(useCursor ? {} : { skip }),
         take,
       }),
     ]);
 
-    // Resolve table names in bulk
+    // Resolve table names in bulk (cached — table names rarely change)
     const tableIds = [...new Set(
       subscribers.filter((sub: any) => sub.sourceTableId).map((sub: any) => sub.sourceTableId)
     )];
-    const tables = tableIds.length > 0
-      ? await prisma.tableMeta.findMany({
-          where: { id: { in: tableIds as number[] }, companyId: currentUser.companyId },
-          select: { id: true, name: true },
-        })
-      : [];
-    const tableMap = new Map(tables.map((t) => [t.id, t.name]));
+    let tableMap = new Map<number, string>();
+    if (tableIds.length > 0) {
+      const { getCachedMetric } = await import("@/lib/services/cache-service");
+      const tableNames = await getCachedMetric(
+        currentUser.companyId,
+        ["table-names"],
+        async () => {
+          const tables = await prisma.tableMeta.findMany({
+            where: { companyId: currentUser.companyId },
+            select: { id: true, name: true },
+          });
+          return Object.fromEntries(tables.map((t) => [t.id, t.name]));
+        },
+        600 // 10-min TTL
+      );
+      tableMap = new Map(Object.entries(tableNames).map(([k, v]) => [Number(k), v]));
+    }
 
     const mapped = subscribers.map((sub: any) => ({
       id: sub.id.toString(),
@@ -504,35 +563,35 @@ async function dispatchAutoSendIfConfigured(
   list: { id: number; configJson: any; isEnabled: boolean; slug: string },
   subscriber: { id: number; phone: string | null; phoneActive: boolean; email?: string | null; emailActive?: boolean; name: string },
   companyId: number
-): Promise<{ dispatched: boolean; channels?: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean; email: boolean }; timing?: string }> {
+): Promise<{ dispatched: boolean; channels?: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean; email: boolean }; timing?: string; reason?: string; error?: boolean }> {
   try {
     if (!list.configJson) {
       console.log("[AutoSend] skip: no configJson on list", list.id);
-      return { dispatched: false };
+      return { dispatched: false, reason: "no_config" };
     }
     const config = list.configJson as any;
     const hasPhone = subscriber.phone && subscriber.phoneActive;
     const hasEmail = subscriber.email && subscriber.emailActive;
     if (!hasPhone && !hasEmail) {
       console.log("[AutoSend] skip: subscriber has no active contact method", { phone: subscriber.phone, phoneActive: subscriber.phoneActive, email: subscriber.email });
-      return { dispatched: false };
+      return { dispatched: false, reason: "no_contact_method" };
     }
     if (config.timing === "manual" || !config.timing) {
       console.log("[AutoSend] skip: timing is manual or unset", config.timing);
-      return { dispatched: false };
+      return { dispatched: false, reason: "manual" };
     }
 
     const channels = config.channels || {};
     if (!channels.sms && !channels.whatsappGreen && !channels.whatsappCloud && !channels.email) {
       console.log("[AutoSend] skip: no channels enabled", channels);
-      return { dispatched: false };
+      return { dispatched: false, reason: "no_channels" };
     }
 
     const { migrateConfigMessages, getActiveMessage, NURTURE_TIMING_MAP } = await import("@/lib/nurture-messages");
     const activeMsg = getActiveMessage(migrateConfigMessages(config));
     if (!activeMsg) {
       console.log("[AutoSend] skip: no active message found");
-      return { dispatched: false };
+      return { dispatched: false, reason: "no_active_message" };
     }
 
     const delayMs = NURTURE_TIMING_MAP[config.timing] ?? 0;
@@ -576,7 +635,7 @@ async function dispatchAutoSendIfConfigured(
     };
   } catch (err) {
     console.error("[NurtureHub] dispatchAutoSendIfConfigured failed (non-fatal):", err);
-    return { dispatched: false };
+    return { dispatched: false, error: true };
   }
 }
 
@@ -592,6 +651,12 @@ export async function addNurtureSubscriberManual(
     if (!currentUser) {
       return { success: false, error: "Authentication required" };
     }
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureMutation);
+    if (limited) return { success: false, error: "בוצעו יותר מדי פניות. אנא המתינו ונסו שוב" };
+    if (!validateNurtureSlug(slug)) return { success: false, error: "קטגוריה לא תקינה" };
+    validateStringLength(data.name, MAX_LENGTHS.name, "name");
+    if (data.email) validateStringLength(data.email, MAX_LENGTHS.email, "email");
+    if (data.phone) validateStringLength(data.phone, MAX_LENGTHS.phone, "phone");
 
     if (!data.email && !data.phone) {
       return { success: false, error: "Email or phone is required" };
@@ -698,7 +763,11 @@ export async function bulkImportNurtureSubscribers(
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser) return { success: false, error: "Authentication required" };
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureBulk);
+    if (limited) return { success: false, error: "בוצעו יותר מדי פניות. אנא המתינו ונסו שוב" };
+    if (!validateNurtureSlug(listSlug)) return { success: false, error: "קטגוריה לא תקינה" };
     if (selectedIds.length === 0) return { success: true, successCount: 0, duplicateCount: 0, missingContactCount: 0 };
+    if (selectedIds.length > 10000) return { success: false, error: "Too many IDs (max 10,000)" };
 
     // Find or create list (once)
     let list = await prisma.nurtureList.findFirst({
@@ -714,58 +783,71 @@ export async function bulkImportNurtureSubscribers(
       });
     }
 
-    // Resolve records from source in batches of 500
+    // Resolve records from source in batches of 2000 (with up to 3 concurrent batches)
     const numericIds = selectedIds.map(Number);
     type MappedRecord = { name: string; email: string | null; phone: string | null; triggerDate: string | null };
     const mapped: MappedRecord[] = [];
-    const BATCH = 500;
+    const BATCH = 2000;
+    const CONCURRENT_SOURCE_BATCHES = 3;
 
+    // Build batch queries
+    const sourceQueries: (() => Promise<MappedRecord[]>)[] = [];
     for (let i = 0; i < numericIds.length; i += BATCH) {
       const batchIds = numericIds.slice(i, i + BATCH);
 
       if (sourceId === "clients") {
-        const clients = await prisma.client.findMany({
-          where: { id: { in: batchIds }, companyId: currentUser.companyId },
+        sourceQueries.push(async () => {
+          const clients = await prisma.client.findMany({
+            where: { id: { in: batchIds }, companyId: currentUser.companyId },
+            select: { id: true, name: true, email: true, phone: true },
+          });
+          return clients.map((c) => ({ name: c.name, email: c.email || null, phone: c.phone || null, triggerDate: null }));
         });
-        for (const c of clients) {
-          mapped.push({ name: c.name, email: c.email || null, phone: c.phone || null, triggerDate: null });
-        }
       } else if (sourceId === "users") {
-        const users = await prisma.user.findMany({
-          where: { id: { in: batchIds }, companyId: currentUser.companyId },
+        sourceQueries.push(async () => {
+          const users = await prisma.user.findMany({
+            where: { id: { in: batchIds }, companyId: currentUser.companyId },
+            select: { id: true, name: true, email: true },
+          });
+          return users.map((u) => ({ name: u.name, email: u.email || null, phone: null, triggerDate: null }));
         });
-        for (const u of users) {
-          mapped.push({ name: u.name, email: u.email || null, phone: null, triggerDate: null });
-        }
       } else {
         const tableId = parseInt(sourceId);
         if (isNaN(tableId)) return { success: false, error: "Invalid source" };
-        const records = await prisma.record.findMany({
-          where: { id: { in: batchIds }, tableId, companyId: currentUser.companyId },
-        });
-        for (const r of records) {
-          const data = r.data as any;
-          if (mapping) {
-            mapped.push({
-              name: String(data[mapping.name] || `Record #${r.id}`),
-              email: data[mapping.email] ? String(data[mapping.email]) : null,
-              phone: data[mapping.phone] ? String(data[mapping.phone]) : null,
-              triggerDate: mapping.triggerDate && data[mapping.triggerDate] ? String(data[mapping.triggerDate]) : null,
-            });
-          } else {
+        sourceQueries.push(async () => {
+          const records = await prisma.record.findMany({
+            where: { id: { in: batchIds }, tableId, companyId: currentUser.companyId },
+          });
+          return records.map((r) => {
+            const data = r.data as any;
+            if (mapping) {
+              return {
+                name: String(data[mapping.name] || `Record #${r.id}`),
+                email: data[mapping.email] ? String(data[mapping.email]) : null,
+                phone: data[mapping.phone] ? String(data[mapping.phone]) : null,
+                triggerDate: mapping.triggerDate && data[mapping.triggerDate] ? String(data[mapping.triggerDate]) : null,
+              };
+            }
             // Heuristic fallback (same as getDataSourceRecords)
             const name = data.name || data.Name || data.title || data.Title || data["שם"] || data["שם מלא"] || `Record #${r.id}`;
             const email = data.email || data.Email || data["מייל"] || data["אימייל"] || null;
             const phone = data.phone || data.Phone || data["טלפון"] || data["נייד"] || null;
-            mapped.push({
+            return {
               name: typeof name === "string" ? name : JSON.stringify(name),
               email: typeof email === "string" ? email : null,
               phone: typeof phone === "string" ? phone : null,
               triggerDate: null,
-            });
-          }
-        }
+            };
+          });
+        });
       }
+    }
+
+    // Run source queries with bounded concurrency (3 concurrent)
+    for (let i = 0; i < sourceQueries.length; i += CONCURRENT_SOURCE_BATCHES) {
+      const chunk = sourceQueries.slice(i, i + CONCURRENT_SOURCE_BATCHES);
+      const results = await Promise.all(chunk.map((fn) => fn()));
+      for (const batch of results) mapped.push(...batch);
     }
 
     // Classify: missing contact vs to-check
@@ -847,34 +929,94 @@ export async function bulkImportNurtureSubscribers(
       });
     }
 
-    // Bulk insert
+    // Bulk insert in chunks of 2000 to avoid memory spikes
+    const INSERT_CHUNK = 2000;
     if (toInsert.length > 0) {
-      await prisma.nurtureSubscriber.createMany({ data: toInsert });
+      for (let i = 0; i < toInsert.length; i += INSERT_CHUNK) {
+        await prisma.nurtureSubscriber.createMany({ data: toInsert.slice(i, i + INSERT_CHUNK) });
+      }
 
-      // Dispatch auto-send for newly created subscribers with active phones
+      // Dispatch auto-send for newly created subscribers with active contact methods
       const config = list.configJson as any;
       if (config?.timing && config.timing !== "manual") {
-        const phonesWithAutoSend = toInsert
-          .filter((r) => r.phone && r.phoneActive)
-          .map((r) => r.phone!);
+        const contactsWithAutoSend = toInsert
+          .filter((r) => (r.phone && r.phoneActive) || r.email)
+          .map((r) => r.phone || r.email!);
 
-        if (phonesWithAutoSend.length > 0) {
-          // Query back created subscribers to get their IDs
-          const DISPATCH_BATCH = 50;
-          for (let i = 0; i < phonesWithAutoSend.length; i += DISPATCH_BATCH) {
-            const batchPhones = phonesWithAutoSend.slice(i, i + DISPATCH_BATCH);
-            const createdSubs = await prisma.nurtureSubscriber.findMany({
-              where: { nurtureListId: list.id, phone: { in: batchPhones } },
-              select: { id: true, phone: true, phoneActive: true, email: true, emailActive: true, name: true },
-            });
-            for (const sub of createdSubs) {
-              const result = await dispatchAutoSendIfConfigured(list, sub, currentUser.companyId);
-              if (result.dispatched) {
-                autoSendCount++;
-                if (!autoSendChannels) {
-                  autoSendChannels = result.channels;
-                  autoSendTiming = result.timing;
+        if (contactsWithAutoSend.length > 0) {
+          const channels = config.channels || {};
+          if (channels.sms || channels.whatsappGreen || channels.whatsappCloud || channels.email) {
+            const { migrateConfigMessages, getActiveMessage, NURTURE_TIMING_MAP } = await import("@/lib/nurture-messages");
+            const activeMsg = getActiveMessage(migrateConfigMessages(config));
+            if (activeMsg) {
+              const delayMs = NURTURE_TIMING_MAP[config.timing] ?? 0;
+              // Query back created subscribers to get their IDs in larger batches
+              const DISPATCH_BATCH = 200;
+              const CONCURRENT_BATCHES = 3;
+              const allEvents: any[] = [];
+
+              // Build batch queries
+              const batchQueries: Promise<any[]>[] = [];
+              for (let i = 0; i < contactsWithAutoSend.length; i += DISPATCH_BATCH) {
+                const batchContacts = contactsWithAutoSend.slice(i, i + DISPATCH_BATCH);
+                batchQueries.push(
+                  prisma.nurtureSubscriber.findMany({
+                    where: {
+                      nurtureListId: list.id,
+                      OR: [
+                        { phone: { in: batchContacts.filter(c => c.startsWith("+") || /^\d/.test(c)) } },
+                        { email: { in: batchContacts.filter(c => c.includes("@")) } },
+                      ],
+                    },
+                    select: { id: true, phone: true, phoneActive: true, email: true, emailActive: true, name: true },
+                  })
+                );
+              }
+
+              // Run batch queries with bounded concurrency (3 concurrent)
+              for (let i = 0; i < batchQueries.length; i += CONCURRENT_BATCHES) {
+                const chunk = batchQueries.slice(i, i + CONCURRENT_BATCHES);
+                const results = await Promise.all(chunk);
+                for (const createdSubs of results) {
+                  for (const sub of createdSubs) {
+                    const hasPhone = sub.phone && sub.phoneActive;
+                    const hasEmail = sub.email && sub.emailActive;
+                    if (!hasPhone && !hasEmail) continue;
+                    allEvents.push({
+                      name: "nurture/delayed-send" as const,
+                      data: {
+                        companyId: currentUser.companyId,
+                        subscriberId: sub.id,
+                        nurtureListId: list.id,
+                        subscriberPhone: sub.phone || "",
+                        subscriberName: sub.name,
+                        channels: { ...channels, email: !!channels.email },
+                        smsBody: activeMsg.smsBody || "",
+                        whatsappGreenBody: activeMsg.whatsappGreenBody || "",
+                        whatsappCloudTemplateName: activeMsg.whatsappCloudTemplateName || "",
+                        whatsappCloudLanguageCode: activeMsg.whatsappCloudLanguageCode || "he",
+                        subscriberEmail: sub.email || "",
+                        emailSubject: activeMsg.emailSubject || "",
+                        emailBody: activeMsg.emailBody || "",
+                        slug: list.slug,
+                        delayMs,
+                        triggerKey: `manual-${list.slug}-${Date.now()}`,
+                      },
+                    });
+                  }
                 }
+              }
+              // Batch send all events in a single Inngest call
+              if (allEvents.length > 0) {
+                const { inngest } = await import("@/lib/inngest/client");
+                await inngest.send(allEvents);
+                autoSendCount = allEvents.length;
+                autoSendChannels = {
+                  sms: !!channels.sms,
+                  whatsappGreen: !!channels.whatsappGreen,
+                  whatsappCloud: !!channels.whatsappCloud,
+                };
+                autoSendTiming = config.timing;
               }
             }
           }
@@ -891,6 +1033,13 @@ export async function bulkImportNurtureSubscribers(
         }
       }
     }
+
+    logSecurityEvent({
+      action: SEC_NURTURE_BULK_IMPORT,
+      companyId: currentUser.companyId,
+      userId: currentUser.id,
+      details: { slug: listSlug, count: toInsert.length },
+    });
 
     return {
       success: true,
@@ -917,20 +1066,21 @@ export async function getNurtureRules(slug: string) {
     if (!currentUser) {
       return [];
     }
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+    if (limited) return [];
+    if (!validateNurtureSlug(slug)) return [];
 
     const rules = await prisma.automationRule.findMany({
       where: {
         companyId: currentUser.companyId,
         actionType: "ADD_TO_NURTURE_LIST",
+        actionConfig: { path: ['listId'], equals: slug },
       },
       orderBy: { createdAt: "desc" },
+      take: 50,
     });
 
-    // Filter by listId matching slug
-    return rules.filter((rule) => {
-      const actionConfig = rule.actionConfig as any;
-      return actionConfig?.listId === slug;
-    });
+    return rules;
   } catch (error) {
     console.error("Error fetching nurture rules:", error);
     return [];
@@ -953,6 +1103,11 @@ export async function updateNurtureSubscriber(
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    const limited = await checkActionRateLimit(String(user.id), RATE_LIMITS.nurtureMutation);
+    if (limited) return { success: false, error: "בוצעו יותר מדי פניות. אנא המתינו ונסו שוב" };
+    if (data.name !== undefined) validateStringLength(data.name, MAX_LENGTHS.name, "name");
+    if (data.email !== undefined) validateStringLength(data.email, MAX_LENGTHS.email, "email");
+    if (data.phone !== undefined) validateStringLength(data.phone, MAX_LENGTHS.phone, "phone");
 
     const subscriberId = parseInt(id);
     if (isNaN(subscriberId)) {
@@ -962,13 +1117,17 @@ export async function updateNurtureSubscriber(
     // Verify subscriber belongs to user's company via nurtureList relation
     const subscriber = await prisma.nurtureSubscriber.findFirst({
       where: { id: subscriberId, nurtureList: { companyId: user.companyId } },
+      select: { id: true },
     });
     if (!subscriber) return { success: false, error: "Not found" };
 
     const updateData: any = {};
     if (data.emailActive !== undefined) updateData.emailActive = data.emailActive;
     if (data.phoneActive !== undefined) updateData.phoneActive = data.phoneActive;
-    if (data.phone !== undefined) updateData.phone = data.phone || null;
+    if (data.phone !== undefined) {
+      const normalizedPhone = data.phone ? normalizeToE164(data.phone) : null;
+      updateData.phone = normalizedPhone || data.phone || null;
+    }
     if (data.email !== undefined) updateData.email = data.email || null;
     if (data.name !== undefined) updateData.name = data.name;
     if (data.triggerDate !== undefined) {
@@ -992,6 +1151,8 @@ export async function deleteNurtureSubscriber(id: string) {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    const limited = await checkActionRateLimit(String(user.id), RATE_LIMITS.nurtureMutation);
+    if (limited) return { success: false, error: "בוצעו יותר מדי פניות. אנא המתינו ונסו שוב" };
 
     const subscriberId = parseInt(id);
     if (isNaN(subscriberId)) {
@@ -1001,6 +1162,7 @@ export async function deleteNurtureSubscriber(id: string) {
     // Verify subscriber belongs to user's company via nurtureList relation
     const subscriber = await prisma.nurtureSubscriber.findFirst({
       where: { id: subscriberId, nurtureList: { companyId: user.companyId } },
+      select: { id: true },
     });
     if (!subscriber) return { success: false, error: "Not found" };
 
@@ -1020,6 +1182,9 @@ export async function deleteNurtureSubscribers(ids: string[]) {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Unauthorized" };
+    const limited = await checkActionRateLimit(String(user.id), RATE_LIMITS.nurtureBulk);
+    if (limited) return { success: false, error: "בוצעו יותר מדי פניות. אנא המתינו ונסו שוב" };
+    if (ids.length > 10000) return { success: false, error: "Too many IDs" };
 
     const numericIds = ids.map((id) => parseInt(id)).filter((id) => !isNaN(id));
     if (numericIds.length === 0) return { success: false, error: "No valid IDs" };
@@ -1030,6 +1195,13 @@ export async function deleteNurtureSubscribers(ids: string[]) {
         id: { in: numericIds },
         nurtureList: { companyId: user.companyId },
       },
+    });
+
+    logSecurityEvent({
+      action: SEC_NURTURE_BULK_DELETE,
+      companyId: user.companyId,
+      userId: user.id,
+      details: { count, slug: "bulk-delete" },
     });
 
     return { success: true, count };
@@ -1048,6 +1220,26 @@ export async function saveNurtureConfig(
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser) return { success: false, error: "Authentication required" };
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureMutation);
+    if (limited) return { success: false, error: "בוצעו יותר מדי פניות. אנא המתינו ונסו שוב" };
+    if (!validateNurtureSlug(slug)) return { success: false, error: "קטגוריה לא תקינה" };
+    validateJsonValue(configJson, 5, 102400, "configJson");
+
+    // Validate individual message body lengths
+    if (typeof configJson === "object" && configJson !== null) {
+      const c = configJson as Record<string, unknown>;
+      const messages = Array.isArray(c.messages) ? c.messages : [];
+      for (const msg of messages) {
+        if (typeof msg !== "object" || msg === null) continue;
+        const m = msg as Record<string, unknown>;
+        if (typeof m.smsBody === "string" && m.smsBody.length > 1600)
+          return { success: false, error: "הודעת SMS ארוכה מדי (מקסימום 1600 תווים)" };
+        if (typeof m.whatsappGreenBody === "string" && m.whatsappGreenBody.length > 4096)
+          return { success: false, error: "הודעת WhatsApp ארוכה מדי (מקסימום 4096 תווים)" };
+        if (typeof m.emailBody === "string" && m.emailBody.length > 50000)
+          return { success: false, error: "תוכן האימייל ארוך מדי (מקסימום 50000 תווים)" };
+      }
+    }
 
     await prisma.nurtureList.upsert({
       where: {
@@ -1069,6 +1261,13 @@ export async function saveNurtureConfig(
       },
     });
 
+    logSecurityEvent({
+      action: SEC_NURTURE_CONFIG_CHANGED,
+      companyId: currentUser.companyId,
+      userId: currentUser.id,
+      details: { slug },
+    });
+
     return { success: true };
   } catch (error) {
     return handleNurtureError(error, "saveNurtureConfig");
@@ -1081,6 +1280,9 @@ export async function getNurtureConfig(slug: string) {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser) return null;
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+    if (limited) return null;
+    if (!validateNurtureSlug(slug)) return null;
 
     const list = await prisma.nurtureList.findFirst({
       where: { slug, companyId: currentUser.companyId },
@@ -1101,29 +1303,39 @@ export async function getAvailableChannels() {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser) return { sms: false, whatsappGreen: false, whatsappCloud: false, email: false };
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+    if (limited) return { sms: false, whatsappGreen: false, whatsappCloud: false, email: false };
 
-    const [smsIntegration, company, waAccount] = await Promise.all([
-      prisma.smsIntegration.findFirst({
-        where: { companyId: currentUser.companyId, status: "READY" },
-        select: { id: true },
-      }),
-      prisma.company.findUnique({
-        where: { id: currentUser.companyId },
-        select: { greenApiInstanceId: true, greenApiToken: true },
-      }),
-      // phoneNumbers relation
-      (prisma.whatsAppAccount as any).findFirst({
-        where: { companyId: currentUser.companyId, status: "ACTIVE" },
-        include: { phoneNumbers: { where: { isActive: true }, take: 1 } },
-      }),
-    ]);
+    const { getCachedMetric } = await import("@/lib/services/cache-service");
+    return getCachedMetric(
+      currentUser.companyId,
+      ["nurture-available-channels"],
+      async () => {
+        const [smsIntegration, company, waAccount] = await Promise.all([
+          prisma.smsIntegration.findFirst({
+            where: { companyId: currentUser.companyId, status: "READY" },
+            select: { id: true },
+          }),
+          prisma.company.findUnique({
+            where: { id: currentUser.companyId },
+            select: { greenApiInstanceId: true, greenApiToken: true },
+          }),
+          // phoneNumbers relation
+          (prisma.whatsAppAccount as any).findFirst({
+            where: { companyId: currentUser.companyId, status: "ACTIVE" },
+            include: { phoneNumbers: { where: { isActive: true }, take: 1 } },
+          }),
+        ]);
 
-    return {
-      sms: !!smsIntegration,
-      whatsappGreen: !!(company?.greenApiInstanceId && company?.greenApiToken),
-      whatsappCloud: !!(waAccount && (waAccount as any).phoneNumbers?.length > 0),
-      email: true,
-    };
+        return {
+          sms: !!smsIntegration,
+          whatsappGreen: !!(company?.greenApiInstanceId && company?.greenApiToken),
+          whatsappCloud: !!(waAccount && (waAccount as any).phoneNumbers?.length > 0),
+          email: true,
+        };
+      },
+      300 // 5-min TTL
+    );
   } catch (error) {
     console.error("Error checking available channels:", error);
     return { sms: false, whatsappGreen: false, whatsappCloud: false, email: false };
@@ -1136,6 +1348,9 @@ export async function getNurtureSendLogs(slug: string) {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser) return [];
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+    if (limited) return [];
+    if (!validateNurtureSlug(slug)) return [];
 
     const list = await prisma.nurtureList.findFirst({
       where: { slug, companyId: currentUser.companyId },
@@ -1174,6 +1389,9 @@ export async function getSubscriberLastSentMap(slug: string): Promise<Record<str
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser) return {};
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+    if (limited) return {};
+    if (!validateNurtureSlug(slug)) return {};
 
     const list = await prisma.nurtureList.findFirst({
       where: { slug, companyId: currentUser.companyId },
@@ -1181,19 +1399,27 @@ export async function getSubscriberLastSentMap(slug: string): Promise<Record<str
     });
     if (!list) return {};
 
-    const groups = await prisma.nurtureSendLog.groupBy({
-      by: ["subscriberId"],
-      where: { nurtureListId: list.id, status: "SENT" },
-      _max: { sentAt: true },
-    });
+    const { getCachedMetric } = await import("@/lib/services/cache-service");
+    return getCachedMetric(
+      currentUser.companyId,
+      ["nurture-last-sent", String(list.id)],
+      async () => {
+        const groups = await prisma.nurtureSendLog.groupBy({
+          by: ["subscriberId"],
+          where: { nurtureListId: list.id, status: "SENT" },
+          _max: { sentAt: true },
+        });
 
-    const result: Record<string, string> = {};
-    for (const g of groups) {
-      if (g._max.sentAt) {
-        result[String(g.subscriberId)] = g._max.sentAt.toISOString();
-      }
-    }
-    return result;
+        const result: Record<string, string> = {};
+        for (const g of groups) {
+          if (g._max.sentAt) {
+            result[String(g.subscriberId)] = g._max.sentAt.toISOString();
+          }
+        }
+        return result;
+      },
+      120 // 2-min TTL — short because send activity changes it
+    );
   } catch (error) {
     console.error("Error fetching subscriber last sent map:", error);
     return {};
@@ -1206,6 +1432,8 @@ export async function getNurtureQuotaAction() {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser) return null;
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+    if (limited) return null;
 
     const { getNurtureQuotaStatus } = await import("@/lib/nurture-rate-limit");
     const tier = (currentUser.isPremium as "basic" | "premium" | "super") || "basic";
@@ -1222,6 +1450,9 @@ export async function getRecentAutoSendActivity(slug: string) {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser) return null;
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+    if (limited) return null;
+    if (!validateNurtureSlug(slug)) return null;
 
     const list = await prisma.nurtureList.findFirst({
       where: { slug, companyId: currentUser.companyId },
@@ -1266,6 +1497,9 @@ export async function getAutoSendQueue(slug: string): Promise<{
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser) return null;
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+    if (limited) return null;
+    if (!validateNurtureSlug(slug)) return null;
 
     const list = await prisma.nurtureList.findFirst({
       where: { slug, companyId: currentUser.companyId },
@@ -1317,15 +1551,19 @@ export async function sendNurtureCampaign(
   subscriberId?: string,
   channelOverrides?: { sms?: boolean; whatsappGreen?: boolean; whatsappCloud?: boolean; email?: boolean },
   subscriberIds?: string[]
-): Promise<{ success: boolean; error?: string; count?: number; totalSubscribers?: number; quotaLimited?: boolean; resetInSeconds?: number; channelsSent?: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean; email: boolean }; batchId?: string }> {
+): Promise<{ success: boolean; error?: string; count?: number; totalSubscribers?: number; quotaLimited?: boolean; truncated?: boolean; resetInSeconds?: number; channelsSent?: { sms: boolean; whatsappGreen: boolean; whatsappCloud: boolean; email: boolean }; batchId?: string }> {
   try {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser) return { success: false, error: "נדרשת התחברות" };
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureSend);
+    if (limited) return { success: false, error: "בוצעו יותר מדי פניות. אנא המתינו ונסו שוב" };
+    if (!validateNurtureSlug(slug)) return { success: false, error: "קטגוריה לא תקינה" };
 
+    // Fetch list metadata only (no subscribers) to avoid loading all subscribers into memory
     const list = await prisma.nurtureList.findFirst({
       where: { slug, companyId: currentUser.companyId },
-      include: { subscribers: true },
+      select: { id: true, slug: true, companyId: true, configJson: true, isEnabled: true },
     });
 
     if (!list) return { success: false, error: "קמפיין לא נמצא" };
@@ -1382,18 +1620,17 @@ export async function sendNurtureCampaign(
       return { success: false, error: "תוכן האימייל חסר בתבנית הפעילה" };
     }
 
-    // Filter subscribers with active contact method
-    let activeSubscribers = list.subscribers.filter(
-      (sub: any) => {
-        const hasPhone = sub.phoneActive && sub.phone;
-        const hasEmail = sub.emailActive && sub.email;
-        // If email is the only channel, require email; otherwise require phone or email
-        if (channels.email && !channels.sms && !channels.whatsappGreen && !channels.whatsappCloud) {
-          return hasEmail;
-        }
-        return hasPhone || hasEmail;
-      }
-    );
+    // Build subscriber query with active contact method filters (instead of loading all into memory)
+    const emailOnlyChannel = channels.email && !channels.sms && !channels.whatsappGreen && !channels.whatsappCloud;
+    const subscriberWhere: any = {
+      nurtureListId: list.id,
+      ...(emailOnlyChannel
+        ? { emailActive: true, email: { not: null } }
+        : { OR: [
+            { phoneActive: true, phone: { not: null } },
+            { emailActive: true, email: { not: null } },
+          ] }),
+    };
 
     // If subscriberId provided, filter to only that subscriber
     if (subscriberId) {
@@ -1401,16 +1638,25 @@ export async function sendNurtureCampaign(
       if (isNaN(subId)) {
         return { success: false, error: "המנוי לא נמצא או שאין לו מספר טלפון פעיל" };
       }
-      activeSubscribers = activeSubscribers.filter((sub: any) => sub.id === subId);
-      if (activeSubscribers.length === 0) {
-        return { success: false, error: "המנוי לא נמצא או שאין לו מספר טלפון פעיל" };
-      }
+      subscriberWhere.id = subId;
     }
 
     // Filter to specific subscriber IDs if provided (bulk dialog selection)
     if (!subscriberId && subscriberIds && subscriberIds.length > 0) {
-      const idSet = new Set(subscriberIds.map(Number));
-      activeSubscribers = activeSubscribers.filter((sub: any) => idSet.has(sub.id));
+      subscriberWhere.id = { in: subscriberIds.map(Number) };
+    }
+
+    let activeSubscribers = await prisma.nurtureSubscriber.findMany({
+      where: subscriberWhere,
+      select: { id: true, name: true, phone: true, phoneActive: true, email: true, emailActive: true },
+      take: 10000,
+    });
+
+    // Warn if subscriber query hit the limit — some subscribers may be silently excluded
+    const subscribersTruncated = activeSubscribers.length === 10000;
+
+    if (subscriberId && activeSubscribers.length === 0) {
+      return { success: false, error: "המנוי לא נמצא או שאין לו מספר טלפון פעיל" };
     }
 
     if (activeSubscribers.length === 0) {
@@ -1461,6 +1707,14 @@ export async function sendNurtureCampaign(
     // Generate batch ID for queue tracking (bulk sends only)
     const batchId = !subscriberId ? crypto.randomUUID() : undefined;
 
+    if (subscribersTruncated) {
+      log.warn("Subscriber query truncated at 10000 limit", {
+        companyId: currentUser.companyId,
+        listId: list.id,
+        slug,
+      });
+    }
+
     log.info("Dispatching nurture campaign", {
       slug,
       channels,
@@ -1484,17 +1738,21 @@ export async function sendNurtureCampaign(
       );
     }
 
-    // Create send logs for manual sends
+    // Create send logs for manual sends with DISPATCHED status (Inngest worker updates to SENT/FAILED)
     const triggerKey = `manual-${Date.now()}`;
-    await prisma.nurtureSendLog.createMany({
-      data: activeSubscribers.map((sub: any) => ({
-        subscriberId: sub.id,
-        nurtureListId: list.id,
-        triggerKey,
-        status: "SENT",
-      })),
-      skipDuplicates: true,
-    });
+    const LOG_CHUNK = 2000;
+    const sendLogData = activeSubscribers.map((sub: any) => ({
+      subscriberId: sub.id,
+      nurtureListId: list.id,
+      triggerKey,
+      status: "DISPATCHED",
+    }));
+    for (let i = 0; i < sendLogData.length; i += LOG_CHUNK) {
+      await prisma.nurtureSendLog.createMany({
+        data: sendLogData.slice(i, i + LOG_CHUNK),
+        skipDuplicates: true,
+      });
+    }
 
     // Enqueue a message event for each subscriber
     const events = activeSubscribers.map((sub: any) => ({
@@ -1516,13 +1774,30 @@ export async function sendNurtureCampaign(
       },
     }));
 
-    await inngest.send(events);
+    const EVENT_CHUNK = 1000;
+    for (let i = 0; i < events.length; i += EVENT_CHUNK) {
+      await inngest.send(events.slice(i, i + EVENT_CHUNK));
+    }
+
+    // Invalidate lastSentMap cache after campaign dispatch
+    try {
+      const { redis } = await import("@/lib/redis");
+      await redis.del(`cache:metric:${currentUser.companyId}:nurture-last-sent:${list.id}`);
+    } catch (e) { console.warn("[NurtureHub] cache invalidation failed", String(e)); }
+
+    logSecurityEvent({
+      action: SEC_NURTURE_CAMPAIGN_SENT,
+      companyId: currentUser.companyId,
+      userId: currentUser.id,
+      details: { slug, count: activeSubscribers.length, batchId },
+    });
 
     return {
       success: true,
       count: activeSubscribers.length,
       totalSubscribers,
       quotaLimited,
+      truncated: subscribersTruncated,
       batchId,
       channelsSent: {
         sms: !!channels.sms,
@@ -1542,6 +1817,8 @@ export async function getNurtureBatchStatus(batchId: string) {
     const { getCurrentUser } = await import("@/lib/permissions-server");
     const currentUser = await getCurrentUser();
     if (!currentUser) return null;
+    const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureRead);
+    if (limited) return null;
 
     const { getBatchQueueStatus } = await import("@/lib/nurture-queue");
     const status = await getBatchQueueStatus(batchId);
@@ -1561,32 +1838,65 @@ export async function normalizeExistingSubscriberPhones(): Promise<{ updated: nu
   const { getCurrentUser } = await import("@/lib/permissions-server");
   const currentUser = await getCurrentUser();
   if (!currentUser) return { updated: 0 };
-
-  const subscribers = await prisma.nurtureSubscriber.findMany({
-    where: {
-      nurtureList: { companyId: currentUser.companyId },
-      phone: { not: null },
-    },
-    select: { id: true, phone: true },
-  });
+  const limited = await checkActionRateLimit(String(currentUser.id), RATE_LIMITS.nurtureBulk);
+  if (limited) return { updated: 0 };
 
   let updated = 0;
-  for (const sub of subscribers) {
-    if (!sub.phone) continue;
-    const normalized = normalizeToE164(sub.phone);
-    if (normalized && normalized !== sub.phone) {
-      await prisma.nurtureSubscriber.update({
-        where: { id: sub.id },
-        data: { phone: normalized },
-      });
-      updated++;
-    } else if (!normalized) {
-      await prisma.nurtureSubscriber.update({
-        where: { id: sub.id },
+  const BATCH_SIZE = 5000;
+  const UPDATE_CHUNK = 50;
+  let cursor: number | undefined;
+
+  while (true) {
+    const subscribers = await prisma.nurtureSubscriber.findMany({
+      where: {
+        nurtureList: { companyId: currentUser.companyId },
+        phone: { not: null },
+        ...(cursor ? { id: { gt: cursor } } : {}),
+      },
+      select: { id: true, phone: true },
+      orderBy: { id: "asc" },
+      take: BATCH_SIZE,
+    });
+
+    if (subscribers.length === 0) break;
+    cursor = subscribers[subscribers.length - 1].id;
+
+    // Collect updates
+    const toNormalize: { id: number; phone: string }[] = [];
+    const toDeactivate: number[] = [];
+
+    for (const sub of subscribers) {
+      if (!sub.phone) continue;
+      const normalized = normalizeToE164(sub.phone);
+      if (normalized && normalized !== sub.phone) {
+        toNormalize.push({ id: sub.id, phone: normalized });
+      } else if (!normalized) {
+        toDeactivate.push(sub.id);
+      }
+    }
+
+    // Batch normalize updates with bounded concurrency
+    for (let i = 0; i < toNormalize.length; i += UPDATE_CHUNK) {
+      const chunk = toNormalize.slice(i, i + UPDATE_CHUNK);
+      await Promise.all(
+        chunk.map(({ id, phone }) =>
+          prisma.nurtureSubscriber.update({ where: { id }, data: { phone } })
+        )
+      );
+      updated += chunk.length;
+    }
+
+    // Batch deactivate with updateMany
+    if (toDeactivate.length > 0) {
+      const result = await prisma.nurtureSubscriber.updateMany({
+        where: { id: { in: toDeactivate } },
         data: { phoneActive: false },
       });
-      updated++;
+      updated += result.count;
     }
+
+    if (subscribers.length < BATCH_SIZE) break;
   }
+
   return { updated };
 }

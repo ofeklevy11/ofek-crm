@@ -3,6 +3,7 @@
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -26,6 +27,7 @@ export default function SyncRulesDialog({ rules }: { rules: any[] }) {
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>ניהול חוקי איסוף נתונים</DialogTitle>
+          <DialogDescription className="sr-only">צפייה ועריכה של חוקי איסוף נתונים פעילים</DialogDescription>
         </DialogHeader>
         <div className="pt-4">
           <ActiveSyncRules rules={rules} />

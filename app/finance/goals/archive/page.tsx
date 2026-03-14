@@ -37,16 +37,22 @@ export default async function ArchivedGoalsPage() {
   const { tables } = creationData;
 
   return (
-    <div
+    <main
       className="p-4 md:p-8 space-y-8 bg-[#f4f8f8] min-h-screen text-right"
       dir="rtl"
     >
+      <a
+        href="#archive-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:right-4 focus:z-50 focus:bg-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:text-[#4f95ff] focus:font-medium"
+      >
+        דלג לתוכן הארכיון
+      </a>
       <div>
         <Link
           href="/finance/goals"
           className="inline-flex items-center text-sm text-gray-500 hover:text-gray-900 mb-4 transition-colors font-medium bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-sm hover:shadow"
         >
-          <ArrowRight className="w-4 h-4 ml-1.5" />
+          <ArrowRight className="w-4 h-4 ml-1.5" aria-hidden="true" />
           חזרה ליעדים פעילים
         </Link>
         <div className="flex justify-between items-end mt-2">
@@ -65,7 +71,7 @@ export default async function ArchivedGoalsPage() {
       </div>
 
       {goals.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
+        <div id="archive-content" className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
           <div className="mx-auto w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
             <Archive className="w-8 h-8 text-gray-300" aria-hidden="true" />
           </div>
@@ -73,7 +79,7 @@ export default async function ArchivedGoalsPage() {
           <p className="text-gray-500 mt-2">אין יעדים בארכיון כרגע</p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
+        <div id="archive-content" className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden overflow-x-auto" tabIndex={0} role="region" aria-label="טבלת ארכיון יעדים">
           <table className="min-w-full divide-y divide-gray-200">
             <caption className="sr-only">ארכיון יעדים</caption>
             <thead className="bg-gray-50/50">
@@ -93,6 +99,6 @@ export default async function ArchivedGoalsPage() {
           </table>
         </div>
       )}
-    </div>
+    </main>
   );
 }

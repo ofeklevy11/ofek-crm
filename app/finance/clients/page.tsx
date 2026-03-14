@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
@@ -5,6 +6,8 @@ import Pagination from "@/components/Pagination";
 import ClientsTable from "@/components/finance/ClientsTable";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { redirect } from "next/navigation";
+
+export const metadata: Metadata = { title: "לקוחות" };
 
 export default async function ClientsPage({
   searchParams,

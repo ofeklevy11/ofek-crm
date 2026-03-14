@@ -488,6 +488,7 @@ model User {
   smsIntegrationsConnected SmsIntegration[] @relation("SmsIntegrationConnectedBy")
 
   @@index([companyId])
+  @@index([companyId, role])
 }
 
 model ApiKey {
@@ -610,6 +611,7 @@ model AutomationRule {
   @@index([companyId, triggerType, calendarEventId])
   @@index([meetingTypeId])
   @@index([meetingId])
+  @@index([triggerType, isActive])
 }
 
 model Notification {
@@ -1844,6 +1846,7 @@ model NurtureSubscriber {
   sendLogs    NurtureSendLog[]
 
   @@index([nurtureListId])
+  @@index([nurtureListId, createdAt(sort: Desc)]) // Covers paginated subscriber listing
   @@index([email])
   @@index([phone])
   @@index([triggerDate])
@@ -1863,6 +1866,8 @@ model NurtureSendLog {
 
   @@unique([subscriberId, nurtureListId, triggerKey])
   @@index([nurtureListId, triggerKey])
+  @@index([nurtureListId, status, subscriberId]) // Covers getSubscriberLastSentMap groupBy
+  @@index([nurtureListId, status, sentAt])        // Covers getRecentAutoSendActivity
   @@index([sentAt])
 }
 
@@ -1987,7 +1992,7 @@ model MeetingType {
   availabilityOverride Json? // Per-type schedule override
   isActive       Boolean @default(true)
   order          Int     @default(0)
-  shareToken     String  @unique @default(cuid())
+  shareToken     String  @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2017,7 +2022,7 @@ model Meeting {
   tags           String[]
   clientId       Int?
   calendarEventId String?      @unique
-  manageToken    String        @unique @default(cuid())
+  manageToken    String        @unique
   cancelledAt    DateTime?
   cancelledBy    String? // "owner" or "participant"
   cancelReason   String?
@@ -2035,6 +2040,7 @@ model Meeting {
   @@index([companyId, status, startTime(sort: Desc)])
   @@index([companyId, meetingTypeId, startTime])
   @@index([companyId, startTime, endTime])
+  @@index([companyId, clientId]) // Covers client-based meeting lookups
 }
 
 model AvailabilityBlock {
