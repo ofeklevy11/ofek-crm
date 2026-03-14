@@ -41,6 +41,14 @@ vi.mock("@/lib/redis", () => ({
 vi.mock("@/app/actions/meeting-automations", () => ({
   fireMeetingAutomations: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/crypto-tokens", () => ({
+  generateSecureToken: vi.fn().mockReturnValue("mock-secure-token-abc123"),
+}));
+vi.mock("@/lib/security/audit-security", () => ({
+  logSecurityEvent: vi.fn(),
+  SEC_MEETING_TYPE_CREATED: "MEETING_TYPE_CREATED",
+  SEC_MEETING_TYPE_DELETED: "MEETING_TYPE_DELETED",
+}));
 vi.mock("@/lib/notification-settings", () => ({
   isNotificationEnabled: vi.fn().mockResolvedValue(true),
   parseNotificationSettings: vi.fn().mockReturnValue({
@@ -231,6 +239,7 @@ describe("createMeetingType", () => {
         availabilityOverride: undefined,
         isActive: true,
         order: 0,
+        shareToken: "mock-secure-token-abc123",
       },
     });
     expect(revalidatePath).toHaveBeenCalledWith("/meetings");
@@ -1046,8 +1055,8 @@ describe("cancelMeeting", () => {
 // rescheduleMeeting
 // ════════════════════════════════════════════════════════════════════
 describe("rescheduleMeeting", () => {
-  const validStart = "2025-06-01T10:00:00Z";
-  const validEnd = "2025-06-01T11:00:00Z";
+  const validStart = "2027-06-01T10:00:00Z";
+  const validEnd = "2027-06-01T11:00:00Z";
 
   it("returns Unauthorized", async () => {
     setupNoAuth();

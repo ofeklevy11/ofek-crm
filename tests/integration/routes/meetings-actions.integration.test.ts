@@ -202,6 +202,7 @@ beforeAll(async () => {
       slug: `intro-call-${Date.now()}`,
       duration: 30,
       isActive: true,
+      shareToken: `tok-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     },
   });
 }, 30_000);
@@ -439,6 +440,7 @@ describe("updateMeetingType", () => {
         slug: `to-update-${Date.now()}`,
         duration: 30,
         color: "#FF5733",
+        shareToken: `tok-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
     const originalUpdatedAt = mt.updatedAt;
@@ -473,10 +475,10 @@ describe("updateMeetingType", () => {
     const slug1 = `slug-a-${Date.now()}`;
     const slug2 = `slug-b-${Date.now()}`;
     const mt1 = await prisma.meetingType.create({
-      data: { companyId: company.id, name: "סוג א", slug: slug1, duration: 30 },
+      data: { companyId: company.id, name: "סוג א", slug: slug1, duration: 30, shareToken: `tok-${Date.now()}-${Math.random().toString(36).slice(2)}` },
     });
     const mt2 = await prisma.meetingType.create({
-      data: { companyId: company.id, name: "סוג ב", slug: slug2, duration: 30 },
+      data: { companyId: company.id, name: "סוג ב", slug: slug2, duration: 30, shareToken: `tok-${Date.now()}-${Math.random().toString(36).slice(2)}` },
     });
 
     const result = await updateMeetingType(mt2.id, { slug: slug1 });
@@ -514,6 +516,7 @@ describe("deleteMeetingType", () => {
         slug: `to-soft-delete-${Date.now()}`,
         duration: 30,
         isActive: true,
+        shareToken: `tok-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -614,7 +617,7 @@ describe("getMeetings", () => {
     mockGetCurrentUser.mockResolvedValue(makeAdminUser());
 
     const otherType = await prisma.meetingType.create({
-      data: { companyId: company.id, name: "סוג אחר", slug: `other-type-${Date.now()}`, duration: 60 },
+      data: { companyId: company.id, name: "סוג אחר", slug: `other-type-${Date.now()}`, duration: 60, shareToken: `tok-${Date.now()}-${Math.random().toString(36).slice(2)}` },
     });
 
     await prisma.meeting.createMany({
@@ -723,7 +726,7 @@ describe("getMeetings", () => {
     mockGetCurrentUser.mockResolvedValue(makeAdminUser());
 
     const otherMt = await prisma.meetingType.create({
-      data: { companyId: companyB.id, name: "סוג חברה ב", slug: `other-co-${Date.now()}`, duration: 30 },
+      data: { companyId: companyB.id, name: "סוג חברה ב", slug: `other-co-${Date.now()}`, duration: 30, shareToken: `tok-${Date.now()}-${Math.random().toString(36).slice(2)}` },
     });
     await prisma.meeting.create({
       data: {
@@ -825,7 +828,7 @@ describe("getMeetingById", () => {
     mockGetCurrentUser.mockResolvedValue(makeAdminUser());
 
     const otherMt = await prisma.meetingType.create({
-      data: { companyId: companyB.id, name: "סוג חיצוני", slug: `other-byid-${Date.now()}`, duration: 30 },
+      data: { companyId: companyB.id, name: "סוג חיצוני", slug: `other-byid-${Date.now()}`, duration: 30, shareToken: `tok-${Date.now()}-${Math.random().toString(36).slice(2)}` },
     });
     const otherMeeting = await prisma.meeting.create({
       data: {

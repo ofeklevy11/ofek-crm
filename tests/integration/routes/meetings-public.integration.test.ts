@@ -146,6 +146,7 @@ beforeAll(async () => {
       maxAdvanceDays: 60,
       dailyLimit: null,
       isActive: true,
+      shareToken: `tok-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     },
   });
 
@@ -239,6 +240,7 @@ describe("GET /api/p/meetings/[token]", () => {
         slug: `inactive-intro-${Date.now()}`,
         duration: 15,
         isActive: false,
+        shareToken: `tok-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -269,6 +271,7 @@ describe("GET /api/p/meetings/[token]", () => {
         slug: `product-demo-${Date.now()}`,
         duration: 60,
         isActive: true,
+        shareToken: `tok-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         availabilityOverride: {
           "1": [{ start: "10:00", end: "12:00" }],
         },
@@ -295,6 +298,7 @@ describe("GET /api/p/meetings/[token]", () => {
         slug: `initial-consult-${Date.now()}`,
         duration: 30,
         isActive: true,
+        shareToken: `tok-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -525,6 +529,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
         minAdvanceHours: 1,
         maxAdvanceDays: 60,
         isActive: true,
+        shareToken: `tok-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -594,6 +599,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
         minAdvanceHours: 48,
         maxAdvanceDays: 60,
         isActive: true,
+        shareToken: `tok-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -634,6 +640,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
         minAdvanceHours: 1,
         maxAdvanceDays: 2,
         isActive: true,
+        shareToken: `tok-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
