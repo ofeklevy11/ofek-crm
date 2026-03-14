@@ -81,6 +81,13 @@ function futureDate(daysAhead: number, hour: number, minute = 0): Date {
   return d;
 }
 
+/** Returns an end-of-day ISO string for a single-day slot query.
+ *  The slots route validates end > start, so we append T23:59:59 to ensure end > start
+ *  while the route's own setUTCHours(23,59,59,999) keeps the range within the same day. */
+function endOfDay(dateStr: string): string {
+  return `${dateStr}T23:59:59`;
+}
+
 /** Shorthand to build a book request. */
 function bookRequest(token: string, body: Record<string, unknown>) {
   return bookMeeting(
@@ -253,14 +260,14 @@ describe("GET /api/p/meetings/[token]", () => {
     await prisma.meetingType.delete({ where: { id: inactive.id } });
   });
 
-  it("returns 400 for invalid token format (too short / special chars)", async () => {
+  it("returns 404 for invalid token format (too short / special chars)", async () => {
     const res = await getMeetingTypeInfo(
       makeRequest("http://localhost/api/p/meetings/ab"),
       makeParams({ token: "ab" }),
     );
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body.error).toBe("Invalid token");
+    expect(body.error).toBe("Not found");
   });
 
   it("uses availabilityOverride when present instead of company schedule", async () => {
@@ -405,7 +412,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
     });
 
     const dateStr = slotStart.toISOString().slice(0, 10);
-    const url = `http://localhost/api/p/meetings/${meetingType.shareToken}/slots?start=${dateStr}&end=${dateStr}`;
+    const url = `http://localhost/api/p/meetings/${meetingType.shareToken}/slots?start=${dateStr}&end=${endOfDay(dateStr)}`;
 
     const res = await getSlots(makeRequest(url), makeParams({ token: meetingType.shareToken }));
     const body = await res.json();
@@ -434,7 +441,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
     });
 
     const dateStr = slotStart.toISOString().slice(0, 10);
-    const url = `http://localhost/api/p/meetings/${meetingType.shareToken}/slots?start=${dateStr}&end=${dateStr}`;
+    const url = `http://localhost/api/p/meetings/${meetingType.shareToken}/slots?start=${dateStr}&end=${endOfDay(dateStr)}`;
 
     const res = await getSlots(makeRequest(url), makeParams({ token: meetingType.shareToken }));
     const body = await res.json();
@@ -468,7 +475,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
     });
 
     const dateStr = slotStart.toISOString().slice(0, 10);
-    const url = `http://localhost/api/p/meetings/${meetingType.shareToken}/slots?start=${dateStr}&end=${dateStr}`;
+    const url = `http://localhost/api/p/meetings/${meetingType.shareToken}/slots?start=${dateStr}&end=${endOfDay(dateStr)}`;
 
     const res = await getSlots(makeRequest(url), makeParams({ token: meetingType.shareToken }));
     const body = await res.json();
@@ -509,7 +516,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
     });
 
     const dateStr = eventStart.toISOString().slice(0, 10);
-    const url = `http://localhost/api/p/meetings/${meetingType.shareToken}/slots?start=${dateStr}&end=${dateStr}`;
+    const url = `http://localhost/api/p/meetings/${meetingType.shareToken}/slots?start=${dateStr}&end=${endOfDay(dateStr)}`;
 
     const res = await getSlots(makeRequest(url), makeParams({ token: meetingType.shareToken }));
     const body = await res.json();
@@ -551,7 +558,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
     });
 
     const dateStr = day.toISOString().slice(0, 10);
-    const url = `http://localhost/api/p/meetings/${limited.shareToken}/slots?start=${dateStr}&end=${dateStr}`;
+    const url = `http://localhost/api/p/meetings/${limited.shareToken}/slots?start=${dateStr}&end=${endOfDay(dateStr)}`;
 
     const res = await getSlots(makeRequest(url), makeParams({ token: limited.shareToken }));
     const body = await res.json();
@@ -581,7 +588,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
     });
 
     const dateStr = dayStart.toISOString().slice(0, 10);
-    const url = `http://localhost/api/p/meetings/${meetingType.shareToken}/slots?start=${dateStr}&end=${dateStr}`;
+    const url = `http://localhost/api/p/meetings/${meetingType.shareToken}/slots?start=${dateStr}&end=${endOfDay(dateStr)}`;
 
     const res = await getSlots(makeRequest(url), makeParams({ token: meetingType.shareToken }));
     const body = await res.json();
@@ -611,7 +618,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
     const tomorrow = new Date();
     tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
     const tomorrowStr = tomorrow.toISOString().slice(0, 10);
-    const url = `http://localhost/api/p/meetings/${advanceMt.shareToken}/slots?start=${tomorrowStr}&end=${tomorrowStr}`;
+    const url = `http://localhost/api/p/meetings/${advanceMt.shareToken}/slots?start=${tomorrowStr}&end=${endOfDay(tomorrowStr)}`;
 
     const res = await getSlots(makeRequest(url), makeParams({ token: advanceMt.shareToken }));
     const body = await res.json();
@@ -623,7 +630,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
     const dayAfter = new Date();
     dayAfter.setUTCDate(dayAfter.getUTCDate() + 3);
     const dayAfterStr = dayAfter.toISOString().slice(0, 10);
-    const url2 = `http://localhost/api/p/meetings/${advanceMt.shareToken}/slots?start=${dayAfterStr}&end=${dayAfterStr}`;
+    const url2 = `http://localhost/api/p/meetings/${advanceMt.shareToken}/slots?start=${dayAfterStr}&end=${endOfDay(dayAfterStr)}`;
 
     const res2 = await getSlots(makeRequest(url2), makeParams({ token: advanceMt.shareToken }));
     const body2 = await res2.json();
@@ -652,7 +659,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
     const farDate = new Date();
     farDate.setUTCDate(farDate.getUTCDate() + 10);
     const farStr = farDate.toISOString().slice(0, 10);
-    const url = `http://localhost/api/p/meetings/${shortMt.shareToken}/slots?start=${farStr}&end=${farStr}`;
+    const url = `http://localhost/api/p/meetings/${shortMt.shareToken}/slots?start=${farStr}&end=${endOfDay(farStr)}`;
 
     const res = await getSlots(makeRequest(url), makeParams({ token: shortMt.shareToken }));
     const body = await res.json();
@@ -998,7 +1005,8 @@ describe("GET /api/p/meetings/manage/[manageToken]", () => {
     expect(body.meetingType.name).toBe("ייעוץ עסקי");
     expect(body.meetingType.duration).toBe(30);
     expect(body.meetingType).toHaveProperty("color");
-    expect(body.meetingType.shareToken).toBeDefined();
+    // shareToken is not included in manage route response (not selected)
+    expect(body.meetingType.shareToken).toBeUndefined();
     expect(body.company).toBeDefined();
     expect(body.company.name).toBe("Cohen Digital Agency");
     expect(body.company).toHaveProperty("logoUrl");
@@ -1021,14 +1029,14 @@ describe("GET /api/p/meetings/manage/[manageToken]", () => {
     expect(body.error).toBe("Not found");
   });
 
-  it("returns 400 for invalid token format", async () => {
+  it("returns 404 for invalid token format", async () => {
     const res = await getManageMeeting(
       makeRequest("http://localhost/api/p/meetings/manage/ab"),
       makeParams({ manageToken: "ab" }),
     );
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body.error).toBe("Invalid token");
+    expect(body.error).toBe("Not found");
   });
 });
 
