@@ -400,6 +400,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
         startTime: slotStart,
         endTime: slotEnd,
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -428,6 +429,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
         startTime: slotStart,
         endTime: slotEnd,
         status: "CANCELLED",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -461,6 +463,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
         startTime: slotStart,
         endTime: slotEnd,
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -543,6 +546,7 @@ describe("GET /api/p/meetings/[token]/slots", () => {
         startTime: day,
         endTime: dayEnd,
         status: "CONFIRMED",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 

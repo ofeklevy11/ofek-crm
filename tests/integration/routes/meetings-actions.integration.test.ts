@@ -364,6 +364,7 @@ describe("createMeetingType", () => {
           name: `Filler Type ${i}`,
           slug: `filler-${Date.now()}-${i}`,
           duration: 15,
+          shareToken: `tok-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`,
         })),
       });
     }
@@ -569,6 +570,7 @@ describe("getMeetings", () => {
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
         clientId: client.id,
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -595,6 +597,7 @@ describe("getMeetings", () => {
           startTime: futureDate(3, 10),
           endTime: futureDate(3, 10, 30),
           status: "PENDING",
+          manageToken: `mgmt-${Date.now()}-a-${Math.random().toString(36).slice(2)}`,
         },
         {
           companyId: company.id,
@@ -603,6 +606,7 @@ describe("getMeetings", () => {
           startTime: futureDate(3, 11),
           endTime: futureDate(3, 11, 30),
           status: "CONFIRMED",
+          manageToken: `mgmt-${Date.now()}-b-${Math.random().toString(36).slice(2)}`,
         },
       ],
     });
@@ -629,6 +633,7 @@ describe("getMeetings", () => {
           startTime: futureDate(3, 10),
           endTime: futureDate(3, 10, 30),
           status: "PENDING",
+          manageToken: `mgmt-${Date.now()}-a-${Math.random().toString(36).slice(2)}`,
         },
         {
           companyId: company.id,
@@ -637,6 +642,7 @@ describe("getMeetings", () => {
           startTime: futureDate(3, 11),
           endTime: futureDate(3, 12),
           status: "PENDING",
+          manageToken: `mgmt-${Date.now()}-b-${Math.random().toString(36).slice(2)}`,
         },
       ],
     });
@@ -662,6 +668,7 @@ describe("getMeetings", () => {
           startTime: futureDate(5, 10),
           endTime: futureDate(5, 10, 30),
           status: "PENDING",
+          manageToken: `mgmt-${Date.now()}-a-${Math.random().toString(36).slice(2)}`,
         },
         {
           companyId: company.id,
@@ -670,6 +677,7 @@ describe("getMeetings", () => {
           startTime: futureDate(20, 10),
           endTime: futureDate(20, 10, 30),
           status: "PENDING",
+          manageToken: `mgmt-${Date.now()}-b-${Math.random().toString(36).slice(2)}`,
         },
       ],
     });
@@ -695,6 +703,7 @@ describe("getMeetings", () => {
           startTime: futureDate(3 + i, 10),
           endTime: futureDate(3 + i, 10, 30),
           status: "PENDING",
+          manageToken: `mgmt-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`,
         },
       });
     }
@@ -736,6 +745,7 @@ describe("getMeetings", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -790,6 +800,7 @@ describe("getMeetingById", () => {
         status: "PENDING",
         clientId: client.id,
         calendarEventId: calEvent.id,
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -815,6 +826,7 @@ describe("getMeetingById", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -838,6 +850,7 @@ describe("getMeetingById", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -866,6 +879,7 @@ describe("updateMeetingStatus", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -892,6 +906,7 @@ describe("updateMeetingStatus", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -914,6 +929,7 @@ describe("updateMeetingStatus", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -950,6 +966,7 @@ describe("updateMeetingNotes", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -974,6 +991,7 @@ describe("updateMeetingNotes", () => {
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
         notesAfter: "הערה קיימת",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -996,6 +1014,7 @@ describe("updateMeetingNotes", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -1020,6 +1039,7 @@ describe("updateMeetingNotes", () => {
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
         notesBefore: "הערה ישנה",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -1052,6 +1072,7 @@ describe("cancelMeeting", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -1081,6 +1102,7 @@ describe("cancelMeeting", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -1127,6 +1149,7 @@ describe("rescheduleMeeting", () => {
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
         calendarEventId: calEvent.id,
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -1157,6 +1180,7 @@ describe("rescheduleMeeting", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         // No calendarEventId
       },
     });
@@ -1183,6 +1207,7 @@ describe("rescheduleMeeting", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -1206,6 +1231,7 @@ describe("rescheduleMeeting", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -1246,6 +1272,7 @@ describe("linkMeetingToClient", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -1275,6 +1302,7 @@ describe("linkMeetingToClient", () => {
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
         clientId: clientA.id,
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -1301,6 +1329,7 @@ describe("linkMeetingToClient", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -1328,6 +1357,7 @@ describe("linkMeetingToClient", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -1365,6 +1395,7 @@ describe("updateMeetingTags", () => {
         startTime: futureDate(3, 10),
         endTime: futureDate(3, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
     meetingId = meeting.id;
@@ -1463,6 +1494,7 @@ describe("getTodaysMeetings", () => {
           startTime: todayAt14,
           endTime: todayAt1430,
           status: "CONFIRMED",
+          manageToken: `mgmt-${Date.now()}-a-${Math.random().toString(36).slice(2)}`,
         },
         {
           companyId: company.id,
@@ -1471,6 +1503,7 @@ describe("getTodaysMeetings", () => {
           startTime: todayAt08,
           endTime: todayAt0830,
           status: "PENDING",
+          manageToken: `mgmt-${Date.now()}-b-${Math.random().toString(36).slice(2)}`,
         },
         {
           companyId: company.id,
@@ -1479,6 +1512,7 @@ describe("getTodaysMeetings", () => {
           startTime: todayAt10,
           endTime: todayAt1030,
           status: "CONFIRMED",
+          manageToken: `mgmt-${Date.now()}-c-${Math.random().toString(36).slice(2)}`,
         },
         {
           companyId: company.id,
@@ -1487,6 +1521,7 @@ describe("getTodaysMeetings", () => {
           startTime: todayAt10,
           endTime: todayAt1030,
           status: "CANCELLED",
+          manageToken: `mgmt-${Date.now()}-d-${Math.random().toString(36).slice(2)}`,
         },
       ],
     });
@@ -1518,6 +1553,7 @@ describe("getTodaysMeetings", () => {
         startTime: futureDate(1, 10),
         endTime: futureDate(1, 10, 30),
         status: "PENDING",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
@@ -1547,6 +1583,7 @@ describe("getMeetingStats", () => {
           startTime: recentDate,
           endTime: new Date(recentDate.getTime() + 30 * 60_000),
           status: "COMPLETED",
+          manageToken: `mgmt-${Date.now()}-a-${Math.random().toString(36).slice(2)}`,
         },
         {
           companyId: company.id,
@@ -1555,6 +1592,7 @@ describe("getMeetingStats", () => {
           startTime: recentDate,
           endTime: new Date(recentDate.getTime() + 30 * 60_000),
           status: "CANCELLED",
+          manageToken: `mgmt-${Date.now()}-b-${Math.random().toString(36).slice(2)}`,
         },
         {
           companyId: company.id,
@@ -1563,6 +1601,7 @@ describe("getMeetingStats", () => {
           startTime: recentDate,
           endTime: new Date(recentDate.getTime() + 30 * 60_000),
           status: "NO_SHOW",
+          manageToken: `mgmt-${Date.now()}-c-${Math.random().toString(36).slice(2)}`,
         },
         {
           companyId: company.id,
@@ -1571,6 +1610,7 @@ describe("getMeetingStats", () => {
           startTime: recentDate,
           endTime: new Date(recentDate.getTime() + 30 * 60_000),
           status: "PENDING",
+          manageToken: `mgmt-${Date.now()}-d-${Math.random().toString(36).slice(2)}`,
         },
       ],
     });
@@ -1613,6 +1653,7 @@ describe("getMeetingStats", () => {
         startTime: fifteenDaysAgo,
         endTime: new Date(fifteenDaysAgo.getTime() + 30 * 60_000),
         status: "COMPLETED",
+        manageToken: `mgmt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
 
