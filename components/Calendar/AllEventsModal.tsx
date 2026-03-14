@@ -2,6 +2,12 @@
 
 import React, { useState, useMemo } from "react";
 import { CalendarEvent } from "@/lib/types";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 interface AllEventsModalProps {
   isOpen: boolean;
@@ -37,38 +43,31 @@ export function AllEventsModal({
       const dateB = b.startTime.getTime();
 
       if (view === "upcoming") {
-        // "from the most current to the most future" -> Ascending for upcoming
         return dateA - dateB;
       } else {
-        // For past: Descending (most recent past first)
-        // For all: Descending (newest first seems most logical to see recent/future)
         return dateB - dateA;
       }
     });
   }, [events, view, now]);
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
-    >
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 flex flex-col max-h-[80vh]">
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent
+        showCloseButton={false}
+        className="max-w-[calc(100%-2rem)] sm:max-w-2xl p-0 gap-0 flex flex-col max-h-[80vh]"
+      >
         <div
           className="flex items-center justify-between p-6 border-b border-gray-200"
           dir="rtl"
         >
-          <h2 className="text-xl font-semibold text-gray-900">כל הרשומות</h2>
+          <DialogTitle className="text-xl font-semibold text-gray-900">כל הרשומות</DialogTitle>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="סגור"
+            className="text-gray-400 hover:text-gray-600 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm"
           >
             <svg
+              aria-hidden="true"
               className="w-6 h-6"
               fill="none"
               stroke="currentColor"
@@ -83,15 +82,19 @@ export function AllEventsModal({
             </svg>
           </button>
         </div>
+        <DialogDescription className="sr-only">צפייה בכל אירועי היומן</DialogDescription>
 
         <div
           className="border-b border-gray-200 overflow-x-auto scrollbar-hide"
           dir="rtl"
         >
-          <div className="flex items-center gap-4 p-4 min-w-full justify-center sm:justify-start">
+          <div className="flex items-center gap-4 p-4 min-w-full justify-center sm:justify-start" role="tablist" aria-label="סינון אירועים">
             <button
+              id="tab-upcoming"
+              role="tab"
+              aria-selected={view === "upcoming"}
               onClick={() => setView("upcoming")}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap shrink-0 focus:outline-none ${
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 view === "upcoming"
                   ? "bg-blue-100 text-blue-700"
                   : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
@@ -100,8 +103,11 @@ export function AllEventsModal({
               אירועים עתידיים
             </button>
             <button
+              id="tab-past"
+              role="tab"
+              aria-selected={view === "past"}
               onClick={() => setView("past")}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap shrink-0 focus:outline-none ${
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 view === "past"
                   ? "bg-blue-100 text-blue-700"
                   : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
@@ -110,8 +116,11 @@ export function AllEventsModal({
               אירועי עבר
             </button>
             <button
+              id="tab-all"
+              role="tab"
+              aria-selected={view === "all"}
               onClick={() => setView("all")}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap shrink-0 focus:outline-none ${
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 view === "all"
                   ? "bg-blue-100 text-blue-700"
                   : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
@@ -127,16 +136,16 @@ export function AllEventsModal({
           dir="rtl"
         >
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-blue-100 border border-blue-200"></div>
+            <div className="w-3 h-3 rounded-full bg-blue-100 border border-blue-200" aria-hidden="true"></div>
             <span className="text-xs text-gray-600">אירוע עתידי</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-green-100 border border-green-200"></div>
+            <div className="w-3 h-3 rounded-full bg-green-100 border border-green-200" aria-hidden="true"></div>
             <span className="text-xs text-gray-600">אירוע עבר</span>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-4" dir="rtl">
+        <div className="flex-1 overflow-y-auto p-6 space-y-4" dir="rtl" role="tabpanel" aria-labelledby={`tab-${view}`}>
           {sortedEvents.length === 0 ? (
             <p className="text-center text-gray-500 py-4">אין אירועים להצגה</p>
           ) : (
@@ -154,6 +163,7 @@ export function AllEventsModal({
                     <div
                       className="w-2 h-10 rounded-full"
                       style={{ backgroundColor: event.color || "#3B82F6" }}
+                      aria-hidden="true"
                     />
                     <div>
                       <h3 className="font-semibold text-gray-900">
@@ -165,15 +175,17 @@ export function AllEventsModal({
                           timeStyle: "short",
                         })}
                       </p>
+                      <span className="sr-only">{isPast ? "אירוע עבר" : "אירוע עתידי"}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => onEdit(event)}
-                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                      title="ערוך"
+                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+                      aria-label={`ערוך ${event.title}`}
                     >
                       <svg
+                        aria-hidden="true"
                         className="w-5 h-5"
                         fill="none"
                         stroke="currentColor"
@@ -189,10 +201,11 @@ export function AllEventsModal({
                     </button>
                     <button
                       onClick={() => onDelete(event)}
-                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
-                      title="מחק"
+                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+                      aria-label={`מחק ${event.title}`}
                     >
                       <svg
+                        aria-hidden="true"
                         className="w-5 h-5"
                         fill="none"
                         stroke="currentColor"
@@ -212,7 +225,7 @@ export function AllEventsModal({
             })
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

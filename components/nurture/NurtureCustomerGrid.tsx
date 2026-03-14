@@ -75,7 +75,8 @@ export default function NurtureCustomerGrid({
   // Loading skeleton
   if (isLoading && customers.length === 0) {
     return (
-      <div className="border rounded-lg overflow-hidden">
+      <div role="status" aria-busy="true" className="border rounded-lg overflow-hidden">
+        <span className="sr-only">טוען נתונים...</span>
         <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 border-b">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="col-span-2 h-4 bg-slate-200 rounded animate-pulse" />
@@ -96,7 +97,7 @@ export default function NurtureCustomerGrid({
   if (customers.length === 0 && !isLoading) {
     if (hasActiveSearch) {
       return (
-        <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-lg border border-dashed text-sm space-y-2">
+        <div role="status" className="text-center py-8 text-slate-500 bg-slate-50 rounded-lg border border-dashed text-sm space-y-2">
           <p>לא נמצאו תוצאות לחיפוש</p>
           {onClearSearch && (
             <Button variant="outline" size="sm" onClick={onClearSearch} className="text-xs">
@@ -107,7 +108,7 @@ export default function NurtureCustomerGrid({
       );
     }
     return (
-      <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-lg border border-dashed text-sm">
+      <div role="status" className="text-center py-8 text-slate-500 bg-slate-50 rounded-lg border border-dashed text-sm">
         עדיין אין לקוחות ברשימה. לחץ על &quot;הוסף לקוחות&quot; כדי להתחיל.
       </div>
     );
@@ -123,110 +124,129 @@ export default function NurtureCustomerGrid({
 
   return (
     <div>
-      <div className="border rounded-lg overflow-hidden">
-        {/* Header */}
-        <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 border-b text-xs font-medium text-slate-500">
-          <div className="col-span-1 flex items-center justify-center">
-            <input
-              type="checkbox"
-              checked={selectedCustomerIds.size === customers.length && customers.length > 0}
-              onChange={onToggleAll}
-              className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer accent-indigo-600"
-            />
-          </div>
-          <div className={`col-span-${colName}`}>שם</div>
-          {dateColumn && <div className={`col-span-${colDate}`}>{dateColumn.label}</div>}
-          <div className={`col-span-${colContact}`}>פרטי קשר</div>
-          <div className={`col-span-${colSource}`}>מקור</div>
-          <div className={`col-span-${colLastSent} text-center`}>שליחה אחרונה</div>
-          <div className={`col-span-${colSend} text-center`}>שליחה</div>
-        </div>
-
-        {/* List */}
-        <div className="max-h-[440px] overflow-y-auto divide-y divide-slate-100">
-          {customers.map((c) => (
-            <div
-              key={c.id}
-              className={cn(
-                "grid grid-cols-12 gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors group items-center",
-                selectedCustomerIds.has(c.id) && "bg-indigo-50/50"
-              )}
-              onClick={() => onCustomerClick(c)}
-            >
-              <div className="col-span-1 flex items-center justify-center">
+      <div className="border rounded-lg overflow-hidden max-h-[500px] overflow-y-auto">
+        <table className="w-full table-fixed">
+          <caption className="sr-only">רשימת לקוחות</caption>
+          <colgroup>
+            <col style={{ width: "8.33%" }} />
+            <col style={{ width: `${colName * 8.33}%` }} />
+            {dateColumn && <col style={{ width: `${colDate * 8.33}%` }} />}
+            <col style={{ width: `${colContact * 8.33}%` }} />
+            <col style={{ width: `${colSource * 8.33}%` }} />
+            <col style={{ width: `${colLastSent * 8.33}%` }} />
+            <col style={{ width: `${colSend * 8.33}%` }} />
+          </colgroup>
+          <thead className="sticky top-0 z-10 bg-slate-50">
+            <tr className="text-xs font-medium text-slate-500 border-b">
+              <th scope="col" className="px-3 py-2 text-center font-medium">
                 <input
                   type="checkbox"
-                  checked={selectedCustomerIds.has(c.id)}
-                  onChange={() => onToggleSelection(c.id)}
-                  onClick={(e) => e.stopPropagation()}
+                  checked={selectedCustomerIds.size === customers.length && customers.length > 0}
+                  onChange={onToggleAll}
+                  aria-label="בחר הכל"
                   className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer accent-indigo-600"
                 />
-              </div>
-              <div className={`col-span-${colName} flex items-center gap-2 overflow-hidden`}>
-                <div className={`w-7 h-7 rounded-full ${style.avatar} flex items-center justify-center text-xs font-bold shrink-0`}>
-                  {c.name.slice(0, 2)}
-                </div>
-                <span className="text-sm font-medium text-slate-900 truncate">{c.name}</span>
-              </div>
-              {dateColumn && (
-                <div className={`col-span-${colDate} flex items-center text-xs text-slate-600`}>
-                  {dateColumn.render(c)}
-                </div>
-              )}
-              <div className={`col-span-${colContact} flex items-center text-xs text-slate-600 truncate`}>
-                {c.email || c.phone || "\u2014"}
-              </div>
-              <div className={`col-span-${colSource} flex items-center gap-1.5`}>
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded ${
-                    c.source === "Table Automation"
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-slate-100 text-slate-500"
-                  }`}
-                >
-                  {c.source === "Manual" ? "ידני" : c.source === "Table Automation" ? "אוטומציה" : c.source}
-                </span>
-                {c.source === "Table Automation" && c.sourceTableName && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">
-                    {c.sourceTableName}
-                  </span>
+              </th>
+              <th scope="col" className="px-1 py-2 text-right font-medium">שם</th>
+              {dateColumn && <th scope="col" className="px-1 py-2 text-right font-medium">{dateColumn.label}</th>}
+              <th scope="col" className="px-1 py-2 text-right font-medium">פרטי קשר</th>
+              <th scope="col" className="px-1 py-2 text-right font-medium">מקור</th>
+              <th scope="col" className="px-1 py-2 text-center font-medium">שליחה אחרונה</th>
+              <th scope="col" className="px-1 py-2 text-center font-medium">שליחה</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {customers.map((c) => (
+              <tr
+                key={c.id}
+                className={cn(
+                  "hover:bg-slate-50 transition-colors group",
+                  selectedCustomerIds.has(c.id) && "bg-indigo-50/50"
                 )}
-              </div>
-              <div className={`col-span-${colLastSent} flex items-center justify-center`}>
-                {lastSentMap[c.id] ? (
-                  <span className="text-[10px] text-slate-400">
-                    {new Date(lastSentMap[c.id]).toLocaleDateString("he-IL")}
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-slate-300">&mdash;</span>
+              >
+                <td className="px-3 py-2 text-center align-middle">
+                  <input
+                    type="checkbox"
+                    checked={selectedCustomerIds.has(c.id)}
+                    onChange={() => onToggleSelection(c.id)}
+                    aria-label={`בחר את ${c.name}`}
+                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer accent-indigo-600"
+                  />
+                </td>
+                <td className="px-1 py-2 align-middle">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <div className={`w-7 h-7 rounded-full ${style.avatar} flex items-center justify-center text-xs font-bold shrink-0`}>
+                      {c.name.slice(0, 2)}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onCustomerClick(c)}
+                      className="text-sm font-medium text-slate-900 truncate hover:underline text-right cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded"
+                    >
+                      {c.name}
+                    </button>
+                  </div>
+                </td>
+                {dateColumn && (
+                  <td className="px-1 py-2 text-xs text-slate-600 align-middle">
+                    {dateColumn.render(c)}
+                  </td>
                 )}
-              </div>
-              <div className={`col-span-${colSend} flex items-center justify-center`}>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSendToCustomer(c);
-                  }}
-                  disabled={sendingCustomerId === c.id || !c.phone || !c.phoneActive || (!isQuotaUnlimited && quotaRemaining <= 0)}
-                  className={`inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded ${style.sendBtn} disabled:opacity-40 disabled:cursor-not-allowed transition-colors`}
-                  title={!c.phone || !c.phoneActive ? "אין מספר טלפון פעיל" : `שלח ל-${c.name}`}
-                >
-                  {sendingCustomerId === c.id ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
+                <td className="px-1 py-2 text-xs text-slate-600 truncate align-middle">
+                  {c.email || c.phone || "\u2014"}
+                </td>
+                <td className="px-1 py-2 align-middle">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded ${
+                        c.source === "Table Automation"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {c.source === "Manual" ? "ידני" : c.source === "Table Automation" ? "אוטומציה" : c.source}
+                    </span>
+                    {c.source === "Table Automation" && c.sourceTableName && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">
+                        {c.sourceTableName}
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-1 py-2 text-center align-middle">
+                  {lastSentMap[c.id] ? (
+                    <span className="text-[10px] text-slate-400">
+                      {new Date(lastSentMap[c.id]).toLocaleDateString("he-IL")}
+                    </span>
                   ) : (
-                    <Send className="w-3 h-3" />
+                    <span className="text-[10px] text-slate-300">&mdash;</span>
                   )}
-                  שלח
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+                </td>
+                <td className="px-1 py-2 text-center align-middle">
+                  <button
+                    onClick={() => onSendToCustomer(c)}
+                    disabled={sendingCustomerId === c.id || !c.phone || !c.phoneActive || (!isQuotaUnlimited && quotaRemaining <= 0)}
+                    aria-label={`שלח הודעה ל-${c.name}`}
+                    className={`inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded ${style.sendBtn} disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1`}
+                    title={!c.phone || !c.phoneActive ? "אין מספר טלפון פעיל" : `שלח ל-${c.name}`}
+                  >
+                    {sendingCustomerId === c.id ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Send className="w-3 h-3" />
+                    )}
+                    שלח
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {/* Selection bar */}
       {selectedCustomerIds.size > 0 && (
-        <div className="flex items-center justify-between mt-2 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-lg">
+        <div role="status" aria-live="polite" className="flex items-center justify-between mt-2 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-lg">
           <span className="text-sm font-medium text-indigo-700">
             {selectedCustomerIds.size} נבחרו
           </span>

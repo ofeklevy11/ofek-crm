@@ -2,7 +2,7 @@
 
 export default function MeetingsBackgroundDecor() {
   return (
-    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden" aria-hidden="true">
       <div
         className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full"
         style={{

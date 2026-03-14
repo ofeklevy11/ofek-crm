@@ -229,20 +229,23 @@ export default function AvailabilityEditor({
                         value={window.start}
                         onChange={(e) => updateWindow(dayKey, wIdx, "start", e.target.value)}
                         className="w-24 h-7 text-xs border-0 bg-transparent p-0 focus:ring-0 text-white"
+                        aria-label={`שעת התחלה יום ${DAY_NAMES[idx]}`}
                       />
-                      <span className="text-xs text-white/50">-</span>
+                      <span className="text-xs text-white/50" aria-hidden="true">-</span>
                       <Input
                         type="time"
                         value={window.end}
                         onChange={(e) => updateWindow(dayKey, wIdx, "end", e.target.value)}
                         className="w-24 h-7 text-xs border-0 bg-transparent p-0 focus:ring-0 text-white"
+                        aria-label={`שעת סיום יום ${DAY_NAMES[idx]}`}
                       />
                       <button
                         type="button"
                         onClick={() => removeWindow(dayKey, wIdx)}
                         className="text-white/50 hover:text-red-400 transition-colors p-0.5"
+                        aria-label="הסר חלון זמן"
                       >
-                        <Trash2 className="size-3" />
+                        <Trash2 className="size-3" aria-hidden="true" />
                       </button>
                     </div>
                   ))}
@@ -262,6 +265,7 @@ export default function AvailabilityEditor({
                 checked={enabled}
                 onCheckedChange={() => toggleDay(dayKey)}
                 className="shrink-0 mt-1.5"
+                aria-label={`${DAY_NAMES[idx]} - ${enabled ? "פעיל" : "לא פעיל"}`}
               />
             </div>
           );
@@ -270,7 +274,7 @@ export default function AvailabilityEditor({
 
       {/* Sticky save bar — only when changes detected */}
       {hasChanges && (
-        <div className="sticky bottom-0 bg-[#162e22] backdrop-blur-sm border-t border-white/20 mt-4 py-3 px-4 -mx-6 -mb-6 flex items-center justify-between gap-3">
+        <div role="status" className="sticky bottom-0 bg-[#162e22] backdrop-blur-sm border-t border-white/20 mt-4 py-3 px-4 -mx-6 -mb-6 flex items-center justify-between gap-3">
           <span className="text-sm text-white/60">יש שינויים שלא נשמרו</span>
           <Button
             onClick={handleSave}

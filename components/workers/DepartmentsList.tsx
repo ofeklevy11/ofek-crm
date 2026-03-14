@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Building2,
   Users,
@@ -39,6 +39,52 @@ export default function DepartmentsList({
 }: Props) {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Focus first menuitem when menu opens
+  useEffect(() => {
+    if (menuOpenId !== null && menuRef.current) {
+      const firstItem = menuRef.current.querySelector<HTMLElement>('[role="menuitem"]');
+      firstItem?.focus();
+    }
+  }, [menuOpenId]);
+
+  const handleMenuKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(
+      e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]')
+    );
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+
+    switch (e.key) {
+      case "ArrowDown": {
+        e.preventDefault();
+        const next = currentIndex + 1 < items.length ? currentIndex + 1 : 0;
+        items[next]?.focus();
+        break;
+      }
+      case "ArrowUp": {
+        e.preventDefault();
+        const prev = currentIndex - 1 >= 0 ? currentIndex - 1 : items.length - 1;
+        items[prev]?.focus();
+        break;
+      }
+      case "Home":
+        e.preventDefault();
+        items[0]?.focus();
+        break;
+      case "End":
+        e.preventDefault();
+        items[items.length - 1]?.focus();
+        break;
+      case "Escape": {
+        e.preventDefault();
+        const trigger = e.currentTarget.parentElement?.querySelector<HTMLElement>('button[aria-haspopup]');
+        setMenuOpenId(null);
+        trigger?.focus();
+        break;
+      }
+    }
+  }, []);
 
   const handleDelete = async (department: Department) => {
     if (department._count && department._count.workers > 0) {
@@ -67,7 +113,7 @@ export default function DepartmentsList({
   if (departments.length === 0) {
     return (
       <div className="text-center py-16">
-        <Building2 className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+        <Building2 className="h-16 w-16 text-gray-300 mx-auto mb-4" aria-hidden="true" />
         <h3 className="text-xl font-semibold text-gray-700 mb-2">אין מחלקות</h3>
         <p className="text-gray-500">
           לחץ על &apos;מחלקה חדשה&apos; להוספת המחלקה הראשונה
@@ -100,7 +146,7 @@ export default function DepartmentsList({
                     color: department.color ?? "#6366F1",
                   }}
                 >
-                  <Building2 className="h-5 w-5" />
+                  <Building2 className="h-5 w-5" aria-hidden="true" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900">
@@ -120,6 +166,9 @@ export default function DepartmentsList({
                       menuOpenId === department.id ? null : department.id
                     )
                   }
+                  aria-label="פעולות נוספות"
+                  aria-haspopup="true"
+                  aria-expanded={menuOpenId === department.id}
                   className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
                 >
                   <MoreVertical className="h-4 w-4" />
@@ -130,8 +179,14 @@ export default function DepartmentsList({
                       className="fixed inset-0 z-10"
                       onClick={() => setMenuOpenId(null)}
                     />
-                    <div className="absolute left-0 top-full mt-1 bg-white rounded-lg shadow-lg border z-50 min-w-[120px]">
+                    <div
+                      ref={menuRef}
+                      role="menu"
+                      onKeyDown={handleMenuKeyDown}
+                      className="absolute left-0 top-full mt-1 bg-white rounded-lg shadow-lg border z-50 min-w-[120px]"
+                    >
                       <button
+                        role="menuitem"
                         onClick={() => {
                           setMenuOpenId(null);
                           onEdit(department);
@@ -142,6 +197,7 @@ export default function DepartmentsList({
                         עריכה
                       </button>
                       <button
+                        role="menuitem"
                         onClick={() => {
                           setMenuOpenId(null);
                           handleDelete(department);
@@ -168,11 +224,11 @@ export default function DepartmentsList({
             {/* Stats */}
             <div className="flex items-center gap-4 pt-3 border-t border-gray-100">
               <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                <Users className="h-4 w-4 text-gray-400" />
+                <Users className="h-4 w-4 text-gray-400" aria-hidden="true" />
                 <span>{department._count?.workers ?? 0} עובדים</span>
               </div>
               <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                <GraduationCap className="h-4 w-4 text-gray-400" />
+                <GraduationCap className="h-4 w-4 text-gray-400" aria-hidden="true" />
                 <span>{department._count?.onboardingPaths ?? 0} מסלולים</span>
               </div>
             </div>

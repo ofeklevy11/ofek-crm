@@ -58,6 +58,8 @@ export function WeekView({
         tolerance: 8,
       },
     }),
+    // Keyboard drag-and-drop not supported for calendar grids (no coordinateGetter).
+    // Keyboard users create/edit events via the floating button + modal.
   );
 
   const weekDates = useMemo(() => {
@@ -66,6 +68,13 @@ export function WeekView({
   }, [currentDate]);
   const timeSlots = TIME_SLOTS;
   const today = new Date();
+
+  // Build aria-label for the grid with date range
+  const gridAriaLabel = useMemo(() => {
+    const first = weekDates[0];
+    const last = weekDates[6];
+    return `לוח שבועי, ${first.toLocaleDateString("he-IL")} עד ${last.toLocaleDateString("he-IL")}`;
+  }, [weekDates]);
 
   // Group events by day using Map-based single-pass grouping
   const eventsByDay = useMemo(() => {
@@ -122,10 +131,11 @@ export function WeekView({
             {onCreateEvent && (
               <button
                 onClick={onCreateEvent}
-                className="w-10 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center md:hidden"
+                className="w-10 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center md:hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                 aria-label="צור אירוע"
               >
                 <svg
+                  aria-hidden="true"
                   className="w-5 h-5"
                   fill="none"
                   stroke="currentColor"
@@ -174,7 +184,7 @@ export function WeekView({
 
         {/* Scrollable Grid */}
         <div className="flex-1 overflow-y-auto">
-          <div className="flex relative min-h-[600px]">
+          <div className="flex relative min-h-[600px]" role="region" aria-label={gridAriaLabel}>
             {/* Time Column */}
             <div className="w-16 shrink-0 border-l border-gray-100 bg-white select-none">
               {timeSlots.map((time, index) => (
@@ -198,6 +208,7 @@ export function WeekView({
                   {timeSlots.map((_, hourIndex) => {
                     const startHour = hourIndex;
                     const endHour = (hourIndex + 1) % 24;
+                    const dayName = daysOfWeek[date.getDay()];
 
                     return (
                       <div
@@ -210,6 +221,7 @@ export function WeekView({
                           data={{ dayIndex, hour: hourIndex, minutes: 0 }}
                           className="group flex-1 cursor-pointer transition-colors border-b border-dashed border-gray-200 relative hover:bg-blue-50"
                           isOverClassName="bg-blue-100"
+                          ariaLabel={`${dayName} ${startHour.toString().padStart(2, "0")}:00`}
                           onClick={(e) => {
                             e.stopPropagation();
                             onTimeSlotClick?.(date, hourIndex, 0);
@@ -229,6 +241,7 @@ export function WeekView({
                           data={{ dayIndex, hour: hourIndex, minutes: 30 }}
                           className="group flex-1 cursor-pointer transition-colors relative hover:bg-green-50"
                           isOverClassName="bg-green-100"
+                          ariaLabel={`${dayName} ${startHour.toString().padStart(2, "0")}:30`}
                           onClick={(e) => {
                             e.stopPropagation();
                             onTimeSlotClick?.(date, hourIndex, 30);

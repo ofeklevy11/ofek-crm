@@ -17,7 +17,7 @@ export default function NurtureQuotaBadge() {
   // No messages sent yet — green
   if (used === 0) {
     return (
-      <div className="flex flex-col items-end gap-0.5">
+      <div role="status" className="flex flex-col items-end gap-0.5">
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200 tabular-nums">
           {remaining}/{limit} הודעות זמינות
         </span>
@@ -29,7 +29,7 @@ export default function NurtureQuotaBadge() {
   // Exhausted — red
   if (remaining === 0) {
     return (
-      <div className="flex flex-col items-end gap-0.5">
+      <div role="status" className="flex flex-col items-end gap-0.5">
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200 tabular-nums">
           0/{limit} | איפוס בעוד {resetInSeconds}s
         </span>
@@ -40,7 +40,7 @@ export default function NurtureQuotaBadge() {
 
   // Partially used — yellow
   return (
-    <div className="flex flex-col items-end gap-0.5">
+    <div role="status" className="flex flex-col items-end gap-0.5">
       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 tabular-nums">
         {remaining}/{limit} נותרו | איפוס בעוד {resetInSeconds}s
       </span>

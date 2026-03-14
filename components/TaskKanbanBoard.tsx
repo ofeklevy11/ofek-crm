@@ -39,7 +39,7 @@ export interface Task {
   updatedAt: Date | string;
 }
 
-const COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
+export const COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
   { id: "todo", title: "משימות", color: "from-slate-600 to-slate-700" },
   {
     id: "in_progress",
@@ -219,14 +219,14 @@ export default function TaskKanbanBoard({
         <div className="flex-1 relative">
           <span
             className="absolute start-3 top-1/2 -translate-y-1/2 text-slate-400"
-            role="img"
-            aria-label="search"
+            aria-hidden="true"
           >
             🔍
           </span>
           <input
             type="text"
             placeholder="חיפוש משימות..."
+            aria-label="חיפוש משימות"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-slate-900/50 text-white placeholder-slate-400 border border-slate-600 rounded-lg px-4 py-2 ps-10 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
@@ -235,6 +235,8 @@ export default function TaskKanbanBoard({
 
         <button
           onClick={() => setIsSidebarOpen((prev) => !prev)}
+          aria-expanded={isSidebarOpen}
+          aria-controls="filter-sidebar"
           className={`flex items-center justify-center md:justify-start gap-2 px-6 py-2 rounded-lg transition-all font-medium border ${
             isSidebarOpen
               ? "bg-slate-700/50 text-slate-200 border-slate-600 hover:bg-slate-700"
@@ -250,7 +252,7 @@ export default function TaskKanbanBoard({
             onClick={() => handleTaskCreate()}
             className="flex items-center justify-center md:justify-start gap-2 bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-2 rounded-lg transition-all shadow-lg hover:shadow-blue-500/50 font-medium"
           >
-            <span className="w-5 h-5" role="img" aria-label="plus">
+            <span className="w-5 h-5" aria-hidden="true">
               +
             </span>
             משימה חדשה
@@ -273,7 +275,7 @@ export default function TaskKanbanBoard({
         {/* Kanban Board */}
         <div className="flex-1 overflow-x-auto w-full">
           {isLoading ? (
-            <div className="flex justify-center items-center h-64">
+            <div className="flex justify-center items-center h-64" role="status" aria-label="טוען משימות...">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
             </div>
           ) : (
@@ -294,6 +296,9 @@ export default function TaskKanbanBoard({
               ))}
             </div>
           )}
+          <div aria-live="polite" className="sr-only">
+            {!isLoading && `${filteredTasks.length} משימות מוצגות`}
+          </div>
         </div>
       </div>
 

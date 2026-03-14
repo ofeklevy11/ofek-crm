@@ -51,6 +51,8 @@ export default function KanbanColumn({
 
   return (
     <div
+      role="region"
+      aria-label={title}
       className={`flex flex-col h-full min-h-[600px] rounded-xl overflow-hidden transition-all ${
         isDragOver ? "ring-2 ring-blue-500 scale-105" : ""
       }`}
@@ -65,15 +67,18 @@ export default function KanbanColumn({
           {canCreate && (
             <button
               onClick={onTaskCreate}
-              className="bg-white/20 hover:bg-white/30 text-white p-1.5 rounded-lg transition-all hover:scale-110"
-              title="הוסף משימה"
+              className="bg-white/20 hover:bg-white/30 text-white p-1.5 rounded-lg transition-all hover:scale-110 focus-visible:ring-2 focus-visible:ring-white/50"
+              aria-label={`הוסף משימה לעמודה ${title}`}
             >
               <Plus className="w-4 h-4" />
             </button>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="bg-white/20 text-white text-sm px-3 py-1 rounded-full font-medium">
+          <span
+            className="bg-white/20 text-white text-sm px-3 py-1 rounded-full font-medium"
+            aria-label={`${tasks.length} משימות`}
+          >
             {tasks.length}
           </span>
         </div>
@@ -87,7 +92,7 @@ export default function KanbanColumn({
             {canCreate && (
               <button
                 onClick={onTaskCreate}
-                className="mt-4 text-blue-400 hover:text-blue-300 text-sm underline"
+                className="mt-4 text-blue-400 hover:text-blue-300 text-sm underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
               >
                 הוסף משימה ראשונה
               </button>
@@ -100,6 +105,8 @@ export default function KanbanColumn({
               task={task}
               onDelete={() => onTaskDelete(task.id)}
               onEdit={() => onTaskEdit(task)}
+              currentStatus={status}
+              onMove={(id, newStatus) => onTaskMove(id, newStatus)}
             />
           ))
         )}

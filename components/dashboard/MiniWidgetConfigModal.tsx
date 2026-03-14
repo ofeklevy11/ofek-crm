@@ -2,13 +2,13 @@
 
 import { useState, useCallback, useEffect } from "react";
 import {
-  X,
   Check,
   Calendar,
   CheckSquare,
   FileText,
   Users,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -215,11 +215,13 @@ function SegmentedControl({
   themeColor?: string;
 }) {
   return (
-    <div className="flex bg-gray-100 p-0.5 rounded-lg gap-0.5">
+    <div className="flex bg-gray-100 p-0.5 rounded-lg gap-0.5" role="radiogroup">
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
+          role="radio"
+          aria-checked={String(value) === String(opt.value)}
           onClick={() => onChange(opt.value)}
           className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-all ${
             String(value) === String(opt.value)
@@ -250,6 +252,7 @@ function ToggleChip({
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={`px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all ${
         active
@@ -571,37 +574,24 @@ export default function MiniWidgetConfigModal({
   // ── Render ─────────────────────────────────────────────────────
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col"
-        dir="rtl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-hidden flex flex-col p-0" showCloseButton>
         {/* Themed Header */}
-        <div className={`h-2 w-full bg-linear-to-r ${theme.gradient}`} />
+        <div className={`h-2 w-full bg-linear-to-r ${theme.gradient}`} aria-hidden="true" />
         <div className="p-5 pb-0">
-          <div className="flex justify-between items-center mb-5">
+          <DialogHeader className="mb-5">
             <div className="flex items-center gap-2">
-              <div className={`p-2 rounded-xl ${theme.bg}`}>
+              <div className={`p-2 rounded-xl ${theme.bg}`} aria-hidden="true">
                 <Icon size={20} className={theme.text} />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-gray-900">
+                <DialogTitle className="text-lg font-bold text-gray-900">
                   {isEdit ? "עריכת הגדרות" : "הגדרת ווידג׳ט"}
-                </h3>
-                <p className="text-xs text-gray-500">{theme.label}</p>
+                </DialogTitle>
+                <DialogDescription className="text-xs text-gray-500">{theme.label}</DialogDescription>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 hover:bg-gray-100 rounded-full transition"
-            >
-              <X size={18} />
-            </button>
-          </div>
+          </DialogHeader>
 
           {/* Quick Presets */}
           <div className="mb-4">
@@ -1143,7 +1133,7 @@ export default function MiniWidgetConfigModal({
             {isEdit ? "שמור שינויים" : "הוסף ווידג׳ט"}
           </button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -8,6 +8,8 @@ import { redirect } from "next/navigation";
 import { isRateLimitError, throwIfAnyRateLimited } from "@/lib/rate-limit-utils";
 import RateLimitFallback from "@/components/RateLimitFallback";
 
+export const metadata = { title: "אנליטיקות ותובנות" };
+
 export default async function AnalyticsPage() {
   const user = await getCurrentUser();
   if (!user || !hasUserFlag(user, "canViewAnalytics")) {

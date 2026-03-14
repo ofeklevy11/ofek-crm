@@ -141,14 +141,18 @@ export default function AutomationFlowPreview({
                 onBlur={() => setEditingName(false)}
                 onKeyDown={(e) => e.key === "Enter" && setEditingName(false)}
                 autoFocus
+                aria-label="שם אוטומציה"
                 className="text-xl font-bold text-gray-900 border-b-2 border-purple-400 h-auto py-1"
                 dir="auto"
               />
             ) : (
               <h3
-                className="text-xl font-bold text-gray-900 cursor-pointer hover:text-purple-700 transition"
+                className="text-xl font-bold text-gray-900 cursor-pointer hover:text-purple-700 transition focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-1 rounded"
                 onClick={() => setEditingName(true)}
-                title="לחץ לעריכה"
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setEditingName(true); } }}
+                role="button"
+                tabIndex={0}
+                aria-label="ערוך שם אוטומציה"
               >
                 {schema.name}
               </h3>
@@ -160,15 +164,19 @@ export default function AutomationFlowPreview({
                 onBlur={() => setEditingDesc(false)}
                 onKeyDown={(e) => e.key === "Enter" && setEditingDesc(false)}
                 autoFocus
+                aria-label="תיאור אוטומציה"
                 placeholder="תיאור האוטומציה..."
                 className="text-sm text-gray-500 mt-1 h-auto py-1"
                 dir="auto"
               />
             ) : (
               <p
-                className="text-sm text-gray-500 mt-1 cursor-pointer hover:text-gray-700 transition"
+                className="text-sm text-gray-500 mt-1 cursor-pointer hover:text-gray-700 transition focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-1 rounded"
                 onClick={() => setEditingDesc(true)}
-                title="לחץ לעריכה"
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setEditingDesc(true); } }}
+                role="button"
+                tabIndex={0}
+                aria-label="ערוך תיאור"
               >
                 {schema.description || "לחץ להוספת תיאור..."}
               </p>
@@ -208,7 +216,7 @@ export default function AutomationFlowPreview({
             <Popover open={addActionOpen} onOpenChange={setAddActionOpen}>
               <PopoverTrigger asChild>
                 <button className="w-full flex items-center justify-center gap-2 py-3 px-4 border-2 border-dashed border-green-300 rounded-lg text-green-600 hover:border-green-400 hover:bg-green-50/50 transition text-sm font-medium">
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-4 h-4" aria-hidden="true" />
                   + הוסף פעולה
                 </button>
               </PopoverTrigger>
@@ -222,7 +230,7 @@ export default function AutomationFlowPreview({
                         onClick={() => handleAddAction(t)}
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-right hover:bg-gray-100 text-gray-700 transition"
                       >
-                        {TypeIcon && <TypeIcon className="w-4 h-4 shrink-0" />}
+                        {TypeIcon && <TypeIcon className="w-4 h-4 shrink-0" aria-hidden="true" />}
                         <span>{ACTION_LABELS[t] || t}</span>
                       </button>
                     );
@@ -245,21 +253,21 @@ export default function AutomationFlowPreview({
             onClick={onReset}
             className="py-2 px-3 bg-white border border-red-200 text-red-600 rounded-xl hover:bg-red-50 font-medium transition text-sm flex items-center gap-1.5"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
             התחל מחדש
           </button>
           <button
             onClick={onEdit}
             className="flex-1 py-2 px-3 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition text-sm flex items-center justify-center gap-1.5"
           >
-            <Pencil className="w-3.5 h-3.5" />
+            <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
             ערוך את האוטומציה
           </button>
           <button
             onClick={onChatFocus}
             className="py-2 px-3 bg-gray-100 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-200 font-medium transition text-sm flex items-center gap-1.5"
           >
-            <MessageSquare className="w-3.5 h-3.5" />
+            <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
             שוחח עם AI
           </button>
         </div>

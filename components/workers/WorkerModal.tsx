@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { Spinner } from "@/components/ui/spinner";
 import {
   X,
@@ -78,6 +79,7 @@ export default function WorkerModal({
   onClose,
   onSave,
 }: Props) {
+  const dialogRef = useFocusTrap(onClose);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     firstName: worker?.firstName ?? "",
@@ -178,12 +180,12 @@ export default function WorkerModal({
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="worker-modal-title">
+      <div ref={dialogRef} className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">
+            <h2 id="worker-modal-title" className="text-xl font-bold text-gray-900">
               {worker ? "עריכת עובד" : "עובד חדש"}
             </h2>
             <p className="text-sm text-gray-500 mt-1">
@@ -192,6 +194,7 @@ export default function WorkerModal({
           </div>
           <button
             onClick={onClose}
+            aria-label="סגור"
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
           >
             <X className="h-5 w-5" />
@@ -200,6 +203,7 @@ export default function WorkerModal({
 
         {/* Form */}
         <form
+          id="worker-form"
           onSubmit={handleSubmit}
           className="p-6 overflow-y-auto max-h-[calc(90vh-160px)]"
         >
@@ -207,15 +211,16 @@ export default function WorkerModal({
             {/* Personal Info */}
             <div>
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <User className="h-4 w-4 text-indigo-500" />
+                <User className="h-4 w-4 text-indigo-500" aria-hidden="true" />
                 פרטים אישיים
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="worker-firstName" className="block text-sm font-medium text-gray-700 mb-1">
                     שם פרטי *
                   </label>
                   <input
+                    id="worker-firstName"
                     type="text"
                     value={formData.firstName}
                     onChange={(e) =>
@@ -224,13 +229,15 @@ export default function WorkerModal({
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
                     placeholder="הכנס שם פרטי"
                     required
+                    aria-required="true"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="worker-lastName" className="block text-sm font-medium text-gray-700 mb-1">
                     שם משפחה *
                   </label>
                   <input
+                    id="worker-lastName"
                     type="text"
                     value={formData.lastName}
                     onChange={(e) =>
@@ -239,14 +246,16 @@ export default function WorkerModal({
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
                     placeholder="הכנס שם משפחה"
                     required
+                    aria-required="true"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <Mail className="h-4 w-4 inline ml-1" />
+                  <label htmlFor="worker-email" className="block text-sm font-medium text-gray-700 mb-1">
+                    <Mail className="h-4 w-4 inline ml-1" aria-hidden="true" />
                     אימייל
                   </label>
                   <input
+                    id="worker-email"
                     type="email"
                     value={formData.email}
                     onChange={(e) =>
@@ -257,11 +266,12 @@ export default function WorkerModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <Phone className="h-4 w-4 inline ml-1" />
+                  <label htmlFor="worker-phone" className="block text-sm font-medium text-gray-700 mb-1">
+                    <Phone className="h-4 w-4 inline ml-1" aria-hidden="true" />
                     טלפון
                   </label>
                   <input
+                    id="worker-phone"
                     type="tel"
                     value={formData.phone}
                     onChange={(e) =>
@@ -277,16 +287,17 @@ export default function WorkerModal({
             {/* Employment Info */}
             <div>
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Briefcase className="h-4 w-4 text-indigo-500" />
+                <Briefcase className="h-4 w-4 text-indigo-500" aria-hidden="true" />
                 פרטי העסקה
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <Building2 className="h-4 w-4 inline ml-1" />
+                  <label htmlFor="worker-department" className="block text-sm font-medium text-gray-700 mb-1">
+                    <Building2 className="h-4 w-4 inline ml-1" aria-hidden="true" />
                     מחלקה *
                   </label>
                   <select
+                    id="worker-department"
                     value={formData.departmentId}
                     onChange={(e) =>
                       setFormData({
@@ -296,6 +307,7 @@ export default function WorkerModal({
                     }
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
                     required
+                    aria-required="true"
                   >
                     <option value="">בחר מחלקה</option>
                     {departments.map((dep) => (
@@ -306,10 +318,11 @@ export default function WorkerModal({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="worker-position" className="block text-sm font-medium text-gray-700 mb-1">
                     תפקיד
                   </label>
                   <input
+                    id="worker-position"
                     type="text"
                     value={formData.position}
                     onChange={(e) =>
@@ -320,11 +333,12 @@ export default function WorkerModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <Hash className="h-4 w-4 inline ml-1" />
+                  <label htmlFor="worker-employeeId" className="block text-sm font-medium text-gray-700 mb-1">
+                    <Hash className="h-4 w-4 inline ml-1" aria-hidden="true" />
                     מספר עובד
                   </label>
                   <input
+                    id="worker-employeeId"
                     type="text"
                     value={formData.employeeId}
                     onChange={(e) =>
@@ -335,11 +349,12 @@ export default function WorkerModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <Calendar className="h-4 w-4 inline ml-1" />
+                  <label htmlFor="worker-startDate" className="block text-sm font-medium text-gray-700 mb-1">
+                    <Calendar className="h-4 w-4 inline ml-1" aria-hidden="true" />
                     תאריך התחלה
                   </label>
                   <input
+                    id="worker-startDate"
                     type="date"
                     value={formData.startDate}
                     onChange={(e) =>
@@ -350,10 +365,11 @@ export default function WorkerModal({
                 </div>
                 {worker && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="worker-status" className="block text-sm font-medium text-gray-700 mb-1">
                       סטטוס
                     </label>
                     <select
+                      id="worker-status"
                       value={formData.status}
                       onChange={(e) =>
                         setFormData({ ...formData, status: e.target.value })
@@ -369,11 +385,12 @@ export default function WorkerModal({
                   </div>
                 )}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <LinkIcon className="h-4 w-4 inline ml-1" />
+                  <label htmlFor="worker-linkedUser" className="block text-sm font-medium text-gray-700 mb-1">
+                    <LinkIcon className="h-4 w-4 inline ml-1" aria-hidden="true" />
                     קישור למשתמש מערכת
                   </label>
                   <select
+                    id="worker-linkedUser"
                     value={formData.linkedUserId ?? ""}
                     onChange={(e) =>
                       setFormData({
@@ -400,14 +417,15 @@ export default function WorkerModal({
             {!worker && availablePaths.length > 0 && (
               <div>
                 <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <GraduationCap className="h-4 w-4 text-indigo-500" />
+                  <GraduationCap className="h-4 w-4 text-indigo-500" aria-hidden="true" />
                   מסלול קליטה
                 </h3>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="worker-onboardingPath" className="block text-sm font-medium text-gray-700 mb-1">
                     בחר מסלול קליטה (אופציונלי)
                   </label>
                   <select
+                    id="worker-onboardingPath"
                     value={formData.onboardingPathId ?? ""}
                     onChange={(e) =>
                       setFormData({
@@ -435,11 +453,12 @@ export default function WorkerModal({
 
             {/* Notes */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                <FileText className="h-4 w-4 inline ml-1" />
+              <label htmlFor="worker-notes" className="block text-sm font-medium text-gray-700 mb-1">
+                <FileText className="h-4 w-4 inline ml-1" aria-hidden="true" />
                 הערות
               </label>
               <textarea
+                id="worker-notes"
                 value={formData.notes}
                 onChange={(e) =>
                   setFormData({ ...formData, notes: e.target.value })
@@ -463,6 +482,7 @@ export default function WorkerModal({
           </button>
           <button
             type="submit"
+            form="worker-form"
             onClick={handleSubmit}
             disabled={isSubmitting}
             className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"

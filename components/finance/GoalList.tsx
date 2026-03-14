@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { GoalWithProgress, updateGoalOrder } from "@/app/actions/goals";
 import GoalCard from "./GoalCard";
-import { AlertCircle, Plus } from "lucide-react";
+import { AlertCircle, GripVertical, Plus } from "lucide-react";
 import GoalModal from "./GoalModal";
 import { Button } from "@/components/ui/button";
 import {
   DndContext,
   closestCenter,
   PointerSensor,
+  KeyboardSensor,
   useSensor,
   useSensors,
   DragEndEvent,
@@ -18,6 +19,7 @@ import {
   arrayMove,
   SortableContext,
   rectSortingStrategy,
+  sortableKeyboardCoordinates,
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -55,7 +57,7 @@ function SortableGoalItem({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    zIndex: isDragging ? 50 : "auto",
+    zIndex: isDragging ? 50 : "auto" as const,
     opacity: isDragging ? 0.5 : 1,
   };
 
@@ -63,24 +65,24 @@ function SortableGoalItem({
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      className={`touch-none ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+      className="relative"
+      aria-roledescription="פריט ניתן לגרירה"
     >
-      <div className="pointer-events-auto">
-        {/* GoalCard handles its own pointer events for buttons, but dragging starts on non-interactive areas if configured correctly.
-             However, dnd-kit listeners on the parent div usually capturing all pointer events.
-             We might need a drag handle or rely on sensors safe-guards.
-             PointerSensor with distance constraint is usually best for mixed content.
-         */}
-        <GoalCard
-          goal={goal}
-          metrics={metrics}
-          tables={tables}
-          isDropdownOpen={isDropdownOpen}
-          onDropdownOpenChange={onDropdownOpenChange}
-        />
-      </div>
+      <button
+        className="absolute top-2 left-2 z-10 p-1.5 rounded-md bg-white/80 border border-gray-200 hover:bg-gray-100 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing touch-none shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:outline-none"
+        aria-label="גרור לשינוי סדר"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="w-4 h-4" aria-hidden="true" />
+      </button>
+      <GoalCard
+        goal={goal}
+        metrics={metrics}
+        tables={tables}
+        isDropdownOpen={isDropdownOpen}
+        onDropdownOpenChange={onDropdownOpenChange}
+      />
     </div>
   );
 }
@@ -88,6 +90,7 @@ function SortableGoalItem({
 export default function GoalList({ goals, metrics, tables, clients }: GoalListProps) {
   const [items, setItems] = useState<GoalWithProgress[]>(goals);
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
+  const [statusMessage, setStatusMessage] = useState("");
 
   useEffect(() => {
     setItems(goals);
@@ -99,7 +102,9 @@ export default function GoalList({ goals, metrics, tables, clients }: GoalListPr
         distance: 8, // Require 8px movement before drag starts to allow clicks
       },
     }),
-    // KeyboardSensor removed to prevent Space key from triggering drag when editing goals
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -111,11 +116,13 @@ export default function GoalList({ goals, metrics, tables, clients }: GoalListPr
       const newItems = arrayMove(items, oldIndex, newIndex);
       const previousItems = items;
       setItems(newItems);
+      setStatusMessage(`יעד הועבר למיקום ${newIndex + 1}`);
 
       try {
         await updateGoalOrder(newItems.map((g) => g.id));
       } catch {
         setItems(previousItems);
+        setStatusMessage("שגיאה בעדכון הסדר");
         toast.error("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E2\u05D3\u05DB\u05D5\u05DF \u05D4\u05E1\u05D3\u05E8");
       }
     }
@@ -125,7 +132,7 @@ export default function GoalList({ goals, metrics, tables, clients }: GoalListPr
     return (
       <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
         <div className="mx-auto w-12 h-12 bg-[#4f95ff]/10 rounded-full flex items-center justify-center mb-4">
-          <AlertCircle className="w-6 h-6 text-[#4f95ff]" />
+          <AlertCircle className="w-6 h-6 text-[#4f95ff]" aria-hidden="true" />
         </div>
         <h3 className="text-lg font-medium text-gray-900">
           עדיין לא הוגדרו יעדים
@@ -158,6 +165,9 @@ export default function GoalList({ goals, metrics, tables, clients }: GoalListPr
         items={items.map((i) => i.id)}
         strategy={rectSortingStrategy}
       >
+        <p className="sr-only">
+          השתמש במקש רווח כדי להתחיל גרירה. בזמן גרירה, השתמש בחיצי המקלדת כדי להזיז את הפריט. לחץ רווח שוב כדי לשחרר.
+        </p>
         <div
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6"
           dir="rtl"
@@ -175,6 +185,7 @@ export default function GoalList({ goals, metrics, tables, clients }: GoalListPr
             />
           ))}
         </div>
+        <div aria-live="polite" className="sr-only">{statusMessage}</div>
       </SortableContext>
     </DndContext>
   );

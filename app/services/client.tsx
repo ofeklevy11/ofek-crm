@@ -37,13 +37,13 @@ function getMarginAnalysis(price: number, cost: number) {
 function getTypeIcon(type: string) {
   switch (type) {
     case "SERVICE":
-      return <Layers className="w-4 h-4" />;
+      return <Layers className="w-4 h-4" aria-hidden="true" />;
     case "PRODUCT":
-      return <Box className="w-4 h-4" />;
+      return <Box className="w-4 h-4" aria-hidden="true" />;
     case "PACKAGE":
-      return <Package className="w-4 h-4" />;
+      return <Package className="w-4 h-4" aria-hidden="true" />;
     default:
-      return <Layers className="w-4 h-4" />;
+      return <Layers className="w-4 h-4" aria-hidden="true" />;
   }
 }
 
@@ -106,6 +106,12 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
 
   return (
     <div className="p-8 space-y-8 max-w-[1600px] mx-auto text-right" dir="rtl">
+      <a
+        href="#services-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:right-2 focus:bg-white focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg focus:text-blue-600 focus:ring-2 focus:ring-blue-500"
+      >
+        דלג לתוכן המוצרים
+      </a>
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-4xl font-bold tracking-tight  text-gray-900">
@@ -119,32 +125,32 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
           onClick={handleAddNew}
           className="flex items-center gap-2 px-6 py-3 bg-[#4f95ff] text-white rounded-xl hover:bg-[#3b82f6] font-medium transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
         >
-          <Plus className="w-5 h-5" /> הוסף חדש
+          <Plus className="w-5 h-5" aria-hidden="true" /> הוסף חדש
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div id="services-content" className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Quick Stats */}
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-          <h3 className="text-sm font-medium text-gray-500 mb-2">
+          <h2 className="text-sm font-medium text-gray-500 mb-2">
             סה״כ פריטים בקטלוג
-          </h3>
+          </h2>
           <div className="text-4xl font-bold text-gray-900">
             {products.length}
           </div>
         </div>
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-          <h3 className="text-sm font-medium text-gray-500 mb-2">
+          <h2 className="text-sm font-medium text-gray-500 mb-2">
             ממוצע רווח גולמי
-          </h3>
+          </h2>
           <div className="text-4xl font-bold text-[#a24ec1]">
             {stats.avgMargin}
           </div>
         </div>
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-          <h3 className="text-sm font-medium text-gray-500 mb-2">
+          <h2 className="text-sm font-medium text-gray-500 mb-2">
             הפריט הרווחי ביותר
-          </h3>
+          </h2>
           <div className="text-xl font-bold text-gray-900 truncate" dir="rtl">
             {stats.mostProfitable}
           </div>
@@ -153,24 +159,25 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-gray-100 bg-gray-50/30">
-          <h3 className="text-xl font-semibold text-gray-900">קטלוג</h3>
+          <h2 className="text-xl font-semibold text-gray-900">קטלוג</h2>
           <p className="text-sm text-gray-500 mt-1">
             רשימה מפורטת של כל השירותים, המוצרים והחבילות שלך
           </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-right text-sm">
+            <caption className="sr-only">קטלוג מוצרים ושירותים</caption>
             <thead className="bg-[#f4f8f8] text-gray-600">
               <tr>
-                <th className="px-6 py-4 font-medium first:rounded-tr-lg">
+                <th scope="col" className="px-6 py-4 font-medium first:rounded-tr-lg">
                   שם הפריט
                 </th>
-                <th className="px-6 py-4 font-medium">מק״ט</th>
-                <th className="px-6 py-4 font-medium">סוג</th>
-                <th className="px-6 py-4 font-medium">מחיר מחירון</th>
-                <th className="px-6 py-4 font-medium">עלות מוערכת</th>
-                <th className="px-6 py-4 font-medium">רווח / אחוז רווח</th>
-                <th className="px-6 py-4 font-medium w-[100px] last:rounded-tl-lg">
+                <th scope="col" className="px-6 py-4 font-medium">מק״ט</th>
+                <th scope="col" className="px-6 py-4 font-medium">סוג</th>
+                <th scope="col" className="px-6 py-4 font-medium">מחיר מחירון</th>
+                <th scope="col" className="px-6 py-4 font-medium">עלות מוערכת</th>
+                <th scope="col" className="px-6 py-4 font-medium">רווח / אחוז רווח</th>
+                <th scope="col" className="px-6 py-4 font-medium w-[100px] last:rounded-tl-lg">
                   פעולות
                 </th>
               </tr>
@@ -217,9 +224,9 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
                     <td className="px-6 py-4">
                       <div className={`flex items-center gap-2 ${color}`}>
                         {margin > 0 ? (
-                          <TrendingUp className="w-4 h-4" />
+                          <TrendingUp className="w-4 h-4" aria-hidden="true" />
                         ) : (
-                          <TrendingDown className="w-4 h-4" />
+                          <TrendingDown className="w-4 h-4" aria-hidden="true" />
                         )}
                         <span className="font-semibold">
                           {formatMoney(margin)}
@@ -233,8 +240,9 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
                       <button
                         className="p-2 text-gray-400 hover:text-[#4f95ff] transition-all rounded-full hover:bg-blue-50"
                         onClick={() => handleEdit(product)}
+                        aria-label={`ערוך ${product.name}`}
                       >
-                        <Edit className="w-4 h-4" />
+                        <Edit className="w-4 h-4" aria-hidden="true" />
                       </button>
                     </td>
                   </tr>
@@ -247,7 +255,7 @@ export default function ServicesPageClient({ products }: { products: any[] }) {
                     className="px-6 py-16 text-center text-gray-500 bg-gray-50/20"
                   >
                     <div>
-                      <Package className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                      <Package className="w-12 h-12 mx-auto text-gray-300 mb-3" aria-hidden="true" />
                       <p className="text-lg font-medium text-gray-900">
                         אין פריטים בקטלוג
                       </p>

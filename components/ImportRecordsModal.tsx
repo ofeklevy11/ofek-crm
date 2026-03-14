@@ -327,6 +327,7 @@ export default function ImportRecordsModal({
               <Upload className="h-6 w-6 text-primary" />
               ייבוא נתונים (CSV/TXT)
             </DialogTitle>
+            <DialogDescription className="sr-only">ייבוא רשומות מקובץ CSV או TXT</DialogDescription>
             {(step !== "UPLOAD" || file || error) && (
               <Button
                 variant="ghost"
@@ -410,6 +411,7 @@ export default function ImportRecordsModal({
                   ref={fileInputRef}
                   className="hidden"
                   accept=".csv,.txt"
+                  aria-label="העלאת קובץ CSV או TXT"
                   onChange={handleFileChange}
                 />
                 <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -534,8 +536,9 @@ export default function ImportRecordsModal({
 
               {summary.validRows > 0 ? (
                 <div className="space-y-2 pt-2">
-                  <Label>כדי להמשיך, הקלד &quot;אני מאשר&quot;:</Label>
+                  <Label htmlFor="import-confirm-input">כדי להמשיך, הקלד &quot;אני מאשר&quot;:</Label>
                   <Input
+                    id="import-confirm-input"
                     value={confirmationText}
                     onChange={(e) => setConfirmationText(e.target.value)}
                     placeholder="אני מאשר"

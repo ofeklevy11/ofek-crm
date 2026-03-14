@@ -15,6 +15,7 @@ import {
   ArrowDownUp,
   Calendar,
   Hash,
+  GripVertical,
 } from "lucide-react";
 import DynamicViewRenderer from "@/components/DynamicViewRenderer";
 import Link from "next/link";
@@ -151,9 +152,7 @@ function CustomTableWidget({
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      className={`relative rounded-xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between bg-white border border-gray-100 group overflow-hidden cursor-grab active:cursor-grabbing ${
+      className={`relative rounded-xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between bg-white border border-gray-100 group overflow-hidden ${
         isCollapsed ? "h-auto min-h-0" : "h-full min-h-[400px]"
       } p-6`}
       dir="rtl"
@@ -162,6 +161,17 @@ function CustomTableWidget({
       <div
         className={`flex justify-between items-center border-gray-100 bg-white sticky top-0 z-20 ${isCollapsed ? "" : "mb-4 border-b pb-4"}`}
       >
+        <div className="flex items-start gap-1">
+          <button
+            {...attributes}
+            {...listeners}
+            className="p-1 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 rounded touch-none focus-visible:ring-2 focus-visible:ring-ring mt-1"
+            aria-label={`גרור ווידג׳ט: ${title}`}
+            aria-roledescription="פריט ניתן לגרירה"
+          >
+            <GripVertical size={16} />
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <div className="bg-blue-50 p-2 rounded-lg text-blue-600">
             <TableIcon size={18} />
@@ -176,7 +186,7 @@ function CustomTableWidget({
             <p className="text-xs text-gray-500">{tableName}</p>
             {tableId && (
               <div className="flex items-center gap-1 mt-1">
-                <div className="flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md text-[10px] font-medium border border-indigo-100">
+                <div className="flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md text-[11px] font-medium border border-indigo-100">
                   <ArrowDownUp size={10} />
                   <span className="truncate max-w-[150px]">
                     {(() => {
@@ -226,8 +236,8 @@ function CustomTableWidget({
                 <Popover>
                   <PopoverTrigger asChild>
                     <button
-                      className={`p-1.5 hover:bg-white rounded-md transition shadow-sm ${isUpdating ? "animate-spin text-blue-500" : "text-gray-400 hover:text-gray-600"}`}
-                      onPointerDown={(e) => e.stopPropagation()}
+                      className={`p-1.5 hover:bg-white rounded-md transition shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${isUpdating ? "animate-spin text-blue-500" : "text-gray-400 hover:text-gray-600"}`}
+                      aria-label="סינון ומיון"
                       title="סינון ומיון"
                     >
                       <Filter size={14} />
@@ -236,7 +246,6 @@ function CustomTableWidget({
                   <PopoverContent
                     className="w-56 p-2"
                     align="end"
-                    onPointerDown={(e) => e.stopPropagation()}
                   >
                     <div className="text-xs font-semibold text-gray-500 mb-2 px-2">
                       מיון לפי
@@ -297,9 +306,9 @@ function CustomTableWidget({
 
                 {/* Hide / Show Toggle */}
                 <button
-                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-white rounded-md transition shadow-sm"
-                  onPointerDown={(e) => e.stopPropagation()}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-white rounded-md transition shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                   onClick={handleToggleCollapse}
+                  aria-label={isCollapsed ? "הצג תוכן ווידג׳ט" : "הסתר תוכן ווידג׳ט"}
                   title={isCollapsed ? "הצג טבלה" : "הסתר טבלה"}
                 >
                   {isCollapsed ? <Eye size={14} /> : <EyeOff size={14} />}
@@ -311,8 +320,8 @@ function CustomTableWidget({
                     e.stopPropagation();
                     onEdit(id);
                   }}
-                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-white rounded-md transition shadow-sm"
-                  onPointerDown={(e) => e.stopPropagation()}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-white rounded-md transition shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                  aria-label="הגדרות ווידג׳ט"
                   title="ערוך תצוגה"
                 >
                   <Settings size={14} />
@@ -322,7 +331,6 @@ function CustomTableWidget({
               <Link
                 href={`/tables/${tableId}?new=true`}
                 className="flex items-center gap-1 text-xs font-medium bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition shadow-sm ml-2"
-                onPointerDown={(e) => e.stopPropagation()}
               >
                 <Plus size={14} />
                 <span className="hidden sm:inline">חדש</span>
@@ -331,11 +339,9 @@ function CustomTableWidget({
           )}
 
           <button
-            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors opacity-0 group-hover:opacity-100"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              onRemove(id);
-            }}
+            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors opacity-0 group-hover:opacity-100 focus-within:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            onClick={() => onRemove(id)}
+            aria-label="הסר ווידג׳ט מהדאשבורד"
             title="הסר מהדאשבורד"
           >
             <X size={16} />
@@ -347,8 +353,9 @@ function CustomTableWidget({
       {!isCollapsed && (
         <div className="flex-1 flex flex-col w-full min-h-0 bg-white relative">
           {isLoading ? (
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center" role="status">
               <Loader2 className="animate-spin text-blue-500" size={32} />
+              <span className="sr-only">טוען נתונים...</span>
             </div>
           ) : data ? (
             <div className="w-full h-full overflow-hidden flex flex-col">

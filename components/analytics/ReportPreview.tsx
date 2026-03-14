@@ -125,6 +125,7 @@ export default function ReportPreview({
               setEditingField(null);
             }}
             onCancel={() => setEditingField(null)}
+            label="כותרת הדוח"
           />
         ) : (
           <div className="group flex items-center gap-2">
@@ -134,6 +135,7 @@ export default function ReportPreview({
               size="icon"
               className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={() => setEditingField("reportTitle")}
+              aria-label="ערוך כותרת דוח"
             >
               <Pencil className="h-3.5 w-3.5" />
             </Button>
@@ -156,6 +158,7 @@ export default function ReportPreview({
                   size="icon"
                   className="h-6 w-6 text-blue-400 hover:text-blue-600"
                   onClick={() => setEditingField("summary")}
+                  aria-label="ערוך סיכום"
                 >
                   <Pencil className="h-3 w-3" />
                 </Button>
@@ -169,6 +172,7 @@ export default function ReportPreview({
                     setEditingField(null);
                   }}
                   onCancel={() => setEditingField(null)}
+                  label="סיכום"
                 />
               ) : (
                 <p className="text-sm text-blue-800 leading-relaxed">{report.summary}</p>
@@ -254,6 +258,7 @@ export default function ReportPreview({
                           setEditingField(null);
                         }}
                         onCancel={() => setEditingField(null)}
+                        label={`תובנה ${idx + 1}`}
                       />
                     ) : (
                       <div className="group flex items-start gap-1 flex-1">
@@ -263,6 +268,7 @@ export default function ReportPreview({
                           size="icon"
                           className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                           onClick={() => setEditingField(`insight-${idx}`)}
+                          aria-label={`ערוך תובנה ${idx + 1}`}
                         >
                           <Pencil className="h-2.5 w-2.5" />
                         </Button>
@@ -334,6 +340,7 @@ function ViewCard({
                 setEditingField(null);
               }}
               onCancel={() => setEditingField(null)}
+              label="כותרת תצוגה"
             />
           ) : (
             <div className="group flex items-center gap-1">
@@ -343,6 +350,7 @@ function ViewCard({
                 size="icon"
                 className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                 onClick={() => setEditingField(`view-title-${view.id}`)}
+                aria-label="ערוך כותרת תצוגה"
               >
                 <Pencil className="h-2.5 w-2.5" />
               </Button>
@@ -355,6 +363,8 @@ function ViewCard({
           size="icon"
           className="h-7 w-7 shrink-0 text-gray-400"
           onClick={onToggleExpand}
+          aria-expanded={isExpanded}
+          aria-label={isExpanded ? "כווץ פרטים" : "הרחב פרטים"}
         >
           {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </Button>
@@ -374,6 +384,7 @@ function ViewCard({
               }}
               onCancel={() => setEditingField(null)}
               placeholder="תיאור..."
+              label="תיאור תצוגה"
             />
           ) : (
             <div className="group flex items-start gap-1">
@@ -383,6 +394,7 @@ function ViewCard({
                 size="icon"
                 className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                 onClick={() => setEditingField(`view-desc-${view.id}`)}
+                aria-label="ערוך תיאור"
               >
                 <Pencil className="h-2.5 w-2.5" />
               </Button>

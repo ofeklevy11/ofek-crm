@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Trash, Plus, Printer, Save, ArrowRight } from "lucide-react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { addWeeks, addMonths, format } from "date-fns";
 import { createQuote, updateQuote } from "@/app/actions/quotes";
 import { getExchangeRate } from "@/app/actions/exchange-rate";
@@ -47,6 +48,7 @@ export default function QuoteEditor({
   const [descriptionPopupIndex, setDescriptionPopupIndex] = useState<
     number | null
   >(null);
+  const descFocusTrapRef = useFocusTrap(() => setDescriptionPopupIndex(null), descriptionPopupIndex !== null);
 
   const [formData, setFormData] = useState({
     clientId: initialQuote?.clientId?.toString() || "new",
@@ -392,8 +394,8 @@ export default function QuoteEditor({
     <div className="p-6 max-w-[1200px] mx-auto space-y-6" dir="rtl">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <button onClick={handleBack} data-testid="back-button" className="p-2 hover:bg-gray-100 rounded-full text-gray-600">
-            <ArrowRight className="w-5 h-5" />
+          <button onClick={handleBack} data-testid="back-button" className="p-2 hover:bg-gray-100 rounded-full text-gray-600" aria-label="חזרה להצעות מחיר">
+            <ArrowRight className="w-5 h-5" aria-hidden="true" />
           </button>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-gray-900">
@@ -417,16 +419,18 @@ export default function QuoteEditor({
               onClick={() =>
                 window.open(`/quotes/${initialQuote.id}/pdf`, "_blank")
               }
+              aria-label="הדפסה / PDF / שליחה בWhatsapp (נפתח בחלון חדש)"
             >
-              <Printer className="w-4 h-4" /> הדפסה / PDF / שליחה בWhatsapp
+              <Printer className="w-4 h-4" aria-hidden="true" /> הדפסה / PDF / שליחה בWhatsapp
             </button>
           )}
           <button
             className="flex items-center gap-2 px-4 py-2 bg-[#4f95ff] text-white rounded-md hover:bg-[#3d7de0] font-medium transition-colors disabled:opacity-50"
             onClick={handleSave}
             disabled={loading}
+            aria-live="polite"
           >
-            <Save className="w-4 h-4" /> {loading ? "שומר..." : "שמור הצעה"}
+            <Save className="w-4 h-4" aria-hidden="true" /> {loading ? "שומר..." : "שמור הצעה"}
           </button>
         </div>
       </div>
@@ -434,14 +438,15 @@ export default function QuoteEditor({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <h3 className="font-semibold text-gray-900">פרטי לקוח</h3>
+            <h2 className="font-semibold text-gray-900">פרטי לקוח</h2>
           </div>
           <div className="p-6 space-y-4">
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <label htmlFor="client-select" className="block text-sm font-medium text-gray-700">
                 בחר לקוח
               </label>
               <select
+                id="client-select"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                 value={formData.clientId}
                 onChange={handleClientChange}
@@ -457,10 +462,11 @@ export default function QuoteEditor({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label htmlFor="client-name" className="block text-sm font-medium text-gray-700">
                   שם לקוח
                 </label>
                 <input
+                  id="client-name"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                   value={formData.clientName}
                   onChange={(e) =>
@@ -469,10 +475,11 @@ export default function QuoteEditor({
                 />
               </div>
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label htmlFor="client-email" className="block text-sm font-medium text-gray-700">
                   דוא״ל
                 </label>
                 <input
+                  id="client-email"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                   value={formData.clientEmail}
                   onChange={(e) =>
@@ -481,10 +488,11 @@ export default function QuoteEditor({
                 />
               </div>
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label htmlFor="client-phone" className="block text-sm font-medium text-gray-700">
                   טלפון
                 </label>
                 <input
+                  id="client-phone"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                   value={formData.clientPhone}
                   onChange={(e) =>
@@ -493,10 +501,11 @@ export default function QuoteEditor({
                 />
               </div>
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label htmlFor="client-taxid" className="block text-sm font-medium text-gray-700">
                   ח.פ / ת.ז
                 </label>
                 <input
+                  id="client-taxid"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                   placeholder="מספר ח.פ או ת.ז"
                   value={formData.clientTaxId}
@@ -506,10 +515,11 @@ export default function QuoteEditor({
                 />
               </div>
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label htmlFor="client-address" className="block text-sm font-medium text-gray-700">
                   כתובת / פרטים נוספים
                 </label>
                 <input
+                  id="client-address"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                   value={formData.clientAddress}
                   onChange={(e) =>
@@ -523,14 +533,15 @@ export default function QuoteEditor({
 
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-fit">
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <h3 className="font-semibold text-gray-900">הגדרות וסטטוס</h3>
+            <h2 className="font-semibold text-gray-900">הגדרות וסטטוס</h2>
           </div>
           <div className="p-6 space-y-4">
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <label htmlFor="title" className="block text-sm font-medium text-gray-700">
                 כותרת הצעה (אופציונלי)
               </label>
               <input
+                id="title"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                 placeholder="לדוגמה: הצעת מחיר לפרויקט בניית אתר"
                 value={formData.title}
@@ -540,10 +551,11 @@ export default function QuoteEditor({
               />
             </div>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <label htmlFor="status" className="block text-sm font-medium text-gray-700">
                 סטטוס
               </label>
               <select
+                id="status"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                 value={formData.status}
                 onChange={(e) =>
@@ -557,10 +569,11 @@ export default function QuoteEditor({
               </select>
             </div>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <label htmlFor="currency" className="block text-sm font-medium text-gray-700">
                 מטבע
               </label>
               <select
+                id="currency"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                 value={currency}
                 onChange={(e) => {
@@ -588,10 +601,11 @@ export default function QuoteEditor({
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label htmlFor="valid-until" className="block text-sm font-medium text-gray-700">
                   בתוקף עד
                 </label>
                 <input
+                  id="valid-until"
                   type="date"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                   value={formData.validUntil}
@@ -623,10 +637,11 @@ export default function QuoteEditor({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 whitespace-nowrap">
+                  <label htmlFor="quote-custom-duration" className="text-xs text-gray-500 whitespace-nowrap">
                     עוד:
-                  </span>
+                  </label>
                   <input
+                    id="quote-custom-duration"
                     type="number"
                     min="1"
                     className="w-16 px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
@@ -635,7 +650,9 @@ export default function QuoteEditor({
                       setCustomDuration(parseInt(e.target.value) || 1)
                     }
                   />
+                  <label htmlFor="quote-custom-unit" className="sr-only">יחידת זמן</label>
                   <select
+                    id="quote-custom-unit"
                     className="px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
                     value={customUnit}
                     onChange={(e) =>
@@ -705,7 +722,7 @@ export default function QuoteEditor({
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <h3 className="font-semibold text-gray-900">פריטים</h3>
+          <h2 className="font-semibold text-gray-900">פריטים</h2>
         </div>
         <div className="p-6 space-y-4">
           <div className="space-y-4">
@@ -715,10 +732,11 @@ export default function QuoteEditor({
                 className="flex gap-4 items-start border-b border-gray-100 pb-4 last:border-0 last:pb-0"
               >
                 <div className="flex-1 space-y-2">
-                  <label className="text-xs font-medium text-gray-500">
+                  <label htmlFor={`quote-item-${index}-product`} className="text-xs font-medium text-gray-500">
                     מוצר/שירות
                   </label>
                   <select
+                    id={`quote-item-${index}-product`}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none text-sm bg-white"
                     value={
                       item.productId ? item.productId.toString() : "custom"
@@ -747,6 +765,7 @@ export default function QuoteEditor({
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
+                      aria-hidden="true"
                     >
                       <path
                         strokeLinecap="round"
@@ -759,10 +778,11 @@ export default function QuoteEditor({
                 </div>
 
                 <div className="w-24 space-y-2">
-                  <label className="text-xs font-medium text-gray-500">
+                  <label htmlFor={`quote-item-${index}-qty`} className="text-xs font-medium text-gray-500">
                     כמות
                   </label>
                   <input
+                    id={`quote-item-${index}-qty`}
                     type="number"
                     min="1"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none text-sm bg-white"
@@ -774,10 +794,11 @@ export default function QuoteEditor({
                 </div>
 
                 <div className="w-32 space-y-2">
-                  <label className="text-xs font-medium text-gray-500">
+                  <label htmlFor={`quote-item-${index}-price`} className="text-xs font-medium text-gray-500">
                     מחיר ({currencySymbol})
                   </label>
                   <input
+                    id={`quote-item-${index}-price`}
                     type="number"
                     step="0.01"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none text-sm bg-white"
@@ -795,8 +816,9 @@ export default function QuoteEditor({
                 <button
                   className="mt-8 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
                   onClick={() => removeItem(index)}
+                  aria-label={`הסר פריט ${index + 1}`}
                 >
-                  <Trash className="w-4 h-4" />
+                  <Trash className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             ))}
@@ -806,14 +828,15 @@ export default function QuoteEditor({
             className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-[#4f95ff] hover:text-[#4f95ff] font-medium transition-all flex items-center justify-center gap-2"
             onClick={addItem}
           >
-            <Plus className="w-4 h-4" /> הוסף פריט
+            <Plus className="w-4 h-4" aria-hidden="true" /> הוסף פריט
           </button>
 
           {/* Discount section */}
           <div className="flex items-end gap-3 pt-4 border-t border-gray-100">
             <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-500">הנחה</label>
+              <label htmlFor="discount-type" className="text-xs font-medium text-gray-500">הנחה</label>
               <select
+                id="discount-type"
                 className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none text-sm bg-white"
                 value={discountType}
                 onChange={(e) => { setDiscountType(e.target.value as "none" | "percent" | "fixed"); setIsDirty(true); }}
@@ -825,10 +848,11 @@ export default function QuoteEditor({
             </div>
             {discountType !== "none" && (
               <div className="space-y-1">
-                <label className="text-xs font-medium text-gray-500">
+                <label htmlFor="discount-value" className="text-xs font-medium text-gray-500">
                   {discountType === "percent" ? "אחוז הנחה" : `סכום (${currencySymbol})`}
                 </label>
                 <input
+                  id="discount-value"
                   type="number"
                   min="0"
                   step={discountType === "percent" ? "1" : "0.01"}
@@ -895,22 +919,27 @@ export default function QuoteEditor({
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
           dir="rtl"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="desc-modal-title"
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh]">
+          <div ref={descFocusTrapRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh]">
             <div className="flex justify-between items-center p-5 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 id="desc-modal-title" className="text-lg font-semibold text-gray-900">
                 תיאור הפריט
               </h3>
               <button
                 type="button"
                 onClick={() => setDescriptionPopupIndex(null)}
                 className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
+                aria-label="סגור"
               >
                 <svg
                   className="w-5 h-5"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
+                  aria-hidden="true"
                 >
                   <path
                     strokeLinecap="round"
@@ -932,6 +961,7 @@ export default function QuoteEditor({
                     e.target.value,
                   )
                 }
+                aria-label="תיאור הפריט"
                 placeholder="כתוב תיאור מפורט לפריט..."
                 rows={22}
                 autoFocus

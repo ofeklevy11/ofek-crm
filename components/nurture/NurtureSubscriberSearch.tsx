@@ -96,10 +96,12 @@ export default function NurtureSubscriberSearch({
   return (
     <div className="space-y-2 mb-3">
       {/* Mode tabs */}
-      <div className="flex items-center gap-2">
+      <div role="radiogroup" aria-label="מצב חיפוש" className="flex items-center gap-2">
         <button
+          role="radio"
+          aria-checked={mode === "general"}
           onClick={() => switchMode("general")}
-          className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+          className={`text-xs px-3 py-1.5 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
             mode === "general"
               ? "bg-indigo-50 border-indigo-200 text-indigo-700 font-medium"
               : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
@@ -109,8 +111,10 @@ export default function NurtureSubscriberSearch({
           חיפוש כללי
         </button>
         <button
+          role="radio"
+          aria-checked={mode === "smart"}
           onClick={() => switchMode("smart")}
-          className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+          className={`text-xs px-3 py-1.5 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
             mode === "smart"
               ? "bg-indigo-50 border-indigo-200 text-indigo-700 font-medium"
               : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
@@ -129,12 +133,14 @@ export default function NurtureSubscriberSearch({
             value={localSearch}
             onChange={(e) => handleGeneralSearch(e.target.value)}
             placeholder="חיפוש לפי שם, אימייל או טלפון..."
+            aria-label="חיפוש לפי שם, אימייל או טלפון"
             className="pr-9 h-9 text-sm"
           />
           {localSearch && (
             <button
               onClick={() => handleGeneralSearch("")}
-              className="absolute left-3 top-2.5 text-slate-400 hover:text-slate-600"
+              aria-label="נקה חיפוש"
+              className="absolute left-3 top-2.5 text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
             >
               <X className="w-4 h-4" />
             </button>
@@ -153,7 +159,7 @@ export default function NurtureSubscriberSearch({
               <div key={i} className="flex items-center gap-2">
                 {/* Field */}
                 <Select value={filter.field} onValueChange={(v) => updateFilter(i, { field: v })}>
-                  <SelectTrigger className="w-[130px] h-8 text-xs">
+                  <SelectTrigger className="w-[130px] h-8 text-xs" aria-label="שדה">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -167,7 +173,7 @@ export default function NurtureSubscriberSearch({
 
                 {/* Operator */}
                 <Select value={filter.operator} onValueChange={(v) => updateFilter(i, { operator: v })}>
-                  <SelectTrigger className="w-[100px] h-8 text-xs">
+                  <SelectTrigger className="w-[100px] h-8 text-xs" aria-label="אופרטור">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -222,7 +228,8 @@ export default function NurtureSubscriberSearch({
 
                 <button
                   onClick={() => removeFilter(i)}
-                  className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  aria-label="הסר פילטר"
+                  className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="w-4 h-4" />
                 </button>

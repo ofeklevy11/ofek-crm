@@ -46,8 +46,8 @@ export default async function TableDetailsPage({
   // Additional permission check (role base)
   if (!canReadTable(user, table.id)) {
     return (
-      <div className="p-8 text-center text-red-600 font-bold text-xl">
-        אין לך הרשאה לצפות בטבלה זו
+      <div className="p-8 text-center" role="alert">
+        <h1 className="text-red-600 font-bold text-xl">אין לך הרשאה לצפות בטבלה זו</h1>
       </div>
     );
   }

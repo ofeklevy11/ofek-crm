@@ -52,11 +52,16 @@ export function DayView({
         tolerance: 8,
       },
     }),
+    // Keyboard drag-and-drop not supported for calendar grids (no coordinateGetter).
+    // Keyboard users create/edit events via the floating button + modal.
   );
 
   const timeSlots = TIME_SLOTS;
   const today = new Date();
   const isToday = isSameDay(currentDate, today);
+
+  const gridAriaLabel = `לוח יומי, ${currentDate.toLocaleDateString("he-IL")}`;
+  const dayName = daysOfWeek[currentDate.getDay()];
 
   // Filter events for this day
   const dayEvents = useMemo(
@@ -99,10 +104,11 @@ export function DayView({
             {onCreateEvent && (
               <button
                 onClick={onCreateEvent}
-                className="w-10 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center md:hidden"
+                className="w-10 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center md:hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                 aria-label="צור אירוע"
               >
                 <svg
+                  aria-hidden="true"
                   className="w-5 h-5"
                   fill="none"
                   stroke="currentColor"
@@ -125,7 +131,7 @@ export function DayView({
                 isToday ? "text-blue-600" : "text-gray-500"
               }`}
             >
-              {daysOfWeek[currentDate.getDay()].toUpperCase()}
+              {dayName.toUpperCase()}
             </div>
             <div
               className={`inline-flex items-center justify-center w-10 h-10 text-xl rounded-full ${
@@ -139,7 +145,7 @@ export function DayView({
 
         {/* Scrollable Grid */}
         <div className="flex-1 overflow-y-auto">
-          <div className="flex relative min-h-[600px]">
+          <div className="flex relative min-h-[600px]" role="region" aria-label={gridAriaLabel}>
             {/* Time Column */}
             <div className="w-16 shrink-0 border-l border-gray-100 bg-white select-none">
               {timeSlots.map((time, index) => (
@@ -171,6 +177,7 @@ export function DayView({
                         data={{ hour: index, minutes: 0 }}
                         className="group flex-1 cursor-pointer transition-colors border-b border-dashed border-gray-200 relative hover:bg-blue-50"
                         isOverClassName="bg-blue-100"
+                        ariaLabel={`${dayName} ${startHour.toString().padStart(2, "0")}:00`}
                         onClick={(e) => {
                           e.stopPropagation();
                           onTimeSlotClick?.(currentDate, index, 0);
@@ -190,6 +197,7 @@ export function DayView({
                         data={{ hour: index, minutes: 30 }}
                         className="group flex-1 cursor-pointer transition-colors relative hover:bg-green-50"
                         isOverClassName="bg-green-100"
+                        ariaLabel={`${dayName} ${startHour.toString().padStart(2, "0")}:30`}
                         onClick={(e) => {
                           e.stopPropagation();
                           onTimeSlotClick?.(currentDate, index, 30);
@@ -228,6 +236,7 @@ export function DayView({
               {/* Current Time Indicator (if today) */}
               {isToday && (
                 <div
+                  aria-hidden="true"
                   className="absolute left-0 right-0 h-0.5 bg-red-500 z-20 pointer-events-none"
                   style={{
                     top: `${

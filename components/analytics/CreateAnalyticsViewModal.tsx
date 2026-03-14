@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState, useEffect } from "react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import {
   X,
   Check,
@@ -139,6 +140,7 @@ export default function CreateAnalyticsViewModal({
   const [limitsData, setLimitsData] = useState<any>(null);
   const [loadingLimits, setLoadingLimits] = useState(true);
   const [submitError, setSubmitError] = useState("");
+  const focusTrapRef = useFocusTrap(onClose);
 
   // Initialize from initialData when opening
   useEffect(() => {
@@ -272,6 +274,7 @@ export default function CreateAnalyticsViewModal({
           <button
             onClick={() => setShowPreview(false)}
             className="text-gray-400 hover:text-gray-600"
+            aria-label="סגור תצוגה מקדימה"
           >
             <X size={16} />
           </button>
@@ -586,14 +589,18 @@ export default function CreateAnalyticsViewModal({
       value,
       onChange,
       placeholder = "בחר שדה...",
-    }: any) => (
+      id,
+    }: any) => {
+      const selectId = id || (label ? `field-select-${label.replace(/\s+/g, "-")}` : undefined);
+      return (
       <div className="flex-1">
         {label && (
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor={selectId} className="block text-sm font-medium text-gray-700 mb-1">
             {label}
           </label>
         )}
         <select
+          id={selectId}
           className="w-full border border-gray-300 rounded-md p-2"
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -607,6 +614,7 @@ export default function CreateAnalyticsViewModal({
         </select>
       </div>
     );
+    };
 
     // Helper: Render Value Selector (Dynamic based on selected field)
     const ValueInput = ({
@@ -615,17 +623,20 @@ export default function CreateAnalyticsViewModal({
       value,
       onChange,
       placeholder = "ערך...",
+      id,
     }: any) => {
+      const inputId = id || (label ? `value-input-${label.replace(/\s+/g, "-")}` : undefined);
       // If no field is selected, disable the input
       if (!fieldName) {
         return (
           <div className="flex-1">
             {label && (
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor={inputId} className="block text-sm font-medium text-gray-700 mb-1">
                 {label}
               </label>
             )}
             <input
+              id={inputId}
               type="text"
               className="w-full border border-gray-300 rounded-md p-2 text-left bg-gray-100 text-gray-500 cursor-not-allowed"
               dir="ltr"
@@ -658,12 +669,13 @@ export default function CreateAnalyticsViewModal({
       return (
         <div className="flex-1">
           {label && (
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor={inputId} className="block text-sm font-medium text-gray-700 mb-1">
               {label}
             </label>
           )}
           {isSelect ? (
             <select
+              id={inputId}
               className="w-full border border-gray-300 rounded-md p-2"
               value={value}
               onChange={(e) => onChange(e.target.value)}
@@ -681,6 +693,7 @@ export default function CreateAnalyticsViewModal({
             </select>
           ) : (
             <input
+              id={inputId}
               type="text"
               className="w-full border border-gray-300 rounded-md p-2 text-left"
               dir="ltr"
@@ -696,10 +709,11 @@ export default function CreateAnalyticsViewModal({
     // Shared Inputs
     const TableSelect = () => (
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">
+        <label htmlFor="analytics-data-source" className="block text-sm font-medium text-gray-700">
           בחר מקור נתונים
         </label>
         <select
+          id="analytics-data-source"
           className="w-full border border-gray-300 rounded-md p-2"
           value={config.tableId || config.model || ""}
           onChange={(e) => {
@@ -812,6 +826,7 @@ export default function CreateAnalyticsViewModal({
             <button
               key={option.id}
               onClick={() => setConfig({ ...config, dateRangeType: option.id })}
+              aria-pressed={(config.dateRangeType || "all") === option.id}
               className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                 (config.dateRangeType || "all") === option.id
                   ? "bg-blue-100 text-blue-700 border-blue-200"
@@ -833,8 +848,9 @@ export default function CreateAnalyticsViewModal({
         {config.dateRangeType === "custom" && (
           <div className="flex gap-2 mt-2">
             <div className="flex-1">
-              <label className="block text-xs text-gray-500 mb-1">מתאריך</label>
+              <label htmlFor="analytics-start-date" className="block text-xs text-gray-500 mb-1">מתאריך</label>
               <input
+                id="analytics-start-date"
                 type="date"
                 value={config.customStartDate || ""}
                 onChange={(e) =>
@@ -844,10 +860,11 @@ export default function CreateAnalyticsViewModal({
               />
             </div>
             <div className="flex-1">
-              <label className="block text-xs text-gray-500 mb-1">
+              <label htmlFor="analytics-end-date" className="block text-xs text-gray-500 mb-1">
                 עד תאריך
               </label>
               <input
+                id="analytics-end-date"
                 type="date"
                 value={config.customEndDate || ""}
                 onChange={(e) =>
@@ -1070,10 +1087,11 @@ export default function CreateAnalyticsViewModal({
                 config.yAxisMeasure === "avg") && (
                 <div className="flex gap-2 items-end animate-in fade-in slide-in-from-top-2">
                   <div className="w-32">
-                    <label className="text-xs text-gray-500 mb-1 block">
+                    <label htmlFor="analytics-y-operation" className="text-xs text-gray-500 mb-1 block">
                       פעולה
                     </label>
                     <select
+                      id="analytics-y-operation"
                       className="w-full border border-gray-300 rounded-md p-2 text-sm"
                       value={config.yAxisMeasure || "sum"}
                       onChange={(e) =>
@@ -1108,15 +1126,16 @@ export default function CreateAnalyticsViewModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); onClose(); }}>
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="create-analytics-title" onClick={(e) => { e.stopPropagation(); onClose(); }}>
+      <div ref={focusTrapRef} className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center p-6 border-b border-gray-200">
-          <h3 className="text-xl font-semibold text-gray-900">
+          <h3 id="create-analytics-title" className="text-xl font-semibold text-gray-900">
             {initialData ? "עריכת תצוגת ניתוח" : "יצירת תצוגת ניתוח חדשה"}
           </h3>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-500"
+            aria-label="סגור"
           >
             <X size={24} />
           </button>
@@ -1166,17 +1185,18 @@ export default function CreateAnalyticsViewModal({
 
           {/* Submit Error */}
           {submitError && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm" role="alert" aria-live="polite">
               {submitError}
             </div>
           )}
 
           {/* Title Input always nice to have */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="analytics-title-input" className="block text-sm font-medium text-gray-700 mb-2">
               כותרת התצוגה
             </label>
             <input
+              id="analytics-title-input"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -1196,7 +1216,7 @@ export default function CreateAnalyticsViewModal({
                 : step;
 
               return (
-                <div className="flex items-center gap-4 mb-4">
+                <div className="flex items-center gap-4 mb-4" role="group" aria-label="שלבי יצירה">
                   {Array.from({ length: totalSteps }, (_, i) => {
                     const dotNum = i + 1;
                     const isCompleted = dotNum < displayStep;
@@ -1208,6 +1228,7 @@ export default function CreateAnalyticsViewModal({
                             className={`h-1 flex-1 rounded-full ${
                               isCompleted ? "bg-green-500" : "bg-gray-200"
                             }`}
+                            aria-hidden="true"
                           />
                         )}
                         <div
@@ -1218,6 +1239,8 @@ export default function CreateAnalyticsViewModal({
                                 ? "bg-blue-600 text-white"
                                 : "bg-gray-200 text-gray-500"
                           }`}
+                          aria-label={`שלב ${dotNum} מתוך ${totalSteps}`}
+                          aria-current={isCurrent ? "step" : undefined}
                         >
                           {isCompleted ? <Check size={16} /> : dotNum}
                         </div>

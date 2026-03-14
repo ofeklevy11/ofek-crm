@@ -124,7 +124,7 @@ export default function AvailabilityBlocksList({
     <div dir="rtl">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base font-semibold text-white">חסימות זמינות</h3>
+        <h2 className="text-base font-semibold text-white">חסימות זמינות</h2>
         <Button
           size="sm"
           className="gap-1.5 bg-blue-600 hover:bg-blue-700"
@@ -172,6 +172,7 @@ export default function AvailabilityBlocksList({
                   disabled={deletingId === block.id}
                   onClick={() => setConfirmDeleteId(block.id)}
                   title="מחק חסימה"
+                  aria-label="מחק חסימה"
                 >
                   <Trash2 className="size-4" />
                 </Button>
@@ -206,10 +207,11 @@ export default function AvailabilityBlocksList({
 
           <div className="space-y-3 py-2">
             <div>
-              <label className="text-sm font-medium mb-1 block text-white/80">
+              <label htmlFor="block-title" className="text-sm font-medium mb-1 block text-white/80">
                 כותרת (אופציונלי)
               </label>
               <Input
+                id="block-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="חופשה, חג..."
@@ -217,10 +219,11 @@ export default function AvailabilityBlocksList({
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block text-white/80">
+              <label htmlFor="block-start" className="text-sm font-medium mb-1 block text-white/80">
                 תאריך התחלה
               </label>
               <Input
+                id="block-start"
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
@@ -228,10 +231,11 @@ export default function AvailabilityBlocksList({
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block text-white/80">
+              <label htmlFor="block-end" className="text-sm font-medium mb-1 block text-white/80">
                 תאריך סיום
               </label>
               <Input
+                id="block-end"
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}

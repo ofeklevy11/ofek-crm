@@ -99,7 +99,7 @@ export default function NurtureMessageEditor({
   };
 
   const PlaceholderTags = () => (
-    <div className="flex gap-2 text-xs text-slate-500 flex-wrap">
+    <div aria-hidden="true" className="flex gap-2 text-xs text-slate-500 flex-wrap">
       {placeholders.map((p) => (
         <span
           key={p}
@@ -114,12 +114,13 @@ export default function NurtureMessageEditor({
   return (
     <div className="space-y-4">
       {/* Message tabs */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div role="tablist" aria-label="תבניות הודעה" className="flex items-center gap-2 flex-wrap">
         {messages.map((m, i) => (
           <div key={m.id} className="group relative flex items-center">
             {renamingIdx === i ? (
               <div className="flex items-center gap-1">
                 <input
+                  aria-label="שם חדש לתבנית"
                   className="text-xs border border-indigo-300 rounded px-2 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-indigo-400"
                   value={renameValue}
                   onChange={(e) => setRenameValue(e.target.value)}
@@ -130,15 +131,19 @@ export default function NurtureMessageEditor({
               </div>
             ) : (
               <button
+                role="tab"
+                aria-selected={selectedIdx === i}
+                id={`msg-tab-${i}`}
+                aria-controls="msg-panel"
                 onClick={() => setSelectedIdx(i)}
-                className={`text-xs px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1.5 ${
+                className={`text-xs px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                   selectedIdx === i
                     ? "border-indigo-300 bg-indigo-50 text-indigo-700 font-medium"
                     : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                 }`}
               >
                 {m.isActive && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                  <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
                 )}
                 {m.name}
               </button>
@@ -149,7 +154,8 @@ export default function NurtureMessageEditor({
                 {!m.isActive && (
                   <button
                     onClick={() => handleActivate(i)}
-                    className="p-1 rounded text-green-600 hover:bg-green-50 transition-colors"
+                    aria-label="הפעל תבנית"
+                    className="p-1 rounded text-green-600 hover:bg-green-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     title="הפעל תבנית זו"
                   >
                     <Check className="w-3.5 h-3.5" />
@@ -157,7 +163,8 @@ export default function NurtureMessageEditor({
                 )}
                 <button
                   onClick={() => startRename(i)}
-                  className="p-1 rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                  aria-label="שנה שם"
+                  className="p-1 rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   title="שנה שם"
                 >
                   <Pencil className="w-3.5 h-3.5" />
@@ -165,7 +172,8 @@ export default function NurtureMessageEditor({
                 {messages.length > 1 && (
                   <button
                     onClick={() => handleDelete(i)}
-                    className="p-1 rounded text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                    aria-label="מחק תבנית"
+                    className="p-1 rounded text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     title="מחק תבנית"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -186,11 +194,11 @@ export default function NurtureMessageEditor({
 
       {/* Active indicator */}
       {selected.isActive ? (
-        <div className="text-xs text-green-600 bg-green-50 border border-green-100 rounded px-3 py-1.5 inline-block">
+        <div role="status" className="text-xs text-green-600 bg-green-50 border border-green-100 rounded px-3 py-1.5 inline-block">
           תבנית פעילה — זו ההודעה שתישלח ללקוחות
         </div>
       ) : (
-        <div className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded px-3 py-1.5 flex items-center gap-2">
+        <div role="status" className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded px-3 py-1.5 flex items-center gap-2">
           <span>תבנית לא פעילה</span>
           <button
             onClick={() => handleActivate(selectedIdx)}
@@ -202,7 +210,7 @@ export default function NurtureMessageEditor({
       )}
 
       {/* Channel editors for selected message */}
-      <div className="space-y-6">
+      <div role="tabpanel" id="msg-panel" aria-labelledby={`msg-tab-${selectedIdx}`} className="space-y-6">
         {channels.sms && (
           <div className="space-y-3">
             <h3 className="font-medium flex items-center gap-2 text-pink-700">

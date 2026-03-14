@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import {
   createAutomationRule,
   updateAutomationRule,
@@ -78,6 +79,7 @@ export default function AutomationModal({
   // --- Wizard State ---
   const [step, setStep] = useState(1);
   const totalSteps = 4;
+  const focusTrapRef = useFocusTrap(onClose);
 
   // Calculate max actions based on user plan
   const maxActions = getActionsPerAutomationLimit(userPlan);
@@ -787,11 +789,11 @@ export default function AutomationModal({
   const renderStep2 = () => (
     <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
       <div className="bg-gray-50 p-4 rounded-lg mb-4 text-sm text-gray-600 flex items-center gap-2">
-        {triggerType === "TASK_STATUS_CHANGE" && <ListTodo size={16} />}
-        {triggerType === "NEW_RECORD" && <TableProperties size={16} />}
-        {triggerType === "RECORD_FIELD_CHANGE" && <MousePointer2 size={16} />}
-        {triggerType === "TIME_SINCE_CREATION" && <Clock size={16} />}
-        {triggerType === "DIRECT_DIAL" && <Phone size={16} />}
+        {triggerType === "TASK_STATUS_CHANGE" && <ListTodo size={16} aria-hidden="true" />}
+        {triggerType === "NEW_RECORD" && <TableProperties size={16} aria-hidden="true" />}
+        {triggerType === "RECORD_FIELD_CHANGE" && <MousePointer2 size={16} aria-hidden="true" />}
+        {triggerType === "TIME_SINCE_CREATION" && <Clock size={16} aria-hidden="true" />}
+        {triggerType === "DIRECT_DIAL" && <Phone size={16} aria-hidden="true" />}
         <span>
           מגדיר תנאים עבור:
           <span className="font-semibold mx-1">
@@ -966,12 +968,12 @@ export default function AutomationModal({
               איזו עמודה לנטר?
             </label>
             <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 text-sm text-amber-800 mb-2">
-              <AlertCircle className="w-4 h-4 inline-block ml-1" />
+              <AlertCircle className="w-4 h-4 inline-block ml-1" aria-hidden="true" />
               שים לב: ניתן לנטר רק שדות מסוג בחירה (select), מספרי (number), תאריך או סטטוס. שדות טקסט חופשי אינם נתמכים כטריגר.
             </div>
             {loadingColumns ? (
-              <div className="flex items-center gap-2 text-sm text-gray-500 p-2">
-                <Loader2 className="animate-spin" size={16} /> טוען עמודות...
+              <div className="flex items-center gap-2 text-sm text-gray-500 p-2" role="status" aria-live="polite">
+                <Loader2 className="animate-spin" size={16} aria-hidden="true" /> טוען עמודות...
               </div>
             ) : (
               <select
@@ -1062,7 +1064,7 @@ export default function AutomationModal({
                     )}
                   </div>
                   <div className="flex items-center justify-center pt-5">
-                    <ArrowLeft className="text-gray-400" size={20} />
+                    <ArrowLeft className="text-gray-400" size={20} aria-hidden="true" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">
@@ -1133,7 +1135,7 @@ export default function AutomationModal({
           </div>
           {timeUnit === "minutes" && (
             <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg text-sm text-orange-800 flex gap-2 items-start">
-              <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+              <CheckCircle2 size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
               <span>
                 <strong>שים לב:</strong> בעת בחירת דקות, הזמן המינימלי הוא 5
                 דקות לפחות.
@@ -1141,7 +1143,7 @@ export default function AutomationModal({
             </div>
           )}
           <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg text-sm text-blue-800 flex gap-2 items-start">
-            <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+            <CheckCircle2 size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
             <span>
               <strong>שים לב:</strong> האוטומציה הזו תפעל רק על רשומות שייווצרו
               לאחר יצירת אוטומציה זו. רשומות היסטוריות לא ייחשבו.
@@ -1203,7 +1205,7 @@ export default function AutomationModal({
           פעולות לביצוע
         </label>
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 flex items-start gap-2 mb-2">
-          <AlertCircle size={16} className="text-blue-500 mt-0.5 shrink-0" />
+          <AlertCircle size={16} className="text-blue-500 mt-0.5 shrink-0" aria-hidden="true" />
           <div className="text-xs text-blue-700 leading-relaxed">
             {maxActions === 2 ? (
               <>
@@ -1227,7 +1229,7 @@ export default function AutomationModal({
               className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-xl"
             >
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg" aria-hidden="true">
                   {act.type === "SEND_NOTIFICATION" && <Bell size={20} />}
                   {act.type === "SEND_WHATSAPP" && <MessageSquare size={20} />}
                   {act.type === "SEND_SMS" && <Phone size={20} />}
@@ -1257,17 +1259,19 @@ export default function AutomationModal({
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => editAction(idx)}
-                    className="text-blue-500 hover:text-blue-700 p-2 hover:bg-blue-50 rounded-full transition-colors"
+                    className="text-blue-500 hover:text-blue-700 p-2 hover:bg-blue-50 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+                    aria-label="ערוך פעולה"
                     title="ערוך פעולה"
                   >
-                    <Pencil size={18} />
+                    <Pencil size={18} aria-hidden="true" />
                   </button>
                   <button
                     onClick={() => removeAction(idx)}
-                    className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-full transition-colors"
+                    className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+                    aria-label="מחק פעולה"
                     title="מחק פעולה"
                   >
-                    <X size={18} />
+                    <X size={18} aria-hidden="true" />
                   </button>
                 </div>
               )}
@@ -1423,7 +1427,7 @@ export default function AutomationModal({
           {(currentActionType === "SEND_WHATSAPP" || currentActionType === "SEND_SMS") && (
             <div className={`${currentActionType === "SEND_SMS" ? "bg-blue-50" : "bg-green-50"} p-6 rounded-xl border ${currentActionType === "SEND_SMS" ? "border-blue-100" : "border-green-100"} space-y-5 animate-in slide-in-from-top-2`}>
               <div className={`flex items-center gap-2 mb-2 ${currentActionType === "SEND_SMS" ? "text-blue-800" : "text-green-800"} font-medium pb-2 border-b ${currentActionType === "SEND_SMS" ? "border-blue-200" : "border-green-200"}`}>
-                {currentActionType === "SEND_SMS" ? <Phone size={18} /> : <MessageSquare size={18} />}
+                {currentActionType === "SEND_SMS" ? <Phone size={18} aria-hidden="true" /> : <MessageSquare size={18} aria-hidden="true" />}
                 {currentActionType === "SEND_SMS" ? "הגדרות הודעת SMS" : "הגדרות הודעת WhatsApp"}
               </div>
 
@@ -1600,7 +1604,7 @@ export default function AutomationModal({
                   return (
                     <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 mb-4 animate-in slide-in-from-top-2">
                       <div className="flex items-center gap-2 text-orange-800 font-medium mb-2">
-                        <Clock size={16} />
+                        <Clock size={16} aria-hidden="true" />
                         השהייה לפני שליחה (בשניות)
                       </div>
                       <p className="text-xs text-orange-600 mb-3">
@@ -1669,8 +1673,8 @@ export default function AutomationModal({
                     בחר קובץ לשליחה
                   </label>
                   {loadingFiles ? (
-                    <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
-                      <Loader2 className="animate-spin" size={16} /> טוען
+                    <div className="flex items-center gap-2 text-sm text-gray-500 py-2" role="status" aria-live="polite">
+                      <Loader2 className="animate-spin" size={16} aria-hidden="true" /> טוען
                       קבצים...
                     </div>
                   ) : (
@@ -1713,11 +1717,13 @@ export default function AutomationModal({
                     type="button"
                     onClick={() => setShowDynamicValues(!showDynamicValues)}
                     className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                    aria-expanded={showDynamicValues}
                   >
                     לפתיחת הערכים לשימוש מהרשומה הנוכחית לחץ כאן:
                     <ChevronDown
                       size={16}
                       className={`transition-transform ${showDynamicValues ? "rotate-180" : ""}`}
+                      aria-hidden="true"
                     />
                   </button>
 
@@ -1732,6 +1738,7 @@ export default function AutomationModal({
                               navigator.clipboard.writeText(`{${col.name}}`);
                             }}
                             className="flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded text-xs hover:border-blue-300 hover:bg-blue-50 transition-colors group"
+                            aria-label={`העתק ערך {${col.name}}`}
                             title="לחץ להעתקה"
                           >
                             <span
@@ -1741,6 +1748,7 @@ export default function AutomationModal({
                             <Copy
                               size={12}
                               className="text-gray-400 group-hover:text-blue-500"
+                              aria-hidden="true"
                             />
                           </button>
                         ))
@@ -1767,7 +1775,7 @@ export default function AutomationModal({
           {currentActionType === "SEND_EMAIL" && (
             <div className="bg-purple-50 p-6 rounded-xl border border-purple-100 space-y-5 animate-in slide-in-from-top-2">
               <div className="flex items-center gap-2 mb-2 text-purple-800 font-medium pb-2 border-b border-purple-200">
-                <Mail size={18} />
+                <Mail size={18} aria-hidden="true" />
                 הגדרות אימייל
               </div>
 
@@ -1897,7 +1905,7 @@ export default function AutomationModal({
           {currentActionType === "CREATE_TASK" && (
             <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 space-y-5 animate-in slide-in-from-top-2">
               <div className="flex items-center gap-2 mb-2 text-blue-800 font-medium pb-2 border-b border-blue-200">
-                <CheckSquare size={18} />
+                <CheckSquare size={18} aria-hidden="true" />
                 הגדרות משימה חדשה
               </div>
 
@@ -1934,11 +1942,13 @@ export default function AutomationModal({
                     type="button"
                     onClick={() => setShowDynamicValues(!showDynamicValues)}
                     className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                    aria-expanded={showDynamicValues}
                   >
                     לפתיחת הערכים לשימוש מהרשומה הנוכחית לחץ כאן:
                     <ChevronDown
                       size={16}
                       className={`transition-transform ${showDynamicValues ? "rotate-180" : ""}`}
+                      aria-hidden="true"
                     />
                   </button>
 
@@ -1953,6 +1963,7 @@ export default function AutomationModal({
                               navigator.clipboard.writeText(`{${col.name}}`);
                             }}
                             className="flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded text-xs hover:border-blue-300 hover:bg-blue-50 transition-colors group"
+                            aria-label={`העתק ערך {${col.name}}`}
                             title="לחץ להעתקה"
                           >
                             <span
@@ -1962,6 +1973,7 @@ export default function AutomationModal({
                             <Copy
                               size={12}
                               className="text-gray-400 group-hover:text-blue-500"
+                              aria-hidden="true"
                             />
                           </button>
                         ))
@@ -2073,6 +2085,7 @@ export default function AutomationModal({
                         type="button"
                         onClick={() => removeTaskTag(tag)}
                         className="hover:text-blue-900 transition-colors font-bold px-1"
+                        aria-label={`הסר תגית ${tag}`}
                       >
                         ×
                       </button>
@@ -2086,7 +2099,7 @@ export default function AutomationModal({
           {currentActionType === "UPDATE_RECORD_FIELD" && (
             <div className="bg-purple-50 p-6 rounded-xl border border-purple-100 space-y-5 animate-in slide-in-from-top-2">
               <div className="flex items-center gap-2 mb-2 text-purple-800 font-medium pb-2 border-b border-purple-200">
-                <Pencil size={18} />
+                <Pencil size={18} aria-hidden="true" />
                 עדכון שדה ברשומה
               </div>
 
@@ -2124,8 +2137,8 @@ export default function AutomationModal({
                     בחר שדה לעדכון
                   </label>
                   {loadingUpdateFieldColumns ? (
-                    <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
-                      <Loader2 className="animate-spin" size={16} /> טוען
+                    <div className="flex items-center gap-2 text-sm text-gray-500 py-2" role="status" aria-live="polite">
+                      <Loader2 className="animate-spin" size={16} aria-hidden="true" /> טוען
                       עמודות...
                     </div>
                   ) : (
@@ -2264,13 +2277,13 @@ export default function AutomationModal({
             onClick={() => setIsAddingAction(true)}
             className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all flex items-center gap-2"
           >
-            <ListTodo size={18} />
+            <ListTodo size={18} aria-hidden="true" />
             הוסף פעולה נוספת (+{actions.length}/{maxActions})
           </button>
         </div>
       ) : (
         <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 text-sm text-yellow-800 flex items-start gap-2">
-          <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+          <CheckCircle2 size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
           הגעת למקסימום הפעולות ({maxActions}) עבור אוטומציה זו.
         </div>
       )}
@@ -2310,14 +2323,16 @@ export default function AutomationModal({
               <label className="block text-sm font-bold text-gray-700 mb-3">
                 ימי פעילות
               </label>
-              <div className="flex gap-3 flex-wrap">
+              <div className="flex gap-3 flex-wrap" role="group" aria-label="ימי פעילות">
                 {["א", "ב", "ג", "ד", "ה", "ו", "ש"].map((day, idx) => {
                   const isActive = activeDays.includes(idx);
-                  // Adjust index so 0=Sunday
+                  const dayNames = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
                   return (
                     <button
                       key={idx}
                       type="button"
+                      aria-pressed={isActive}
+                      aria-label={`יום ${dayNames[idx]}`}
                       onClick={() => {
                         if (isActive) {
                           setActiveDays(activeDays.filter((d) => d !== idx));
@@ -2347,6 +2362,7 @@ export default function AutomationModal({
                   <Clock
                     className="absolute top-3 right-3 text-gray-400"
                     size={16}
+                    aria-hidden="true"
                   />
                   <input
                     type="time"
@@ -2364,6 +2380,7 @@ export default function AutomationModal({
                   <Clock
                     className="absolute top-3 right-3 text-gray-400"
                     size={16}
+                    aria-hidden="true"
                   />
                   <input
                     type="time"
@@ -2376,7 +2393,7 @@ export default function AutomationModal({
             </div>
 
             <div className="bg-white/50 p-3 rounded-lg border border-purple-100 text-xs text-purple-800 flex items-start gap-2">
-              <CalendarClock size={16} className="shrink-0 mt-0.5" />
+              <CalendarClock size={16} className="shrink-0 mt-0.5" aria-hidden="true" />
               שים לב: במידה ומוגדרים ימי פעילות, האוטומציה לא תפעל כלל מחוץ
               לטווחים האלו, גם אם הטריגר התרחש.
             </div>
@@ -2392,14 +2409,21 @@ export default function AutomationModal({
       dir="rtl"
       onClick={onClose}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+      <div
+        ref={focusTrapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="automation-modal-title"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="bg-gray-50 px-8 py-5 border-b border-gray-100 flex justify-between items-center">
           <div className="flex flex-col">
-            <h3 className="text-xl font-bold text-gray-800">
+            <h3 id="automation-modal-title" className="text-xl font-bold text-gray-800">
               {editingRule ? "עריכת אוטומציה" : "אשף האוטומציות"}
             </h3>
-            <div className="flex gap-2 mt-2">
+            <div className="flex gap-2 mt-2" aria-label={`שלב ${step} מתוך ${totalSteps}`} role="progressbar" aria-valuenow={step} aria-valuemin={1} aria-valuemax={totalSteps}>
               {[1, 2, 3, 4].map((i) => (
                 <div
                   key={i}
@@ -2411,8 +2435,9 @@ export default function AutomationModal({
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors"
+            aria-label="סגור"
           >
-            <X size={24} />
+            <X size={24} aria-hidden="true" />
           </button>
         </div>
 
@@ -2435,7 +2460,7 @@ export default function AutomationModal({
               onClick={() => setStep(step - 1)}
               className="px-6 py-2.5 text-gray-600 font-medium hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-2"
             >
-              <ArrowRight size={18} />
+              <ArrowRight size={18} aria-hidden="true" />
               חזור
             </button>
           ) : (
@@ -2453,7 +2478,7 @@ export default function AutomationModal({
               className="px-8 py-2.5 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-200 flex items-center gap-2"
             >
               המשך לשלב הבא
-              <ArrowLeft size={18} />
+              <ArrowLeft size={18} aria-hidden="true" />
             </button>
           ) : (
             <button
@@ -2461,9 +2486,9 @@ export default function AutomationModal({
               disabled={loading}
               className="px-8 py-2.5 bg-green-600 text-white font-medium rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all shadow-lg shadow-green-200 flex items-center gap-2"
             >
-              {loading && <Loader2 className="animate-spin" size={18} />}
+              {loading && <Loader2 className="animate-spin" size={18} aria-hidden="true" />}
               {editingRule ? "שמור שינויים" : "צור אוטומציה"}
-              <CheckCircle2 size={18} />
+              <CheckCircle2 size={18} aria-hidden="true" />
             </button>
           )}
         </div>
@@ -2486,9 +2511,11 @@ function TriggerCard({
   onClick: () => void;
 }) {
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
-      className={`relative p-5 rounded-xl border-2 cursor-pointer transition-all duration-200 group ${
+      aria-pressed={selected}
+      className={`relative p-5 rounded-xl border-2 cursor-pointer transition-all duration-200 group w-full text-right ${
         selected
           ? "border-blue-500 bg-blue-50 shadow-md ring-2 ring-blue-200 ring-offset-2"
           : "border-gray-100 bg-white hover:border-blue-200 hover:bg-gray-50"
@@ -2497,6 +2524,7 @@ function TriggerCard({
       <div className="flex items-start gap-4">
         <div
           className={`p-3 rounded-lg ${selected ? "bg-white" : "bg-gray-100 group-hover:bg-white"} transition-colors`}
+          aria-hidden="true"
         >
           {icon}
         </div>
@@ -2510,7 +2538,7 @@ function TriggerCard({
         </div>
       </div>
       {selected && (
-        <div className="absolute top-4 left-4 text-blue-500">
+        <div className="absolute top-4 left-4 text-blue-500" aria-hidden="true">
           <CheckCircle2
             size={20}
             fill="currentColor"
@@ -2518,7 +2546,7 @@ function TriggerCard({
           />
         </div>
       )}
-    </div>
+    </button>
   );
 }
 

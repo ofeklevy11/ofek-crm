@@ -59,17 +59,23 @@ export default function NurtureChannelSelector({
   availableChannels,
 }: NurtureChannelSelectorProps) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div role="group" aria-label="ערוצי שליחה" className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {channelDefs.map((ch) => {
         const isActive = channels[ch.key];
         const isAvailable = availableChannels[ch.key];
         return (
-          <div
+          <button
             key={ch.key}
+            type="button"
+            role="switch"
+            aria-checked={isActive}
+            aria-label={`${ch.label} - ${isActive ? "מופעל" : "כבוי"}`}
+            disabled={!isAvailable}
+            aria-disabled={!isAvailable}
             className={cn(
-              "cursor-pointer border rounded-xl p-4 flex flex-col items-center gap-3 transition-all relative",
+              "border rounded-xl p-4 flex flex-col items-center gap-3 transition-all relative cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               isActive ? ch.activeColor : "border-slate-200 hover:border-slate-300",
-              !isAvailable && "opacity-70"
+              !isAvailable && "opacity-70 cursor-not-allowed"
             )}
             onClick={() => {
               if (!isAvailable) return;
@@ -85,7 +91,7 @@ export default function NurtureChannelSelector({
               <ch.icon className="w-5 h-5" />
             </div>
             <span className="font-medium text-sm">{ch.label}</span>
-            {isActive && <CheckCircle2 className={cn("w-4 h-4", ch.checkColor)} />}
+            {isActive && <CheckCircle2 aria-hidden="true" className={cn("w-4 h-4", ch.checkColor)} />}
             {!isAvailable && (
               <Link
                 href="/profile"
@@ -96,7 +102,7 @@ export default function NurtureChannelSelector({
                 לא מחובר
               </Link>
             )}
-          </div>
+          </button>
         );
       })}
 

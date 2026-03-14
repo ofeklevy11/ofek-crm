@@ -10,6 +10,7 @@ import {
   LayoutGrid,
   Plus,
   Trash2,
+  GripVertical,
 } from "lucide-react";
 import { useState, useEffect, memo } from "react";
 import { useRouter } from "next/navigation";
@@ -202,24 +203,33 @@ function TableViewsDashboardWidget({
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      className={`group relative flex flex-col bg-white rounded-2xl shadow-sm hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300 border border-gray-100 overflow-hidden cursor-grab active:cursor-grabbing ${
+      className={`group relative flex flex-col bg-white rounded-2xl shadow-sm hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300 border border-gray-100 overflow-hidden ${
         isCollapsed ? "h-auto" : "min-h-[200px]"
       }`}
     >
       {/* Top Accent Line - Gradient */}
-      <div className="h-1.5 w-full shrink-0 bg-gradient-to-r from-[#4f95ff] to-[#a24ec1]" />
+      <div className="h-1.5 w-full shrink-0 bg-gradient-to-r from-[#4f95ff] to-[#a24ec1]" aria-hidden="true" />
 
       <div className="p-5 flex-1 flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-start mb-4">
+          <div className="flex items-start gap-1">
+            <button
+              {...attributes}
+              {...listeners}
+              className="p-1 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 rounded touch-none focus-visible:ring-2 focus-visible:ring-ring mt-1"
+              aria-label={`גרור ווידג׳ט: ${title}`}
+              aria-roledescription="פריט ניתן לגרירה"
+            >
+              <GripVertical size={16} />
+            </button>
+          </div>
           <div className="flex-1 overflow-hidden">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-gradient-to-r from-blue-50 to-purple-50 text-purple-700 border-purple-100">
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-gradient-to-r from-blue-50 to-purple-50 text-purple-700 border-purple-100">
                 מיני דאשבורד
               </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-gray-50 text-gray-600 border-gray-100">
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-gray-50 text-gray-600 border-gray-100">
                 {views.length} תצוגות
               </span>
             </div>
@@ -231,37 +241,35 @@ function TableViewsDashboardWidget({
             </h3>
           </div>
 
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
             <button
-              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition"
-              onPointerDown={(e) => e.stopPropagation()}
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               onClick={handleToggleCollapse}
               title={isCollapsed ? "הצג" : "הסתר"}
+              aria-label={isCollapsed ? "הצג תוכן ווידג׳ט" : "הסתר תוכן ווידג׳ט"}
             >
               {isCollapsed ? <Eye size={16} /> : <EyeOff size={16} />}
             </button>
 
             {onEdit && (
               <button
-                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition"
-                onPointerDown={(e) => e.stopPropagation()}
+                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                 onClick={(e) => {
                   e.stopPropagation();
                   onEdit(id);
                 }}
                 title="עריכה"
+                aria-label="הגדרות ווידג׳ט"
               >
                 <Settings size={16} />
               </button>
             )}
 
             <button
-              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                onRemove(id);
-              }}
+              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+              onClick={() => onRemove(id)}
               title="הסר מהדאשבורד"
+              aria-label="הסר ווידג׳ט מהדאשבורד"
             >
               <X size={16} />
             </button>
@@ -281,13 +289,14 @@ function TableViewsDashboardWidget({
                 <div
                   key={key}
                   className="relative bg-white rounded-xl border border-gray-100 p-4 transition-all group/card"
-                  onPointerDown={(e) => e.stopPropagation()}
                 >
                   {/* Number */}
                   <div className="flex items-start justify-between mb-2">
                     <span className="text-2xl font-bold text-gray-900">
                       {data?.isLoading ? (
-                        <span className="inline-block w-8 h-6 bg-gray-100 animate-pulse rounded" />
+                        <span className="inline-block w-8 h-6 bg-gray-100 animate-pulse rounded" role="status">
+                          <span className="sr-only">טוען...</span>
+                        </span>
                       ) : (
                         (data?.count?.toLocaleString() ?? 0)
                       )}
@@ -310,7 +319,7 @@ function TableViewsDashboardWidget({
                   </p>
 
                   {/* Table name hint */}
-                  <p className="text-[10px] text-gray-400 mt-1 truncate">
+                  <p className="text-[11px] text-gray-400 mt-1 truncate">
                     {table?.name || ""}
                   </p>
                 </div>

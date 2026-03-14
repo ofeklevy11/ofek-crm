@@ -27,7 +27,6 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   Select,
@@ -37,6 +36,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import NurtureChannelSelector from "@/components/nurture/NurtureChannelSelector";
 import NurtureMessageEditor, { migrateConfigMessages, NurtureMessage } from "@/components/nurture/NurtureMessageEditor";
@@ -291,7 +297,7 @@ export default function ReviewAutomationPage() {
   };
 
   return (
-    <div
+    <main
       className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20"
       dir="rtl"
     >
@@ -354,7 +360,7 @@ export default function ReviewAutomationPage() {
             {/* Customer List Management */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg flex justify-between items-center">
+                <h2 className="font-semibold leading-none tracking-tight text-lg flex justify-between items-center">
                   <span>רשימת לקוחות ({total})</span>
                   <CustomerListManager
                     onAddCustomers={handleAddCustomers}
@@ -363,7 +369,7 @@ export default function ReviewAutomationPage() {
                     onAutomationOpenChangeProp={setIsAutoModalOpen}
                     onAutoSendDispatched={handleAutoSendDispatched}
                   />
-                </CardTitle>
+                </h2>
                 <CardDescription>
                   נהל את רשימת הלקוחות שיקבלו בקשת ביקורת
                 </CardDescription>
@@ -406,10 +412,10 @@ export default function ReviewAutomationPage() {
             {rules.length > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
+                  <h2 className="font-semibold leading-none tracking-tight text-lg flex items-center gap-2">
                     <Zap className="w-5 h-5 text-amber-500 fill-amber-500" />
                     חוקי אוטומציה פעילים ({rules.length})
-                  </CardTitle>
+                  </h2>
                   <CardDescription>
                     חוקים שמוסיפים לקוחות באופן אוטומטי
                   </CardDescription>
@@ -448,8 +454,9 @@ export default function ReviewAutomationPage() {
                               onClick={() => {
                                 setIsAutoModalOpen(true);
                               }}
-                              className="p-1.5 rounded-md text-indigo-600 hover:bg-indigo-50 transition-colors"
+                              className="p-1.5 rounded-md text-indigo-600 hover:bg-indigo-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                               title="ערוך ונהל אוטומציות"
+                              aria-label="ערוך אוטומציה"
                             >
                               <Pencil className="w-4 h-4" />
                             </button>
@@ -467,12 +474,13 @@ export default function ReviewAutomationPage() {
                                   else toast.error(getUserFriendlyError(error));
                                 }
                               }}
-                              className={`p-1.5 rounded-md transition-colors ${
+                              className={`p-1.5 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                                 rule.isActive
                                   ? "text-green-600 hover:bg-green-100"
                                   : "text-slate-400 hover:bg-slate-100"
                               }`}
                               title={rule.isActive ? "השבת" : "הפעל"}
+                              aria-label={rule.isActive ? "השבת אוטומציה" : "הפעל אוטומציה"}
                             >
                               {rule.isActive ? (
                                 <ToggleRight className="w-5 h-5" />
@@ -500,13 +508,15 @@ export default function ReviewAutomationPage() {
                                       setConfirmDeleteRuleId(null);
                                     }
                                   }}
-                                  className="p-1 rounded-md text-white bg-red-500 hover:bg-red-600 transition-colors text-xs px-2"
+                                  className="p-1 rounded-md text-white bg-red-500 hover:bg-red-600 transition-colors text-xs px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  aria-label="אשר מחיקת אוטומציה"
                                 >
                                   מחק
                                 </button>
                                 <button
                                   onClick={() => setConfirmDeleteRuleId(null)}
-                                  className="p-1 rounded-md text-slate-500 hover:bg-slate-100 transition-colors"
+                                  className="p-1 rounded-md text-slate-500 hover:bg-slate-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  aria-label="ביטול מחיקה"
                                 >
                                   <X className="w-3.5 h-3.5" />
                                 </button>
@@ -514,8 +524,9 @@ export default function ReviewAutomationPage() {
                             ) : (
                               <button
                                 onClick={() => setConfirmDeleteRuleId(rule.id)}
-                                className="p-1.5 rounded-md text-red-500 hover:bg-red-50 transition-colors"
+                                className="p-1.5 rounded-md text-red-500 hover:bg-red-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 title="מחק"
+                                aria-label="מחק אוטומציה"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -541,7 +552,7 @@ export default function ReviewAutomationPage() {
             {/* Channel Selection */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">ערוצי שליחה</CardTitle>
+                <h2 className="font-semibold leading-none tracking-tight text-lg">ערוצי שליחה</h2>
                 <CardDescription>בחר היכן הלקוח יקבל את ההודעה</CardDescription>
               </CardHeader>
               <CardContent>
@@ -556,7 +567,7 @@ export default function ReviewAutomationPage() {
             {/* Message Editor */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">תוכן ההודעות</CardTitle>
+                <h2 className="font-semibold leading-none tracking-tight text-lg">תוכן ההודעות</h2>
               </CardHeader>
               <CardContent>
                 <NurtureMessageEditor
@@ -571,10 +582,10 @@ export default function ReviewAutomationPage() {
             {/* Timing & Scheduling */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
+                <h2 className="font-semibold leading-none tracking-tight text-lg flex items-center gap-2">
                   <Zap className="w-5 h-5 text-amber-500 fill-amber-500" />
                   תזמון שליחה
-                </CardTitle>
+                </h2>
                 <CardDescription>הגדר מתי לשלוח בקשת ביקורת ללקוחות שמתווספים לרשימה</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -629,31 +640,13 @@ export default function ReviewAutomationPage() {
       </div>
 
       {/* Customer Details Popup */}
-      {selectedCustomer && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={() => {
-            setSelectedCustomer(null);
-            setEditingCustomer(null);
-            setConfirmingDelete(false);
-          }}
-        >
-          <div
-            className="bg-white rounded-xl shadow-xl w-[90%] max-w-sm p-5 relative"
-            dir="rtl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => {
-                setSelectedCustomer(null);
-                setEditingCustomer(null);
-                setConfirmingDelete(false);
-              }}
-              className="absolute top-3 left-3 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
-            >
-              <X className="w-4 h-4 text-slate-600" />
-            </button>
-
+      <Dialog open={!!selectedCustomer} onOpenChange={(open) => { if (!open) { setSelectedCustomer(null); setEditingCustomer(null); setConfirmingDelete(false); } }}>
+        <DialogContent className="max-w-sm p-5" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="sr-only">{selectedCustomer?.name ?? "פרטי לקוח"}</DialogTitle>
+            <DialogDescription className="sr-only">צפייה ועריכת פרטי לקוח</DialogDescription>
+          </DialogHeader>
+          {selectedCustomer && (<>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg font-bold">
                 {selectedCustomer.name.slice(0, 2)}
@@ -684,11 +677,12 @@ export default function ReviewAutomationPage() {
                     )}
                 </div>
               </div>
-              {!editingCustomer && (
+              {!editingCustomer && selectedCustomer && (
                 <button
                   onClick={() => setEditingCustomer({ ...selectedCustomer })}
-                  className="p-2 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors"
+                  className="p-2 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   title="ערוך"
+                  aria-label="ערוך פרטי לקוח"
                 >
                   <Pencil className="w-4 h-4 text-slate-600" />
                 </button>
@@ -748,11 +742,12 @@ export default function ReviewAutomationPage() {
                           emailActive: !editingCustomer.emailActive,
                         })
                       }
-                      className={`p-1.5 rounded-md transition-colors ${
+                      className={`p-1.5 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                         editingCustomer.emailActive
                           ? "text-green-600 hover:bg-green-50"
                           : "text-slate-400 hover:bg-slate-100"
                       }`}
+                      aria-label={editingCustomer.emailActive ? "השבת אימייל" : "הפעל אימייל"}
                     >
                       {editingCustomer.emailActive ? (
                         <ToggleRight className="w-6 h-6" />
@@ -778,11 +773,12 @@ export default function ReviewAutomationPage() {
                           phoneActive: !editingCustomer.phoneActive,
                         })
                       }
-                      className={`p-1.5 rounded-md transition-colors ${
+                      className={`p-1.5 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                         editingCustomer.phoneActive
                           ? "text-green-600 hover:bg-green-50"
                           : "text-slate-400 hover:bg-slate-100"
                       }`}
+                      aria-label={editingCustomer.phoneActive ? "השבת טלפון" : "הפעל טלפון"}
                     >
                       {editingCustomer.phoneActive ? (
                         <ToggleRight className="w-6 h-6" />
@@ -933,9 +929,9 @@ export default function ReviewAutomationPage() {
                 </div>
               </>
             )}
-          </div>
-        </div>
-      )}
+          </>)}
+        </DialogContent>
+      </Dialog>
       <NurtureQueuePanel batchId={activeBatchId} onClose={() => setActiveBatchId(null)} />
       <NurtureAutoSendQueue slug="review" trigger={autoSendQueueTrigger} />
       <NurtureSendConfirmDialog
@@ -959,6 +955,6 @@ export default function ReviewAutomationPage() {
         quota={quota}
         selectedOnly={bulkSendForSelected}
       />
-    </div>
+    </main>
   );
 }

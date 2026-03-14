@@ -240,10 +240,16 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
           >
             {/* Sheet Header */}
             <div
+              className="w-full p-5 flex flex-col md:flex-row items-center justify-between hover:bg-slate-700/30 transition-colors cursor-pointer gap-4 md:gap-0 text-start"
               onClick={() => toggleSheet(sheet.id)}
-              className="w-full p-5 flex flex-col md:flex-row items-center justify-between hover:bg-slate-700/30 transition-colors cursor-pointer gap-4 md:gap-0"
             >
-              <div className="flex items-center justify-between w-full md:w-auto">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); toggleSheet(sheet.id); }}
+                aria-expanded={isExpanded}
+                aria-controls={`sheet-content-${sheet.id}`}
+                className="flex items-center justify-between w-full md:w-auto text-start focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg cursor-pointer"
+              >
                 <div className="flex items-center gap-4">
                   <div
                     className={`p-3 rounded-xl ${
@@ -291,14 +297,14 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
                   </div>
                 </div>
                 {/* Mobile Chevron */}
-                <div className="md:hidden">
+                <div className="md:hidden" aria-hidden="true">
                   {isExpanded ? (
                     <ChevronUp className="w-5 h-5 text-slate-400" />
                   ) : (
                     <ChevronDown className="w-5 h-5 text-slate-400" />
                   )}
                 </div>
-              </div>
+              </button>
 
               <div className="flex items-center gap-4 w-full md:w-auto flex-col md:flex-row">
                 {/* Button Section */}
@@ -308,8 +314,8 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
                       e.stopPropagation();
                       handleResetSheet(sheet.id);
                     }}
-                    className="w-full md:w-auto justify-center flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/30 rounded-lg transition-colors md:ml-2"
-                    title="איפוס דף משימות"
+                    className="w-full md:w-auto justify-center flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/30 rounded-lg transition-colors md:ml-2 focus-visible:ring-2 focus-visible:ring-blue-500"
+                    aria-label={`איפוס דף "${sheet.title}"`}
                   >
                     <RefreshCw className="w-4 h-4" />
                     איפוס דף המשימות
@@ -330,6 +336,8 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
                     <svg
                       className="w-full h-full -rotate-90"
                       viewBox="0 0 36 36"
+                      role="img"
+                      aria-label={`התקדמות: ${progress} אחוז`}
                     >
                       <circle
                         cx="18"
@@ -367,7 +375,7 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
                 </div>
 
                 {/* Desktop Chevron */}
-                <div className="hidden md:block md:order-3">
+                <div className="hidden md:block md:order-3" aria-hidden="true">
                   {isExpanded ? (
                     <ChevronUp className="w-5 h-5 text-slate-400" />
                   ) : (
@@ -379,7 +387,7 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
 
             {/* Items List */}
             {isExpanded && (
-              <div className="border-t border-slate-700/50">
+              <div id={`sheet-content-${sheet.id}`} className="border-t border-slate-700/50">
                 {items.length === 0 ? (
                   <div className="p-8 text-center text-slate-400">
                     <Circle className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -405,7 +413,9 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
                           <button
                             onClick={() => toggleItemCompletion(item.id)}
                             disabled={isLoading}
-                            className={`flex-shrink-0 mt-0.5 transition-all ${
+                            aria-busy={isLoading}
+                            aria-label={`סמן "${item.title}" כ${item.isCompleted ? "לא הושלם" : "הושלם"}`}
+                            className={`flex-shrink-0 mt-0.5 transition-all focus-visible:ring-2 focus-visible:ring-blue-500 rounded-full ${
                               isLoading ? "opacity-50" : ""
                             }`}
                           >
@@ -437,7 +447,7 @@ export default function MyTaskSheets({ initialSheets }: MyTaskSheetsProps) {
                               )}
                               {item.linkedTask && (
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400">
-                                  🔗 {item.linkedTask.title}
+                                  <span aria-hidden="true">🔗</span> {item.linkedTask.title}
                                 </span>
                               )}
                             </div>

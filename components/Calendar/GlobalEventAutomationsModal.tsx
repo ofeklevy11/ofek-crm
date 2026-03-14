@@ -29,6 +29,12 @@ import { showAlert, showConfirm } from "@/hooks/use-modal";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
 import { getAutomationCategoryLimit } from "@/lib/plan-limits";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 interface GlobalEventAutomationsModalProps {
   isOpen: boolean;
@@ -146,15 +152,7 @@ export function GlobalEventAutomationsModal({
     // Check global limits
     const limit = getAutomationCategoryLimit(userPlan);
 
-    // Check if adding another global automation would violate the limit for ANY existing event
-    // that already has specific automations
     const potentialTotal = automations.length + maxSpecificCount;
-
-    // However, if we add a global one, it adds 1 to the global count for everyone.
-    // If I have 6 specials on one event, and 0 globals.
-    // I try to add 1 global. New total for that event = 6 + 1 = 7 > 6. BLOCKED.
-
-    // Wait, the logic is: Global Count (existing) + 1 (new) + Max Specific <= Limit
 
     if (automations.length + 1 + maxSpecificCount > limit) {
       showAlert(
@@ -179,48 +177,51 @@ export function GlobalEventAutomationsModal({
     setEditingAutoData(null);
   };
 
-  if (!isOpen) return null;
+  const handleDialogChange = (open: boolean) => {
+    if (!open) {
+      if (showBuilder) {
+        handleCloseBuilder();
+      } else {
+        onClose();
+      }
+    }
+  };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] backdrop-blur-sm p-4"
-      dir="rtl"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          if (showBuilder) {
-            handleCloseBuilder();
-          } else {
-            onClose();
-          }
-        }
-      }}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[85vh] overflow-hidden flex flex-col">
+    <Dialog open={isOpen} onOpenChange={handleDialogChange}>
+      <DialogContent
+        showCloseButton={false}
+        className="max-w-[calc(100%-2rem)] sm:max-w-4xl h-[85vh] p-0 gap-0 overflow-hidden flex flex-col"
+      >
         {showBuilder ? (
-          <EventAutomationBuilder
-            onSave={handleSaveAutomation}
-            onCancel={handleCloseBuilder}
-            initialData={editingAutoData}
-            userPlan={userPlan}
-            globalCount={automations.length}
-            specificCount={0} // Global builder doesn't know about specific context
-          />
+          <>
+            <DialogTitle className="sr-only">בניית אוטומציה קבועה</DialogTitle>
+            <DialogDescription className="sr-only">אשף בניית אוטומציה קבועה ליומן</DialogDescription>
+            <EventAutomationBuilder
+              onSave={handleSaveAutomation}
+              onCancel={handleCloseBuilder}
+              initialData={editingAutoData}
+              userPlan={userPlan}
+              globalCount={automations.length}
+              specificCount={0}
+            />
+          </>
         ) : (
           <>
             <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-6 text-white flex justify-between items-start">
               <div>
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <div className="p-2 bg-white/20 rounded-lg">
+                <DialogTitle className="text-2xl font-bold flex items-center gap-3 text-white">
+                  <div className="p-2 bg-white/20 rounded-lg" aria-hidden="true">
                     <Zap className="fill-yellow-400 text-yellow-400" />
                   </div>
                   אוטומציות קבועות ליומן
-                </h2>
-                <p className="text-indigo-100 mt-2 text-sm max-w-xl">
+                </DialogTitle>
+                <DialogDescription className="text-indigo-100 mt-2 text-sm max-w-xl">
                   אוטומציות שתגדיר כאן ייווצרו באופן אוטומטי עבור כל אירוע חדש
                   שיתווסף ליומן.
-                </p>
+                </DialogDescription>
                 <div className="mt-3 bg-white/10 border border-white/20 rounded-lg p-3 text-xs flex items-center gap-2 max-w-fit">
-                  <span className="bg-white text-indigo-700 px-1.5 rounded font-bold">
+                  <span className="bg-white text-indigo-700 px-1.5 rounded font-bold" aria-hidden="true">
                     !
                   </span>
                   שים לב: השינויים יחולו רק על אירועים שיווצרו מעתה ואילך
@@ -228,15 +229,17 @@ export function GlobalEventAutomationsModal({
               </div>
               <button
                 onClick={onClose}
-                className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors"
+                aria-label="סגור"
+                className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-white"
               >
-                <X size={20} />
+                <X aria-hidden="true" size={20} />
               </button>
             </div>
 
             {/* Disclaimer Bar */}
             <div className="bg-indigo-50 border-b border-indigo-100 px-6 py-4 flex items-start gap-3">
               <AlertCircle
+                aria-hidden="true"
                 className="text-indigo-600 shrink-0 mt-0.5"
                 size={18}
               />
@@ -259,7 +262,14 @@ export function GlobalEventAutomationsModal({
                 </div>
                 {userPlan !== "super" && (
                   <div className="mb-2">
-                    <div className="w-full bg-indigo-100 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="w-full bg-indigo-100 rounded-full h-2 overflow-hidden"
+                      role="progressbar"
+                      aria-label="שימוש באוטומציות קבועות"
+                      aria-valuenow={automations.length}
+                      aria-valuemin={0}
+                      aria-valuemax={userPlan === "premium" ? 6 : 2}
+                    >
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${
                           automations.length >= (userPlan === "premium" ? 6 : 2)
@@ -288,8 +298,8 @@ export function GlobalEventAutomationsModal({
               {/* List */}
               <div className="space-y-4">
                 {loading ? (
-                  <div className="flex flex-col items-center justify-center py-20 gap-3">
-                    <Loader2 className="animate-spin text-indigo-500 w-10 h-10" />
+                  <div className="flex flex-col items-center justify-center py-20 gap-3" role="status" aria-live="polite">
+                    <Loader2 aria-hidden="true" className="animate-spin text-indigo-500 w-10 h-10" />
                     <span className="text-gray-500 font-medium">
                       טוען אוטומציות...
                     </span>
@@ -297,7 +307,7 @@ export function GlobalEventAutomationsModal({
                 ) : automations.length === 0 ? (
                   <div className="text-center py-20 px-4 border-2 border-dashed border-gray-300 rounded-2xl bg-white/50">
                     <div className="bg-indigo-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto shadow-sm mb-6">
-                      <Zap className="text-indigo-300 w-10 h-10" />
+                      <Zap aria-hidden="true" className="text-indigo-300 w-10 h-10" />
                     </div>
                     <h4 className="text-gray-900 font-bold text-lg mb-2">
                       אין אוטומציות קבועות
@@ -308,9 +318,9 @@ export function GlobalEventAutomationsModal({
                     </p>
                     <button
                       onClick={handleOpenBuilder}
-                      className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center mx-auto gap-2"
+                      className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center mx-auto gap-2 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                     >
-                      <Plus size={20} />
+                      <Plus aria-hidden="true" size={20} />
                       צור אוטומציה ראשונה
                     </button>
                   </div>
@@ -322,14 +332,14 @@ export function GlobalEventAutomationsModal({
                       </h3>
                       <button
                         onClick={handleOpenBuilder}
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all flex items-center gap-2"
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                       >
-                        <Plus size={16} />
+                        <Plus aria-hidden="true" size={16} />
                         הוסף חדש
                       </button>
                     </div>
 
-                    <div className="grid gap-4">
+                    <ul className="grid gap-4 list-none">
                       {automations.map((auto) => {
                         let displayName = auto.name || "אוטומציה ללא שם";
                         // Legacy translation
@@ -353,7 +363,7 @@ export function GlobalEventAutomationsModal({
                         }
 
                         return (
-                          <div
+                          <li
                             key={auto.id}
                             className="bg-white border border-gray-200 rounded-xl p-5 flex justify-between items-center shadow-sm hover:shadow-md transition-all group hover:border-indigo-300"
                           >
@@ -375,6 +385,7 @@ export function GlobalEventAutomationsModal({
                                               ? "bg-indigo-50 text-indigo-600"
                                               : "bg-purple-50 text-purple-600"
                                 }`}
+                                aria-hidden="true"
                               >
                                 {auto.actionType === "SEND_NOTIFICATION" ? (
                                   <Bell size={24} />
@@ -404,11 +415,11 @@ export function GlobalEventAutomationsModal({
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-gray-500">
                                   <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-medium flex items-center gap-1">
-                                    <Zap size={12} />
+                                    <Zap aria-hidden="true" size={12} />
                                     {auto.triggerConfig?.minutesBefore} דקות
                                     לפני
                                   </span>
-                                  <span className="text-gray-300">•</span>
+                                  <span className="text-gray-300" aria-hidden="true">•</span>
                                   <span>
                                     {auto.actionType === "SEND_NOTIFICATION"
                                       ? "שליחת התראה למערכת"
@@ -432,30 +443,30 @@ export function GlobalEventAutomationsModal({
                             <div className="flex gap-2">
                               <button
                                 onClick={() => handleEdit(auto)}
-                                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100"
-                                title="ערוך"
+                                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100 focus-visible:ring-2 focus-visible:ring-indigo-500"
+                                aria-label={`ערוך ${displayName}`}
                               >
-                                <Pencil size={18} />
+                                <Pencil aria-hidden="true" size={18} />
                               </button>
                               <button
                                 onClick={() => handleDelete(auto.id)}
-                                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100"
-                                title="מחק"
+                                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100 focus-visible:ring-2 focus-visible:ring-red-500"
+                                aria-label={`מחק ${displayName}`}
                               >
-                                <Trash2 size={18} />
+                                <Trash2 aria-hidden="true" size={18} />
                               </button>
                             </div>
-                          </div>
+                          </li>
                         );
                       })}
-                    </div>
+                    </ul>
                   </div>
                 )}
               </div>
             </div>
           </>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

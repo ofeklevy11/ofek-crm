@@ -10,6 +10,10 @@ import RateLimitFallback from "@/components/RateLimitFallback";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "ניהול אוטומציות",
+};
+
 export default async function AutomationsPage() {
   const user = await getCurrentUser();
 
@@ -48,12 +52,12 @@ export default async function AutomationsPage() {
   const folders = foldersResponse.success ? foldersResponse.data : [];
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <div className="md:flex md:items-center md:justify-between mb-4">
         <div className="flex-1 min-w-0">
-          <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
+          <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
             ניהול אוטומציות
-          </h2>
+          </h1>
           <p className="mt-1 text-sm text-gray-500">
             צור ונהל כללים אוטומטיים לשליחת התראות וביצוע פעולות במערכת.
           </p>
@@ -61,11 +65,12 @@ export default async function AutomationsPage() {
       </div>
 
       {/* Disclaimer for time-based automations */}
-      <div className="mb-8 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+      <div role="note" className="mb-8 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
         <svg
           className="w-5 h-5 text-blue-600 mt-0.5 shrink-0"
           fill="currentColor"
           viewBox="0 0 20 20"
+          aria-hidden="true"
         >
           <path
             fillRule="evenodd"
@@ -93,6 +98,6 @@ export default async function AutomationsPage() {
         currentUserId={user.id}
         userPlan={user.isPremium || "basic"}
       />
-    </div>
+    </main>
   );
 }

@@ -504,10 +504,11 @@ export function Calendar() {
       {/* Floating Create Button */}
       <button
         onClick={handleCreateEvent}
-        className="fixed bottom-8 start-8 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg items-center justify-center transition-all hover:scale-110 z-40 hidden md:flex"
+        className="fixed bottom-8 start-8 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg items-center justify-center transition-all hover:scale-110 z-40 hidden md:flex focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
         aria-label="צור אירוע"
       >
         <svg
+          aria-hidden="true"
           className="w-6 h-6"
           fill="none"
           stroke="currentColor"

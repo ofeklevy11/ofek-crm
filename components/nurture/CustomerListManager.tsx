@@ -711,6 +711,7 @@ export default function CustomerListManager({
 
                   }}
                   className="p-1 rounded-md hover:bg-slate-100 transition-colors"
+                  aria-label="חזור לרשימה"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
@@ -790,6 +791,7 @@ export default function CustomerListManager({
                                   onClick={() => handleEditRule(rule)}
                                   className="p-1.5 rounded-md text-indigo-600 hover:bg-indigo-50 transition-colors"
                                   title="ערוך"
+                                  aria-label="ערוך"
                                 >
                                   <Pencil className="w-4 h-4" />
                                 </button>
@@ -805,6 +807,7 @@ export default function CustomerListManager({
                                       : "text-slate-400 hover:bg-slate-100"
                                   )}
                                   title={rule.isActive ? "השבת" : "הפעל"}
+                                  aria-label={rule.isActive ? "השבת" : "הפעל"}
                                 >
                                   {rule.isActive ? (
                                     <ToggleRight className="w-5 h-5" />
@@ -824,6 +827,7 @@ export default function CustomerListManager({
                                     <button
                                       onClick={() => setConfirmDeleteId(null)}
                                       className="p-1 rounded-md text-slate-500 hover:bg-slate-100 transition-colors"
+                                      aria-label="בטל מחיקה"
                                     >
                                       <X className="w-3.5 h-3.5" />
                                     </button>
@@ -833,6 +837,7 @@ export default function CustomerListManager({
                                     onClick={() => setConfirmDeleteId(rule.id)}
                                     className="p-1.5 rounded-md text-red-500 hover:bg-red-50 transition-colors"
                                     title="מחק"
+                                    aria-label="מחק"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </button>
@@ -912,8 +917,9 @@ export default function CustomerListManager({
                   </div>
 
                   <div className="space-y-2">
-                    <Label>מקור הנתונים (טבלה)</Label>
+                    <Label htmlFor="clm-auto-table">מקור הנתונים (טבלה)</Label>
                     <select
+                      id="clm-auto-table"
                       className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={autoConfig.tableId}
                       onChange={(e) =>
@@ -1332,10 +1338,11 @@ export default function CustomerListManager({
               >
                 <form onSubmit={handleManualSubmit} className="space-y-4">
                   <div className="space-y-2">
-                    <Label>
+                    <Label htmlFor="clm-manual-name">
                       שם מלא <span className="text-red-500">*</span>
                     </Label>
                     <Input
+                      id="clm-manual-name"
                       value={manualForm.name}
                       onChange={(e) =>
                         setManualForm({ ...manualForm, name: e.target.value })
@@ -1350,7 +1357,7 @@ export default function CustomerListManager({
                   </div>
 
                   <div className="space-y-2">
-                    <Label>
+                    <Label htmlFor="clm-manual-email">
                       כתובת אימייל
                       {!manualForm.phone && (
                         <span className="text-red-500"> *</span>
@@ -1362,6 +1369,7 @@ export default function CustomerListManager({
                       )}
                     </Label>
                     <Input
+                      id="clm-manual-email"
                       type="email"
                       value={manualForm.email}
                       onChange={(e) =>
@@ -1371,7 +1379,7 @@ export default function CustomerListManager({
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>
+                    <Label htmlFor="clm-manual-phone">
                       טלפון
                       {!manualForm.email && (
                         <span className="text-red-500"> *</span>
@@ -1383,6 +1391,7 @@ export default function CustomerListManager({
                       )}
                     </Label>
                     <Input
+                      id="clm-manual-phone"
                       type="tel"
                       value={manualForm.phone}
                       onChange={(e) =>
@@ -1394,8 +1403,9 @@ export default function CustomerListManager({
 
                   {needsTriggerDate && (
                     <div className="space-y-2">
-                      <Label>{triggerDateLabel}</Label>
+                      <Label htmlFor="clm-manual-trigger-date">{triggerDateLabel}</Label>
                       <Input
+                        id="clm-manual-trigger-date"
                         type="date"
                         value={manualForm.triggerDate}
                         onChange={(e) =>
@@ -1428,10 +1438,11 @@ export default function CustomerListManager({
                 {/* Table Selection */}
                 <div className="space-y-3">
                   <div>
-                    <Label className="text-xs text-slate-500 mb-1 block">
+                    <Label htmlFor="clm-import-table" className="text-xs text-slate-500 mb-1 block">
                       בחר טבלה
                     </Label>
                     <select
+                      id="clm-import-table"
                       className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       value={selectedTable}
                       onChange={(e) => setSelectedTable(e.target.value)}
@@ -1455,10 +1466,11 @@ export default function CustomerListManager({
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <div className="space-y-1">
-                          <Label className="text-xs text-amber-800">
+                          <Label htmlFor="clm-import-name" className="text-xs text-amber-800">
                             שדה שם <span className="text-red-500">*</span>
                           </Label>
                           <select
+                            id="clm-import-name"
                             className="w-full h-9 rounded-md border border-amber-200 bg-white px-2 text-sm"
                             value={importMapping.name}
                             onChange={(e) =>
@@ -1477,10 +1489,11 @@ export default function CustomerListManager({
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs text-amber-800">
+                          <Label htmlFor="clm-import-email" className="text-xs text-amber-800">
                             שדה אימייל
                           </Label>
                           <select
+                            id="clm-import-email"
                             className="w-full h-9 rounded-md border border-amber-200 bg-white px-2 text-sm"
                             value={importMapping.email}
                             onChange={(e) =>
@@ -1499,10 +1512,11 @@ export default function CustomerListManager({
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs text-amber-800">
+                          <Label htmlFor="clm-import-phone" className="text-xs text-amber-800">
                             שדה טלפון
                           </Label>
                           <select
+                            id="clm-import-phone"
                             className="w-full h-9 rounded-md border border-amber-200 bg-white px-2 text-sm"
                             value={importMapping.phone}
                             onChange={(e) =>
@@ -1522,10 +1536,11 @@ export default function CustomerListManager({
                         </div>
                         {needsTriggerDate && (
                           <div className="space-y-1">
-                            <Label className="text-xs text-amber-800">
+                            <Label htmlFor="clm-import-trigger-date" className="text-xs text-amber-800">
                               {triggerDateLabel}
                             </Label>
                             <select
+                              id="clm-import-trigger-date"
                               className="w-full h-9 rounded-md border border-amber-200 bg-white px-2 text-sm"
                               value={importMapping.triggerDate}
                               onChange={(e) =>
@@ -1672,12 +1687,15 @@ export default function CustomerListManager({
                             record.id
                           );
                           return (
-                            <div
+                            <button
+                              type="button"
                               key={record.id}
                               className={cn(
-                                "p-3 flex items-center gap-3 hover:bg-slate-50 cursor-pointer transition-colors",
+                                "p-3 flex items-center gap-3 hover:bg-slate-50 cursor-pointer transition-colors w-full text-right",
                                 isSelected && "bg-indigo-50 hover:bg-indigo-50"
                               )}
+                              aria-label={`${isSelected ? "בטל בחירת" : "בחר"} ${displayName}`}
+                              aria-pressed={isSelected}
                               onClick={() => toggleCustomerSelection(record.id)}
                             >
                               <div
@@ -1708,7 +1726,7 @@ export default function CustomerListManager({
                               <div className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500">
                                 {record.source || selectedTable}
                               </div>
-                            </div>
+                            </button>
                           );
                         })}
                         {dbResults.length === 0 && (

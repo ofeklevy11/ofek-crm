@@ -97,7 +97,7 @@ export function WorkflowBoard({
 
               {/* Connector Arrow (if not last) */}
               {index < workflow.stages.length - 1 && (
-                <div className="flex items-center justify-center w-12 text-gray-300 mx-2">
+                <div className="flex items-center justify-center w-12 text-gray-300 mx-2" aria-hidden="true">
                   <ArrowRight
                     size={24}
                     strokeWidth={1.5}
@@ -112,7 +112,7 @@ export function WorkflowBoard({
           {/* Add New Stage Button */}
           <div className="flex items-center h-full min-h-[160px]">
             {workflow.stages.length > 0 && (
-              <div className="flex items-center justify-center w-12 text-gray-300 mx-2">
+              <div className="flex items-center justify-center w-12 text-gray-300 mx-2" aria-hidden="true">
                 <ArrowRight
                   size={24}
                   strokeWidth={1.5}
@@ -138,11 +138,11 @@ export function WorkflowBoard({
       {/* Info / Legend */}
       <div className="mt-8 flex gap-6 text-sm text-gray-500 border-t border-gray-100 pt-6">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-blue-500" />
+          <div className="w-3 h-3 rounded-full bg-blue-500" aria-hidden="true" />
           <span>פעיל</span>
         </div>
         <div className="flex items-center gap-2">
-          <Settings2 size={16} />
+          <Settings2 size={16} aria-hidden="true" />
           <span>לחיצה על כרטיס פותחת הגדרות מתקדמות</span>
         </div>
       </div>

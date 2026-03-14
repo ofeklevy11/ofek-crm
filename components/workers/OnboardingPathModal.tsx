@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
@@ -96,6 +97,7 @@ export default function OnboardingPathModal({
   onSave,
   userPlan = "basic",
 }: Props) {
+  const dialogRef = useFocusTrap(onClose);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeSection, setActiveSection] = useState<"details" | "steps">(
     "details",
@@ -483,12 +485,12 @@ export default function OnboardingPathModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] shadow-2xl overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="path-modal-title">
+      <div ref={dialogRef} className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] shadow-2xl overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100 shrink-0">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">
+            <h2 id="path-modal-title" className="text-xl font-bold text-gray-900">
               {path ? "עריכת מסלול קליטה" : "מסלול קליטה חדש"}
             </h2>
             <p className="text-sm text-gray-500 mt-1">
@@ -500,13 +502,22 @@ export default function OnboardingPathModal({
           <button
             onClick={onClose}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
+            aria-label="סגור"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-100 px-6 shrink-0">
+        <div className="flex border-b border-gray-100 px-6 shrink-0" role="tablist" aria-label="ניהול מסלול קליטה" onKeyDown={(e) => {
+          if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+            e.preventDefault();
+            const next = activeSection === "details" ? "steps" : "details";
+            setActiveSection(next);
+            const tabId = `path-tab-${next}`;
+            document.getElementById(tabId)?.focus();
+          }
+        }}>
           <button
             onClick={() => setActiveSection("details")}
             className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
@@ -514,6 +525,11 @@ export default function OnboardingPathModal({
                 ? "border-indigo-600 text-indigo-600"
                 : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
+            role="tab"
+            aria-selected={activeSection === "details"}
+            tabIndex={activeSection === "details" ? 0 : -1}
+            id="path-tab-details"
+            aria-controls="path-tabpanel-details"
           >
             פרטי המסלול
           </button>
@@ -524,22 +540,28 @@ export default function OnboardingPathModal({
                 ? "border-indigo-600 text-indigo-600"
                 : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
+            role="tab"
+            aria-selected={activeSection === "steps"}
+            tabIndex={activeSection === "steps" ? 0 : -1}
+            id="path-tab-steps"
+            aria-controls="path-tabpanel-steps"
           >
             שלבי הקליטה ({steps.length})
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6" role="tabpanel" id={"path-tabpanel-" + activeSection} aria-labelledby={"path-tab-" + activeSection}>
           {activeSection === "details" ? (
             <div className="space-y-5">
               {/* Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  <GraduationCap className="h-4 w-4 inline ml-1" />
+                <label htmlFor="path-name" className="block text-sm font-medium text-gray-700 mb-1">
+                  <GraduationCap className="h-4 w-4 inline ml-1" aria-hidden="true" />
                   שם המסלול *
                 </label>
                 <input
+                  id="path-name"
                   type="text"
                   value={formData.name}
                   onChange={(e) =>
@@ -547,16 +569,19 @@ export default function OnboardingPathModal({
                   }
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
                   placeholder='למשל: "קליטת עובד חדש - מכירות"'
+                  required
+                  aria-required="true"
                 />
               </div>
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  <FileText className="h-4 w-4 inline ml-1" />
+                <label htmlFor="path-description" className="block text-sm font-medium text-gray-700 mb-1">
+                  <FileText className="h-4 w-4 inline ml-1" aria-hidden="true" />
                   תיאור
                 </label>
                 <textarea
+                  id="path-description"
                   value={formData.description}
                   onChange={(e) =>
                     setFormData({ ...formData, description: e.target.value })
@@ -570,11 +595,12 @@ export default function OnboardingPathModal({
               {/* Department & Duration */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <Building2 className="h-4 w-4 inline ml-1" />
+                  <label htmlFor="path-department" className="block text-sm font-medium text-gray-700 mb-1">
+                    <Building2 className="h-4 w-4 inline ml-1" aria-hidden="true" />
                     מחלקה
                   </label>
                   <select
+                    id="path-department"
                     value={formData.departmentId ?? ""}
                     onChange={(e) =>
                       setFormData({
@@ -595,11 +621,12 @@ export default function OnboardingPathModal({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <Clock className="h-4 w-4 inline ml-1" />
+                  <label htmlFor="path-estimatedDays" className="block text-sm font-medium text-gray-700 mb-1">
+                    <Clock className="h-4 w-4 inline ml-1" aria-hidden="true" />
                     משך מוערך (ימים)
                   </label>
                   <input
+                    id="path-estimatedDays"
                     type="number"
                     value={formData.estimatedDays ?? ""}
                     onChange={(e) =>
@@ -687,6 +714,7 @@ export default function OnboardingPathModal({
                             <button
                               onClick={() => handleMoveStep(index, "up")}
                               disabled={index === 0}
+                              aria-label="הזז שלב למעלה"
                               className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
                             >
                               <ChevronUp className="h-4 w-4" />
@@ -694,6 +722,7 @@ export default function OnboardingPathModal({
                             <button
                               onClick={() => handleMoveStep(index, "down")}
                               disabled={index === steps.length - 1}
+                              aria-label="הזז שלב למטה"
                               className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
                             >
                               <ChevronDown className="h-4 w-4" />
@@ -716,11 +745,12 @@ export default function OnboardingPathModal({
                             >
                               {/* Step Title */}
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label htmlFor="edit-step-title" className="block text-sm font-medium text-gray-700 mb-1">
                                   כותרת השלב{" "}
                                   <span className="text-red-500">*</span>
                                 </label>
                                 <input
+                                  id="edit-step-title"
                                   type="text"
                                   value={editingStepData.title ?? ""}
                                   onChange={(e) =>
@@ -736,10 +766,11 @@ export default function OnboardingPathModal({
 
                               {/* Step Description */}
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label htmlFor="edit-step-description" className="block text-sm font-medium text-gray-700 mb-1">
                                   תיאור השלב
                                 </label>
                                 <textarea
+                                  id="edit-step-description"
                                   value={editingStepData.description ?? ""}
                                   onChange={(e) =>
                                     setEditingStepData({
@@ -756,10 +787,11 @@ export default function OnboardingPathModal({
                               {/* Type and Time Row */}
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  <label htmlFor="edit-step-type" className="block text-sm font-medium text-gray-700 mb-1">
                                     סוג שלב
                                   </label>
                                   <select
+                                    id="edit-step-type"
                                     value={editingStepData.type ?? "TASK"}
                                     onChange={(e) =>
                                       setEditingStepData({
@@ -777,10 +809,11 @@ export default function OnboardingPathModal({
                                   </select>
                                 </div>
                                 <div>
-                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  <label htmlFor="edit-step-time" className="block text-sm font-medium text-gray-700 mb-1">
                                     זמן משוער (דקות)
                                   </label>
                                   <input
+                                    id="edit-step-time"
                                     type="number"
                                     value={
                                       editingStepData.estimatedMinutes ?? ""
@@ -805,10 +838,11 @@ export default function OnboardingPathModal({
                                 editingStepData.type === "DOCUMENT") && (
                                 <div className="grid grid-cols-2 gap-4">
                                   <div className="col-span-2 md:col-span-1">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label htmlFor="edit-step-resource-url" className="block text-sm font-medium text-gray-700 mb-1">
                                       קישור לחומר
                                     </label>
                                     <input
+                                      id="edit-step-resource-url"
                                       type="url"
                                       value={editingStepData.resourceUrl ?? ""}
                                       onChange={(e) =>
@@ -823,10 +857,11 @@ export default function OnboardingPathModal({
                                     />
                                   </div>
                                   <div className="col-span-2 md:col-span-1">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label htmlFor="edit-step-resource-type" className="block text-sm font-medium text-gray-700 mb-1">
                                       סוג החומר
                                     </label>
                                     <select
+                                      id="edit-step-resource-type"
                                       value={editingStepData.resourceType ?? ""}
                                       onChange={(e) =>
                                         setEditingStepData({
@@ -982,8 +1017,9 @@ export default function OnboardingPathModal({
                                                 })
                                               }
                                               className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition"
+                                              aria-label="ערוך אוטומציה"
                                             >
-                                              <Pencil className="h-4 w-4" />
+                                              <Pencil className="h-4 w-4" aria-hidden="true" />
                                             </button>
                                             <button
                                               onClick={() => {
@@ -998,8 +1034,9 @@ export default function OnboardingPathModal({
                                                 });
                                               }}
                                               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"
+                                              aria-label="מחק אוטומציה"
                                             >
-                                              <Trash2 className="h-4 w-4" />
+                                              <Trash2 className="h-4 w-4" aria-hidden="true" />
                                             </button>
                                           </div>
                                         </div>
@@ -1007,7 +1044,7 @@ export default function OnboardingPathModal({
                                     )
                                   ) : (
                                     <div className="text-center py-6 bg-gray-50 border border-dashed border-gray-200 rounded-xl text-gray-500">
-                                      <Zap className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                                      <Zap className="h-8 w-8 mx-auto mb-2 text-gray-300" aria-hidden="true" />
                                       <p className="text-sm">
                                         לא הוגדרו אוטומציות
                                       </p>
@@ -1124,17 +1161,19 @@ export default function OnboardingPathModal({
                     <button
                       onClick={() => setNewStep(null)}
                       className="p-1 text-gray-400 hover:text-gray-600 hover:bg-white/50 rounded transition"
+                      aria-label="סגור טופס שלב חדש"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>
 
                   {/* Step Title */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="new-step-title" className="block text-sm font-medium text-gray-700 mb-1">
                       כותרת השלב <span className="text-red-500">*</span>
                     </label>
                     <input
+                      id="new-step-title"
                       type="text"
                       value={newStep.title ?? ""}
                       onChange={(e) =>
@@ -1148,10 +1187,11 @@ export default function OnboardingPathModal({
 
                   {/* Step Description */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="new-step-description" className="block text-sm font-medium text-gray-700 mb-1">
                       תיאור השלב
                     </label>
                     <textarea
+                      id="new-step-description"
                       value={newStep.description ?? ""}
                       onChange={(e) =>
                         setNewStep({ ...newStep, description: e.target.value })
@@ -1165,10 +1205,11 @@ export default function OnboardingPathModal({
                   {/* Type and Time Row */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="new-step-type" className="block text-sm font-medium text-gray-700 mb-1">
                         סוג שלב
                       </label>
                       <select
+                        id="new-step-type"
                         value={newStep.type ?? "TASK"}
                         onChange={(e) =>
                           setNewStep({ ...newStep, type: e.target.value })
@@ -1183,10 +1224,11 @@ export default function OnboardingPathModal({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="new-step-time" className="block text-sm font-medium text-gray-700 mb-1">
                         זמן משוער (דקות)
                       </label>
                       <input
+                        id="new-step-time"
                         type="number"
                         value={newStep.estimatedMinutes ?? ""}
                         onChange={(e) =>
@@ -1207,10 +1249,11 @@ export default function OnboardingPathModal({
                     newStep.type === "DOCUMENT") && (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="col-span-2 md:col-span-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="new-step-resource-url" className="block text-sm font-medium text-gray-700 mb-1">
                           קישור לחומר
                         </label>
                         <input
+                          id="new-step-resource-url"
                           type="url"
                           value={newStep.resourceUrl ?? ""}
                           onChange={(e) =>
@@ -1225,10 +1268,11 @@ export default function OnboardingPathModal({
                         />
                       </div>
                       <div className="col-span-2 md:col-span-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="new-step-resource-type" className="block text-sm font-medium text-gray-700 mb-1">
                           סוג החומר
                         </label>
                         <select
+                          id="new-step-resource-type"
                           value={newStep.resourceType ?? ""}
                           onChange={(e) =>
                             setNewStep({
@@ -1449,7 +1493,7 @@ export default function OnboardingPathModal({
                         ))
                       ) : (
                         <div className="text-center py-6 bg-gray-50 border border-dashed border-gray-200 rounded-xl text-gray-500">
-                          <Zap className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                          <Zap className="h-8 w-8 mx-auto mb-2 text-gray-300" aria-hidden="true" />
                           <p className="text-sm">לא הוגדרו אוטומציות</p>
                         </div>
                       )}

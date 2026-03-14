@@ -5,6 +5,9 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { canManageTables } from "@/lib/permissions";
 import { buildTablePermissionWhere } from "@/lib/table-permissions";
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "טבלאות | BizlyCRM" };
 
 export default async function TablesPage() {
   const user = await getCurrentUser();

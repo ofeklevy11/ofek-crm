@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useId } from "react";
 import {
   Plus,
   Trash2,
@@ -104,6 +104,7 @@ export default function TaskItemAutomations({
   const [isExpanded, setIsExpanded] = useState(actions.length > 0);
   const [showBuilder, setShowBuilder] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const contentId = useId();
 
   const limits: Record<string, number> = {
     basic: 2,
@@ -208,6 +209,8 @@ export default function TaskItemAutomations({
         <button
           type="button"
           onClick={() => setIsExpanded(!isExpanded)}
+          aria-expanded={isExpanded}
+          aria-controls={contentId}
           className="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors"
         >
           <div className="flex items-center gap-2">
@@ -218,20 +221,20 @@ export default function TaskItemAutomations({
               אוטומציות בהשלמה
             </span>
             {actions.length > 0 && (
-              <span className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs px-2.5 py-0.5 rounded-full font-medium">
+              <span className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs px-2.5 py-0.5 rounded-full font-medium" aria-label={`${actions.length} אוטומציות`}>
                 {actions.length}
               </span>
             )}
           </div>
           {isExpanded ? (
-            <ChevronUp className="w-5 h-5 text-gray-400" />
+            <ChevronUp className="w-5 h-5 text-gray-400" aria-hidden="true" />
           ) : (
-            <ChevronDown className="w-5 h-5 text-gray-400" />
+            <ChevronDown className="w-5 h-5 text-gray-400" aria-hidden="true" />
           )}
         </button>
 
         {isExpanded && (
-          <div className="p-4 space-y-4 border-t border-gray-100 bg-gray-50/50">
+          <div id={contentId} className="p-4 space-y-4 border-t border-gray-100 bg-gray-50/50">
             {/* Plan Disclaimer */}
             <div
               className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${
@@ -263,7 +266,14 @@ export default function TaskItemAutomations({
                 </p>
                 {/* Progress bar */}
                 {globalLimit !== Infinity && (
-                  <div className="mt-2 h-2 bg-white/60 rounded-full overflow-hidden">
+                  <div
+                    className="mt-2 h-2 bg-white/60 rounded-full overflow-hidden"
+                    role="progressbar"
+                    aria-valuenow={Math.min(Math.round((currentTotalUsage / globalLimit) * 100), 100)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label="ניצול אוטומציות"
+                  >
                     <div
                       className={`h-full rounded-full transition-all ${
                         isLimitReached
@@ -318,20 +328,20 @@ export default function TaskItemAutomations({
                           </p>
                         )}
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                         <button
                           type="button"
                           onClick={() => handleEditAction(index)}
-                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="ערוך אוטומציה"
+                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+                          aria-label="ערוך אוטומציה"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDeleteAction(index)}
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="מחק אוטומציה"
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+                          aria-label="מחק אוטומציה"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

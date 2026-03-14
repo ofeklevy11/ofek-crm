@@ -11,6 +11,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import MeetingAutomationWizard from "./MeetingAutomationWizard";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Plus, Trash2, Bell, Clock, MessageSquare, Webhook, CheckSquare, Timer, Pencil, Edit2, AlertCircle, Phone } from "lucide-react";
 
 interface AutomationRule {
@@ -73,6 +83,7 @@ export default function GlobalMeetingAutomationsModal({
   const [showWizard, setShowWizard] = useState(false);
   const [editingRule, setEditingRule] = useState<AutomationRule | undefined>(undefined);
   const [usage, setUsage] = useState<{ globalCount: number; perMeetingCount: number; total: number; limit: number } | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const fetchAutomations = async () => {
     setLoading(true);
@@ -129,7 +140,6 @@ export default function GlobalMeetingAutomationsModal({
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("למחוק אוטומציה זו?")) return;
     const { deleteGlobalMeetingAutomation } = await import("@/app/actions/meeting-automations");
     const result = await deleteGlobalMeetingAutomation(id);
     if (result.success) {
@@ -138,6 +148,7 @@ export default function GlobalMeetingAutomationsModal({
     } else {
       toast.error(result.error || "שגיאה");
     }
+    setConfirmDeleteId(null);
   };
 
   const handleEdit = (rule: AutomationRule) => {
@@ -195,7 +206,14 @@ export default function GlobalMeetingAutomationsModal({
                           ? `הגעת למגבלת האוטומציות הקבועות (${usage.limit}). שדרג את התוכנית להוספת אוטומציות נוספות.`
                           : `${usage.globalCount} מתוך ${usage.limit} אוטומציות קבועות בשימוש. נשארו ${usage.limit - usage.globalCount}.`}
                       </p>
-                      <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden"
+                        role="progressbar"
+                        aria-valuenow={usage.globalCount}
+                        aria-valuemin={0}
+                        aria-valuemax={usage.limit}
+                        aria-label="שימוש באוטומציות"
+                      >
                         <div
                           className={`h-full transition-all ${isAtLimit ? "bg-red-500" : "bg-blue-500"}`}
                           style={{ width: `${Math.min(100, (usage.globalCount / usage.limit) * 100)}%` }}
@@ -211,7 +229,7 @@ export default function GlobalMeetingAutomationsModal({
           {/* Existing automations */}
           <div className="space-y-2 mt-4">
             {loading ? (
-              <p className="text-sm text-muted-foreground">טוען...</p>
+              <p className="text-sm text-muted-foreground" role="status">טוען...</p>
             ) : automations.length === 0 ? (
               <p className="text-sm text-muted-foreground">אין אוטומציות קבועות</p>
             ) : (
@@ -248,16 +266,18 @@ export default function GlobalMeetingAutomationsModal({
                       size="sm"
                       onClick={() => handleEdit(auto)}
                       className="text-muted-foreground hover:text-foreground"
+                      aria-label="ערוך אוטומציה"
                     >
-                      <Edit2 className="h-4 w-4" />
+                      <Edit2 className="h-4 w-4" aria-hidden="true" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDelete(auto.id)}
+                      onClick={() => setConfirmDeleteId(auto.id)}
                       className="text-destructive hover:text-destructive"
+                      aria-label="מחק אוטומציה"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   </div>
                 </div>
@@ -288,6 +308,19 @@ export default function GlobalMeetingAutomationsModal({
           userPlan={userPlan}
         />
       )}
+
+      <AlertDialog open={confirmDeleteId !== null} onOpenChange={(open) => !open && setConfirmDeleteId(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת אוטומציה</AlertDialogTitle>
+            <AlertDialogDescription>למחוק אוטומציה זו?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction onClick={() => confirmDeleteId && handleDelete(confirmDeleteId)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">מחק</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

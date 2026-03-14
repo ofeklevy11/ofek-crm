@@ -52,17 +52,20 @@ export default function TasksFilterSidebar({
 
   return (
     <div
+      role="search"
+      aria-label="פילטרים למשימות"
+      id="filter-sidebar"
       className={`bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-[calc(100vh-10rem)] overflow-hidden ${className}`}
     >
       <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
         <h3 className="font-semibold text-slate-800 flex items-center gap-2 text-lg">
-          <span className="w-1.5 h-6 bg-blue-500 rounded-full"></span>
+          <span className="w-1.5 h-6 bg-blue-500 rounded-full" aria-hidden="true"></span>
           פילטרים
         </h3>
         {hasActiveFilters && (
           <button
             onClick={clearAllFilters}
-            className="text-xs text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-md transition-colors flex items-center gap-1 font-medium"
+            className="text-xs text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-md transition-colors flex items-center gap-1 font-medium focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
           >
             <RotateCcw className="w-3 h-3" />
             נקה הכל
@@ -73,12 +76,13 @@ export default function TasksFilterSidebar({
       <div className="p-6 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
         {/* Assignee Filter */}
         <div className="space-y-3">
-          <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+          <label htmlFor="filter-assignee" className="text-sm font-semibold text-slate-700 flex items-center gap-2">
             <UserIcon className="w-4 h-4 text-slate-400" />
             אחראי משימה
           </label>
           <div className="relative group">
             <select
+              id="filter-assignee"
               value={filters.assigneeId || ""}
               onChange={(e) =>
                 handleChange(
@@ -97,6 +101,7 @@ export default function TasksFilterSidebar({
             </select>
             <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400 group-hover:text-blue-500 transition-colors">
               <svg
+                aria-hidden="true"
                 className="w-4 h-4"
                 fill="none"
                 stroke="currentColor"
@@ -115,12 +120,13 @@ export default function TasksFilterSidebar({
 
         {/* Priority Filter */}
         <div className="space-y-3">
-          <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+          <label htmlFor="filter-priority" className="text-sm font-semibold text-slate-700 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-slate-400" />
             דחיפות משימה
           </label>
           <div className="relative group">
             <select
+              id="filter-priority"
               value={filters.priority || ""}
               onChange={(e) => handleChange("priority", e.target.value || null)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none transition-all cursor-pointer hover:bg-slate-100 text-slate-700"
@@ -133,6 +139,7 @@ export default function TasksFilterSidebar({
             </select>
             <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400 group-hover:text-blue-500 transition-colors">
               <svg
+                aria-hidden="true"
                 className="w-4 h-4"
                 fill="none"
                 stroke="currentColor"
@@ -151,12 +158,13 @@ export default function TasksFilterSidebar({
 
         {/* Due Date Filter */}
         <div className="space-y-3">
-          <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+          <label htmlFor="filter-dueDate" className="text-sm font-semibold text-slate-700 flex items-center gap-2">
             <Calendar className="w-4 h-4 text-slate-400" />
             תאריך יעד לסיום
           </label>
           <div className="relative group">
             <input
+              id="filter-dueDate"
               type="date"
               value={filters.dueDate || ""}
               onChange={(e) => handleChange("dueDate", e.target.value || null)}
@@ -167,12 +175,13 @@ export default function TasksFilterSidebar({
 
         {/* Start Date Filter */}
         <div className="space-y-3">
-          <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+          <label htmlFor="filter-startDate" className="text-sm font-semibold text-slate-700 flex items-center gap-2">
             <Clock className="w-4 h-4 text-slate-400" />
             תאריך התחלת משימה
           </label>
           <div className="relative group">
             <input
+              id="filter-startDate"
               type="date"
               value={filters.startDate || ""}
               onChange={(e) =>
@@ -189,7 +198,7 @@ export default function TasksFilterSidebar({
         <button
           onClick={clearAllFilters}
           disabled={!hasActiveFilters}
-          className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border font-medium transition-all ${
+          className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border font-medium transition-all focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
             hasActiveFilters
               ? "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-sm hover:shadow-md"
               : "bg-slate-50 border-transparent text-slate-400 cursor-not-allowed"

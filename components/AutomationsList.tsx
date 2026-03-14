@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import AutomationModal from "@/components/AutomationModal";
 import MultiEventAutomationModal from "@/components/MultiEventAutomationModal";
@@ -118,6 +118,69 @@ export default function AutomationsList({
   const [successRuleId, setSuccessRuleId] = useState<number | null>(null);
 
   const router = useRouter();
+
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Focus first menuitem when dropdown opens
+  useEffect(() => {
+    if (activeDropdownId === null) return;
+    requestAnimationFrame(() => {
+      const first = menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]');
+      first?.focus();
+    });
+  }, [activeDropdownId]);
+
+  // Close folder dropdown on Escape or outside click
+  useEffect(() => {
+    if (activeDropdownId === null) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setActiveDropdownId(null);
+    };
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[role="menu"]') && !target.closest('[aria-haspopup="true"]')) {
+        setActiveDropdownId(null);
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    document.addEventListener("mousedown", handleClick);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      document.removeEventListener("mousedown", handleClick);
+    };
+  }, [activeDropdownId]);
+
+  // Arrow key navigation for folder dropdown menu
+  const handleMenuKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(
+      e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]')
+    );
+    const current = document.activeElement as HTMLElement;
+    const idx = items.indexOf(current);
+
+    switch (e.key) {
+      case "ArrowDown": {
+        e.preventDefault();
+        const next = idx < items.length - 1 ? idx + 1 : 0;
+        items[next]?.focus();
+        break;
+      }
+      case "ArrowUp": {
+        e.preventDefault();
+        const prev = idx > 0 ? idx - 1 : items.length - 1;
+        items[prev]?.focus();
+        break;
+      }
+      case "Home":
+        e.preventDefault();
+        items[0]?.focus();
+        break;
+      case "End":
+        e.preventDefault();
+        items[items.length - 1]?.focus();
+        break;
+    }
+  }, []);
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
@@ -423,15 +486,16 @@ export default function AutomationsList({
   return (
     <div className="flex gap-6">
       {/* Sidebar Folders */}
-      <div className="w-1/4 min-w-[250px] space-y-4">
+      <nav aria-label="תיקיות אוטומציות" className="w-1/4 min-w-[250px] space-y-4">
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="font-semibold text-gray-700">תיקיות</h3>
+            <h2 className="font-semibold text-gray-700">תיקיות</h2>
             <button
               onClick={() => setIsCreatingFolder(true)}
-              className="text-blue-600 hover:text-blue-800"
+              className="text-blue-600 hover:text-blue-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 rounded"
+              aria-label="הוסף תיקייה חדשה"
             >
-              <Plus size={18} />
+              <Plus size={18} aria-hidden="true" />
             </button>
           </div>
 
@@ -443,6 +507,7 @@ export default function AutomationsList({
                 onChange={(e) => setNewFolderName(e.target.value)}
                 className="border rounded px-2 py-1 w-full text-sm"
                 placeholder="שם תיקיה..."
+                aria-label="שם תיקייה חדשה"
                 autoFocus
               />
               <button
@@ -493,20 +558,21 @@ export default function AutomationsList({
                     e.stopPropagation();
                     handleDeleteFolder(folder.id);
                   }}
-                  className="opacity-0 group-hover:opacity-100 p-2 text-gray-400 hover:text-red-500"
+                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-2 text-gray-400 hover:text-red-500 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 rounded"
+                  aria-label={`מחק תיקייה ${folder.name}`}
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={14} aria-hidden="true" />
                 </button>
               </li>
             ))}
           </ul>
         </div>
-      </div>
+      </nav>
 
       <div className="flex-1 space-y-6">
         {isAtLimit && usage && (
-          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm">
-            <AlertTriangle className="h-5 w-5 shrink-0" />
+          <div role="status" className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm">
+            <AlertTriangle className="h-5 w-5 shrink-0" aria-hidden="true" />
             <span>
               הגעת למגבלת האוטומציות ({totalCount}/{usage.general.limit}).
               מחק אוטומציות קיימות או שדרג את התוכנית כדי ליצור חדשות.
@@ -522,7 +588,7 @@ export default function AutomationsList({
                 : "כל האוטומציות"}
             </h2>
             {usage && usage.general.limit !== Infinity && (
-              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full" aria-label={`${totalCount} מתוך ${usage.general.limit} אוטומציות בשימוש`}>
                 {totalCount}/{usage.general.limit}
               </span>
             )}
@@ -656,22 +722,23 @@ export default function AutomationsList({
             const isLongName = displayName.length > 30;
 
             return (
-              <div
+              <article
                 key={rule.id}
+                aria-label={displayName}
                 className={`relative bg-white pt-5 px-4 pb-12 sm:pt-6 sm:px-6 shadow rounded-lg overflow-hidden border-2 transition-colors ${
                   rule.isActive
                     ? "border-transparent"
                     : "border-gray-100 bg-gray-50"
                 }`}
               >
-                <dt>
+                <div>
                   <div className="absolute top-4 left-4 flex gap-2">
                     {/* Move Folder Dropdown */}
                     <div className="relative">
                       {movingRuleId === rule.id ? (
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500" role="status" aria-label="מעביר לתיקייה"></div>
                       ) : successRuleId === rule.id ? (
-                        <div className="text-green-500">
+                        <div className="text-green-500" role="status" aria-label="הועבר בהצלחה">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
                             width="20"
@@ -683,6 +750,7 @@ export default function AutomationsList({
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             className="lucide lucide-check"
+                            aria-hidden="true"
                           >
                             <path d="M20 6 9 17l-5-5" />
                           </svg>
@@ -694,7 +762,10 @@ export default function AutomationsList({
                               activeDropdownId === rule.id ? null : rule.id,
                             )
                           }
-                          className={`hover:text-blue-500 transition-colors ${activeDropdownId === rule.id ? "text-blue-600" : "text-gray-400"}`}
+                          className={`hover:text-blue-500 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 rounded ${activeDropdownId === rule.id ? "text-blue-600" : "text-gray-400"}`}
+                          aria-label="העבר לתיקייה"
+                          aria-expanded={activeDropdownId === rule.id}
+                          aria-haspopup="true"
                         >
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -707,6 +778,7 @@ export default function AutomationsList({
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             className="lucide lucide-folder-input"
+                            aria-hidden="true"
                           >
                             <path d="M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2" />
                             <path d="M2 13h10" />
@@ -716,10 +788,11 @@ export default function AutomationsList({
                       )}
 
                       {activeDropdownId === rule.id && (
-                        <div className="absolute left-0 mt-1 w-40 bg-white border border-gray-200 shadow-lg rounded-md z-20 animate-in fade-in zoom-in-95 duration-100">
+                        <div ref={menuRef} onKeyDown={handleMenuKeyDown} className="absolute left-0 mt-1 w-40 bg-white border border-gray-200 shadow-lg rounded-md z-20 animate-in fade-in zoom-in-95 duration-100" role="menu">
                           <button
                             onClick={() => handleMoveToFolder(rule.id, null)}
                             className="block w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            role="menuitem"
                           >
                             ללא תיקייה
                           </button>
@@ -728,6 +801,7 @@ export default function AutomationsList({
                               key={f.id}
                               onClick={() => handleMoveToFolder(rule.id, f.id)}
                               className="block w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                              role="menuitem"
                             >
                               {f.name}
                             </button>
@@ -739,22 +813,25 @@ export default function AutomationsList({
                     {rule.triggerType !== "VIEW_METRIC_THRESHOLD" && (
                       <button
                         onClick={() => handleEdit(rule)}
-                        className="text-gray-400 hover:text-blue-500 transition-colors"
+                        className="text-gray-400 hover:text-blue-500 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 rounded"
+                        aria-label={`ערוך אוטומציה ${displayName}`}
                       >
-                        <Edit size={20} />
+                        <Edit size={20} aria-hidden="true" />
                       </button>
                     )}
                     <button
                       onClick={() => handleDelete(rule)}
-                      className="text-gray-400 hover:text-red-500 transition-colors"
+                      className="text-gray-400 hover:text-red-500 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 rounded"
+                      aria-label={`מחק אוטומציה ${displayName}`}
                     >
-                      <Trash2 size={20} />
+                      <Trash2 size={20} aria-hidden="true" />
                     </button>
                   </div>
                   <div
                     className={`p-3 rounded-md inline-flex items-center justify-center ${
                       rule.isActive ? "bg-blue-500" : "bg-gray-400"
                     } text-white`}
+                    aria-hidden="true"
                   >
                     <Power size={24} />
                   </div>
@@ -768,16 +845,16 @@ export default function AutomationsList({
                         </span>
                       ) : null;
                     })()}
-                    <p
+                    <h3
                       className={`font-semibold text-gray-900 wrap-break-word leading-tight ${
                         isLongName ? "text-lg" : "text-xl"
                       }`}
                     >
                       {displayName}
-                    </p>
+                    </h3>
                   </div>
-                </dt>
-                <dd className="ml-16 pb-6 flex items-baseline sm:pb-7">
+                </div>
+                <div className="ml-16 pb-6 flex items-baseline sm:pb-7">
                   <div className="text-sm text-gray-500">
                     <p>
                       <span className="font-semibold">טריגר:</span>{" "}
@@ -793,6 +870,7 @@ export default function AutomationsList({
                     <div className="text-sm">
                       <button
                         onClick={() => handleToggle(rule.id, rule.isActive)}
+                        aria-pressed={rule.isActive}
                         className={`font-medium ${
                           rule.isActive
                             ? "text-green-600 hover:text-green-500"
@@ -805,12 +883,12 @@ export default function AutomationsList({
                       </button>
                     </div>
                   </div>
-                </dd>
-              </div>
+                </div>
+              </article>
             );
           })}
           {filteredRules.length === 0 && (
-            <div className="col-span-full text-center py-12 text-gray-500 bg-white rounded-lg border-2 border-dashed border-gray-300">
+            <div role="status" className="col-span-full text-center py-12 text-gray-500 bg-white rounded-lg border-2 border-dashed border-gray-300">
               <p>אין אוטומציות בתיקייה זו.</p>
             </div>
           )}

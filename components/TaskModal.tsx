@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 
 interface TaskModalProps {
   // initial column status where the task will be created; user can change it
@@ -46,6 +47,8 @@ export default function TaskModal({
     Array<{ id: number; name: string; email: string }>
   >([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
+
+  const focusTrapRef = useFocusTrap(onClose);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -146,28 +149,40 @@ export default function TaskModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-xl font-bold text-white mb-4">
+    <div
+      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="task-modal-title"
+      onClick={onClose}
+    >
+      <div
+        ref={focusTrapRef}
+        className="bg-slate-800 rounded-xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 id="task-modal-title" className="text-xl font-bold text-white mb-4">
           {task ? "עריכת משימה" : "משימה חדשה"}
         </h3>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-slate-400 text-sm mb-1">כותרת</label>
+            <label htmlFor="task-title" className="block text-slate-400 text-sm mb-1">כותרת</label>
             <input
+              id="task-title"
               required
               placeholder="שם המשימה"
-              className="w-full bg-slate-900/50 text-white rounded px-3 py-2 border border-slate-700 focus:border-blue-500 outline-none"
+              className="w-full bg-slate-900/50 text-white rounded px-3 py-2 border border-slate-700 focus:border-blue-500 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
           </div>
 
           <div>
-            <label className="block text-slate-400 text-sm mb-1">תיאור</label>
+            <label htmlFor="task-description" className="block text-slate-400 text-sm mb-1">תיאור</label>
             <textarea
+              id="task-description"
               placeholder="תיאור (אופציונלי)"
-              className="w-full bg-slate-900/50 text-white rounded px-3 py-2 border border-slate-700 focus:border-blue-500 outline-none"
+              className="w-full bg-slate-900/50 text-white rounded px-3 py-2 border border-slate-700 focus:border-blue-500 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -176,21 +191,23 @@ export default function TaskModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-400 text-sm mb-1">
+              <label htmlFor="task-dueDate" className="block text-slate-400 text-sm mb-1">
                 תאריך יעד
               </label>
               <input
+                id="task-dueDate"
                 type="date"
-                className="w-full bg-slate-900/50 text-white rounded px-3 py-2 border border-slate-700 focus:border-blue-500 outline-none"
+                className="w-full bg-slate-900/50 text-white rounded px-3 py-2 border border-slate-700 focus:border-blue-500 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
               />
             </div>
             <div>
-              <label className="block text-slate-400 text-sm mb-1">סטטוס</label>
+              <label htmlFor="task-status" className="block text-slate-400 text-sm mb-1">סטטוס</label>
               <div className="relative">
                 <select
-                  className="w-full bg-slate-900/50 text-white rounded pr-3 pl-10 py-2 border border-slate-700 focus:border-blue-500 outline-none appearance-none"
+                  id="task-status"
+                  className="w-full bg-slate-900/50 text-white rounded pr-3 pl-10 py-2 border border-slate-700 focus:border-blue-500 outline-none appearance-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   value={selectedStatus}
                   onChange={(e) => setSelectedStatus(e.target.value)}
                 >
@@ -201,7 +218,7 @@ export default function TaskModal({
                   <option value="completed_month">בוצעו החודש</option>
                   <option value="done">משימות שבוצעו</option>
                 </select>
-                <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+                <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
               </div>
             </div>
           </div>
@@ -231,12 +248,13 @@ export default function TaskModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-400 text-sm mb-1">
+              <label htmlFor="task-priority" className="block text-slate-400 text-sm mb-1">
                 עדיפות
               </label>
               <div className="relative">
                 <select
-                  className="w-full bg-slate-900/50 text-white rounded pr-3 pl-10 py-2 border border-slate-700 focus:border-blue-500 outline-none appearance-none"
+                  id="task-priority"
+                  className="w-full bg-slate-900/50 text-white rounded pr-3 pl-10 py-2 border border-slate-700 focus:border-blue-500 outline-none appearance-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   value={priority}
                   onChange={(e) =>
                     setPriority(e.target.value as "high" | "medium" | "low")
@@ -246,14 +264,15 @@ export default function TaskModal({
                   <option value="medium">בינוני</option>
                   <option value="low">נמוך</option>
                 </select>
-                <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+                <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
               </div>
             </div>
             <div>
-              <label className="block text-slate-400 text-sm mb-1">אחראי</label>
+              <label htmlFor="task-assignee" className="block text-slate-400 text-sm mb-1">אחראי</label>
               <div className="relative">
                 <select
-                  className="w-full bg-slate-900/50 text-white rounded pr-3 pl-10 py-2 border border-slate-700 focus:border-blue-500 outline-none appearance-none"
+                  id="task-assignee"
+                  className="w-full bg-slate-900/50 text-white rounded pr-3 pl-10 py-2 border border-slate-700 focus:border-blue-500 outline-none appearance-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   value={assigneeId || ""}
                   onChange={(e) =>
                     setAssigneeId(
@@ -269,25 +288,26 @@ export default function TaskModal({
                     </option>
                   ))}
                 </select>
-                <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+                <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
               </div>
             </div>
           </div>
 
           <div>
-            <label className="block text-slate-400 text-sm mb-2">תגיות</label>
+            <label htmlFor="task-tags-input" className="block text-slate-400 text-sm mb-2">תגיות</label>
             <div className="flex gap-2 mb-2">
               <input
+                id="task-tags-input"
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={handleAddTag}
                 placeholder="הקלד תגית ולחץ Enter"
-                className="flex-1 bg-slate-900/50 text-white rounded px-3 py-2 border border-slate-700 focus:border-blue-500 outline-none text-sm"
+                className="flex-1 bg-slate-900/50 text-white rounded px-3 py-2 border border-slate-700 focus:border-blue-500 outline-none text-sm focus-visible:ring-2 focus-visible:ring-blue-500"
               />
               <button
                 type="button"
                 onClick={handleAddTag}
-                className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded transition-colors text-sm"
+                className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded transition-colors text-sm focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 הוסף
               </button>
@@ -302,7 +322,8 @@ export default function TaskModal({
                   <button
                     type="button"
                     onClick={() => removeTag(tag)}
-                    className="hover:text-white transition-colors"
+                    className="hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 rounded-full"
+                    aria-label={`הסר תגית ${tag}`}
                   >
                     ×
                   </button>
@@ -316,22 +337,25 @@ export default function TaskModal({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-4 py-2 text-slate-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-slate-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
             >
               ביטול
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               {loading ? (
-                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
+                <span role="status">
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span className="sr-only">שומר...</span>
+                </span>
               ) : (
-                <span className="w-4 h-4 font-bold flex items-center justify-center" role="img" aria-label="plus">
+                <span className="w-4 h-4 font-bold flex items-center justify-center" aria-hidden="true">
                   {task ? "✎" : "+"}
                 </span>
               )}

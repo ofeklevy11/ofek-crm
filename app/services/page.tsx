@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import { getProducts } from "@/app/actions/products";
 import ServicesPageClient from "./client";
 
+export const metadata: Metadata = { title: "מוצרים ושירותים | BizlyCRM" };
 export const dynamic = "force-dynamic";
 
 export default async function ServicesPage() {

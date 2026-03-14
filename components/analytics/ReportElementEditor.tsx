@@ -19,9 +19,10 @@ interface TextEditorProps {
   onSave: (value: string) => void;
   onCancel: () => void;
   placeholder?: string;
+  label?: string;
 }
 
-export function TextEditor({ type, value, onSave, onCancel, placeholder }: TextEditorProps) {
+export function TextEditor({ type, value, onSave, onCancel, placeholder, label }: TextEditorProps) {
   const [draft, setDraft] = useState(value);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -40,6 +41,7 @@ export function TextEditor({ type, value, onSave, onCancel, placeholder }: TextE
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
+          aria-label={label || placeholder || "ערוך ערך"}
           className="flex-1"
           autoFocus
         />
@@ -49,15 +51,16 @@ export function TextEditor({ type, value, onSave, onCancel, placeholder }: TextE
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
+          aria-label={label || placeholder || "ערוך ערך"}
           className="flex-1 min-h-[60px]"
           autoFocus
         />
       )}
       <div className="flex gap-1 shrink-0">
-        <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600 hover:bg-green-50" onClick={() => onSave(draft)}>
+        <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600 hover:bg-green-50" onClick={() => onSave(draft)} aria-label="שמור">
           <Check className="h-4 w-4" />
         </Button>
-        <Button size="icon" variant="ghost" className="h-8 w-8 text-gray-400 hover:bg-gray-100" onClick={onCancel}>
+        <Button size="icon" variant="ghost" className="h-8 w-8 text-gray-400 hover:bg-gray-100" onClick={onCancel} aria-label="בטל">
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -77,7 +80,7 @@ export function SelectEditor({ value, options, onSave, label }: SelectEditorProp
     <div className="flex items-center gap-2">
       {label && <span className="text-xs text-gray-500 shrink-0">{label}</span>}
       <Select value={value} onValueChange={onSave}>
-        <SelectTrigger className="h-8 text-xs">
+        <SelectTrigger className="h-8 text-xs" aria-label={label}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

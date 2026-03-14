@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import {
   createAutomationRule,
   updateAutomationRule,
@@ -59,6 +60,8 @@ export default function MultiEventAutomationModal({
   // --- Wizard State ---
   const [step, setStep] = useState(1);
   const totalSteps = 2; // Steps: 1. Event Chain, 2. Actions
+  // Focus trap is declared here but ref is assigned in the return block
+  const focusTrapRef = useFocusTrap(onClose);
 
   // Calculate max actions based on user plan
   const maxActions = getActionsPerAutomationLimit(userPlan);
@@ -649,7 +652,7 @@ export default function MultiEventAutomationModal({
     <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
       <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6">
         <h3 className="font-bold text-blue-900 flex items-center gap-2 mb-2">
-          <Timer className="w-5 h-5" />
+          <Timer className="w-5 h-5" aria-hidden="true" />
           הגדרת שרשרת האירועים
         </h3>
         <p className="text-sm text-blue-800">
@@ -701,8 +704,9 @@ export default function MultiEventAutomationModal({
                   : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50"
               }`}
               title="אפשר בחירת טבלה שונה לכל שלב בשרשרת"
+              aria-label={isMultiTableMode ? "מצב מורכב פעיל - לחץ למעבר למצב רגיל" : "מצב רגיל - לחץ למעבר למצב מורכב"}
             >
-              <Database size={16} />
+              <Database size={16} aria-hidden="true" />
               {isMultiTableMode ? "מצב מורכב פעיל" : "מצב רגיל"}
             </button>
           </div>
@@ -749,9 +753,10 @@ export default function MultiEventAutomationModal({
                   {eventChain.length > 2 && (
                     <button
                       onClick={() => removeEvent(event.id)}
-                      className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 rounded"
+                      aria-label="הסר שלב"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={16} aria-hidden="true" />
                     </button>
                   )}
                 </div>
@@ -851,13 +856,13 @@ export default function MultiEventAutomationModal({
           onClick={addEvent}
           className="mr-8 flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-4 py-2 rounded-lg transition"
         >
-          <Plus size={16} />
+          <Plus size={16} aria-hidden="true" />
           הוסף שלב נוסף
         </button>
       </div>
 
       {validationError && (
-        <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm border border-red-200 flex items-center gap-2">
+        <div role="alert" className="bg-red-50 text-red-700 p-3 rounded-lg text-sm border border-red-200 flex items-center gap-2">
           ⚠️ {validationError}
         </div>
       )}
@@ -880,9 +885,9 @@ export default function MultiEventAutomationModal({
           <div className="flex justify-between items-center mb-6">
             <h4 className="font-bold text-blue-900 flex items-center gap-2">
               {editingActionIndex !== null ? (
-                <Pencil size={18} />
+                <Pencil size={18} aria-hidden="true" />
               ) : (
-                <Plus size={18} />
+                <Plus size={18} aria-hidden="true" />
               )}
               {editingActionIndex !== null ? "עריכת פעולה" : "הוספת פעולה חדשה"}
             </h4>
@@ -894,8 +899,9 @@ export default function MultiEventAutomationModal({
                   setCurrentActionType("");
                 }}
                 className="text-gray-400 hover:text-gray-600"
+                aria-label="ביטול עריכת פעולה"
               >
-                <X size={20} />
+                <X size={20} aria-hidden="true" />
               </button>
             )}
           </div>
@@ -961,7 +967,7 @@ export default function MultiEventAutomationModal({
                   onClick={() => setCurrentActionType("")}
                   className="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1"
                 >
-                  <ArrowRight size={14} /> החלף סוג פעולה
+                  <ArrowRight size={14} aria-hidden="true" /> החלף סוג פעולה
                 </button>
                 <span className="text-gray-300">|</span>
                 <span className="text-sm font-bold text-gray-800">
@@ -982,7 +988,7 @@ export default function MultiEventAutomationModal({
                   {/* Reuse existing WA config UI code */}
                   <div className="bg-green-50 p-4 rounded-xl border border-green-200">
                     <h4 className="font-bold text-green-800 flex items-center gap-2">
-                      <Smartphone size={18} />
+                      <Smartphone size={18} aria-hidden="true" />
                       הגדרות וואטסאפ
                     </h4>
                   </div>
@@ -1090,7 +1096,7 @@ export default function MultiEventAutomationModal({
                     <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 animate-in fade-in">
                       <div className="flex items-start gap-3">
                         <div className="p-2 bg-amber-100 rounded-lg">
-                          <Timer className="w-5 h-5 text-amber-600" />
+                          <Timer className="w-5 h-5 text-amber-600" aria-hidden="true" />
                         </div>
                         <div className="flex-1">
                           <h4 className="font-bold text-amber-800 text-sm mb-1">
@@ -1166,8 +1172,8 @@ export default function MultiEventAutomationModal({
                         בחר קובץ לשליחה
                       </label>
                       {loadingFiles ? (
-                        <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
-                          <Loader2 className="animate-spin" size={16} /> טוען
+                        <div className="flex items-center gap-2 text-sm text-gray-500 py-2" role="status" aria-live="polite">
+                          <Loader2 className="animate-spin" size={16} aria-hidden="true" /> טוען
                           קבצים...
                         </div>
                       ) : (
@@ -1206,11 +1212,13 @@ export default function MultiEventAutomationModal({
                         type="button"
                         onClick={() => setShowDynamicValues(!showDynamicValues)}
                         className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                        aria-expanded={showDynamicValues}
                       >
                         לפתיחת הערכים לשימוש מהרשומה הנוכחית לחץ כאן:
                         <ChevronDown
                           size={16}
                           className={`transition-transform ${showDynamicValues ? "rotate-180" : ""}`}
+                          aria-hidden="true"
                         />
                       </button>
 
@@ -1226,6 +1234,7 @@ export default function MultiEventAutomationModal({
                               navigator.clipboard.writeText(`{durationString}`);
                             }}
                             className="flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded text-xs hover:border-purple-300 hover:bg-purple-50 transition-colors group"
+                            aria-label="העתק ערך {durationString}"
                             title="משך זמן כולל מחושב (בפורמט טקסט)"
                           >
                             <span
@@ -1237,6 +1246,7 @@ export default function MultiEventAutomationModal({
                             <Copy
                               size={12}
                               className="text-gray-400 group-hover:text-purple-500"
+                              aria-hidden="true"
                             />
                           </button>
                           {getColumnsForEvent(tableId).map((col: any) => (
@@ -1247,6 +1257,7 @@ export default function MultiEventAutomationModal({
                                 navigator.clipboard.writeText(`{${col.name}}`);
                               }}
                               className="flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded text-xs hover:border-blue-300 hover:bg-blue-50 transition-colors group"
+                              aria-label={`העתק ערך {${col.name}}`}
                               title="לחץ להעתקה"
                             >
                               <span
@@ -1256,6 +1267,7 @@ export default function MultiEventAutomationModal({
                               <Copy
                                 size={12}
                                 className="text-gray-400 group-hover:text-blue-500"
+                                aria-hidden="true"
                               />
                             </button>
                           ))}
@@ -1272,7 +1284,7 @@ export default function MultiEventAutomationModal({
                 <div className="space-y-4">
                   <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4">
                     <h4 className="font-bold text-blue-800 flex items-center gap-2">
-                      <Bell size={18} />
+                      <Bell size={18} aria-hidden="true" />
                       הגדרות התראה
                     </h4>
                   </div>
@@ -1323,7 +1335,7 @@ export default function MultiEventAutomationModal({
                 <div className="space-y-4">
                   <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 mb-4">
                     <h4 className="font-bold text-purple-800 flex items-center gap-2">
-                      <ListTodo size={18} />
+                      <ListTodo size={18} aria-hidden="true" />
                       הגדרות משימה חדשה
                     </h4>
                   </div>
@@ -1451,8 +1463,9 @@ export default function MultiEventAutomationModal({
                               type="button"
                               onClick={() => removeTag(tag)}
                               className="hover:text-purple-900 transition-colors w-4 h-4 flex items-center justify-center rounded-full hover:bg-purple-200"
+                              aria-label={`הסר תג ${tag}`}
                             >
-                              <X size={12} />
+                              <X size={12} aria-hidden="true" />
                             </button>
                           </span>
                         ))}
@@ -1467,7 +1480,7 @@ export default function MultiEventAutomationModal({
                 <div className="space-y-4">
                   <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 mb-4">
                     <h4 className="font-bold text-orange-800 flex items-center gap-2">
-                      <Webhook size={18} />
+                      <Webhook size={18} aria-hidden="true" />
                       הגדרות Webhook
                     </h4>
                   </div>
@@ -1491,7 +1504,7 @@ export default function MultiEventAutomationModal({
                 <div className="space-y-4">
                   <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 mb-4">
                     <h4 className="font-bold text-purple-800 flex items-center gap-2">
-                      <Pencil size={18} />
+                      <Pencil size={18} aria-hidden="true" />
                       הגדרות עדכון שדה
                     </h4>
                   </div>
@@ -1604,7 +1617,7 @@ export default function MultiEventAutomationModal({
                 onClick={() => setIsAddingAction(true)}
                 className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium inline-flex items-center gap-2"
               >
-                <Plus size={16} /> הוסף פעולה ראשונה
+                <Plus size={16} aria-hidden="true" /> הוסף פעולה ראשונה
               </button>
             </div>
           )}
@@ -1635,18 +1648,20 @@ export default function MultiEventAutomationModal({
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                 <button
                   onClick={() => editAction(index)}
-                  className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition"
+                  className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+                  aria-label="ערוך פעולה"
                 >
-                  <Pencil size={18} />
+                  <Pencil size={18} aria-hidden="true" />
                 </button>
                 <button
                   onClick={() => removeAction(index)}
-                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition"
+                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+                  aria-label="מחק פעולה"
                 >
-                  <Trash2 size={18} />
+                  <Trash2 size={18} aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -1657,7 +1672,7 @@ export default function MultiEventAutomationModal({
               onClick={() => setIsAddingAction(true)}
               className="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition flex items-center justify-center gap-2 font-medium"
             >
-              <Plus size={20} />
+              <Plus size={20} aria-hidden="true" />
               הוסף פעולה נוספת ({actions.length}/{maxActions})
             </button>
           )}
@@ -1674,14 +1689,14 @@ export default function MultiEventAutomationModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl min-h-[600px] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div ref={focusTrapRef} role="dialog" aria-modal="true" aria-labelledby="multi-event-modal-title" className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl min-h-[600px] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="bg-gray-50 border-b border-gray-200 p-6 flex justify-between items-center shrink-0">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">
+            <h2 id="multi-event-modal-title" className="text-xl font-bold text-gray-900">
               אשף אוטומציה מרובת שלבים
             </h2>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-2" aria-label={`שלב ${step} מתוך ${totalSteps}`} role="progressbar" aria-valuenow={step} aria-valuemin={1} aria-valuemax={totalSteps}>
               {[1, 2].map((s) => (
                 <div
                   key={s}
@@ -1690,7 +1705,7 @@ export default function MultiEventAutomationModal({
                   <div
                     className={`w-6 h-6 rounded-full flex items-center justify-center text-xs border ${step >= s ? "bg-blue-100 border-blue-600" : "border-gray-300"}`}
                   >
-                    {step > s ? <CheckCircle2 size={14} /> : s}
+                    {step > s ? <CheckCircle2 size={14} aria-hidden="true" /> : s}
                   </div>
                   <span>
                     {s === 1 && "הגדרת רצף"}
@@ -1704,8 +1719,9 @@ export default function MultiEventAutomationModal({
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-200 transition"
+            aria-label="סגור"
           >
-            <X size={24} />
+            <X size={24} aria-hidden="true" />
           </button>
         </div>
 
@@ -1745,7 +1761,7 @@ export default function MultiEventAutomationModal({
               }}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-white transition"
             >
-              <ArrowRight size={18} />
+              <ArrowRight size={18} aria-hidden="true" />
               חזור
             </button>
           ) : (
@@ -1780,7 +1796,7 @@ export default function MultiEventAutomationModal({
               disabled={step === 1 && validationError !== null}
             >
               המשך
-              <ArrowLeft size={18} />
+              <ArrowLeft size={18} aria-hidden="true" />
             </button>
           ) : (
             <button
@@ -1795,7 +1811,7 @@ export default function MultiEventAutomationModal({
                 </>
               ) : (
                 <>
-                  <CheckCircle2 size={18} />
+                  <CheckCircle2 size={18} aria-hidden="true" />
                   סיום ושמירה
                 </>
               )}
@@ -1810,9 +1826,11 @@ export default function MultiEventAutomationModal({
 // Sub-component for Action Card
 function ActionCard({ title, desc, icon, selected, onClick }: any) {
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
-      className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${
+      aria-pressed={selected}
+      className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all duration-200 hover:shadow-md w-full text-right ${
         selected
           ? "border-blue-500 bg-blue-50"
           : "border-gray-100 bg-white hover:border-blue-200"
@@ -1823,6 +1841,7 @@ function ActionCard({ title, desc, icon, selected, onClick }: any) {
           className={`p-3 rounded-xl ${
             selected ? "bg-white shadow-sm" : "bg-gray-50"
           }`}
+          aria-hidden="true"
         >
           {icon}
         </div>
@@ -1844,11 +1863,11 @@ function ActionCard({ title, desc, icon, selected, onClick }: any) {
         </div>
       </div>
       {selected && (
-        <div className="absolute top-4 left-4 text-blue-500">
+        <div className="absolute top-4 left-4 text-blue-500" aria-hidden="true">
           <CheckCircle2 size={24} className="fill-blue-100" />
         </div>
       )}
-    </div>
+    </button>
   );
 }
 

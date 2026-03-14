@@ -5,6 +5,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ export default function ViewTextModal({
         <div className="p-6 border-b">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">{title}</DialogTitle>
+            <DialogDescription className="sr-only">תצוגת טקסט מלא</DialogDescription>
           </DialogHeader>
         </div>
 
@@ -47,7 +49,7 @@ export default function ViewTextModal({
               }}
               className="gap-2"
             >
-              <Edit2 className="h-4 w-4" /> ערוך רשומה
+              <Edit2 className="h-4 w-4" aria-hidden="true" /> ערוך רשומה
             </Button>
           )}
           <Button variant="outline" onClick={onClose}>

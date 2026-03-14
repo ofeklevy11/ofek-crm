@@ -7,6 +7,11 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { isRateLimitError } from "@/lib/rate-limit-utils";
 import RateLimitFallback from "@/components/RateLimitFallback";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "ארכיון יעדים | CRM",
+};
 
 export default async function ArchivedGoalsPage() {
   const user = await getCurrentUser();
@@ -48,7 +53,7 @@ export default async function ArchivedGoalsPage() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
               <div className="w-12 h-12 bg-white rounded-2xl border border-gray-100 flex items-center justify-center shadow-sm text-gray-500">
-                <Archive className="w-6 h-6" />
+                <Archive className="w-6 h-6" aria-hidden="true" />
               </div>
               ארכיון יעדים
             </h1>
@@ -62,28 +67,30 @@ export default async function ArchivedGoalsPage() {
       {goals.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
           <div className="mx-auto w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-            <Archive className="w-8 h-8 text-gray-300" />
+            <Archive className="w-8 h-8 text-gray-300" aria-hidden="true" />
           </div>
-          <h3 className="text-xl font-bold text-gray-900">הארכיון ריק</h3>
+          <h2 className="text-xl font-bold text-gray-900">הארכיון ריק</h2>
           <p className="text-gray-500 mt-2">אין יעדים בארכיון כרגע</p>
         </div>
       ) : (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
-          {/* Header Row */}
-          <div className="bg-gray-50/50 border-b border-gray-100 flex items-center justify-between gap-6 px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-wide">
-            <div className="flex-1 min-w-[240px]">שם היעד וסוג</div>
-            <div className="min-w-[160px] text-right">התקדמות ויעד</div>
-            <div className="min-w-[140px] text-right pr-2">תקופת יעד</div>
-            <div className="min-w-[120px] text-center">סטטוס סופי</div>
-            <div className="min-w-[100px] text-left pl-2">פעולות</div>
-          </div>
-
-          {/* Rows */}
-          <div className="divide-y divide-gray-100">
-            {goals.map((goal) => (
-              <ArchivedGoalRow key={goal.id} goal={goal} tables={tables} />
-            ))}
-          </div>
+          <table className="min-w-full divide-y divide-gray-200">
+            <caption className="sr-only">ארכיון יעדים</caption>
+            <thead className="bg-gray-50/50">
+              <tr>
+                <th scope="col" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">שם היעד וסוג</th>
+                <th scope="col" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">התקדמות ויעד</th>
+                <th scope="col" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">תקופת יעד</th>
+                <th scope="col" className="px-6 py-4 text-center text-xs font-medium text-gray-400 uppercase tracking-wide">סטטוס סופי</th>
+                <th scope="col" className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">פעולות</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {goals.map((goal) => (
+                <ArchivedGoalRow key={goal.id} goal={goal} tables={tables} />
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

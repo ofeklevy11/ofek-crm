@@ -25,11 +25,12 @@ export default function SearchInput() {
       <Input
         type="text"
         placeholder="חיפוש..."
+        aria-label="חיפוש בטבלה"
         onChange={(e) => handleSearch(e.target.value)}
         defaultValue={searchParams.get("q")?.toString()}
         className="pl-10 h-10 w-full sm:w-64"
       />
-      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
+      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" aria-hidden="true">
         <Search className="h-4 w-4" />
       </div>
     </div>

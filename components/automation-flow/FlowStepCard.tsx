@@ -321,6 +321,7 @@ export default function FlowStepCard({
                 <button
                   key={tab.key}
                   type="button"
+                  aria-pressed={mode === tab.key}
                   onClick={() => {
                     if (tab.key === "column") onFieldChange(step.id, field.key, "");
                     else if (tab.key === "manual") onFieldChange(step.id, field.key, "manual:");
@@ -439,17 +440,20 @@ export default function FlowStepCard({
         {canRemove && onRemove && (
           <button
             onClick={() => onRemove(step.id)}
-            className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition shrink-0"
+            className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition shrink-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1"
             title="הסר פעולה"
+            aria-label="הסר פעולה"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="w-4 h-4" aria-hidden="true" />
           </button>
         )}
 
         {/* Expand/collapse toggle */}
         <button
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-2 hover:bg-gray-100/50 rounded p-0.5 transition shrink-0"
+          className="flex items-center gap-2 hover:bg-gray-100/50 rounded-full p-0.5 transition shrink-0 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+          aria-expanded={expanded}
+          aria-label={`${isTrigger ? "טריגר" : "פעולה"} ${stepIndex} - ${expanded ? "כווץ" : "הרחב"}`}
         >
           <span
             className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold text-white ${
@@ -459,13 +463,13 @@ export default function FlowStepCard({
             {stepIndex}
           </span>
           {expanded ? (
-            <ChevronUp className="w-4 h-4 text-gray-400" />
+            <ChevronUp className="w-4 h-4 text-gray-400" aria-hidden="true" />
           ) : (
-            <ChevronDown className="w-4 h-4 text-gray-400" />
+            <ChevronDown className="w-4 h-4 text-gray-400" aria-hidden="true" />
           )}
         </button>
 
-        {Icon && <Icon className="w-4 h-4 text-gray-600 shrink-0" />}
+        {Icon && <Icon className="w-4 h-4 text-gray-600 shrink-0" aria-hidden="true" />}
 
         {/* Type label — clickable popover for type change */}
         <div className="flex-1 flex flex-col gap-1">
@@ -477,7 +481,7 @@ export default function FlowStepCard({
               <PopoverTrigger asChild>
                 <button className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-800 hover:border-purple-400 hover:bg-purple-50 transition shadow-sm">
                   {typeLabel}
-                  <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-56 p-2 max-h-64 overflow-y-auto" align="start">
@@ -500,7 +504,7 @@ export default function FlowStepCard({
                             : "hover:bg-gray-100 text-gray-700"
                         }`}
                       >
-                        {TypeIcon && <TypeIcon className="w-4 h-4 shrink-0" />}
+                        {TypeIcon && <TypeIcon className="w-4 h-4 shrink-0" aria-hidden="true" />}
                         <span>{labels[t] || t}</span>
                       </button>
                     );
@@ -547,7 +551,7 @@ export default function FlowStepCard({
                     }}
                     className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 transition"
                   >
-                    <X className="w-3 h-3" />
+                    <X className="w-3 h-3" aria-hidden="true" />
                     הסר תנאי
                   </button>
                 </div>
@@ -557,7 +561,7 @@ export default function FlowStepCard({
                   onClick={() => setConditionOpen(true)}
                   className="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 transition"
                 >
-                  <Plus className="w-3 h-3" />
+                  <Plus className="w-3 h-3" aria-hidden="true" />
                   הוסף תנאי
                 </button>
               )}

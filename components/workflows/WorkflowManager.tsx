@@ -83,8 +83,12 @@ export function WorkflowManager({
       </div>
 
       {/* Main Mode Toggle */}
-      <div className="flex p-1 bg-gray-200/50 rounded-xl w-fit">
+      <div className="flex p-1 bg-gray-200/50 rounded-xl w-fit" role="tablist" aria-label="תצוגת תהליכי עבודה">
         <button
+          role="tab"
+          id="tab-active"
+          aria-selected={activeTab === "active"}
+          aria-controls="tabpanel-active"
           onClick={() => setActiveTab("active")}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             activeTab === "active"
@@ -92,10 +96,14 @@ export function WorkflowManager({
               : "text-gray-500 hover:text-gray-700"
           }`}
         >
-          <CheckSquare size={16} />
+          <CheckSquare size={16} aria-hidden="true" />
           תהליכים פעילים (Checklists)
         </button>
         <button
+          role="tab"
+          id="tab-templates"
+          aria-selected={activeTab === "templates"}
+          aria-controls="tabpanel-templates"
           onClick={() => setActiveTab("templates")}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             activeTab === "templates"
@@ -103,14 +111,14 @@ export function WorkflowManager({
               : "text-gray-500 hover:text-gray-700"
           }`}
         >
-          <Settings size={16} />
+          <Settings size={16} aria-hidden="true" />
           הגדרת תבניות
         </button>
       </div>
 
       {activeTab === "active" ? (
         // ACTIVE INSTANCES VIEW
-        <div className="h-[750px] bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <div id="tabpanel-active" role="tabpanel" aria-labelledby="tab-active" className="h-[750px] bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
           <WorkflowInstancesBoard
             instances={initialInstances}
             workflows={workflows}
@@ -119,13 +127,17 @@ export function WorkflowManager({
         </div>
       ) : (
         // TEMPLATES VIEW
-        <>
+        <div id="tabpanel-templates" role="tabpanel" aria-labelledby="tab-templates">
           {/* Workflow Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 pb-2">
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar" role="tablist" aria-label="תבניות תהליכי עבודה">
               {workflows.map((workflow) => (
                 <button
                   key={workflow.id}
+                  role="tab"
+                  id={`tab-workflow-${workflow.id}`}
+                  aria-selected={activeWorkflowId === workflow.id}
+                  aria-controls={`tabpanel-workflow-${workflow.id}`}
                   onClick={() => setActiveWorkflowId(workflow.id)}
                   className={`
                         flex items-center gap-2 px-4 py-2.5 rounded-t-lg text-sm font-medium transition-all relative
@@ -136,7 +148,7 @@ export function WorkflowManager({
                         }
                         `}
                 >
-                  <Layout size={16} />
+                  <Layout size={16} aria-hidden="true" />
                   {workflow.name}
                   {activeWorkflowId === workflow.id && (
                     <span className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-white" />
@@ -148,13 +160,13 @@ export function WorkflowManager({
               onClick={handleCreateWorkflow}
               className="flex items-center gap-2 text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
             >
-              <Plus size={16} />
+              <Plus size={16} aria-hidden="true" />
               <span>תבנית חדשה</span>
             </button>
           </div>
 
           {/* Template Board */}
-          <div className="bg-white min-h-[600px] border border-gray-200 rounded-xl rounded-tl-none p-6 shadow-sm relative overflow-hidden">
+          <div id={activeWorkflow ? `tabpanel-workflow-${activeWorkflow.id}` : undefined} role="tabpanel" aria-labelledby={activeWorkflow ? `tab-workflow-${activeWorkflow.id}` : undefined} className="bg-white min-h-[600px] border border-gray-200 rounded-xl rounded-tl-none p-6 shadow-sm relative overflow-hidden">
             {activeWorkflow ? (
               <div className="space-y-12">
                 {/* Workflow Actions Header */}
@@ -236,12 +248,12 @@ export function WorkflowManager({
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center py-20 text-gray-400">
-                <Layout size={48} className="mb-4 opacity-20" />
+                <Layout size={48} className="mb-4 opacity-20" aria-hidden="true" />
                 <p className="text-lg">בחר תבנית לעריכה או צור חדשה</p>
               </div>
             )}
           </div>
-        </>
+        </div>
       )}
     </div>
   );

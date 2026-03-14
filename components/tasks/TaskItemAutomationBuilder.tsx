@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import {
   X,
   Zap,
@@ -113,6 +114,7 @@ export default function TaskItemAutomationBuilder({
   users,
   tables,
 }: Props) {
+  const focusTrapRef = useFocusTrap(onClose);
   const [step, setStep] = useState(1);
   const [selectedType, setSelectedType] = useState<string>(
     initialAction?.actionType || "",
@@ -761,7 +763,7 @@ export default function TaskItemAutomationBuilder({
                 </div>
 
                 {loadingColumns ? (
-                  <div className="text-center py-4 text-sm text-gray-500">
+                  <div className="text-center py-4 text-sm text-gray-500" role="status">
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                     טוען שדות...
                   </div>
@@ -891,6 +893,7 @@ export default function TaskItemAutomationBuilder({
                             <button
                               type="button"
                               onClick={() => handleRemoveField(key)}
+                              aria-label="הסר שדה"
                               className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors mt-6"
                             >
                               <X className="w-4 h-4" />
@@ -946,7 +949,7 @@ export default function TaskItemAutomationBuilder({
                 </div>
 
                 {loadingColumns ? (
-                  <div className="text-center py-4 text-sm text-gray-500">
+                  <div className="text-center py-4 text-sm text-gray-500" role="status">
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                     טוען שדות...
                   </div>
@@ -1076,6 +1079,7 @@ export default function TaskItemAutomationBuilder({
                             <button
                               type="button"
                               onClick={() => handleRemoveField(key)}
+                              aria-label="הסר שדה"
                               className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors mt-6"
                             >
                               <X className="w-4 h-4" />
@@ -1267,15 +1271,15 @@ export default function TaskItemAutomationBuilder({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="automation-builder-title">
+      <div ref={focusTrapRef} className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-50 to-purple-50 backdrop-blur border-b p-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             {step === 2 && (
               <button
                 onClick={() => setStep(1)}
-                className="p-2 hover:bg-white/80 rounded-lg transition flex items-center gap-1 text-sm text-gray-600"
+                className="p-2 hover:bg-white/80 rounded-lg transition flex items-center gap-1 text-sm text-gray-600 focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <ArrowRight className="w-4 h-4" />
                 חזור
@@ -1286,7 +1290,7 @@ export default function TaskItemAutomationBuilder({
                 <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg">
                   <Zap className="w-4 h-4 text-white" />
                 </div>
-                <h2 className="text-lg font-bold text-gray-900">
+                <h2 id="automation-builder-title" className="text-lg font-bold text-gray-900">
                   {step === 1
                     ? "הוספת אוטומציה חדשה"
                     : initialAction
@@ -1303,6 +1307,7 @@ export default function TaskItemAutomationBuilder({
           </div>
           <button
             onClick={onClose}
+            aria-label="סגור"
             className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition"
           >
             <X className="w-5 h-5" />
@@ -1330,7 +1335,7 @@ export default function TaskItemAutomationBuilder({
               </span>
               בחירת סוג
             </div>
-            <ArrowLeft className="w-4 h-4 text-gray-300" />
+            <ArrowLeft className="w-4 h-4 text-gray-300" aria-hidden="true" />
             <div
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                 step === 2
@@ -1368,13 +1373,13 @@ export default function TaskItemAutomationBuilder({
           <div className="p-4 border-t bg-gray-50 flex items-center justify-end gap-3 shrink-0">
             <button
               onClick={onClose}
-              className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-xl transition"
+              className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-xl transition focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               ביטול
             </button>
             <button
               onClick={handleSave}
-              className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-blue-500/25 transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
+              className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-blue-500/25 transition-all transform hover:-translate-y-0.5 flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <Zap className="w-4 h-4" />
               שמור אוטומציה

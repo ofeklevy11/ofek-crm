@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { addMonths, monthNames, daysOfWeek } from "@/lib/dateUtils";
 
 interface DatePickerPopupProps {
@@ -17,6 +17,55 @@ export function DatePickerPopup({
   currentDate,
 }: DatePickerPopupProps) {
   const [viewDate, setViewDate] = useState(new Date(currentDate));
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  // Focus trap + auto-focus + Escape key
+  useEffect(() => {
+    if (!isOpen || !popupRef.current) return;
+
+    // Save the element that had focus before opening
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+
+    // Auto-focus first button in popup
+    const firstBtn = popupRef.current.querySelector<HTMLElement>("button");
+    firstBtn?.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+
+      // Focus trap
+      if (e.key === "Tab" && popupRef.current) {
+        const focusable = popupRef.current.querySelectorAll<HTMLElement>(
+          'button, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      // Restore focus to the element that was focused before opening
+      previousFocusRef.current?.focus();
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -69,6 +118,16 @@ export function DatePickerPopup({
     );
   };
 
+  const formatFullDate = (day: number) => {
+    const date = new Date(year, month, day);
+    return date.toLocaleDateString("he-IL", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
+
   return (
     <>
       {/* Backdrop */}
@@ -76,6 +135,10 @@ export function DatePickerPopup({
 
       {/* Popup */}
       <div
+        ref={popupRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="בחירת תאריך"
         className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 md:absolute md:top-16 md:left-1/2 md:transform md:-translate-x-1/2 md:translate-y-0 bg-white rounded-lg shadow-xl border border-gray-200 z-50 p-4 w-80"
         dir="rtl"
       >
@@ -83,10 +146,11 @@ export function DatePickerPopup({
         <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => setViewDate(addMonths(viewDate, -1))}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
             aria-label="חודש קודם"
           >
             <svg
+              aria-hidden="true"
               className="w-5 h-5 text-gray-600"
               fill="none"
               stroke="currentColor"
@@ -107,10 +171,11 @@ export function DatePickerPopup({
 
           <button
             onClick={() => setViewDate(addMonths(viewDate, 1))}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
             aria-label="חודש הבא"
           >
             <svg
+              aria-hidden="true"
               className="w-5 h-5 text-gray-600"
               fill="none"
               stroke="currentColor"
@@ -132,6 +197,7 @@ export function DatePickerPopup({
             <div
               key={day}
               className="text-center text-xs font-medium text-gray-500 py-1"
+              aria-hidden="true"
             >
               {day}
             </div>
@@ -139,13 +205,16 @@ export function DatePickerPopup({
         </div>
 
         {/* Calendar grid */}
-        <div className="grid grid-cols-7 gap-1">
+        <div className="grid grid-cols-7 gap-1" role="grid" aria-label={`${monthNames[month]} ${year}`}>
           {days.map((day, index) => (
             <div key={index} className="aspect-square">
               {day ? (
                 <button
                   onClick={() => handleDateClick(day)}
-                  className={`w-full h-full flex items-center justify-center text-sm rounded-full transition-all ${
+                  aria-label={formatFullDate(day)}
+                  aria-current={isToday(day) ? "date" : undefined}
+                  aria-pressed={isSelected(day)}
+                  className={`w-full h-full flex items-center justify-center text-sm rounded-full transition-all focus-visible:ring-2 focus-visible:ring-blue-500 ${
                     isSelected(day)
                       ? "bg-blue-600 text-white font-semibold shadow-md"
                       : isToday(day)
@@ -156,7 +225,7 @@ export function DatePickerPopup({
                   {day}
                 </button>
               ) : (
-                <div />
+                <div aria-hidden="true" />
               )}
             </div>
           ))}
@@ -171,13 +240,13 @@ export function DatePickerPopup({
               onSelectDate(today);
               onClose();
             }}
-            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            className="text-sm text-blue-600 hover:text-blue-700 font-medium focus-visible:ring-2 focus-visible:ring-blue-500 rounded px-1"
           >
             היום
           </button>
           <button
             onClick={onClose}
-            className="text-sm text-gray-600 hover:text-gray-700 font-medium"
+            className="text-sm text-gray-600 hover:text-gray-700 font-medium focus-visible:ring-2 focus-visible:ring-blue-500 rounded px-1"
           >
             סגור
           </button>

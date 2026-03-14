@@ -90,7 +90,7 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
 
   if (loading) {
     return (
-      <div className="space-y-5">
+      <div className="space-y-5" role="status" aria-label="טוען פגישות">
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="rounded-xl border border-white/20 bg-[#162e22] p-3 space-y-2">
@@ -109,7 +109,7 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
     <>
       <Tabs defaultValue="meetings" dir="rtl">
         {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5" role="region" aria-label="סטטיסטיקות פגישות החודש">
             {[
               { label: "סה״כ החודש", value: stats.total, color: "text-white/90" },
               { label: "ממתינות", value: stats.pending, color: "text-amber-400" },

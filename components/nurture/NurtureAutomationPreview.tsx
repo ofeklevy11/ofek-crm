@@ -114,13 +114,14 @@ export default function NurtureAutomationPreview({
       <div className="flex items-center gap-1.5">
         <span
           className={`w-2.5 h-2.5 rounded-full ${isEnabled ? "bg-green-500" : "bg-slate-300"}`}
+          aria-hidden="true"
         />
         <span className={`font-medium ${isEnabled ? "text-green-700" : "text-slate-400"}`}>
           {isEnabled ? "פעיל" : "מושבת"}
         </span>
       </div>
 
-      <span className="text-slate-200">|</span>
+      <span className="text-slate-200" aria-hidden="true">|</span>
 
       {/* Channels */}
       <div className="flex items-center gap-1.5 text-slate-600">
@@ -132,7 +133,7 @@ export default function NurtureAutomationPreview({
         )}
       </div>
 
-      <span className="text-slate-200">|</span>
+      <span className="text-slate-200" aria-hidden="true">|</span>
 
       {/* Message preview */}
       {truncatedMsg && (
@@ -140,7 +141,7 @@ export default function NurtureAutomationPreview({
           <div className="text-slate-500 truncate max-w-[200px]" title={msgPreview}>
             &ldquo;{truncatedMsg}&rdquo;
           </div>
-          <span className="text-slate-200">|</span>
+          <span className="text-slate-200" aria-hidden="true">|</span>
         </>
       )}
 
@@ -150,7 +151,7 @@ export default function NurtureAutomationPreview({
         <span>{TIMING_LABELS[timing] || timing}</span>
       </div>
 
-      <span className="text-slate-200">|</span>
+      <span className="text-slate-200" aria-hidden="true">|</span>
 
       {/* Customer count */}
       <div className="flex items-center gap-1.5 text-slate-600">
@@ -161,8 +162,8 @@ export default function NurtureAutomationPreview({
       {/* Live activity */}
       {activity && (
         <>
-          <span className="text-slate-200">|</span>
-          <div className="flex items-center gap-1.5">
+          <span className="text-slate-200" aria-hidden="true">|</span>
+          <div role="status" aria-live="polite" className="flex items-center gap-1.5">
             {activity.pendingCount > 0 ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 text-amber-500 animate-spin" />

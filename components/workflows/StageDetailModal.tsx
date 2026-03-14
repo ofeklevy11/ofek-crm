@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { WorkflowStage } from "@prisma/client";
 import {
   X,
@@ -199,6 +200,7 @@ function ActionSelectionModal({
   onSelect: (item: any) => void;
 }) {
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
+  const containerRef = useFocusTrap(onClose, isOpen);
 
   useEffect(() => {
     if (!isOpen) setSelectedCategory(null);
@@ -212,24 +214,26 @@ function ActionSelectionModal({
       style={{ margin: 0 }}
       onClick={onClose}
     >
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby="action-selection-title" className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
         <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <div className="flex items-center gap-2">
             {selectedCategory && (
               <button
                 onClick={() => setSelectedCategory(null)}
                 className="p-1 hover:bg-gray-200 rounded-full text-gray-500 mr-1"
+                aria-label="חזור לקטגוריות"
               >
                 <ArrowLeft size={18} />
               </button>
             )}
-            <h3 className="font-bold text-gray-900">
+            <h3 id="action-selection-title" className="font-bold text-gray-900">
               {selectedCategory ? selectedCategory.label : "בחר סוג אוטומציה"}
             </h3>
           </div>
           <button
             onClick={onClose}
             className="p-1 hover:bg-gray-200 rounded-full text-gray-500"
+            aria-label="סגור"
           >
             <X size={20} />
           </button>
@@ -373,6 +377,7 @@ function AutomationConfigModal({
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [showDynamicValues, setShowDynamicValues] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const containerRef = useFocusTrap(onClose, isOpen);
 
   useEffect(() => {
     if (isOpen) {
@@ -604,14 +609,15 @@ function AutomationConfigModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby="auto-config-title" className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
         <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-indigo-50">
           <div className="flex items-center gap-2">
-            <h3 className="font-bold text-indigo-900">{type.label}</h3>
+            <h3 id="auto-config-title" className="font-bold text-indigo-900">{type.label}</h3>
           </div>
           <button
             onClick={onClose}
             className="p-1 hover:bg-indigo-100 rounded-full text-indigo-400"
+            aria-label="סגור"
           >
             <X size={20} />
           </button>
@@ -622,10 +628,11 @@ function AutomationConfigModal({
           {type.id === "create_task" && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-create_task-title" className="block text-sm font-medium text-gray-700 mb-1">
                   כותרת המשימה
                 </label>
                 <input
+                  id="auto-create_task-title"
                   className="w-full p-2 border rounded-md"
                   placeholder="שם המשימה"
                   value={fields.title || ""}
@@ -636,10 +643,11 @@ function AutomationConfigModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-create_task-description" className="block text-sm font-medium text-gray-700 mb-1">
                   תיאור
                 </label>
                 <textarea
+                  id="auto-create_task-description"
                   className="w-full p-2 border rounded-md"
                   placeholder="תיאור (אופציונלי)"
                   rows={3}
@@ -652,10 +660,11 @@ function AutomationConfigModal({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="auto-create_task-dueDateOffset" className="block text-sm font-medium text-gray-700 mb-1">
                     תאריך יעד (בעוד X ימים)
                   </label>
                   <input
+                    id="auto-create_task-dueDateOffset"
                     type="number"
                     min="0"
                     className="w-full p-2 border rounded-md"
@@ -667,10 +676,11 @@ function AutomationConfigModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="auto-create_task-status" className="block text-sm font-medium text-gray-700 mb-1">
                     סטטוס
                   </label>
                   <select
+                    id="auto-create_task-status"
                     className="w-full p-2 border rounded-md"
                     value={fields.status || "todo"}
                     onChange={(e) =>
@@ -689,10 +699,11 @@ function AutomationConfigModal({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="auto-create_task-priority" className="block text-sm font-medium text-gray-700 mb-1">
                     עדיפות
                   </label>
                   <select
+                    id="auto-create_task-priority"
                     className="w-full p-2 border rounded-md"
                     value={fields.priority || "low"}
                     onChange={(e) =>
@@ -705,10 +716,11 @@ function AutomationConfigModal({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="auto-create_task-assignee" className="block text-sm font-medium text-gray-700 mb-1">
                     אחראי
                   </label>
                   <select
+                    id="auto-create_task-assignee"
                     className="w-full p-2 border rounded-md"
                     value={fields.assigneeId || ""}
                     onChange={(e) =>
@@ -726,11 +738,12 @@ function AutomationConfigModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-create_task-tagInput" className="block text-sm font-medium text-gray-700 mb-1">
                   תגיות
                 </label>
                 <div className="flex gap-2 mb-2">
                   <input
+                    id="auto-create_task-tagInput"
                     value={fields.tagInput || ""}
                     onChange={(e) =>
                       setFields({ ...fields, tagInput: e.target.value })
@@ -782,6 +795,7 @@ function AutomationConfigModal({
                           });
                         }}
                         className="hover:text-blue-800 transition-colors"
+                        aria-label={`הסר תגית ${tag}`}
                       >
                         <X size={12} />
                       </button>
@@ -793,10 +807,11 @@ function AutomationConfigModal({
           )}
           {(type.id === "update_task" || type.id === "delete_task") && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-task-taskId" className="block text-sm font-medium text-gray-700 mb-1">
                 מזהה המשימה (ID)
               </label>
               <input
+                id="auto-task-taskId"
                 className="w-full p-2 border rounded-md font-mono text-sm"
                 placeholder="Task ID..."
                 onChange={(e) =>
@@ -811,10 +826,11 @@ function AutomationConfigModal({
           )}
           {type.id === "update_task" && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-task-status" className="block text-sm font-medium text-gray-700 mb-1">
                 סטטוס חדש
               </label>
               <select
+                id="auto-task-status"
                 className="w-full p-2 border rounded-md"
                 onChange={(e) =>
                   setFields({ ...fields, status: e.target.value })
@@ -836,7 +852,7 @@ function AutomationConfigModal({
             type.id === "update_record" ||
             type.id === "delete_record") && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-record-tableId" className="block text-sm font-medium text-gray-700 mb-1">
                 בחר טבלה
               </label>
               {tables.length === 0 ? (
@@ -845,6 +861,7 @@ function AutomationConfigModal({
                 </p>
               ) : (
                 <select
+                  id="auto-record-tableId"
                   className="w-full p-2 border rounded-md"
                   value={fields.tableId || ""}
                   onChange={(e) =>
@@ -863,10 +880,11 @@ function AutomationConfigModal({
           )}
           {(type.id === "update_record" || type.id === "delete_record") && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-record-recordId" className="block text-sm font-medium text-gray-700 mb-1">
                 מזהה רשומה (ID) <span className="text-red-500">*</span>
               </label>
               <input
+                id="auto-record-recordId"
                 className={`w-full p-2 border rounded-md ${
                   error ? "border-red-500" : ""
                 }`}
@@ -902,6 +920,7 @@ function AutomationConfigModal({
                     f.type === "priority" ? (
                       <select
                         className="col-span-2 p-1 text-sm border rounded"
+                        aria-label={f.label || f.name}
                         value={val}
                         onChange={(e) => {
                           const newValues = {
@@ -921,6 +940,7 @@ function AutomationConfigModal({
                     ) : (
                       <input
                         className="col-span-2 p-1 text-sm border rounded"
+                        aria-label={f.label || f.name}
                         placeholder="ערך..."
                         value={val}
                         onChange={(e) => {
@@ -940,10 +960,11 @@ function AutomationConfigModal({
           {type.id === "update_record" && fields.tableId && (
             <div className="space-y-3 p-3 bg-gray-50 rounded border">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-update_record-fieldName" className="block text-xs font-medium text-gray-700 mb-1">
                   שדה לעדכון
                 </label>
                 <select
+                  id="auto-update_record-fieldName"
                   className="w-full p-1 border rounded text-sm"
                   onChange={(e) =>
                     setFields({
@@ -970,10 +991,11 @@ function AutomationConfigModal({
                   selectedFieldForUpdate.type === "status" ||
                   selectedFieldForUpdate.type === "priority" ? (
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label htmlFor="auto-update_record-value" className="block text-xs font-medium text-gray-700 mb-1">
                         ערך חדש
                       </label>
                       <select
+                        id="auto-update_record-value"
                         className="w-full p-1 border rounded text-sm"
                         value={fields.value || ""}
                         onChange={(e) =>
@@ -995,10 +1017,11 @@ function AutomationConfigModal({
                     selectedFieldForUpdate.type === "currency" ? (
                     <div className="flex gap-2">
                       <div className="w-1/3">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                        <label htmlFor="auto-update_record-operation" className="block text-xs font-medium text-gray-700 mb-1">
                           פעולה
                         </label>
                         <select
+                          id="auto-update_record-operation"
                           className="w-full p-1 border rounded text-sm dir-ltr"
                           value={fields.operation || "set"}
                           onChange={(e) =>
@@ -1013,10 +1036,11 @@ function AutomationConfigModal({
                         </select>
                       </div>
                       <div className="w-2/3">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                        <label htmlFor="auto-update_record-numValue" className="block text-xs font-medium text-gray-700 mb-1">
                           ערך
                         </label>
                         <input
+                          id="auto-update_record-numValue"
                           type="number"
                           className="w-full p-1 border rounded text-sm"
                           placeholder="מספר..."
@@ -1029,10 +1053,11 @@ function AutomationConfigModal({
                     </div>
                   ) : (
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label htmlFor="auto-update_record-textValue" className="block text-xs font-medium text-gray-700 mb-1">
                         ערך חדש
                       </label>
                       <input
+                        id="auto-update_record-textValue"
                         className="w-full p-1 border rounded text-sm"
                         placeholder="ערך..."
                         value={fields.value || ""}
@@ -1051,10 +1076,11 @@ function AutomationConfigModal({
           {type.id === "create_event" && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-create_event-title" className="block text-sm font-medium text-gray-700 mb-1">
                   כותרת האירוע
                 </label>
                 <input
+                  id="auto-create_event-title"
                   className="w-full p-2 border rounded-md"
                   placeholder="פגישה עם..."
                   value={fields.title || ""}
@@ -1065,10 +1091,11 @@ function AutomationConfigModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-create_event-description" className="block text-sm font-medium text-gray-700 mb-1">
                   תיאור
                 </label>
                 <textarea
+                  id="auto-create_event-description"
                   className="w-full p-2 border rounded-md"
                   placeholder="תיאור האירוע..."
                   rows={3}
@@ -1114,10 +1141,11 @@ function AutomationConfigModal({
                 {fields.timingMode === "relative" ? (
                   <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-200">
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                      <label htmlFor="auto-create_event-hoursOffset" className="block text-xs font-medium text-gray-500 mb-1">
                         בעוד (שעות)
                       </label>
                       <input
+                        id="auto-create_event-hoursOffset"
                         type="number"
                         min="0"
                         className="w-full p-2 border rounded-md"
@@ -1129,10 +1157,11 @@ function AutomationConfigModal({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                      <label htmlFor="auto-create_event-minutesOffset" className="block text-xs font-medium text-gray-500 mb-1">
                         בעוד (דקות)
                       </label>
                       <input
+                        id="auto-create_event-minutesOffset"
                         type="number"
                         min="0"
                         step="5"
@@ -1151,10 +1180,11 @@ function AutomationConfigModal({
                 ) : (
                   <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-200">
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                      <label htmlFor="auto-create_event-daysOffset" className="block text-xs font-medium text-gray-500 mb-1">
                         בעוד (ימים)
                       </label>
                       <input
+                        id="auto-create_event-daysOffset"
                         type="number"
                         min="0"
                         className="w-full p-2 border rounded-md"
@@ -1166,10 +1196,11 @@ function AutomationConfigModal({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                      <label htmlFor="auto-create_event-startTime" className="block text-xs font-medium text-gray-500 mb-1">
                         שעה קבועה
                       </label>
                       <input
+                        id="auto-create_event-startTime"
                         type="time"
                         className="w-full p-2 border rounded-md"
                         value={fields.startTime || "09:00"}
@@ -1184,10 +1215,11 @@ function AutomationConfigModal({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="auto-create_event-duration" className="block text-sm font-medium text-gray-700 mb-1">
                     משך (דקות)
                   </label>
                   <input
+                    id="auto-create_event-duration"
                     type="number"
                     min="15"
                     step="15"
@@ -1205,19 +1237,21 @@ function AutomationConfigModal({
                   צבע
                 </label>
                 <div className="flex gap-2 flex-wrap">
-                  {[
-                    "#3788d8", // Blue
-                    "#7b1fa2", // Purple
-                    "#2e7d32", // Green
-                    "#d32f2f", // Red
-                    "#f57c00", // Orange
-                    "#0097a7", // Cyan
-                    "#5d4037", // Brown
-                  ].map((c) => (
+                  {([
+                    { hex: "#3788d8", name: "כחול" },
+                    { hex: "#7b1fa2", name: "סגול" },
+                    { hex: "#2e7d32", name: "ירוק" },
+                    { hex: "#d32f2f", name: "אדום" },
+                    { hex: "#f57c00", name: "כתום" },
+                    { hex: "#0097a7", name: "טורקיז" },
+                    { hex: "#5d4037", name: "חום" },
+                  ] as const).map(({ hex: c, name }) => (
                     <button
                       key={c}
                       type="button"
                       onClick={() => setFields({ ...fields, color: c })}
+                      aria-label={name}
+                      aria-pressed={(fields.color || "#3788d8") === c}
                       className={`w-8 h-8 rounded-full transition-transform border border-transparent hover:border-gray-300 ${
                         (fields.color || "#3788d8") === c
                           ? "ring-2 ring-offset-2 ring-gray-400 scale-110"
@@ -1232,10 +1266,11 @@ function AutomationConfigModal({
           )}
           {(type.id === "update_event" || type.id === "delete_event") && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-event-eventId" className="block text-sm font-medium text-gray-700 mb-1">
                 מזהה אירוע (Event ID)
               </label>
               <input
+                id="auto-event-eventId"
                 className="w-full p-2 border rounded-md"
                 placeholder="..."
                 onChange={(e) =>
@@ -1249,10 +1284,11 @@ function AutomationConfigModal({
           {type.id === "notification" && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-notification-message" className="block text-sm font-medium text-gray-700 mb-1">
                   תוכן ההתראה
                 </label>
                 <textarea
+                  id="auto-notification-message"
                   className="w-full p-2 border rounded-md"
                   placeholder="הודעה שתופיע בפעמון..."
                   rows={3}
@@ -1262,10 +1298,11 @@ function AutomationConfigModal({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-notification-recipient" className="block text-sm font-medium text-gray-700 mb-1">
                   נמען
                 </label>
                 <select
+                  id="auto-notification-recipient"
                   className="w-full p-2 border rounded-md"
                   onChange={(e) =>
                     setFields({ ...fields, recipientId: e.target.value })
@@ -1286,10 +1323,11 @@ function AutomationConfigModal({
           {type.id === "whatsapp" && (
             <div className="space-y-5">
               <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                <label className="block text-sm font-medium text-blue-900 mb-1">
+                <label htmlFor="auto-whatsapp-tableId" className="block text-sm font-medium text-blue-900 mb-1">
                   הגדרת טבלה (עבור משתנים ומספרים)
                 </label>
                 <select
+                  id="auto-whatsapp-tableId"
                   className="w-full p-2 border rounded-md text-sm"
                   value={waTableId}
                   onChange={(e) => setWaTableId(e.target.value)}
@@ -1385,6 +1423,7 @@ function AutomationConfigModal({
                     <div>
                       <select
                         value={fields.phoneColumnId || ""}
+                        aria-label="בחר עמודת טלפון"
                         onChange={(e) =>
                           setFields({
                             ...fields,
@@ -1419,6 +1458,7 @@ function AutomationConfigModal({
                           })
                         }
                         placeholder="הכנס מספר טלפון (לדוגמה: 0501234567)"
+                        aria-label="מספר טלפון ידני"
                         className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500"
                         dir="ltr"
                       />
@@ -1439,10 +1479,11 @@ function AutomationConfigModal({
                 </div>
               ) : (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="auto-whatsapp-groupId" className="block text-sm font-medium text-gray-700 mb-2">
                     מזהה קבוצה (Group ID)
                   </label>
                   <input
+                    id="auto-whatsapp-groupId"
                     type="text"
                     value={String(fields.phoneColumnId || "").replace(
                       "manual:",
@@ -1509,7 +1550,7 @@ function AutomationConfigModal({
 
               {waMessageType === "media" && (
                 <div className="animate-in slide-in-from-top-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="auto-whatsapp-mediaFileId" className="block text-sm font-medium text-gray-700 mb-1">
                     בחר קובץ לשליחה
                   </label>
                   {loadingFiles ? (
@@ -1519,6 +1560,7 @@ function AutomationConfigModal({
                     </div>
                   ) : (
                     <select
+                      id="auto-whatsapp-mediaFileId"
                       value={fields.mediaFileId || ""}
                       onChange={(e) =>
                         setFields({ ...fields, mediaFileId: e.target.value })
@@ -1537,12 +1579,13 @@ function AutomationConfigModal({
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-whatsapp-content" className="block text-sm font-medium text-gray-700 mb-1">
                   {waMessageType === "media"
                     ? "כיתוב (Caption)"
                     : "תוכן ההודעה"}
                 </label>
                 <textarea
+                  id="auto-whatsapp-content"
                   value={fields.content || ""}
                   onChange={(e) =>
                     setFields({ ...fields, content: e.target.value })
@@ -1643,6 +1686,7 @@ function AutomationConfigModal({
                   <div>
                     <select
                       value={fields.phoneColumnId || ""}
+                      aria-label="בחר עמודת טלפון"
                       onChange={(e) =>
                         setFields({
                           ...fields,
@@ -1665,6 +1709,7 @@ function AutomationConfigModal({
                       <div className="mt-2">
                         <select
                           className="w-full p-2 border rounded-md text-sm"
+                          aria-label="בחר טבלה"
                           value={waTableId}
                           onChange={(e) => setWaTableId(e.target.value)}
                         >
@@ -1693,6 +1738,7 @@ function AutomationConfigModal({
                         })
                       }
                       placeholder="הכנס מספר טלפון (לדוגמה: 0501234567)"
+                      aria-label="מספר טלפון ידני"
                       className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500"
                       dir="ltr"
                     />
@@ -1701,10 +1747,11 @@ function AutomationConfigModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-sms-content" className="block text-sm font-medium text-gray-700 mb-1">
                   תוכן ההודעה
                 </label>
                 <textarea
+                  id="auto-sms-content"
                   value={fields.content || ""}
                   onChange={(e) =>
                     setFields({ ...fields, content: e.target.value })
@@ -1720,10 +1767,11 @@ function AutomationConfigModal({
           {/* --- WEBHOOK --- */}
           {type.id === "webhook" && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-webhook-url" className="block text-sm font-medium text-gray-700 mb-1">
                 כתובת URL
               </label>
               <input
+                id="auto-webhook-url"
                 className="w-full p-2 border rounded-md ltr"
                 placeholder="https://api.external.com/webhook..."
                 dir="ltr"
@@ -1735,7 +1783,7 @@ function AutomationConfigModal({
 
         <div className="p-4 flex flex-col gap-3 bg-gray-50 border-t border-gray-100">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded text-sm flex items-center gap-2">
+            <div id="auto-config-error" role="alert" className="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded text-sm flex items-center gap-2">
               <AlertTriangle size={16} />
               {error}
             </div>
@@ -1750,6 +1798,7 @@ function AutomationConfigModal({
             <button
               onClick={handleSave}
               className="px-4 py-2 rounded bg-indigo-600 text-white"
+              aria-describedby={error ? "auto-config-error" : undefined}
             >
               שמור
             </button>
@@ -1774,18 +1823,20 @@ function DeleteAutomationAlert({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const containerRef = useFocusTrap(onClose, isOpen);
+
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+      <div ref={containerRef} role="alertdialog" aria-modal="true" aria-labelledby="delete-auto-title" aria-describedby="delete-auto-desc" className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="p-6 text-center">
-          <div className="mx-auto w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
+          <div className="mx-auto w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4" aria-hidden="true">
             <AlertTriangle className="text-red-600" size={24} />
           </div>
-          <h3 className="text-lg font-bold text-gray-900 mb-2">
+          <h3 id="delete-auto-title" className="text-lg font-bold text-gray-900 mb-2">
             מחיקת אוטומציה
           </h3>
-          <p className="text-gray-500 text-sm mb-6">
+          <p id="delete-auto-desc" className="text-gray-500 text-sm mb-6">
             האם אתה בטוח שברצונך למחוק את האוטומציה? <br />
             פעולה זו היא בלתי הפיכה.
           </p>
@@ -1872,6 +1923,9 @@ export function StageDetailModal({
 
   // View/Edit Mode
   const [isEditing, setIsEditing] = useState(false);
+
+  // Focus trap for slide-over panel
+  const panelRef = useFocusTrap(onClose, isOpen);
 
   // Dynamic Data — cached across modal open/close, only cleared on workflowId change
   const [users, setUsers] = useState<any[]>([]);
@@ -2066,6 +2120,10 @@ export function StageDetailModal({
       />
 
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="stage-detail-title"
         className={`
           fixed top-0 right-0 h-full w-[500px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-spring overflow-hidden flex flex-col
           ${isOpen ? "translate-x-0" : "translate-x-full"}
@@ -2077,6 +2135,7 @@ export function StageDetailModal({
           <div>
             <div className="flex items-center gap-3 mb-1">
               <div
+                aria-hidden="true"
                 className={`w-10 h-10 rounded-xl bg-${
                   formData.color || "blue"
                 }-50 text-${
@@ -2091,14 +2150,16 @@ export function StageDetailModal({
               </div>
               {isEditing ? (
                 <input
+                  id="stage-detail-title"
                   value={formData.name}
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
                   className="text-xl font-bold text-gray-900 bg-transparent border-b border-gray-300 focus:border-indigo-500 outline-none px-1"
+                  aria-label="שם השלב"
                 />
               ) : (
-                <h2 className="text-xl font-bold text-gray-900">
+                <h2 id="stage-detail-title" className="text-xl font-bold text-gray-900">
                   {formData.name}
                 </h2>
               )}
@@ -2111,6 +2172,7 @@ export function StageDetailModal({
           <div className="flex items-center gap-1">
             <button
               onClick={() => setIsEditing(!isEditing)}
+              aria-label={isEditing ? "שמור" : "ערוך"}
               className={`p-2 rounded-lg transition-colors ${
                 isEditing
                   ? "bg-indigo-50 text-indigo-600"
@@ -2121,12 +2183,14 @@ export function StageDetailModal({
             </button>
             <button
               onClick={handleDelete}
+              aria-label="מחק שלב"
               className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
             >
               <Trash2 size={20} />
             </button>
             <button
               onClick={onClose}
+              aria-label="סגור פאנל"
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <X size={20} />
@@ -2139,11 +2203,12 @@ export function StageDetailModal({
           {/* Section: Description */}
           <section>
             <div className="flex items-center gap-2 mb-3 text-gray-900 font-medium">
-              <Info size={18} className="text-blue-500" />
-              <h3>תיאור השלב</h3>
+              <Info size={18} className="text-blue-500" aria-hidden="true" />
+              <h3 id="stage-edit-description">תיאור השלב</h3>
             </div>
             {isEditing ? (
               <textarea
+                aria-labelledby="stage-edit-description"
                 value={formData.whatHappens}
                 onChange={(e) =>
                   setFormData({ ...formData, whatHappens: e.target.value })
@@ -2161,11 +2226,12 @@ export function StageDetailModal({
           {/* Section: Goals */}
           <section>
             <div className="flex items-center gap-2 mb-3 text-gray-900 font-medium">
-              <Target size={18} className="text-emerald-500" />
-              <h3>מטרת השלב</h3>
+              <Target size={18} className="text-emerald-500" aria-hidden="true" />
+              <h3 id="stage-edit-goals">מטרת השלב</h3>
             </div>
             {isEditing ? (
               <textarea
+                aria-labelledby="stage-edit-goals"
                 value={formData.goals}
                 onChange={(e) =>
                   setFormData({ ...formData, goals: e.target.value })
@@ -2183,7 +2249,7 @@ export function StageDetailModal({
           {/* Section: Automations */}
           <section>
             <div className="flex items-center gap-2 mb-3 text-gray-900 font-medium">
-              <Zap size={18} className="text-orange-500" />
+              <Zap size={18} className="text-orange-500" aria-hidden="true" />
               <h3>אוטומציות (System Actions)</h3>
             </div>
 
@@ -2214,7 +2280,7 @@ export function StageDetailModal({
                       <p className="text-sm text-gray-700">{summary}</p>
                     </div>
                     {isEditing && (
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                         <button
                           onClick={() => {
                             const typeObj = getActionType(action.type);
@@ -2227,12 +2293,14 @@ export function StageDetailModal({
                             }
                           }}
                           className="p-1 text-gray-400 hover:text-indigo-500"
+                          aria-label="ערוך אוטומציה"
                         >
                           <Edit3 size={14} />
                         </button>
                         <button
                           onClick={() => setAutomationToDelete(i)}
                           className="p-1 text-gray-400 hover:text-red-500"
+                          aria-label="מחק אוטומציה"
                         >
                           <Trash2 size={14} />
                         </button>

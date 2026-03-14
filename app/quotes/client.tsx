@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useRef, useCallback } from "react";
 import {
   Plus,
   Search,
@@ -25,6 +25,7 @@ import { showConfirm } from "@/hooks/use-modal";
 import { toast } from "sonner";
 import { isRateLimitError, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit-utils";
 import { getUserFriendlyError } from "@/lib/errors";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 
 const formatMoney = (amount: number, currency: string = "ILS") => {
   return new Intl.NumberFormat("he-IL", {
@@ -61,6 +62,17 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [isLoadingMore, startLoadMore] = useTransition();
+  const settingsFocusTrapRef = useFocusTrap(() => setShowSettingsModal(false), showSettingsModal);
+  const tableRef = useRef<HTMLTableSectionElement>(null);
+
+  const focusNextRow = useCallback((removedId: string) => {
+    requestAnimationFrame(() => {
+      const link = tableRef.current?.querySelector<HTMLAnchorElement>(
+        `tr:not([data-id="${removedId}"]) a[data-row-link]`
+      );
+      link?.focus();
+    });
+  }, []);
 
   const handleTrash = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -70,6 +82,7 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
         await trashQuote(id);
         toast.success("ההצעה הועברה לפח");
         setQuotes((prev) => prev.filter((q) => q.id !== id));
+        focusNextRow(id);
       } catch (error) {
         if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
         else toast.error(getUserFriendlyError(error));
@@ -86,6 +99,7 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
       await restoreQuote(id);
       toast.success("ההצעה שוחזרה בהצלחה");
       setQuotes((prev) => prev.filter((q) => q.id !== id));
+      focusNextRow(id);
     } catch (error) {
       if (isRateLimitError(error)) toast.error(RATE_LIMIT_MESSAGE);
       else toast.error(getUserFriendlyError(error));
@@ -124,25 +138,25 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
       case "DRAFT":
         return (
           <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-            <Clock className="w-3 h-3 ml-1" /> טיוטה
+            <Clock className="w-3 h-3 ml-1" aria-hidden="true" /> טיוטה
           </span>
         );
       case "SENT":
         return (
           <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-            <FileText className="w-3 h-3 ml-1" /> נשלחה
+            <FileText className="w-3 h-3 ml-1" aria-hidden="true" /> נשלחה
           </span>
         );
       case "ACCEPTED":
         return (
           <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-            <CheckCircle className="w-3 h-3 ml-1" /> אושרה
+            <CheckCircle className="w-3 h-3 ml-1" aria-hidden="true" /> אושרה
           </span>
         );
       case "REJECTED":
         return (
           <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
-            <XCircle className="w-3 h-3 ml-1" /> נדחתה
+            <XCircle className="w-3 h-3 ml-1" aria-hidden="true" /> נדחתה
           </span>
         );
       default:
@@ -177,10 +191,8 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
         </div>
         <div className="flex gap-2">
           {showTrashed ? (
-            <a href="/quotes">
-              <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 font-medium transition-colors">
-                <RotateCcw className="w-4 h-4" /> חזרה להצעות
-              </button>
+            <a href="/quotes" className="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 font-medium transition-colors">
+              <RotateCcw className="w-4 h-4" aria-hidden="true" /> חזרה להצעות
             </a>
           ) : (
             <>
@@ -188,17 +200,13 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
                 onClick={() => setShowSettingsModal(true)}
                 className="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 font-medium transition-colors"
               >
-                <Settings className="w-4 h-4" /> הגדרות עסק
+                <Settings className="w-4 h-4" aria-hidden="true" /> הגדרות עסק
               </button>
-              <a href="/quotes?trash=true">
-                <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 font-medium transition-colors">
-                  <Archive className="w-4 h-4" /> פח זבל
-                </button>
+              <a href="/quotes?trash=true" className="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 font-medium transition-colors">
+                <Archive className="w-4 h-4" aria-hidden="true" /> פח זבל
               </a>
-              <a href="/quotes/new">
-                <button className="flex items-center gap-2 px-4 py-2 bg-[#4f95ff] text-white rounded-md hover:bg-[#3d7de0] font-medium transition-colors shadow-sm">
-                  <Plus className="w-4 h-4" /> הצעת מחיר חדשה
-                </button>
+              <a href="/quotes/new" className="flex items-center gap-2 px-4 py-2 bg-[#4f95ff] text-white rounded-md hover:bg-[#3d7de0] font-medium transition-colors shadow-sm">
+                <Plus className="w-4 h-4" aria-hidden="true" /> הצעת מחיר חדשה
               </a>
             </>
           )}
@@ -208,58 +216,63 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
       {/* Search */}
       <div className="flex gap-4 items-center">
         <div className="relative max-w-md w-full">
-          <Search className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
+          <Search className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" aria-hidden="true" />
           <input
             placeholder="חיפוש לפי שם לקוח או מספר הצעה..."
+            aria-label="חיפוש לפי שם לקוח או מספר הצעה"
             className="w-full pr-9 pl-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#4f95ff] outline-none bg-white"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-gray-500" aria-live="polite" aria-atomic="true">
           {filteredQuotes.length} הצעות מחיר
         </div>
       </div>
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <table className="w-full">
+        <table className="w-full" aria-label="רשימת הצעות מחיר">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 מספר הצעה
               </th>
-              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 לקוח
               </th>
-              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 סכום
               </th>
-              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 סטטוס
               </th>
-              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 תאריך יצירה
               </th>
-              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 בתוקף עד
               </th>
-              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 פעולות
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100" ref={tableRef}>
             {filteredQuotes.map((quote) => (
               <tr
                 key={quote.id}
-                className="hover:bg-gray-50 transition-colors cursor-pointer"
-                onClick={() => router.push(`/quotes/${quote.id}`)}
+                data-id={quote.id}
+                className="hover:bg-gray-50 transition-colors relative"
               >
                 <td className="px-6 py-4">
-                  <span className="font-mono font-medium text-gray-900">
+                  <a
+                    href={`/quotes/${quote.id}`}
+                    data-row-link
+                    className="font-mono font-medium text-gray-900 after:absolute after:inset-0"
+                  >
                     {formatQuoteNumber(quote)}
-                  </span>
+                  </a>
                 </td>
                 <td className="px-6 py-4">
                   <div>
@@ -290,7 +303,7 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
                     ? new Date(quote.validUntil).toLocaleDateString("he-IL")
                     : "-"}
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-6 py-4 relative z-10">
                   <div className="flex items-center gap-1">
                     <button
                       onClick={(e) => {
@@ -299,8 +312,9 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
                       }}
                       className="p-2 text-gray-500 hover:text-[#4f95ff] hover:bg-blue-50 rounded-md transition-colors"
                       title="עריכה"
+                      aria-label="עריכה"
                     >
-                      <Edit className="w-4 h-4" />
+                      <Edit className="w-4 h-4" aria-hidden="true" />
                     </button>
                     <button
                       onClick={(e) => {
@@ -309,8 +323,9 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
                       }}
                       className="p-2 text-gray-500 hover:text-[#4f95ff] hover:bg-blue-50 rounded-md transition-colors"
                       title="תצוגה מקדימה"
+                      aria-label="תצוגה מקדימה"
                     >
-                      <Eye className="w-4 h-4" />
+                      <Eye className="w-4 h-4" aria-hidden="true" />
                     </button>
                     {showTrashed ? (
                       <button
@@ -318,8 +333,9 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
                         disabled={loadingId === quote.id}
                         className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors disabled:opacity-50"
                         title="שחזור"
+                        aria-label="שחזור"
                       >
-                        <RotateCcw className="w-4 h-4" />
+                        <RotateCcw className="w-4 h-4" aria-hidden="true" />
                       </button>
                     ) : (
                       <button
@@ -327,8 +343,9 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
                         disabled={loadingId === quote.id}
                         className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
                         title="העבר לפח"
+                        aria-label="העבר לפח"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" aria-hidden="true" />
                       </button>
                     )}
                   </div>
@@ -348,7 +365,7 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
             >
               {isLoadingMore ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> טוען...
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> טוען...
                 </>
               ) : (
                 "טען עוד הצעות"
@@ -367,19 +384,17 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
                 <FileText className="w-8 h-8 text-gray-400" />
               )}
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-1">
+            <h2 className="text-lg font-medium text-gray-900 mb-1">
               {showTrashed ? "פח הזבל ריק" : "אין הצעות מחיר"}
-            </h3>
+            </h2>
             <p className="text-gray-500 mb-4">
               {showTrashed
                 ? "לא הועברו הצעות מחיר לפח הזבל."
                 : "צור את הצעת המחיר הראשונה שלך כדי להתחיל."}
             </p>
             {!showTrashed && (
-              <a href="/quotes/new">
-                <button className="inline-flex items-center gap-2 px-4 py-2 bg-[#4f95ff] text-white rounded-md hover:bg-[#3d7de0] font-medium transition-colors">
-                  <Plus className="w-4 h-4" /> הצעת מחיר חדשה
-                </button>
+              <a href="/quotes/new" className="inline-flex items-center gap-2 px-4 py-2 bg-[#4f95ff] text-white rounded-md hover:bg-[#3d7de0] font-medium transition-colors">
+                <Plus className="w-4 h-4" aria-hidden="true" /> הצעת מחיר חדשה
               </a>
             )}
           </div>
@@ -388,17 +403,19 @@ export default function QuotesPageClient({ initialQuotes, initialNextCursor, sho
 
       {/* Business Settings Modal */}
       {showSettingsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
           <div
             className="absolute inset-0 bg-black/50"
             onClick={() => setShowSettingsModal(false)}
           />
-          <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl">
+          <div ref={settingsFocusTrapRef} className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl">
+            <span id="settings-modal-title" className="sr-only">הגדרות עסק</span>
             <button
               onClick={() => setShowSettingsModal(false)}
               className="absolute top-4 left-4 z-20 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-sm"
+              aria-label="סגור"
             >
-              <X className="w-4 h-4 text-gray-600" />
+              <X className="w-4 h-4 text-gray-600" aria-hidden="true" />
             </button>
             <BusinessSettingsRequired
               initialSettings={businessSettings}

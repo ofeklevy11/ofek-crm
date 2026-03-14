@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  GripVertical,
 } from "lucide-react";
 import { memo } from "react";
 import { useRouter } from "next/navigation";
@@ -112,25 +113,34 @@ function GoalWidget({
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      className="group relative flex flex-col justify-between bg-white rounded-2xl shadow-sm hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300 border border-gray-100 overflow-hidden cursor-grab active:cursor-grabbing h-full min-h-[200px]"
+      className="group relative flex flex-col justify-between bg-white rounded-2xl shadow-sm hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300 border border-gray-100 overflow-hidden h-full min-h-[200px]"
     >
       {/* Top Accent Line */}
-      <div className={`h-1.5 w-full shrink-0 ${status.accent}`} />
+      <div className={`h-1.5 w-full shrink-0 ${status.accent}`} aria-hidden="true" />
 
       <div className="p-6 flex-1 flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-start mb-4">
+          <div className="flex items-start gap-1">
+            <button
+              {...attributes}
+              {...listeners}
+              className="p-1 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 rounded touch-none focus-visible:ring-2 focus-visible:ring-ring mt-1"
+              aria-label={`גרור ווידג׳ט: ${goal.name}`}
+              aria-roledescription="פריט ניתן לגרירה"
+            >
+              <GripVertical size={16} />
+            </button>
+          </div>
           <div className="flex-1 overflow-hidden">
             <div className="flex items-center gap-2 mb-1">
               <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${status.bg} ${status.color} border-transparent`}
+                className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${status.bg} ${status.color} border-transparent`}
               >
                 {status.label}
               </span>
               <span className="text-[10px] font-medium text-gray-400 flex items-center gap-1">
-                <Clock className="w-3 h-3" />
+                <Clock className="w-3 h-3" aria-hidden="true" />
                 {goal.daysRemaining} ימים נותרו
               </span>
             </div>
@@ -164,15 +174,15 @@ function GoalWidget({
             </div>
           </div>
 
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 router.push("/finance/goals");
               }}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition"
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               title="הגדרות"
+              aria-label="הגדרות ווידג׳ט"
             >
               <Settings className="w-4 h-4" />
             </button>
@@ -181,9 +191,9 @@ function GoalWidget({
                 e.stopPropagation();
                 onRemove(id);
               }}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               title="הסר מהדאשבורד"
+              aria-label="הסר ווידג׳ט מהדאשבורד"
             >
               <Trash2 className="w-4 h-4" />
             </button>

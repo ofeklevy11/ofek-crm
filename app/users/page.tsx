@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import UserModal from "@/components/UserModal";
 import { showConfirm } from "@/hooks/use-modal";
 import { apiFetch } from "@/lib/api-fetch";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
 import RateLimitFallback from "@/components/RateLimitFallback";
+import { Spinner } from "@/components/ui/spinner";
+import { USER_FLAGS } from "@/lib/permissions";
 
 interface User {
   id: number;
@@ -62,6 +64,8 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [rateLimited, setRateLimited] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [hasChangedPage, setHasChangedPage] = useState(false);
+  const createButtonRef = useRef<HTMLButtonElement>(null);
   const pageSize = 30;
 
   useEffect(() => {
@@ -123,6 +127,7 @@ export default function UsersPage() {
       if (response.ok) {
         setUsers(prev => prev.filter((u) => u.id !== userId));
         toast.success("המשתמש נמחק בהצלחה");
+        createButtonRef.current?.focus();
       } else {
         toast.error("שגיאה במחיקת המשתמש");
       }
@@ -175,7 +180,9 @@ export default function UsersPage() {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setHasChangedPage(true);
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion ? "instant" : "smooth" });
   };
 
   // Generate page numbers to display
@@ -224,8 +231,9 @@ export default function UsersPage() {
             <p className="text-gray-600">ניהול משתמשים והרשאות גישה למערכת</p>
           </div>
           <button
+            ref={createButtonRef}
             onClick={handleCreateUser}
-            className="bg-linear-to-r from-blue-600 to-blue-700 text-white py-3 px-6 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
+            className="bg-linear-to-r from-blue-600 to-blue-700 text-white py-3 px-6 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             + משתמש חדש
           </button>
@@ -233,27 +241,28 @@ export default function UsersPage() {
 
         {isLoading ? (
           <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
+            <Spinner size="xl" />
           </div>
         ) : (
           <>
             <div className="bg-white rounded-2xl shadow-md overflow-x-auto">
               <table className="w-full">
+                <caption className="sr-only">טבלת משתמשים</caption>
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
+                    <th scope="col" className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
                       שם
                     </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
+                    <th scope="col" className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
                       אימייל
                     </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
+                    <th scope="col" className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
                       תפקיד
                     </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
+                    <th scope="col" className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
                       הרשאות נוספות
                     </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
+                    <th scope="col" className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
                       פעולות
                     </th>
                   </tr>
@@ -285,6 +294,7 @@ export default function UsersPage() {
                                 className="w-4 h-4"
                                 fill="currentColor"
                                 viewBox="0 0 20 20"
+                                aria-hidden="true"
                               >
                                 <path
                                   fillRule="evenodd"
@@ -305,25 +315,28 @@ export default function UsersPage() {
                                       icon: "•",
                                       className: "bg-gray-50 text-gray-700 border-gray-200",
                                     };
+                                    const flagLabel = USER_FLAGS.find((f) => f.key === key)?.label || key;
 
                                     return (
                                       <span
                                         key={key}
+                                        role="img"
+                                        aria-label={flagLabel}
                                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs border ${flag.className}`}
-                                        title={key}
+                                        title={flagLabel}
                                       >
                                         <span>{flag.icon}</span>
                                       </span>
                                     );
                                   })}
                               {activePermissions > 3 && (
-                                <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs border border-gray-200">
+                                <span role="img" className="inline-flex items-center px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs border border-gray-200" aria-label={`ו-${activePermissions - 3} הרשאות נוספות`}>
                                   +{activePermissions - 3}
                                 </span>
                               )}
                             </div>
                           ) : (
-                            <span className="text-gray-400 text-xs">
+                            <span className="text-gray-500 text-xs">
                               אין הרשאות נוספות
                             </span>
                           )}
@@ -332,13 +345,15 @@ export default function UsersPage() {
                           <div className="flex gap-2">
                             <button
                               onClick={() => handleEditUser(user)}
-                              className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-700 transition"
+                              aria-label={`ערוך משתמש ${user.name}`}
+                              className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-700 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                             >
                               ערוך
                             </button>
                             <button
                               onClick={() => handleDeleteClick(user.id)}
-                              className="bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-700 transition"
+                              aria-label={`מחק משתמש ${user.name}`}
+                              className="bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-700 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
                             >
                               מחק
                             </button>
@@ -352,15 +367,15 @@ export default function UsersPage() {
 
               {users.length === 0 && (
                 <div className="text-center py-16">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-2">
                     אין משתמשים
-                  </h3>
+                  </h2>
                   <p className="text-gray-600 mb-6">
                     צור את המשתמש הראשון במערכת
                   </p>
                   <button
                     onClick={handleCreateUser}
-                    className="inline-block bg-linear-to-r from-blue-600 to-blue-700 text-white py-3 px-8 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium"
+                    className="inline-block bg-linear-to-r from-blue-600 to-blue-700 text-white py-3 px-8 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                   >
                     + צור משתמש ראשון
                   </button>
@@ -370,13 +385,14 @@ export default function UsersPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex flex-col items-center gap-4 mt-8 mb-6">
+              <nav aria-label="ניווט עמודים" className="flex flex-col items-center gap-4 mt-8 mb-6">
                 <div className="flex items-center gap-2 flex-wrap justify-center">
                   {/* First Page Button */}
                   <button
                     onClick={() => handlePageChange(1)}
                     disabled={currentPage <= 1}
-                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200"
+                    aria-label="עמוד ראשון"
+                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                     title="עמוד ראשון"
                   >
                     ⏮ ראשון
@@ -386,7 +402,8 @@ export default function UsersPage() {
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage <= 1}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200"
+                    aria-label="עמוד קודם"
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                     title="עמוד קודם"
                   >
                     ← הקודם
@@ -400,6 +417,7 @@ export default function UsersPage() {
                           <span
                             key={`ellipsis-${index}`}
                             className="px-2 text-gray-500"
+                            aria-hidden="true"
                           >
                             ...
                           </span>
@@ -413,7 +431,9 @@ export default function UsersPage() {
                         <button
                           key={pageNum}
                           onClick={() => handlePageChange(pageNum)}
-                          className={`min-w-10 px-3 py-2 rounded-lg font-medium transition-all duration-200 ${
+                          aria-label={`עמוד ${pageNum}`}
+                          aria-current={isActive ? "page" : undefined}
+                          className={`min-w-10 px-3 py-2 rounded-lg font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                             isActive
                               ? "bg-blue-600 text-white shadow-md scale-105"
                               : "border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-400"
@@ -429,7 +449,8 @@ export default function UsersPage() {
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage >= totalPages}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200"
+                    aria-label="עמוד הבא"
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                     title="עמוד הבא"
                   >
                     הבא →
@@ -439,18 +460,19 @@ export default function UsersPage() {
                   <button
                     onClick={() => handlePageChange(totalPages)}
                     disabled={currentPage >= totalPages}
-                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200"
+                    aria-label="עמוד אחרון"
+                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                     title="עמוד אחרון"
                   >
                     אחרון ⏭
                   </button>
                 </div>
 
-                {/* Page Info */}
-                <div className="text-sm text-gray-600 font-medium">
-                  עמוד {currentPage} מתוך {totalPages}
+                {/* Page Info / Live Region */}
+                <div aria-live="polite" className="text-sm text-gray-600 font-medium">
+                  {hasChangedPage && `מציג משתמשים ${startIndex + 1} עד ${Math.min(endIndex, users.length)} מתוך ${users.length}`}
                 </div>
-              </div>
+              </nav>
             )}
           </>
         )}

@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Trash2, Settings, Eye, EyeOff } from "lucide-react";
+import { Trash2, Settings, Eye, EyeOff, GripVertical } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, memo } from "react";
 import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
@@ -63,14 +63,14 @@ function ConfigDetails({ config, type }: { config: any; type: string }) {
     return (
       <div className="flex flex-wrap gap-1.5 items-center mt-1">
         {label && (
-          <span className="text-gray-400 text-[10px] font-medium uppercase tracking-wider ml-1">
+          <span className="text-gray-400 text-[11px] font-medium uppercase tracking-wider ml-1">
             {label}
           </span>
         )}
         {Object.entries(filter).map(([key, val]) => (
           <span
             key={key}
-            className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-50 text-gray-600 border border-gray-100"
+            className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-gray-50 text-gray-600 border border-gray-100"
           >
             <span className="opacity-60 ml-1">{translate(key)}:</span>
             <span>{translate(String(val))}</span>
@@ -94,10 +94,10 @@ function ConfigDetails({ config, type }: { config: any; type: string }) {
     }
     return (
       <div className="flex items-center gap-2 mt-1">
-        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+        <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
           זמן
         </span>
-        <div className="flex items-center gap-1.5 text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100">
+        <div className="flex items-center gap-1.5 text-[11px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100">
           <span className="font-medium">{text}</span>
         </div>
       </div>
@@ -116,10 +116,10 @@ function ConfigDetails({ config, type }: { config: any; type: string }) {
       {renderDateRange()}
       {config.groupByField && (
         <div className="flex items-center gap-2 mt-1">
-          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+          <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
             קבץ לפי
           </span>
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-100">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-100">
             {translate(config.groupByField)}
           </span>
         </div>
@@ -226,34 +226,43 @@ function AnalyticsTableWidget({
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      className={`group relative flex flex-col bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-indigo-100 overflow-hidden cursor-grab active:cursor-grabbing ${
+      className={`group relative flex flex-col bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-indigo-100 overflow-hidden ${
         isCollapsed ? "h-auto" : "h-full min-h-[300px]"
       }`}
     >
       {/* Top Accent - Blue/Purple Gradient */}
-      <div className="h-1.5 w-full bg-linear-to-r from-blue-500 to-purple-500" />
+      <div className="h-1.5 w-full bg-linear-to-r from-blue-500 to-purple-500" aria-hidden="true" />
 
       <div className="p-5 flex-1 flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-start mb-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-100">
-                אנליטיקות
-              </span>
+          <div className="flex items-start gap-1">
+            <button
+              {...attributes}
+              {...listeners}
+              className="p-1 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 rounded touch-none focus-visible:ring-2 focus-visible:ring-ring mt-1"
+              aria-label={`גרור ווידג׳ט: ${title}`}
+              aria-roledescription="פריט ניתן לגרירה"
+            >
+              <GripVertical size={16} />
+            </button>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-100">
+                  אנליטיקות
+                </span>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+              <p className="text-sm text-gray-500">{analytics.length} אייטמים</p>
             </div>
-            <h3 className="text-lg font-bold text-gray-900">{title}</h3>
-            <p className="text-sm text-gray-500">{analytics.length} אייטמים</p>
           </div>
 
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
             <button
-              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition"
-              onPointerDown={(e) => e.stopPropagation()}
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               onClick={handleToggleCollapse}
               title={isCollapsed ? "הצג" : "הסתר"}
+              aria-label={isCollapsed ? "הצג תוכן ווידג׳ט" : "הסתר תוכן ווידג׳ט"}
             >
               {isCollapsed ? <Eye size={16} /> : <EyeOff size={16} />}
             </button>
@@ -262,9 +271,9 @@ function AnalyticsTableWidget({
                 e.stopPropagation();
                 onEdit(id);
               }}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition"
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               title="ערוך"
+              aria-label="הגדרות ווידג׳ט"
             >
               <Settings className="w-4 h-4" />
             </button>
@@ -273,9 +282,9 @@ function AnalyticsTableWidget({
                 e.stopPropagation();
                 onRemove(id);
               }}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               title="הסר מהדאשבורד"
+              aria-label="הסר ווידג׳ט מהדאשבורד"
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -286,11 +295,12 @@ function AnalyticsTableWidget({
         {!isCollapsed && (
           <div className="flex-1 overflow-auto -mx-5 px-5" dir="rtl">
             <table className="w-full text-sm">
+              <caption className="sr-only">{title}</caption>
               <thead>
                 <tr className="text-right text-sm text-gray-500 border-b border-gray-100">
-                  <th className="pb-3 font-medium">שם האנליטיקה</th>
-                  <th className="pb-3 font-medium w-32">מקור</th>
-                  <th className="pb-3 font-medium text-center">ערך</th>
+                  <th scope="col" className="pb-3 font-medium">שם האנליטיקה</th>
+                  <th scope="col" className="pb-3 font-medium w-32">מקור</th>
+                  <th scope="col" className="pb-3 font-medium text-center">ערך</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">

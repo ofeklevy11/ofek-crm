@@ -38,6 +38,7 @@ import {
 } from "@/app/actions/workers";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 
 interface OnboardingPath {
   id: number;
@@ -115,6 +116,130 @@ interface Props {
   availablePaths?: OnboardingPath[];
 }
 
+function AssignPathModal({
+  worker,
+  unassignedPaths,
+  selectedPathId,
+  setSelectedPathId,
+  isAssigning,
+  onAssign,
+  onClose,
+}: {
+  worker: Worker;
+  unassignedPaths: OnboardingPath[];
+  selectedPathId: number | null;
+  setSelectedPathId: (id: number | null) => void;
+  isAssigning: boolean;
+  onAssign: () => void;
+  onClose: () => void;
+}) {
+  const dialogRef = useFocusTrap(onClose);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="assign-path-modal-title"
+    >
+      <div ref={dialogRef} className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <div>
+            <h2 id="assign-path-modal-title" className="text-xl font-bold text-gray-900">
+              הקצאת מסלול קליטה
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">
+              בחר מסלול קליטה עבור {worker.firstName} {worker.lastName}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="סגור"
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
+          {unassignedPaths.length === 0 ? (
+            <div className="text-center py-6">
+              <GraduationCap className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500">אין מסלולים זמינים להקצאה</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {unassignedPaths.map((path) => (
+                <label
+                  key={path.id}
+                  className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition ${
+                    selectedPathId === path.id
+                      ? "border-indigo-500 bg-indigo-50"
+                      : "border-gray-200 hover:border-indigo-300"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="path"
+                    value={path.id}
+                    checked={selectedPathId === path.id}
+                    onChange={() => setSelectedPathId(path.id)}
+                    className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-900">
+                        {path.name}
+                      </span>
+                      {path.isDefault && (
+                        <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium">
+                          ברירת מחדל
+                        </span>
+                      )}
+                    </div>
+                    {path.description && (
+                      <p className="text-sm text-gray-500 mt-1">
+                        {path.description}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-4 text-xs text-gray-500 mt-2">
+                      {path._count?.steps !== undefined && (
+                        <span>{path._count.steps} שלבים</span>
+                      )}
+                      {path.estimatedDays && (
+                        <span>{path.estimatedDays} ימים מוערכים</span>
+                      )}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition font-medium"
+          >
+            ביטול
+          </button>
+          <button
+            onClick={onAssign}
+            disabled={!selectedPathId || isAssigning}
+            className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isAssigning ? "מקצה..." : "הקצה מסלול"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
   const [expandedOnboardingId, setExpandedOnboardingId] = useState<
     number | null
@@ -162,13 +287,13 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
   const getStepStatusIcon = (status: string) => {
     switch (status) {
       case "COMPLETED":
-        return <CheckCircle2 className="h-5 w-5 text-emerald-500" />;
+        return <CheckCircle2 className="h-5 w-5 text-emerald-500" aria-hidden="true" />;
       case "IN_PROGRESS":
-        return <PlayCircle className="h-5 w-5 text-blue-500" />;
+        return <PlayCircle className="h-5 w-5 text-blue-500" aria-hidden="true" />;
       case "SKIPPED":
-        return <SkipForward className="h-5 w-5 text-gray-400" />;
+        return <SkipForward className="h-5 w-5 text-gray-400" aria-hidden="true" />;
       default:
-        return <Circle className="h-5 w-5 text-gray-300" />;
+        return <Circle className="h-5 w-5 text-gray-300" aria-hidden="true" />;
     }
   };
 
@@ -251,7 +376,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
         prefetch={false}
         className="inline-flex items-center gap-2 text-gray-600 hover:text-indigo-600 mb-6 transition"
       >
-        <ArrowRight className="h-4 w-4" />
+        <ArrowRight className="h-4 w-4" aria-hidden="true" />
         חזרה לרשימת העובדים
       </Link>
 
@@ -300,17 +425,17 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
               </div>
               <div className="flex flex-wrap items-center gap-4 text-gray-600">
                 <span className="flex items-center gap-1">
-                  <Building2 className="h-4 w-4" />
+                  <Building2 className="h-4 w-4" aria-hidden="true" />
                   {worker.department.name}
                 </span>
                 {worker.position && (
                   <span className="flex items-center gap-1">
-                    <Briefcase className="h-4 w-4" />
+                    <Briefcase className="h-4 w-4" aria-hidden="true" />
                     {worker.position}
                   </span>
                 )}
                 <span className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4" />
+                  <Calendar className="h-4 w-4" aria-hidden="true" />
                   החל מ-{new Date(worker.startDate).toLocaleDateString("he-IL")}
                 </span>
               </div>
@@ -320,10 +445,10 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
             {activeOnboarding && (
               <div className="bg-indigo-50 rounded-xl p-4 min-w-[200px]">
                 <div className="flex items-center gap-2 text-indigo-700 font-medium mb-2">
-                  <GraduationCap className="h-5 w-5" />
+                  <GraduationCap className="h-5 w-5" aria-hidden="true" />
                   התקדמות קליטה
                 </div>
-                <div className="w-full bg-indigo-200 rounded-full h-2 mb-2">
+                <div className="w-full bg-indigo-200 rounded-full h-2 mb-2" role="progressbar" aria-valuenow={getOnboardingProgress(activeOnboarding).progress} aria-valuemin={0} aria-valuemax={100} aria-label="התקדמות קליטה">
                   <div
                     className="bg-indigo-600 h-2 rounded-full transition-all"
                     style={{
@@ -348,7 +473,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
           {/* Contact Info */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
             <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <User className="h-4 w-4 text-indigo-500" />
+              <User className="h-4 w-4 text-indigo-500" aria-hidden="true" />
               פרטי קשר
             </h3>
             <div className="space-y-3">
@@ -357,7 +482,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
                   href={`mailto:${worker.email}`}
                   className="flex items-center gap-3 text-gray-600 hover:text-indigo-600 transition"
                 >
-                  <Mail className="h-4 w-4 text-gray-400" />
+                  <Mail className="h-4 w-4 text-gray-400" aria-hidden="true" />
                   {worker.email}
                 </a>
               )}
@@ -366,13 +491,13 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
                   href={`tel:${worker.phone}`}
                   className="flex items-center gap-3 text-gray-600 hover:text-indigo-600 transition"
                 >
-                  <Phone className="h-4 w-4 text-gray-400" />
+                  <Phone className="h-4 w-4 text-gray-400" aria-hidden="true" />
                   {worker.phone}
                 </a>
               )}
               {worker.employeeId && (
                 <div className="flex items-center gap-3 text-gray-600">
-                  <Hash className="h-4 w-4 text-gray-400" />
+                  <Hash className="h-4 w-4 text-gray-400" aria-hidden="true" />
                   מס׳ עובד: {worker.employeeId}
                 </div>
               )}
@@ -392,7 +517,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
           {/* Tasks */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
             <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <ListTodo className="h-4 w-4 text-indigo-500" />
+              <ListTodo className="h-4 w-4 text-indigo-500" aria-hidden="true" />
               משימות ({worker.assignedTasks.length})
             </h3>
             {worker.assignedTasks.length === 0 ? (
@@ -405,9 +530,9 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
                     className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition"
                   >
                     {task.status === "COMPLETED" ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />
                     ) : (
-                      <Circle className="h-4 w-4 text-gray-300" />
+                      <Circle className="h-4 w-4 text-gray-300" aria-hidden="true" />
                     )}
                     <span
                       className={`text-sm ${
@@ -475,14 +600,24 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
                   {/* Header */}
                   <div
                     className="p-5 cursor-pointer hover:bg-gray-50 transition"
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isExpanded}
+                    aria-label={isExpanded ? "כווץ פרטים" : "הרחב פרטים"}
                     onClick={() =>
                       setExpandedOnboardingId(isExpanded ? null : onboarding.id)
                     }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setExpandedOnboardingId(isExpanded ? null : onboarding.id);
+                      }
+                    }}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="p-2.5 rounded-lg bg-indigo-100 text-indigo-600">
-                          <GraduationCap className="h-5 w-5" />
+                          <GraduationCap className="h-5 w-5" aria-hidden="true" />
                         </div>
                         <div>
                           <h3 className="font-semibold text-gray-900">
@@ -509,7 +644,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
                     </div>
 
                     {/* Progress Bar */}
-                    <div className="mt-4 w-full bg-gray-200 rounded-full h-2">
+                    <div className="mt-4 w-full bg-gray-200 rounded-full h-2" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="התקדמות קליטה">
                       <div
                         className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full transition-all"
                         style={{ width: `${progress}%` }}
@@ -559,7 +694,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
                                     <h4 className="font-medium text-gray-900">
                                       {step.title}
                                     </h4>
-                                    <StepTypeIcon className="h-4 w-4 text-gray-400" />
+                                    <StepTypeIcon className="h-4 w-4 text-gray-400" aria-hidden="true" />
                                     {step.isRequired && (
                                       <span className="px-1.5 py-0.5 text-xs bg-red-100 text-red-600 rounded">
                                         חובה
@@ -694,6 +829,9 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
                                       }
                                     }}
                                     disabled={updatingStep === step.id}
+                                    role="switch"
+                                    aria-checked={stepStatus === "COMPLETED"}
+                                    aria-label={step.title + " - " + (stepStatus === "COMPLETED" ? "הושלם" : "לא הושלם")}
                                     className={`relative w-14 h-8 rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                                       stepStatus === "COMPLETED"
                                         ? "bg-gradient-to-r from-emerald-400 to-emerald-600 focus:ring-emerald-500 shadow-lg shadow-emerald-200"
@@ -732,6 +870,7 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
                                           );
                                         }}
                                         disabled={updatingStep === step.id}
+                                        aria-label={"דלג על " + step.title}
                                         className="text-xs text-gray-400 hover:text-gray-600 transition"
                                       >
                                         דלג
@@ -763,107 +902,18 @@ export default function WorkerDetails({ worker, availablePaths = [] }: Props) {
 
       {/* Assign Onboarding Path Modal */}
       {showAssignModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">
-                  הקצאת מסלול קליטה
-                </h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  בחר מסלול קליטה עבור {worker.firstName} {worker.lastName}
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowAssignModal(false);
-                  setSelectedPathId(null);
-                }}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-6">
-              {unassignedPaths.length === 0 ? (
-                <div className="text-center py-6">
-                  <GraduationCap className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">אין מסלולים זמינים להקצאה</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {unassignedPaths.map((path) => (
-                    <label
-                      key={path.id}
-                      className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition ${
-                        selectedPathId === path.id
-                          ? "border-indigo-500 bg-indigo-50"
-                          : "border-gray-200 hover:border-indigo-300"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="path"
-                        value={path.id}
-                        checked={selectedPathId === path.id}
-                        onChange={() => setSelectedPathId(path.id)}
-                        className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900">
-                            {path.name}
-                          </span>
-                          {path.isDefault && (
-                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium">
-                              ברירת מחדל
-                            </span>
-                          )}
-                        </div>
-                        {path.description && (
-                          <p className="text-sm text-gray-500 mt-1">
-                            {path.description}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-4 text-xs text-gray-500 mt-2">
-                          {path._count?.steps !== undefined && (
-                            <span>{path._count.steps} שלבים</span>
-                          )}
-                          {path.estimatedDays && (
-                            <span>{path.estimatedDays} ימים מוערכים</span>
-                          )}
-                        </div>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
-              <button
-                onClick={() => {
-                  setShowAssignModal(false);
-                  setSelectedPathId(null);
-                }}
-                className="px-5 py-2.5 text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition font-medium"
-              >
-                ביטול
-              </button>
-              <button
-                onClick={handleAssignPath}
-                disabled={!selectedPathId || isAssigning}
-                className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isAssigning ? "מקצה..." : "הקצה מסלול"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <AssignPathModal
+          worker={worker}
+          unassignedPaths={unassignedPaths}
+          selectedPathId={selectedPathId}
+          setSelectedPathId={setSelectedPathId}
+          isAssigning={isAssigning}
+          onAssign={handleAssignPath}
+          onClose={() => {
+            setShowAssignModal(false);
+            setSelectedPathId(null);
+          }}
+        />
       )}
     </div>
   );

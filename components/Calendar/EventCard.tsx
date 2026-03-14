@@ -51,15 +51,26 @@ export const EventCard = memo(function EventCard({
   // In RTL, we use "right" positioning instead of "left"
   const rightPercent = columnIndex * widthPercent;
 
+  const eventAriaLabel = `${event.title}, ${formatTime(event.startTime)} - ${formatTime(event.endTime)}${isGoogle ? ", Google Calendar" : ""}`;
+
   return (
     <div
       ref={setNodeRef}
+      role="button"
+      tabIndex={0}
+      aria-label={eventAriaLabel}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if ((e.key === "Enter" || e.key === " ") && onClick) {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       {...attributes}
       {...listeners}
       className={`absolute rounded-md px-2 py-1 text-white text-xs ${isGoogle ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"} transition-shadow overflow-hidden shadow-sm select-none ${
         isDragging && !isOverlay ? "opacity-30" : "hover:opacity-90"
-      } ${isOverlay ? "z-50 shadow-xl scale-105" : "z-10"}`}
+      } ${isOverlay ? "z-50 shadow-xl scale-105" : "z-10"} focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2`}
       style={{
         top: `calc(${startHour * 3.5}rem + 2px)`,
         height: `calc(${duration * 3.5}rem - 4px)`,
@@ -101,7 +112,7 @@ export const EventCard = memo(function EventCard({
 
 function GoogleBadge() {
   return (
-    <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-white/30 rounded-full text-[8px] font-bold shrink-0">
+    <span aria-hidden="true" className="inline-flex items-center justify-center w-3.5 h-3.5 bg-white/30 rounded-full text-[8px] font-bold shrink-0">
       G
     </span>
   );

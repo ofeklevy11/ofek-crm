@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import { getDashboardInitialData } from "@/app/actions/dashboard";
@@ -6,6 +7,8 @@ import { checkActionRateLimit, DASHBOARD_RATE_LIMITS } from "@/lib/rate-limit-ac
 import { isRateLimitError } from "@/lib/rate-limit-utils";
 import RateLimitFallback from "@/components/RateLimitFallback";
 import { redirect } from "next/navigation";
+
+export const metadata: Metadata = { title: "לוח בקרה | BizlyCRM" };
 
 export const dynamic = "force-dynamic";
 
@@ -39,20 +42,28 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-muted/40 p-4 md:p-8" dir="rtl">
+      <a
+        href="#dashboard-widgets"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:right-2 focus:bg-white focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg focus:text-blue-600 focus:ring-2 focus:ring-blue-500"
+      >
+        דלג לתוכן הדאשבורד
+      </a>
       <div className="max-w-[1600px] mx-auto space-y-6">
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          <h1 id="dashboard-heading" className="text-3xl font-bold tracking-tight text-foreground">
             לוח בקרה
           </h1>
           <p className="text-muted-foreground">סקירה כללית של העסק שלך</p>
         </div>
 
-        <DashboardClient
-          initialAnalytics={analyticsViews}
-          availableTables={tables}
-          availableGoals={goals}
-          user={user}
-        />
+        <section aria-labelledby="dashboard-heading">
+          <DashboardClient
+            initialAnalytics={analyticsViews}
+            availableTables={tables}
+            availableGoals={goals}
+            user={user}
+          />
+        </section>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { getUserFriendlyError } from "@/lib/errors";
 import { toast } from "sonner";
 import { showConfirm } from "@/hooks/use-modal";
@@ -63,6 +64,8 @@ export default function ViewAutomationModal({
   userId,
   userPlan = "basic",
 }: ViewAutomationModalProps) {
+  const focusTrapRef = useFocusTrap(onClose);
+
   // Mode: list, create, edit
   const [mode, setMode] = useState<"list" | "create" | "edit">("list");
 
@@ -573,8 +576,9 @@ export default function ViewAutomationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200" role="dialog" aria-modal="true" aria-labelledby="automation-modal-title" onClick={onClose}>
       <div
+        ref={focusTrapRef}
         className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]"
         dir="rtl"
         onClick={(e) => e.stopPropagation()}
@@ -582,7 +586,7 @@ export default function ViewAutomationModal({
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-gray-100">
           <div>
-            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <h2 id="automation-modal-title" className="text-xl font-bold text-gray-900 flex items-center gap-2">
               <Zap className="text-amber-500" size={24} />
               {mode === "list"
                 ? "אוטומציות לאנליטיקה"
@@ -595,6 +599,7 @@ export default function ViewAutomationModal({
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors"
+            aria-label="סגור"
           >
             <X size={20} />
           </button>
@@ -614,6 +619,8 @@ export default function ViewAutomationModal({
                         ? "bg-green-50 border-green-200"
                         : "bg-blue-50 border-blue-200"
                   }`}
+                  role="status"
+                  aria-live="polite"
                 >
                   <div className="flex items-start gap-3">
                     <div
@@ -643,7 +650,7 @@ export default function ViewAutomationModal({
                               : `${totalActionsUsed} מתוך ${globalLimit} פעולות בשימוש. נשארו ${remainingActions} פעולות.`}
                           </p>
                           {/* Progress bar */}
-                          <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" aria-valuenow={totalActionsUsed} aria-valuemax={globalLimit} aria-label="שימוש בפעולות אוטומציה">
                             <div
                               className={`h-full transition-all ${
                                 isAtLimit ? "bg-red-500" : "bg-blue-500"
@@ -732,14 +739,16 @@ export default function ViewAutomationModal({
                           title={
                             rule.isActive ? "כבה אוטומציה" : "הפעל אוטומציה"
                           }
+                          aria-label={rule.isActive ? "כבה אוטומציה" : "הפעל אוטומציה"}
                         >
                           <Power size={18} />
                         </button>
-                        <div className="h-4 w-px bg-gray-300 mx-1" />
+                        <div className="h-4 w-px bg-gray-300 mx-1" aria-hidden="true" />
                         <button
                           onClick={() => handleEdit(rule)}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
                           title="ערוך"
+                          aria-label="ערוך"
                         >
                           <Edit2 size={16} />
                         </button>
@@ -747,6 +756,7 @@ export default function ViewAutomationModal({
                           onClick={() => handleDelete(rule.id)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-full"
                           title="מחק"
+                          aria-label="מחק"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -803,10 +813,11 @@ export default function ViewAutomationModal({
 
               {/* 1. Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="automation-name" className="block text-sm font-medium text-gray-700 mb-1">
                   שם האוטומציה
                 </label>
                 <input
+                  id="automation-name"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -818,10 +829,11 @@ export default function ViewAutomationModal({
 
               {/* Frequency Selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="automation-frequency" className="block text-sm font-medium text-gray-700 mb-1">
                   תדירות ביצוע
                 </label>
                 <select
+                  id="automation-frequency"
                   value={frequency}
                   onChange={(e) => setFrequency(e.target.value)}
                   className="w-full px-3 py-2 border border-blue-200 bg-blue-50/50 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -871,10 +883,11 @@ export default function ViewAutomationModal({
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                    <label htmlFor="automation-metric" className="block text-xs font-medium text-gray-500 mb-1">
                       מטריקה
                     </label>
                     <select
+                      id="automation-metric"
                       value={metric}
                       onChange={(e) => setMetric(e.target.value)}
                       className="w-full appearance-none pr-3 pl-10 py-2 border border-gray-300 rounded-md text-sm"
@@ -889,10 +902,11 @@ export default function ViewAutomationModal({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                    <label htmlFor="automation-operator" className="block text-xs font-medium text-gray-500 mb-1">
                       אופרטור
                     </label>
                     <select
+                      id="automation-operator"
                       value={operator}
                       onChange={(e) => setOperator(e.target.value)}
                       className="w-full appearance-none pr-3 pl-10 py-2 border border-gray-300 rounded-md text-sm"
@@ -912,10 +926,11 @@ export default function ViewAutomationModal({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                    <label htmlFor="automation-threshold" className="block text-xs font-medium text-gray-500 mb-1">
                       סף (Threshold)
                     </label>
                     <input
+                      id="automation-threshold"
                       type="number"
                       step="0.01"
                       value={threshold}
@@ -984,6 +999,7 @@ export default function ViewAutomationModal({
                               onClick={() => editAction(idx)}
                               className="text-blue-500 hover:text-blue-700 p-2 hover:bg-blue-50 rounded-full transition-colors"
                               title="ערוך פעולה"
+                              aria-label="ערוך פעולה"
                             >
                               <Pencil size={18} />
                             </button>
@@ -991,6 +1007,7 @@ export default function ViewAutomationModal({
                               onClick={() => removeAction(idx)}
                               className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-full transition-colors"
                               title="מחק פעולה"
+                              aria-label="מחק פעולה"
                             >
                               <X size={18} />
                             </button>
@@ -1097,10 +1114,11 @@ export default function ViewAutomationModal({
                     {currentActionType === "SEND_NOTIFICATION" && (
                       <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 space-y-4 animate-in slide-in-from-top-2">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label htmlFor="automation-recipient" className="block text-sm font-medium text-gray-700 mb-1">
                             למי לשלוח?
                           </label>
                           <select
+                            id="automation-recipient"
                             value={recipientId}
                             onChange={(e) => setRecipientId(e.target.value)}
                             className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
@@ -1114,10 +1132,11 @@ export default function ViewAutomationModal({
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label htmlFor="automation-message-template" className="block text-sm font-medium text-gray-700 mb-1">
                             הודעה (תבנית)
                           </label>
                           <textarea
+                            id="automation-message-template"
                             value={messageTemplate}
                             onChange={(e) => setMessageTemplate(e.target.value)}
                             rows={2}
@@ -1142,10 +1161,11 @@ export default function ViewAutomationModal({
 
                         {/* Phone number - manual only for analytics (no table context) */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label htmlFor="automation-wa-phone" className="block text-sm font-medium text-gray-700 mb-2">
                             מספר טלפון לשליחה
                           </label>
                           <input
+                            id="automation-wa-phone"
                             type="text"
                             value={waPhoneColumnId.replace("manual:", "")}
                             onChange={(e) =>
@@ -1184,15 +1204,16 @@ export default function ViewAutomationModal({
                             const minDelay = waBeforeCount >= 2 ? 20 : 10;
                             return (
                               <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 animate-in slide-in-from-top-2">
-                                <div className="flex items-center gap-2 text-orange-800 font-medium mb-2">
+                                <label htmlFor="automation-wa-delay" className="flex items-center gap-2 text-orange-800 font-medium mb-2">
                                   <Clock size={16} />
                                   השהייה לפני שליחה (בשניות)
-                                </div>
+                                </label>
                                 <p className="text-xs text-orange-600 mb-3">
                                   נא להגדיר השהייה של לפחות {minDelay} שניות כדי
                                   למנוע חסימה ע"י Green API.
                                 </p>
                                 <input
+                                  id="automation-wa-delay"
                                   type="number"
                                   min={minDelay}
                                   value={waDelay}
@@ -1202,7 +1223,7 @@ export default function ViewAutomationModal({
                                   className={`w-full px-4 py-2 bg-white border rounded-lg shadow-sm ${waDelay < minDelay ? "border-red-500 ring-1 ring-red-500" : "border-orange-200"}`}
                                 />
                                 {waDelay < minDelay && (
-                                  <p className="text-xs text-red-500 mt-1">
+                                  <p className="text-xs text-red-500 mt-1" role="alert">
                                     הערך נמוך מהמינימום הנדרש ({minDelay})
                                   </p>
                                 )}
@@ -1250,7 +1271,7 @@ export default function ViewAutomationModal({
                         {/* Media Selection */}
                         {waMessageType === "media" && (
                           <div className="animate-in slide-in-from-top-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label htmlFor="automation-wa-media" className="block text-sm font-medium text-gray-700 mb-1">
                               בחר קובץ לשליחה
                             </label>
                             {loadingFiles ? (
@@ -1260,6 +1281,7 @@ export default function ViewAutomationModal({
                               </div>
                             ) : (
                               <select
+                                id="automation-wa-media"
                                 value={waMediaFileId}
                                 onChange={(e) =>
                                   setWaMediaFileId(e.target.value)
@@ -1282,12 +1304,13 @@ export default function ViewAutomationModal({
 
                         {/* Content */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label htmlFor="automation-wa-content" className="block text-sm font-medium text-gray-700 mb-1">
                             {waMessageType === "media"
                               ? "כיתוב (Caption)"
                               : "תוכן ההודעה"}
                           </label>
                           <textarea
+                            id="automation-wa-content"
                             value={waContent}
                             onChange={(e) => setWaContent(e.target.value)}
                             rows={4}
@@ -1309,10 +1332,11 @@ export default function ViewAutomationModal({
                           Webhook Configuration
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label htmlFor="automation-webhook-url" className="block text-sm font-medium text-gray-700 mb-2">
                             כתובת ה-URL לשליחה (POST)
                           </label>
                           <input
+                            id="automation-webhook-url"
                             type="url"
                             value={webhookUrl}
                             onChange={(e) => setWebhookUrl(e.target.value)}
@@ -1336,10 +1360,11 @@ export default function ViewAutomationModal({
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label htmlFor="automation-task-title" className="block text-sm font-medium text-gray-700 mb-1">
                             כותרת המשימה
                           </label>
                           <input
+                            id="automation-task-title"
                             type="text"
                             value={taskTitle}
                             onChange={(e) => setTaskTitle(e.target.value)}
@@ -1350,10 +1375,11 @@ export default function ViewAutomationModal({
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label htmlFor="automation-task-description" className="block text-sm font-medium text-gray-700 mb-1">
                             תיאור
                           </label>
                           <textarea
+                            id="automation-task-description"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -1364,10 +1390,11 @@ export default function ViewAutomationModal({
 
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label htmlFor="automation-assignee" className="block text-sm font-medium text-gray-700 mb-1">
                               נציג מטפל
                             </label>
                             <select
+                              id="automation-assignee"
                               value={assigneeId}
                               onChange={(e) => setAssigneeId(e.target.value)}
                               className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
@@ -1381,10 +1408,11 @@ export default function ViewAutomationModal({
                             </select>
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label htmlFor="automation-task-status" className="block text-sm font-medium text-gray-700 mb-1">
                               סטטוס
                             </label>
                             <select
+                              id="automation-task-status"
                               value={taskStatus}
                               onChange={(e) => setTaskStatus(e.target.value)}
                               className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
@@ -1401,10 +1429,11 @@ export default function ViewAutomationModal({
 
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label htmlFor="automation-task-priority" className="block text-sm font-medium text-gray-700 mb-1">
                               עדיפות
                             </label>
                             <select
+                              id="automation-task-priority"
                               value={taskPriority}
                               onChange={(e) => setTaskPriority(e.target.value)}
                               className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm"
@@ -1415,10 +1444,11 @@ export default function ViewAutomationModal({
                             </select>
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label htmlFor="automation-due-date" className="block text-sm font-medium text-gray-700 mb-1">
                               תאריך יעד
                             </label>
                             <input
+                              id="automation-due-date"
                               type="date"
                               value={dueDate}
                               onChange={(e) => setDueDate(e.target.value)}
@@ -1450,10 +1480,11 @@ export default function ViewAutomationModal({
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label htmlFor="automation-update-table" className="block text-sm font-medium text-gray-700 mb-1">
                             בחר טבלה
                           </label>
                           <select
+                            id="automation-update-table"
                             required
                             value={updateFieldTableId}
                             onChange={(e) => {
@@ -1474,7 +1505,7 @@ export default function ViewAutomationModal({
 
                         {updateFieldTableId && (
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label htmlFor="automation-update-column" className="block text-sm font-medium text-gray-700 mb-1">
                               בחר שדה לעדכון
                             </label>
                             {loadingUpdateFieldColumns ? (
@@ -1483,6 +1514,7 @@ export default function ViewAutomationModal({
                               </div>
                             ) : (
                               <select
+                                id="automation-update-column"
                                 required
                                 value={updateFieldColumnId}
                                 onChange={(e) => {
@@ -1504,7 +1536,7 @@ export default function ViewAutomationModal({
 
                         {updateFieldColumnId && (
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label htmlFor="automation-update-value" className="block text-sm font-medium text-gray-700 mb-1">
                               הערך החדש
                             </label>
                             {(() => {
@@ -1523,6 +1555,7 @@ export default function ViewAutomationModal({
                               if (isSelectType && selectedCol?.options) {
                                 return (
                                   <select
+                                    id="automation-update-value"
                                     required
                                     value={updateFieldValue}
                                     onChange={(e) => setUpdateFieldValue(e.target.value)}
@@ -1541,6 +1574,7 @@ export default function ViewAutomationModal({
                               if (selectedCol?.type === "boolean" || selectedCol?.type === "checkbox") {
                                 return (
                                   <select
+                                    id="automation-update-value"
                                     required
                                     value={updateFieldValue}
                                     onChange={(e) => setUpdateFieldValue(e.target.value)}
@@ -1555,6 +1589,7 @@ export default function ViewAutomationModal({
                               if (selectedCol?.type === "date") {
                                 return (
                                   <input
+                                    id="automation-update-value"
                                     required
                                     type="date"
                                     value={updateFieldValue}
@@ -1566,6 +1601,7 @@ export default function ViewAutomationModal({
 
                               return (
                                 <input
+                                  id="automation-update-value"
                                   required
                                   type={selectedCol?.type === "number" || selectedCol?.type === "currency" ? "number" : "text"}
                                   value={updateFieldValue}
@@ -1582,10 +1618,11 @@ export default function ViewAutomationModal({
                         )}
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label htmlFor="automation-record-id" className="block text-sm font-medium text-gray-700 mb-1">
                             מזהה רשומה
                           </label>
                           <input
+                            id="automation-record-id"
                             required
                             type="text"
                             value={updateFieldRecordId}
@@ -1687,9 +1724,11 @@ function ActionCard({
   onClick: () => void;
 }) {
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
-      className={`relative p-5 rounded-xl border-2 cursor-pointer transition-all duration-200 group ${
+      aria-pressed={selected}
+      className={`relative p-5 rounded-xl border-2 transition-all duration-200 group text-right w-full ${
         selected
           ? "border-blue-500 bg-blue-50 shadow-md ring-2 ring-blue-200 ring-offset-2"
           : "border-gray-100 bg-white hover:border-blue-200 hover:bg-gray-50"
@@ -1719,7 +1758,7 @@ function ActionCard({
           />
         </div>
       )}
-    </div>
+    </button>
   );
 }
 

@@ -197,7 +197,7 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
         >
           {props.children}
           {dots.length > 0 && (
-            <span className="flex gap-1 justify-center">
+            <span className="flex gap-1 justify-center" aria-hidden="true">
               {dots.map((color, i) => (
                 <span
                   key={i}
@@ -218,7 +218,7 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setSelectedDate(undefined); }}>
-          <SelectTrigger className="w-36 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white">
+          <SelectTrigger className="w-36 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white" aria-label="סינון לפי סטטוס">
             <SelectValue placeholder="סטטוס" />
           </SelectTrigger>
           <SelectContent className="bg-[#1a3a2a] border-white/20 text-white/80">
@@ -232,7 +232,7 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
         </Select>
 
         <Select value={typeFilter} onValueChange={v => { setTypeFilter(v); setSelectedDate(undefined); }}>
-          <SelectTrigger className="w-44 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white">
+          <SelectTrigger className="w-44 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white" aria-label="סינון לפי סוג פגישה">
             <SelectValue placeholder="סוג פגישה" />
           </SelectTrigger>
           <SelectContent className="bg-[#1a3a2a] border-white/20 text-white/80">
@@ -244,7 +244,7 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
         </Select>
 
         {loading && (
-          <span className="text-sm text-white/60">טוען...</span>
+          <span className="text-sm text-white/60" role="status">טוען...</span>
         )}
       </div>
 
@@ -303,9 +303,13 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
                   return (
                     <div
                       key={m.id}
-                      className="bg-[#162e22] backdrop-blur-sm rounded-xl border border-white/20 p-3 cursor-pointer hover:bg-white/[0.06] transition-colors duration-150 mtg-slide-up"
+                      className="bg-[#162e22] backdrop-blur-sm rounded-xl border border-white/20 p-3 cursor-pointer hover:bg-white/[0.06] transition-colors duration-150 mtg-slide-up focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
                       style={{ animationDelay: `${idx * 40}ms` }}
                       onClick={() => openDetail(m.id)}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${m.participantName} - ${start.toLocaleTimeString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" })}`}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetail(m.id); } }}
                     >
                       {/* Mobile: stacked layout with centered time */}
                       <div className="flex flex-col items-center gap-2 sm:hidden">
@@ -317,7 +321,7 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
                         </div>
                         <div className="flex items-center justify-between w-full">
                           <div className="flex items-center gap-2 min-w-0">
-                            <div className="w-7 h-7 rounded-full bg-blue-500/15 text-blue-300 flex items-center justify-center text-xs font-bold shrink-0">
+                            <div className="w-7 h-7 rounded-full bg-blue-500/15 text-blue-300 flex items-center justify-center text-xs font-bold shrink-0" aria-hidden="true">
                               {m.participantName?.charAt(0) || "?"}
                             </div>
                             <span className="text-sm font-medium truncate text-white">{m.participantName}</span>
@@ -326,6 +330,7 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
                             <span
                               className="w-2 h-2 rounded-full"
                               style={{ backgroundColor: m.meetingType?.color || "#3B82F6" }}
+                              aria-hidden="true"
                             />
                             <MeetingStatusBadge status={m.status} />
                           </div>
@@ -341,7 +346,7 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
                           {end.toLocaleTimeString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" })}
                         </div>
                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <div className="w-7 h-7 rounded-full bg-blue-500/15 text-blue-300 flex items-center justify-center text-xs font-bold shrink-0">
+                          <div className="w-7 h-7 rounded-full bg-blue-500/15 text-blue-300 flex items-center justify-center text-xs font-bold shrink-0" aria-hidden="true">
                             {m.participantName?.charAt(0) || "?"}
                           </div>
                           <span className="text-sm font-medium truncate text-white">{m.participantName}</span>
@@ -350,6 +355,7 @@ export default function MeetingsCalendar({ meetingTypes, userPlan }: MeetingsCal
                           <span
                             className="w-2 h-2 rounded-full"
                             style={{ backgroundColor: m.meetingType?.color || "#3B82F6" }}
+                            aria-hidden="true"
                           />
                           <span className="text-sm text-white/60">{m.meetingType?.name}</span>
                         </div>

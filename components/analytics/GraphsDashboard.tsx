@@ -83,14 +83,15 @@ function SortableGraphCard({
     >
       <div className="p-4 border-b border-gray-50 flex justify-between items-start">
         <div className="flex items-start gap-2">
-          <div
+          <button
+            type="button"
             {...attributes}
             {...listeners}
             className="cursor-grab active:cursor-grabbing p-1 text-gray-300 hover:text-gray-500 mt-1"
-            title="גרור לשינוי סדר"
+            aria-label="גרור לשינוי סדר"
           >
             <GripVertical size={18} />
-          </div>
+          </button>
           <div>
             <h3 className="font-bold text-gray-900 text-lg">{view.ruleName}</h3>
             <p className="text-sm text-gray-500">{view.stats?.subMetric}</p>
@@ -104,21 +105,21 @@ function SortableGraphCard({
             onClick={() => onRefresh(view)}
             disabled={isRefreshing}
             className="p-1.5 text-gray-400 hover:text-green-600 rounded-full hover:bg-gray-50 disabled:opacity-50"
-            title="רענן גרף"
+            aria-label="רענן גרף"
           >
             <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
           </button>
           <button
             onClick={() => onEdit(view)}
             className="p-1.5 text-gray-400 hover:text-blue-600 rounded-full hover:bg-gray-50"
-            title="ערוך גרף"
+            aria-label="ערוך גרף"
           >
             <Edit3 size={16} />
           </button>
           <button
             onClick={() => onDelete(view.viewId)}
             className="p-1.5 text-gray-400 hover:text-red-600 rounded-full hover:bg-gray-50"
-            title="מחק גרף"
+            aria-label="מחק גרף"
           >
             <Trash2 size={16} />
           </button>
@@ -130,6 +131,7 @@ function SortableGraphCard({
           data={view.data}
           type={view.config.chartType}
           height={chartHeight}
+          title={view.ruleName}
         />
       </div>
 
@@ -259,7 +261,7 @@ export default function GraphsDashboard({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8" dir="rtl">
+    <main className="min-h-screen bg-gray-50 p-8" dir="rtl">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
@@ -294,7 +296,7 @@ export default function GraphsDashboard({
         </div>
 
         {/* Cache Info Banner */}
-        <div className="bg-gradient-to-l from-blue-50 to-indigo-50 border border-blue-100/80 rounded-xl px-5 py-3.5 mb-8 flex items-start gap-3">
+        <div className="bg-gradient-to-l from-blue-50 to-indigo-50 border border-blue-100/80 rounded-xl px-5 py-3.5 mb-8 flex items-start gap-3" role="region" aria-label="מידע על מערכת קאש">
           <div className="bg-blue-100 rounded-lg p-2 shrink-0">
             <RefreshCw size={16} className="text-blue-600" />
           </div>
@@ -338,7 +340,7 @@ export default function GraphsDashboard({
         {/* Content */}
         {views.length === 0 ? (
           loadError ? (
-            <div className="bg-white rounded-xl shadow-sm p-12 text-center border border-red-100 flex flex-col items-center">
+            <div className="bg-white rounded-xl shadow-sm p-12 text-center border border-red-100 flex flex-col items-center" role="alert">
               <div className="bg-red-50 p-4 rounded-full mb-4">
                 <BarChart2 className="text-red-400" size={48} />
               </div>
@@ -357,7 +359,7 @@ export default function GraphsDashboard({
               </button>
             </div>
           ) : (
-            <div className="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100 flex flex-col items-center">
+            <div className="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100 flex flex-col items-center" role="status">
               <div className="bg-pink-50 p-4 rounded-full mb-4">
                 <BarChart2 className="text-pink-500" size={48} />
               </div>
@@ -386,6 +388,7 @@ export default function GraphsDashboard({
               items={views.map((v) => v.id)}
               strategy={rectSortingStrategy}
             >
+              <h2 className="sr-only">גרפים</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {views.map((view) => (
                   <SortableGraphCard
@@ -418,6 +421,6 @@ export default function GraphsDashboard({
         />
       </div>
 
-    </div>
+    </main>
   );
 }

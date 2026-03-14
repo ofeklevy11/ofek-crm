@@ -27,7 +27,7 @@ export default function MeetingStatusBadge({ status, variant = "dark" }: { statu
   const config = configs[status] || { ...fallback, label: status };
   return (
     <Badge variant="outline" className={`${config.className} text-xs font-medium gap-1.5`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${config.dotClass}`} />
+      <span className={`w-1.5 h-1.5 rounded-full ${config.dotClass}`} aria-hidden="true" />
       {config.label}
     </Badge>
   );

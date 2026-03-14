@@ -42,6 +42,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import { he } from "date-fns/locale";
 import {
   Popover,
   PopoverContent,
@@ -292,6 +293,7 @@ export default function MeetingDetailModal({
               <span
                 className="w-3 h-3 rounded-full shrink-0"
                 style={{ backgroundColor: meeting.meetingType.color || "#3B82F6" }}
+                aria-hidden="true"
               />
               <span>{meeting.meetingType.name}</span>
               <MeetingStatusBadge status={meeting.status} variant="light" />
@@ -342,6 +344,7 @@ export default function MeetingDetailModal({
                   size="sm"
                   variant="outline"
                   className="text-xs mr-auto"
+                  aria-expanded={showReschedule}
                   onClick={() => {
                     setShowReschedule(!showReschedule);
                     if (!showReschedule) {
@@ -381,6 +384,8 @@ export default function MeetingDetailModal({
                         selected={rescheduleDate}
                         onSelect={setRescheduleDate}
                         disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                        locale={he}
+                        dir="rtl"
                       />
                     </PopoverContent>
                   </Popover>
@@ -393,6 +398,7 @@ export default function MeetingDetailModal({
                       onChange={(e) => setRescheduleTime(e.target.value)}
                       className="w-32"
                       dir="ltr"
+                      aria-label="שעת תזמון מחדש"
                     />
                   </div>
                 </div>
@@ -436,7 +442,7 @@ export default function MeetingDetailModal({
             <div className="flex items-center gap-3 mtg-slide-up" style={{ animationDelay: "160ms" }}>
               <span className="text-sm font-medium">שנה סטטוס:</span>
               <Select value={meeting.status} onValueChange={handleStatusChange} disabled={saving}>
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-40" aria-label="שנה סטטוס">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -454,8 +460,9 @@ export default function MeetingDetailModal({
             <div className="space-y-3">
               <h3 className="font-semibold text-sm text-gray-900">הערות</h3>
               <div>
-                <label className="text-xs text-muted-foreground">הערות לפני הפגישה</label>
+                <label htmlFor="notes-before" className="text-xs text-muted-foreground">הערות לפני הפגישה</label>
                 <Textarea
+                  id="notes-before"
                   defaultValue={meeting.notesBefore || ""}
                   onChange={e => setNotesBefore(e.target.value)}
                   placeholder="הערות לפני הפגישה..."
@@ -464,8 +471,9 @@ export default function MeetingDetailModal({
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">הערות אחרי הפגישה</label>
+                <label htmlFor="notes-after" className="text-xs text-muted-foreground">הערות אחרי הפגישה</label>
                 <Textarea
+                  id="notes-after"
                   defaultValue={meeting.notesAfter || ""}
                   onChange={e => setNotesAfter(e.target.value)}
                   placeholder="הערות אחרי הפגישה..."
@@ -489,8 +497,8 @@ export default function MeetingDetailModal({
               {meeting.tags.map(tag => (
                 <Badge key={tag} variant="secondary" className="gap-1">
                   {tag}
-                  <button onClick={() => handleRemoveTag(tag)} className="hover:text-destructive">
-                    <X className="h-3 w-3" />
+                  <button onClick={() => handleRemoveTag(tag)} className="hover:text-destructive" aria-label={`הסר תגית ${tag}`}>
+                    <X className="h-3 w-3" aria-hidden="true" />
                   </button>
                 </Badge>
               ))}
@@ -500,6 +508,7 @@ export default function MeetingDetailModal({
                 value={newTag}
                 onChange={e => setNewTag(e.target.value)}
                 placeholder="תגית חדשה..."
+                aria-label="תגית חדשה"
                 className="flex-1"
                 onKeyDown={e => e.key === "Enter" && handleAddTag()}
               />
@@ -534,7 +543,7 @@ export default function MeetingDetailModal({
               )}
 
               {loadingAutomations ? (
-                <p className="text-xs text-muted-foreground">טוען...</p>
+                <p className="text-xs text-muted-foreground" role="status">טוען...</p>
               ) : perMeetingAutomations.length === 0 ? (
                 <p className="text-xs text-muted-foreground">אין אוטומציות לפגישה זו</p>
               ) : (
@@ -564,8 +573,9 @@ export default function MeetingDetailModal({
                           <button
                             onClick={() => setDeletingAutoId(auto.id)}
                             className="text-destructive hover:text-destructive/80 p-1 shrink-0"
+                            aria-label="מחק אוטומציה"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                           </button>
                         </AlertDialogTrigger>
                         <AlertDialogContent dir="rtl">
@@ -614,6 +624,7 @@ export default function MeetingDetailModal({
                   variant="destructive"
                   size="sm"
                   onClick={() => setShowCancelForm(true)}
+                  aria-expanded={showCancelForm}
                 >
                   בטל פגישה
                 </Button>
@@ -623,6 +634,7 @@ export default function MeetingDetailModal({
                     value={cancelReason}
                     onChange={e => setCancelReason(e.target.value)}
                     placeholder="סיבת ביטול (אופציונלי)..."
+                    aria-label="סיבת ביטול"
                     rows={2}
                   />
                   <div className="flex gap-2">

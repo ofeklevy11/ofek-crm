@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Trash2, Eye, EyeOff, Settings2 } from "lucide-react";
+import { Trash2, Eye, EyeOff, Settings2, GripVertical } from "lucide-react";
 import { useEffect, useState, useMemo, memo } from "react";
 import { useRouter } from "next/navigation";
 import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
@@ -221,17 +221,26 @@ function MiniMeetingsWidget({
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      className={`group relative flex flex-col bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-violet-100 overflow-hidden cursor-grab active:cursor-grabbing ${
+      className={`group relative flex flex-col bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-violet-100 overflow-hidden ${
         isCollapsed ? "h-auto" : "h-full min-h-[300px]"
       }`}
     >
-      <div className="h-1.5 w-full bg-linear-to-r from-violet-400 to-purple-500" />
+      <div className="h-1.5 w-full bg-linear-to-r from-violet-400 to-purple-500" aria-hidden="true" />
 
       <div className="p-5 flex-1 flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-start mb-4">
+          <div className="flex items-start gap-1">
+            <button
+              {...attributes}
+              {...listeners}
+              className="p-1 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 rounded touch-none focus-visible:ring-2 focus-visible:ring-ring mt-1"
+              aria-label="גרור ווידג׳ט: פגישות"
+              aria-roledescription="פריט ניתן לגרירה"
+            >
+              <GripVertical size={16} />
+            </button>
+          </div>
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-sm font-bold px-2 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-100">
@@ -261,25 +270,25 @@ function MiniMeetingsWidget({
             <p className="text-sm text-gray-500">{totalMeetings} פגישות</p>
           </div>
 
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
             {onOpenSettings && (
               <button
-                className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded-md transition"
-                onPointerDown={(e) => e.stopPropagation()}
+                className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded-md transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                 onClick={(e) => {
                   e.stopPropagation();
                   onOpenSettings(id);
                 }}
                 title="הגדרות"
+                aria-label="הגדרות ווידג׳ט"
               >
                 <Settings2 size={16} />
               </button>
             )}
             <button
-              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition"
-              onPointerDown={(e) => e.stopPropagation()}
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               onClick={handleToggleCollapse}
               title={isCollapsed ? "הצג" : "הסתר"}
+              aria-label={isCollapsed ? "הצג תוכן ווידג׳ט" : "הסתר תוכן ווידג׳ט"}
             >
               {isCollapsed ? <Eye size={16} /> : <EyeOff size={16} />}
             </button>
@@ -288,9 +297,9 @@ function MiniMeetingsWidget({
                 e.stopPropagation();
                 onRemove(id);
               }}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               title="הסר מהדאשבורד"
+              aria-label="הסר ווידג׳ט מהדאשבורד"
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -301,7 +310,8 @@ function MiniMeetingsWidget({
         {!isCollapsed && (
           <div className="flex-1 overflow-auto -mx-5 px-5" dir="rtl">
             {loading ? (
-              <div className="space-y-3">
+              <div className="space-y-3" role="status">
+                <span className="sr-only">טוען נתונים...</span>
                 {[1, 2, 3].map((i) => (
                   <div key={i} className="animate-pulse flex gap-3">
                     <div className="w-2 h-2 mt-2 rounded-full bg-gray-200" />
@@ -347,6 +357,7 @@ function MiniMeetingsWidget({
                             style={{
                               backgroundColor: m.meetingType?.color || "#8B5CF6",
                             }}
+                            aria-hidden="true"
                           />
                           <p className="text-base font-medium text-gray-800 truncate">
                             {m.participantName}
@@ -384,7 +395,6 @@ function MiniMeetingsWidget({
             <Link
               href="/meetings"
               className="block text-center text-sm text-violet-600 hover:text-violet-800 mt-3 py-2"
-              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
               צפה בכל הפגישות

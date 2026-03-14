@@ -152,12 +152,13 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="חיפוש משתתף..."
+            aria-label="חיפוש משתתף"
             className="pr-9 w-full sm:w-48 h-9 rounded-lg bg-white/[0.08] border-white/20 text-white placeholder:text-white/50 focus:ring-blue-500/50"
           />
         </div>
 
         <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-full sm:w-36 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white">
+          <SelectTrigger className="w-full sm:w-36 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white" aria-label="סינון לפי סטטוס">
             <SelectValue placeholder="סטטוס" />
           </SelectTrigger>
           <SelectContent className="bg-[#1a3a2a] border-white/20 text-white/80">
@@ -171,7 +172,7 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
         </Select>
 
         <Select value={typeFilter} onValueChange={v => { setTypeFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-full sm:w-44 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white">
+          <SelectTrigger className="w-full sm:w-44 rounded-lg h-9 bg-white/[0.08] border-white/20 text-white" aria-label="סינון לפי סוג פגישה">
             <SelectValue placeholder="סוג פגישה" />
           </SelectTrigger>
           <SelectContent className="bg-[#1a3a2a] border-white/20 text-white/80">
@@ -183,19 +184,20 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
         </Select>
 
         <div className="flex items-center gap-2 mr-auto">
-          <span className="text-sm text-white/60">{total} פגישות</span>
+          <span className="text-sm text-white/60" aria-live="polite" aria-atomic="true">{total} פגישות</span>
           {statusFilter !== "all" && (
-            <Badge variant="secondary" className="gap-1 text-xs cursor-pointer bg-white/[0.08] text-white/80 border-white/20 hover:bg-white/[0.15]" onClick={() => { setStatusFilter("all"); setPage(1); }}>
+            <Badge variant="secondary" className="gap-1 text-xs cursor-pointer bg-white/[0.08] text-white/80 border-white/20 hover:bg-white/[0.15] focus:outline-none focus:ring-2 focus:ring-emerald-400/60 focus:ring-offset-1 focus:ring-offset-transparent" onClick={() => { setStatusFilter("all"); setPage(1); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setStatusFilter("all"); setPage(1); } }} role="button" tabIndex={0} aria-label="נקה סינון סטטוס">
               {statusFilter === "PENDING" ? "ממתין" : statusFilter === "CONFIRMED" ? "מאושר" : statusFilter === "COMPLETED" ? "הושלם" : statusFilter === "CANCELLED" ? "בוטל" : "לא הגיע"}
-              <X className="h-3 w-3" />
+              <X className="h-3 w-3" aria-hidden="true" />
             </Badge>
           )}
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-[#162e22] backdrop-blur-sm rounded-xl border border-white/20 overflow-x-auto">
+      <div className="bg-[#162e22] backdrop-blur-sm rounded-xl border border-white/20 overflow-x-auto" aria-busy={loading}>
         <Table>
+          <caption className="sr-only">רשימת פגישות</caption>
           <TableHeader>
             <TableRow className="border-white/20 hover:bg-transparent">
               <TableHead className="text-right bg-white/[0.04] text-sm font-medium text-white/70">משתתף</TableHead>
@@ -211,7 +213,7 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i} className="border-white/20">
                   {Array.from({ length: 6 }).map((_, j) => (
-                    <TableCell key={j}><div className="h-4 w-full mtg-dark-skeleton" /></TableCell>
+                    <TableCell key={j}><div className="h-4 w-full mtg-dark-skeleton" />{j === 0 && i === 0 && <span className="sr-only" role="status">טוען פגישות...</span>}</TableCell>
                   ))}
                 </TableRow>
               ))
@@ -235,13 +237,17 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
                 return (
                   <TableRow
                     key={m.id}
-                    className="group cursor-pointer hover:bg-white/[0.06] transition-colors duration-150 even:bg-white/[0.02] border-white/20 mtg-slide-up"
+                    className="group cursor-pointer hover:bg-white/[0.06] transition-colors duration-150 even:bg-white/[0.02] border-white/20 mtg-slide-up focus-within:ring-2 focus-within:ring-blue-500/50"
                     style={{ animationDelay: `${idx * 40}ms` }}
                     onClick={() => openDetail(m.id)}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`${m.participantName} - ${formatRelativeDate(start)}`}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetail(m.id); } }}
                   >
                     <TableCell className="font-medium text-white">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-blue-500/15 text-blue-300 flex items-center justify-center text-xs font-bold shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-blue-500/15 text-blue-300 flex items-center justify-center text-xs font-bold shrink-0" aria-hidden="true">
                           {m.participantName?.charAt(0) || "?"}
                         </div>
                         <div>
@@ -257,6 +263,7 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
                         <span
                           className="w-2 h-2 rounded-full shrink-0"
                           style={{ backgroundColor: m.meetingType?.color || "#3B82F6" }}
+                          aria-hidden="true"
                         />
                         {m.meetingType?.name}
                       </div>
@@ -270,7 +277,7 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
                     <TableCell>
                       <MeetingStatusBadge status={m.status} />
                     </TableCell>
-                    <TableCell className="w-10">
+                    <TableCell className="w-10" aria-hidden="true">
                       <Eye className="h-4 w-4 text-white/50 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
                     </TableCell>
                   </TableRow>
@@ -290,10 +297,11 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
             className="h-8 w-8 p-0 rounded-lg bg-white/[0.08] border-white/20 text-white/80 hover:bg-white/[0.15] hover:text-white"
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={page === 1}
+            aria-label="עמוד הקודם"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <span className="text-sm text-white/60 tabular-nums">
+          <span className="text-sm text-white/60 tabular-nums" aria-live="polite" aria-atomic="true">
             {page} / {totalPages}
           </span>
           <Button
@@ -302,6 +310,7 @@ export default function MeetingsList({ meetingTypes, userPlan }: MeetingsListPro
             className="h-8 w-8 p-0 rounded-lg bg-white/[0.08] border-white/20 text-white/80 hover:bg-white/[0.15] hover:text-white"
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
+            aria-label="עמוד הבא"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>

@@ -1,16 +1,18 @@
 "use client";
 
 import React from "react";
-import { Task } from "./TaskKanbanBoard";
+import { Task, TaskStatus, COLUMNS } from "./TaskKanbanBoard";
 import { showConfirm } from "@/hooks/use-modal";
 
 interface TaskCardProps {
   task: Task;
   onDelete: (id: string) => void;
   onEdit: () => void;
+  currentStatus?: TaskStatus;
+  onMove?: (taskId: string, newStatus: TaskStatus) => void;
 }
 
-export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
+export default function TaskCard({ task, onDelete, onEdit, currentStatus, onMove }: TaskCardProps) {
   const [isDragging, setIsDragging] = React.useState(false);
 
   const handleDragStart = (e: React.DragEvent) => {
@@ -47,6 +49,8 @@ export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
       draggable
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      role="article"
+      aria-label={task.title}
       className={`bg-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-lg p-4 shadow-lg hover:shadow-xl transition-all cursor-move relative ${
         isDragging ? "opacity-50 scale-95" : "hover:scale-[1.02]"
       }`}
@@ -55,8 +59,8 @@ export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
       <div className="absolute top-2 end-2 flex gap-1">
         <button
           onClick={onEdit}
-          className="text-slate-400 hover:text-blue-400 p-1 rounded transition-colors"
-          title="עריכת משימה"
+          className="text-slate-400 hover:text-blue-400 p-1 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900"
+          aria-label={`ערוך משימה: ${task.title}`}
         >
           ✎
         </button>
@@ -66,10 +70,10 @@ export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
               onDelete(task.id);
             }
           }}
-          className="text-slate-400 hover:text-red-400 p-1 rounded transition-colors"
-          title="מחיקת משימה"
+          className="text-slate-400 hover:text-red-400 p-1 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900"
+          aria-label={`מחק משימה: ${task.title}`}
         >
-          🗑️
+          <span aria-hidden="true">🗑️</span>
         </button>
       </div>
 
@@ -81,7 +85,7 @@ export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
               task.priority,
             )}`}
           >
-            ★{" "}
+            <span aria-hidden="true">★</span>{" "}
             {task.priority === "high"
               ? "גבוה"
               : task.priority === "medium"
@@ -91,7 +95,6 @@ export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
         </div>
       )}
 
-      {/* Header */}
       {/* Header */}
       <h4
         className="text-white font-semibold text-sm mb-2 break-words line-clamp-2"
@@ -104,14 +107,14 @@ export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
       <div className="flex flex-wrap gap-2 mb-3">
         {/* Start Date */}
         <span className="inline-flex items-center gap-1.5 bg-purple-500/10 text-purple-200 text-xs px-2 py-0.5 rounded-full border border-purple-500/20">
-          <span className="opacity-70">🚀 התחלנו:</span>
+          <span className="opacity-70"><span aria-hidden="true">🚀</span> התחלנו:</span>
           <span className="font-medium">{formatDate(task.createdAt)}</span>
         </span>
 
         {/* Due Date */}
         {task.dueDate && (
           <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-200 text-xs px-2 py-0.5 rounded-full border border-emerald-500/20">
-            <span className="opacity-70">📅 יעד לסיום:</span>
+            <span className="opacity-70"><span aria-hidden="true">📅</span> יעד לסיום:</span>
             <span className="font-medium">{formatDate(task.dueDate)}</span>
           </span>
         )}
@@ -133,7 +136,7 @@ export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
               key={idx}
               className="inline-flex items-center gap-1 bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded-full"
             >
-              🏷️ {tag}
+              <span aria-hidden="true">🏷️</span> {tag}
             </span>
           ))}
         </div>
@@ -143,9 +146,27 @@ export default function TaskCard({ task, onDelete, onEdit }: TaskCardProps) {
       {task.assignee && (
         <div className="flex items-center justify-end pt-2 border-t border-slate-700/50">
           <div className="flex items-center gap-1.5 bg-slate-700/50 px-2 py-1 rounded-full">
-            👤{" "}
+            <span aria-hidden="true">👤</span>{" "}
             <span className="text-xs text-slate-300">{task.assignee.name}</span>
           </div>
+        </div>
+      )}
+
+      {/* Keyboard-accessible move control */}
+      {currentStatus && onMove && (
+        <div className="mt-2 pt-2 border-t border-slate-700/50">
+          <select
+            aria-label="העבר משימה לעמודה"
+            value={currentStatus}
+            onChange={(e) => onMove(task.id, e.target.value as TaskStatus)}
+            className="w-full bg-slate-800 text-slate-300 text-xs rounded px-2 py-1 border border-slate-700 focus-visible:ring-2 focus-visible:ring-blue-500 outline-none"
+          >
+            {COLUMNS.map((col) => (
+              <option key={col.id} value={col.id}>
+                {col.title}
+              </option>
+            ))}
+          </select>
         </div>
       )}
     </div>
@@ -183,7 +204,7 @@ function DescriptionWithReadMore({
             e.stopPropagation();
             onReadMore();
           }}
-          className="text-[10px] text-blue-400 hover:text-blue-300 hover:underline transition-colors block"
+          className="text-[10px] text-blue-400 hover:text-blue-300 hover:underline transition-colors block focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
         >
           קרא עוד...
         </button>

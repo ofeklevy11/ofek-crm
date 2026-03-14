@@ -30,12 +30,13 @@ export function StageCard({ stage, onClick, index }: StageCardProps) {
   const borderColor = activeColorClass.split(" ")[0]; // extract border-X-500
 
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
       className={`
         relative w-[280px] h-[180px] bg-white rounded-xl shadow-sm border border-gray-200 cursor-pointer
         transform transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-indigo-300
-        flex flex-col group overflow-hidden
+        flex flex-col group overflow-hidden text-right p-0
       `}
     >
       {/* Top Color Line */}
@@ -45,7 +46,7 @@ export function StageCard({ stage, onClick, index }: StageCardProps) {
 
       <div className="p-5 flex-1 flex flex-col">
         <div className="flex justify-between items-start mb-3">
-          <div className={`p-2 rounded-lg ${activeColorClass}`}>
+          <div className={`p-2 rounded-lg ${activeColorClass}`} aria-hidden="true">
             <IconComponent size={20} />
           </div>
           <span className="text-xs font-semibold text-gray-400 bg-gray-50 px-2 py-1 rounded-full uppercase tracking-wider">
@@ -63,13 +64,13 @@ export function StageCard({ stage, onClick, index }: StageCardProps) {
       </div>
 
       {/* Footer / Status Indicator (Fake for visuals) */}
-      <div className="px-5 py-3 border-t border-gray-50 bg-gray-50/50 flex items-center justify-between text-xs text-gray-400">
+      <div className="px-5 py-3 border-t border-gray-50 bg-gray-50/50 flex items-center justify-between text-xs text-gray-400 w-full">
         <span>פעיל</span>
-        <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+        <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
       </div>
 
       {/* Hover Reveal Gradient */}
-      <div className="absolute inset-0 bg-gradient-to-t from-indigo-50/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-    </div>
+      <div className="absolute inset-0 bg-gradient-to-t from-indigo-50/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" aria-hidden="true" />
+    </button>
   );
 }

@@ -118,10 +118,11 @@ export default function RetainerPaymentModal({
                   onClick={() =>
                     setSelectedCount(Math.max(1, selectedCount - 1))
                   }
+                  aria-label="הפחת תשלום"
                 >
                   -
                 </Button>
-                <span className="text-[#4f95ff] font-bold text-lg w-8 text-center">
+                <span className="text-[#4f95ff] font-bold text-lg w-8 text-center" aria-live="polite" aria-atomic="true">
                   {selectedCount}
                 </span>
                 <Button
@@ -130,6 +131,7 @@ export default function RetainerPaymentModal({
                   size="icon"
                   className="h-8 w-8"
                   onClick={() => setSelectedCount(selectedCount + 1)}
+                  aria-label="הוסף תשלום"
                 >
                   +
                 </Button>

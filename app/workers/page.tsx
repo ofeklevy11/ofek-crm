@@ -74,7 +74,7 @@ export default async function WorkersPage() {
 
 function WorkersSkeleton() {
   return (
-    <div className="p-8 space-y-8 animate-pulse">
+    <div className="p-8 space-y-8 animate-pulse" role="status" aria-label="טוען נתוני עובדים...">
       <div className="flex justify-between items-center">
         <div className="h-10 w-48 bg-white/60 rounded-lg"></div>
         <div className="h-10 w-32 bg-white/60 rounded-lg"></div>

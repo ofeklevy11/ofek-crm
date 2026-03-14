@@ -33,18 +33,21 @@ interface AnalyticsGraphProps {
   data: any[];
   type?: string; // bar, line, pie, area
   height?: number;
+  title?: string;
 }
 
 export default function AnalyticsGraph({
   data,
   type = "bar",
   height = 300,
+  title,
 }: AnalyticsGraphProps) {
   if (!data || data.length === 0) {
     return (
       <div
         className="flex items-center justify-center text-gray-400 text-sm"
         style={{ height }}
+        role="status"
       >
         אין מספיק נתונים להצגה
       </div>
@@ -281,8 +284,9 @@ export default function AnalyticsGraph({
   };
 
   return (
-    <div style={{ width: "100%", height }}>
+    <div style={{ width: "100%", height }} role="img" aria-label={title || "גרף אנליטיקה"}>
       <ResponsiveContainer>{renderChart()}</ResponsiveContainer>
+      <div className="sr-only">{data.map(d => `${d.name}: ${d.value}`).join(', ')}</div>
     </div>
   );
 }

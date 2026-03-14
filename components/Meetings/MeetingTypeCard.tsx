@@ -82,6 +82,7 @@ export default function MeetingTypeCard({
             onCheckedChange={(checked) =>
               onToggleActive(meetingType.id, checked)
             }
+            aria-label={`${meetingType.name} - ${meetingType.isActive ? "פעיל" : "לא פעיל"}`}
           />
         </div>
 
@@ -130,7 +131,7 @@ export default function MeetingTypeCard({
         <div className="flex items-center gap-1 pt-2 border-t border-white/20">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" className="text-white/80 hover:text-white hover:bg-white/[0.08]" onClick={handleCopyLink}>
+              <Button variant="ghost" size="icon-sm" className="text-white/80 hover:text-white hover:bg-white/[0.08]" onClick={handleCopyLink} aria-label="העתק קישור שיתוף">
                 {copied ? <Check className="size-4 text-green-400" /> : <Link className="size-4" />}
               </Button>
             </TooltipTrigger>
@@ -139,7 +140,7 @@ export default function MeetingTypeCard({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" className="text-white/80 hover:text-white hover:bg-white/[0.08]" onClick={() => onEdit(meetingType.id)}>
+              <Button variant="ghost" size="icon-sm" className="text-white/80 hover:text-white hover:bg-white/[0.08]" onClick={() => onEdit(meetingType.id)} aria-label="ערוך סוג פגישה">
                 <Pencil className="size-4" />
               </Button>
             </TooltipTrigger>
@@ -150,7 +151,7 @@ export default function MeetingTypeCard({
             <Tooltip>
               <TooltipTrigger asChild>
                 <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" className="text-red-400 hover:text-red-300 hover:bg-white/[0.08]">
+                  <Button variant="ghost" size="icon-sm" className="text-red-400 hover:text-red-300 hover:bg-white/[0.08]" aria-label="מחק סוג פגישה">
                     <Trash2 className="size-4" />
                   </Button>
                 </AlertDialogTrigger>

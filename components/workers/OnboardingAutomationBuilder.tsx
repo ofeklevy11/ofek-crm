@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import {
   X,
   Zap,
@@ -119,6 +120,7 @@ export default function OnboardingAutomationBuilder({
   users,
   tables,
 }: Props) {
+  const dialogRef = useFocusTrap(onClose);
   const [step, setStep] = useState(1);
   const [selectedType, setSelectedType] = useState<string>(
     initialAction?.actionType || "",
@@ -435,10 +437,11 @@ export default function OnboardingAutomationBuilder({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-task-title" className="block text-sm font-medium text-gray-700 mb-1">
                 כותרת המשימה *
               </label>
               <input
+                id="auto-task-title"
                 type="text"
                 value={(config.title as string) || ""}
                 onChange={(e) => updateConfig("title", e.target.value)}
@@ -447,10 +450,11 @@ export default function OnboardingAutomationBuilder({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-task-description" className="block text-sm font-medium text-gray-700 mb-1">
                 תיאור
               </label>
               <textarea
+                id="auto-task-description"
                 value={(config.description as string) || ""}
                 onChange={(e) => updateConfig("description", e.target.value)}
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
@@ -459,10 +463,11 @@ export default function OnboardingAutomationBuilder({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-task-status" className="block text-sm font-medium text-gray-700 mb-1">
                   סטטוס
                 </label>
                 <select
+                  id="auto-task-status"
                   value={(config.status as string) || "todo"}
                   onChange={(e) => updateConfig("status", e.target.value)}
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
@@ -476,10 +481,11 @@ export default function OnboardingAutomationBuilder({
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-task-priority" className="block text-sm font-medium text-gray-700 mb-1">
                   עדיפות
                 </label>
                 <select
+                  id="auto-task-priority"
                   value={(config.priority as string) || "medium"}
                   onChange={(e) => updateConfig("priority", e.target.value)}
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
@@ -490,10 +496,11 @@ export default function OnboardingAutomationBuilder({
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-task-assignee" className="block text-sm font-medium text-gray-700 mb-1">
                   הקצאה ל-
                 </label>
                 <select
+                  id="auto-task-assignee"
                   value={(config.assigneeId as number) || ""}
                   onChange={(e) =>
                     updateConfig("assigneeId", Number(e.target.value))
@@ -516,10 +523,11 @@ export default function OnboardingAutomationBuilder({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-notif-recipient" className="block text-sm font-medium text-gray-700 mb-1">
                 נמען *
               </label>
               <select
+                id="auto-notif-recipient"
                 value={(config.recipientId as number) || ""}
                 onChange={(e) =>
                   updateConfig("recipientId", Number(e.target.value))
@@ -535,10 +543,11 @@ export default function OnboardingAutomationBuilder({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-notif-title" className="block text-sm font-medium text-gray-700 mb-1">
                 כותרת *
               </label>
               <input
+                id="auto-notif-title"
                 type="text"
                 value={(config.title as string) || ""}
                 onChange={(e) => updateConfig("title", e.target.value)}
@@ -547,10 +556,11 @@ export default function OnboardingAutomationBuilder({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-notif-message" className="block text-sm font-medium text-gray-700 mb-1">
                 תוכן ההודעה
               </label>
               <textarea
+                id="auto-notif-message"
                 value={(config.message as string) || ""}
                 onChange={(e) => updateConfig("message", e.target.value)}
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
@@ -567,10 +577,10 @@ export default function OnboardingAutomationBuilder({
           <div className="space-y-4">
             {/* Phone Source Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label id="auto-phone-source-label" className="block text-sm font-medium text-gray-700 mb-2">
                 מקור מספר הטלפון
               </label>
-              <div className="flex gap-3">
+              <div className="flex gap-3" role="radiogroup" aria-labelledby="auto-phone-source-label">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
@@ -604,10 +614,11 @@ export default function OnboardingAutomationBuilder({
             {/* Manual Phone Entry */}
             {(config.phoneSource as string) !== "table" && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-phone" className="block text-sm font-medium text-gray-700 mb-1">
                   מספר טלפון *
                 </label>
                 <input
+                  id="auto-phone"
                   type="text"
                   value={(config.phone as string) || ""}
                   onChange={(e) => updateConfig("phone", e.target.value)}
@@ -645,10 +656,11 @@ export default function OnboardingAutomationBuilder({
             {(config.phoneSource as string) === "table" && (
               <div className="space-y-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="auto-wa-table" className="block text-sm font-medium text-gray-700 mb-1">
                     בחר טבלה
                   </label>
                   <select
+                    id="auto-wa-table"
                     value={(config.waTableId as number) || ""}
                     onChange={(e) => {
                       updateConfig("waTableId", Number(e.target.value));
@@ -667,13 +679,14 @@ export default function OnboardingAutomationBuilder({
 
                 {Boolean(config.waTableId) && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="auto-wa-phone-col" className="block text-sm font-medium text-gray-700 mb-1">
                       שדה טלפון
                     </label>
                     {loadingWaColumns ? (
                       <div className="text-sm text-gray-500">טוען שדות...</div>
                     ) : (
                       <select
+                        id="auto-wa-phone-col"
                         value={(config.waPhoneColumn as string) || ""}
                         onChange={(e) =>
                           updateConfig("waPhoneColumn", e.target.value)
@@ -696,10 +709,11 @@ export default function OnboardingAutomationBuilder({
 
                 {Boolean(config.waTableId) && Boolean(config.waPhoneColumn) && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="auto-wa-record-id" className="block text-sm font-medium text-gray-700 mb-1">
                       מזהה רשומה (אופציונלי)
                     </label>
                     <input
+                      id="auto-wa-record-id"
                       type="text"
                       value={(config.waRecordId as string) || ""}
                       onChange={(e) =>
@@ -714,10 +728,11 @@ export default function OnboardingAutomationBuilder({
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-msg-content" className="block text-sm font-medium text-gray-700 mb-1">
                 תוכן ההודעה *
               </label>
               <textarea
+                id="auto-msg-content"
                 value={(config.message as string) || ""}
                 onChange={(e) => updateConfig("message", e.target.value)}
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
@@ -734,10 +749,11 @@ export default function OnboardingAutomationBuilder({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-webhook-url" className="block text-sm font-medium text-gray-700 mb-1">
                 URL *
               </label>
               <input
+                id="auto-webhook-url"
                 type="url"
                 value={(config.url as string) || ""}
                 onChange={(e) => updateConfig("url", e.target.value)}
@@ -753,10 +769,11 @@ export default function OnboardingAutomationBuilder({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-create-record-table" className="block text-sm font-medium text-gray-700 mb-1">
                 טבלה *
               </label>
               <select
+                id="auto-create-record-table"
                 value={(config.tableId as number) || ""}
                 onChange={(e) =>
                   updateConfig("tableId", Number(e.target.value))
@@ -934,10 +951,11 @@ export default function OnboardingAutomationBuilder({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-update-record-table" className="block text-sm font-medium text-gray-700 mb-1">
                 טבלה *
               </label>
               <select
+                id="auto-update-record-table"
                 value={(config.tableId as number) || ""}
                 onChange={(e) =>
                   updateConfig("tableId", Number(e.target.value))
@@ -953,10 +971,11 @@ export default function OnboardingAutomationBuilder({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-update-record-id" className="block text-sm font-medium text-gray-700 mb-1">
                 מזהה רשומה (ID)
               </label>
               <input
+                id="auto-update-record-id"
                 type="text"
                 value={(config.recordId as string) || ""}
                 onChange={(e) => updateConfig("recordId", e.target.value)}
@@ -1130,10 +1149,11 @@ export default function OnboardingAutomationBuilder({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-finance-title" className="block text-sm font-medium text-gray-700 mb-1">
                 כותרת *
               </label>
               <input
+                id="auto-finance-title"
                 type="text"
                 value={(config.title as string) || ""}
                 onChange={(e) => updateConfig("title", e.target.value)}
@@ -1143,10 +1163,11 @@ export default function OnboardingAutomationBuilder({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-finance-amount" className="block text-sm font-medium text-gray-700 mb-1">
                   סכום *
                 </label>
                 <input
+                  id="auto-finance-amount"
                   type="number"
                   value={(config.amount as number) || ""}
                   onChange={(e) =>
@@ -1157,10 +1178,11 @@ export default function OnboardingAutomationBuilder({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-finance-type" className="block text-sm font-medium text-gray-700 mb-1">
                   סוג *
                 </label>
                 <select
+                  id="auto-finance-type"
                   value={(config.type as string) || "INCOME"}
                   onChange={(e) => updateConfig("type", e.target.value)}
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
@@ -1171,10 +1193,11 @@ export default function OnboardingAutomationBuilder({
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-finance-category" className="block text-sm font-medium text-gray-700 mb-1">
                 קטגוריה
               </label>
               <input
+                id="auto-finance-category"
                 type="text"
                 value={(config.category as string) || ""}
                 onChange={(e) => updateConfig("category", e.target.value)}
@@ -1189,10 +1212,11 @@ export default function OnboardingAutomationBuilder({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-update-task-id" className="block text-sm font-medium text-gray-700 mb-1">
                 מזהה המשימה (Task ID)
               </label>
               <input
+                id="auto-update-task-id"
                 type="text"
                 value={(config.taskId as string) || ""}
                 onChange={(e) => updateConfig("taskId", e.target.value)}
@@ -1201,10 +1225,11 @@ export default function OnboardingAutomationBuilder({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-update-task-status" className="block text-sm font-medium text-gray-700 mb-1">
                 סטטוס חדש
               </label>
               <select
+                id="auto-update-task-status"
                 value={(getSafeUpdates().status as string) || ""}
                 onChange={(e) =>
                   updateConfig("updates", {
@@ -1230,10 +1255,11 @@ export default function OnboardingAutomationBuilder({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-event-title" className="block text-sm font-medium text-gray-700 mb-1">
                 כותרת האירוע *
               </label>
               <input
+                id="auto-event-title"
                 type="text"
                 value={(config.title as string) || ""}
                 onChange={(e) => updateConfig("title", e.target.value)}
@@ -1243,10 +1269,11 @@ export default function OnboardingAutomationBuilder({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-event-start" className="block text-sm font-medium text-gray-700 mb-1">
                   התחלה (שעה/תאריך) *
                 </label>
                 <input
+                  id="auto-event-start"
                   type="datetime-local"
                   value={(config.startTime as string) || ""}
                   onChange={(e) => updateConfig("startTime", e.target.value)}
@@ -1254,10 +1281,11 @@ export default function OnboardingAutomationBuilder({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="auto-event-end" className="block text-sm font-medium text-gray-700 mb-1">
                   סיום (שעה/תאריך) *
                 </label>
                 <input
+                  id="auto-event-end"
                   type="datetime-local"
                   value={(config.endTime as string) || ""}
                   onChange={(e) => updateConfig("endTime", e.target.value)}
@@ -1266,10 +1294,11 @@ export default function OnboardingAutomationBuilder({
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="auto-event-description" className="block text-sm font-medium text-gray-700 mb-1">
                 תיאור
               </label>
               <textarea
+                id="auto-event-description"
                 value={(config.description as string) || ""}
                 onChange={(e) => updateConfig("description", e.target.value)}
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
@@ -1291,8 +1320,8 @@ export default function OnboardingAutomationBuilder({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
-      <div className="bg-white/95 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="automation-builder-title">
+      <div ref={dialogRef} className="bg-white/95 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="bg-white/50 backdrop-blur border-b p-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -1300,12 +1329,13 @@ export default function OnboardingAutomationBuilder({
               <button
                 onClick={() => setStep(1)}
                 className="p-1 hover:bg-gray-100 rounded-full transition"
+                aria-label="חזור לבחירת פעולה"
               >
                 <ArrowRight className="w-5 h-5 text-gray-500" />
               </button>
             )}
             <div>
-              <h2 className="text-lg font-bold text-gray-900">
+              <h2 id="automation-builder-title" className="text-lg font-bold text-gray-900">
                 {step === 1 ? "הוספת אוטומציה חדשה" : "הגדרת פעולה"}
               </h2>
               <p className="text-sm text-gray-500">
@@ -1318,6 +1348,7 @@ export default function OnboardingAutomationBuilder({
           <button
             onClick={onClose}
             className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition"
+            aria-label="סגור"
           >
             <X className="w-5 h-5" />
           </button>

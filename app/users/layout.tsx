@@ -2,6 +2,8 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 
+export const metadata = { title: "ניהול משתמשים | BizlyCRM" };
+
 export default async function UsersLayout({
   children,
 }: {

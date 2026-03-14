@@ -182,7 +182,27 @@
       "Bash(find /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app -type f -path \"*api*\" \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) 2>/dev/null | xargs grep -l \"nurture\" | head -20)",
       "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(32\\).toString\\('hex'\\)\\)\")",
       "Bash(find /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/app -type d -name \"*\\(dashboard\\)*\" -o -type d -name \"*\\(auth\\)*\" -o -type d -name \"*\\(settings\\)*\" 2>/dev/null)",
-      "Bash(for f:*)"
+      "Bash(for f:*)",
+      "Bash(cd \"C:/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app\" && rm -rf .next/types && npx tsc --noEmit --pretty 2>&1 | head -20)",
+      "Bash(find \"/c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app\" -path \"*/nurture-hub/*\" -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) 2>/dev/null | head -30)",
+      "Bash(find /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/app -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) 2>/dev/null | grep -i nurture | head -20)",
+      "Bash(for file:*)",
+      "Bash(git status:*)",
+      "Bash(do)",
+      "Bash(echo \"=== $file/page.tsx ===\")",
+      "Read(//c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/app/nurture-hub$file/**)",
+      "Bash(ssh -i ~/.ssh/id_ed25519 deploy@46.225.53.137 \"docker exec crm-postgres-1 psql -U crm_user -d ofek_crm -c \\\\\"INSERT INTO \\\\\\\\\\\\\"NurtureList\\\\\\\\\\\\\" \\(\\\\\\\\\\\\\"companyId\\\\\\\\\\\\\", name, slug, \\\\\\\\\\\\\"updatedAt\\\\\\\\\\\\\", \\\\\\\\\\\\\"isEnabled\\\\\\\\\\\\\", \\\\\\\\\\\\\"configJson\\\\\\\\\\\\\"\\) VALUES \\(1, 'Review', 'review', NOW\\(\\), true, '{\\\\\\\\\\\\\"channels\\\\\\\\\\\\\": {\\\\\\\\\\\\\"sms\\\\\\\\\\\\\": false, \\\\\\\\\\\\\"whatsappCloud\\\\\\\\\\\\\": false, \\\\\\\\\\\\\"whatsappGreen\\\\\\\\\\\\\": true}, \\\\\\\\\\\\\"messages\\\\\\\\\\\\\": [{\\\\\\\\\\\\\"id\\\\\\\\\\\\\": \\\\\\\\\\\\\"msg_default\\\\\\\\\\\\\", \\\\\\\\\\\\\"name\\\\\\\\\\\\\": \\\\\\\\\\\\\"test\\\\\\\\\\\\\", \\\\\\\\\\\\\"smsBody\\\\\\\\\\\\\": \\\\\\\\\\\\\"\\\\\\\\\\\\\", \\\\\\\\\\\\\"isActive\\\\\\\\\\\\\": true, \\\\\\\\\\\\\"whatsappGreenBody\\\\\\\\\\\\\": \\\\\\\\\\\\\"hi {first_name}, test review msg\\\\\\\\\\\\\", \\\\\\\\\\\\\"whatsappCloudLanguageCode\\\\\\\\\\\\\": \\\\\\\\\\\\\"he\\\\\\\\\\\\\", \\\\\\\\\\\\\"whatsappCloudTemplateName\\\\\\\\\\\\\": \\\\\\\\\\\\\"\\\\\\\\\\\\\"}], \\\\\\\\\\\\\"delayHours\\\\\\\\\\\\\": 2}'\\);\\\\\"\")",
+      "Bash(ssh -i ~/.ssh/id_ed25519 deploy@46.225.53.137 \"docker exec crm-postgres-1 psql -U crm_user -d ofek_crm -c \\\\\"INSERT INTO \\\\\\\\\\\\\"NurtureList\\\\\\\\\\\\\" \\(\\\\\\\\\\\\\"companyId\\\\\\\\\\\\\", name, slug, \\\\\\\\\\\\\"updatedAt\\\\\\\\\\\\\", \\\\\\\\\\\\\"isEnabled\\\\\\\\\\\\\", \\\\\\\\\\\\\"configJson\\\\\\\\\\\\\"\\) VALUES \\(1, 'Winback', 'winback', NOW\\(\\), true, '{\\\\\\\\\\\\\"channels\\\\\\\\\\\\\": {\\\\\\\\\\\\\"sms\\\\\\\\\\\\\": false, \\\\\\\\\\\\\"whatsappCloud\\\\\\\\\\\\\": false, \\\\\\\\\\\\\"whatsappGreen\\\\\\\\\\\\\": true}, \\\\\\\\\\\\\"messages\\\\\\\\\\\\\": [{\\\\\\\\\\\\\"id\\\\\\\\\\\\\": \\\\\\\\\\\\\"msg_default\\\\\\\\\\\\\", \\\\\\\\\\\\\"name\\\\\\\\\\\\\": \\\\\\\\\\\\\"test\\\\\\\\\\\\\", \\\\\\\\\\\\\"smsBody\\\\\\\\\\\\\": \\\\\\\\\\\\\"\\\\\\\\\\\\\", \\\\\\\\\\\\\"isActive\\\\\\\\\\\\\": true, \\\\\\\\\\\\\"whatsappGreenBody\\\\\\\\\\\\\": \\\\\\\\\\\\\"hi {first_name}, test winback msg\\\\\\\\\\\\\", \\\\\\\\\\\\\"whatsappCloudLanguageCode\\\\\\\\\\\\\": \\\\\\\\\\\\\"he\\\\\\\\\\\\\", \\\\\\\\\\\\\"whatsappCloudTemplateName\\\\\\\\\\\\\": \\\\\\\\\\\\\"\\\\\\\\\\\\\"}], \\\\\\\\\\\\\"inactivityDays\\\\\\\\\\\\\": 90}'\\);\\\\\"\")",
+      "Bash(for page:*)",
+      "Read(//c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/app/nurture-hub/$page/**)",
+      "Bash(tasklist //FI \"IMAGENAME eq node.exe\" 2>/dev/null | head -10)",
+      "Bash(tasklist 2>/dev/null | grep -i node | head -5)",
+      "Bash(cd \"C:\\\\Users\\\\Ofek\\\\Desktop\\\\ofek-prog\\\\ofek-business-crm\\\\my-app\" && rm -f .next/lock && npx next build 2>&1 | tail -30)",
+      "Bash(cd \"C:\\\\Users\\\\Ofek\\\\Desktop\\\\ofek-prog\\\\ofek-business-crm\\\\my-app\" && rm -rf .next && npx next build 2>&1 | tail -30)",
+      "Bash(cd \"C:\\\\Users\\\\Ofek\\\\Desktop\\\\ofek-prog\\\\ofek-business-crm\\\\my-app\" && node fix-modal.js && rm fix-modal.js)",
+      "Bash(cd \"C:\\\\Users\\\\Ofek\\\\Desktop\\\\ofek-prog\\\\ofek-business-crm\\\\my-app\" && node fix-modal2.js && rm fix-modal2.js)",
+      "Read(//mnt/c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/components/Calendar/**)",
+      "Bash(find /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app -type f \\\\\\( -name \"tailwind*\" -o -name \"next.config.*\" \\\\\\) 2>/dev/null | head -20)"
     ]
   }
 }

@@ -251,18 +251,18 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
 
       {/* Items Table - clean minimal, no description in table */}
       <div>
-        <table className="w-full text-right">
+        <table className="w-full text-right" aria-label="פריטים בהצעת המחיר">
           <thead>
             <tr className="border-b border-gray-200 text-xs text-gray-600">
-              <th className="py-2 px-2 font-medium w-[5%]">#</th>
-              <th className="py-2 px-2 font-medium w-[45%]">תיאור</th>
-              <th className="py-2 px-2 font-medium text-center w-[12%]">
+              <th scope="col" className="py-2 px-2 font-medium w-[5%]">#</th>
+              <th scope="col" className="py-2 px-2 font-medium w-[45%]">תיאור</th>
+              <th scope="col" className="py-2 px-2 font-medium text-center w-[12%]">
                 כמות
               </th>
-              <th className="py-2 px-2 font-medium text-left w-[18%]">
+              <th scope="col" className="py-2 px-2 font-medium text-left w-[18%]">
                 מחיר יחידה
               </th>
-              <th className="py-2 px-2 font-medium text-left w-[20%]">סה״כ</th>
+              <th scope="col" className="py-2 px-2 font-medium text-left w-[20%]">סה״כ</th>
             </tr>
           </thead>
           <tbody>
@@ -295,9 +295,9 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
       {/* Descriptions - full width section */}
       {hasDescriptions && (
         <div className="mt-8">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3 border-b border-gray-200 pb-2">
+          <h2 className="text-sm font-semibold text-gray-900 mb-3 border-b border-gray-200 pb-2">
             הערות נוספות
-          </h3>
+          </h2>
           <div className="space-y-4">
             {quote.items.map((item, i) =>
               item.description ? (

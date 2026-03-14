@@ -2,6 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
 import TableCard from "./TableCard";
 
 interface SortableTableCardProps {
@@ -46,7 +47,16 @@ export default function SortableTableCard({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div ref={setNodeRef} style={style} className="relative group">
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label="גרור לשינוי סדר"
+        className="absolute right-2 top-4 z-10 cursor-grab active:cursor-grabbing opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100 transition-opacity bg-background text-muted-foreground hover:text-foreground p-1.5 rounded-lg shadow-sm border border-border"
+      >
+        <GripVertical className="h-4 w-4" aria-hidden="true" />
+      </button>
       <TableCard
         table={table}
         canDelete={canDelete}

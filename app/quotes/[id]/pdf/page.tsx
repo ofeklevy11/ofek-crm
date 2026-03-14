@@ -23,17 +23,17 @@ export default async function QuotePdfPage({
 
   if (!quote) {
     return (
-      <div
+      <main
         className="flex items-center justify-center min-h-[400px] text-gray-500"
         dir="rtl"
       >
-        הצעת המחיר לא נמצאה
-      </div>
+        <h1 className="text-lg font-medium">הצעת המחיר לא נמצאה</h1>
+      </main>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-white z-50 overflow-auto quote-print-area">
+    <main className="fixed inset-0 bg-white z-50 overflow-auto quote-print-area">
       <div className="print:hidden w-full sticky top-0 z-[60]">
         <Navbar />
       </div>
@@ -106,6 +106,6 @@ export default async function QuotePdfPage({
       `,
         }}
       />
-    </div>
+    </main>
   );
 }

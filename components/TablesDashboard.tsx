@@ -226,10 +226,16 @@ export default function TablesDashboard({
       onDragEnd={handleDragEnd}
     >
       <div className="min-h-screen bg-muted/30 p-4 md:p-8" dir="rtl">
-        <div className="max-w-7xl mx-auto space-y-8">
+        <a
+          href="#tables-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:right-2 focus:bg-white focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg focus:text-blue-600 focus:ring-2 focus:ring-blue-500"
+        >
+          דלג לתוכן הטבלאות
+        </a>
+        <main className="max-w-7xl mx-auto space-y-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h1 className="text-4xl font-bold tracking-tight text-foreground mb-2">
+              <h1 id="tables-heading" className="text-4xl font-bold tracking-tight text-foreground mb-2">
                 טבלאות
               </h1>
               <p className="text-muted-foreground">נהל את טבלאות הנתונים שלך</p>
@@ -241,8 +247,9 @@ export default function TablesDashboard({
                     variant="outline"
                     className="gap-2 sm:hidden order-3"
                     disabled
+                    aria-description="תכונה זו זמינה במחשב בלבד"
                   >
-                    <Sparkles className="h-4 w-4 text-indigo-500" />
+                    <Sparkles className="h-4 w-4 text-indigo-500" aria-hidden="true" />
                     צור עם AI (במחשב בלבד)
                   </Button>
                   <Button
@@ -250,7 +257,7 @@ export default function TablesDashboard({
                     variant="outline"
                     className="gap-2 hidden sm:inline-flex sm:order-1"
                   >
-                    <Sparkles className="h-4 w-4 text-indigo-500" />
+                    <Sparkles className="h-4 w-4 text-indigo-500" aria-hidden="true" />
                     צור עם AI
                   </Button>
                 </>
@@ -259,12 +266,12 @@ export default function TablesDashboard({
                   variant="outline"
                   className="gap-2 order-2 sm:order-2"
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-4 w-4" aria-hidden="true" />
                   קטגוריה חדשה
                 </Button>
                 <Button asChild className="order-1 sm:order-3">
                   <Link href="/tables/new" prefetch={false} className="gap-2">
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-4 w-4" aria-hidden="true" />
                     צור טבלה
                   </Link>
                 </Button>
@@ -272,14 +279,14 @@ export default function TablesDashboard({
             )}
           </div>
 
-          <div className="space-y-12">
+          <div id="tables-content" className="space-y-12">
             {categories.map((category) => {
               const catTables = getCategoryTables(category.id);
               return (
                 <div key={category.id} className="space-y-4">
                   <div className="flex items-center gap-3">
                     <h2 className="text-xl font-bold flex items-center gap-2">
-                      <span className="w-1.5 h-6 bg-primary rounded-full"></span>
+                      <span className="w-1.5 h-6 bg-primary rounded-full" aria-hidden="true"></span>
                       {category.name}
                       <span className="text-sm font-normal text-muted-foreground mr-1">
                         ({catTables.length})
@@ -293,7 +300,7 @@ export default function TablesDashboard({
                         className="h-8 w-8 text-muted-foreground hover:text-primary"
                         title="ערוך שם קטגוריה"
                       >
-                        <Pencil className="h-4 w-4" />
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
                         <span className="sr-only">ערוך</span>
                       </Button>
                     )}
@@ -330,7 +337,7 @@ export default function TablesDashboard({
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <h2 className="text-xl font-bold flex items-center gap-2">
-                    <span className="w-1.5 h-6 bg-muted-foreground/30 rounded-full"></span>
+                    <span className="w-1.5 h-6 bg-muted-foreground/30 rounded-full" aria-hidden="true"></span>
                     ללא קטגוריה
                     <span className="text-sm font-normal text-muted-foreground mr-1">
                       ({uncategorizedTables.length})
@@ -346,7 +353,7 @@ export default function TablesDashboard({
                       className="h-8 w-8 text-muted-foreground hover:text-primary"
                       title="שנה שם לקבוצה ללא קטגוריה"
                     >
-                      <Pencil className="h-4 w-4" />
+                      <Pencil className="h-4 w-4" aria-hidden="true" />
                       <span className="sr-only">ערוך</span>
                     </Button>
                   )}
@@ -388,8 +395,9 @@ export default function TablesDashboard({
                           variant="outline"
                         className="gap-2 h-11 sm:hidden order-2"
                           disabled
+                          aria-description="תכונה זו זמינה במחשב בלבד"
                         >
-                          <Sparkles className="h-4 w-4 text-indigo-500" />
+                          <Sparkles className="h-4 w-4 text-indigo-500" aria-hidden="true" />
                           צור עם AI (במחשב בלבד)
                         </Button>
                         <Button
@@ -397,7 +405,7 @@ export default function TablesDashboard({
                           variant="outline"
                           className="gap-2 h-11 hidden sm:inline-flex sm:order-1"
                         >
-                          <Sparkles className="h-4 w-4 text-indigo-500" />
+                          <Sparkles className="h-4 w-4 text-indigo-500" aria-hidden="true" />
                           צור עם AI
                         </Button>
                       </>
@@ -407,7 +415,7 @@ export default function TablesDashboard({
                           prefetch={false}
                           className="gap-2"
                         >
-                          <Plus className="h-4 w-4" />
+                          <Plus className="h-4 w-4" aria-hidden="true" />
                           צור טבלה חדשה
                         </Link>
                       </Button>
@@ -417,7 +425,7 @@ export default function TablesDashboard({
               </div>
             )}
           </div>
-        </div>
+        </main>
 
         <Dialog
           open={isCategoryModalOpen}

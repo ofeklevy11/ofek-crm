@@ -60,14 +60,14 @@ export default function Pagination({ totalPages }: { totalPages: number }) {
   const pageNumbers = getPageNumbers();
 
   return (
-    <div className="flex flex-col items-center gap-4 mt-8 mb-6">
+    <nav aria-label="ניווט עמודים" className="flex flex-col items-center gap-4 mt-8 mb-6">
       <div className="flex items-center gap-2 flex-wrap justify-center">
         {/* First Page Button */}
         <button
           onClick={() => handlePageChange(1)}
           disabled={currentPage <= 1}
-          className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200"
-          title="עמוד ראשון"
+          className="px-3 py-2 border border-border rounded-lg hover:bg-primary/10 hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-background disabled:hover:border-border text-foreground font-medium transition-all duration-200"
+          aria-label="עמוד ראשון"
         >
           ⏮ ראשון
         </button>
@@ -76,8 +76,8 @@ export default function Pagination({ totalPages }: { totalPages: number }) {
         <button
           onClick={() => handlePageChange(currentPage - 1)}
           disabled={currentPage <= 1}
-          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200"
-          title="עמוד קודם"
+          className="px-4 py-2 border border-border rounded-lg hover:bg-primary/10 hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-background disabled:hover:border-border text-foreground font-medium transition-all duration-200"
+          aria-label="עמוד קודם"
         >
           ← הקודם
         </button>
@@ -87,7 +87,7 @@ export default function Pagination({ totalPages }: { totalPages: number }) {
           {pageNumbers.map((page, index) => {
             if (page === "...") {
               return (
-                <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
+                <span key={`ellipsis-${index}`} className="px-2 text-muted-foreground" aria-hidden="true">
                   ...
                 </span>
               );
@@ -100,10 +100,11 @@ export default function Pagination({ totalPages }: { totalPages: number }) {
               <button
                 key={pageNum}
                 onClick={() => handlePageChange(pageNum)}
+                aria-current={isActive ? "page" : undefined}
                 className={`min-w-[40px] px-3 py-2 rounded-lg font-medium transition-all duration-200 ${
                   isActive
-                    ? "bg-blue-600 text-white shadow-md scale-105"
-                    : "border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-400"
+                    ? "bg-primary text-primary-foreground shadow-md scale-105"
+                    : "border border-border text-foreground hover:bg-primary/10 hover:border-primary/40"
                 }`}
               >
                 {pageNum}
@@ -116,8 +117,8 @@ export default function Pagination({ totalPages }: { totalPages: number }) {
         <button
           onClick={() => handlePageChange(currentPage + 1)}
           disabled={currentPage >= totalPages}
-          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200"
-          title="עמוד הבא"
+          className="px-4 py-2 border border-border rounded-lg hover:bg-primary/10 hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-background disabled:hover:border-border text-foreground font-medium transition-all duration-200"
+          aria-label="עמוד הבא"
         >
           הבא →
         </button>
@@ -126,17 +127,17 @@ export default function Pagination({ totalPages }: { totalPages: number }) {
         <button
           onClick={() => handlePageChange(totalPages)}
           disabled={currentPage >= totalPages}
-          className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 text-gray-700 font-medium transition-all duration-200"
-          title="עמוד אחרון"
+          className="px-3 py-2 border border-border rounded-lg hover:bg-primary/10 hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-background disabled:hover:border-border text-foreground font-medium transition-all duration-200"
+          aria-label="עמוד אחרון"
         >
           אחרון ⏭
         </button>
       </div>
 
       {/* Page Info */}
-      <div className="text-sm text-gray-600 font-medium">
+      <div className="text-sm text-muted-foreground font-medium">
         עמוד {currentPage} מתוך {totalPages}
       </div>
-    </div>
+    </nav>
   );
 }

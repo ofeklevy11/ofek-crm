@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
 import { showAlert } from "@/hooks/use-modal";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 
 interface PrintButtonProps {
   quoteId: string;
@@ -27,6 +28,7 @@ export default function PrintButton({
   const [sendOption, setSendOption] = useState<"client" | "custom">(
     clientPhone ? "client" : "custom",
   );
+  const whatsappFocusTrapRef = useFocusTrap(() => setShowWhatsAppModal(false), showWhatsAppModal);
 
   // Format quote number for display/filename
   const formattedNumber = quoteNumber
@@ -126,7 +128,7 @@ ${downloadLink}`;
           className="flex items-center gap-2 px-4 py-2 border border-[#4f95ff] text-[#4f95ff] rounded-md hover:bg-blue-50 font-medium transition-colors"
           onClick={() => window.print()}
         >
-          <Printer className="w-4 h-4" /> הדפסה
+          <Printer className="w-4 h-4" aria-hidden="true" /> הדפסה
         </button>
         <button
           className="flex items-center gap-2 px-4 py-2 bg-[#4f95ff] text-white rounded-md hover:bg-[#3d7de0] font-medium transition-colors disabled:opacity-50"
@@ -134,9 +136,9 @@ ${downloadLink}`;
           disabled={downloading}
         >
           {downloading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
           ) : (
-            <Download className="w-4 h-4" />
+            <Download className="w-4 h-4" aria-hidden="true" />
           )}
           {downloading ? "מכין PDF..." : "הורד PDF"}
         </button>
@@ -144,14 +146,14 @@ ${downloadLink}`;
           className="flex items-center gap-2 px-4 py-2 border border-green-500 text-green-600 bg-white rounded-md hover:bg-green-50 font-medium transition-colors"
           onClick={() => setShowWhatsAppModal(true)}
         >
-          <Share2 className="w-4 h-4" /> וואטסאפ
+          <Share2 className="w-4 h-4" aria-hidden="true" /> וואטסאפ
         </button>
         <button
           disabled
           className="items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-400 rounded-md cursor-not-allowed hidden md:flex"
           title="בקרוב (דורש שירות דואר)"
         >
-          <Mail className="w-4 h-4" /> דוא״ל
+          <Mail className="w-4 h-4" aria-hidden="true" /> דוא״ל
         </button>
       </div>
 
@@ -159,17 +161,21 @@ ${downloadLink}`;
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           dir="rtl"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="whatsapp-modal-title"
         >
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 space-y-4 animate-in fade-in zoom-in duration-200">
+          <div ref={whatsappFocusTrapRef} className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 space-y-4 animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center border-b pb-3 border-gray-100">
-              <h3 className="font-semibold text-lg text-gray-900">
+              <h3 id="whatsapp-modal-title" className="font-semibold text-lg text-gray-900">
                 שליחת הצעה בוואטסאפ
               </h3>
               <button
                 onClick={() => setShowWhatsAppModal(false)}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
+                aria-label="סגור"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
 
@@ -219,6 +225,7 @@ ${downloadLink}`;
                     <input
                       type="tel"
                       autoFocus
+                      aria-label="מספר טלפון"
                       placeholder="הכנס מספר טלפון (050...)"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f95ff] outline-none text-left bg-gray-50 focus:bg-white transition-all text-lg"
                       value={phone}

@@ -44,6 +44,9 @@ import MiniMeetingsWidget from "./dashboard/MiniMeetingsWidget";
 import MiniWidgetConfigModal from "./dashboard/MiniWidgetConfigModal";
 import AnalyticsDetailsModal from "./AnalyticsDetailsModal";
 import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Spinner } from "@/components/ui/spinner";
 import { getTableViewData, getCustomTableData, getBatchTableData } from "@/app/actions/dashboard";
 import {
@@ -181,6 +184,9 @@ export default function DashboardClient({
 
   // Analytics Details Modal State
   const [selectedView, setSelectedView] = useState<any | null>(null);
+
+  // Live announcement for screen readers
+  const [liveAnnouncement, setLiveAnnouncement] = useState('');
 
   // Data State for Table Widgets
   const [tableData, setTableData] = useState<Record<string, any>>({});
@@ -747,6 +753,10 @@ export default function DashboardClient({
 
     setIsAddModalOpen(false);
     setEditingWidgetId(null);
+    if (!editingWidgetId) {
+      setLiveAnnouncement('');
+      requestAnimationFrame(() => setLiveAnnouncement("ווידג׳ט חדש נוסף לדאשבורד"));
+    }
     setSelectedItem("");
     setSelectedTable("");
     setIsCustomMode(false);
@@ -849,6 +859,8 @@ export default function DashboardClient({
           return newLoading;
         });
         delete lastFetchTime.current[widgetId];
+        setLiveAnnouncement('');
+        requestAnimationFrame(() => setLiveAnnouncement("ווידג׳ט הוסר מהדאשבורד"));
       }
       setDeleteModal({ isOpen: false, widgetId: "", widgetTitle: "" });
     } finally {
@@ -952,7 +964,7 @@ export default function DashboardClient({
 
   if (!canViewDashboard) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center" role="alert">
         <h2 className="text-xl font-semibold text-gray-800 mb-2">
           אין לך גישה לדאשבורד
         </h2>
@@ -965,9 +977,10 @@ export default function DashboardClient({
 
   return (
     <div className="w-full">
+      <div aria-live="polite" className="sr-only" role="status">{liveAnnouncement}</div>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-          <LayoutDashboard className="text-blue-600" />
+          <LayoutDashboard className="text-blue-600" aria-hidden="true" />
           הדאשבורד שלי
         </h2>
         {canViewDashboard && (
@@ -1085,12 +1098,33 @@ export default function DashboardClient({
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        accessibility={{
+          announcements: {
+            onDragStart({ active }) {
+              const w = widgetsRef.current.find(w => w.id === active.id);
+              return w ? `התחלת גרירה: ${getWidgetTitle(w)}` : '';
+            },
+            onDragOver({ active, over }) {
+              const w = widgetsRef.current.find(w => w.id === active.id);
+              return w && over ? `${getWidgetTitle(w)} מעל מיקום חדש` : '';
+            },
+            onDragEnd({ active, over }) {
+              const w = widgetsRef.current.find(w => w.id === active.id);
+              return w ? (over ? `${getWidgetTitle(w)} הועבר למיקום חדש` : `${getWidgetTitle(w)} הוחזר למקומו`) : '';
+            },
+            onDragCancel({ active }) {
+              const w = widgetsRef.current.find(w => w.id === active.id);
+              return w ? `בוטלה גרירה: ${getWidgetTitle(w)}` : '';
+            },
+          },
+        }}
       >
         <SortableContext
           items={widgets.map((w) => w.id)}
           strategy={rectSortingStrategy}
         >
           <div
+            id="dashboard-widgets"
             className={
               widgets.length > 0
                 ? "columns-1 sm:columns-2 gap-6 space-y-6"
@@ -1280,24 +1314,25 @@ export default function DashboardClient({
             })}
 
             {!isWidgetsLoaded && widgets.length === 0 && (
-              <div className="w-full flex items-center justify-center min-h-[500px]">
+              <div className="w-full flex items-center justify-center min-h-[500px]" role="status">
                 <Spinner size="xl" />
+                <span className="sr-only">טוען את הדאשבורד...</span>
               </div>
             )}
 
             {isWidgetsLoaded && widgets.length === 0 && (
-              <div className="w-full max-w-4xl flex flex-col items-center justify-center min-h-[500px] relative overflow-hidden bg-white rounded-3xl border border-gray-100 shadow-sm mx-auto">
+              <div className="w-full max-w-4xl flex flex-col items-center justify-center min-h-[500px] relative overflow-hidden bg-white rounded-3xl border border-gray-100 shadow-sm mx-auto" role="status">
                 {/* Background decoration */}
-                <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] opacity-20"></div>
-                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-50/50 rounded-full blur-3xl -ml-32 -mb-32 pointer-events-none"></div>
+                <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] opacity-20" aria-hidden="true"></div>
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" aria-hidden="true"></div>
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-50/50 rounded-full blur-3xl -ml-32 -mb-32 pointer-events-none" aria-hidden="true"></div>
 
                 <div className="relative z-10 flex flex-col items-center max-w-lg text-center p-8">
                   <div className="mb-8 relative group">
-                    <div className="w-24 h-24 bg-gradient-to-br from-blue-50 to-purple-50 rounded-3xl flex items-center justify-center transform rotate-3 group-hover:rotate-6 transition-transform duration-300 shadow-sm">
+                    <div className="w-24 h-24 bg-gradient-to-br from-blue-50 to-purple-50 rounded-3xl flex items-center justify-center transform rotate-3 group-hover:rotate-6 transition-transform duration-300 shadow-sm" aria-hidden="true">
                       <LayoutDashboard className="w-10 h-10 text-[#4f95ff]" />
                     </div>
-                    <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center text-[#a24ec1] rotate-12 group-hover:rotate-12 transition-transform duration-300 border border-gray-50">
+                    <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center text-[#a24ec1] rotate-12 group-hover:rotate-12 transition-transform duration-300 border border-gray-50" aria-hidden="true">
                       <Plus className="w-5 h-5" />
                     </div>
                   </div>
@@ -1334,100 +1369,67 @@ export default function DashboardClient({
           {/* Optional: Render drag overlay for smoother visuals */}
         </DragOverlay>
 
-        {/* Add Widget Modal Overlay */}
-        {isAddModalOpen && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-            onClick={() => {
-              setIsAddModalOpen(false);
-              setEditingWidgetId(null);
-            }}
-          >
-            <div
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto"
-              dir="rtl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-bold">
-                  {editingWidgetId ? "עריכת וידג׳ט" : "הוספת וידג׳ט לדאשבורד"}
-                </h3>
-                <button
-                  onClick={() => {
-                    setIsAddModalOpen(false);
-                    setEditingWidgetId(null);
-                  }}
-                  className="p-1 hover:bg-gray-100 rounded-full transition"
-                >
-                  <X size={20} />
-                </button>
-              </div>
+        {/* Add Widget Modal */}
+        <Dialog open={isAddModalOpen} onOpenChange={(open) => {
+          if (!open) { setIsAddModalOpen(false); setEditingWidgetId(null); }
+        }}>
+          <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{editingWidgetId ? "עריכת וידג׳ט" : "הוספת וידג׳ט לדאשבורד"}</DialogTitle>
+              <DialogDescription className="sr-only">בחר סוג וידג׳ט להוספה לדאשבורד</DialogDescription>
+            </DialogHeader>
 
-              <div className="space-y-4">
+              <Tabs
+                value={selectedType}
+                onValueChange={(val) => {
+                  if (editingWidgetId) return;
+                  setSelectedType(val as WidgetType);
+                  setSelectedItem("");
+                  if (val === "TABLE") setIsCustomMode(true);
+                }}
+                className="space-y-4"
+              >
                 {/* Type Selection */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <span className="block text-sm font-medium text-gray-700 mb-2">
                     סוג מקור
-                  </label>
-                  <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
-                    <button
-                      className={`flex-1 py-2 text-sm font-medium rounded-md transition ${
-                        selectedType === "ANALYTICS"
-                          ? "bg-white shadow text-blue-600"
-                          : "text-gray-500 hover:text-gray-700"
-                      } ${editingWidgetId ? "opacity-50 cursor-not-allowed" : ""}`}
-                      onClick={() => {
-                        if (editingWidgetId) return;
-                        setSelectedType("ANALYTICS");
-                        setSelectedItem("");
-                      }}
+                  </span>
+                  <TabsList className="flex w-full gap-2 bg-gray-100 p-1 rounded-lg h-auto">
+                    <TabsTrigger
+                      value="ANALYTICS"
                       disabled={!!editingWidgetId}
+                      className="flex-1 py-2 text-sm font-medium rounded-md transition data-[state=active]:bg-white data-[state=active]:shadow data-[state=active]:text-blue-600 data-[state=inactive]:text-gray-500 data-[state=inactive]:hover:text-gray-700"
                     >
                       אנליטיקות
-                    </button>
-                    <button
-                      className={`flex-1 py-2 text-sm font-medium rounded-md transition ${
-                        selectedType === "GOAL"
-                          ? "bg-white shadow text-blue-600"
-                          : "text-gray-500 hover:text-gray-700"
-                      } ${editingWidgetId ? "opacity-50 cursor-not-allowed" : ""}`}
-                      onClick={() => {
-                        if (editingWidgetId) return;
-                        setSelectedType("GOAL");
-                        setSelectedItem("");
-                      }}
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="GOAL"
                       disabled={!!editingWidgetId}
+                      className="flex-1 py-2 text-sm font-medium rounded-md transition data-[state=active]:bg-white data-[state=active]:shadow data-[state=active]:text-blue-600 data-[state=inactive]:text-gray-500 data-[state=inactive]:hover:text-gray-700"
                     >
                       יעדים
-                    </button>
-                    <button
-                      className={`flex-1 py-2 text-sm font-medium rounded-md transition ${
-                        selectedType === "TABLE"
-                          ? "bg-white shadow text-blue-600"
-                          : "text-gray-500 hover:text-gray-700"
-                      } ${editingWidgetId ? "opacity-50 cursor-not-allowed" : ""}`}
-                      onClick={() => {
-                        if (editingWidgetId) return;
-                        setSelectedType("TABLE");
-                        setSelectedItem("");
-                        setIsCustomMode(true);
-                      }}
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="TABLE"
                       disabled={!!editingWidgetId}
+                      className="flex-1 py-2 text-sm font-medium rounded-md transition data-[state=active]:bg-white data-[state=active]:shadow data-[state=active]:text-blue-600 data-[state=inactive]:text-gray-500 data-[state=inactive]:hover:text-gray-700"
                     >
                       תצוגות טבלה
-                    </button>
-                    {/* Reset custom mode when switching types just in case, though state logic handles it */}
-                  </div>
+                    </TabsTrigger>
+                  </TabsList>
                 </div>
 
                 {/* Content Selection */}
-                {selectedType === "ANALYTICS" && (
-                  <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                <TabsContent value="ANALYTICS" className="mt-0">
+                  <RadioGroup
+                    value={selectedItem}
+                    onValueChange={setSelectedItem}
+                    className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100 gap-0"
+                  >
                     {initialAnalytics.map((a) => (
-                      <button
+                      <label
                         key={a.id}
-                        onClick={() => setSelectedItem(String(a.id))}
-                        className={`w-full text-right p-3 hover:bg-blue-50 transition flex items-center justify-between group ${
+                        className={`w-full text-right p-3 hover:bg-blue-50 transition flex items-center justify-between cursor-pointer ${
                           selectedItem === String(a.id)
                             ? "bg-blue-50 ring-1 ring-blue-500"
                             : ""
@@ -1441,30 +1443,27 @@ export default function DashboardClient({
                             {a.tableName}
                           </div>
                         </div>
-                        <div
-                          className={`w-4 h-4 rounded-full border border-gray-300 ${
-                            selectedItem === String(a.id)
-                              ? "bg-blue-600 border-blue-600"
-                              : ""
-                          }`}
-                        ></div>
-                      </button>
+                        <RadioGroupItem value={String(a.id)} />
+                      </label>
                     ))}
                     {initialAnalytics.length === 0 && (
                       <div className="p-4 text-center text-sm text-gray-500">
                         לא נמצאו אנליטיקות זמינות.
                       </div>
                     )}
-                  </div>
-                )}
+                  </RadioGroup>
+                </TabsContent>
 
-                {selectedType === "GOAL" && (
-                  <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                <TabsContent value="GOAL" className="mt-0">
+                  <RadioGroup
+                    value={selectedItem}
+                    onValueChange={setSelectedItem}
+                    className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100 gap-0"
+                  >
                     {availableGoals.map((g) => (
-                      <button
+                      <label
                         key={g.id}
-                        onClick={() => setSelectedItem(String(g.id))}
-                        className={`w-full text-right p-3 hover:bg-blue-50 transition flex items-center justify-between group ${
+                        className={`w-full text-right p-3 hover:bg-blue-50 transition flex items-center justify-between cursor-pointer ${
                           selectedItem === String(g.id)
                             ? "bg-blue-50 ring-1 ring-blue-500"
                             : ""
@@ -1479,30 +1478,25 @@ export default function DashboardClient({
                             {g.metricType}
                           </div>
                         </div>
-                        <div
-                          className={`w-4 h-4 rounded-full border border-gray-300 ${
-                            selectedItem === String(g.id)
-                              ? "bg-blue-600 border-blue-600"
-                              : ""
-                          }`}
-                        ></div>
-                      </button>
+                        <RadioGroupItem value={String(g.id)} />
+                      </label>
                     ))}
                     {availableGoals.length === 0 && (
                       <div className="p-4 text-center text-sm text-gray-500">
                         לא נמצאו יעדים זמינים.
                       </div>
                     )}
-                  </div>
-                )}
+                  </RadioGroup>
+                </TabsContent>
 
-                {selectedType === "TABLE" && (
+                <TabsContent value="TABLE" className="mt-0">
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 mb-1">
+                      <label htmlFor="table-select" className="block text-xs font-semibold text-gray-500 mb-1">
                         בחר טבלה
                       </label>
                       <select
+                        id="table-select"
                         className="w-full rounded-lg border border-gray-300 p-2.5 text-sm bg-white disabled:opacity-50 disabled:bg-gray-100"
                         value={selectedTable}
                         onChange={(e) => {
@@ -1617,8 +1611,8 @@ export default function DashboardClient({
                       </div>
                     )}
                   </div>
-                )}
-              </div>
+                </TabsContent>
+              </Tabs>
 
               <div className="mt-6 pt-4 border-t border-gray-100 flex gap-3">
                 <button
@@ -1643,50 +1637,33 @@ export default function DashboardClient({
                   {editingWidgetId ? "שמור שינויים" : "הוסף לדאשבורד"}
                 </button>
               </div>
-            </div>
-          </div>
-        )}
+          </DialogContent>
+        </Dialog>
       </DndContext>
 
       {/* Mini Dashboard Modal */}
-      {isMiniDashboardModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-          onClick={() => {
-            setIsMiniDashboardModalOpen(false);
-            setEditingMiniDashboardId(null);
-          }}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto flex flex-col"
-            dir="rtl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center mb-6 shrink-0">
-              <h3 className="text-xl font-bold flex items-center gap-2">
-                <LayoutGrid className="text-blue-600" />
-                {editingMiniDashboardId
-                  ? "עריכת מיני דאשבורד"
-                  : "הוספת מיני דאשבורד"}
-              </h3>
-              <button
-                onClick={() => {
-                  setIsMiniDashboardModalOpen(false);
-                  setEditingMiniDashboardId(null);
-                }}
-                className="p-1 hover:bg-gray-100 rounded-full transition"
-              >
-                <X size={20} />
-              </button>
-            </div>
+      <Dialog open={isMiniDashboardModalOpen} onOpenChange={(open) => {
+        if (!open) { setIsMiniDashboardModalOpen(false); setEditingMiniDashboardId(null); }
+      }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <LayoutGrid className="text-blue-600" aria-hidden="true" />
+              {editingMiniDashboardId
+                ? "עריכת מיני דאשבורד"
+                : "הוספת מיני דאשבורד"}
+            </DialogTitle>
+            <DialogDescription className="sr-only">הגדר מיני דאשבורד עם תצוגות טבלה</DialogDescription>
+          </DialogHeader>
 
             <div className="space-y-6 flex-1 overflow-y-auto p-1">
               {/* Title Input */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="mini-dashboard-title" className="block text-sm font-medium text-gray-700 mb-2">
                   כותרת
                 </label>
                 <input
+                  id="mini-dashboard-title"
                   type="text"
                   value={miniDashboardTitle}
                   onChange={(e) => setMiniDashboardTitle(e.target.value)}
@@ -1724,6 +1701,7 @@ export default function DashboardClient({
                             setMiniDashboardViews(newViews);
                           }}
                           className="text-gray-400 hover:text-red-500 transition ml-1"
+                          aria-label={`הסר תצוגה: ${view.viewName}`}
                         >
                           <X size={14} />
                         </button>
@@ -1846,46 +1824,29 @@ export default function DashboardClient({
                 {editingMiniDashboardId ? "שמור שינויים" : "צור מיני דאשבורד"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Goals Table Modal */}
-      {isGoalsTableModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-          onClick={() => {
-            setIsGoalsTableModalOpen(false);
-            setEditingGoalsTableId(null);
-          }}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto flex flex-col"
-            dir="rtl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center mb-6 shrink-0">
-              <h3 className="text-xl font-bold flex items-center gap-2">
-                <Target className="text-purple-600" />
-                {editingGoalsTableId ? "עריכת טבלת יעדים" : "הוספת טבלת יעדים"}
-              </h3>
-              <button
-                onClick={() => {
-                  setIsGoalsTableModalOpen(false);
-                  setEditingGoalsTableId(null);
-                }}
-                className="p-1 hover:bg-gray-100 rounded-full transition"
-              >
-                <X size={20} />
-              </button>
-            </div>
+      <Dialog open={isGoalsTableModalOpen} onOpenChange={(open) => {
+        if (!open) { setIsGoalsTableModalOpen(false); setEditingGoalsTableId(null); }
+      }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Target className="text-purple-600" aria-hidden="true" />
+              {editingGoalsTableId ? "עריכת טבלת יעדים" : "הוספת טבלת יעדים"}
+            </DialogTitle>
+            <DialogDescription className="sr-only">בחר יעדים להצגה בטבלת יעדים</DialogDescription>
+          </DialogHeader>
 
             <div className="space-y-6 flex-1 overflow-y-auto p-1">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="goals-table-title" className="block text-sm font-medium text-gray-700 mb-2">
                   כותרת
                 </label>
                 <input
+                  id="goals-table-title"
                   type="text"
                   value={goalsTableTitle}
                   onChange={(e) => setGoalsTableTitle(e.target.value)}
@@ -1906,7 +1867,7 @@ export default function DashboardClient({
                     )
                   </label>
                 </div>
-                <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col max-h-[400px]">
+                <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col max-h-[400px]" role="group" aria-label="בחר יעדים להצגה">
                   <div className="overflow-y-auto p-2">
                     {availableGoals.map((goal) => (
                       <label
@@ -1983,48 +1944,31 @@ export default function DashboardClient({
                 {editingGoalsTableId ? "שמור שינויים" : "צור טבלה"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Analytics Table Modal */}
-      {isAnalyticsTableModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-          onClick={() => {
-            setIsAnalyticsTableModalOpen(false);
-            setEditingAnalyticsTableId(null);
-          }}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto flex flex-col"
-            dir="rtl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center mb-6 shrink-0">
-              <h3 className="text-xl font-bold flex items-center gap-2">
-                <BarChart3 className="text-emerald-600" />
-                {editingAnalyticsTableId
-                  ? "עריכת טבלת אנליטיקות"
-                  : "הוספת טבלת אנליטיקות"}
-              </h3>
-              <button
-                onClick={() => {
-                  setIsAnalyticsTableModalOpen(false);
-                  setEditingAnalyticsTableId(null);
-                }}
-                className="p-1 hover:bg-gray-100 rounded-full transition"
-              >
-                <X size={20} />
-              </button>
-            </div>
+      <Dialog open={isAnalyticsTableModalOpen} onOpenChange={(open) => {
+        if (!open) { setIsAnalyticsTableModalOpen(false); setEditingAnalyticsTableId(null); }
+      }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BarChart3 className="text-emerald-600" aria-hidden="true" />
+              {editingAnalyticsTableId
+                ? "עריכת טבלת אנליטיקות"
+                : "הוספת טבלת אנליטיקות"}
+            </DialogTitle>
+            <DialogDescription className="sr-only">בחר אנליטיקות להצגה בטבלה</DialogDescription>
+          </DialogHeader>
 
             <div className="space-y-6 flex-1 overflow-y-auto p-1">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="analytics-table-title" className="block text-sm font-medium text-gray-700 mb-2">
                   כותרת
                 </label>
                 <input
+                  id="analytics-table-title"
                   type="text"
                   value={analyticsTableTitle}
                   onChange={(e) => setAnalyticsTableTitle(e.target.value)}
@@ -2130,9 +2074,8 @@ export default function DashboardClient({
                 {editingAnalyticsTableId ? "שמור שינויים" : "צור טבלה"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Analytics Details Modal */}
       <AnalyticsDetailsModal

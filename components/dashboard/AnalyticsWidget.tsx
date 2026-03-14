@@ -1,7 +1,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { X, List, Eye, EyeOff, Settings } from "lucide-react";
-import { useState, memo } from "react";
+import { X, List, Eye, EyeOff, Settings, GripVertical } from "lucide-react";
+import { useState, memo, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
 import {
@@ -100,14 +100,14 @@ function ConfigDetails({ config, type }: { config: any; type: string }) {
     return (
       <div className="flex flex-wrap gap-1.5 items-center mt-2">
         {label && (
-          <span className="text-gray-400 text-[10px] font-medium uppercase tracking-wider ml-1">
+          <span className="text-gray-400 text-[11px] font-medium uppercase tracking-wider ml-1">
             {label}
           </span>
         )}
         {Object.entries(filter).map(([key, val]) => (
           <span
             key={key}
-            className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-50 text-gray-600 border border-gray-100"
+            className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-gray-50 text-gray-600 border border-gray-100"
           >
             <span className="opacity-60 ml-1">{translate(key)}:</span>
             <span>{translate(String(val))}</span>
@@ -131,7 +131,7 @@ function ConfigDetails({ config, type }: { config: any; type: string }) {
     }
     return (
       <div className="flex items-center gap-2 mt-2">
-        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+        <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
           זמן
         </span>
         <div className="flex items-center gap-1.5 text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100">
@@ -153,10 +153,10 @@ function ConfigDetails({ config, type }: { config: any; type: string }) {
       {renderDateRange()}
       {config.groupByField && (
         <div className="flex items-center gap-2 mt-2">
-          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+          <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
             קבץ לפי
           </span>
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-100">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-100">
             {translate(config.groupByField)}
           </span>
         </div>
@@ -252,36 +252,54 @@ function AnalyticsWidget({
   const isGraph = view.type === "GRAPH";
   const accentClass = getAccentClass(view.color);
 
+  const chartAriaLabel = useMemo(() => {
+    if (!view.data?.length) return `${view.ruleName}: אין נתונים`;
+    const typeLabel = view.config?.chartType === 'line' ? 'גרף קו' :
+                      view.config?.chartType === 'pie' ? 'גרף עוגה' : 'גרף עמודות';
+    const items = view.data.slice(0, 5).map((d: any) => `${d.name}: ${d.value}`).join(', ');
+    const suffix = view.data.length > 5 ? `, ועוד ${view.data.length - 5}` : '';
+    return `${typeLabel} - ${view.ruleName}. ${items}${suffix}`;
+  }, [view]);
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      className={`group relative flex flex-col justify-between bg-white rounded-2xl shadow-sm hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300 border border-gray-100 overflow-hidden cursor-grab active:cursor-grabbing ${
+      className={`group relative flex flex-col justify-between bg-white rounded-2xl shadow-sm hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300 border border-gray-100 overflow-hidden ${
         isCollapsed
           ? "h-auto"
           : `h-full ${isGraph ? "min-h-[350px]" : "min-h-[280px]"}`
       }`}
     >
       {/* Top Accent Line */}
-      <div className={`h-1.5 w-full shrink-0 ${accentClass}`} />
+      <div className={`h-1.5 w-full shrink-0 ${accentClass}`} aria-hidden="true" />
 
       <div className="p-5 flex-1 flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-start">
+          <div className="flex items-start gap-1">
+            <button
+              {...attributes}
+              {...listeners}
+              className="p-1 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 rounded touch-none focus-visible:ring-2 focus-visible:ring-ring mt-1"
+              aria-label={`גרור ווידג׳ט: ${view.ruleName}`}
+              aria-roledescription="פריט ניתן לגרירה"
+            >
+              <GripVertical size={16} />
+            </button>
+          </div>
           <div className="flex-1 overflow-hidden">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-100">
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-100">
                 אנליטיקה
               </span>
               {isAutomation && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-100">
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-100">
                   מקור האנליטיקה מאוטומציה
                 </span>
               )}
               {isGraph && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-pink-50 text-pink-700 border-pink-100">
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-pink-50 text-pink-700 border-pink-100">
                   גרף
                 </span>
               )}
@@ -301,24 +319,22 @@ function AnalyticsWidget({
             <ConfigDetails config={view.config} type={view.type} />
           </div>
 
-          <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity">
             {/* Hide / Show Toggle */}
             <button
-              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition"
-              onPointerDown={(e) => e.stopPropagation()}
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               onClick={handleToggleCollapse}
               title={isCollapsed ? "הצג" : "הסתר"}
+              aria-label={isCollapsed ? "הצג תוכן ווידג׳ט" : "הסתר תוכן ווידג׳ט"}
             >
               {isCollapsed ? <Eye size={16} /> : <EyeOff size={16} />}
             </button>
 
             {/* Settings Button - Navigate to analytics page */}
             <button
-              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition"
-              onPointerDown={(e) => e.stopPropagation()}
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-md transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               onClick={(e) => {
                 e.stopPropagation();
-                // Navigate to the appropriate analytics page
                 if (view.type === "GRAPH") {
                   router.push("/analytics/graphs");
                 } else {
@@ -326,17 +342,16 @@ function AnalyticsWidget({
                 }
               }}
               title="הגדרות"
+              aria-label="הגדרות ווידג׳ט"
             >
               <Settings size={16} />
             </button>
 
             <button
-              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                onRemove(id);
-              }}
+              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+              onClick={() => onRemove(id)}
               title="הסר מהדאשבורד"
+              aria-label="הסר ווידג׳ט מהדאשבורד"
             >
               <X size={16} />
             </button>
@@ -356,7 +371,7 @@ function AnalyticsWidget({
                 <p className="text-xs text-gray-400 mt-2">אין נתונים</p>
               </div>
             ) : view.type === "GRAPH" && view.data?.length > 0 ? (
-              <div className="w-full" style={{ height: 300 }} dir="ltr">
+              <div className="w-full" style={{ height: 300 }} dir="ltr" role="img" aria-label={chartAriaLabel}>
                 <ResponsiveContainer width="100%" height={300}>
                   {view.config?.chartType === "line" ? (
                     <LineChart data={view.data}>
@@ -419,7 +434,7 @@ function AnalyticsWidget({
                               fill="#374151"
                               textAnchor={x > cx ? "start" : "end"}
                               dominantBaseline="central"
-                              className="text-[10px] font-medium"
+                              className="text-[11px] font-medium"
                             >
                               <tspan
                                 x={x}
@@ -503,6 +518,15 @@ function AnalyticsWidget({
                     </BarChart>
                   )}
                 </ResponsiveContainer>
+                <table className="sr-only">
+                  <caption>{view.ruleName}</caption>
+                  <thead><tr><th scope="col">קטגוריה</th><th scope="col">ערך</th></tr></thead>
+                  <tbody>
+                    {view.data.map((d: any, i: number) => (
+                      <tr key={i}><td>{d.name}</td><td>{d.value}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             ) : view.stats.mainMetric ? (
               <div className="text-center w-full">
@@ -554,9 +578,9 @@ function AnalyticsWidget({
                     e.stopPropagation();
                     onOpenDetails(view);
                   }}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className="group/list p-1.5 hover:bg-white hover:shadow-sm rounded-full transition-all text-blue-600 border border-transparent hover:border-blue-100"
+                  className="group/list p-1.5 hover:bg-white hover:shadow-sm rounded-full transition-all text-blue-600 border border-transparent hover:border-blue-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                   title="צפה ברשימה המלאה"
+                  aria-label="צפה ברשימה המלאה"
                 >
                   <List
                     size={16}

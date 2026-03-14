@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -115,8 +115,12 @@ function ConfettiBurst() {
     });
   }, []);
 
+  if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return null;
+  }
+
   return (
-    <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-50">
+    <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-50" aria-hidden="true">
       {pieces.map((p) => (
         <span
           key={p.id}
@@ -147,7 +151,7 @@ function StepBar({
   onGoTo: (step: number) => void;
 }) {
   return (
-    <div className="flex items-center justify-center gap-0 py-3 px-4">
+    <nav aria-label="שלבי האשף" className="flex items-center justify-center gap-0 py-3 px-4">
       {STEPS.map((step, idx) => {
         const stepNum = idx + 1;
         const isActive = stepNum === current;
@@ -161,6 +165,7 @@ function StepBar({
               <div
                 className="w-8 sm:w-12 h-0.5 transition-colors duration-300"
                 style={{ backgroundColor: isCompleted || isActive ? color : "#e2e8f0" }}
+                aria-hidden="true"
               />
             )}
             <button
@@ -168,6 +173,8 @@ function StepBar({
               onClick={() => isCompleted && onGoTo(stepNum)}
               disabled={isFuture}
               className="flex flex-col items-center gap-1 group"
+              aria-current={isActive ? "step" : undefined}
+              aria-label={`שלב ${stepNum}: ${step.label}`}
             >
               <div
                 className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
@@ -196,7 +203,7 @@ function StepBar({
           </div>
         );
       })}
-    </div>
+    </nav>
   );
 }
 
@@ -345,6 +352,8 @@ export default function MeetingTypeModal({
   });
   const [customFields, setCustomFields] = useState<CustomFieldDef[]>([]);
   const [optionsText, setOptionsText] = useState<Record<string, string>>({});
+  const stepContainerRef = useRef<HTMLDivElement>(null);
+  const shouldFocusStep = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -378,6 +387,15 @@ export default function MeetingTypeModal({
     }
   }, [open, meetingType]);
 
+  useEffect(() => {
+    if (shouldFocusStep.current) {
+      shouldFocusStep.current = false;
+      requestAnimationFrame(() => {
+        stepContainerRef.current?.focus();
+      });
+    }
+  }, [wizardStep]);
+
   const handleNameChange = (value: string) => {
     const slug = meetingType ? form.slug : generateSlug(value);
     setForm((prev) => ({ ...prev, name: value, slug }));
@@ -406,6 +424,7 @@ export default function MeetingTypeModal({
 
   const goNext = () => {
     if (wizardStep < 4) {
+      shouldFocusStep.current = true;
       setStepDirection("forward");
       setWizardStep((s) => s + 1);
     }
@@ -413,12 +432,14 @@ export default function MeetingTypeModal({
 
   const goBack = () => {
     if (wizardStep > 1) {
+      shouldFocusStep.current = true;
       setStepDirection("back");
       setWizardStep((s) => s - 1);
     }
   };
 
   const goTo = (step: number) => {
+    shouldFocusStep.current = true;
     setStepDirection(step > wizardStep ? "forward" : "back");
     setWizardStep(step);
   };
@@ -495,7 +516,7 @@ export default function MeetingTypeModal({
             <div className="flex-1 sm:w-[60%] overflow-y-auto px-6 pb-4">
               {/* Step 1: Basic Info */}
               {wizardStep === 1 && (
-                <div key="step1" className={slideClass}>
+                <div key="step1" className={slideClass} ref={stepContainerRef} tabIndex={-1}>
                   <div className="space-y-4">
                     <div className="space-y-1.5 animate-cascade-in" style={{ animationDelay: "0ms" }}>
                       <Label htmlFor="mt-name">שם *</Label>
@@ -560,7 +581,7 @@ export default function MeetingTypeModal({
 
               {/* Step 2: Timing */}
               {wizardStep === 2 && (
-                <div key="step2" className={slideClass}>
+                <div key="step2" className={slideClass} ref={stepContainerRef} tabIndex={-1}>
                   <div className="space-y-4">
                     <div className="space-y-1.5 animate-cascade-in" style={{ animationDelay: "0ms" }}>
                       <Label>משך</Label>
@@ -570,7 +591,7 @@ export default function MeetingTypeModal({
                           setForm((prev) => ({ ...prev, duration: v }))
                         }
                       >
-                        <SelectTrigger>
+                        <SelectTrigger aria-label="משך הפגישה">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -623,7 +644,7 @@ export default function MeetingTypeModal({
 
               {/* Step 3: Constraints */}
               {wizardStep === 3 && (
-                <div key="step3" className={slideClass}>
+                <div key="step3" className={slideClass} ref={stepContainerRef} tabIndex={-1}>
                   <div className="space-y-4">
                     <div className="space-y-1.5 animate-cascade-in" style={{ animationDelay: "0ms" }}>
                       <Label htmlFor="mt-limit">מגבלה יומית (0 = ללא הגבלה)</Label>
@@ -678,7 +699,7 @@ export default function MeetingTypeModal({
 
               {/* Step 4: Custom Fields */}
               {wizardStep === 4 && (
-                <div key="step4" className={slideClass}>
+                <div key="step4" className={slideClass} ref={stepContainerRef} tabIndex={-1}>
                   <div className="space-y-3">
                     {customFields.map((field, idx) => (
                       <div
@@ -693,6 +714,7 @@ export default function MeetingTypeModal({
                               updateCustomField(idx, "label", e.target.value)
                             }
                             placeholder="שם השדה"
+                            aria-label={`שם שדה ${idx + 1}`}
                             className="flex-1 h-8 text-sm"
                           />
                           <Select
@@ -701,7 +723,7 @@ export default function MeetingTypeModal({
                               updateCustomField(idx, "type", v)
                             }
                           >
-                            <SelectTrigger className="w-28 h-8 text-xs">
+                            <SelectTrigger className="w-28 h-8 text-xs" aria-label={`סוג שדה ${field.label || idx + 1}`}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -719,6 +741,7 @@ export default function MeetingTypeModal({
                                 updateCustomField(idx, "required", checked)
                               }
                               className="scale-75"
+                              aria-label={`${field.label || `שדה ${idx + 1}`} - שדה חובה`}
                             />
                             <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                               חובה
@@ -730,17 +753,19 @@ export default function MeetingTypeModal({
                             size="icon"
                             className="h-8 w-8 text-destructive hover:text-destructive/80 shrink-0"
                             onClick={() => removeCustomField(idx)}
+                            aria-label={`הסר שדה ${field.label || idx + 1}`}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                           </Button>
                         </div>
 
                         {field.type === "select" && (
                           <div>
-                            <label className="text-[10px] text-muted-foreground">
+                            <label className="text-[10px] text-muted-foreground" htmlFor={`mt-cf-options-${field.id}`}>
                               אפשרויות (מופרדות בפסיק)
                             </label>
                             <Input
+                              id={`mt-cf-options-${field.id}`}
                               value={optionsText[field.id] ?? field.options.join(", ")}
                               onChange={(e) =>
                                 setOptionsText((prev) => ({ ...prev, [field.id]: e.target.value }))

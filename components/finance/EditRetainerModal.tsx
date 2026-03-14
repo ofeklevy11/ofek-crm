@@ -2,11 +2,18 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { X, Trash2, Save } from "lucide-react";
+import { Trash2, Save } from "lucide-react";
 import { apiFetch, throwResponseError } from "@/lib/api-fetch";
 import { showConfirm } from "@/hooks/use-modal";
 import { getUserFriendlyError } from "@/lib/errors";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface EditRetainerModalProps {
   retainer: any;
@@ -48,7 +55,7 @@ export default function EditRetainerModal({
     }
   }, [retainer]);
 
-  if (!isOpen || !retainer) return null;
+  if (!retainer) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,37 +108,26 @@ export default function EditRetainerModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      dir="rtl"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden text-right"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex justify-between items-center p-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">עריכת ריטיינר</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>עריכת ריטיינר</DialogTitle>
+          <DialogDescription className="sr-only">טופס עריכת פרטי ריטיינר</DialogDescription>
+        </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">
+            <div role="alert" className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="retainer-title" className="block text-sm font-medium text-gray-700 mb-1">
               כותרת
             </label>
             <input
+              id="retainer-title"
               type="text"
               value={formData.title}
               onChange={(e) =>
@@ -144,10 +140,11 @@ export default function EditRetainerModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="retainer-amount" className="block text-sm font-medium text-gray-700 mb-1">
                 סכום (₪)
               </label>
               <input
+                id="retainer-amount"
                 type="number"
                 value={formData.amount}
                 onChange={(e) =>
@@ -160,10 +157,11 @@ export default function EditRetainerModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="retainer-frequency" className="block text-sm font-medium text-gray-700 mb-1">
                 תדירות
               </label>
               <select
+                id="retainer-frequency"
                 value={formData.frequency}
                 onChange={(e) =>
                   setFormData({ ...formData, frequency: e.target.value })
@@ -179,10 +177,11 @@ export default function EditRetainerModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="retainer-status" className="block text-sm font-medium text-gray-700 mb-1">
                 סטטוס
               </label>
               <select
+                id="retainer-status"
                 value={formData.status}
                 onChange={(e) =>
                   setFormData({ ...formData, status: e.target.value })
@@ -208,7 +207,7 @@ export default function EditRetainerModal({
                       nextDueDate: today.toISOString().split("T")[0],
                     });
                   }}
-                  className="flex-1 py-2 px-3 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                  className="flex-1 py-2 px-3 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:ring-offset-2"
                 >
                   התחל מיידית (היום)
                 </button>
@@ -233,34 +232,37 @@ export default function EditRetainerModal({
                       nextDueDate: today.toISOString().split("T")[0],
                     });
                   }}
-                  className="flex-1 py-2 px-3 text-xs bg-gray-50 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="flex-1 py-2 px-3 text-xs bg-gray-50 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:ring-offset-2"
                 >
                   התחל מחזור הבא
                 </button>
               </div>
 
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="retainer-next-due-date" className="block text-sm font-medium text-gray-700 mb-1">
                 תשלום הבא
               </label>
               <input
+                id="retainer-next-due-date"
                 type="date"
                 value={formData.nextDueDate}
                 onChange={(e) =>
                   setFormData({ ...formData, nextDueDate: e.target.value })
                 }
                 className="w-full rounded-lg border border-gray-300 p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                aria-describedby="retainer-date-helper"
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p id="retainer-date-helper" className="mt-1 text-xs text-gray-500">
                 החישוב מתבצע החל מתאריך זה.
               </p>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="retainer-notes" className="block text-sm font-medium text-gray-700 mb-1">
               הערות
             </label>
             <textarea
+              id="retainer-notes"
               value={formData.notes}
               onChange={(e) =>
                 setFormData({ ...formData, notes: e.target.value })
@@ -274,29 +276,29 @@ export default function EditRetainerModal({
             <button
               type="button"
               onClick={handleDelete}
-              className="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1"
+              className="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 rounded"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
               מחק
             </button>
             <div className="flex gap-3">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:ring-offset-2"
               >
                 ביטול
               </button>
               <button
                 type="submit"
                 disabled={isLoading}
-                className="px-4 py-2 text-sm font-medium text-white bg-[#4f95ff] rounded-lg hover:bg-blue-600 flex items-center gap-2"
+                className="px-4 py-2 text-sm font-medium text-white bg-[#4f95ff] rounded-lg hover:bg-blue-600 flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:ring-offset-2"
               >
                 {isLoading ? (
                   "שומר..."
                 ) : (
                   <>
-                    <Save className="w-4 h-4" />
+                    <Save className="w-4 h-4" aria-hidden="true" />
                     שמור שינויים
                   </>
                 )}
@@ -304,7 +306,7 @@ export default function EditRetainerModal({
             </div>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

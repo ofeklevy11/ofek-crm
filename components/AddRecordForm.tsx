@@ -12,6 +12,7 @@ import RelationPicker from "./RelationPicker";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -290,6 +291,7 @@ export default function AddRecordForm({
             <DialogTitle className="text-3xl font-bold text-center">
               רשומה חדשה בטבלת {tableName}
             </DialogTitle>
+            <DialogDescription className="sr-only">טופס יצירת רשומה חדשה בטבלת {tableName}</DialogDescription>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto w-full">
@@ -306,13 +308,14 @@ export default function AddRecordForm({
 
                 const renderFieldInput = (field: SchemaField) => (
                     <div key={field.name} className="space-y-4">
-                      <Label className="uppercase tracking-wide text-lg font-bold text-muted-foreground">
+                      <Label htmlFor={`add-field-${field.name}`} id={`label-add-field-${field.name}`} className="uppercase tracking-wide text-lg font-bold text-muted-foreground">
                         {field.label}
                       </Label>
 
                       {field.type === "select" ? (
                         <div className="relative">
                           <select
+                            id={`add-field-${field.name}`}
                             value={formData[field.name] || ""}
                             onChange={(e) =>
                               setFormData({
@@ -334,6 +337,7 @@ export default function AddRecordForm({
                               className="fill-current h-6 w-6"
                               xmlns="http://www.w3.org/2000/svg"
                               viewBox="0 0 20 20"
+                              aria-hidden="true"
                             >
                               <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                             </svg>
@@ -342,6 +346,7 @@ export default function AddRecordForm({
                       ) : field.type === "boolean" ? (
                         <div className="relative">
                           <select
+                            id={`add-field-${field.name}`}
                             value={
                               formData[field.name] === undefined
                                 ? ""
@@ -364,6 +369,7 @@ export default function AddRecordForm({
                               className="fill-current h-6 w-6"
                               xmlns="http://www.w3.org/2000/svg"
                               viewBox="0 0 20 20"
+                              aria-hidden="true"
                             >
                               <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                             </svg>
@@ -371,6 +377,7 @@ export default function AddRecordForm({
                         </div>
                       ) : field.type === "textarea" ? (
                         <Textarea
+                          id={`add-field-${field.name}`}
                           value={formData[field.name] || ""}
                           onChange={(e) =>
                             setFormData({
@@ -382,7 +389,7 @@ export default function AddRecordForm({
                           placeholder={`הזן ${field.label}...`}
                         />
                       ) : field.type === "radio" ? (
-                        <div className="flex flex-wrap gap-4 pt-2">
+                        <div className="flex flex-wrap gap-4 pt-2" role="group" aria-labelledby={`label-add-field-${field.name}`}>
                           {field.options?.map((opt, i) => (
                             <label
                               key={`${opt}-${i}`}
@@ -405,6 +412,7 @@ export default function AddRecordForm({
                       ) : field.type === "multi-select" ? (
                         <div className="relative">
                           <select
+                            id={`add-field-${field.name}`}
                             multiple
                             value={
                               Array.isArray(formData[field.name])
@@ -435,7 +443,7 @@ export default function AddRecordForm({
                           </select>
                         </div>
                       ) : field.type === "tags" ? (
-                        <div className="flex flex-wrap gap-2 p-4 bg-muted/20 rounded-xl border border-input min-h-16 items-center">
+                        <div className="flex flex-wrap gap-2 p-4 bg-muted/20 rounded-xl border border-input min-h-16 items-center" role="group" aria-labelledby={`label-add-field-${field.name}`}>
                           {field.options?.map((tag, i) => {
                             const rawValue = formData[field.name];
                             const currentTags = Array.isArray(rawValue)
@@ -443,10 +451,11 @@ export default function AddRecordForm({
                               : [];
                             const isSelected = currentTags.includes(tag);
                             return (
-                              <Badge
+                              <button
+                                type="button"
                                 key={`${tag}-${i}`}
-                                variant={isSelected ? "default" : "outline"}
-                                className="text-xs py-1 px-3 cursor-pointer select-none hover:bg-primary/90"
+                                aria-pressed={isSelected}
+                                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded-md"
                                 onClick={() => {
                                   const newTags = isSelected
                                     ? currentTags.filter(
@@ -459,8 +468,13 @@ export default function AddRecordForm({
                                   });
                                 }}
                               >
-                                {tag}
-                              </Badge>
+                                <Badge
+                                  variant={isSelected ? "default" : "outline"}
+                                  className="text-xs py-1 px-3 cursor-pointer select-none hover:bg-primary/90"
+                                >
+                                  {tag}
+                                </Badge>
+                              </button>
                             );
                           })}
                           {(!field.options || field.options.length === 0) && (
@@ -470,7 +484,7 @@ export default function AddRecordForm({
                           )}
                         </div>
                       ) : field.type === "relation" && field.relationTableId ? (
-                        <div className="bg-white dark:bg-zinc-950 rounded-xl border border-gray-300 dark:border-gray-600 overflow-hidden">
+                        <div className="bg-white dark:bg-zinc-950 rounded-xl border border-gray-300 dark:border-gray-600 overflow-hidden" role="group" aria-labelledby={`label-add-field-${field.name}`}>
                           <RelationPicker
                             tableId={field.relationTableId!}
                             value={formData[field.name]}
@@ -539,7 +553,7 @@ export default function AddRecordForm({
                           />
                         </div>
                       ) : field.type === "score" ? (
-                        <div className="space-y-4 pt-2 px-1">
+                        <div className="space-y-4 pt-2 px-1" role="group" aria-labelledby={`label-add-field-${field.name}`}>
                           <div className="flex justify-between items-center">
                             <span className="text-xs text-muted-foreground font-mono">
                               {field.min || 0}
@@ -556,6 +570,7 @@ export default function AddRecordForm({
                             </span>
                           </div>
                           <Slider
+                            aria-label={field.label}
                             value={[
                               formData[field.name] !== undefined
                                 ? Number(formData[field.name])
@@ -575,6 +590,7 @@ export default function AddRecordForm({
                         </div>
                       ) : (
                         <Input
+                          id={`add-field-${field.name}`}
                           type={
                             field.type === "number"
                               ? "number"
@@ -727,6 +743,7 @@ export default function AddRecordForm({
                                 type="button"
                                 variant="ghost"
                                 size="sm"
+                                aria-label="הסר קובץ"
                                 onClick={() => removeAttachment(originalIndex)}
                                 className="text-destructive hover:bg-destructive/10 h-7 w-7 p-0"
                               >
@@ -738,18 +755,14 @@ export default function AddRecordForm({
                     </div>
 
                     {/* File Upload Area */}
-                    <div
-                      className="border-2 border-dashed border-blue-200 dark:border-blue-700 rounded-xl p-6 flex flex-col items-center justify-center gap-3 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors cursor-pointer group"
-                      onClick={() =>
-                        document
-                          .getElementById("add-record-file-upload")
-                          ?.click()
-                      }
+                    <label
+                      htmlFor="add-record-file-upload"
+                      className="border-2 border-dashed border-blue-200 dark:border-blue-700 rounded-xl p-6 flex flex-col items-center justify-center gap-3 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors cursor-pointer group focus-within:ring-2 focus-within:ring-ring"
                     >
                       <input
                         type="file"
                         id="add-record-file-upload"
-                        className="hidden"
+                        className="sr-only"
                         onChange={handleFileSelect}
                       />
                       <div className="p-3 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full group-hover:scale-110 transition-transform">
@@ -763,7 +776,7 @@ export default function AddRecordForm({
                           עד 1MB
                         </span>
                       </div>
-                    </div>
+                    </label>
                   </div>
 
                   {/* Links Column */}
@@ -800,6 +813,7 @@ export default function AddRecordForm({
                                 type="button"
                                 variant="ghost"
                                 size="sm"
+                                aria-label="הסר לינק"
                                 onClick={() => removeAttachment(originalIndex)}
                                 className="text-destructive hover:bg-destructive/10 h-7 w-7 p-0"
                               >
@@ -818,6 +832,7 @@ export default function AddRecordForm({
                         </span>
                       </div>
                       <Input
+                        aria-label="שם הלינק"
                         placeholder="שם הלינק (אופציונלי)"
                         value={newAttachmentName}
                         onChange={(e) => setNewAttachmentName(e.target.value)}
@@ -825,6 +840,7 @@ export default function AddRecordForm({
                       />
                       <div className="flex gap-2 items-center">
                         <Input
+                          aria-label="כתובת לינק"
                           placeholder="הדבק לינק כאן..."
                           value={newAttachmentUrl}
                           onChange={(e) => setNewAttachmentUrl(e.target.value)}
@@ -839,6 +855,7 @@ export default function AddRecordForm({
                         <Button
                           type="button"
                           variant="secondary"
+                          aria-label="הוסף לינק"
                           onClick={handleAddAttachment}
                           className="h-10 px-4 font-medium bg-purple-100 hover:bg-purple-200 text-purple-700 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 dark:text-purple-300"
                           disabled={!newAttachmentUrl}

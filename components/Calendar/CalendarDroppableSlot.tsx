@@ -8,6 +8,7 @@ interface CalendarDroppableSlotProps {
   className?: string;
   isOverClassName?: string;
   onClick?: (e: React.MouseEvent) => void;
+  ariaLabel?: string;
 }
 
 export function CalendarDroppableSlot({
@@ -17,6 +18,7 @@ export function CalendarDroppableSlot({
   className,
   isOverClassName,
   onClick,
+  ariaLabel,
 }: CalendarDroppableSlotProps) {
   const { setNodeRef, isOver } = useDroppable({
     id,
@@ -26,10 +28,19 @@ export function CalendarDroppableSlot({
   return (
     <div
       ref={setNodeRef}
+      role="button"
+      tabIndex={-1}
+      aria-label={ariaLabel}
       className={`${className} ${
         isOver ? isOverClassName || "bg-blue-100" : ""
-      }`}
+      } focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset`}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if ((e.key === "Enter" || e.key === " ") && onClick) {
+          e.preventDefault();
+          onClick(e as unknown as React.MouseEvent);
+        }
+      }}
     >
       {children}
     </div>

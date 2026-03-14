@@ -50,7 +50,8 @@ export function CalendarHeader({
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   return (
-    <div
+    <header
+      aria-label="בקרות יומן"
       className="flex flex-col md:flex-row items-center justify-between px-4 py-4 border-b border-gray-200 bg-white gap-4"
       dir="rtl"
     >
@@ -59,9 +60,6 @@ export function CalendarHeader({
         <h1 className="text-xl md:text-2xl font-semibold text-gray-800">
           {formatMonthYear(currentDate)}
         </h1>
-
-        {/* Mobile View Switcher (Visible only on mobile to save space in main controls if needed,
-            but we can keep the main one valid. Let's stick to one View Switcher) */}
       </div>
 
       {/* Controls Container */}
@@ -72,10 +70,11 @@ export function CalendarHeader({
           <div className="flex items-center gap-1 px-1 py-1 bg-gray-50 rounded-lg border border-gray-200 shrink-0">
             <button
               onClick={onPrevMonth}
-              className="p-1.5 hover:bg-gray-200 rounded transition-colors"
-              aria-label="חודש הבא"
+              className="p-1.5 hover:bg-gray-200 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+              aria-label="חודש קודם"
             >
               <svg
+                aria-hidden="true"
                 className="w-4 h-4 text-gray-600"
                 fill="none"
                 stroke="currentColor"
@@ -92,10 +91,11 @@ export function CalendarHeader({
             <span className="text-xs font-medium text-gray-500 px-1">חודש</span>
             <button
               onClick={onNextMonth}
-              className="p-1.5 hover:bg-gray-200 rounded transition-colors"
-              aria-label="חודש קודם"
+              className="p-1.5 hover:bg-gray-200 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+              aria-label="חודש הבא"
             >
               <svg
+                aria-hidden="true"
                 className="w-4 h-4 text-gray-600"
                 fill="none"
                 stroke="currentColor"
@@ -115,10 +115,11 @@ export function CalendarHeader({
           <div className="flex items-center gap-1 px-1 py-1 bg-gray-50 rounded-lg border border-gray-200 shrink-0">
             <button
               onClick={onPrev}
-              className="p-1.5 hover:bg-gray-200 rounded transition-colors"
-              aria-label={view === "day" ? "יום הבא" : "שבוע הבא"}
+              className="p-1.5 hover:bg-gray-200 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+              aria-label={view === "day" ? "יום קודם" : "שבוע קודם"}
             >
               <svg
+                aria-hidden="true"
                 className="w-4 h-4 text-gray-600"
                 fill="none"
                 stroke="currentColor"
@@ -137,10 +138,11 @@ export function CalendarHeader({
             </span>
             <button
               onClick={onNext}
-              className="p-1.5 hover:bg-gray-200 rounded transition-colors"
-              aria-label={view === "day" ? "יום קודם" : "שבוע קודם"}
+              className="p-1.5 hover:bg-gray-200 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+              aria-label={view === "day" ? "יום הבא" : "שבוע הבא"}
             >
               <svg
+                aria-hidden="true"
                 className="w-4 h-4 text-gray-600"
                 fill="none"
                 stroke="currentColor"
@@ -159,7 +161,7 @@ export function CalendarHeader({
           {/* Today Button */}
           <button
             onClick={onToday}
-            className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm whitespace-nowrap"
+            className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm whitespace-nowrap focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
           >
             היום
           </button>
@@ -171,9 +173,10 @@ export function CalendarHeader({
           <div className="relative flex-1 md:flex-none">
             <button
               onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
-              className="w-full md:w-auto px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors shadow-sm flex items-center justify-center gap-2 whitespace-nowrap"
+              className="w-full md:w-auto px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors shadow-sm flex items-center justify-center gap-2 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
             >
               <svg
+                aria-hidden="true"
                 className="w-3.5 h-3.5"
                 fill="none"
                 stroke="currentColor"
@@ -203,9 +206,10 @@ export function CalendarHeader({
           {/* Show All */}
           <button
             onClick={onShowAllEvents}
-            className="flex-1 md:flex-none w-full md:w-auto px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors shadow-sm flex items-center justify-center gap-2 whitespace-nowrap"
+            className="flex-1 md:flex-none w-full md:w-auto px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors shadow-sm flex items-center justify-center gap-2 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-1"
           >
             <svg
+              aria-hidden="true"
               className="w-3.5 h-3.5"
               fill="none"
               stroke="currentColor"
@@ -224,9 +228,9 @@ export function CalendarHeader({
           {/* Global Automations */}
           <button
             onClick={onGlobalAutomations}
-            className="flex-1 md:flex-none w-full md:w-auto px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors shadow-sm flex items-center justify-center gap-2 whitespace-nowrap"
+            className="flex-1 md:flex-none w-full md:w-auto px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors shadow-sm flex items-center justify-center gap-2 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
           >
-            <Zap size={14} className="fill-indigo-300" />
+            <Zap aria-hidden="true" size={14} className="fill-indigo-300" />
             <span>אוטומציות קבועות</span>
           </button>
 
@@ -236,9 +240,9 @@ export function CalendarHeader({
               <button
                 onClick={onConnectGoogle}
                 disabled={googleLoading}
-                className="flex-1 md:flex-none w-full md:w-auto px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors shadow-sm flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-50"
+                className="flex-1 md:flex-none w-full md:w-auto px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors shadow-sm flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-1"
               >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                <svg aria-hidden="true" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M19.5 22h-15A2.5 2.5 0 012 19.5v-15A2.5 2.5 0 014.5 2h15A2.5 2.5 0 0122 4.5v15a2.5 2.5 0 01-2.5 2.5zM9.29 7L5 12l4.29 5h2.71l-4.29-5 4.29-5H9.29zm5.42 0L10.42 12l4.29 5h2.71l-4.29-5 4.29-5h-2.71z" />
                 </svg>
                 <span>Google Calendar</span>
@@ -251,7 +255,7 @@ export function CalendarHeader({
               </span>
               <button
                 onClick={onDisconnectGoogle}
-                className="px-2 py-1 text-[10px] font-medium text-red-600 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors whitespace-nowrap"
+                className="px-2 py-1 text-[10px] font-medium text-red-600 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors whitespace-nowrap focus-visible:ring-2 focus-visible:ring-red-500"
               >
                 נתק
               </button>
@@ -261,10 +265,12 @@ export function CalendarHeader({
 
         {/* Source Switcher (only when Google is connected) */}
         {googleConnected && onSourceChange && (
-          <div className="flex w-full md:w-auto bg-gray-100 p-1 rounded-lg shrink-0">
+          <div className="flex w-full md:w-auto bg-gray-100 p-1 rounded-lg shrink-0" role="tablist" aria-label="מקור אירועים">
             <button
+              role="tab"
+              aria-selected={calendarSource === "crm"}
               onClick={() => onSourceChange("crm")}
-              className={`flex-1 md:flex-none px-3 py-1 text-xs font-medium rounded-md transition-all ${
+              className={`flex-1 md:flex-none px-3 py-1 text-xs font-medium rounded-md transition-all focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 calendarSource === "crm"
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
@@ -273,8 +279,10 @@ export function CalendarHeader({
               CRM
             </button>
             <button
+              role="tab"
+              aria-selected={calendarSource === "google"}
               onClick={() => onSourceChange("google")}
-              className={`flex-1 md:flex-none px-3 py-1 text-xs font-medium rounded-md transition-all ${
+              className={`flex-1 md:flex-none px-3 py-1 text-xs font-medium rounded-md transition-all focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 calendarSource === "google"
                   ? "bg-white text-blue-600 shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
@@ -283,8 +291,10 @@ export function CalendarHeader({
               Google Calendar
             </button>
             <button
+              role="tab"
+              aria-selected={calendarSource === "all"}
               onClick={() => onSourceChange("all")}
-              className={`flex-1 md:flex-none px-3 py-1 text-xs font-medium rounded-md transition-all ${
+              className={`flex-1 md:flex-none px-3 py-1 text-xs font-medium rounded-md transition-all focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 calendarSource === "all"
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
@@ -297,10 +307,12 @@ export function CalendarHeader({
       </div>
 
       {/* View Switcher */}
-      <div className="flex w-full md:w-auto bg-gray-100 p-1 rounded-lg shrink-0">
+      <div className="flex w-full md:w-auto bg-gray-100 p-1 rounded-lg shrink-0" role="tablist" aria-label="תצוגת יומן">
         <button
+          role="tab"
+          aria-selected={view === "day"}
           onClick={() => onViewChange("day")}
-          className={`flex-1 md:flex-none px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-all ${
+          className={`flex-1 md:flex-none px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-all focus-visible:ring-2 focus-visible:ring-blue-500 ${
             view === "day"
               ? "bg-white text-gray-900 shadow-sm"
               : "text-gray-500 hover:text-gray-700"
@@ -309,8 +321,10 @@ export function CalendarHeader({
           יום
         </button>
         <button
+          role="tab"
+          aria-selected={view === "week"}
           onClick={() => onViewChange("week")}
-          className={`flex-1 md:flex-none px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-all ${
+          className={`flex-1 md:flex-none px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-all focus-visible:ring-2 focus-visible:ring-blue-500 ${
             view === "week"
               ? "bg-white text-gray-900 shadow-sm"
               : "text-gray-500 hover:text-gray-700"
@@ -319,6 +333,6 @@ export function CalendarHeader({
           שבוע
         </button>
       </div>
-    </div>
+    </header>
   );
 }

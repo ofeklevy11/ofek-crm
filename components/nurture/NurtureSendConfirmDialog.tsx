@@ -381,6 +381,7 @@ export default function NurtureSendConfirmDialog({
                 placeholder="חפש לפי שם..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                aria-label="חפש לפי שם"
                 className="pr-9"
                 disabled={loading}
               />
@@ -403,6 +404,7 @@ export default function NurtureSendConfirmDialog({
                           checked={checked}
                           onCheckedChange={() => toggleCustomer(c.id)}
                           disabled={disabled || loading}
+                          aria-label={c.name}
                         />
                         <span className="text-sm flex-1 truncate">{c.name}</span>
                         {c.phone && (

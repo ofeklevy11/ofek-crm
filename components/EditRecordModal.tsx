@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -486,6 +487,7 @@ export default function EditRecordModal({
               #{record.id}
             </span>
           </DialogTitle>
+          <DialogDescription className="sr-only">ערוך את שדות הרשומה</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
@@ -502,7 +504,7 @@ export default function EditRecordModal({
                     field.type === "textarea" ? "col-span-1 md:col-span-2" : ""
                   }
                 >
-                  <Label className="text-sm font-semibold mb-1.5 block">
+                  <Label htmlFor={`field-${field.name}`} id={`label-field-${field.name}`} className="text-sm font-semibold mb-1.5 block">
                     {field.label}
                   </Label>
 
@@ -582,7 +584,8 @@ export default function EditRecordModal({
                   ) : field.type === "radio" ? (
                     <div
                       className="flex flex-wrap gap-4 pt-1"
-                      id={`field-${field.name}`}
+                      role="group"
+                      aria-labelledby={`label-field-${field.name}`}
                     >
                       {field.options?.map((opt, i) => (
                         <label
@@ -632,7 +635,8 @@ export default function EditRecordModal({
                   ) : field.type === "tags" ? (
                     <div
                       className="flex flex-wrap gap-2 p-2 bg-muted/20 rounded-md border border-input min-h-[40px]"
-                      id={`field-${field.name}`}
+                      role="group"
+                      aria-labelledby={`label-field-${field.name}`}
                     >
                       {field.options?.map((tag, i) => {
                         const rawValue = formData[field.name];
@@ -641,10 +645,11 @@ export default function EditRecordModal({
                           : [];
                         const isSelected = currentTags.includes(tag);
                         return (
-                          <Badge
+                          <button
+                            type="button"
                             key={`${tag}-${i}`}
-                            variant={isSelected ? "default" : "outline"}
-                            className="text-xs cursor-pointer select-none hover:bg-primary/90"
+                            aria-pressed={isSelected}
+                            className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded-md"
                             onClick={() => {
                               const newTags = isSelected
                                 ? currentTags.filter((t: string) => t !== tag)
@@ -655,8 +660,13 @@ export default function EditRecordModal({
                               });
                             }}
                           >
-                            {tag}
-                          </Badge>
+                            <Badge
+                              variant={isSelected ? "default" : "outline"}
+                              className="text-xs cursor-pointer select-none hover:bg-primary/90"
+                            >
+                              {tag}
+                            </Badge>
+                          </button>
                         );
                       })}
                       {(!field.options || field.options.length === 0) && (
@@ -666,7 +676,7 @@ export default function EditRecordModal({
                       )}
                     </div>
                   ) : field.type === "relation" && field.relationTableId ? (
-                    <div id={`field-${field.name}`}>
+                    <div role="group" aria-labelledby={`label-field-${field.name}`}>
                       <RelationPicker
                         tableId={field.relationTableId}
                         value={formData[field.name]}
@@ -729,8 +739,9 @@ export default function EditRecordModal({
                     </div>
                   ) : field.type === "score" ? (
                     <div
-                      id={`field-${field.name}`}
                       className="space-y-4 pt-2 px-1"
+                      role="group"
+                      aria-labelledby={`label-field-${field.name}`}
                     >
                       <div className="flex justify-between items-center">
                         <span className="text-xs text-muted-foreground font-mono">
@@ -748,6 +759,7 @@ export default function EditRecordModal({
                         </span>
                       </div>
                       <Slider
+                        aria-label={field.label}
                         value={[
                           formData[field.name] !== undefined
                             ? Number(formData[field.name])
@@ -926,10 +938,11 @@ export default function EditRecordModal({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Created At Field - Read Only */}
             <div>
-              <Label className="text-sm font-semibold mb-1.5 block text-muted-foreground">
+              <Label htmlFor="meta-created-at" className="text-sm font-semibold mb-1.5 block text-muted-foreground">
                 נוצר בתאריך
               </Label>
               <Input
+                id="meta-created-at"
                 type="date"
                 value={createdAt}
                 disabled
@@ -940,10 +953,11 @@ export default function EditRecordModal({
             {/* Created By Field - Read Only */}
             {creatorName && (
               <div>
-                <Label className="text-sm font-semibold mb-1.5 block text-muted-foreground">
+                <Label htmlFor="meta-created-by" className="text-sm font-semibold mb-1.5 block text-muted-foreground">
                   נוצר על ידי
                 </Label>
                 <Input
+                  id="meta-created-by"
                   type="text"
                   value={creatorName}
                   disabled
@@ -954,10 +968,11 @@ export default function EditRecordModal({
 
             {/* Updated At Field - Read Only */}
             <div>
-              <Label className="text-sm font-semibold mb-1.5 block text-muted-foreground">
+              <Label htmlFor="meta-updated-at" className="text-sm font-semibold mb-1.5 block text-muted-foreground">
                 עודכן בתאריך
               </Label>
               <Input
+                id="meta-updated-at"
                 type="date"
                 value={updatedAt}
                 disabled
@@ -968,10 +983,11 @@ export default function EditRecordModal({
             {/* Updated By Field - Read Only */}
             {updaterName && (
               <div>
-                <Label className="text-sm font-semibold mb-1.5 block text-muted-foreground">
+                <Label htmlFor="meta-updated-by" className="text-sm font-semibold mb-1.5 block text-muted-foreground">
                   עודכן על ידי
                 </Label>
                 <Input
+                  id="meta-updated-by"
                   type="text"
                   value={updaterName}
                   disabled
@@ -998,10 +1014,11 @@ export default function EditRecordModal({
                     // Edit mode
                     <div className="flex flex-col gap-2">
                       <div>
-                        <Label className="text-xs text-muted-foreground mb-1 block">
+                        <Label htmlFor="edit-link-name" className="text-xs text-muted-foreground mb-1 block">
                           שם הלינק (אופציונלי)
                         </Label>
                         <Input
+                          id="edit-link-name"
                           placeholder="שם לתצוגה..."
                           value={editLinkName}
                           onChange={(e) => setEditLinkName(e.target.value)}
@@ -1009,10 +1026,11 @@ export default function EditRecordModal({
                         />
                       </div>
                       <div>
-                        <Label className="text-xs text-muted-foreground mb-1 block">
+                        <Label htmlFor="edit-link-url" className="text-xs text-muted-foreground mb-1 block">
                           כתובת URL
                         </Label>
                         <Input
+                          id="edit-link-url"
                           placeholder="https://..."
                           value={editLinkUrl}
                           onChange={(e) => setEditLinkUrl(e.target.value)}
@@ -1074,6 +1092,7 @@ export default function EditRecordModal({
                           type="button"
                           variant="ghost"
                           size="icon"
+                          aria-label="ערוך לינק"
                           className="h-6 w-6 hover:bg-primary/10 hover:text-primary text-muted-foreground"
                           onClick={() => {
                             setEditingLinkId(att.id);
@@ -1087,6 +1106,7 @@ export default function EditRecordModal({
                           type="button"
                           variant="ghost"
                           size="icon"
+                          aria-label="מחק לינק"
                           className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
                           onClick={() => handleDeleteAttachment(att.id)}
                         >
@@ -1108,10 +1128,11 @@ export default function EditRecordModal({
                     // Edit Mode
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground shrink-0">
+                        <label htmlFor="edit-file-name" className="text-xs text-muted-foreground shrink-0">
                           שם:
-                        </span>
+                        </label>
                         <Input
+                          id="edit-file-name"
                           placeholder={file.name}
                           value={editFileName}
                           onChange={(e) => setEditFileName(e.target.value)}
@@ -1175,6 +1196,7 @@ export default function EditRecordModal({
                           type="button"
                           variant="ghost"
                           size="icon"
+                          aria-label="ערוך שם קובץ"
                           className="h-6 w-6 hover:bg-blue-200 dark:hover:bg-blue-800 text-muted-foreground"
                           onClick={() => {
                             setEditFileName((file as any).displayName || "");
@@ -1188,6 +1210,7 @@ export default function EditRecordModal({
                           type="button"
                           variant="ghost"
                           size="icon"
+                          aria-label="מחק קובץ"
                           className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
                           onClick={() => handleDeleteFile(file.id)}
                         >
@@ -1235,6 +1258,7 @@ export default function EditRecordModal({
               <div className="flex flex-col gap-2">
                 <Input
                   type="text"
+                  aria-label="שם הלינק"
                   placeholder="שם הלינק (אופציונלי)"
                   value={newAttachmentName}
                   onChange={(e) => setNewAttachmentName(e.target.value)}
@@ -1242,6 +1266,7 @@ export default function EditRecordModal({
                 <div className="flex gap-2">
                   <Input
                     type="url"
+                    aria-label="כתובת לינק"
                     placeholder="הדבק לינק..."
                     value={newAttachmentUrl}
                     onChange={(e) => setNewAttachmentUrl(e.target.value)}

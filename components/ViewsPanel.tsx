@@ -177,6 +177,7 @@ export default function ViewsPanel({
         <div className="shrink-0">
           <Button
             onClick={() => setIsOpen(true)}
+            aria-expanded={false}
             className="gap-2 bg-linear-to-r from-[#4f95ff] to-[#a24ec1] text-white hover:opacity-90"
           >
             <PanelLeftOpen className="h-4 w-4" />
@@ -195,7 +196,7 @@ export default function ViewsPanel({
             variant="ghost"
             size="icon"
             onClick={() => setIsOpen(false)}
-            title="סגור תצוגות"
+            aria-label="סגור תצוגות"
           >
             <PanelLeftClose className="h-4 w-4" />
           </Button>
@@ -301,15 +302,15 @@ export default function ViewsPanel({
         )}
 
         {isReordering && (
-          <div className="fixed bottom-4 right-4 bg-primary text-primary-foreground px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
-            <span className="animate-spin duration-1000">⟳</span>
+          <div className="fixed bottom-4 right-4 bg-primary text-primary-foreground px-4 py-2 rounded-lg shadow-lg flex items-center gap-2" role="status" aria-live="assertive">
+            <span className="animate-spin duration-1000" aria-hidden="true">⟳</span>
             שומר את הסדר החדש...
           </div>
         )}
 
         {views.length === 0 && (
           <div className="bg-muted/30 border border-dashed border-muted rounded-xl p-8 text-center">
-            <div className="text-muted-foreground text-4xl mb-2 opacity-30">
+            <div className="text-muted-foreground text-4xl mb-2 opacity-30" aria-hidden="true">
               📊
             </div>
             <p className="text-sm text-muted-foreground">

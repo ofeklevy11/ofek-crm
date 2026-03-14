@@ -1,7 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
+import { useState, useEffect, useRef } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import {
   Bell,
   MessageSquare,
@@ -172,16 +178,19 @@ function TriggerCard({
   onClick: () => void;
 }) {
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
-      className={`relative p-5 rounded-xl border-2 cursor-pointer transition-all duration-200 group ${
+      role="radio"
+      aria-checked={selected}
+      className={`relative p-5 rounded-xl border-2 cursor-pointer transition-all duration-200 group text-right w-full ${
         selected
           ? "border-blue-500 bg-blue-50 shadow-md ring-2 ring-blue-200 ring-offset-2"
           : "border-gray-100 bg-white hover:border-blue-200 hover:bg-gray-50"
       }`}
     >
       <div className="flex items-start gap-4">
-        <div className={`p-3 rounded-lg ${selected ? "bg-white" : "bg-gray-100 group-hover:bg-white"}`}>
+        <div className={`p-3 rounded-lg ${selected ? "bg-white" : "bg-gray-100 group-hover:bg-white"}`} aria-hidden="true">
           {icon}
         </div>
         <div>
@@ -192,11 +201,11 @@ function TriggerCard({
         </div>
       </div>
       {selected && (
-        <div className="absolute top-4 left-4 text-blue-500">
+        <div className="absolute top-4 left-4 text-blue-500" aria-hidden="true">
           <CheckCircle2 size={20} fill="currentColor" className="text-blue-100" />
         </div>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -211,6 +220,8 @@ export default function MeetingAutomationWizard({
 }: MeetingAutomationWizardProps) {
   const totalSteps = 3;
   const [step, setStep] = useState(1);
+  const stepContainerRef = useRef<HTMLDivElement>(null);
+  const shouldFocusStep = useRef(false);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [usage, setUsage] = useState<{ total: number; limit: number; globalCount: number; perMeetingCount: number } | null>(null);
@@ -244,6 +255,20 @@ export default function MeetingAutomationWizard({
   const [taskTitle, setTaskTitle] = useState(editingRule?.actionConfig?.title || "");
   const [updateField, setUpdateField] = useState(editingRule?.actionConfig?.field || "");
   const [updateValue, setUpdateValue] = useState(editingRule?.actionConfig?.value || "");
+
+  useEffect(() => {
+    if (shouldFocusStep.current) {
+      shouldFocusStep.current = false;
+      requestAnimationFrame(() => {
+        stepContainerRef.current?.focus();
+      });
+    }
+  }, [step]);
+
+  const changeStep = (newStep: number) => {
+    shouldFocusStep.current = true;
+    setStep(newStep);
+  };
 
   const triggerOptions = mode === "global" ? TRIGGER_OPTIONS_GLOBAL : TRIGGER_OPTIONS_PER_MEETING;
 
@@ -308,6 +333,7 @@ export default function MeetingAutomationWizard({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="למשל: תזכורת 30 דקות לפני"
+          aria-label="שם האוטומציה"
           className="w-full px-4 py-3 text-lg border-2 border-gray-200 rounded-xl focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
         />
       </div>
@@ -316,7 +342,7 @@ export default function MeetingAutomationWizard({
         <label className="block text-base font-bold text-gray-700 mb-3">
           מה יפעיל את האוטומציה?
         </label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4" role="radiogroup" aria-label="בחר טריגר">
           {triggerOptions.map((t) => (
             <TriggerCard
               key={t.value}
@@ -341,6 +367,7 @@ export default function MeetingAutomationWizard({
               onChange={(e) => setMinutesBefore(Number(e.target.value))}
               min={1}
               max={43200}
+              aria-label="דקות לפני הפגישה"
               className="w-28"
             />
             <span className="text-sm text-muted-foreground">דקות</span>
@@ -354,7 +381,7 @@ export default function MeetingAutomationWizard({
             סוג פגישה (אופציונלי)
           </label>
           <Select value={meetingTypeId} onValueChange={setMeetingTypeId}>
-            <SelectTrigger className="w-full">
+            <SelectTrigger className="w-full" aria-label="סוג פגישה">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -385,7 +412,7 @@ export default function MeetingAutomationWizard({
         <label className="block text-base font-bold text-gray-700 mb-3">
           מה האוטומציה תעשה?
         </label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4" role="radiogroup" aria-label="בחר פעולה">
           {ACTION_OPTIONS.map((a) => (
             <TriggerCard
               key={a.value}
@@ -422,6 +449,7 @@ export default function MeetingAutomationWizard({
             value={notifMessage}
             onChange={(e) => setNotifMessage(e.target.value)}
             placeholder="ניתן להשתמש במשתנים: {participantName}, {meetingType}, {meetingStart}"
+            aria-label="תוכן ההודעה"
             rows={3}
           />
           <p className="text-xs text-gray-500">
@@ -439,6 +467,7 @@ export default function MeetingAutomationWizard({
             value={webhookUrl}
             onChange={(e) => setWebhookUrl(e.target.value)}
             placeholder="https://..."
+            aria-label="כתובת Webhook"
             dir="ltr"
           />
         </div>
@@ -453,6 +482,7 @@ export default function MeetingAutomationWizard({
             value={taskTitle}
             onChange={(e) => setTaskTitle(e.target.value)}
             placeholder="מעקב אחרי פגישה עם {participantName}"
+            aria-label="כותרת משימה"
           />
         </div>
       )}
@@ -466,11 +496,13 @@ export default function MeetingAutomationWizard({
             value={updateField}
             onChange={(e) => setUpdateField(e.target.value)}
             placeholder="שם השדה"
+            aria-label="שם השדה"
           />
           <Input
             value={updateValue}
             onChange={(e) => setUpdateValue(e.target.value)}
             placeholder="ערך חדש"
+            aria-label="ערך חדש"
           />
         </div>
       )}
@@ -491,7 +523,7 @@ export default function MeetingAutomationWizard({
   const renderStep3 = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
       {success ? (
-        <div className="text-center py-12">
+        <div className="text-center py-12" role="status">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-4 animate-in zoom-in duration-300">
             <CheckCircle2 size={40} className="text-green-600" />
           </div>
@@ -540,36 +572,34 @@ export default function MeetingAutomationWizard({
     </div>
   );
 
-  return createPortal(
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4" dir="rtl">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden" dir="rtl">
         {/* Header */}
-        <div className="bg-gray-50 px-8 py-5 border-b border-gray-100 flex justify-between items-center">
-          <div className="flex flex-col">
-            <h3 className="text-xl font-bold text-gray-800">
+        <div className="bg-gray-50 px-8 py-5 border-b border-gray-100">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-gray-800">
               {editingRule ? "עריכת אוטומציה" : "אשף אוטומציות פגישות"}
-            </h3>
-            <div className="flex gap-2 mt-2">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
-                    i <= step ? "w-8 bg-blue-600" : "w-2 bg-gray-200"
-                  }`}
-                />
-              ))}
-            </div>
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              שלב {step} מתוך {totalSteps}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 mt-2" aria-hidden="true">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  i <= step ? "w-8 bg-blue-600" : "w-2 bg-gray-200"
+                }`}
+              />
+            ))}
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
-          >
-            <X size={20} />
-          </button>
+          <span className="sr-only">שלב {step} מתוך {totalSteps}</span>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8 relative scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+        <div ref={stepContainerRef} tabIndex={-1} className="flex-1 overflow-y-auto p-8 relative scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
           {/* Plan usage disclaimer */}
           {usage && (
             <div className={`mb-6 p-3 rounded-xl border flex items-center gap-3 ${
@@ -604,7 +634,7 @@ export default function MeetingAutomationWizard({
           <div className="p-6 border-t border-gray-100 bg-white flex justify-between items-center">
             {step > 1 ? (
               <button
-                onClick={() => setStep(step - 1)}
+                onClick={() => changeStep(step - 1)}
                 className="flex items-center gap-2 px-5 py-2.5 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-xl transition-all font-medium"
               >
                 <ArrowRight size={18} /> חזור
@@ -615,7 +645,7 @@ export default function MeetingAutomationWizard({
 
             {step < totalSteps ? (
               <button
-                onClick={() => setStep(step + 1)}
+                onClick={() => changeStep(step + 1)}
                 disabled={(step === 1 && !canGoStep2) || (step === 2 && !canGoStep3)}
                 className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-medium shadow-lg shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -634,8 +664,7 @@ export default function MeetingAutomationWizard({
             )}
           </div>
         )}
-      </div>
-    </div>,
-    document.body
+      </DialogContent>
+    </Dialog>
   );
 }

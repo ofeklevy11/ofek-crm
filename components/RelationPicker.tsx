@@ -190,15 +190,17 @@ export default function RelationPicker({
                         className="text-xs px-2 py-0.5 gap-1 hover:bg-secondary/80 bg-primary/10 text-primary border-primary/20"
                       >
                         {getSelectedLabel(id)}
-                        <div
+                        <button
+                          type="button"
                           className="cursor-pointer hover:text-destructive transition-colors rounded-full p-0.5"
-                          onPointerDown={(e) => {
+                          aria-label="הסר בחירה"
+                          onClick={(e) => {
                             e.stopPropagation();
                             handleSelect(id);
                           }}
                         >
                           <X className="h-3 w-3" />
-                        </div>
+                        </button>
                       </Badge>
                     );
                   });
@@ -226,13 +228,14 @@ export default function RelationPicker({
         <div className="flex items-center border-b px-3" dir="rtl">
           <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
           <input
+            aria-label="חיפוש רשומות"
             className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
             placeholder="חיפוש..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="max-h-[300px] overflow-y-auto p-1" dir="rtl">
+        <div className="max-h-[300px] overflow-y-auto p-1" dir="rtl" role="listbox" aria-label="רשימת רשומות">
           {loading ? (
             <div className="py-6 text-center text-sm text-muted-foreground">
               טוען...
@@ -247,6 +250,8 @@ export default function RelationPicker({
               return (
                 <div
                   key={record.id}
+                  role="option"
+                  aria-selected={selected}
                   onClick={() => handleSelect(record.id)}
                   className={cn(
                     "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",

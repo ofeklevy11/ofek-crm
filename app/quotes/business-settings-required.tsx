@@ -174,7 +174,7 @@ export default function BusinessSettingsRequired({
           <div className="bg-linear-to-l from-[#4f95ff] to-[#a24ec1] p-8 text-white">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
-                <Building2 className="w-7 h-7" />
+                <Building2 className="w-7 h-7" aria-hidden="true" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold">הגדרות עסק</h1>
@@ -187,7 +187,7 @@ export default function BusinessSettingsRequired({
 
           {/* Alert */}
           <div className="mx-6 mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" aria-hidden="true" />
             <div className="text-sm text-amber-800">
               <p className="font-medium">שדות חובה</p>
               <p className="mt-1">
@@ -202,7 +202,7 @@ export default function BusinessSettingsRequired({
             {/* Logo Upload */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
-                <ImagePlus className="w-4 h-4 inline ml-1" />
+                <ImagePlus className="w-4 h-4 inline ml-1" aria-hidden="true" />
                 לוגו העסק{" "}
                 <span className="text-gray-400 text-xs">(אופציונלי)</span>
               </label>
@@ -217,9 +217,10 @@ export default function BusinessSettingsRequired({
                     <button
                       type="button"
                       onClick={removeLogo}
-                      className="absolute -top-2 -left-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                      className="absolute -top-2 -left-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                      aria-label="הסר לוגו"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-3 h-3" aria-hidden="true" />
                     </button>
                   </div>
                 ) : (
@@ -227,8 +228,9 @@ export default function BusinessSettingsRequired({
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="w-20 h-20 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:border-[#4f95ff] hover:text-[#4f95ff] transition-colors"
+                    aria-label="העלה לוגו"
                   >
-                    <ImagePlus className="w-6 h-6" />
+                    <ImagePlus className="w-6 h-6" aria-hidden="true" />
                   </button>
                 )}
                 <div className="flex-1">
@@ -265,10 +267,11 @@ export default function BusinessSettingsRequired({
 
             {/* Business Name */}
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <label htmlFor="biz-name" className="block text-sm font-medium text-gray-700">
                 שם העסק <span className="text-red-500">*</span>
               </label>
               <input
+                id="biz-name"
                 type="text"
                 required
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] outline-none bg-white transition-all"
@@ -282,14 +285,16 @@ export default function BusinessSettingsRequired({
 
             {/* Business Type */}
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <label id="biz-type-label" className="block text-sm font-medium text-gray-700">
                 סוג עוסק <span className="text-red-500">*</span>
               </label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-3" role="radiogroup" aria-labelledby="biz-type-label">
                 {BUSINESS_TYPES.map((type) => (
                   <button
                     key={type.value}
                     type="button"
+                    role="radio"
+                    aria-checked={formData.businessType === type.value}
                     onClick={() =>
                       setFormData({ ...formData, businessType: type.value })
                     }
@@ -301,7 +306,7 @@ export default function BusinessSettingsRequired({
                   >
                     <div className="flex items-center justify-center gap-2">
                       {formData.businessType === type.value && (
-                        <Check className="w-4 h-4" />
+                        <Check className="w-4 h-4" aria-hidden="true" />
                       )}
                       <span className="font-medium">{type.label}</span>
                     </div>
@@ -312,14 +317,15 @@ export default function BusinessSettingsRequired({
 
             {/* Tax ID */}
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                <FileText className="w-4 h-4 inline ml-1" />
+              <label htmlFor="biz-tax-id" className="block text-sm font-medium text-gray-700">
+                <FileText className="w-4 h-4 inline ml-1" aria-hidden="true" />
                 {formData.businessType === "ltd"
                   ? "ח.פ (חברה פרטית)"
                   : "מספר עוסק"}{" "}
                 <span className="text-red-500">*</span>
               </label>
               <input
+                id="biz-tax-id"
                 type="text"
                 required
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] outline-none bg-white transition-all"
@@ -337,11 +343,12 @@ export default function BusinessSettingsRequired({
 
             {/* Business Address */}
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                <MapPin className="w-4 h-4 inline ml-1" />
+              <label htmlFor="biz-address" className="block text-sm font-medium text-gray-700">
+                <MapPin className="w-4 h-4 inline ml-1" aria-hidden="true" />
                 כתובת העסק <span className="text-red-500">*</span>
               </label>
               <input
+                id="biz-address"
                 type="text"
                 required
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] outline-none bg-white transition-all"
@@ -363,12 +370,13 @@ export default function BusinessSettingsRequired({
 
             {/* Website (Optional) */}
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                <Globe className="w-4 h-4 inline ml-1" />
+              <label htmlFor="biz-website" className="block text-sm font-medium text-gray-700">
+                <Globe className="w-4 h-4 inline ml-1" aria-hidden="true" />
                 קישור לאתר אינטרנט{" "}
                 <span className="text-gray-400 text-xs">(אופציונלי)</span>
               </label>
               <input
+                id="biz-website"
                 type="text"
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] outline-none bg-white transition-all"
                 placeholder="לדוגמה: https://www.example.co.il"
@@ -390,12 +398,13 @@ export default function BusinessSettingsRequired({
 
             {/* Email (Optional) */}
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                <Mail className="w-4 h-4 inline ml-1" />
+              <label htmlFor="biz-email" className="block text-sm font-medium text-gray-700">
+                <Mail className="w-4 h-4 inline ml-1" aria-hidden="true" />
                 דוא״ל עסקי{" "}
                 <span className="text-gray-400 text-xs">(אופציונלי)</span>
               </label>
               <input
+                id="biz-email"
                 type="email"
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#4f95ff] focus:border-[#4f95ff] outline-none bg-white transition-all"
                 placeholder="לדוגמה: info@example.co.il"
@@ -412,7 +421,7 @@ export default function BusinessSettingsRequired({
               disabled={loading || uploadingLogo}
               className="w-full py-4 bg-linear-to-l from-[#4f95ff] to-[#a24ec1] text-white rounded-xl font-medium hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <Save className="w-5 h-5" />
+              <Save className="w-5 h-5" aria-hidden="true" />
               {loading ? "שומר..." : "שמור והמשך ליצירת הצעת מחיר"}
             </button>
           </form>

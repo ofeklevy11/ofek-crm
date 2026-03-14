@@ -10,6 +10,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { isRateLimitError } from "@/lib/rate-limit-utils";
 import RateLimitFallback from "@/components/RateLimitFallback";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "תכנון יעדים | CRM",
+};
 
 export default async function GoalsPage() {
   const user = await getCurrentUser();
@@ -157,7 +162,7 @@ export default async function GoalsPage() {
             <div className="p-2 bg-[#4f95ff]/10 rounded-lg">
               <Target className="w-5 h-5 text-[#4f95ff]" />
             </div>
-            <h3 className="font-medium text-gray-600">יעדים פעילים</h3>
+            <h2 className="font-medium text-gray-600">יעדים פעילים</h2>
           </div>
           <p className="text-3xl font-bold text-gray-900">
             {activeCount}
@@ -169,7 +174,7 @@ export default async function GoalsPage() {
             <div className="p-2 bg-[#a24ec1]/10 rounded-lg">
               <TrendingUp className="w-5 h-5 text-[#a24ec1]" />
             </div>
-            <h3 className="font-medium text-gray-600">במסלול להצלחה</h3>
+            <h2 className="font-medium text-gray-600">במסלול להצלחה</h2>
           </div>
           <p className="text-3xl font-bold text-gray-900">
             {onTrackCount}

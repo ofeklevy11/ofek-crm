@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import EditTableModal from "./EditTableModal";
 import { showConfirm, showDestructiveConfirm } from "@/hooks/use-modal";
+import Link from "next/link";
 import { User, Pencil, Trash2, Copy } from "lucide-react";
 import { duplicateTable } from "@/app/actions/tables";
 import { apiFetch } from "@/lib/api-fetch";
@@ -111,24 +112,15 @@ export default function TableCard({
     }
   };
 
-  const handleCardClick = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-
-    // בלוק כשמקליקים על כפתור
-    if (target.tagName === "BUTTON" || target.closest("button")) return;
-
-    router.push(`/tables/${table.id}`);
-  };
-
   // ---------------------------
   // Render
   // ---------------------------
 
   return (
     <>
-      <div
-        className="relative group bg-card rounded-xl shadow-sm hover:shadow-lg transition-all p-6 border border-border cursor-pointer hover:border-primary/20"
-        onClick={handleCardClick}
+      <Link
+        href={`/tables/${table.id}`}
+        className="relative group bg-card rounded-xl shadow-sm hover:shadow-lg transition-all p-6 border border-border cursor-pointer hover:border-primary/20 block focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl"
         dir="rtl"
       >
         {/* Title + Slug */}
@@ -160,13 +152,13 @@ export default function TableCard({
         </div>
 
         {/* Buttons (appear on hover) */}
-        <div className="absolute bottom-4 left-4 md:bottom-auto md:top-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex gap-2 z-10">
+        <div className="absolute bottom-4 left-4 md:bottom-auto md:top-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity flex gap-2 z-10">
           {canEdit && (
             <button
               onClick={handleEditClick}
               onPointerDown={(e) => e.stopPropagation()}
               className="bg-background text-muted-foreground hover:text-primary p-2 rounded-lg shadow-sm border border-border hover:border-primary transition"
-              title="ערוך טבלה"
+              aria-label="ערוך טבלה"
               disabled={isDeleting || isDuplicating}
             >
               <Pencil size={16} />
@@ -178,7 +170,7 @@ export default function TableCard({
               onClick={handleDuplicateClick}
               onPointerDown={(e) => e.stopPropagation()}
               className="bg-background text-muted-foreground hover:text-purple-500 p-2 rounded-lg shadow-sm border border-border hover:border-purple-500 transition disabled:opacity-50"
-              title="שכפל טבלה"
+              aria-label="שכפל טבלה"
               disabled={isDeleting || isDuplicating}
             >
               {isDuplicating ? (
@@ -194,7 +186,7 @@ export default function TableCard({
               onClick={handleDeleteClick}
               onPointerDown={(e) => e.stopPropagation()}
               className="bg-background text-muted-foreground hover:text-destructive p-2 rounded-lg shadow-sm border border-border hover:border-destructive transition disabled:opacity-50"
-              title="מחק טבלה"
+              aria-label="מחק טבלה"
               disabled={isDeleting || isDuplicating}
             >
               {isDeleting ? (
@@ -205,7 +197,7 @@ export default function TableCard({
             </button>
           )}
         </div>
-      </div>
+      </Link>
 
       {/* Edit Modal */}
       {isEditModalOpen && (

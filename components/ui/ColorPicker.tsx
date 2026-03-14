@@ -46,6 +46,7 @@ export function ColorPicker({ value, onChange, label }: ColorPickerProps) {
       <PopoverTrigger asChild>
         <button
           type="button"
+          aria-label={label || "בחירת צבע"}
           className={cn(
             "flex items-center gap-2 px-3 py-1.5 rounded-full border border-input",
             "hover:border-primary/50 transition-colors cursor-pointer",
@@ -55,6 +56,7 @@ export function ColorPicker({ value, onChange, label }: ColorPickerProps) {
           <span
             className="w-4 h-4 rounded-full border border-black/10"
             style={{ backgroundColor: displayColor }}
+            aria-hidden="true"
           />
           <span className="text-muted-foreground text-xs">
             {selectedPreset?.name || (value ? "מותאם" : "בחר צבע")}
@@ -84,11 +86,14 @@ export function ColorPicker({ value, onChange, label }: ColorPickerProps) {
                 )}
                 style={{ backgroundColor: color.value }}
                 title={color.name}
+                aria-label={color.name}
+                aria-pressed={value === color.value}
               >
                 {value === color.value && (
                   <Check
                     className="w-4 h-4"
                     style={{ color: color.textColor }}
+                    aria-hidden="true"
                   />
                 )}
               </button>
@@ -104,6 +109,7 @@ export function ColorPicker({ value, onChange, label }: ColorPickerProps) {
               <Input
                 type="text"
                 placeholder="#FF5733"
+                aria-label="קוד צבע מותאם אישית"
                 value={customColor}
                 onChange={(e) => setCustomColor(e.target.value)}
                 className="h-8 text-xs font-mono flex-1"
@@ -116,6 +122,7 @@ export function ColorPicker({ value, onChange, label }: ColorPickerProps) {
               />
               <input
                 type="color"
+                aria-label="בורר צבע"
                 value={customColor || "#9CA3AF"}
                 onChange={(e) => setCustomColor(e.target.value)}
                 className="w-8 h-8 rounded cursor-pointer border border-input"
@@ -123,13 +130,14 @@ export function ColorPicker({ value, onChange, label }: ColorPickerProps) {
               <Button
                 type="button"
                 size="sm"
+                aria-label="החל צבע מותאם"
                 onClick={handleCustomColorApply}
                 disabled={
                   !customColor || !/^#[0-9A-Fa-f]{6}$/.test(customColor)
                 }
                 className="h-8 px-2"
               >
-                <Check className="w-3 h-3" />
+                <Check className="w-3 h-3" aria-hidden="true" />
               </Button>
             </div>
           </div>

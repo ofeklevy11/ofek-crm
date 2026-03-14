@@ -63,7 +63,7 @@ export default async function WorkflowsPage() {
 
 function WorkflowsSkeleton() {
   return (
-    <div className="space-y-8 animate-pulse">
+    <div className="space-y-8 animate-pulse" role="status" aria-label="טוען תהליכי עבודה...">
       <div className="h-8 w-48 bg-gray-200 rounded"></div>
       <div className="flex gap-4">
         <div className="h-10 w-32 bg-gray-200 rounded"></div>

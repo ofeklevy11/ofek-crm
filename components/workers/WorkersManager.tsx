@@ -301,7 +301,7 @@ export default function WorkersManager({
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" role="group" aria-label="סטטיסטיקות עובדים">
         <StatCard
           icon={Users}
           label="סה״כ עובדים"
@@ -329,18 +329,43 @@ export default function WorkersManager({
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div
+        className="flex flex-wrap gap-2 mb-6"
+        role="tablist"
+        aria-label="חלונות ניהול עובדים"
+        onKeyDown={(e) => {
+          if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+          e.preventDefault();
+          const currentIndex = tabs.findIndex((t) => t.id === activeTab);
+          let nextIndex: number;
+          if (e.key === "ArrowLeft") {
+            // RTL: ArrowLeft = next tab
+            nextIndex = (currentIndex + 1) % tabs.length;
+          } else {
+            // RTL: ArrowRight = previous tab
+            nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+          }
+          setActiveTab(tabs[nextIndex].id);
+          const nextBtn = document.getElementById("tab-" + tabs[nextIndex].id);
+          nextBtn?.focus();
+        }}
+      >
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            id={"tab-" + tab.id}
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            aria-controls={"tabpanel-" + tab.id}
             onClick={() => setActiveTab(tab.id)}
+            tabIndex={activeTab === tab.id ? 0 : -1}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all ${
               activeTab === tab.id
                 ? "bg-linear-to-r from-indigo-600 to-purple-600 text-white shadow-md"
                 : "bg-white/80 text-gray-700 hover:bg-white hover:shadow-md border border-gray-200"
             }`}
           >
-            <tab.icon className="h-4 w-4" />
+            <tab.icon className="h-4 w-4" aria-hidden="true" />
             {tab.label}
             <span
               className={`px-2 py-0.5 rounded-full text-xs ${
@@ -357,10 +382,11 @@ export default function WorkersManager({
       {activeTab === "workers" && (
         <div className="flex flex-wrap gap-4 mb-6">
           <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" aria-hidden="true" />
             <input
               type="text"
               placeholder="חיפוש עובד..."
+              aria-label="חיפוש עובד"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pr-10 pl-4 py-2.5 bg-white/80 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
@@ -369,6 +395,7 @@ export default function WorkersManager({
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
+            aria-label="סינון לפי סטטוס"
             className="appearance-none pr-4 pl-10 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition min-w-[150px]"
             style={{
               backgroundColor: "rgba(255,255,255,0.8)",
@@ -391,6 +418,7 @@ export default function WorkersManager({
                 e.target.value ? Number(e.target.value) : null,
               )
             }
+            aria-label="סינון לפי מחלקה"
             className="appearance-none pr-4 pl-10 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition min-w-[150px]"
             style={{
               backgroundColor: "rgba(255,255,255,0.8)",
@@ -411,13 +439,13 @@ export default function WorkersManager({
       )}
 
       {/* Content */}
-      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 overflow-visible">
+      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 overflow-visible" role="tabpanel" id={"tabpanel-" + activeTab} aria-labelledby={"tab-" + activeTab}>
         {activeTab === "workers" &&
           (departments.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center px-4">
               <div className="bg-purple-100 p-4 rounded-full mb-6 relative">
                 <div className="absolute inset-0 bg-purple-200 blur-xl opacity-50 rounded-full"></div>
-                <Building2 className="h-12 w-12 text-purple-600 relative z-10" />
+                <Building2 className="h-12 w-12 text-purple-600 relative z-10" aria-hidden="true" />
               </div>
               <h3 className="text-2xl font-bold text-gray-900 mb-3">
                 טרם נוצרו מחלקות
@@ -558,7 +586,7 @@ function StatCard({
         <div
           className={`p-2.5 rounded-lg bg-linear-to-br ${colors[color]} text-white`}
         >
-          <Icon className="h-5 w-5" />
+          <Icon className="h-5 w-5" aria-hidden="true" />
         </div>
         <div>
           <p className="text-2xl font-bold text-gray-900">{value}</p>

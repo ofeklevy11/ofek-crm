@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useRouter } from "next/navigation";
 import { createAutomationRule } from "@/app/actions/automations";
 import { useAIJob } from "@/hooks/use-ai-job";
@@ -57,6 +58,7 @@ export default function AIAutomationCreator({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  const focusTrapRef = useFocusTrap(onClose, isOpen);
 
   // Cancel in-flight requests when modal closes
   useEffect(() => {
@@ -259,7 +261,7 @@ export default function AIAutomationCreator({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-white w-full max-w-6xl max-h-[90vh] rounded-3xl shadow-2xl flex overflow-hidden border border-gray-100 flex-col md:flex-row" onClick={(e) => e.stopPropagation()}>
+      <div ref={focusTrapRef} role="dialog" aria-modal="true" aria-labelledby="ai-automation-modal-title" className="bg-white w-full max-w-6xl max-h-[90vh] rounded-3xl shadow-2xl flex overflow-hidden border border-gray-100 flex-col md:flex-row" onClick={(e) => e.stopPropagation()}>
         {/* Chat Section */}
         <div
           className={`flex flex-col flex-1 min-h-0 ${
@@ -270,8 +272,8 @@ export default function AIAutomationCreator({
         >
           <div className="p-6 border-b border-gray-100 bg-linear-to-r from-purple-50 to-blue-50 flex justify-between items-center">
             <div>
-              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <span className="text-2xl">🤖</span> צור אוטומציה עם AI
+              <h2 id="ai-automation-modal-title" className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <span className="text-2xl" aria-hidden="true">🤖</span> צור אוטומציה עם AI
               </h2>
               <p className="text-sm text-gray-500">
                 תאר מה אתה רוצה, או קבל הצעות חכמות.
@@ -280,15 +282,16 @@ export default function AIAutomationCreator({
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition p-2"
+              aria-label="סגור"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-4 bg-gray-50/30">
+          <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-4 bg-gray-50/30" role="log" aria-live="polite" aria-atomic="false" aria-label="שיחת AI">
             {messages.map((msg, i) => (
               <div
                 key={i}
@@ -310,7 +313,7 @@ export default function AIAutomationCreator({
               </div>
             ))}
             {(loading || loadingSuggestions) && (
-              <div className="flex justify-start">
+              <div className="flex justify-start" role="status" aria-label="מעבד...">
                 <div className="bg-white border border-gray-100 px-5 py-3.5 rounded-2xl rounded-bl-none shadow-sm flex gap-2 items-center">
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-.3s]"></div>
@@ -321,7 +324,7 @@ export default function AIAutomationCreator({
             {tables.length === 0 && !loading && (
               <div className="flex flex-col items-center justify-center h-full p-8 text-center space-y-4">
                 <div className="bg-orange-100 p-4 rounded-full">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-600" aria-hidden="true">
                     <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
                     <line x1="12" y1="9" x2="12" y2="13"></line>
                     <line x1="12" y1="17" x2="12.01" y2="17"></line>
@@ -340,7 +343,7 @@ export default function AIAutomationCreator({
                   onClick={handleGetSuggestions}
                   className="w-full p-4 bg-linear-to-r from-purple-600 to-blue-600 text-white rounded-xl hover:from-purple-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl font-medium flex items-center justify-center gap-3"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
                     <path d="M2 17l10 5 10-5"></path>
                     <path d="M2 12l10 5 10-5"></path>
@@ -366,8 +369,8 @@ export default function AIAutomationCreator({
           </div>
 
           {rateLimitError && (
-            <div className="mx-6 mb-2 bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl flex items-center gap-3 animate-in fade-in">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <div role="alert" className="mx-6 mb-2 bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl flex items-center gap-3 animate-in fade-in">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true">
                 <circle cx="12" cy="12" r="10"></circle>
                 <line x1="12" y1="8" x2="12" y2="12"></line>
                 <line x1="12" y1="16" x2="12.01" y2="16"></line>
@@ -395,6 +398,7 @@ export default function AIAutomationCreator({
                     ? "לדוגמה: שלח וואטסאפ כשרשומה חדשה נוצרת בטבלת לידים..."
                     : "נא ליצור טבלאות קודם"
                 }
+                aria-label="הקלד בקשה ליצירת אוטומציה"
                 disabled={tables.length === 0}
                 rows={6}
                 style={{ resize: "none", fieldSizing: "content", maxHeight: "12.5rem", overflowY: "auto" } as React.CSSProperties}
@@ -405,8 +409,9 @@ export default function AIAutomationCreator({
                   onClick={() => handleSend()}
                   disabled={loading || loadingSuggestions || !input.trim()}
                   className="absolute right-2 bottom-2 p-2 bg-linear-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition disabled:opacity-50 shadow-md"
+                  aria-label="שלח"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <line x1="22" y1="2" x2="11" y2="13"></line>
                     <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                   </svg>

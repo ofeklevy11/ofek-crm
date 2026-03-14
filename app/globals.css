@@ -303,6 +303,14 @@
   .lp-float-reverse {
     animation: none !important;
   }
+  .animate-blob,
+  .animate-pulse {
+    animation: none !important;
+  }
+  .queue-progress-glow,
+  .queue-autosend-glow {
+    box-shadow: none !important;
+  }
 }
 
 /* ── Meeting dark-theme calendar overrides ────────────────── */

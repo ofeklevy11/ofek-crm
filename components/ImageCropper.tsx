@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Check, X, ZoomIn, ZoomOut, Move } from "lucide-react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 
 interface ImageCropperProps {
   imageSrc: string;
@@ -24,6 +25,7 @@ export default function ImageCropper({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const focusTrapRef = useFocusTrap(onCancel);
 
   // Constants for the crop area size
   const CROP_SIZE = 300;
@@ -159,15 +161,19 @@ export default function ImageCropper({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       dir="rtl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cropper-modal-title"
     >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+      <div ref={focusTrapRef} className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
         <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-          <h3 className="font-bold text-lg">עריכת לוגו</h3>
+          <h3 id="cropper-modal-title" className="font-bold text-lg">עריכת לוגו</h3>
           <button
             onClick={onCancel}
             className="text-gray-500 hover:text-gray-700"
+            aria-label="סגור"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -179,6 +185,7 @@ export default function ImageCropper({
 
           <div
             className="relative overflow-hidden bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 shadow-inner cursor-move"
+            aria-label="אזור גרירה למיקום הלוגו"
             style={{
               width: cropWidth,
               height: cropHeight,
@@ -198,7 +205,7 @@ export default function ImageCropper({
             <img
               ref={imageRef}
               src={imageSrc}
-              alt="Crop preview"
+              alt="תצוגה מקדימה של חיתוך"
               draggable={false}
               className="absolute max-w-none origin-center"
               style={{
@@ -212,10 +219,10 @@ export default function ImageCropper({
           <div className="w-full max-w-xs space-y-3">
             <div className="flex justify-between text-sm text-gray-500">
               <span className="flex items-center gap-1">
-                <ZoomOut className="w-4 h-4" /> הקטן
+                <ZoomOut className="w-4 h-4" aria-hidden="true" /> הקטן
               </span>
               <span className="flex items-center gap-1">
-                הגדל <ZoomIn className="w-4 h-4" />
+                הגדל <ZoomIn className="w-4 h-4" aria-hidden="true" />
               </span>
             </div>
             <Slider
@@ -224,6 +231,7 @@ export default function ImageCropper({
               max={5}
               step={0.1}
               onValueChange={(val) => setZoom(val[0])}
+              aria-label="זום"
             />
           </div>
         </div>
@@ -236,7 +244,7 @@ export default function ImageCropper({
             onClick={handleCrop}
             className="bg-[#4f95ff] hover:bg-[#3d84ff]"
           >
-            <Check className="w-4 h-4 ml-2" />
+            <Check className="w-4 h-4 ml-2" aria-hidden="true" />
             שמור לוגו
           </Button>
         </div>

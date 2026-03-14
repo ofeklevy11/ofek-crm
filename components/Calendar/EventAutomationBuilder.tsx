@@ -339,12 +339,16 @@ export function EventAutomationBuilder({
     <div className="h-full flex flex-col bg-gray-50 rounded-xl overflow-hidden border border-gray-200 shadow-inner">
       {/* Progress Header */}
       <div className="bg-white p-4 border-b flex justify-between items-center px-8">
+        <span className="sr-only" aria-live="polite">
+          שלב {step} מתוך 3: {step === 1 ? "תזמון" : step === 2 ? "פעולה" : "הגדרות"}
+        </span>
         {[1, 2, 3].map((s) => (
           <div
             key={s}
             className="flex flex-col items-center relative z-10 w-20"
           >
             <div
+              aria-current={step === s ? "step" : undefined}
               className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 ${step >= s ? "bg-blue-600 text-white scale-110" : "bg-gray-200 text-gray-500"}`}
             >
               {s}
@@ -358,6 +362,7 @@ export function EventAutomationBuilder({
         <div
           className="absolute top-8 right-12 left-12 h-0.5 bg-gray-200 z-0 hidden md:block"
           style={{ top: "34px" }}
+          aria-hidden="true"
         >
           <div
             className="h-full bg-blue-600 transition-all duration-500"
@@ -383,7 +388,7 @@ export function EventAutomationBuilder({
               {/* Disclaimer */}
               <div className="space-y-4 mb-6">
                 <div className="bg-blue-50 text-blue-800 px-4 py-3 rounded-lg text-sm flex items-start gap-2 border border-blue-100">
-                  <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                  <AlertCircle aria-hidden="true" size={16} className="mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-2">
                       <p className="font-semibold">
@@ -407,7 +412,14 @@ export function EventAutomationBuilder({
                       <>
                         {/* Progress Bar */}
                         <div className="mb-3">
-                          <div className="w-full bg-blue-100 rounded-full h-2 overflow-hidden">
+                          <div
+                            className="w-full bg-blue-100 rounded-full h-2 overflow-hidden"
+                            role="progressbar"
+                            aria-label="שימוש באוטומציות"
+                            aria-valuenow={globalCount + specificCount}
+                            aria-valuemin={0}
+                            aria-valuemax={userPlan === "premium" ? 6 : 2}
+                          >
                             <div
                               className={`h-full rounded-full transition-all duration-500 ${
                                 globalCount + specificCount >=
@@ -455,7 +467,7 @@ export function EventAutomationBuilder({
                 </div>
 
                 <div className="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm flex items-center justify-center gap-2">
-                  <AlertCircle size={16} />
+                  <AlertCircle aria-hidden="true" size={16} />
                   <span>
                     שימו לב: לא ניתן להגדיר אוטומציה פחות מ-5 דקות לפני האירוע
                   </span>
@@ -467,6 +479,7 @@ export function EventAutomationBuilder({
                   <input
                     type="number"
                     min="1"
+                    aria-label="כמות זמן"
                     value={timeValue}
                     onChange={(e) =>
                       setTimeValue(Math.max(1, Number(e.target.value)))
@@ -476,6 +489,7 @@ export function EventAutomationBuilder({
                 </div>
                 <select
                   value={timeUnit}
+                  aria-label="יחידת זמן"
                   onChange={(e) => setTimeUnit(e.target.value as any)}
                   className="text-base md:text-xl p-3 bg-gray-50 rounded-lg border-none focus:ring-2 focus:ring-blue-500 cursor-pointer hover:bg-gray-100"
                 >
@@ -489,7 +503,7 @@ export function EventAutomationBuilder({
               </div>
 
               <div className="mt-8 p-4 bg-blue-50 rounded-xl flex items-center gap-3 text-blue-700">
-                <Clock className="w-5 h-5 md:w-6 md:h-6 flex-shrink-0" />
+                <Clock aria-hidden="true" className="w-5 h-5 md:w-6 md:h-6 flex-shrink-0" />
                 <span className="text-sm md:text-base font-medium">
                   האוטומציה תופעל {timeValue}{" "}
                   {timeUnit === "minutes"
@@ -578,12 +592,14 @@ export function EventAutomationBuilder({
                 <button
                   key={item.id}
                   onClick={() => setActionType(item.id)}
-                  className={`relative p-6 rounded-2xl border-2 transition-all duration-300 text-right group h-48 flex flex-col items-center justify-center gap-4
+                  aria-pressed={actionType === item.id}
+                  className={`relative p-6 rounded-2xl border-2 transition-all duration-300 text-right group h-48 flex flex-col items-center justify-center gap-4 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
                                 ${actionType === item.id ? `border-blue-500 ring-2 ring-blue-500 ring-offset-2 bg-white shadow-lg` : `border-transparent bg-white shadow hover:shadow-lg ${item.border}`}
                             `}
                 >
                   <div
                     className={`p-4 rounded-full ${item.bg} ${item.color} transition-transform group-hover:scale-110 duration-300`}
+                    aria-hidden="true"
                   >
                     <item.icon size={32} />
                   </div>
@@ -593,7 +609,7 @@ export function EventAutomationBuilder({
 
                   {actionType === item.id && (
                     <div className="absolute top-3 right-3 text-blue-500">
-                      <CheckCircle2 size={24} className="fill-blue-100" />
+                      <CheckCircle2 aria-hidden="true" size={24} className="fill-blue-100" />
                     </div>
                   )}
                 </button>
@@ -607,8 +623,8 @@ export function EventAutomationBuilder({
           <div className="max-w-2xl mx-auto animate-in fade-in zoom-in-95 duration-300">
             {/* Error Message */}
             {error && (
-              <div className="mb-4 bg-red-50 text-red-600 px-4 py-3 rounded-xl flex items-center gap-2 border border-red-100 shadow-sm animate-in fade-in slide-in-from-top-2">
-                <AlertCircle size={18} className="shrink-0" />
+              <div role="alert" className="mb-4 bg-red-50 text-red-600 px-4 py-3 rounded-xl flex items-center gap-2 border border-red-100 shadow-sm animate-in fade-in slide-in-from-top-2">
+                <AlertCircle aria-hidden="true" size={18} className="shrink-0" />
                 <span className="font-medium text-sm">{error}</span>
               </div>
             )}
@@ -617,7 +633,7 @@ export function EventAutomationBuilder({
             {actionType === "CREATE_TASK" && (
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-5">
                 <div className="flex items-center gap-3 border-b pb-4 mb-4">
-                  <div className="p-2 bg-green-100 rounded-lg text-green-700">
+                  <div className="p-2 bg-green-100 rounded-lg text-green-700" aria-hidden="true">
                     <CheckSquare />
                   </div>
                   <h3 className="text-lg md:text-xl font-bold">
@@ -626,12 +642,13 @@ export function EventAutomationBuilder({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="taskTitle" className="block text-sm font-medium text-gray-700 mb-1">
                     כותרת המשימה
                   </label>
                   <div className="relative">
                     <input
                       type="text"
+                      id="taskTitle"
                       value={taskTitle}
                       onChange={(e) => setTaskTitle(e.target.value)}
                       className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
@@ -644,10 +661,11 @@ export function EventAutomationBuilder({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="taskDesc" className="block text-sm font-medium text-gray-700 mb-1">
                     תיאור המשימה
                   </label>
                   <textarea
+                    id="taskDesc"
                     value={taskDesc}
                     onChange={(e) => setTaskDesc(e.target.value)}
                     rows={3}
@@ -657,12 +675,13 @@ export function EventAutomationBuilder({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="taskAssignee" className="block text-sm font-medium text-gray-700 mb-1">
                       למי להקצות?
                     </label>
                     <div className="relative">
-                      <User className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
+                      <User aria-hidden="true" className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
                       <select
+                        id="taskAssignee"
                         value={taskAssignee}
                         onChange={(e) => setTaskAssignee(e.target.value)}
                         className="w-full pr-10 pl-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -677,10 +696,11 @@ export function EventAutomationBuilder({
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="taskPriority" className="block text-sm font-medium text-gray-700 mb-1">
                       עדיפות
                     </label>
                     <select
+                      id="taskPriority"
                       value={taskPriority}
                       onChange={(e) => setTaskPriority(e.target.value)}
                       className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -692,10 +712,11 @@ export function EventAutomationBuilder({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="taskStatus" className="block text-sm font-medium text-gray-700 mb-1">
                       סטטוס
                     </label>
                     <select
+                      id="taskStatus"
                       value={taskStatus}
                       onChange={(e) => setTaskStatus(e.target.value)}
                       className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -713,11 +734,12 @@ export function EventAutomationBuilder({
                 </div>
 
                 <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg">
-                  <CalendarIcon className="w-5 h-5 text-gray-500" />
+                  <CalendarIcon aria-hidden="true" className="w-5 h-5 text-gray-500" />
                   <span className="text-sm">תאריך יעד:</span>
                   <input
                     type="number"
                     min="0"
+                    aria-label="ימים לאחר האירוע"
                     value={taskDueDays}
                     onChange={(e) => setTaskDueDays(Number(e.target.value))}
                     className="w-16 text-center border rounded px-1"
@@ -735,7 +757,7 @@ export function EventAutomationBuilder({
             {actionType === "SEND_NOTIFICATION" && (
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-5">
                 <div className="flex items-center gap-3 border-b pb-4 mb-4">
-                  <div className="p-2 bg-yellow-100 rounded-lg text-yellow-700">
+                  <div className="p-2 bg-yellow-100 rounded-lg text-yellow-700" aria-hidden="true">
                     <Bell />
                   </div>
                   <h3 className="text-lg md:text-xl font-bold">
@@ -744,10 +766,11 @@ export function EventAutomationBuilder({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="notifRecipient" className="block text-sm font-medium text-gray-700 mb-1">
                     למי לשלוח?
                   </label>
                   <select
+                    id="notifRecipient"
                     value={notifRecipient}
                     onChange={(e) => setNotifRecipient(e.target.value)}
                     className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -767,10 +790,11 @@ export function EventAutomationBuilder({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="notifMessage" className="block text-sm font-medium text-gray-700 mb-1">
                     תוכן ההודעה
                   </label>
                   <textarea
+                    id="notifMessage"
                     value={notifMessage}
                     onChange={(e) => setNotifMessage(e.target.value)}
                     rows={3}
@@ -795,11 +819,11 @@ export function EventAutomationBuilder({
 
                 <div className="flex items-center gap-3 border-b pb-4 mb-4">
                   {actionType === "SEND_SMS" ? (
-                    <div className="p-2 bg-blue-100 rounded-lg text-blue-700">
+                    <div className="p-2 bg-blue-100 rounded-lg text-blue-700" aria-hidden="true">
                       <Smartphone className="w-5 h-5" />
                     </div>
                   ) : (
-                    <div className="p-2 bg-green-100 rounded-lg text-green-700">
+                    <div className="p-2 bg-green-100 rounded-lg text-green-700" aria-hidden="true">
                       <WhatsAppIcon />
                     </div>
                   )}
@@ -809,18 +833,19 @@ export function EventAutomationBuilder({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="waPhone" className="block text-sm font-medium text-gray-700 mb-1">
                     מספר טלפון (בינלאומי)
                   </label>
                   <div className="relative" dir="ltr">
                     <input
                       type="text"
+                      id="waPhone"
                       value={waPhone}
                       onChange={(e) => setWaPhone(e.target.value)}
                       className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-left"
                       placeholder="+972501234567"
                     />
-                    <div className="absolute right-3 top-2.5 text-gray-400 pointer-events-none">
+                    <div className="absolute right-3 top-2.5 text-gray-400 pointer-events-none" aria-hidden="true">
                       {actionType === "SEND_SMS" ? <Smartphone size={16} /> : <WhatsAppIcon size={16} />}
                     </div>
                   </div>
@@ -833,11 +858,12 @@ export function EventAutomationBuilder({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="waMessage" className="block text-sm font-medium text-gray-700 mb-1">
                     תוכן ההודעה
                   </label>
                   <div className="relative">
                     <textarea
+                      id="waMessage"
                       value={waMessage}
                       onChange={(e) => setWaMessage(e.target.value)}
                       rows={5}
@@ -871,7 +897,7 @@ export function EventAutomationBuilder({
                 </div>
 
                 <div className="bg-blue-50 p-3 rounded-lg flex gap-2 items-start text-xs text-blue-700">
-                  <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+                  <AlertCircle aria-hidden="true" size={14} className="mt-0.5 flex-shrink-0" />
                   <p>
                     {actionType === "SEND_SMS"
                       ? "שים לב: ההודעה תישלח כ-SMS דרך Twilio. וודא שהמספר תקין."
@@ -885,7 +911,7 @@ export function EventAutomationBuilder({
             {actionType === "WEBHOOK" && (
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-5">
                 <div className="flex items-center gap-3 border-b pb-4 mb-4">
-                  <div className="p-2 bg-purple-100 rounded-lg text-purple-700">
+                  <div className="p-2 bg-purple-100 rounded-lg text-purple-700" aria-hidden="true">
                     <Webhook />
                   </div>
                   <h3 className="text-lg md:text-xl font-bold">
@@ -894,11 +920,12 @@ export function EventAutomationBuilder({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="webhookUrl" className="block text-sm font-medium text-gray-700 mb-1">
                     כתובת URL
                   </label>
                   <input
                     type="text"
+                    id="webhookUrl"
                     value={webhookUrl}
                     onChange={(e) => setWebhookUrl(e.target.value)}
                     className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-left"
@@ -908,10 +935,11 @@ export function EventAutomationBuilder({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="webhookMethod" className="block text-sm font-medium text-gray-700 mb-1">
                     שיטת שליחה (Method)
                   </label>
                   <select
+                    id="webhookMethod"
                     value={webhookMethod}
                     onChange={(e) => setWebhookMethod(e.target.value)}
                     className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -935,7 +963,7 @@ export function EventAutomationBuilder({
             {actionType === "CREATE_RECORD" && (
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-5">
                 <div className="flex items-center gap-3 border-b pb-4 mb-4">
-                  <div className="p-2 bg-blue-100 rounded-lg text-blue-700">
+                  <div className="p-2 bg-blue-100 rounded-lg text-blue-700" aria-hidden="true">
                     <TableIcon />
                   </div>
                   <h3 className="text-lg md:text-xl font-bold">
@@ -944,10 +972,11 @@ export function EventAutomationBuilder({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="selectedTable" className="block text-sm font-medium text-gray-700 mb-1">
                     בחר טבלה
                   </label>
                   <select
+                    id="selectedTable"
                     value={selectedTableId}
                     onChange={(e) => {
                       setSelectedTableId(e.target.value);
@@ -999,6 +1028,7 @@ export function EventAutomationBuilder({
                               col.type === "status" ||
                               col.type === "priority" ? (
                                 <select
+                                  aria-label={col.label || col.name}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 bg-white"
                                   value={currentMapping?.value || ""}
                                   onChange={(e) => {
@@ -1045,6 +1075,7 @@ export function EventAutomationBuilder({
                                         ? "date"
                                         : "text"
                                   }
+                                  aria-label={col.label || col.name}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500"
                                   placeholder={`ערך עבור ${col.label || col.name}`}
                                   value={currentMapping?.value || ""}
@@ -1097,7 +1128,7 @@ export function EventAutomationBuilder({
             {actionType === "CREATE_CALENDAR_EVENT" && (
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-5">
                 <div className="flex items-center gap-3 border-b pb-4 mb-4">
-                  <div className="p-2 bg-indigo-100 rounded-lg text-indigo-700">
+                  <div className="p-2 bg-indigo-100 rounded-lg text-indigo-700" aria-hidden="true">
                     <CalendarPlus />
                   </div>
                   <h3 className="text-lg md:text-xl font-bold">
@@ -1106,11 +1137,12 @@ export function EventAutomationBuilder({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="newEventTitle" className="block text-sm font-medium text-gray-700 mb-1">
                     כותרת האירוע
                   </label>
                   <input
                     type="text"
+                    id="newEventTitle"
                     value={newEventTitle}
                     onChange={(e) => setNewEventTitle(e.target.value)}
                     className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -1121,10 +1153,11 @@ export function EventAutomationBuilder({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="newEventDesc" className="block text-sm font-medium text-gray-700 mb-1">
                     תיאור
                   </label>
                   <textarea
+                    id="newEventDesc"
                     value={newEventDesc}
                     onChange={(e) => setNewEventDesc(e.target.value)}
                     rows={3}
@@ -1140,6 +1173,7 @@ export function EventAutomationBuilder({
                     <div className="flex gap-2">
                       <input
                         type="number"
+                        aria-label="היסט זמן התחלה"
                         value={newEventStartOffset}
                         onChange={(e) =>
                           setNewEventStartOffset(Number(e.target.value))
@@ -1147,6 +1181,7 @@ export function EventAutomationBuilder({
                         className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
                       />
                       <select
+                        aria-label="יחידת היסט התחלה"
                         value={newEventStartUnit}
                         onChange={(e) =>
                           setNewEventStartUnit(
@@ -1173,6 +1208,7 @@ export function EventAutomationBuilder({
                         type="number"
                         min="0.5"
                         step="0.5"
+                        aria-label="משך האירוע"
                         value={newEventDuration}
                         onChange={(e) =>
                           setNewEventDuration(Number(e.target.value))
@@ -1180,6 +1216,7 @@ export function EventAutomationBuilder({
                         className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
                       />
                       <select
+                        aria-label="יחידת משך"
                         value={newEventDurationUnit}
                         onChange={(e) =>
                           setNewEventDurationUnit(
@@ -1206,7 +1243,7 @@ export function EventAutomationBuilder({
       <div className="p-4 bg-white border-t flex justify-between items-center px-8">
         <button
           onClick={step === 1 ? onCancel : handleBack}
-          className="text-gray-500 font-medium px-4 py-2 hover:bg-gray-100 rounded-lg transition-colors"
+          className="text-gray-500 font-medium px-4 py-2 hover:bg-gray-100 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
         >
           {step === 1 ? "ביטול" : "חזור"}
         </button>
@@ -1214,7 +1251,7 @@ export function EventAutomationBuilder({
         <button
           onClick={handleNext}
           className={`
-                px-8 py-3 rounded-xl font-bold shadow-lg transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2
+                px-8 py-3 rounded-xl font-bold shadow-lg transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
                 ${
                   step === 3
                     ? "bg-green-600 hover:bg-green-700 text-white shadow-green-200"
@@ -1224,13 +1261,13 @@ export function EventAutomationBuilder({
         >
           {step === 3 ? (
             <>
-              <CheckCircle2 size={20} />
+              <CheckCircle2 aria-hidden="true" size={20} />
               שמור אוטומציה
             </>
           ) : (
             <>
               המשך
-              <ArrowLeft size={20} />
+              <ArrowLeft aria-hidden="true" size={20} />
             </>
           )}
         </button>

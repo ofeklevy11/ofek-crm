@@ -81,6 +81,7 @@ import {
   DndContext,
   closestCenter,
   PointerSensor,
+  KeyboardSensor,
   useSensor,
   useSensors,
   DragEndEvent,
@@ -90,6 +91,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
   useSortable,
+  sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -104,11 +106,11 @@ function SortableColumnItem({ id, label, onRemove }: { id: string; label: string
 
   return (
     <div ref={setNodeRef} style={style} className="flex items-center gap-2 px-2 py-1.5 rounded border bg-background text-sm">
-      <button type="button" {...attributes} {...listeners} className="cursor-grab touch-none text-muted-foreground hover:text-foreground">
+      <button type="button" {...attributes} {...listeners} aria-label="גרור לשינוי סדר עמודה" className="cursor-grab touch-none text-muted-foreground hover:text-foreground">
         <GripVertical className="h-4 w-4" />
       </button>
       <span className="flex-1 truncate">{label}</span>
-      <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-destructive">
+      <button type="button" onClick={onRemove} aria-label={`הסר עמודה ${label}`} className="text-muted-foreground hover:text-destructive">
         <X className="h-3.5 w-3.5" />
       </button>
     </div>
@@ -560,7 +562,8 @@ export default function RecordTable({
   // Column dialog local state & DnD
   const [localOrder, setLocalOrder] = useState<string[]>([]);
   const columnSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   const handleColumnDialogOpen = (open: boolean) => {
@@ -933,18 +936,22 @@ export default function RecordTable({
         <div className="space-y-4">
           {/* Free Text Search */}
           <div className="bg-card rounded-xl shadow-sm border border-border p-4 w-full md:w-[25%] min-w-[300px]">
-            <h3 className="text-sm font-bold text-foreground mb-2">
+            <h3 id="free-search-heading" className="text-sm font-bold text-foreground mb-2">
               חיפוש חופשי בטבלה
             </h3>
             <div className="relative">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <Input
                 type="text"
                 placeholder="חפש..."
+                aria-labelledby="free-search-heading"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-4 pr-10 h-9"
               />
+            </div>
+            <div className="sr-only" aria-live="polite" role="status">
+              {searchTerm && `נמצאו ${filteredRecords.length} תוצאות`}
             </div>
           </div>
 
@@ -954,6 +961,7 @@ export default function RecordTable({
               <Button
                 variant="outline"
                 className="gap-2"
+                aria-expanded={isAdvancedSearchOpen}
                 onClick={() => setIsAdvancedSearchOpen(!isAdvancedSearchOpen)}
               >
                 <Search className="h-4 w-4 text-primary" />
@@ -984,7 +992,7 @@ export default function RecordTable({
         <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
           <div className="p-4 border-b border-border flex flex-col md:flex-row gap-4 justify-between items-center bg-muted/20">
             <div className="flex gap-4 items-center w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-              <div className="text-sm text-foreground whitespace-nowrap font-medium">
+              <div className="text-sm text-foreground whitespace-nowrap font-medium" role="status" aria-live="polite">
                 {selectedIds.length} נבחרו
               </div>
               {/* Dynamic Filters */}
@@ -1003,6 +1011,7 @@ export default function RecordTable({
                     <div className="relative" key={field.name}>
                       <select
                         value={filters[field.name] || ""}
+                        aria-label={`סנן לפי ${field.label}`}
                         onChange={(e) =>
                           setFilters((prev) => ({
                             ...prev,
@@ -1023,6 +1032,7 @@ export default function RecordTable({
                           className="fill-current h-4 w-4"
                           xmlns="http://www.w3.org/2000/svg"
                           viewBox="0 0 20 20"
+                          aria-hidden="true"
                         >
                           <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                         </svg>
@@ -1065,6 +1075,7 @@ export default function RecordTable({
                         size="sm"
                         className="gap-2 sm:hidden"
                         disabled
+                        aria-description="תכונה זו זמינה במחשב בלבד"
                       >
                         <Download className="h-4 w-4" />
                         ייצוא נבחרים (במחשב בלבד)
@@ -1105,9 +1116,9 @@ export default function RecordTable({
                     <div className="flex-1 overflow-y-auto space-y-4 min-h-0">
                       {/* Visible columns - sortable */}
                       <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-2">
+                        <h3 className="text-xs font-semibold text-muted-foreground mb-2">
                           עמודות מוצגות ({localOrder.length})
-                        </p>
+                        </h3>
                         <DndContext sensors={columnSensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
                           <SortableContext items={localOrder} strategy={verticalListSortingStrategy}>
                             <div className="space-y-1">
@@ -1133,9 +1144,9 @@ export default function RecordTable({
                       {/* Hidden columns */}
                       {uniqueFields.filter((f) => !localOrder.includes(f.name)).length > 0 && (
                         <div>
-                          <p className="text-xs font-semibold text-muted-foreground mb-2">
+                          <h3 className="text-xs font-semibold text-muted-foreground mb-2">
                             עמודות מוסתרות
-                          </p>
+                          </h3>
                           <div className="space-y-1">
                             {uniqueFields
                               .filter((f) => !localOrder.includes(f.name))
@@ -1212,6 +1223,7 @@ export default function RecordTable({
                     size="sm"
                     className="gap-2 sm:hidden"
                     disabled
+                    aria-description="תכונה זו זמינה במחשב בלבד"
                   >
                     <ArrowUpDown className="h-4 w-4" />
                     ייבוא / ייצוא (במחשב בלבד)
@@ -1243,7 +1255,7 @@ export default function RecordTable({
               }
             }}
           >
-            <Table>
+            <Table aria-label="טבלת רשומות">
               <TableHeader className="bg-muted/30">
                 <TableRow>
                   <TableHead className="w-[50px] text-center">
@@ -1253,6 +1265,7 @@ export default function RecordTable({
                         selectedIds.length === filteredRecords.length
                       }
                       onCheckedChange={toggleSelectAll}
+                      aria-label="בחר את כל הרשומות"
                       className="border-gray-400 bg-white mr-4"
                     />
                   </TableHead>
@@ -1299,6 +1312,7 @@ export default function RecordTable({
                       <Checkbox
                         checked={selectedIdSet.has(record.id)}
                         onCheckedChange={() => toggleSelect(record.id)}
+                        aria-label={`בחר רשומה ${record.id}`}
                         className="border-gray-400 bg-white mr-4"
                       />
                     </TableCell>
@@ -1312,7 +1326,7 @@ export default function RecordTable({
                             setEditingRecord(record);
                             setEditingField(undefined);
                           }}
-                          title="ערוך רשומה"
+                          aria-label="ערוך רשומה"
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
@@ -1515,37 +1529,58 @@ export default function RecordTable({
                                   return (
                                     <div className="flex flex-wrap gap-1">
                                       {val.map((id: any) => (
-                                        <Badge
-                                          key={id}
-                                          variant="outline"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (relatedTableId) {
-                                              router.push(
-                                                `/tables/${relatedTableId}`,
-                                              );
-                                            }
-                                          }}
-                                          className="bg-primary/5 hover:bg-primary/10 cursor-pointer text-primary border-primary/20"
-                                        >
-                                          {getLabel(id)}
-                                        </Badge>
+                                        relatedTableId ? (
+                                          <a
+                                            key={id}
+                                            href={`/tables/${relatedTableId}`}
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              router.push(`/tables/${relatedTableId}`);
+                                            }}
+                                            className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded-md"
+                                          >
+                                            <Badge
+                                              variant="outline"
+                                              className="bg-primary/5 hover:bg-primary/10 cursor-pointer text-primary border-primary/20"
+                                            >
+                                              {getLabel(id)}
+                                            </Badge>
+                                          </a>
+                                        ) : (
+                                          <Badge
+                                            key={id}
+                                            variant="outline"
+                                            className="bg-primary/5 text-primary border-primary/20"
+                                          >
+                                            {getLabel(id)}
+                                          </Badge>
+                                        )
                                       ))}
                                     </div>
                                   );
                                 }
-                                return (
+                                return relatedTableId ? (
+                                  <a
+                                    href={`/tables/${relatedTableId}`}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      router.push(`/tables/${relatedTableId}`);
+                                    }}
+                                    className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded-md inline-block"
+                                  >
+                                    <Badge
+                                      variant="outline"
+                                      className="bg-primary/5 hover:bg-primary/10 cursor-pointer text-primary border-primary/20"
+                                    >
+                                      {getLabel(val)}
+                                    </Badge>
+                                  </a>
+                                ) : (
                                   <Badge
                                     variant="outline"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (relatedTableId) {
-                                        router.push(
-                                          `/tables/${relatedTableId}`,
-                                        );
-                                      }
-                                    }}
-                                    className="bg-primary/5 hover:bg-primary/10 cursor-pointer text-primary border-primary/20"
+                                    className="bg-primary/5 text-primary border-primary/20"
                                   >
                                     {getLabel(val)}
                                   </Badge>
@@ -1577,7 +1612,7 @@ export default function RecordTable({
                                   colorClass = "bg-orange-500";
 
                                 return (
-                                  <div className="w-full flex items-center gap-2">
+                                  <div className="w-full flex items-center gap-2" role="meter" aria-valuenow={scoreVal} aria-valuemin={Number(min)} aria-valuemax={Number(max)} aria-label={`${field.label}: ${scoreVal}`}>
                                     <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
                                       <div
                                         className={`h-full ${colorClass}`}
@@ -1622,6 +1657,7 @@ export default function RecordTable({
                                     setEditLinkName(e.target.value)
                                   }
                                   className="h-6 text-[10px] w-full"
+                                  aria-label="שם הלינק"
                                 />
                                 <Input
                                   placeholder="כתובת URL"
@@ -1630,6 +1666,7 @@ export default function RecordTable({
                                     setEditLinkUrl(e.target.value)
                                   }
                                   className="h-6 text-[10px] w-full"
+                                  aria-label="כתובת URL"
                                   onKeyDown={(e) => {
                                     if (e.key === "Enter") {
                                       e.preventDefault();
@@ -1648,6 +1685,7 @@ export default function RecordTable({
                                     size="sm"
                                     variant="ghost"
                                     className="h-5 px-1 text-[10px]"
+                                    aria-label="בטל עריכת לינק"
                                     onClick={() => {
                                       setEditingLinkId(null);
                                       setEditLinkUrl("");
@@ -1660,6 +1698,7 @@ export default function RecordTable({
                                     type="button"
                                     size="sm"
                                     className="h-5 px-2 text-[10px]"
+                                    aria-label="שמור לינק"
                                     onClick={() =>
                                       handleUpdateLink(record.id, att.id)
                                     }
@@ -1686,10 +1725,11 @@ export default function RecordTable({
                                   </span>
                                 </a>
                                 {canEdit && (
-                                  <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                                     <Button
                                       variant="ghost"
                                       size="icon"
+                                      aria-label="ערוך לינק"
                                       className="h-5 w-5 hover:bg-primary/10 hover:text-primary"
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -1703,6 +1743,7 @@ export default function RecordTable({
                                     <Button
                                       variant="ghost"
                                       size="icon"
+                                      aria-label="מחק לינק"
                                       className="h-5 w-5 hover:bg-destructive/10 hover:text-destructive"
                                       onClick={(e) =>
                                         handleDeleteAttachment(
@@ -1740,6 +1781,7 @@ export default function RecordTable({
                                     setEditFileName(e.target.value)
                                   }
                                   className="h-6 text-[10px]"
+                                  aria-label="שם קובץ חדש"
                                   autoFocus
                                   onKeyDown={(e) => {
                                     if (e.key === "Enter")
@@ -1756,6 +1798,7 @@ export default function RecordTable({
                                     size="sm"
                                     variant="ghost"
                                     className="h-5 px-1 text-[10px]"
+                                    aria-label="בטל עריכת שם קובץ"
                                     onClick={() => {
                                       setEditingFileId(null);
                                       setEditFileName("");
@@ -1767,6 +1810,7 @@ export default function RecordTable({
                                     type="button"
                                     size="sm"
                                     className="h-5 px-2 text-[10px]"
+                                    aria-label="שמור שם קובץ"
                                     onClick={() =>
                                       handleUpdateFile(record.id, file.id)
                                     }
@@ -1792,7 +1836,7 @@ export default function RecordTable({
                                   </span>
                                 </a>
                                 {canEdit && (
-                                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
                                     <Button
                                       type="button"
                                       variant="ghost"
@@ -1803,7 +1847,7 @@ export default function RecordTable({
                                         setEditFileName(file.displayName || "");
                                         setEditingFileId(file.id);
                                       }}
-                                      title="ערוך שם"
+                                      aria-label="ערוך שם קובץ"
                                     >
                                       <Pencil className="h-3 w-3" />
                                     </Button>
@@ -1892,6 +1936,7 @@ export default function RecordTable({
                                       }
                                     }}
                                     className="h-8 text-xs"
+                                    aria-label="שם הלינק"
                                   />
                                   <div className="flex gap-1">
                                     <Input
@@ -1915,6 +1960,7 @@ export default function RecordTable({
                                         }
                                       }}
                                       className="h-8 text-xs flex-1"
+                                      aria-label="כתובת לינק"
                                       onKeyDown={(e) => {
                                         if (
                                           e.key === "Enter" &&
@@ -1929,6 +1975,7 @@ export default function RecordTable({
                                       type="button"
                                       size="sm"
                                       className="h-8 px-3"
+                                      aria-label="הוסף לינק"
                                       onClick={() => handleAddLink(record.id)}
                                       disabled={
                                         !newLinkUrl.trim() ||
@@ -1968,7 +2015,7 @@ export default function RecordTable({
             </Table>
 
             {filteredRecords.length === 0 && (
-              <div className="p-12 text-center text-muted-foreground bg-muted/10">
+              <div className="p-12 text-center text-muted-foreground bg-muted/10" role="status" aria-live="polite">
                 <Search className="h-10 w-10 mx-auto mb-3 opacity-20" />
                 <p>לא נמצאו רשומות התואמות את החיפוש</p>
               </div>

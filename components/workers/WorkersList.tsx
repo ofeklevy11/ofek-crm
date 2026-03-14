@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 import {
   User,
@@ -92,6 +92,58 @@ export default function WorkersList({
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
   const [loadedSteps, setLoadedSteps] = useState<Record<number, { stepId: number; status: string }[]>>({});
   const [loadingSteps, setLoadingSteps] = useState<number | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Focus first menuitem when menu opens
+  useEffect(() => {
+    if (menuOpenId !== null && menuRef.current) {
+      const firstItem = menuRef.current.querySelector<HTMLElement>('[role="menuitem"]');
+      firstItem?.focus();
+    }
+  }, [menuOpenId]);
+
+  const handleMenuKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const menu = menuRef.current;
+    if (!menu) return;
+    const items = Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+
+    switch (e.key) {
+      case "ArrowDown": {
+        e.preventDefault();
+        const next = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+        items[next]?.focus();
+        break;
+      }
+      case "ArrowUp": {
+        e.preventDefault();
+        const prev = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+        items[prev]?.focus();
+        break;
+      }
+      case "Home": {
+        e.preventDefault();
+        items[0]?.focus();
+        break;
+      }
+      case "End": {
+        e.preventDefault();
+        items[items.length - 1]?.focus();
+        break;
+      }
+      case "Escape": {
+        e.preventDefault();
+        const trigger = e.currentTarget.parentElement?.querySelector<HTMLElement>('button[aria-haspopup]');
+        setMenuOpenId(null);
+        trigger?.focus();
+        break;
+      }
+      case "Enter": {
+        // Let the native click/navigation happen
+        break;
+      }
+    }
+  }, []);
 
   // Filter workers
   const filteredWorkers = workers.filter((worker) => {
@@ -221,7 +273,7 @@ export default function WorkersList({
   if (filteredWorkers.length === 0) {
     return (
       <div className="text-center py-16">
-        <User className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+        <User className="h-16 w-16 text-gray-300 mx-auto mb-4" aria-hidden="true" />
         <h3 className="text-xl font-semibold text-gray-700 mb-2">אין עובדים</h3>
         <p className="text-gray-500 mb-6">
           {workers.length === 0
@@ -289,18 +341,18 @@ export default function WorkersList({
                   <span
                     className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.bg} ${status.color}`}
                   >
-                    <StatusIcon className="h-3 w-3" />
+                    <StatusIcon className="h-3 w-3" aria-hidden="true" />
                     {status.label}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
                   <span className="flex items-center gap-1">
-                    <Building2 className="h-3.5 w-3.5" />
+                    <Building2 className="h-3.5 w-3.5" aria-hidden="true" />
                     {worker.department.name}
                   </span>
                   {worker.position && (
                     <span className="flex items-center gap-1">
-                      <Briefcase className="h-3.5 w-3.5" />
+                      <Briefcase className="h-3.5 w-3.5" aria-hidden="true" />
                       {worker.position}
                     </span>
                   )}
@@ -315,9 +367,9 @@ export default function WorkersList({
                       }`}
                     >
                       {path.isCompleted ? (
-                        <CheckCircle2 className="h-3 w-3" />
+                        <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
                       ) : (
-                        <GraduationCap className="h-3 w-3" />
+                        <GraduationCap className="h-3 w-3" aria-hidden="true" />
                       )}
                       {path.path.name}
                       {!path.isCompleted && ` (${path.progress}%)`}
@@ -330,10 +382,10 @@ export default function WorkersList({
               {onboardingProgress && (
                 <div className="hidden md:flex flex-col items-end min-w-[160px]">
                   <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-                    <GraduationCap className="h-4 w-4 text-indigo-500" />
+                    <GraduationCap className="h-4 w-4 text-indigo-500" aria-hidden="true" />
                     <span>{onboardingProgress.path.name}</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-gray-200 rounded-full h-2" role="progressbar" aria-valuenow={onboardingProgress.progress} aria-valuemin={0} aria-valuemax={100} aria-label="התקדמות קליטה">
                     <div
                       className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full transition-all"
                       style={{ width: `${onboardingProgress.progress}%` }}
@@ -377,6 +429,8 @@ export default function WorkersList({
                       }
                     }
                   }}
+                  aria-expanded={isExpanded}
+                  aria-label={isExpanded ? "כווץ פרטים" : "הרחב פרטים"}
                   className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
                 >
                   {isExpanded ? (
@@ -390,6 +444,9 @@ export default function WorkersList({
                     onClick={() =>
                       setMenuOpenId(menuOpenId === worker.id ? null : worker.id)
                     }
+                    aria-label="פעולות נוספות"
+                    aria-haspopup="true"
+                    aria-expanded={menuOpenId === worker.id}
                     className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
                   >
                     <MoreVertical className="h-5 w-5" />
@@ -400,10 +457,11 @@ export default function WorkersList({
                         className="fixed inset-0 z-10"
                         onClick={() => setMenuOpenId(null)}
                       />
-                      <div className="absolute left-0 top-full mt-1 bg-white rounded-lg shadow-lg border z-50 min-w-[120px]">
+                      <div ref={menuRef} role="menu" onKeyDown={handleMenuKeyDown} className="absolute left-0 top-full mt-1 bg-white rounded-lg shadow-lg border z-50 min-w-[120px]">
                         <Link
                           href={`/workers/${worker.id}`}
                           prefetch={false}
+                          role="menuitem"
                           onClick={() => setMenuOpenId(null)}
                           className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
@@ -411,6 +469,7 @@ export default function WorkersList({
                           צפייה
                         </Link>
                         <button
+                          role="menuitem"
                           onClick={() => {
                             setMenuOpenId(null);
                             onEdit(worker);
@@ -421,6 +480,7 @@ export default function WorkersList({
                           עריכה
                         </button>
                         <button
+                          role="menuitem"
                           onClick={() => {
                             setMenuOpenId(null);
                             handleDelete(worker.id);
@@ -448,7 +508,7 @@ export default function WorkersList({
                     <div className="space-y-2 text-sm">
                       {worker.email && (
                         <div className="flex items-center gap-2 text-gray-600">
-                          <Mail className="h-4 w-4 text-gray-400" />
+                          <Mail className="h-4 w-4 text-gray-400" aria-hidden="true" />
                           <a
                             href={`mailto:${worker.email}`}
                             className="hover:text-indigo-600"
@@ -459,7 +519,7 @@ export default function WorkersList({
                       )}
                       {worker.phone && (
                         <div className="flex items-center gap-2 text-gray-600">
-                          <Phone className="h-4 w-4 text-gray-400" />
+                          <Phone className="h-4 w-4 text-gray-400" aria-hidden="true" />
                           <a
                             href={`tel:${worker.phone}`}
                             className="hover:text-indigo-600"
@@ -518,7 +578,7 @@ export default function WorkersList({
                         href={`/workers/${worker.id}`}
                         className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-xs font-medium hover:bg-indigo-200 transition"
                       >
-                        <GraduationCap className="h-3.5 w-3.5" />
+                        <GraduationCap className="h-3.5 w-3.5" aria-hidden="true" />
                         נהל מסלולי קליטה
                       </Link>
                     </div>
@@ -537,10 +597,10 @@ export default function WorkersList({
                               <div className="flex items-center gap-2">
                                 {path.isCompleted ? (
                                   <div className="h-6 w-6 rounded-full bg-emerald-500 flex items-center justify-center">
-                                    <CheckCircle2 className="h-4 w-4 text-white" />
+                                    <CheckCircle2 className="h-4 w-4 text-white" aria-hidden="true" />
                                   </div>
                                 ) : (
-                                  <GraduationCap className="h-5 w-5 text-indigo-500" />
+                                  <GraduationCap className="h-5 w-5 text-indigo-500" aria-hidden="true" />
                                 )}
                                 <span
                                   className={`font-medium ${
@@ -575,6 +635,11 @@ export default function WorkersList({
                                   ? "bg-emerald-200"
                                   : "bg-gray-200"
                               }`}
+                              role="progressbar"
+                              aria-valuenow={path.progress}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-label="התקדמות קליטה"
                             >
                               <div
                                 className={`h-2 rounded-full transition-all ${
@@ -588,7 +653,7 @@ export default function WorkersList({
 
                             {/* Steps Checklist — lazy-loaded */}
                             {loadingSteps === worker.id && !loadedSteps[path.id] ? (
-                              <div className="text-xs text-gray-400 py-2">טוען שלבים...</div>
+                              <div className="text-xs text-gray-400 py-2" role="status">טוען שלבים...</div>
                             ) : loadedSteps[path.id] ? (
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                               {loadedSteps[path.id].map((sp, idx) => {
@@ -606,11 +671,11 @@ export default function WorkersList({
                                     }`}
                                   >
                                     {isCompleted ? (
-                                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                                     ) : isSkipped ? (
-                                      <XCircle className="h-3.5 w-3.5 shrink-0" />
+                                      <XCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                                     ) : (
-                                      <div className="h-3.5 w-3.5 rounded-full border-2 border-gray-300 shrink-0" />
+                                      <div className="h-3.5 w-3.5 rounded-full border-2 border-gray-300 shrink-0" aria-hidden="true" />
                                     )}
                                     <span className="truncate">
                                       שלב {idx + 1}
@@ -630,7 +695,7 @@ export default function WorkersList({
                       </div>
                     ) : (
                       <div className="text-center py-6 bg-gray-50 rounded-xl">
-                        <GraduationCap className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                        <GraduationCap className="h-8 w-8 text-gray-300 mx-auto mb-2" aria-hidden="true" />
                         <p className="text-sm text-gray-500">
                           אין מסלול קליטה פעיל
                         </p>

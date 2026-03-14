@@ -91,7 +91,9 @@ export default function NurtureTriggerInfo({ slug }: { slug: NurtureSlug }) {
     <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-right hover:bg-blue-100/50 transition-colors"
+        aria-expanded={open}
+        aria-controls={`trigger-info-content-${slug}`}
+        className="w-full flex items-center gap-3 px-4 py-3 text-right hover:bg-blue-100/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
           <Icon className="w-4 h-4 text-blue-600" />
@@ -100,7 +102,7 @@ export default function NurtureTriggerInfo({ slug }: { slug: NurtureSlug }) {
         <ChevronDown className={`w-4 h-4 text-blue-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="px-4 pb-4 pt-1 border-t border-blue-100">
+        <div id={`trigger-info-content-${slug}`} className="px-4 pb-4 pt-1 border-t border-blue-100">
           <p className="text-sm text-blue-800 mb-3 leading-relaxed">{data.body}</p>
           <ul className="space-y-1.5">
             {data.bullets.map((b, i) => (

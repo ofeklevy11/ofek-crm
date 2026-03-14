@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { apiFetch } from "@/lib/api-fetch";
 import { getUserFriendlyError } from "@/lib/errors";
 import { Spinner } from "@/components/ui/spinner";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 
 import { USER_FLAGS } from "@/lib/permissions";
 
@@ -32,6 +33,7 @@ export default function UserModal({
   onClose,
   onSave,
 }: UserModalProps) {
+  const focusTrapRef = useFocusTrap(onClose);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -145,32 +147,34 @@ export default function UserModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="user-modal-title" onClick={onClose}>
+      <div ref={focusTrapRef} className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-900">
+          <h2 id="user-modal-title" className="text-2xl font-bold text-gray-900">
             {user ? "ערוך משתמש" : "משתמש חדש"}
           </h2>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
+            <div role="alert" className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
               {error}
             </div>
           )}
 
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">
+            <label htmlFor="user-name" className="block text-sm font-medium text-gray-900 mb-2">
               שם <span className="text-red-500">*</span>
             </label>
             <input
+              id="user-name"
               type="text"
               value={formData.name}
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
+              aria-required="true"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
               placeholder="שם מלא"
             />
@@ -178,15 +182,17 @@ export default function UserModal({
 
           {/* Email */}
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">
+            <label htmlFor="user-email" className="block text-sm font-medium text-gray-900 mb-2">
               אימייל <span className="text-red-500">*</span>
             </label>
             <input
+              id="user-email"
               type="email"
               value={formData.email}
               onChange={(e) =>
                 setFormData({ ...formData, email: e.target.value })
               }
+              aria-required="true"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
               placeholder="email@example.com"
             />
@@ -194,7 +200,7 @@ export default function UserModal({
 
           {/* Password */}
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">
+            <label htmlFor="user-password" className="block text-sm font-medium text-gray-900 mb-2">
               סיסמה {!user && <span className="text-red-500">*</span>}
               {user && (
                 <span className="text-gray-500 text-xs mr-2">
@@ -203,21 +209,23 @@ export default function UserModal({
               )}
             </label>
             <input
+              id="user-password"
               type="password"
               value={formData.password}
               onChange={(e) =>
                 setFormData({ ...formData, password: e.target.value })
               }
+              {...(!user && { "aria-required": "true" as const })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
               placeholder="••••••••"
             />
           </div>
 
           {/* Role */}
-          <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">
+          <fieldset className="border-0 p-0 m-0">
+            <legend className="block text-sm font-medium text-gray-900 mb-2">
               תפקיד
-            </label>
+            </legend>
             <div className="space-y-3">
               <label className="flex items-start gap-3 p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition">
                 <input
@@ -289,21 +297,21 @@ export default function UserModal({
                 </div>
               </label>
             </div>
-          </div>
+          </fieldset>
 
           {/* Flags / Permissions - Only for non-admins */}
           {formData.role !== "admin" && (
             <div>
-              <label className="block text-sm font-medium text-gray-900 mb-3">
+              <span className="block text-sm font-medium text-gray-900 mb-3">
                 הרשאות נוספות
-              </label>
+              </span>
               <div className="space-y-4 bg-gray-50 p-5 rounded-lg border border-gray-200">
                 {/* Navigation Permissions */}
-                <div className="bg-white p-4 rounded-lg border border-blue-100">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <span className="text-blue-600">🧭</span>
+                <fieldset className="bg-white p-4 rounded-lg border border-blue-100 m-0">
+                  <legend className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <span className="text-blue-600" aria-hidden="true">🧭</span>
                     הרשאות ניווט וגישה למודולים
-                  </h3>
+                  </legend>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       "canViewTables",
@@ -345,14 +353,14 @@ export default function UserModal({
                       );
                     })}
                   </div>
-                </div>
+                </fieldset>
 
                 {/* Management Permissions */}
-                <div className="bg-white p-4 rounded-lg border border-green-100">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <span className="text-green-600">⚙️</span>
+                <fieldset className="bg-white p-4 rounded-lg border border-green-100 m-0">
+                  <legend className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <span className="text-green-600" aria-hidden="true">⚙️</span>
                     הרשאות ניהול ותפעול
-                  </h3>
+                  </legend>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {[
                       "canCreateTasks",
@@ -380,14 +388,14 @@ export default function UserModal({
                       );
                     })}
                   </div>
-                </div>
+                </fieldset>
 
                 {/* Table Operations */}
-                <div className="bg-white p-4 rounded-lg border border-purple-100">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <span className="text-purple-600">🔧</span>
+                <fieldset className="bg-white p-4 rounded-lg border border-purple-100 m-0">
+                  <legend className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <span className="text-purple-600" aria-hidden="true">🔧</span>
                     פעולות בטבלאות (שהמשתמש מורשה לצפות בהן)
-                  </h3>
+                  </legend>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {[
                       "canSearchTables",
@@ -414,17 +422,17 @@ export default function UserModal({
                       );
                     })}
                   </div>
-                </div>
+                </fieldset>
               </div>
             </div>
           )}
 
           {/* Table Permissions (for managers) */}
           {formData.role === "manager" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
+            <fieldset className="border-0 p-0 m-0">
+              <legend className="block text-sm font-medium text-gray-900 mb-2">
                 הרשאות כתיבה לטבלאות
-              </label>
+              </legend>
               <div className="border border-gray-300 rounded-lg p-4 max-h-64 overflow-y-auto space-y-2">
                 {tables.length === 0 ? (
                   <p className="text-gray-500 text-sm">אין טבלאות זמינות</p>
@@ -454,15 +462,15 @@ export default function UserModal({
                   ))
                 )}
               </div>
-            </div>
+            </fieldset>
           )}
 
           {/* Table Permissions (for basic users) */}
           {formData.role === "basic" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
+            <fieldset className="border-0 p-0 m-0">
+              <legend className="block text-sm font-medium text-gray-900 mb-2">
                 הרשאות לטבלאות
-              </label>
+              </legend>
               <div className="border border-gray-300 rounded-lg overflow-hidden">
                 <div className="bg-gray-50 border-b border-gray-200 grid grid-cols-12 px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   <div className="col-span-6">שם טבלה</div>
@@ -500,6 +508,7 @@ export default function UserModal({
                               onChange={() =>
                                 handleTablePermissionChange(table.id, "none")
                               }
+                              aria-label={`ללא גישה ל${table.name}`}
                               className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300"
                             />
                           </div>
@@ -511,6 +520,7 @@ export default function UserModal({
                               onChange={() =>
                                 handleTablePermissionChange(table.id, "read")
                               }
+                              aria-label={`קריאה בלבד ל${table.name}`}
                               className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300"
                             />
                           </div>
@@ -522,6 +532,7 @@ export default function UserModal({
                               onChange={() =>
                                 handleTablePermissionChange(table.id, "write")
                               }
+                              aria-label={`קריאה וכתיבה ל${table.name}`}
                               className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300"
                             />
                           </div>
@@ -531,7 +542,7 @@ export default function UserModal({
                   )}
                 </div>
               </div>
-            </div>
+            </fieldset>
           )}
 
           {/* Actions */}
@@ -540,14 +551,14 @@ export default function UserModal({
               type="button"
               onClick={onClose}
               disabled={isSaving}
-              className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium disabled:opacity-50"
+              className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             >
               ביטול
             </button>
             <button
               type="submit"
               disabled={isSaving}
-              className="flex-1 px-6 py-3 bg-linear-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 px-6 py-3 bg-linear-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition shadow-lg font-medium disabled:opacity-50 flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             >
               {isSaving ? <><Spinner size="sm" /> שומר...</> : user ? "עדכן" : "צור"}
             </button>

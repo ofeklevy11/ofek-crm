@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { getUserFriendlyError } from "@/lib/errors";
 import { toast } from "sonner";
 import {
@@ -75,6 +76,7 @@ export default function AIAnalyticsCreator({
   const { dispatch, cancel } = useAIJob();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasLoadedTablesRef = useRef(false);
+  const focusTrapRef = useFocusTrap(onClose, isOpen);
 
   // Cancel in-flight requests when modal closes
   useEffect(() => {
@@ -318,9 +320,13 @@ export default function AIAnalyticsCreator({
   return (
     <div
       className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ai-analytics-title"
       onClick={onClose}
     >
       <div
+        ref={focusTrapRef}
         className={cn(
           "bg-card w-full max-h-[90vh] rounded-3xl shadow-2xl flex overflow-hidden border border-border flex-col md:flex-row",
           generatedView || aiSuggestions.length > 0 ? "max-w-6xl" : "max-w-2xl"
@@ -340,7 +346,7 @@ export default function AIAnalyticsCreator({
           >
             <div className="p-6 border-b border-border bg-muted/30 flex justify-between items-center">
               <div>
-                <h2 className="text-xl font-bold flex items-center gap-2">
+                <h2 id="ai-analytics-title" className="text-xl font-bold flex items-center gap-2">
                   <Sparkles className="text-primary" /> יצירת אנליטיקה חכמה עם AI
                 </h2>
                 <p className="text-sm text-muted-foreground">
@@ -355,6 +361,7 @@ export default function AIAnalyticsCreator({
                     onClick={() => setChatMinimized(true)}
                     className="text-muted-foreground hover:text-foreground"
                     title="מזער צ'אט"
+                    aria-label="מזער צ'אט"
                   >
                     <PanelLeftClose className="h-5 w-5" />
                   </Button>
@@ -373,6 +380,7 @@ export default function AIAnalyticsCreator({
                   size="icon"
                   onClick={onClose}
                   className="text-muted-foreground hover:text-foreground"
+                  aria-label="סגור"
                 >
                   <X className="h-5 w-5" />
                 </Button>
@@ -380,7 +388,7 @@ export default function AIAnalyticsCreator({
             </div>
 
             <ScrollArea className="flex-1 p-6 bg-muted/10">
-              <div className="space-y-4">
+              <div className="space-y-4" aria-live="polite">
                 {messages.map((msg, i) => (
                   <div
                     key={i}
@@ -407,19 +415,21 @@ export default function AIAnalyticsCreator({
                 ))}
                 {(loading || loadingSuggestions) && (
                   <div className="flex justify-start">
-                    <div className="bg-card border border-border px-5 py-3.5 rounded-2xl rounded-br-none shadow-sm flex gap-2 items-center">
+                    <div role="status" className="bg-card border border-border px-5 py-3.5 rounded-2xl rounded-br-none shadow-sm flex gap-2 items-center">
                       <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
                       <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-.3s]"></div>
                       <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-.5s]"></div>
+                      <span className="sr-only">טוען...</span>
                     </div>
                   </div>
                 )}
                 {initialLoading && messages.length === 1 && (
                   <div className="flex justify-start">
-                    <div className="bg-card border border-border px-5 py-3.5 rounded-2xl rounded-br-none shadow-sm flex gap-2 items-center">
+                    <div role="status" className="bg-card border border-border px-5 py-3.5 rounded-2xl rounded-br-none shadow-sm flex gap-2 items-center">
                       <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
                       <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-.3s]"></div>
                       <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-.5s]"></div>
+                      <span className="sr-only">טוען...</span>
                     </div>
                   </div>
                 )}
@@ -467,7 +477,7 @@ export default function AIAnalyticsCreator({
             </ScrollArea>
 
             {error && (
-              <div className="mx-6 mb-2 bg-destructive/10 border border-destructive/20 text-destructive p-3 rounded-xl flex items-center gap-3 animate-in fade-in">
+              <div className="mx-6 mb-2 bg-destructive/10 border border-destructive/20 text-destructive p-3 rounded-xl flex items-center gap-3 animate-in fade-in" role="alert">
                 <AlertCircle size={18} />
                 <p className="text-sm">{error}</p>
               </div>
@@ -489,6 +499,7 @@ export default function AIAnalyticsCreator({
                       ? "בקש שינוי, למשל: שנה לגרף עוגה..."
                       : "למשל: גרף עמודות של לידים לפי סטטוס..."
                   }
+                  aria-label="הודעה ל-AI"
                   className="pl-5 pr-12 py-6 rounded-xl bg-muted/20 min-h-[9rem]"
                   autoFocus
                   rows={6}
@@ -499,6 +510,7 @@ export default function AIAnalyticsCreator({
                   disabled={loading || !input.trim() || tables.length === 0}
                   size="icon"
                   className="absolute left-2 bottom-2 h-8 w-8 rounded-lg"
+                  aria-label="שלח הודעה"
                 >
                   <ArrowRight className="h-4 w-4" />
                 </Button>
@@ -603,6 +615,7 @@ export default function AIAnalyticsCreator({
                   size="icon"
                   onClick={onClose}
                   className="text-muted-foreground hover:text-foreground"
+                  aria-label="סגור"
                 >
                   <X className="h-5 w-5" />
                 </Button>

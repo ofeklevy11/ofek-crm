@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +70,7 @@ export default function AIReportCreator({
   const [report, setReport] = useState<AIReport | null>(null);
   const { dispatch, cancel } = useAIJob();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const focusTrapRef = useFocusTrap(onClose, isOpen);
 
   const [suggestions] = useState<string[]>([
     "דוח מקיף על הלקוחות שלי - כמות, חלוקה לפי מקור ומגמות",
@@ -230,9 +232,13 @@ export default function AIReportCreator({
   return (
     <div
       className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ai-report-title"
       onClick={onClose}
     >
       <div
+        ref={focusTrapRef}
         className="bg-card w-full max-w-7xl h-[90vh] rounded-3xl shadow-2xl flex overflow-hidden border border-border flex-col md:flex-row"
         dir="rtl"
         onClick={(e) => e.stopPropagation()}
@@ -246,7 +252,7 @@ export default function AIReportCreator({
         >
           <div className="p-5 border-b border-border bg-muted/30 flex justify-between items-center">
             <div>
-              <h2 className="text-xl font-bold flex items-center gap-2">
+              <h2 id="ai-report-title" className="text-xl font-bold flex items-center gap-2">
                 <Sparkles className="text-primary" /> יצירת דוח אנליטי עם AI
               </h2>
               <p className="text-sm text-muted-foreground">
@@ -268,6 +274,7 @@ export default function AIReportCreator({
                 size="icon"
                 onClick={onClose}
                 className="text-muted-foreground hover:text-foreground"
+                aria-label="סגור"
               >
                 <X className="h-5 w-5" />
               </Button>
@@ -275,7 +282,7 @@ export default function AIReportCreator({
           </div>
 
           <ScrollArea className="flex-1 p-5 bg-muted/10">
-            <div className="space-y-4">
+            <div className="space-y-4" aria-live="polite">
               {messages.map((msg, i) => (
                 <div
                   key={i}
@@ -298,10 +305,11 @@ export default function AIReportCreator({
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="bg-card border border-border px-5 py-3.5 rounded-2xl rounded-br-none shadow-sm flex gap-2 items-center">
+                  <div role="status" className="bg-card border border-border px-5 py-3.5 rounded-2xl rounded-br-none shadow-sm flex gap-2 items-center">
                     <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
                     <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-.3s]"></div>
                     <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-.5s]"></div>
+                    <span className="sr-only">טוען...</span>
                   </div>
                 </div>
               )}
@@ -326,7 +334,7 @@ export default function AIReportCreator({
           {/* Chat Input */}
           <div className="p-4 bg-card border-t border-border">
             {error && (
-              <div className="mb-3 bg-red-50 border border-red-100 text-red-600 p-3 rounded-xl flex items-center gap-2 text-sm">
+              <div className="mb-3 bg-red-50 border border-red-100 text-red-600 p-3 rounded-xl flex items-center gap-2 text-sm" role="alert">
                 <AlertCircle size={16} />
                 <p>{error}</p>
               </div>
@@ -346,6 +354,7 @@ export default function AIReportCreator({
                     ? "בקש שינוי בדוח, למשל: ״שנה את הגרף לעוגה״..."
                     : "תאר את הדוח שברצונך ליצור..."
                 }
+                aria-label="הודעה ל-AI"
                 className="pl-5 pr-12 py-6 rounded-xl bg-muted/20 min-h-[9rem]"
                 disabled={loading}
                 rows={6}
@@ -356,6 +365,7 @@ export default function AIReportCreator({
                 disabled={loading || !input.trim()}
                 size="icon"
                 className="absolute left-2 bottom-2 h-8 w-8 rounded-lg"
+                aria-label="שלח הודעה"
               >
                 <ArrowRight className="h-4 w-4" />
               </Button>

@@ -65,6 +65,7 @@ import {
   GripVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 
 // Available colors for the cards
 const COLOR_OPTIONS = [
@@ -209,6 +210,68 @@ function ConfigDetails({ config, type }: { config: any; type: string }) {
   );
 }
 
+function FolderCreateModal({
+  newFolderName,
+  setNewFolderName,
+  onClose,
+  onSubmit,
+}: {
+  newFolderName: string;
+  setNewFolderName: (v: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  const focusTrapRef = useFocusTrap(onClose);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="new-folder-title"
+      onClick={onClose}
+    >
+      <div
+        ref={focusTrapRef}
+        className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 id="new-folder-title" className="text-xl font-bold text-gray-900 mb-2">
+          יצירת תיקייה חדשה
+        </h3>
+        <p className="text-gray-500 text-sm mb-6">
+          תן שם לתיקייה כדי לארגן את התצוגות שלך
+        </p>
+        <input
+          type="text"
+          autoFocus
+          placeholder="שם התיקייה..."
+          aria-label="שם התיקייה"
+          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all outline-none mb-6"
+          value={newFolderName}
+          onChange={(e) => setNewFolderName(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && onSubmit()}
+        />
+        <div className="flex gap-3">
+          <button
+            className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors"
+            onClick={onClose}
+          >
+            ביטול
+          </button>
+          <button
+            className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors"
+            onClick={onSubmit}
+            disabled={!newFolderName.trim()}
+          >
+            צור תיקייה
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AnalyticsCard({
   view,
   onOpenDetails,
@@ -286,10 +349,11 @@ function AnalyticsCard({
       style={style}
       {...attributes}
       {...listeners}
+      aria-roledescription="פריט ניתן לגרירה"
       className="group relative flex flex-col justify-between h-full bg-white rounded-2xl shadow-sm hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300 border border-gray-100 overflow-hidden"
     >
       {/* Top Accent Line */}
-      <div className={`h-1.5 w-full shrink-0 ${accentClass}`} />
+      <div className={`h-1.5 w-full shrink-0 ${accentClass}`} aria-hidden="true" />
 
       <div className="p-5 flex-1 flex flex-col cursor-grab active:cursor-grabbing">
         {/* Header Row */}
@@ -327,57 +391,51 @@ function AnalyticsCard({
 
           {/* Actions - Visible on Hover */}
           {canManage && (
-            <div className="absolute top-4 left-4 flex gap-1 bg-white/95 backdrop-blur rounded-lg p-1 border border-gray-100 shadow-sm opacity-100 md:opacity-0 md:group-hover:opacity-100 scale-100 md:scale-90 md:group-hover:scale-100 transition-all duration-200 origin-top-left z-10">
+            <div className="absolute top-4 left-4 flex gap-1 bg-white/95 backdrop-blur rounded-lg p-1 border border-gray-100 shadow-sm opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 scale-100 md:scale-90 md:group-hover:scale-100 md:focus-within:scale-100 transition-all duration-200 origin-top-left z-10">
               <button
                 className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
-                onPointerDown={(e) => {
-                  e.stopPropagation();
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => {
                   setShowFolderPicker(!showFolderPicker);
                   setShowColorPicker(false);
                 }}
-                title="העבר לתיקייה"
+                aria-label="העבר לתיקייה"
+                aria-expanded={showFolderPicker}
               >
                 <Move size={14} />
               </button>
               {!isAutomation && (
                 <button
                   className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                    onAddAutomation(view);
-                  }}
-                  title="הוסף אוטומציה"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => onAddAutomation(view)}
+                  aria-label="הוסף אוטומציה"
                 >
                   <Zap size={14} />
                 </button>
               )}
               <button
                 className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  onEdit(view);
-                }}
-                title={isAutomation ? "ערוך אוטומציה" : "ערוך תצוגה"}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => onEdit(view)}
+                aria-label={isAutomation ? "ערוך אוטומציה" : "ערוך תצוגה"}
               >
                 {isAutomation ? <Settings size={14} /> : <Edit3 size={14} />}
               </button>
               <button
                 className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  setShowColorPicker(!showColorPicker);
-                }}
-                title="שנה צבע"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => setShowColorPicker(!showColorPicker)}
+                aria-label="שנה צבע"
+                aria-expanded={showColorPicker}
               >
                 <Palette size={14} />
               </button>
               <button
                 className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  onDelete(view);
-                }}
-                title="מחק תצוגה"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => onDelete(view)}
+                aria-label="מחק תצוגה"
               >
                 <Trash2 size={14} />
               </button>
@@ -387,6 +445,9 @@ function AnalyticsCard({
                 <div
                   className="absolute top-full left-0 mt-2 z-20 bg-white shadow-xl rounded-xl p-3 grid grid-cols-4 gap-2 border border-gray-100 w-40"
                   onPointerDown={(e) => e.stopPropagation()}
+                  role="listbox"
+                  aria-label="בחר צבע"
+                  onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setShowColorPicker(false); } }}
                 >
                   {COLOR_OPTIONS.map((color) => (
                     <button
@@ -406,7 +467,9 @@ function AnalyticsCard({
                         }
                         setShowColorPicker(false);
                       }}
-                      title={color.label}
+                      role="option"
+                      aria-label={color.label}
+                      aria-selected={view.color === color.value}
                     />
                   ))}
                 </div>
@@ -416,12 +479,17 @@ function AnalyticsCard({
                 <div
                   className="absolute top-full left-0 mt-2 z-20 bg-white shadow-xl rounded-xl p-2 border border-gray-100 w-56 flex flex-col gap-1 max-h-60 overflow-y-auto"
                   onPointerDown={(e) => e.stopPropagation()}
+                  role="listbox"
+                  aria-label="בחר תיקייה"
+                  onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setShowFolderPicker(false); } }}
                 >
                   <div className="px-2 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50 mb-1">
                     בחר תיקייה
                   </div>
                   <button
                     className="text-right px-3 py-2 text-xs hover:bg-gray-50 rounded-lg flex items-center gap-2 text-gray-600 font-medium transition-colors"
+                    role="option"
+                    aria-selected={!view.folderId}
                     onClick={() => {
                       onMove(view, null);
                       setShowFolderPicker(false);
@@ -434,6 +502,8 @@ function AnalyticsCard({
                     <button
                       key={f.id}
                       className="text-right px-3 py-2 text-xs hover:bg-yellow-50 rounded-lg flex items-center gap-2 text-gray-700 font-medium transition-colors"
+                      role="option"
+                      aria-selected={view.folderId === f.id}
                       onClick={() => {
                         onMove(view, f.id);
                         setShowFolderPicker(false);
@@ -518,7 +588,7 @@ function AnalyticsCard({
             onClick={() => onRefresh(view)}
             disabled={isRefreshing}
             className="p-1.5 hover:bg-white hover:shadow-sm rounded-full transition-all text-gray-400 hover:text-blue-600 border border-transparent hover:border-blue-100 disabled:opacity-50"
-            title="רענן נתון"
+            aria-label="רענן נתון"
             onPointerDown={(e) => e.stopPropagation()}
           >
             <RefreshCw
@@ -530,7 +600,7 @@ function AnalyticsCard({
             <button
               onClick={() => onOpenDetails(view)}
               className="group/list p-1.5 hover:bg-white hover:shadow-sm rounded-full transition-all text-blue-600 border border-transparent hover:border-blue-100"
-              title="צפה ברשימה המלאה"
+              aria-label="צפה ברשימה המלאה"
               onPointerDown={(e) => e.stopPropagation()}
             >
               <List
@@ -581,14 +651,15 @@ function SortableGraphCard({ view }: { view: any }) {
     >
       <div className="p-4 border-b border-gray-50 flex justify-between items-start">
         <div className="flex items-start gap-2">
-          <div
+          <button
+            type="button"
             {...attributes}
             {...listeners}
             className="cursor-grab active:cursor-grabbing p-1 text-gray-300 hover:text-gray-500 mt-1"
-            title="גרור לשינוי סדר"
+            aria-label="גרור לשינוי סדר"
           >
             <GripVertical size={18} />
-          </div>
+          </button>
           <div>
             <h3 className="font-bold text-gray-900 text-lg">{view.ruleName}</h3>
             <p className="text-sm text-gray-500">{view.stats?.subMetric}</p>
@@ -606,6 +677,7 @@ function SortableGraphCard({ view }: { view: any }) {
           data={view.data}
           type={view.config.chartType}
           height={chartHeight}
+          title={view.ruleName}
         />
       </div>
 
@@ -922,7 +994,7 @@ export default function AnalyticsDashboard({
   const refreshesLeft = Math.max(0, maxRefreshes - refreshUsage);
 
   return (
-    <div
+    <main
       className="min-h-screen bg-[#f4f8f8] py-8 px-4 sm:px-6 lg:px-8"
       dir="rtl"
     >
@@ -992,13 +1064,13 @@ export default function AnalyticsDashboard({
               <button
                 onClick={() => setIsFolderModalOpen(true)}
                 className="hidden md:block shrink-0 p-3 text-gray-400 hover:bg-gray-50 hover:text-gray-600 rounded-xl transition-colors bg-gray-50/50 border border-gray-100"
-                title="צור תיקייה חדשה"
+                aria-label="צור תיקייה חדשה"
               >
                 <FolderPlus size={20} />
               </button>
             )}
 
-            <div className="hidden md:block h-8 w-px bg-gray-200 mx-2 shrink-0" />
+            <div className="hidden md:block h-8 w-px bg-gray-200 mx-2 shrink-0" aria-hidden="true" />
 
             {/* All Analytics Button */}
             <button
@@ -1012,19 +1084,22 @@ export default function AnalyticsDashboard({
               <Zap
                 size={18}
                 className={currentFolder === "all" ? "text-purple-300" : ""}
+                aria-hidden="true"
               />
               כל האנליטיקות
             </button>
 
             {/* Folder List */}
             {folders.map((folder) => (
-              <div
+              <button
+                type="button"
                 key={folder.id}
-                className={`group relative shrink-0 flex items-center pr-4 pl-10 py-2.5 rounded-xl text-sm font-bold transition-all border cursor-pointer shadow-sm hover:shadow-md ${
+                className={`group relative shrink-0 flex items-center pr-4 pl-10 py-2.5 rounded-xl text-sm font-bold transition-all border shadow-sm hover:shadow-md ${
                   currentFolder === folder.id
                     ? "bg-yellow-50 text-yellow-800 border-yellow-200"
                     : "bg-white text-gray-600 border-gray-100 hover:bg-gray-50"
                 }`}
+                aria-pressed={currentFolder === folder.id}
                 onClick={() => setCurrentFolder(folder.id)}
               >
                 <Folder
@@ -1039,17 +1114,27 @@ export default function AnalyticsDashboard({
 
                 {/* Delete Folder Button */}
                 {canManage && (
-                  <button
-                    className="absolute left-1 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="absolute left-1 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                    aria-label="מחק תיקייה"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDeleteFolder(folder.id);
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDeleteFolder(folder.id);
+                      }
+                    }}
                   >
                     <X size={12} />
-                  </button>
+                  </span>
                 )}
-              </div>
+              </button>
             ))}
           </div>
 
@@ -1064,9 +1149,11 @@ export default function AnalyticsDashboard({
           `}</style>
 
           {/* Left Side: View Type Filters */}
-          <div className="flex bg-gray-100/50 p-1.5 rounded-xl mt-4 sm:mt-0 gap-1">
+          <div className="flex bg-gray-100/50 p-1.5 rounded-xl mt-4 sm:mt-0 gap-1" role="tablist" aria-label="סינון לפי סוג">
             <button
               onClick={() => setFilter("all")}
+              role="tab"
+              aria-selected={filter === "all"}
               className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${
                 filter === "all"
                   ? "bg-pink-100 text-pink-700 shadow-sm border border-pink-200"
@@ -1077,6 +1164,8 @@ export default function AnalyticsDashboard({
             </button>
             <button
               onClick={() => setFilter("manual")}
+              role="tab"
+              aria-selected={filter === "manual"}
               className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${
                 filter === "manual"
                   ? "bg-pink-100 text-pink-700 shadow-sm border border-pink-200"
@@ -1087,6 +1176,8 @@ export default function AnalyticsDashboard({
             </button>
             <button
               onClick={() => setFilter("automation")}
+              role="tab"
+              aria-selected={filter === "automation"}
               className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${
                 filter === "automation"
                   ? "bg-pink-100 text-pink-700 shadow-sm border border-pink-200"
@@ -1126,7 +1217,7 @@ export default function AnalyticsDashboard({
         />
 
         {/* Automations Guide Banner */}
-        <div className="bg-gradient-to-l from-amber-50 to-orange-50 border border-amber-100/80 rounded-xl px-5 py-3.5 mt-6 flex items-start gap-3">
+        <div className="bg-gradient-to-l from-amber-50 to-orange-50 border border-amber-100/80 rounded-xl px-5 py-3.5 mt-6 flex items-start gap-3" role="region" aria-label="מידע על אוטומציות">
           <div className="bg-amber-100 rounded-lg p-2 shrink-0">
             <Zap size={16} className="text-amber-600" />
           </div>
@@ -1152,7 +1243,7 @@ export default function AnalyticsDashboard({
         </div>
 
         {/* Cache Info Banner */}
-        <div className="bg-gradient-to-l from-blue-50 to-indigo-50 border border-blue-100/80 rounded-xl px-5 py-3.5 mt-3 flex items-start gap-3">
+        <div className="bg-gradient-to-l from-blue-50 to-indigo-50 border border-blue-100/80 rounded-xl px-5 py-3.5 mt-3 flex items-start gap-3" role="region" aria-label="מידע על מערכת קאש">
           <div className="bg-blue-100 rounded-lg p-2 shrink-0">
             <RefreshCw size={16} className="text-blue-600" />
           </div>
@@ -1196,7 +1287,7 @@ export default function AnalyticsDashboard({
         </div>
 
         {loadError && /rate.?limit/i.test(loadError) && (
-          <div className="bg-gradient-to-l from-red-50 to-orange-50 border border-red-100/80 rounded-xl px-5 py-3.5 mt-3 flex items-start gap-3">
+          <div className="bg-gradient-to-l from-red-50 to-orange-50 border border-red-100/80 rounded-xl px-5 py-3.5 mt-3 flex items-start gap-3" role="alert">
             <div className="bg-red-100 rounded-lg p-2 shrink-0">
               <AlertCircle size={16} className="text-red-600" />
             </div>
@@ -1209,7 +1300,7 @@ export default function AnalyticsDashboard({
       </div>
 
       {loading ? (
-        <div className="flex justify-center items-center h-64">
+        <div className="flex justify-center items-center h-64" role="status" aria-label="טוען נתונים">
           <Loader2 className="animate-spin text-blue-500" size={48} />
         </div>
       ) : (
@@ -1223,10 +1314,11 @@ export default function AnalyticsDashboard({
               items={filteredViews.map((v) => v.id)}
               strategy={rectSortingStrategy}
             >
+              <h2 className="sr-only">כרטיסי אנליטיקה</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredViews.length === 0 ? (
                   loadError ? (
-                    <div className="col-span-full py-16 text-center bg-white rounded-2xl border border-red-100">
+                    <div className="col-span-full py-16 text-center bg-white rounded-2xl border border-red-100" role="alert">
                       <div className="bg-red-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                         <BarChart2 className="text-red-400" size={32} />
                       </div>
@@ -1245,7 +1337,7 @@ export default function AnalyticsDashboard({
                       </button>
                     </div>
                   ) : (
-                  <div className="col-span-full py-16 text-center bg-white rounded-2xl border border-dashed border-gray-200">
+                  <div className="col-span-full py-16 text-center bg-white rounded-2xl border border-dashed border-gray-200" role="status">
                     <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                       <BarChart2 className="text-gray-300" size={32} />
                     </div>
@@ -1311,40 +1403,12 @@ export default function AnalyticsDashboard({
 
       {/* New Folder Modal */}
       {isFolderModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-bold text-gray-900 mb-2 ">
-              יצירת תיקייה חדשה
-            </h3>
-            <p className="text-gray-500 text-sm mb-6">
-              תן שם לתיקייה כדי לארגן את התצוגות שלך
-            </p>
-            <input
-              type="text"
-              autoFocus
-              placeholder="שם התיקייה..."
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all outline-none mb-6"
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleCreateFolder()}
-            />
-            <div className="flex gap-3">
-              <button
-                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors"
-                onClick={() => setIsFolderModalOpen(false)}
-              >
-                ביטול
-              </button>
-              <button
-                className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors"
-                onClick={handleCreateFolder}
-                disabled={!newFolderName.trim()}
-              >
-                צור תיקייה
-              </button>
-            </div>
-          </div>
-        </div>
+        <FolderCreateModal
+          newFolderName={newFolderName}
+          setNewFolderName={setNewFolderName}
+          onClose={() => setIsFolderModalOpen(false)}
+          onSubmit={handleCreateFolder}
+        />
       )}
 
       {viewAutomationTarget && (
@@ -1356,6 +1420,6 @@ export default function AnalyticsDashboard({
         />
       )}
 
-    </div>
+    </main>
   );
 }

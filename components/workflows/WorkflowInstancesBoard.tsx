@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { Workflow, WorkflowStage } from "@prisma/client";
 import {
   CheckCircle2,
@@ -59,6 +60,9 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
   const [selectedInstance, setSelectedInstance] = useState<any>(null); // Detail view
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingInstance, setEditingInstance] = useState<any | null>(null);
+
+  const createModalRef = useFocusTrap(() => setIsCreateModalOpen(false), isCreateModalOpen);
+  const editModalRef = useFocusTrap(() => setEditingInstance(null), !!editingInstance);
 
   // Lazily-loaded stage details (automation configs) keyed by stageId
   const [stageDetailsMap, setStageDetailsMap] = useState<Record<number, any>>({});
@@ -233,7 +237,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
             onClick={() => setIsCreateModalOpen(true)}
             className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 shadow-sm transition-all"
           >
-            <PlayCircle size={18} />
+            <PlayCircle size={18} aria-hidden="true" />
             התחל תהליך חדש
           </button>
           {selectedInstance && (
@@ -241,7 +245,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
               onClick={handleReset}
               className="flex items-center gap-2 bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-xl hover:bg-gray-50 hover:border-gray-300 shadow-sm transition-all text-sm"
             >
-              <RotateCcw size={16} />
+              <RotateCcw size={16} aria-hidden="true" />
               אפס את תהליך העבודה
             </button>
           )}
@@ -258,23 +262,24 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
               <button
                 onClick={() => setSelectedInstance(null)}
                 className="p-2 hover:bg-white rounded-full border border-transparent hover:border-gray-200 transition-all text-gray-500"
+                aria-label="חזור לרשימת התהליכים"
               >
                 <ArrowLeft size={20} />
               </button>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">
+                <h2 className="text-2xl font-bold text-gray-900">
                   {selectedInstance.name}
-                </h1>
+                </h2>
                 <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
                   <span className="flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
                     {selectedInstance.workflow.name}
                   </span>
                   <span className="flex items-center gap-1">
-                    <UserIcon size={14} />
+                    <UserIcon size={14} aria-hidden="true" />
                     {selectedInstance.assignee?.name || "ללא משויך"}
                   </span>
                   <span className="flex items-center gap-1">
-                    <Calendar size={14} />
+                    <Calendar size={14} aria-hidden="true" />
                     {formatDate(selectedInstance.createdAt)}
                   </span>
                 </div>
@@ -284,7 +289,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
             <div className="flex items-center gap-2">
               {/* Progress Ring or Bar could go here */}
               <div className="text-right">
-                <div className="text-2xl font-bold text-indigo-600">
+                <div className="text-2xl font-bold text-indigo-600" aria-live="polite">
                   {progressMap.get(selectedInstance.id) ?? 0}%
                 </div>
                 <div className="text-xs text-gray-400">הושלם</div>
@@ -346,6 +351,9 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                             !isCompleted,
                           )
                         }
+                        role="checkbox"
+                        aria-checked={isCompleted}
+                        aria-label={`שלב: ${stage.name}`}
                         className={`
                                       shrink-0 w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all mt-1
                                       ${
@@ -373,6 +381,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                           </h3>
                           <div
                             className={`p-1.5 rounded-lg bg-${stage.color}-50 text-${stage.color}-600`}
+                            aria-hidden="true"
                           >
                             <Icon size={18} />
                           </div>
@@ -415,7 +424,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                                     key={i}
                                     className={`text-xs px-2 py-1 rounded-md flex items-center gap-1 ${badgeColor}`}
                                   >
-                                    <Zap size={12} />
+                                    <Zap size={12} aria-hidden="true" />
                                     <span className="truncate max-w-[200px]">
                                       {label}
                                     </span>
@@ -433,7 +442,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
 
               {selectedInstance.status === "completed" && (
                 <div className="text-center py-8">
-                  <div className="inline-flex p-4 bg-green-100 text-green-600 rounded-full mb-4">
+                  <div className="inline-flex p-4 bg-green-100 text-green-600 rounded-full mb-4" aria-hidden="true">
                     <CheckCircle2 size={48} />
                   </div>
                   <h3 className="text-2xl font-bold text-gray-900">
@@ -450,7 +459,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto p-1">
           {instances.length === 0 ? (
             <div className="col-span-full text-center py-20 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
-              <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 mb-4">
+              <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 mb-4" aria-hidden="true">
                 <FileText size={32} />
               </div>
               {workflows.length === 0 ? (
@@ -486,8 +495,12 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
               return (
               <div
                 key={inst.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedInstance(inst)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedInstance(inst); } }}
                 className="group bg-white rounded-xl border border-gray-200 p-5 hover:shadow-lg hover:border-indigo-200 transition-all cursor-pointer relative"
+                aria-label={`${inst.name} — ${inst.workflow.name}, ${inst.status === "completed" ? "הושלם" : "פעיל"}, ${progress}% הושלם`}
               >
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex-1">
@@ -510,20 +523,20 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                 </div>
 
                 {/* Actions */}
-                <div className="absolute top-4 left-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute top-4 left-4 flex gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                   <button
                     onClick={(e) => handleEditClick(e, inst)}
                     className="p-1.5 bg-white text-indigo-600 rounded-lg shadow-sm border border-gray-200 hover:bg-indigo-50"
-                    title="ערוך תהליך"
+                    aria-label="ערוך תהליך"
                   >
-                    <Edit2 size={14} />
+                    <Edit2 size={14} aria-hidden="true" />
                   </button>
                   <button
                     onClick={(e) => handleDeleteInstance(e, inst.id)}
                     className="p-1.5 bg-white text-red-500 rounded-lg shadow-sm border border-gray-200 hover:bg-red-50"
-                    title="מחק תהליך"
+                    aria-label="מחק תהליך"
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={14} aria-hidden="true" />
                   </button>
                 </div>
 
@@ -533,7 +546,7 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                     <span>התקדמות</span>
                     <span>{progress}%</span>
                   </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="התקדמות">
                     <div
                       className="h-full bg-indigo-500 rounded-full transition-all duration-500"
                       style={{
@@ -545,11 +558,11 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
 
                 <div className="flex items-center justify-between text-xs text-gray-500">
                   <div className="flex items-center gap-1">
-                    <UserIcon size={12} />
+                    <UserIcon size={12} aria-hidden="true" />
                     {inst.assignee?.name || "ללא"}
                   </div>
                   <div className="flex items-center gap-1">
-                    <Calendar size={12} />
+                    <Calendar size={12} aria-hidden="true" />
                     {formatDate(inst.createdAt)}
                   </div>
                 </div>
@@ -563,27 +576,30 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
       {/* Create Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsCreateModalOpen(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+          <div ref={createModalRef} role="dialog" aria-modal="true" aria-labelledby="create-instance-title" className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="font-bold text-gray-900">תהליך חדש</h3>
+              <h3 id="create-instance-title" className="font-bold text-gray-900">תהליך חדש</h3>
               <button
                 onClick={() => setIsCreateModalOpen(false)}
                 className="p-1 hover:bg-gray-200 rounded-full text-gray-400"
+                aria-label="סגור"
               >
                 <X size={20} />
               </button>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label id="create-workflow-type-label" className="block text-sm font-medium text-gray-700 mb-1">
                   סוג תהליך
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-labelledby="create-workflow-type-label">
                   {workflows.map((w) => {
                     const isEmpty = w.stages.length === 0;
                     return (
                       <button
                         key={w.id}
+                        role="radio"
+                        aria-checked={newForm.workflowId === w.id.toString()}
                         disabled={isEmpty}
                         onClick={() =>
                           !isEmpty &&
@@ -612,10 +628,11 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="create-instance-name" className="block text-sm font-medium text-gray-700 mb-1">
                   שם התהליך (לזיהוי)
                 </label>
                 <input
+                  id="create-instance-name"
                   required
                   placeholder="לדוגמה: אונבורדינג ללקוח X"
                   className="w-full p-2 border rounded-md"
@@ -626,10 +643,11 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="create-instance-assignee" className="block text-sm font-medium text-gray-700 mb-1">
                   אחראי ראשי (אופציונלי)
                 </label>
                 <select
+                  id="create-instance-assignee"
                   className="w-full p-2 border rounded-md"
                   value={newForm.assigneeId}
                   onChange={(e) =>
@@ -667,22 +685,24 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
       {/* Edit Instance Modal */}
       {editingInstance && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setEditingInstance(null)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+          <div ref={editModalRef} role="dialog" aria-modal="true" aria-labelledby="edit-instance-title" className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="font-bold text-gray-900">עריכת תהליך</h3>
+              <h3 id="edit-instance-title" className="font-bold text-gray-900">עריכת תהליך</h3>
               <button
                 onClick={() => setEditingInstance(null)}
                 className="p-1 hover:bg-gray-200 rounded-full text-gray-400"
+                aria-label="סגור"
               >
                 <X size={20} />
               </button>
             </div>
             <form onSubmit={handleUpdateInstance} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="edit-instance-name" className="block text-sm font-medium text-gray-700 mb-1">
                   שם התהליך
                 </label>
                 <input
+                  id="edit-instance-name"
                   required
                   value={editingInstance.name}
                   onChange={(e) =>
@@ -696,10 +716,11 @@ export function WorkflowInstancesBoard({ instances, workflows, users }: Props) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="edit-instance-assignee" className="block text-sm font-medium text-gray-700 mb-1">
                   משויך ל...
                 </label>
                 <select
+                  id="edit-instance-assignee"
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
                   value={editingInstance.assigneeId || ""}
                   onChange={(e) =>

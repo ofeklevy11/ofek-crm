@@ -293,7 +293,7 @@ export default function GoalModal({
             type="button"
             onClick={handleFetchPreview}
             disabled={isRefreshDisabled}
-            className="flex items-center gap-2 px-4 py-2 bg-[#4f95ff] text-white rounded-lg text-sm font-medium hover:bg-[#3d7ccc] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2 bg-[#4f95ff] text-white rounded-lg text-sm font-medium hover:bg-[#3d7ccc] transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#4f95ff]"
           >
             <RefreshCw className="w-4 h-4" />
             חשב מצב נוכחי
@@ -331,8 +331,15 @@ export default function GoalModal({
               type="button"
               onClick={handleFetchPreview}
               disabled={isRefreshDisabled}
-              className="p-2 text-[#4f95ff] hover:bg-[#4f95ff]/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 text-[#4f95ff] hover:bg-[#4f95ff]/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:ring-offset-2"
               title={
+                isRefreshDisabled
+                  ? refreshCount >= MAX_REFRESHES
+                    ? "הגעת למקסימום רענונים"
+                    : "שנה תאריכים כדי לרענן"
+                  : "חשב מחדש"
+              }
+              aria-label={
                 isRefreshDisabled
                   ? refreshCount >= MAX_REFRESHES
                     ? "הגעת למקסימום רענונים"
@@ -355,12 +362,24 @@ export default function GoalModal({
           )}
         </>
       )}
+      {/* Screen reader announcement for preview result */}
+      <div aria-live="polite" className="sr-only">
+        {previewState === "done" && previewValue !== null
+          ? `מצב נוכחי: ${previewValue.toLocaleString()} ${
+              formData.targetType === "SUM"
+                ? "שקלים"
+                : formData.metricType === "RECORDS"
+                  ? "רשומות"
+                  : "יחידות"
+            }`
+          : ""}
+      </div>
     </div>
   );
 
   const renderStep1 = () => (
     <div className="space-y-4 animate-in slide-in-from-right-4 duration-300 pt-4">
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3" role="group" aria-label="בחירת סוג מדד">
         {[
           {
             type: "REVENUE",
@@ -425,8 +444,9 @@ export default function GoalModal({
               }));
               setStep(2);
             }}
+            aria-pressed={formData.metricType === m.type}
             className={cn(
-              "flex flex-col items-center p-4 rounded-xl border-2 transition-all hover:border-[#4f95ff] hover:bg-[#4f95ff]/5",
+              "flex flex-col items-center p-4 rounded-xl border-2 transition-all hover:border-[#4f95ff] hover:bg-[#4f95ff]/5 focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:ring-offset-2",
               formData.metricType === m.type
                 ? "border-[#4f95ff] bg-[#4f95ff]/5 ring-1 ring-[#4f95ff]"
                 : "border-gray-200 bg-white",
@@ -477,14 +497,15 @@ export default function GoalModal({
         <div className="space-y-4">
           {/* --- TARGET TYPE TOGGLE --- */}
           {showSumOption && (
-            <div className="bg-[#f4f8f8] p-1 rounded-lg flex border border-gray-200">
+            <div className="bg-[#f4f8f8] p-1 rounded-lg flex border border-gray-200" role="group" aria-label="סוג חישוב">
               <button
                 type="button"
+                aria-pressed={formData.targetType === "COUNT"}
                 onClick={() =>
                   setFormData((prev) => ({ ...prev, targetType: "COUNT" }))
                 }
                 className={cn(
-                  "flex-1 py-1.5 text-sm font-medium rounded-md transition-all",
+                  "flex-1 py-1.5 text-sm font-medium rounded-md transition-all focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:ring-offset-2",
                   formData.targetType === "COUNT"
                     ? "bg-white text-[#4f95ff] shadow-sm ring-1 ring-black/5"
                     : "text-gray-600 hover:text-gray-900",
@@ -494,11 +515,12 @@ export default function GoalModal({
               </button>
               <button
                 type="button"
+                aria-pressed={formData.targetType === "SUM"}
                 onClick={() =>
                   setFormData((prev) => ({ ...prev, targetType: "SUM" }))
                 }
                 className={cn(
-                  "flex-1 py-1.5 text-sm font-medium rounded-md transition-all",
+                  "flex-1 py-1.5 text-sm font-medium rounded-md transition-all focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:ring-offset-2",
                   formData.targetType === "SUM"
                     ? "bg-white text-[#4f95ff] shadow-sm ring-1 ring-black/5"
                     : "text-gray-600 hover:text-gray-900",
@@ -527,14 +549,15 @@ export default function GoalModal({
               <Label className="text-[#a24ec1] font-semibold">
                 מקור הכנסה לחישוב
               </Label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="group" aria-label="מקור הכנסה לחישוב">
                 <button
                   type="button"
+                  aria-pressed={formData.filters?.source === "TRANSACTIONS_ONE_TIME" || formData.filters?.source === "TRANSACTIONS" || !formData.filters?.source}
                   onClick={() =>
                     updateFilter("source", "TRANSACTIONS_ONE_TIME")
                   }
                   className={cn(
-                    "flex flex-col items-center justify-center gap-1 p-2 rounded-md border text-sm font-medium transition-all h-20",
+                    "flex flex-col items-center justify-center gap-1 p-2 rounded-md border text-sm font-medium transition-all h-20 focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:ring-offset-2",
                     formData.filters?.source === "TRANSACTIONS_ONE_TIME" ||
                       formData.filters?.source === "TRANSACTIONS" ||
                       !formData.filters?.source
@@ -550,11 +573,12 @@ export default function GoalModal({
 
                 <button
                   type="button"
+                  aria-pressed={formData.filters?.source === "TRANSACTIONS_RETAINER"}
                   onClick={() =>
                     updateFilter("source", "TRANSACTIONS_RETAINER")
                   }
                   className={cn(
-                    "flex flex-col items-center justify-center gap-1 p-2 rounded-md border text-sm font-medium transition-all h-20",
+                    "flex flex-col items-center justify-center gap-1 p-2 rounded-md border text-sm font-medium transition-all h-20 focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:ring-offset-2",
                     formData.filters?.source === "TRANSACTIONS_RETAINER"
                       ? "bg-white border-[#4f95ff] text-[#4f95ff] shadow-sm ring-1 ring-[#4f95ff]"
                       : "border-gray-200 text-gray-600 hover:bg-white",
@@ -566,12 +590,13 @@ export default function GoalModal({
 
                 <button
                   type="button"
+                  aria-pressed={formData.filters?.source === "FINANCE_RECORD"}
                   onClick={() => {
                     updateFilter("source", "FINANCE_RECORD");
                     updateFilter("tableId", undefined);
                   }}
                   className={cn(
-                    "flex flex-col items-center justify-center gap-1 p-2 rounded-md border text-sm font-medium transition-all h-20",
+                    "flex flex-col items-center justify-center gap-1 p-2 rounded-md border text-sm font-medium transition-all h-20 focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:ring-offset-2",
                     formData.filters?.source === "FINANCE_RECORD"
                       ? "bg-white border-[#4f95ff] text-[#4f95ff] shadow-sm ring-1 ring-[#4f95ff]"
                       : "border-gray-200 text-gray-600 hover:bg-white",
@@ -585,13 +610,14 @@ export default function GoalModal({
 
                 <button
                   type="button"
+                  aria-pressed={formData.filters?.source === "TABLE"}
                   onClick={() => {
                     updateFilter("source", "TABLE");
                     if (tables.length > 0)
                       updateFilter("tableId", tables[0].id);
                   }}
                   className={cn(
-                    "flex flex-col items-center justify-center gap-1 p-2 rounded-md border text-sm font-medium transition-all h-20",
+                    "flex flex-col items-center justify-center gap-1 p-2 rounded-md border text-sm font-medium transition-all h-20 focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:ring-offset-2",
                     formData.filters?.source === "TABLE"
                       ? "bg-white border-[#4f95ff] text-[#4f95ff] shadow-sm ring-1 ring-[#4f95ff]"
                       : "border-gray-200 text-gray-600 hover:bg-white",
@@ -657,10 +683,11 @@ export default function GoalModal({
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-gray-900 font-medium">
+                    <Label htmlFor="goal-category" className="text-gray-900 font-medium">
                       סינון לפי קטגוריה (אופציונלי)
                     </Label>
                     <Input
+                      id="goal-category"
                       placeholder="הקלד שם קטגוריה..."
                       className="bg-white border-gray-200 focus:border-[#4f95ff] transition-all"
                       value={formData.filters?.columnKey || ""}
@@ -722,7 +749,7 @@ export default function GoalModal({
                 </div>
               )}
               <div className="space-y-1">
-                <Label>בחר טבלה</Label>
+                <Label htmlFor="goal-table-select">בחר טבלה</Label>
                 <Select
                   value={formData.filters?.tableId?.toString()}
                   onValueChange={(val) => {
@@ -730,7 +757,7 @@ export default function GoalModal({
                     updateFilter("columnKey", undefined);
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="goal-table-select">
                     <SelectValue placeholder="בחר טבלה..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -747,7 +774,7 @@ export default function GoalModal({
               {(formData.targetType === "SUM" ||
                 formData.metricType === "REVENUE") && (
                 <div className="space-y-1">
-                  <Label>עמודת סכום לסיכום</Label>
+                  <Label htmlFor="goal-column-select">עמודת סכום לסיכום</Label>
                   <Select
                     value={formData.filters?.columnKey || ""}
                     onValueChange={(val) => updateFilter("columnKey", val)}
@@ -760,7 +787,7 @@ export default function GoalModal({
                       ).length === 0
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="goal-column-select">
                       <SelectValue placeholder="בחר עמודה..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -818,10 +845,11 @@ export default function GoalModal({
                 </div>
               </div>
               <div className="space-y-1">
-                <Label>סינון שם/תיאור אירוע (אופציונלי)</Label>
+                <Label htmlFor="goal-calendar-search">סינון שם/תיאור אירוע (אופציונלי)</Label>
                 <div className="relative">
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
+                    id="goal-calendar-search"
                     placeholder="למשל: 'פגישת מכירה', 'זום'..."
                     className="pr-9"
                     value={formData.filters?.searchQuery || ""}
@@ -868,13 +896,14 @@ export default function GoalModal({
                 <Label className="text-[#a24ec1] font-semibold">
                   סוג יעד משימות
                 </Label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="group" aria-label="סוג יעד משימות">
                   {/* Option 1: Count by Status */}
                   <button
                     type="button"
+                    aria-pressed={formData.filters?.taskGoalMode === "COUNT" || !formData.filters?.taskGoalMode}
                     onClick={() => updateFilter("taskGoalMode", "COUNT")}
                     className={cn(
-                      "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center",
+                      "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:ring-offset-2",
                       formData.filters?.taskGoalMode === "COUNT" ||
                         !formData.filters?.taskGoalMode
                         ? "border-[#4f95ff] bg-white shadow-md ring-1 ring-[#4f95ff]"
@@ -905,9 +934,10 @@ export default function GoalModal({
                   {/* Option 2: Reduce Tasks */}
                   <button
                     type="button"
+                    aria-pressed={formData.filters?.taskGoalMode === "REDUCE"}
                     onClick={() => updateFilter("taskGoalMode", "REDUCE")}
                     className={cn(
-                      "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center",
+                      "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center focus-visible:ring-2 focus-visible:ring-[#4f95ff] focus-visible:ring-offset-2",
                       formData.filters?.taskGoalMode === "REDUCE"
                         ? "border-[#a24ec1] bg-white shadow-md ring-1 ring-[#a24ec1]"
                         : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50",
@@ -984,7 +1014,7 @@ export default function GoalModal({
 
               {/* Status selector */}
               <div className="space-y-1">
-                <Label>
+                <Label htmlFor="goal-task-status">
                   {formData.filters?.taskGoalMode === "REDUCE"
                     ? "סטטוס לצמצום (כמה נותרו)"
                     : "סטטוס משימה לספירה"}
@@ -998,7 +1028,7 @@ export default function GoalModal({
                   }
                   onValueChange={(val) => updateFilter("status", val)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="goal-task-status">
                     <SelectValue placeholder="בחר סטטוס..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -1037,12 +1067,12 @@ export default function GoalModal({
                 </div>
               </div>
               <div className="space-y-1">
-                <Label>סינון לפי תדירות הריטיינרים</Label>
+                <Label htmlFor="goal-retainer-frequency">סינון לפי תדירות הריטיינרים</Label>
                 <Select
                   value={formData.filters?.frequency || "all"}
                   onValueChange={(val) => updateFilter("frequency", val)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="goal-retainer-frequency">
                     <SelectValue placeholder="הכל" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1095,12 +1125,12 @@ export default function GoalModal({
 
               {/* Quote Status Selector */}
               <div className="space-y-1">
-                <Label>סינון לפי סטטוס הצעה</Label>
+                <Label htmlFor="goal-quote-status">סינון לפי סטטוס הצעה</Label>
                 <Select
                   value={formData.filters?.status || "all"}
                   onValueChange={(val) => updateFilter("status", val)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="goal-quote-status">
                     <SelectValue placeholder="הכל" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1119,13 +1149,16 @@ export default function GoalModal({
           )}
 
           <div className="space-y-2 pt-2">
-            <Label>שם היעד</Label>
+            <Label htmlFor="goal-name">שם היעד</Label>
             <Input
+              id="goal-name"
               value={formData.name}
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, name: e.target.value }))
               }
               placeholder="תן שם ליעד..."
+              required
+              aria-required="true"
             />
           </div>
 
@@ -1154,7 +1187,7 @@ export default function GoalModal({
   const renderStep3 = () => (
     <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 pt-2">
       <div className="space-y-2">
-        <Label className="text-lg font-bold text-[#a24ec1]">
+        <Label htmlFor="goal-target-value" className="text-lg font-bold text-[#a24ec1]">
           {formData.metricType === "TASKS" &&
           formData.filters?.taskGoalMode === "REDUCE"
             ? "כמות משימות מטרה (להגיע אליה)"
@@ -1164,8 +1197,10 @@ export default function GoalModal({
         </Label>
         <div className="relative">
           <Input
+            id="goal-target-value"
             type="number"
             className="text-2xl font-bold h-14 pl-10"
+            aria-required="true"
             min={
               formData.metricType === "TASKS" &&
               formData.filters?.taskGoalMode === "REDUCE"
@@ -1200,9 +1235,12 @@ export default function GoalModal({
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label>תאריך התחלה</Label>
+          <Label htmlFor="goal-start-date">תאריך התחלה</Label>
           <Input
+            id="goal-start-date"
             type="date"
+            required
+            aria-required="true"
             value={formatDateForInput(formData.startDate)}
             onChange={(e) => {
               const d = new Date(e.target.value);
@@ -1212,9 +1250,12 @@ export default function GoalModal({
           />
         </div>
         <div className="space-y-2">
-          <Label>תאריך יעד</Label>
+          <Label htmlFor="goal-end-date">תאריך יעד</Label>
           <Input
+            id="goal-end-date"
             type="date"
+            required
+            aria-required="true"
             value={formatDateForInput(formData.endDate)}
             onChange={(e) => {
               const d = new Date(e.target.value);
@@ -1255,9 +1296,11 @@ export default function GoalModal({
     </div>
   );
 
+  const totalSteps = 3;
   let title = existingGoal ? "עריכת יעד" : "הגדרת יעד חדש";
   if (step === 2) title = existingGoal ? "עריכת הגדרות" : "הגדרות מתקדמות";
   if (step === 3) title = "יעדים וזמנים";
+  const stepLabel = existingGoal ? title : `${title} (שלב ${step} מתוך ${totalSteps})`;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -1272,6 +1315,7 @@ export default function GoalModal({
       <DialogContent
         className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-lg"
         dir="rtl"
+        aria-label={stepLabel}
       >
         <DialogHeader className="mb-2">
           <DialogTitle className="text-xl text-center md:text-right">

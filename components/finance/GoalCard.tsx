@@ -161,6 +161,7 @@ export default function GoalCard({
       {/* Background Decor */}
       <div
         className={`absolute -left-6 -top-6 w-24 h-24 rounded-full opacity-10 pointer-events-none ${status.bg}`}
+        aria-hidden="true"
       />
 
       <div className="flex justify-between items-start mb-4">
@@ -203,7 +204,7 @@ export default function GoalCard({
             )}
           </div>
           <p className="text-sm text-gray-500 flex items-center gap-2">
-            <Clock className="w-3 h-3" />
+            <Clock className="w-3 h-3" aria-hidden="true" />
             {format(new Date(goal.startDate), "d MMM", { locale: he })} -{" "}
             {format(new Date(goal.endDate), "d MMM, yyyy", { locale: he })}
           </p>
@@ -227,6 +228,7 @@ export default function GoalCard({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 hover:bg-gray-100"
+                aria-label="אפשרויות יעד"
               >
                 <MoreVertical className="w-4 h-4 text-gray-500" />
               </Button>
@@ -284,6 +286,7 @@ export default function GoalCard({
               value={goal.progressPercent}
               className="h-3 bg-[#F3F4F6]"
               indicatorClassName={status.progressColor}
+              aria-valuetext={`${goal.progressPercent}% הושלמו`}
             />
           </div>
 

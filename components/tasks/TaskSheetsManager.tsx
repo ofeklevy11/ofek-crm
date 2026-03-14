@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Calendar,
   Clock,
@@ -24,6 +24,7 @@ import {
 import { showConfirm, showPrompt } from "@/hooks/use-modal";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import TaskItemAutomations from "./TaskItemAutomations";
 
 interface TaskSheetItem {
@@ -215,11 +216,13 @@ export default function TaskSheetsManager({
     setIsCreating(true);
   };
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setIsCreating(false);
     setEditingSheet(null);
     resetForm();
-  };
+  }, []);
+
+  const focusTrapRef = useFocusTrap(closeModal);
 
   const addNewItem = () => {
     setNewItems([
@@ -694,6 +697,8 @@ export default function TaskSheetsManager({
                   <div className="p-4 flex items-center justify-between min-w-[600px] md:min-w-0">
                     <button
                       onClick={() => toggleSheet(sheet.id)}
+                      aria-expanded={isExpanded}
+                      aria-controls={`sheet-manage-content-${sheet.id}`}
                       className="flex items-center gap-3 flex-1 text-start"
                     >
                       <div
@@ -735,15 +740,21 @@ export default function TaskSheetsManager({
                         </div>
                       </div>
                       {isExpanded ? (
-                        <ChevronUp className="w-5 h-5 text-slate-400 ms-auto" />
+                        <ChevronUp className="w-5 h-5 text-slate-400 ms-auto" aria-hidden="true" />
                       ) : (
-                        <ChevronDown className="w-5 h-5 text-slate-400 ms-auto" />
+                        <ChevronDown className="w-5 h-5 text-slate-400 ms-auto" aria-hidden="true" />
                       )}
                     </button>
 
                     {/* Progress Bar */}
                     <div className="flex items-center gap-3 mx-4">
-                      <div className="w-24 h-2 bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="w-24 h-2 bg-slate-700 rounded-full overflow-hidden"
+                        role="progressbar"
+                        aria-valuenow={progress}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                      >
                         <div
                           className={`h-full transition-all ${
                             progress === 100
@@ -764,15 +775,15 @@ export default function TaskSheetsManager({
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => openEditModal(sheet)}
-                        className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
-                        title="ערוך"
+                        className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+                        aria-label={`ערוך דף משימות: ${sheet.title}`}
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(sheet.id)}
-                        className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                        title="מחק"
+                        className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+                        aria-label={`מחק דף משימות: ${sheet.title}`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -782,7 +793,7 @@ export default function TaskSheetsManager({
 
                 {/* Expanded Content */}
                 {isExpanded && (
-                  <div className="border-t border-slate-700/50 p-4">
+                  <div id={`sheet-manage-content-${sheet.id}`} className="border-t border-slate-700/50 p-4">
                     {sheet.items.length === 0 ? (
                       <div className="text-center py-6 text-slate-400">
                         <Circle className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -841,7 +852,8 @@ export default function TaskSheetsManager({
                               onClick={() =>
                                 handleDeleteItem(sheet.id, item.id)
                               }
-                              className="p-1.5 text-slate-500 hover:text-red-400 rounded transition-colors"
+                              className="p-1.5 text-slate-500 hover:text-red-400 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+                              aria-label={`מחק פריט "${item.title}"`}
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -866,15 +878,21 @@ export default function TaskSheetsManager({
 
       {/* Create/Edit Modal */}
       {isCreating && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sheet-modal-title"
+        >
+          <div ref={focusTrapRef} className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-700 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-white">
+              <h3 id="sheet-modal-title" className="text-xl font-bold text-white">
                 {editingSheet ? "עריכת דף משימות" : "יצירת דף משימות חדש"}
               </h3>
               <button
                 onClick={closeModal}
-                className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-700 transition-colors"
+                aria-label="סגור"
+                className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -883,7 +901,7 @@ export default function TaskSheetsManager({
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
               {/* Error Message */}
               {formError && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-center gap-2 text-red-400 text-sm">
+                <div role="alert" className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-center gap-2 text-red-400 text-sm">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   {formError}
                 </div>
@@ -891,10 +909,11 @@ export default function TaskSheetsManager({
 
               {/* Title */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label htmlFor="sheet-title" className="block text-sm font-medium text-slate-300 mb-2">
                   כותרת *
                 </label>
                 <input
+                  id="sheet-title"
                   type="text"
                   value={formData.title}
                   onChange={(e) =>
@@ -908,10 +927,11 @@ export default function TaskSheetsManager({
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label htmlFor="sheet-description" className="block text-sm font-medium text-slate-300 mb-2">
                   תיאור
                 </label>
                 <textarea
+                  id="sheet-description"
                   value={formData.description}
                   onChange={(e) =>
                     setFormData({ ...formData, description: e.target.value })
@@ -925,10 +945,11 @@ export default function TaskSheetsManager({
               {/* Type & Assignee */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label htmlFor="sheet-type" className="block text-sm font-medium text-slate-300 mb-2">
                     סוג *
                   </label>
                   <select
+                    id="sheet-type"
                     value={formData.type}
                     onChange={(e) =>
                       setFormData({
@@ -943,10 +964,11 @@ export default function TaskSheetsManager({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label htmlFor="sheet-assignee" className="block text-sm font-medium text-slate-300 mb-2">
                     הקצה לעובד *
                   </label>
                   <select
+                    id="sheet-assignee"
                     value={formData.assigneeId}
                     onChange={(e) =>
                       setFormData({
@@ -970,10 +992,11 @@ export default function TaskSheetsManager({
               {/* Valid From/Until */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label htmlFor="sheet-validFrom" className="block text-sm font-medium text-slate-300 mb-2">
                     תחילה מ-
                   </label>
                   <input
+                    id="sheet-validFrom"
                     type="date"
                     value={formData.validFrom}
                     onChange={(e) =>
@@ -983,10 +1006,11 @@ export default function TaskSheetsManager({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label htmlFor="sheet-validUntil" className="block text-sm font-medium text-slate-300 mb-2">
                     עד (אופציונלי)
                   </label>
                   <input
+                    id="sheet-validUntil"
                     type="date"
                     value={formData.validUntil}
                     onChange={(e) =>
@@ -1026,6 +1050,8 @@ export default function TaskSheetsManager({
                           <button
                             type="button"
                             onClick={() => toggleExistingItem(item.id)}
+                            aria-expanded={isExpanded}
+                            aria-controls={`item-content-${item.id}`}
                             className="w-full flex items-center justify-between p-3 text-start"
                           >
                             <div className="flex items-center gap-3">
@@ -1060,13 +1086,13 @@ export default function TaskSheetsManager({
                               </span>
                             </div>
                             {isExpanded ? (
-                              <ChevronUp className="w-4 h-4 text-slate-400" />
+                              <ChevronUp className="w-4 h-4 text-slate-400" aria-hidden="true" />
                             ) : (
-                              <ChevronDown className="w-4 h-4 text-slate-400" />
+                              <ChevronDown className="w-4 h-4 text-slate-400" aria-hidden="true" />
                             )}
                           </button>
                           {isExpanded && (
-                            <div className="px-3 pb-3 pt-0 border-t border-slate-700/50 mt-0">
+                            <div id={`item-content-${item.id}`} className="px-3 pb-3 pt-0 border-t border-slate-700/50 mt-0">
                               {isEditing && editingItemData ? (
                                 /* Edit Mode */
                                 <div className="space-y-3 mt-3">
@@ -1081,6 +1107,7 @@ export default function TaskSheetsManager({
                                         })
                                       }
                                       placeholder="שם הפריט *"
+                                      aria-label="שם הפריט"
                                       className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                     <select
@@ -1091,6 +1118,7 @@ export default function TaskSheetsManager({
                                           priority: e.target.value,
                                         })
                                       }
+                                      aria-label="עדיפות"
                                       className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     >
                                       {priorityOptions.map((p) => (
@@ -1111,6 +1139,7 @@ export default function TaskSheetsManager({
                                         })
                                       }
                                       placeholder="קטגוריה (אופציונלי)"
+                                      aria-label="קטגוריה"
                                       className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                     <input
@@ -1122,6 +1151,7 @@ export default function TaskSheetsManager({
                                           dueTime: e.target.value,
                                         })
                                       }
+                                      aria-label="שעת יעד"
                                       className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                   </div>
@@ -1134,6 +1164,7 @@ export default function TaskSheetsManager({
                                       })
                                     }
                                     placeholder="תיאור (אופציונלי)"
+                                    aria-label="תיאור"
                                     className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                     rows={2}
                                   />
@@ -1182,7 +1213,7 @@ export default function TaskSheetsManager({
                                   />
 
                                   {editError && (
-                                    <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 p-2 rounded-lg mt-2">
+                                    <div role="alert" className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 p-2 rounded-lg mt-2">
                                       <AlertTriangle className="w-4 h-4" />
                                       {editError}
                                     </div>
@@ -1295,6 +1326,7 @@ export default function TaskSheetsManager({
                               updateNewItem(index, "title", e.target.value)
                             }
                             placeholder="שם הפריט *"
+                            aria-label="שם הפריט"
                             className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                           <select
@@ -1302,6 +1334,7 @@ export default function TaskSheetsManager({
                             onChange={(e) =>
                               updateNewItem(index, "priority", e.target.value)
                             }
+                            aria-label="עדיפות"
                             className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             {priorityOptions.map((p) => (
@@ -1313,6 +1346,7 @@ export default function TaskSheetsManager({
                           <button
                             type="button"
                             onClick={() => removeNewItem(index)}
+                            aria-label={`הסר פריט ${index + 1}`}
                             className="p-2 text-slate-400 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-colors"
                           >
                             <X className="w-4 h-4" />
@@ -1326,6 +1360,7 @@ export default function TaskSheetsManager({
                               updateNewItem(index, "category", e.target.value)
                             }
                             placeholder="קטגוריה (אופציונלי)"
+                            aria-label="קטגוריה"
                             className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                           <input
@@ -1334,6 +1369,7 @@ export default function TaskSheetsManager({
                             onChange={(e) =>
                               updateNewItem(index, "dueTime", e.target.value)
                             }
+                            aria-label="שעת יעד"
                             className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
@@ -1343,6 +1379,7 @@ export default function TaskSheetsManager({
                             updateNewItem(index, "description", e.target.value)
                           }
                           placeholder="תיאור (אופציונלי)"
+                          aria-label="תיאור"
                           className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                           rows={2}
                         />

@@ -34,7 +34,6 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   Dialog,
@@ -349,7 +348,7 @@ export default function BirthdayAutomationPage() {
   };
 
   return (
-    <div
+    <main
       className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20"
       dir="rtl"
     >
@@ -415,7 +414,7 @@ export default function BirthdayAutomationPage() {
             {/* Customer List Management */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg flex justify-between items-center">
+                <h2 className="font-semibold leading-none tracking-tight text-lg flex justify-between items-center">
                   <span>רשימת לקוחות ({total})</span>
                   <CustomerListManager
                     onAddCustomers={handleAddCustomers}
@@ -424,7 +423,7 @@ export default function BirthdayAutomationPage() {
                     onAutomationOpenChangeProp={setIsAutoModalOpen}
                     onAutoSendDispatched={handleAutoSendDispatched}
                   />
-                </CardTitle>
+                </h2>
                 <CardDescription>
                   נהל את רשימת הלקוחות שיקבלו את הברכה
                 </CardDescription>
@@ -478,10 +477,10 @@ export default function BirthdayAutomationPage() {
             {rules.length > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
+                  <h2 className="font-semibold leading-none tracking-tight text-lg flex items-center gap-2">
                     <Zap className="w-5 h-5 text-amber-500 fill-amber-500" />
                     חוקי אוטומציה פעילים ({rules.length})
-                  </CardTitle>
+                  </h2>
                   <CardDescription>
                     חוקים שמוסיפים לקוחות באופן אוטומטי
                   </CardDescription>
@@ -520,7 +519,8 @@ export default function BirthdayAutomationPage() {
                               onClick={() => {
                                 setIsAutoModalOpen(true);
                               }}
-                              className="p-1.5 rounded-md text-indigo-600 hover:bg-indigo-50 transition-colors"
+                              aria-label="ערוך אוטומציה"
+                              className="p-1.5 rounded-md text-indigo-600 hover:bg-indigo-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                               title="ערוך ונהל אוטומציות"
                             >
                               <Pencil className="w-4 h-4" />
@@ -539,7 +539,8 @@ export default function BirthdayAutomationPage() {
                                   else toast.error(getUserFriendlyError(error));
                                 }
                               }}
-                              className={`p-1.5 rounded-md transition-colors ${
+                              aria-label={rule.isActive ? "השבת אוטומציה" : "הפעל אוטומציה"}
+                              className={`p-1.5 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                                 rule.isActive
                                   ? "text-green-600 hover:bg-green-100"
                                   : "text-slate-400 hover:bg-slate-100"
@@ -572,13 +573,15 @@ export default function BirthdayAutomationPage() {
                                       setConfirmDeleteRuleId(null);
                                     }
                                   }}
-                                  className="p-1 rounded-md text-white bg-red-500 hover:bg-red-600 transition-colors text-xs px-2"
+                                  aria-label="אשר מחיקת אוטומציה"
+                                  className="p-1 rounded-md text-white bg-red-500 hover:bg-red-600 transition-colors text-xs px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
                                   מחק
                                 </button>
                                 <button
                                   onClick={() => setConfirmDeleteRuleId(null)}
-                                  className="p-1 rounded-md text-slate-500 hover:bg-slate-100 transition-colors"
+                                  aria-label="ביטול מחיקה"
+                                  className="p-1 rounded-md text-slate-500 hover:bg-slate-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
                                   <X className="w-3.5 h-3.5" />
                                 </button>
@@ -586,7 +589,8 @@ export default function BirthdayAutomationPage() {
                             ) : (
                               <button
                                 onClick={() => setConfirmDeleteRuleId(rule.id)}
-                                className="p-1.5 rounded-md text-red-500 hover:bg-red-50 transition-colors"
+                                aria-label="מחק אוטומציה"
+                                className="p-1.5 rounded-md text-red-500 hover:bg-red-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 title="מחק"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -613,7 +617,7 @@ export default function BirthdayAutomationPage() {
             {/* Channel Selection */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">ערוצי שליחה</CardTitle>
+                <h2 className="font-semibold leading-none tracking-tight text-lg">ערוצי שליחה</h2>
                 <CardDescription>בחר היכן הלקוח יקבל את הברכה</CardDescription>
               </CardHeader>
               <CardContent>
@@ -628,7 +632,7 @@ export default function BirthdayAutomationPage() {
             {/* Automation Details */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">הגדרות תוכן ותזמון</CardTitle>
+                <h2 className="font-semibold leading-none tracking-tight text-lg">הגדרות תוכן ותזמון</h2>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -674,7 +678,7 @@ export default function BirthdayAutomationPage() {
             {/* Message Editor */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">תוכן ההודעות</CardTitle>
+                <h2 className="font-semibold leading-none tracking-tight text-lg">תוכן ההודעות</h2>
               </CardHeader>
               <CardContent>
                 <NurtureMessageEditor
@@ -695,7 +699,7 @@ export default function BirthdayAutomationPage() {
               </h3>
 
               {/* Phone Preview */}
-              <div className="border border-slate-200 bg-white rounded-[2.5rem] p-3 shadow-xl max-w-[320px] mx-auto">
+              <div aria-hidden="true" className="border border-slate-200 bg-white rounded-[2.5rem] p-3 shadow-xl max-w-[320px] mx-auto">
                 <div className="bg-slate-50 rounded-[2rem] h-[550px] overflow-hidden border border-slate-100 relative">
                   {/* Status Bar Mock */}
                   <div className="h-6 bg-white flex justify-between items-center px-4 text-[10px] text-slate-800 font-medium">
@@ -785,31 +789,20 @@ export default function BirthdayAutomationPage() {
       </div>
 
       {/* Customer Details Popup */}
-      {selectedCustomer && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={() => {
-            setSelectedCustomer(null);
-            setEditingCustomer(null);
-            setConfirmingDelete(false);
-          }}
-        >
-          <div
-            className="bg-white rounded-xl shadow-xl w-[90%] max-w-sm p-5 relative"
-            dir="rtl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => {
-                setSelectedCustomer(null);
-                setEditingCustomer(null);
-                setConfirmingDelete(false);
-              }}
-              className="absolute top-3 left-3 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
-            >
-              <X className="w-4 h-4 text-slate-600" />
-            </button>
-
+      <Dialog open={!!selectedCustomer} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedCustomer(null);
+          setEditingCustomer(null);
+          setConfirmingDelete(false);
+        }
+      }}>
+        <DialogContent className="max-w-sm p-5" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="sr-only">{selectedCustomer?.name ?? "פרטי לקוח"}</DialogTitle>
+            <DialogDescription className="sr-only">צפייה ועריכת פרטי לקוח</DialogDescription>
+          </DialogHeader>
+          {selectedCustomer && (
+          <>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg font-bold">
                 {selectedCustomer.name.slice(0, 2)}
@@ -840,10 +833,11 @@ export default function BirthdayAutomationPage() {
                     )}
                 </div>
               </div>
-              {!editingCustomer && (
+              {!editingCustomer && selectedCustomer && (
                 <button
                   onClick={() => setEditingCustomer({ ...selectedCustomer })}
-                  className="p-2 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors"
+                  aria-label="ערוך פרטי לקוח"
+                  className="p-2 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   title="ערוך"
                 >
                   <Pencil className="w-4 h-4 text-slate-600" />
@@ -920,7 +914,8 @@ export default function BirthdayAutomationPage() {
                           emailActive: !editingCustomer.emailActive,
                         })
                       }
-                      className={`p-1.5 rounded-md transition-colors ${
+                      aria-label={editingCustomer.emailActive ? "השבת אימייל" : "הפעל אימייל"}
+                      className={`p-1.5 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                         editingCustomer.emailActive
                           ? "text-green-600 hover:bg-green-50"
                           : "text-slate-400 hover:bg-slate-100"
@@ -951,7 +946,8 @@ export default function BirthdayAutomationPage() {
                           phoneActive: !editingCustomer.phoneActive,
                         })
                       }
-                      className={`p-1.5 rounded-md transition-colors ${
+                      aria-label={editingCustomer.phoneActive ? "השבת טלפון" : "הפעל טלפון"}
+                      className={`p-1.5 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                         editingCustomer.phoneActive
                           ? "text-green-600 hover:bg-green-50"
                           : "text-slate-400 hover:bg-slate-100"
@@ -1108,9 +1104,10 @@ export default function BirthdayAutomationPage() {
                 </div>
               </>
             )}
-          </div>
-        </div>
-      )}
+          </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Rule Dialog */}
       <Dialog
@@ -1148,8 +1145,9 @@ export default function BirthdayAutomationPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>מקור הנתונים (טבלה)</Label>
+                  <Label htmlFor="edit-rule-table">מקור הנתונים (טבלה)</Label>
                   <select
+                    id="edit-rule-table"
                     className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={editConfig.tableId}
                     onChange={(e) =>
@@ -1173,7 +1171,7 @@ export default function BirthdayAutomationPage() {
             {editStep === 2 && (
               <div className="space-y-4">
                 {fetchingFields ? (
-                  <div className="text-center py-8 text-slate-500">
+                  <div role="status" aria-live="polite" className="text-center py-8 text-slate-500">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
                     טוען שדות...
                   </div>
@@ -1186,10 +1184,11 @@ export default function BirthdayAutomationPage() {
                         </Label>
 
                         <div className="space-y-1">
-                          <Label className="text-xs text-amber-800">
+                          <Label htmlFor="edit-rule-status-field" className="text-xs text-amber-800">
                             שדה הסטטוס
                           </Label>
                           <select
+                            id="edit-rule-status-field"
                             className="w-full h-9 rounded-md border border-amber-200 bg-white px-2 text-sm"
                             value={editConfig.condition.field}
                             onChange={(e) =>
@@ -1222,10 +1221,11 @@ export default function BirthdayAutomationPage() {
                         {editConfig.condition.field && (
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
-                              <Label className="text-xs text-amber-800">
+                              <Label htmlFor="edit-rule-from-status" className="text-xs text-amber-800">
                                 מסטטוס (קודם)
                               </Label>
                               <select
+                                id="edit-rule-from-status"
                                 className="w-full h-9 rounded-md border border-amber-200 bg-white px-2 text-sm"
                                 value={editConfig.condition.fromValue}
                                 onChange={(e) =>
@@ -1261,10 +1261,11 @@ export default function BirthdayAutomationPage() {
                               </select>
                             </div>
                             <div className="space-y-1">
-                              <Label className="text-xs text-amber-800">
+                              <Label htmlFor="edit-rule-to-status" className="text-xs text-amber-800">
                                 לסטטוס (חדש)
                               </Label>
                               <select
+                                id="edit-rule-to-status"
                                 className="w-full h-9 rounded-md border border-amber-200 bg-white px-2 text-sm"
                                 value={editConfig.condition.toValue}
                                 onChange={(e) =>
@@ -1308,10 +1309,11 @@ export default function BirthdayAutomationPage() {
                       <Label>מיפוי שדות (איזה מידע לשמור?)</Label>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
-                          <Label className="text-xs text-slate-500">
+                          <Label htmlFor="edit-rule-name-field" className="text-xs text-slate-500">
                             שדה שם
                           </Label>
                           <select
+                            id="edit-rule-name-field"
                             className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
                             value={editConfig.fields.name}
                             onChange={(e) =>
@@ -1340,10 +1342,11 @@ export default function BirthdayAutomationPage() {
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs text-slate-500">
+                          <Label htmlFor="edit-rule-email-field" className="text-xs text-slate-500">
                             שדה אימייל (אופציונלי אם נבחר טלפון)
                           </Label>
                           <select
+                            id="edit-rule-email-field"
                             className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
                             value={editConfig.fields.email}
                             onChange={(e) =>
@@ -1372,10 +1375,11 @@ export default function BirthdayAutomationPage() {
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs text-slate-500">
+                          <Label htmlFor="edit-rule-phone-field" className="text-xs text-slate-500">
                             שדה טלפון (אופציונלי אם נבחר אימייל)
                           </Label>
                           <select
+                            id="edit-rule-phone-field"
                             className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
                             value={editConfig.fields.phone}
                             onChange={(e) =>
@@ -1405,10 +1409,11 @@ export default function BirthdayAutomationPage() {
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs text-slate-500">
+                          <Label htmlFor="edit-rule-trigger-date" className="text-xs text-slate-500">
                             תאריך יום הולדת
                           </Label>
                           <select
+                            id="edit-rule-trigger-date"
                             className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
                             value={editConfig.fields.triggerDate}
                             onChange={(e) =>
@@ -1571,6 +1576,6 @@ export default function BirthdayAutomationPage() {
         quota={quota}
         selectedOnly={bulkSendForSelected}
       />
-    </div>
+    </main>
   );
 }

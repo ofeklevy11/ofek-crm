@@ -5,6 +5,8 @@ import { hasUserFlag } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import GraphsDashboard from "@/components/analytics/GraphsDashboard";
 
+export const metadata = { title: "תצוגת גרפים" };
+
 export default async function GraphsPage() {
   const user = await getCurrentUser();
   if (!user || !hasUserFlag(user, "canViewAnalytics")) {

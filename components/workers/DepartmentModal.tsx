@@ -7,6 +7,7 @@ import { createDepartment, updateDepartment } from "@/app/actions/workers";
 import { toast } from "sonner";
 import { showAlert } from "@/hooks/use-modal";
 import { getUserFriendlyError } from "@/lib/errors";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 
 interface Department {
   id: number;
@@ -50,6 +51,7 @@ export default function DepartmentModal({
   onClose,
   onSave,
 }: Props) {
+  const dialogRef = useFocusTrap(onClose);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: department?.name ?? "",
@@ -96,12 +98,12 @@ export default function DepartmentModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="department-modal-title">
+      <div ref={dialogRef} className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">
+            <h2 id="department-modal-title" className="text-xl font-bold text-gray-900">
               {department ? "עריכת מחלקה" : "מחלקה חדשה"}
             </h2>
             <p className="text-sm text-gray-500 mt-1">
@@ -110,6 +112,7 @@ export default function DepartmentModal({
           </div>
           <button
             onClick={onClose}
+            aria-label="סגור"
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
           >
             <X className="h-5 w-5" />
@@ -117,14 +120,15 @@ export default function DepartmentModal({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form id="department-form" onSubmit={handleSubmit} className="p-6 space-y-5">
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              <Building2 className="h-4 w-4 inline ml-1" />
+            <label htmlFor="dept-name" className="block text-sm font-medium text-gray-700 mb-1">
+              <Building2 className="h-4 w-4 inline ml-1" aria-hidden="true" />
               שם המחלקה *
             </label>
             <input
+              id="dept-name"
               type="text"
               value={formData.name}
               onChange={(e) =>
@@ -133,16 +137,18 @@ export default function DepartmentModal({
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
               placeholder='למשל: "מכירות", "שיווק", "פיתוח"'
               required
+              aria-required="true"
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              <FileText className="h-4 w-4 inline ml-1" />
+            <label htmlFor="dept-description" className="block text-sm font-medium text-gray-700 mb-1">
+              <FileText className="h-4 w-4 inline ml-1" aria-hidden="true" />
               תיאור
             </label>
             <textarea
+              id="dept-description"
               value={formData.description}
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
@@ -156,7 +162,7 @@ export default function DepartmentModal({
           {/* Color Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Palette className="h-4 w-4 inline ml-1" />
+              <Palette className="h-4 w-4 inline ml-1" aria-hidden="true" />
               צבע המחלקה
             </label>
             <div className="flex flex-wrap gap-2">
@@ -167,6 +173,8 @@ export default function DepartmentModal({
                   onClick={() =>
                     setFormData({ ...formData, color: color.value })
                   }
+                  aria-label={color.label}
+                  aria-pressed={formData.color === color.value}
                   className={`w-9 h-9 rounded-lg border-2 transition-all ${
                     formData.color === color.value
                       ? "border-gray-900 scale-110 shadow-md"
@@ -181,11 +189,12 @@ export default function DepartmentModal({
 
           {/* Manager */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              <User className="h-4 w-4 inline ml-1" />
+            <label htmlFor="dept-manager" className="block text-sm font-medium text-gray-700 mb-1">
+              <User className="h-4 w-4 inline ml-1" aria-hidden="true" />
               מנהל מחלקה
             </label>
             <select
+              id="dept-manager"
               value={formData.managerId ?? ""}
               onChange={(e) =>
                 setFormData({
@@ -237,7 +246,7 @@ export default function DepartmentModal({
           </button>
           <button
             type="submit"
-            onClick={handleSubmit}
+            form="department-form"
             disabled={isSubmitting}
             className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >

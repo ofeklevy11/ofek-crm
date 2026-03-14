@@ -27,6 +27,24 @@ import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
 import { showAlert, showConfirm } from "@/hooks/use-modal";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errors";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+
+// Color name map for aria-labels
+const colorNames: Record<string, string> = {
+  "#4285F4": "כחול",
+  "#EA4335": "אדום",
+  "#FBBC04": "צהוב",
+  "#34A853": "ירוק",
+  "#9334E6": "סגול",
+  "#F97316": "כתום",
+  "#06B6D4": "טורקיז",
+  "#EC4899": "ורוד",
+};
 
 interface EventModalProps {
   isOpen: boolean;
@@ -340,25 +358,30 @@ export function EventModal({
     setPendingAutomations((prev) => prev.filter((_, i) => i !== index));
   };
 
-  if (!isOpen) return null;
+  const dialogTitle = isGoogleEvent
+    ? "אירוע Google Calendar"
+    : event
+      ? activeTab === "details"
+        ? "עריכת אירוע"
+        : "אוטומציות לאירוע"
+      : "אירוע חדש";
 
-  // -- If Builder Mode --
-  if (showBuilder) {
+  // -- Builder Mode --
+  if (showBuilder && isOpen) {
     const displayAutos = event ? automations : pendingAutomations;
     return (
-      <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70]"
-        dir="rtl"
-        onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            setShowBuilder(false);
-            setEditingAutoId(null);
-            setEditingPendingIndex(null);
-            setEditingAutoData(null);
-          }
-        }}
-      >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] md:h-[800px] mx-4 relative overflow-hidden flex flex-col">
+      <Dialog open={true} onOpenChange={() => {
+        setShowBuilder(false);
+        setEditingAutoId(null);
+        setEditingPendingIndex(null);
+        setEditingAutoData(null);
+      }}>
+        <DialogContent
+          showCloseButton={false}
+          className="max-w-[calc(100%-2rem)] sm:max-w-4xl h-[90vh] md:h-[800px] p-0 gap-0 overflow-hidden flex flex-col"
+        >
+          <DialogTitle className="sr-only">בניית אוטומציה</DialogTitle>
+          <DialogDescription className="sr-only">אשף בניית אוטומציה לאירוע</DialogDescription>
           <EventAutomationBuilder
             onSave={handleCreateAutomation}
             onCancel={() => {
@@ -373,50 +396,52 @@ export function EventModal({
             globalCount={globalAutomationCount}
             specificCount={displayAutos.length}
           />
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
     );
   }
 
   // -- Normal Modal --
+  const limit = userPlan === "premium" ? 6 : 2;
+  const displayAutosCount = event ? automations.length : pendingAutomations.length;
+  const usageCount = globalAutomationCount + displayAutosCount;
+  const usagePercent = Math.min(100, (usageCount / limit) * 100);
+
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
-      dir="rtl"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          handleClose();
-        }
-      }}
-    >
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden flex flex-col max-h-[90vh]">
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
+      <DialogContent
+        showCloseButton={false}
+        className="max-w-[calc(100%-2rem)] sm:max-w-md p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]"
+      >
         {/* Header with Tabs */}
         <div className="bg-gray-50 border-b border-gray-200 relative">
           <button
             onClick={handleClose}
-            className="absolute top-4 left-4 text-gray-400 hover:text-gray-600 transition-colors bg-white rounded-full p-1 shadow-sm border border-gray-200 hover:shadow"
+            aria-label="סגור"
+            className="absolute top-4 left-4 text-gray-400 hover:text-gray-600 transition-colors bg-white rounded-full p-1 shadow-sm border border-gray-200 hover:shadow focus-visible:ring-2 focus-visible:ring-blue-500"
           >
-            <X className="w-5 h-5" />
+            <X aria-hidden="true" className="w-5 h-5" />
           </button>
 
           <div className="flex items-center justify-between p-6 pb-0 pt-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              {isGoogleEvent
-                ? "אירוע Google Calendar"
-                : event
-                  ? activeTab === "details"
-                    ? "עריכת אירוע"
-                    : "אוטומציות לאירוע"
-                  : "אירוע חדש"}
-            </h2>
+            <DialogTitle className="text-xl font-semibold text-gray-900 mb-4">
+              {dialogTitle}
+            </DialogTitle>
           </div>
+          <DialogDescription className="sr-only">
+            {isGoogleEvent ? "צפייה באירוע גוגל קלנדר" : event ? "עריכת אירוע קיים" : "יצירת אירוע חדש"}
+          </DialogDescription>
 
           {/* Tabs */}
           {!isGoogleEvent && (
-          <div className="flex gap-6 px-6">
+          <div className="flex gap-6 px-6" role="tablist" aria-label="לשוניות אירוע">
             <button
+              role="tab"
+              aria-selected={activeTab === "details"}
+              id="tab-details"
+              aria-controls="panel-details"
               onClick={() => setActiveTab("details")}
-              className={`pb-3 px-2 text-sm font-medium transition-all border-b-2 ${
+              className={`pb-3 px-2 text-sm font-medium transition-all border-b-2 focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 activeTab === "details"
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-gray-500 hover:text-gray-700"
@@ -425,17 +450,21 @@ export function EventModal({
               פרטי אירוע
             </button>
             <button
+              role="tab"
+              aria-selected={activeTab === "automations"}
+              id="tab-automations"
+              aria-controls="panel-automations"
               onClick={() => setActiveTab("automations")}
-              className={`pb-3 px-2 text-sm font-medium transition-all border-b-2 flex items-center gap-1.5 ${
+              className={`pb-3 px-2 text-sm font-medium transition-all border-b-2 flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 activeTab === "automations"
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
               אוטומציות
-              {(event ? automations.length : pendingAutomations.length) > 0 && (
+              {displayAutosCount > 0 && (
                 <span className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.5 rounded-full">
-                  {event ? automations.length : pendingAutomations.length}
+                  {displayAutosCount}
                 </span>
               )}
             </button>
@@ -483,23 +512,23 @@ export function EventModal({
                     href={event.googleEventUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-4 py-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors text-sm font-medium"
+                    className="flex items-center gap-2 px-4 py-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
-                    <CalendarIcon size={16} />
+                    <CalendarIcon aria-hidden="true" size={16} />
                     פתח בגוגל קלנדר
                   </a>
                 )}
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="px-6 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium text-sm mr-auto"
+                  className="px-6 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium text-sm mr-auto focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                   סגור
                 </button>
               </div>
             </div>
           ) : activeTab === "details" ? (
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-5" role="tabpanel" id="panel-details" aria-labelledby="tab-details">
               <div>
                 <label
                   htmlFor="title"
@@ -556,6 +585,7 @@ export function EventModal({
                       <input
                         type="time"
                         id="startTime"
+                        aria-label="שעת התחלה"
                         value={startTime}
                         onChange={(e) => setStartTime(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
@@ -584,6 +614,7 @@ export function EventModal({
                       <input
                         type="time"
                         id="endTime"
+                        aria-label="שעת סיום"
                         value={endTime}
                         onChange={(e) => setEndTime(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
@@ -598,13 +629,15 @@ export function EventModal({
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   צבע תצוגה
                 </label>
-                <div className="flex gap-2 p-1.5 bg-gray-50 rounded-xl border border-gray-100 w-fit">
+                <div className="flex gap-2 p-1.5 bg-gray-50 rounded-xl border border-gray-100 w-fit" role="group" aria-label="בחירת צבע">
                   {defaultEventColors.map((c) => (
                     <button
                       key={c}
                       type="button"
                       onClick={() => setColor(c)}
-                      className={`w-6 h-6 rounded-full transition-transform hover:scale-110 shadow-sm ${
+                      aria-label={`${colorNames[c] || c}${color === c ? " (נבחר)" : ""}`}
+                      aria-pressed={color === c}
+                      className={`w-6 h-6 rounded-full transition-transform hover:scale-110 shadow-sm focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                         color === c
                           ? "ring-2 ring-offset-2 ring-gray-400 scale-110"
                           : ""
@@ -623,9 +656,9 @@ export function EventModal({
                       onDelete();
                       handleClose();
                     }}
-                    className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
+                    className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 aria-hidden="true" size={16} />
                     מחק אירוע
                   </button>
                 )}
@@ -633,23 +666,23 @@ export function EventModal({
                   <button
                     type="button"
                     onClick={handleClose}
-                    className="px-6 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium text-sm"
+                    className="px-6 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium text-sm focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
                     ביטול
                   </button>
                   <button
                     type="submit"
                     disabled={saving}
-                    className="px-6 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-blue-200 shadow-md font-medium text-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="px-6 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-blue-200 shadow-md font-medium text-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
-                    {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {saving && <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />}
                     {event ? "שמור שינויים" : "צור אירוע"}
                   </button>
                 </div>
               </div>
             </form>
           ) : (
-            <div className="space-y-6 h-full flex flex-col">
+            <div className="space-y-6 h-full flex flex-col" role="tabpanel" id="panel-automations" aria-labelledby="tab-automations">
                   {/* Status Bar */}
                   {userPlan !== "super" && (
                     <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-2">
@@ -661,29 +694,34 @@ export function EventModal({
                             : "Basic (עד 2 אוטומציות)"}
                         </span>
                         <span className="bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full text-xs font-bold border border-blue-200">
-                          {globalAutomationCount + (event ? automations : pendingAutomations).length} מתוך{" "}
-                          {userPlan === "premium" ? 6 : 2} בשימוש
+                          {usageCount} מתוך{" "}
+                          {limit} בשימוש
                         </span>
                       </div>
-                      <div className="w-full bg-blue-100 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="w-full bg-blue-100 rounded-full h-1.5 overflow-hidden"
+                        role="progressbar"
+                        aria-label="שימוש באוטומציות"
+                        aria-valuenow={usageCount}
+                        aria-valuemin={0}
+                        aria-valuemax={limit}
+                      >
                         <div
                           className={`h-full rounded-full transition-all duration-500 ${
-                            globalAutomationCount + (event ? automations : pendingAutomations).length >=
-                            (userPlan === "premium" ? 6 : 2)
+                            usageCount >= limit
                               ? "bg-red-500"
-                              : globalAutomationCount + (event ? automations : pendingAutomations).length >=
-                                  (userPlan === "premium" ? 4 : 1)
+                              : usageCount >= (userPlan === "premium" ? 4 : 1)
                                 ? "bg-yellow-500"
                                 : "bg-blue-600"
                           }`}
                           style={{
-                            width: `${Math.min(100, ((globalAutomationCount + (event ? automations : pendingAutomations).length) / (userPlan === "premium" ? 6 : 2)) * 100)}%`,
+                            width: `${usagePercent}%`,
                           }}
                         />
                       </div>
                       <div className="flex justify-between mt-1.5 text-[10px] text-blue-600">
                         <span>{globalAutomationCount} קבועות</span>
-                        <span>{(event ? automations : pendingAutomations).length} ספציפיות לאירוע</span>
+                        <span>{displayAutosCount} ספציפיות לאירוע</span>
                       </div>
                     </div>
                   )}
@@ -692,7 +730,7 @@ export function EventModal({
                       <span className="text-sm font-semibold text-purple-900">
                         סטטוס מנוי: Super (ללא הגבלה)
                       </span>
-                      <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                      <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-[10px] font-bold" aria-hidden="true">
                         ∞
                       </span>
                     </div>
@@ -701,12 +739,12 @@ export function EventModal({
                   {/* Add New Button */}
                   <button
                     onClick={handleOpenBuilder}
-                    className="w-full group relative overflow-hidden bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl p-1 shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 transition-all transform hover:-translate-y-0.5"
+                    className="w-full group relative overflow-hidden bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl p-1 shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 transition-all transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                   >
-                    <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity" />
+                    <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity" aria-hidden="true" />
                     <div className="bg-white/10 backdrop-blur-sm rounded-[10px] py-4 flex items-center justify-center gap-3">
                       <div className="bg-white/20 p-1.5 rounded-full">
-                        <Plus size={20} className="text-white" />
+                        <Plus aria-hidden="true" size={20} className="text-white" />
                       </div>
                       <span className="font-bold text-lg">
                         {editingAutoId || editingPendingIndex !== null ? "ערוך אוטומציה" : "בנה אוטומציה חדשה"}
@@ -717,8 +755,8 @@ export function EventModal({
                   {/* List */}
                   <div className="space-y-3 overflow-y-auto flex-1 pr-1">
                     {event && loadingAutomations ? (
-                      <div className="flex flex-col items-center justify-center py-10 gap-3">
-                        <Loader2 className="animate-spin text-blue-500 w-8 h-8" />
+                      <div className="flex flex-col items-center justify-center py-10 gap-3" role="status" aria-live="polite">
+                        <Loader2 aria-hidden="true" className="animate-spin text-blue-500 w-8 h-8" />
                         <span className="text-sm text-gray-500">
                           טוען אוטומציות...
                         </span>
@@ -726,7 +764,7 @@ export function EventModal({
                     ) : (event ? automations : pendingAutomations).length === 0 ? (
                       <div className="text-center py-12 px-4 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
                         <div className="bg-white w-16 h-16 rounded-full flex items-center justify-center mx-auto shadow-sm mb-4">
-                          <Webhook className="text-gray-300 w-8 h-8" />
+                          <Webhook aria-hidden="true" className="text-gray-300 w-8 h-8" />
                         </div>
                         <h4 className="text-gray-900 font-medium mb-1">
                           אין אוטומציות מוגדרות
@@ -736,7 +774,7 @@ export function EventModal({
                         </p>
                       </div>
                     ) : event ? (
-                      <div className="space-y-3">
+                      <ul className="space-y-3 list-none">
                         {automations.map((auto) => {
                           let displayName = auto.name || "אוטומציה ללא שם";
                           // Legacy translation
@@ -760,7 +798,7 @@ export function EventModal({
                           }
 
                           return (
-                            <div
+                            <li
                               key={auto.id}
                               className="bg-white border border-gray-200 rounded-xl p-4 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow group"
                             >
@@ -782,6 +820,7 @@ export function EventModal({
                                                 ? "bg-indigo-50 text-indigo-600"
                                                 : "bg-gray-50 text-gray-600"
                                   }`}
+                                  aria-hidden="true"
                                 >
                                   {auto.actionType === "SEND_NOTIFICATION" ? (
                                     <Bell size={20} />
@@ -809,7 +848,7 @@ export function EventModal({
                                       {auto.triggerConfig?.minutesBefore} דקות
                                       לפני
                                     </span>
-                                    <span>•</span>
+                                    <span aria-hidden="true">•</span>
                                     <span>
                                       {auto.actionType === "SEND_NOTIFICATION"
                                         ? "התראה"
@@ -833,10 +872,11 @@ export function EventModal({
                               <div className="flex gap-2 opacity-100">
                                 <button
                                   onClick={() => handleEditAuto(auto)}
-                                  className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-all"
-                                  title="ערוך אוטומציה"
+                                  className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-all focus-visible:ring-2 focus-visible:ring-blue-500"
+                                  aria-label={`ערוך ${displayName}`}
                                 >
                                   <svg
+                                    aria-hidden="true"
                                     xmlns="http://www.w3.org/2000/svg"
                                     width="16"
                                     height="16"
@@ -854,20 +894,20 @@ export function EventModal({
                                 </button>
                                 <button
                                   onClick={() => handleDeleteAuto(auto.id)}
-                                  className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
-                                  title="מחק אוטומציה"
+                                  className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all focus-visible:ring-2 focus-visible:ring-blue-500"
+                                  aria-label={`מחק ${displayName}`}
                                 >
-                                  <Trash2 size={16} />
+                                  <Trash2 aria-hidden="true" size={16} />
                                 </button>
                               </div>
-                            </div>
+                            </li>
                           );
                         })}
-                      </div>
+                      </ul>
                     ) : (
-                      <div className="space-y-3">
+                      <ul className="space-y-3 list-none">
                         {pendingAutomations.map((auto, index) => (
-                          <div
+                          <li
                             key={index}
                             className="bg-white border border-gray-200 rounded-xl p-4 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow group"
                           >
@@ -889,6 +929,7 @@ export function EventModal({
                                               ? "bg-indigo-50 text-indigo-600"
                                               : "bg-gray-50 text-gray-600"
                                 }`}
+                                aria-hidden="true"
                               >
                                 {auto.actionType === "SEND_NOTIFICATION" ? (
                                   <Bell size={20} />
@@ -915,7 +956,7 @@ export function EventModal({
                                   <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 font-medium">
                                     {auto.minutesBefore} דקות לפני
                                   </span>
-                                  <span>•</span>
+                                  <span aria-hidden="true">•</span>
                                   <span>
                                     {auto.actionType === "SEND_NOTIFICATION"
                                       ? "התראה"
@@ -938,10 +979,11 @@ export function EventModal({
                             <div className="flex gap-2 opacity-100">
                               <button
                                 onClick={() => handleEditPending(index)}
-                                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-all"
-                                title="ערוך אוטומציה"
+                                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-all focus-visible:ring-2 focus-visible:ring-blue-500"
+                                aria-label="ערוך אוטומציה"
                               >
                                 <svg
+                                  aria-hidden="true"
                                   xmlns="http://www.w3.org/2000/svg"
                                   width="16"
                                   height="16"
@@ -959,21 +1001,21 @@ export function EventModal({
                               </button>
                               <button
                                 onClick={() => handleDeletePending(index)}
-                                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
-                                title="מחק אוטומציה"
+                                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all focus-visible:ring-2 focus-visible:ring-blue-500"
+                                aria-label="מחק אוטומציה"
                               >
-                                <Trash2 size={16} />
+                                <Trash2 aria-hidden="true" size={16} />
                               </button>
                             </div>
-                          </div>
+                          </li>
                         ))}
-                      </div>
+                      </ul>
                     )}
                   </div>
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

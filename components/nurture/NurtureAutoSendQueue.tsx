@@ -92,6 +92,8 @@ export default function NurtureAutoSendQueue({ slug, trigger }: AutoSendQueuePro
 
   return (
     <div
+      role="region"
+      aria-label="שליחה אוטומטית"
       className={cn(
         "fixed bottom-4 left-4 z-50 w-96 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white shadow-2xl transition-all duration-300",
       )}
@@ -105,18 +107,25 @@ export default function NurtureAutoSendQueue({ slug, trigger }: AutoSendQueuePro
           <span className="text-xs text-slate-500">{processed}/{total}</span>
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={() => setCollapsed(!collapsed)} className="p-1 rounded hover:bg-slate-100 text-slate-400">
+          <button onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "הרחב" : "כווץ"} aria-expanded={!collapsed} className="p-1 rounded hover:bg-slate-100 text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             {collapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
-          <button onClick={() => setVisible(false)} className="p-1 rounded hover:bg-slate-100 text-slate-400">
+          <button onClick={() => setVisible(false)} aria-label="סגור" className="p-1 rounded hover:bg-slate-100 text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <X className="w-4 h-4" />
           </button>
         </div>
       </div>
 
       {/* Progress bar */}
-      <div className="px-4 py-2">
-        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+      <div className="px-4 py-2" aria-live="polite">
+        <div
+          className="h-2 rounded-full bg-slate-100 overflow-hidden"
+          role="progressbar"
+          aria-valuenow={processed}
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-label="התקדמות שליחה"
+        >
           <div
             className={cn(
               "h-full rounded-full transition-all duration-500 ease-out",
@@ -141,15 +150,15 @@ export default function NurtureAutoSendQueue({ slug, trigger }: AutoSendQueuePro
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-slate-800 truncate">{item.name}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  {channels?.sms && <Smartphone className="w-3 h-3 text-pink-500" />}
-                  {channels?.whatsappGreen && <MessageSquare className="w-3 h-3 text-emerald-500" />}
-                  {channels?.whatsappCloud && <MessageSquare className="w-3 h-3 text-blue-500" />}
-                  {channels?.email && <Mail className="w-3 h-3 text-purple-500" />}
+                  {channels?.sms && <><Smartphone className="w-3 h-3 text-pink-500" aria-hidden="true" /><span className="sr-only">SMS</span></>}
+                  {channels?.whatsappGreen && <><MessageSquare className="w-3 h-3 text-emerald-500" aria-hidden="true" /><span className="sr-only">WhatsApp</span></>}
+                  {channels?.whatsappCloud && <><MessageSquare className="w-3 h-3 text-blue-500" aria-hidden="true" /><span className="sr-only">WhatsApp Cloud</span></>}
+                  {channels?.email && <><Mail className="w-3 h-3 text-purple-500" aria-hidden="true" /><span className="sr-only">Email</span></>}
                 </div>
               </div>
-              {item.status === "DISPATCHED" && <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />}
-              {item.status === "SENT" && <Check className="w-4 h-4 text-emerald-500" />}
-              {item.status === "FAILED" && <AlertCircle className="w-4 h-4 text-red-500" />}
+              {item.status === "DISPATCHED" && <><Loader2 className="w-4 h-4 text-amber-500 animate-spin" aria-hidden="true" /><span className="sr-only">שולח</span></>}
+              {item.status === "SENT" && <><Check className="w-4 h-4 text-emerald-500" aria-hidden="true" /><span className="sr-only">נשלח</span></>}
+              {item.status === "FAILED" && <><AlertCircle className="w-4 h-4 text-red-500" aria-hidden="true" /><span className="sr-only">נכשל</span></>}
             </div>
           ))}
         </div>

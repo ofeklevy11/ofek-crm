@@ -190,13 +190,14 @@ export default function CompletedTasksList({
   return (
     <>
       {/* Filter bar */}
-      <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 mb-4 space-y-3">
+      <div role="search" aria-label="סינון משימות שבוצעו" className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 mb-4 space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <input
               type="text"
               placeholder="חיפוש משימה..."
+              aria-label="חיפוש משימות שבוצעו"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={`${inputClass} pr-9 w-52`}
@@ -204,6 +205,7 @@ export default function CompletedTasksList({
           </div>
           <div className="relative min-w-[120px]">
             <select
+              aria-label="סינון לפי עדיפות"
               value={filterPriority ?? ""}
               onChange={(e) => setFilterPriority(e.target.value || null)}
               className={`${inputClass} w-full pl-10 appearance-none`}
@@ -213,10 +215,11 @@ export default function CompletedTasksList({
               <option value="medium">בינונית</option>
               <option value="low">נמוכה</option>
             </select>
-            <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+            <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
           </div>
           <div className="relative min-w-[140px]">
             <select
+              aria-label="סינון לפי אחראי"
               value={filterAssigneeId ?? ""}
               onChange={(e) => setFilterAssigneeId(e.target.value ? Number(e.target.value) : null)}
               className={`${inputClass} w-full pl-10 appearance-none`}
@@ -226,10 +229,11 @@ export default function CompletedTasksList({
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
-            <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+            <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
           </div>
           <div className="relative min-w-[120px]">
             <select
+              aria-label="סינון לפי תגית"
               value={filterTag ?? ""}
               onChange={(e) => setFilterTag(e.target.value || null)}
               className={`${inputClass} w-full pl-10 appearance-none`}
@@ -239,7 +243,7 @@ export default function CompletedTasksList({
                 <option key={tag} value={tag}>{tag}</option>
               ))}
             </select>
-            <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+            <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -248,6 +252,7 @@ export default function CompletedTasksList({
             <span>מתאריך</span>
             <input
               type="date"
+              aria-label="מתאריך"
               value={filterDateFrom ?? ""}
               onChange={(e) => setFilterDateFrom(e.target.value || null)}
               className={inputClass}
@@ -255,6 +260,7 @@ export default function CompletedTasksList({
             <span>עד תאריך</span>
             <input
               type="date"
+              aria-label="עד תאריך"
               value={filterDateTo ?? ""}
               onChange={(e) => setFilterDateTo(e.target.value || null)}
               className={inputClass}
@@ -263,7 +269,7 @@ export default function CompletedTasksList({
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="flex items-center gap-1 text-sm text-red-400 hover:text-red-300 transition-colors mr-auto"
+              className="flex items-center gap-1 text-sm text-red-400 hover:text-red-300 transition-colors mr-auto focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded"
             >
               <X className="w-4 h-4" />
               נקה פילטרים
@@ -273,7 +279,7 @@ export default function CompletedTasksList({
       </div>
 
       <div className="flex items-center gap-3 mb-4">
-        <span className="text-sm text-slate-400">
+        <span className="text-sm text-slate-400" aria-live="polite">
           {(() => {
             const start = (currentPage - 1) * TASKS_PER_PAGE + 1;
             const end = Math.min(currentPage * TASKS_PER_PAGE, filteredTasks.length);
@@ -295,7 +301,7 @@ export default function CompletedTasksList({
           <p className="text-lg font-medium">לא נמצאו משימות התואמות לפילטרים</p>
           <button
             onClick={clearFilters}
-            className="mt-3 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+            className="mt-3 text-sm text-blue-400 hover:text-blue-300 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded"
           >
             נקה פילטרים
           </button>
@@ -317,7 +323,7 @@ export default function CompletedTasksList({
                     className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${priority.bg} ${priority.text}`}
                   >
                     {task.priority === "high" && (
-                      <AlertTriangle className="w-3 h-3" />
+                      <AlertTriangle className="w-3 h-3" aria-hidden="true" />
                     )}
                     {priority.label}
                   </span>
@@ -327,15 +333,15 @@ export default function CompletedTasksList({
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setEditingTask(task)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
-                    title="עריכה"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+                    aria-label={`ערוך משימה: ${task.title}`}
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => handleDelete(task.id)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                    title="מחיקה"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+                    aria-label={`מחק משימה: ${task.title}`}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -381,7 +387,7 @@ export default function CompletedTasksList({
                     </span>
                   ))}
                   {task.tags.length > 3 && (
-                    <span className="text-xs text-slate-500">
+                    <span role="img" className="text-xs text-slate-500" aria-label={`עוד ${task.tags.length - 3} תגיות`}>
                       +{task.tags.length - 3}
                     </span>
                   )}
@@ -407,11 +413,12 @@ export default function CompletedTasksList({
 
       {/* Pagination controls */}
       {totalPages > 1 && (
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3 mt-4 flex items-center justify-center gap-4">
+        <nav aria-label="ניווט עמודים" className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3 mt-4 flex items-center justify-center gap-4">
           <button
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="עמוד הקודם"
+            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <ChevronRight className="w-4 h-4" />
             הקודם
@@ -422,12 +429,13 @@ export default function CompletedTasksList({
           <button
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
-            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="עמוד הבא"
+            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             הבא
             <ChevronLeft className="w-4 h-4" />
           </button>
-        </div>
+        </nav>
       )}
       </>
       )}

@@ -10,6 +10,9 @@ import { ClipboardList, LayoutGrid, Calendar, Users, CheckCircle, AlertTriangle,
 import { getTasks, getDoneTasks } from "@/app/actions/tasks";
 import { isRateLimitError } from "@/lib/rate-limit-utils";
 import RateLimitFallback from "@/components/RateLimitFallback";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "משימות | BizlyCRM" };
 
 async function getUsers(companyId: number) {
   const users = await prisma.user.findMany({
@@ -176,7 +179,7 @@ export default async function TasksPage({
   ];
 
   const ErrorBanner = ({ error }: { error: string }) => (
-    <div className="p-4 bg-red-900/30 border border-red-500/30 rounded-xl flex items-center gap-3">
+    <div role="alert" className="p-4 bg-red-900/30 border border-red-500/30 rounded-xl flex items-center gap-3">
       <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
       <div className="flex-1">
         <p className="text-red-300 font-medium">שגיאה בטעינת המשימות</p>
@@ -194,16 +197,22 @@ export default async function TasksPage({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <div className="w-full px-6 py-8">
+      <a
+        href="#tasks-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:right-2 focus:bg-white focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg focus:text-blue-600 focus:ring-2 focus:ring-blue-500"
+      >
+        דלג לתוכן המשימות
+      </a>
+      <main className="w-full px-6 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">משימות</h1>
+          <h1 id="tasks-heading" className="text-4xl font-bold text-white mb-2">משימות</h1>
           <p className="text-slate-400">ניהול משימות ודפי עבודה יומיים</p>
         </div>
 
         {/* Tabs */}
         <div className="mb-6">
-          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 bg-slate-800/50 backdrop-blur-sm p-1.5 rounded-xl border border-slate-700/50 w-full md:w-fit">
+          <nav aria-label="תצוגות משימות" className="flex flex-col md:flex-row items-stretch md:items-center gap-2 bg-slate-800/50 backdrop-blur-sm p-1.5 rounded-xl border border-slate-700/50 w-full md:w-fit">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = currentView === tab.id;
@@ -212,30 +221,33 @@ export default async function TasksPage({
                   key={tab.id}
                   href={`/tasks?view=${tab.id}`}
                   prefetch={false}
+                  aria-current={isActive ? "page" : undefined}
                   className={`flex items-center justify-center md:justify-start gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
                     isActive
                       ? "bg-linear-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/20"
                       : "text-slate-400 hover:text-white hover:bg-slate-700/50"
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className="w-4 h-4" aria-hidden="true" />
                   {tab.label}
                   {tab.id === "my-sheets" && mySheetsCount > 0 && (
-                    <span className="bg-blue-500/30 text-blue-300 text-xs px-2 py-0.5 rounded-full">
+                    <span className="bg-blue-500/30 text-blue-300 text-xs px-2 py-0.5 rounded-full" aria-label={`${mySheetsCount} דפי משימות`}>
                       {mySheetsCount}
                     </span>
                   )}
                 </Link>
               );
             })}
-          </div>
+          </nav>
         </div>
 
         {/* Content */}
+        <div id="tasks-content">
         <Suspense
           fallback={
-            <div className="flex justify-center items-center h-64">
+            <div className="flex justify-center items-center h-64" role="status">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
+              <span className="sr-only">טוען...</span>
             </div>
           }
         >
@@ -251,7 +263,7 @@ export default async function TasksPage({
               : <div>
                   <div className="mb-6 p-4 bg-gradient-to-r from-purple-900/30 to-indigo-900/30 rounded-xl border border-purple-500/20">
                     <div className="flex items-center gap-3">
-                      <div className="p-2.5 bg-purple-500/20 rounded-lg">
+                      <div className="p-2.5 bg-purple-500/20 rounded-lg" aria-hidden="true">
                         <CheckCircle className="w-5 h-5 text-purple-400" />
                       </div>
                       <div>
@@ -280,7 +292,7 @@ export default async function TasksPage({
             <div>
               <div className="mb-6 p-4 bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-xl border border-blue-500/20">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-blue-500/20 rounded-lg">
+                  <div className="p-2.5 bg-blue-500/20 rounded-lg" aria-hidden="true">
                     <Calendar className="w-5 h-5 text-blue-400" />
                   </div>
                   <div>
@@ -323,7 +335,8 @@ export default async function TasksPage({
             />
           )}
         </Suspense>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
