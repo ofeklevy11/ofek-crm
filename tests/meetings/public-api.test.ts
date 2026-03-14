@@ -14,7 +14,10 @@ vi.mock("@/lib/prisma", () => {
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: vi.fn(),
-  RATE_LIMITS: { publicBooking: { prefix: "pub-book", max: 10, windowSeconds: 60 } },
+  RATE_LIMITS: {
+    publicBooking: { prefix: "pub-book", max: 10, windowSeconds: 60 },
+    publicManageRead: { prefix: "pub-manage", max: 20, windowSeconds: 60 },
+  },
 }));
 vi.mock("@/lib/meeting-validation", () => ({
   validateBookingInput: vi.fn(),
@@ -35,6 +38,25 @@ vi.mock("@/lib/notification-settings", async (importOriginal) => {
     isNotificationEnabled: vi.fn().mockResolvedValue(false),
   };
 });
+vi.mock("@/lib/crypto-tokens", () => ({
+  SECURE_TOKEN_RE: /^[A-Za-z0-9_-]{20,64}$/,
+  generateSecureToken: vi.fn().mockReturnValue("mock-manage-token-12345678"),
+}));
+vi.mock("@/lib/security/audit-security", () => ({
+  logSecurityEvent: vi.fn(),
+  SEC_MEETING_BOOKED: "MEETING_BOOKED",
+  SEC_MEETING_RESCHEDULED: "MEETING_RESCHEDULED",
+  SEC_MEETING_CANCELLED: "MEETING_CANCELLED",
+}));
+vi.mock("@/lib/with-metrics", () => ({
+  withMetrics: vi.fn((_name: string, handler: any) => handler),
+}));
+vi.mock("@/lib/request-ip", () => ({
+  getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
+}));
+vi.mock("@/lib/server-action-utils", () => ({
+  validateJsonValue: vi.fn((val: any) => val),
+}));
 
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -56,6 +78,9 @@ import { POST as postCancel } from "@/app/api/p/meetings/manage/[manageToken]/ca
 function makeRequest(opts: { method?: string; body?: any; ip?: string; headers?: Record<string, string> } = {}) {
   const h = new Headers(opts.headers || {});
   if (opts.ip) h.set("x-forwarded-for", opts.ip);
+  if (opts.body !== undefined && !h.has("content-type")) {
+    h.set("content-type", "application/json");
+  }
   return new NextRequest("http://localhost/api/p/meetings/test", {
     method: opts.method || "GET",
     headers: h,
@@ -84,49 +109,49 @@ beforeEach(() => {
 // GET /api/p/meetings/[token] — meeting type info
 // ════════════════════════════════════════════════════════════════════
 describe("GET /api/p/meetings/[token]", () => {
-  it("returns 400 for token shorter than 10 chars", async () => {
+  it("returns 404 for token shorter than 20 chars", async () => {
     const res = await getToken(makeRequest(), params("short"));
-    expect(res.status).toBe(400);
-    expect(await jsonBody(res)).toEqual({ error: "Invalid token" });
+    expect(res.status).toBe(404);
+    expect(await jsonBody(res)).toEqual({ error: "Not found" });
   });
 
-  it("returns 400 for token longer than 50 chars", async () => {
-    const res = await getToken(makeRequest(), params("a".repeat(51)));
-    expect(res.status).toBe(400);
-    expect(await jsonBody(res)).toEqual({ error: "Invalid token" });
+  it("returns 404 for token longer than 64 chars", async () => {
+    const res = await getToken(makeRequest(), params("a".repeat(65)));
+    expect(res.status).toBe(404);
+    expect(await jsonBody(res)).toEqual({ error: "Not found" });
   });
 
-  it("returns 400 for token with special chars", async () => {
+  it("returns 404 for token with special chars", async () => {
     const res = await getToken(makeRequest(), params("abcde!@#$%fgh"));
-    expect(res.status).toBe(400);
-    expect(await jsonBody(res)).toEqual({ error: "Invalid token" });
+    expect(res.status).toBe(404);
+    expect(await jsonBody(res)).toEqual({ error: "Not found" });
   });
 
-  it("accepts 10-char alphanumeric token", async () => {
+  it("accepts 20-char alphanumeric token", async () => {
     (prisma as any).meetingType.findFirst.mockResolvedValue(null);
-    const res = await getToken(makeRequest(), params("abcdefghij"));
+    const res = await getToken(makeRequest(), params("a".repeat(20)));
     // Should reach DB lookup, not fail token validation
     expect(res.status).toBe(404);
   });
 
-  it("accepts 50-char alphanumeric token", async () => {
+  it("accepts 64-char alphanumeric token", async () => {
     (prisma as any).meetingType.findFirst.mockResolvedValue(null);
-    const res = await getToken(makeRequest(), params("a".repeat(50)));
+    const res = await getToken(makeRequest(), params("a".repeat(64)));
     expect(res.status).toBe(404);
   });
 
   it("returns 404 when no active meeting type found", async () => {
     (prisma as any).meetingType.findFirst.mockResolvedValue(null);
-    const res = await getToken(makeRequest(), params("validtoken1"));
+    const res = await getToken(makeRequest(), params("abcdefghij1234567890"));
     expect(res.status).toBe(404);
     expect(await jsonBody(res)).toEqual({ error: "Not found" });
   });
 
   it("queries with isActive:true", async () => {
     (prisma as any).meetingType.findFirst.mockResolvedValue(null);
-    await getToken(makeRequest(), params("validtoken1"));
+    await getToken(makeRequest(), params("abcdefghij1234567890"));
     expect((prisma as any).meetingType.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { shareToken: "validtoken1", isActive: true } }),
+      expect.objectContaining({ where: { shareToken: "abcdefghij1234567890", isActive: true } }),
     );
   });
 
@@ -136,7 +161,7 @@ describe("GET /api/p/meetings/[token]", () => {
       id: 1, name: "Test", duration: 30, availabilityOverride: override,
       companyId: 10, company: { name: "Co", logoUrl: null, companyAvailability: null },
     });
-    const res = await getToken(makeRequest(), params("validtoken1"));
+    const res = await getToken(makeRequest(), params("abcdefghij1234567890"));
     const body = await jsonBody(res);
     expect(body.availableDays).toEqual([0, 3]);
   });
@@ -155,7 +180,7 @@ describe("GET /api/p/meetings/[token]", () => {
       id: 1, name: "Test", duration: 30, availabilityOverride: null,
       companyId: 10, company: { name: "Co", logoUrl: null, companyAvailability: { weeklySchedule: companySchedule } },
     });
-    const res = await getToken(makeRequest(), params("validtoken1"));
+    const res = await getToken(makeRequest(), params("abcdefghij1234567890"));
     const body = await jsonBody(res);
     expect(body.availableDays).toEqual([0, 1]);
   });
@@ -165,7 +190,7 @@ describe("GET /api/p/meetings/[token]", () => {
       id: 1, name: "Test", duration: 30, availabilityOverride: null,
       companyId: 10, company: { name: "Co", logoUrl: null, companyAvailability: null },
     });
-    const res = await getToken(makeRequest(), params("validtoken1"));
+    const res = await getToken(makeRequest(), params("abcdefghij1234567890"));
     const body = await jsonBody(res);
     // Default: days 0-4 have windows, 5-6 are empty
     expect(body.availableDays).toEqual([0, 1, 2, 3, 4]);
@@ -176,7 +201,7 @@ describe("GET /api/p/meetings/[token]", () => {
       id: 1, name: "Test", duration: 30, availabilityOverride: null,
       companyId: 10, company: { name: "Co", logoUrl: null, companyAvailability: null },
     });
-    const res = await getToken(makeRequest(), params("validtoken1"));
+    const res = await getToken(makeRequest(), params("abcdefghij1234567890"));
     const body = await jsonBody(res);
     expect(body.companyId).toBeUndefined();
     expect(body.availabilityOverride).toBeUndefined();
@@ -184,7 +209,7 @@ describe("GET /api/p/meetings/[token]", () => {
 
   it("propagates DB error as unhandled (no try/catch in route)", async () => {
     (prisma as any).meetingType.findFirst.mockRejectedValue(new Error("DB down"));
-    await expect(getToken(makeRequest(), params("validtoken1"))).rejects.toThrow("DB down");
+    await expect(getToken(makeRequest(), params("abcdefghij1234567890"))).rejects.toThrow("DB down");
   });
 
   it("returns availableDays as number array", async () => {
@@ -192,7 +217,7 @@ describe("GET /api/p/meetings/[token]", () => {
       id: 1, name: "Test", duration: 30, availabilityOverride: null,
       companyId: 10, company: { name: "Co", logoUrl: null, companyAvailability: null },
     });
-    const res = await getToken(makeRequest(), params("validtoken1"));
+    const res = await getToken(makeRequest(), params("abcdefghij1234567890"));
     const body = await jsonBody(res);
     for (const day of body.availableDays) {
       expect(typeof day).toBe("number");
@@ -208,7 +233,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
     participantName: "John",
     participantEmail: "john@test.com",
     participantPhone: "0501234567",
-    startTime: "2025-06-01T10:00:00Z",
+    startTime: "2027-06-01T10:00:00Z",
   };
 
   const meetingType = {
@@ -224,7 +249,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
         participantName: "John",
         participantEmail: "john@test.com",
         participantPhone: "0501234567",
-        startTime: new Date("2025-06-01T10:00:00Z"),
+        startTime: new Date("2027-06-01T10:00:00Z"),
         customFieldData: undefined,
       },
     });
@@ -240,41 +265,37 @@ describe("POST /api/p/meetings/[token]/book", () => {
     (prisma as any).meeting.create.mockResolvedValue({ id: "m1", manageToken: "mgmt123456" });
   }
 
-  it("returns 400 for invalid token", async () => {
+  it("returns 404 for invalid token", async () => {
     const req = makeRequest({ method: "POST", body: validBookingData });
     const res = await postBook(req, params("bad!"));
-    expect(res.status).toBe(400);
-    expect(await jsonBody(res)).toEqual({ error: "Invalid token" });
+    expect(res.status).toBe(404);
+    expect(await jsonBody(res)).toEqual({ error: "Not found" });
   });
 
   it("returns 429 when rate limited", async () => {
     const rateLimitResponse = new Response(JSON.stringify({ error: "Rate limit exceeded" }), { status: 429 });
     (checkRateLimit as any).mockResolvedValue(rateLimitResponse);
     const req = makeRequest({ method: "POST", body: validBookingData, ip: "1.2.3.4" });
-    const res = await postBook(req, params("validtoken1"));
+    const res = await postBook(req, params("abcdefghij1234567890"));
     expect(res.status).toBe(429);
   });
 
-  it("extracts IP from x-forwarded-for first entry", async () => {
-    (checkRateLimit as any).mockResolvedValue(null);
-    (validateBookingInput as any).mockReturnValue({ valid: false, error: "test" });
-    const req = makeRequest({ method: "POST", body: validBookingData, headers: { "x-forwarded-for": "1.2.3.4, 5.6.7.8" } });
-    await postBook(req, params("validtoken1"));
-    expect(checkRateLimit).toHaveBeenCalledWith("1.2.3.4", expect.any(Object));
-  });
-
-  it("uses 'unknown' when no x-forwarded-for", async () => {
+  it("passes getClientIp result to checkRateLimit", async () => {
+    const { getClientIp } = await import("@/lib/request-ip");
+    (getClientIp as any).mockReturnValue("1.2.3.4");
     (checkRateLimit as any).mockResolvedValue(null);
     (validateBookingInput as any).mockReturnValue({ valid: false, error: "test" });
     const req = makeRequest({ method: "POST", body: validBookingData });
-    await postBook(req, params("validtoken1"));
-    expect(checkRateLimit).toHaveBeenCalledWith("unknown", expect.any(Object));
+    await postBook(req, params("abcdefghij1234567890"));
+    expect(checkRateLimit).toHaveBeenCalledWith("1.2.3.4", expect.any(Object));
+    // Reset mock
+    (getClientIp as any).mockReturnValue("127.0.0.1");
   });
 
   it("returns 400 when body validation fails", async () => {
     (validateBookingInput as any).mockReturnValue({ valid: false, error: "שם נדרש" });
     const req = makeRequest({ method: "POST", body: {} });
-    const res = await postBook(req, params("validtoken1"));
+    const res = await postBook(req, params("abcdefghij1234567890"));
     expect(res.status).toBe(400);
     expect(await jsonBody(res)).toEqual({ error: "שם נדרש" });
   });
@@ -286,7 +307,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
     });
     (prisma as any).meetingType.findFirst.mockResolvedValue(null);
     const req = makeRequest({ method: "POST", body: validBookingData });
-    const res = await postBook(req, params("validtoken1"));
+    const res = await postBook(req, params("abcdefghij1234567890"));
     expect(res.status).toBe(404);
     expect(await jsonBody(res)).toEqual({ error: "Not found" });
   });
@@ -294,14 +315,14 @@ describe("POST /api/p/meetings/[token]/book", () => {
   it("returns 400 when pre-check slot unavailable", async () => {
     (validateBookingInput as any).mockReturnValue({
       valid: true,
-      data: { participantName: "J", participantEmail: "j@e.com", startTime: new Date("2025-06-01T10:00:00Z") },
+      data: { participantName: "J", participantEmail: "j@e.com", startTime: new Date("2027-06-01T10:00:00Z") },
     });
     (prisma as any).meetingType.findFirst.mockResolvedValue(meetingType);
     (prisma as any).meeting.findMany.mockResolvedValue([]);
     (prisma as any).calendarEvent.findMany.mockResolvedValue([]);
     (isSlotAvailable as any).mockReturnValue(false);
     const req = makeRequest({ method: "POST", body: validBookingData });
-    const res = await postBook(req, params("validtoken1"));
+    const res = await postBook(req, params("abcdefghij1234567890"));
     expect(res.status).toBe(400);
     expect(await jsonBody(res)).toEqual({ error: "Slot is no longer available" });
   });
@@ -309,7 +330,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
   it("returns 400 when SLOT_TAKEN inside transaction", async () => {
     (validateBookingInput as any).mockReturnValue({
       valid: true,
-      data: { participantName: "J", participantEmail: "j@e.com", startTime: new Date("2025-06-01T10:00:00Z") },
+      data: { participantName: "J", participantEmail: "j@e.com", startTime: new Date("2027-06-01T10:00:00Z") },
     });
     (prisma as any).meetingType.findFirst.mockResolvedValue(meetingType);
     (prisma as any).meeting.findMany.mockResolvedValue([]);
@@ -319,7 +340,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
     (prisma as any).$transaction.mockImplementation(async (fn: any) => fn((prisma as any)));
 
     const req = makeRequest({ method: "POST", body: validBookingData });
-    const res = await postBook(req, params("validtoken1"));
+    const res = await postBook(req, params("abcdefghij1234567890"));
     expect(res.status).toBe(400);
     expect(await jsonBody(res)).toEqual({ error: "Slot is no longer available" });
   });
@@ -327,7 +348,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
   it("creates calendarEvent, finds client, creates meeting in transaction (happy path)", async () => {
     setupBookingMocks();
     const req = makeRequest({ method: "POST", body: validBookingData });
-    const res = await postBook(req, params("validtoken1"));
+    const res = await postBook(req, params("abcdefghij1234567890"));
     expect(res.status).toBe(200);
     const body = await jsonBody(res);
     expect(body.success).toBe(true);
@@ -338,8 +359,8 @@ describe("POST /api/p/meetings/[token]/book", () => {
     expect(ceArgs.data).toEqual({
       companyId: 10,
       title: "Consultation - John",
-      startTime: new Date("2025-06-01T10:00:00Z"),
-      endTime: new Date("2025-06-01T10:30:00Z"),
+      startTime: new Date("2027-06-01T10:00:00Z"),
+      endTime: new Date("2027-06-01T10:30:00Z"),
       color: "#blue",
     });
 
@@ -354,8 +375,8 @@ describe("POST /api/p/meetings/[token]/book", () => {
       participantName: "John",
       participantEmail: "john@test.com",
       participantPhone: "0501234567",
-      startTime: new Date("2025-06-01T10:00:00Z"),
-      endTime: new Date("2025-06-01T10:30:00Z"),
+      startTime: new Date("2027-06-01T10:00:00Z"),
+      endTime: new Date("2027-06-01T10:30:00Z"),
       clientId: 5,
       calendarEventId: "ce1",
     }));
@@ -366,7 +387,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
     (prisma as any).client.findFirst.mockResolvedValue(null);
     (prisma as any).client.create.mockResolvedValue({ id: 99 });
     const req = makeRequest({ method: "POST", body: validBookingData });
-    await postBook(req, params("validtoken1"));
+    await postBook(req, params("abcdefghij1234567890"));
     const clientArgs = (prisma as any).client.create.mock.calls[0][0];
     expect(clientArgs.data).toEqual({
       companyId: 10,
@@ -379,7 +400,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
   it("looks up client using OR (email/phone) + companyId", async () => {
     setupBookingMocks();
     const req = makeRequest({ method: "POST", body: validBookingData });
-    await postBook(req, params("validtoken1"));
+    await postBook(req, params("abcdefghij1234567890"));
     const clientCall = (prisma as any).client.findFirst.mock.calls[0][0];
     expect(clientCall.where.companyId).toBe(10);
     expect(clientCall.where.OR).toEqual(
@@ -393,9 +414,9 @@ describe("POST /api/p/meetings/[token]/book", () => {
   it("calculates endTime = startTime + duration * 60_000", async () => {
     setupBookingMocks();
     const req = makeRequest({ method: "POST", body: validBookingData });
-    await postBook(req, params("validtoken1"));
+    await postBook(req, params("abcdefghij1234567890"));
     const ceArgs = (prisma as any).calendarEvent.create.mock.calls[0][0];
-    const startMs = new Date("2025-06-01T10:00:00Z").getTime();
+    const startMs = new Date("2027-06-01T10:00:00Z").getTime();
     const expectedEnd = new Date(startMs + 30 * 60_000);
     expect(ceArgs.data.endTime).toEqual(expectedEnd);
     const meetingArgs = (prisma as any).meeting.create.mock.calls[0][0];
@@ -410,12 +431,12 @@ describe("POST /api/p/meetings/[token]/book", () => {
         participantName: "John",
         participantEmail: "john@test.com",
         participantPhone: undefined,
-        startTime: new Date("2025-06-01T10:00:00Z"),
+        startTime: new Date("2027-06-01T10:00:00Z"),
         customFieldData: undefined,
       },
     });
     const req = makeRequest({ method: "POST", body: { ...validBookingData, participantPhone: undefined } });
-    await postBook(req, params("validtoken1"));
+    await postBook(req, params("abcdefghij1234567890"));
     const clientCall = (prisma as any).client.findFirst.mock.calls[0][0];
     expect(clientCall.where.OR).toEqual([{ email: "john@test.com" }]);
   });
@@ -428,12 +449,12 @@ describe("POST /api/p/meetings/[token]/book", () => {
         participantName: "John",
         participantEmail: undefined,
         participantPhone: "0501234567",
-        startTime: new Date("2025-06-01T10:00:00Z"),
+        startTime: new Date("2027-06-01T10:00:00Z"),
         customFieldData: undefined,
       },
     });
     const req = makeRequest({ method: "POST", body: { ...validBookingData, participantEmail: undefined } });
-    await postBook(req, params("validtoken1"));
+    await postBook(req, params("abcdefghij1234567890"));
     const clientCall = (prisma as any).client.findFirst.mock.calls[0][0];
     expect(clientCall.where.OR).toEqual([{ phone: "0501234567" }]);
   });
@@ -446,14 +467,14 @@ describe("POST /api/p/meetings/[token]/book", () => {
         participantName: "John",
         participantEmail: undefined,
         participantPhone: undefined,
-        startTime: new Date("2025-06-01T10:00:00Z"),
+        startTime: new Date("2027-06-01T10:00:00Z"),
         customFieldData: undefined,
       },
     });
     (prisma as any).client.create.mockResolvedValue({ id: 77 });
 
-    const req = makeRequest({ method: "POST", body: { participantName: "John", startTime: "2025-06-01T10:00:00Z" } });
-    const res = await postBook(req, params("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { participantName: "John", startTime: "2027-06-01T10:00:00Z" } });
+    const res = await postBook(req, params("abcdefghij1234567890"));
     expect(res.status).toBe(200);
 
     // client.findFirst should NOT have been called (clientWhereConditions is empty)
@@ -472,7 +493,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
     setupBookingMocks();
     (prisma as any).user.findMany.mockResolvedValue([{ id: 100 }, { id: 200 }]);
     const req = makeRequest({ method: "POST", body: validBookingData });
-    await postBook(req, params("validtoken1"));
+    await postBook(req, params("abcdefghij1234567890"));
 
     // Flush fire-and-forget .then() chain
     await new Promise(r => setTimeout(r, 0));
@@ -504,7 +525,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
   it("fires MEETING_BOOKED automation after successful booking", async () => {
     setupBookingMocks();
     const req = makeRequest({ method: "POST", body: validBookingData });
-    await postBook(req, params("validtoken1"));
+    await postBook(req, params("abcdefghij1234567890"));
 
     // Flush microtask for import(...).then(...)
     await new Promise(r => setTimeout(r, 0));
@@ -518,20 +539,20 @@ describe("POST /api/p/meetings/[token]/book", () => {
         participantName: "John",
         participantEmail: "john@test.com",
         participantPhone: "0501234567",
-        startTime: new Date("2025-06-01T10:00:00Z"),
-        endTime: new Date("2025-06-01T10:30:00Z"),
+        startTime: new Date("2027-06-01T10:00:00Z"),
+        endTime: new Date("2027-06-01T10:30:00Z"),
         meetingTypeName: "Consultation",
       },
     );
   });
 
-  it("returns 500 when request body is missing", async () => {
+  it("returns 415 when content-type is missing", async () => {
     const req = new NextRequest("http://localhost/api/p/meetings/test", {
       method: "POST",
     });
-    const res = await postBook(req, params("validtoken1"));
-    expect(res.status).toBe(500);
-    expect(await jsonBody(res)).toEqual({ error: "Internal server error" });
+    const res = await postBook(req, params("abcdefghij1234567890"));
+    expect(res.status).toBe(415);
+    expect(await jsonBody(res)).toEqual({ error: "Content-Type must be application/json" });
   });
 
   it("returns 500 when request body is invalid JSON", async () => {
@@ -540,7 +561,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
       body: "not json",
       headers: { "content-type": "application/json" },
     });
-    const res = await postBook(req, params("validtoken1"));
+    const res = await postBook(req, params("abcdefghij1234567890"));
     expect(res.status).toBe(500);
     expect(await jsonBody(res)).toEqual({ error: "Internal server error" });
   });
@@ -549,7 +570,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
     setupBookingMocks();
     (prisma as any).$transaction.mockRejectedValue(new Error("Unexpected"));
     const req = makeRequest({ method: "POST", body: validBookingData });
-    const res = await postBook(req, params("validtoken1"));
+    const res = await postBook(req, params("abcdefghij1234567890"));
     expect(res.status).toBe(500);
     expect(await jsonBody(res)).toEqual({ error: "Internal server error" });
   });
@@ -567,7 +588,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
         participantName: "John",
         participantEmail: "john@test.com",
         participantPhone: "0501234567",
-        startTime: new Date("2025-06-01T10:00:00Z"),
+        startTime: new Date("2027-06-01T10:00:00Z"),
         customFieldData: undefined,
       },
     });
@@ -580,7 +601,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
     (prisma as any).meeting.create.mockResolvedValue({ id: "m1", manageToken: "mgmt123456" });
 
     const req = makeRequest({ method: "POST", body: validBookingData });
-    const res = await postBook(req, params("validtoken1"));
+    const res = await postBook(req, params("abcdefghij1234567890"));
     expect(res.status).toBe(200);
 
     // Client should NOT be looked up or created
@@ -603,7 +624,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
         participantName: "John",
         participantEmail: "john@test.com",
         participantPhone: "0501234567",
-        startTime: new Date("2025-06-01T10:00:00Z"),
+        startTime: new Date("2027-06-01T10:00:00Z"),
         customFieldData: undefined,
       },
     });
@@ -618,7 +639,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
     (prisma as any).user.findMany.mockResolvedValue([{ id: 100 }]);
 
     const req = makeRequest({ method: "POST", body: validBookingData });
-    await postBook(req, params("validtoken1"));
+    await postBook(req, params("abcdefghij1234567890"));
 
     await new Promise(r => setTimeout(r, 0));
 
@@ -637,7 +658,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
         participantName: "John",
         participantEmail: "john@test.com",
         participantPhone: "0501234567",
-        startTime: new Date("2025-06-01T10:00:00Z"),
+        startTime: new Date("2027-06-01T10:00:00Z"),
         customFieldData: undefined,
       },
     });
@@ -650,7 +671,7 @@ describe("POST /api/p/meetings/[token]/book", () => {
     (prisma as any).meeting.create.mockResolvedValue({ id: "m1", manageToken: "mgmt123456" });
 
     const req = makeRequest({ method: "POST", body: validBookingData });
-    const res = await postBook(req, params("validtoken1"));
+    const res = await postBook(req, params("abcdefghij1234567890"));
     expect(res.status).toBe(200);
 
     await new Promise(r => setTimeout(r, 0));
@@ -666,21 +687,21 @@ describe("POST /api/p/meetings/[token]/book", () => {
 // GET /api/p/meetings/manage/[manageToken]
 // ════════════════════════════════════════════════════════════════════
 describe("GET /api/p/meetings/manage/[manageToken]", () => {
-  it("returns 400 for invalid token", async () => {
+  it("returns 404 for invalid token", async () => {
     const res = await getManage(makeRequest(), manageParams("short"));
-    expect(res.status).toBe(400);
-    expect(await jsonBody(res)).toEqual({ error: "Invalid token" });
+    expect(res.status).toBe(404);
+    expect(await jsonBody(res)).toEqual({ error: "Not found" });
   });
 
-  it("returns 400 for token with special chars", async () => {
+  it("returns 404 for token with special chars", async () => {
     const res = await getManage(makeRequest(), manageParams("abc!@#de123"));
-    expect(res.status).toBe(400);
-    expect(await jsonBody(res)).toEqual({ error: "Invalid token" });
+    expect(res.status).toBe(404);
+    expect(await jsonBody(res)).toEqual({ error: "Not found" });
   });
 
   it("returns 404 when not found", async () => {
     (prisma as any).meeting.findUnique.mockResolvedValue(null);
-    const res = await getManage(makeRequest(), manageParams("validtoken1"));
+    const res = await getManage(makeRequest(), manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(404);
     expect(await jsonBody(res)).toEqual({ error: "Not found" });
   });
@@ -693,7 +714,7 @@ describe("GET /api/p/meetings/manage/[manageToken]", () => {
       company: { name: "Co", logoUrl: null },
     };
     (prisma as any).meeting.findUnique.mockResolvedValue(meeting);
-    const res = await getManage(makeRequest(), manageParams("validtoken1"));
+    const res = await getManage(makeRequest(), manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(200);
     const body = await jsonBody(res);
     expect(body.participantName).toBe("John");
@@ -703,15 +724,15 @@ describe("GET /api/p/meetings/manage/[manageToken]", () => {
 
   it("queries by manageToken (findUnique)", async () => {
     (prisma as any).meeting.findUnique.mockResolvedValue(null);
-    await getManage(makeRequest(), manageParams("validtoken1"));
+    await getManage(makeRequest(), manageParams("abcdefghij1234567890"));
     expect((prisma as any).meeting.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { manageToken: "validtoken1" } }),
+      expect.objectContaining({ where: { manageToken: "abcdefghij1234567890" } }),
     );
   });
 
   it("propagates DB error as unhandled (no try/catch in route)", async () => {
     (prisma as any).meeting.findUnique.mockRejectedValue(new Error("DB down"));
-    await expect(getManage(makeRequest(), manageParams("validtoken1"))).rejects.toThrow("DB down");
+    await expect(getManage(makeRequest(), manageParams("abcdefghij1234567890"))).rejects.toThrow("DB down");
   });
 });
 
@@ -725,41 +746,41 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
     meetingType: { name: "Test", duration: 30, bufferBefore: 5, bufferAfter: 5 },
   };
 
-  it("returns 400 for invalid token", async () => {
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
+  it("returns 404 for invalid token", async () => {
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
     const res = await postReschedule(req, manageParams("bad!"));
-    expect(res.status).toBe(400);
-    expect(await jsonBody(res)).toEqual({ error: "Invalid token" });
+    expect(res.status).toBe(404);
+    expect(await jsonBody(res)).toEqual({ error: "Not found" });
   });
 
   it("returns 429 when rate limited", async () => {
     const rateLimitResponse = new Response(JSON.stringify({ error: "Rate limit exceeded" }), { status: 429 });
     (checkRateLimit as any).mockResolvedValue(rateLimitResponse);
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" }, ip: "1.2.3.4" });
-    const res = await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" }, ip: "1.2.3.4" });
+    const res = await postReschedule(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(429);
   });
 
   it("returns 404 when not found", async () => {
     (prisma as any).meeting.findUnique.mockResolvedValue(null);
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
-    const res = await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
+    const res = await postReschedule(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(404);
     expect(await jsonBody(res)).toEqual({ error: "Not found" });
   });
 
   it("returns 400 for CANCELLED meeting", async () => {
     (prisma as any).meeting.findUnique.mockResolvedValue({ ...meetingData, status: "CANCELLED" });
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
-    const res = await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
+    const res = await postReschedule(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(400);
     expect(await jsonBody(res)).toEqual({ error: "Meeting cannot be rescheduled" });
   });
 
   it("returns 400 for COMPLETED meeting", async () => {
     (prisma as any).meeting.findUnique.mockResolvedValue({ ...meetingData, status: "COMPLETED" });
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
-    const res = await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
+    const res = await postReschedule(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(400);
     expect(await jsonBody(res)).toEqual({ error: "Meeting cannot be rescheduled" });
   });
@@ -773,8 +794,8 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
     (prisma as any).meeting.findMany.mockResolvedValue([]);
     (prisma as any).calendarEvent.findMany.mockResolvedValue([]);
 
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
-    const res = await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
+    const res = await postReschedule(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(200);
     expect(await jsonBody(res)).toEqual({ success: true });
   });
@@ -782,7 +803,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
   it("returns 400 when startTime is missing", async () => {
     (prisma as any).meeting.findUnique.mockResolvedValue(meetingData);
     const req = makeRequest({ method: "POST", body: {} });
-    const res = await postReschedule(req, manageParams("validtoken1"));
+    const res = await postReschedule(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(400);
     expect(await jsonBody(res)).toEqual({ error: "startTime is required" });
   });
@@ -790,7 +811,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
   it("returns 400 when startTime is not a string", async () => {
     (prisma as any).meeting.findUnique.mockResolvedValue(meetingData);
     const req = makeRequest({ method: "POST", body: { startTime: 12345 } });
-    const res = await postReschedule(req, manageParams("validtoken1"));
+    const res = await postReschedule(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(400);
     expect(await jsonBody(res)).toEqual({ error: "startTime is required" });
   });
@@ -798,7 +819,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
   it("returns 400 for invalid startTime", async () => {
     (prisma as any).meeting.findUnique.mockResolvedValue(meetingData);
     const req = makeRequest({ method: "POST", body: { startTime: "not-a-date" } });
-    const res = await postReschedule(req, manageParams("validtoken1"));
+    const res = await postReschedule(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(400);
     expect(await jsonBody(res)).toEqual({ error: "Invalid startTime" });
   });
@@ -810,12 +831,12 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
     (prisma as any).meeting.update.mockResolvedValue({});
     (prisma as any).calendarEvent.update.mockResolvedValue({});
 
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
-    await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
+    await postReschedule(req, manageParams("abcdefghij1234567890"));
 
     // The meeting.update call inside transaction should have endTime = start + 30min
     const updateCall = (prisma as any).meeting.update.mock.calls[0][0];
-    const expectedEnd = new Date("2025-06-01T10:30:00Z");
+    const expectedEnd = new Date("2027-06-01T10:30:00Z");
     expect(updateCall.data.endTime).toEqual(expectedEnd);
   });
 
@@ -826,8 +847,8 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
     (prisma as any).meeting.findMany.mockResolvedValue([]);
     (prisma as any).calendarEvent.findMany.mockResolvedValue([]);
 
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
-    const res = await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
+    const res = await postReschedule(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(400);
     expect(await jsonBody(res)).toEqual({ error: "Slot is no longer available" });
   });
@@ -841,8 +862,8 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
     (prisma as any).meeting.findMany.mockResolvedValue([]);
     (prisma as any).calendarEvent.findMany.mockResolvedValue([]);
 
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
-    await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
+    await postReschedule(req, manageParams("abcdefghij1234567890"));
 
     const meetingQuery = (prisma as any).meeting.findMany.mock.calls[0][0];
     expect(meetingQuery.where.id).toEqual({ not: "m1" });
@@ -857,8 +878,8 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
     (prisma as any).meeting.findMany.mockResolvedValue([]);
     (prisma as any).calendarEvent.findMany.mockResolvedValue([]);
 
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
-    await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
+    await postReschedule(req, manageParams("abcdefghij1234567890"));
 
     const ceQuery = (prisma as any).calendarEvent.findMany.mock.calls[0][0];
     expect(ceQuery.where.id).toEqual({ not: "ce1" });
@@ -873,20 +894,20 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
     (prisma as any).meeting.findMany.mockResolvedValue([]);
     (prisma as any).calendarEvent.findMany.mockResolvedValue([]);
 
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
-    const res = await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
+    const res = await postReschedule(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(200);
     expect(await jsonBody(res)).toEqual({ success: true });
 
     const meetingUpdateCall = (prisma as any).meeting.update.mock.calls[0][0];
     expect(meetingUpdateCall.where).toEqual({ id: "m1" });
-    expect(meetingUpdateCall.data.startTime).toEqual(new Date("2025-06-01T10:00:00Z"));
-    expect(meetingUpdateCall.data.endTime).toEqual(new Date("2025-06-01T10:30:00Z"));
+    expect(meetingUpdateCall.data.startTime).toEqual(new Date("2027-06-01T10:00:00Z"));
+    expect(meetingUpdateCall.data.endTime).toEqual(new Date("2027-06-01T10:30:00Z"));
 
     const ceUpdateCall = (prisma as any).calendarEvent.update.mock.calls[0][0];
     expect(ceUpdateCall.where).toEqual({ id: "ce1" });
-    expect(ceUpdateCall.data.startTime).toEqual(new Date("2025-06-01T10:00:00Z"));
-    expect(ceUpdateCall.data.endTime).toEqual(new Date("2025-06-01T10:30:00Z"));
+    expect(ceUpdateCall.data.startTime).toEqual(new Date("2027-06-01T10:00:00Z"));
+    expect(ceUpdateCall.data.endTime).toEqual(new Date("2027-06-01T10:30:00Z"));
   });
 
   it("skips calendarEvent update when calendarEventId is null", async () => {
@@ -897,8 +918,8 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
     (prisma as any).meeting.findMany.mockResolvedValue([]);
     (prisma as any).calendarEvent.findMany.mockResolvedValue([]);
 
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
-    await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
+    await postReschedule(req, manageParams("abcdefghij1234567890"));
     expect((prisma as any).calendarEvent.update).not.toHaveBeenCalled();
   });
 
@@ -913,8 +934,8 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
     (prisma as any).calendarEvent.findMany.mockResolvedValue([]);
     (prisma as any).user.findMany.mockResolvedValue([{ id: 100 }, { id: 200 }]);
 
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
-    await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
+    await postReschedule(req, manageParams("abcdefghij1234567890"));
 
     // Flush fire-and-forget .then() chain
     await new Promise(r => setTimeout(r, 0));
@@ -954,8 +975,8 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
     (prisma as any).calendarEvent.findMany.mockResolvedValue([]);
     (prisma as any).user.findMany.mockResolvedValue([{ id: 100 }]);
 
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
-    await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
+    await postReschedule(req, manageParams("abcdefghij1234567890"));
 
     await new Promise(r => setTimeout(r, 0));
 
@@ -971,8 +992,8 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
     (prisma as any).meeting.findMany.mockResolvedValue([]);
     (prisma as any).calendarEvent.findMany.mockResolvedValue([]);
 
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
-    const res = await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
+    const res = await postReschedule(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(200);
     expect(await jsonBody(res)).toEqual({ success: true });
   });
@@ -985,8 +1006,8 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
     (prisma as any).meeting.findMany.mockResolvedValue([]);
     (prisma as any).calendarEvent.findMany.mockResolvedValue([]);
 
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
-    const res = await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
+    const res = await postReschedule(req, manageParams("abcdefghij1234567890"));
 
     const ceQuery = (prisma as any).calendarEvent.findMany.mock.calls[0][0];
     expect(ceQuery.where.id).toBeUndefined();
@@ -994,32 +1015,32 @@ describe("POST /api/p/meetings/manage/[manageToken]/reschedule", () => {
     expect(await jsonBody(res)).toEqual({ success: true });
   });
 
-  it("returns 500 when request body is missing", async () => {
+  it("returns 415 when content-type is missing", async () => {
     (prisma as any).meeting.findUnique.mockResolvedValue(meetingData);
-    const req = new NextRequest("http://localhost/api/p/meetings/manage/validtoken1/reschedule", {
+    const req = new NextRequest("http://localhost/api/p/meetings/manage/abcdefghij1234567890/reschedule", {
       method: "POST",
     });
-    const res = await postReschedule(req, manageParams("validtoken1"));
-    expect(res.status).toBe(500);
-    expect(await jsonBody(res)).toEqual({ error: "Internal server error" });
+    const res = await postReschedule(req, manageParams("abcdefghij1234567890"));
+    expect(res.status).toBe(415);
+    expect(await jsonBody(res)).toEqual({ error: "Content-Type must be application/json" });
   });
 
   it("returns 500 when request body is invalid JSON", async () => {
     (prisma as any).meeting.findUnique.mockResolvedValue(meetingData);
-    const req = new NextRequest("http://localhost/api/p/meetings/manage/validtoken1/reschedule", {
+    const req = new NextRequest("http://localhost/api/p/meetings/manage/abcdefghij1234567890/reschedule", {
       method: "POST",
       body: "not json",
       headers: { "content-type": "application/json" },
     });
-    const res = await postReschedule(req, manageParams("validtoken1"));
+    const res = await postReschedule(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(500);
     expect(await jsonBody(res)).toEqual({ error: "Internal server error" });
   });
 
   it("returns 500 on unexpected error", async () => {
     (prisma as any).meeting.findUnique.mockRejectedValue(new Error("Unexpected"));
-    const req = makeRequest({ method: "POST", body: { startTime: "2025-06-01T10:00:00Z" } });
-    const res = await postReschedule(req, manageParams("validtoken1"));
+    const req = makeRequest({ method: "POST", body: { startTime: "2027-06-01T10:00:00Z" } });
+    const res = await postReschedule(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(500);
     expect(await jsonBody(res)).toEqual({ error: "Internal server error" });
   });
@@ -1032,29 +1053,29 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
   const meetingData = {
     id: "m1", companyId: 10, status: "PENDING", participantName: "John",
     participantEmail: "j@e.com", participantPhone: "0501234567",
-    startTime: new Date("2025-06-01T10:00:00Z"), endTime: new Date("2025-06-01T10:30:00Z"),
+    startTime: new Date("2027-06-01T10:00:00Z"), endTime: new Date("2027-06-01T10:30:00Z"),
     meetingTypeId: 1, meetingType: { name: "Test" },
   };
 
-  it("returns 400 for invalid token", async () => {
+  it("returns 404 for invalid token", async () => {
     const req = makeRequest({ method: "POST", body: {} });
     const res = await postCancel(req, manageParams("bad!"));
-    expect(res.status).toBe(400);
-    expect(await jsonBody(res)).toEqual({ error: "Invalid token" });
+    expect(res.status).toBe(404);
+    expect(await jsonBody(res)).toEqual({ error: "Not found" });
   });
 
   it("returns 429 when rate limited", async () => {
     const rateLimitResponse = new Response(JSON.stringify({ error: "Rate limit exceeded" }), { status: 429 });
     (checkRateLimit as any).mockResolvedValue(rateLimitResponse);
     const req = makeRequest({ method: "POST", body: {}, ip: "1.2.3.4" });
-    const res = await postCancel(req, manageParams("validtoken1"));
+    const res = await postCancel(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(429);
   });
 
   it("returns 404 when not found", async () => {
     (prisma as any).meeting.findUnique.mockResolvedValue(null);
     const req = makeRequest({ method: "POST", body: {} });
-    const res = await postCancel(req, manageParams("validtoken1"));
+    const res = await postCancel(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(404);
     expect(await jsonBody(res)).toEqual({ error: "Not found" });
   });
@@ -1062,7 +1083,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
   it("returns 400 for CANCELLED meeting", async () => {
     (prisma as any).meeting.findUnique.mockResolvedValue({ ...meetingData, status: "CANCELLED" });
     const req = makeRequest({ method: "POST", body: {} });
-    const res = await postCancel(req, manageParams("validtoken1"));
+    const res = await postCancel(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(400);
     expect(await jsonBody(res)).toEqual({ error: "Meeting cannot be cancelled" });
   });
@@ -1070,7 +1091,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
   it("returns 400 for COMPLETED meeting", async () => {
     (prisma as any).meeting.findUnique.mockResolvedValue({ ...meetingData, status: "COMPLETED" });
     const req = makeRequest({ method: "POST", body: {} });
-    const res = await postCancel(req, manageParams("validtoken1"));
+    const res = await postCancel(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(400);
     expect(await jsonBody(res)).toEqual({ error: "Meeting cannot be cancelled" });
   });
@@ -1079,7 +1100,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
     (prisma as any).meeting.findUnique.mockResolvedValue(meetingData);
     (prisma as any).meeting.update.mockResolvedValue({});
     const req = makeRequest({ method: "POST", body: {} });
-    await postCancel(req, manageParams("validtoken1"));
+    await postCancel(req, manageParams("abcdefghij1234567890"));
     const data = (prisma as any).meeting.update.mock.calls[0][0].data;
     expect(data.cancelledBy).toBe("participant");
     expect(data.status).toBe("CANCELLED");
@@ -1091,7 +1112,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
     (prisma as any).meeting.update.mockResolvedValue({});
     const longReason = "r".repeat(2000);
     const req = makeRequest({ method: "POST", body: { reason: longReason } });
-    await postCancel(req, manageParams("validtoken1"));
+    await postCancel(req, manageParams("abcdefghij1234567890"));
     const data = (prisma as any).meeting.update.mock.calls[0][0].data;
     expect(data.cancelReason!.length).toBe(1000);
   });
@@ -1101,7 +1122,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
     (prisma as any).meeting.update.mockResolvedValue({});
     const reason = "I have a conflict";
     const req = makeRequest({ method: "POST", body: { reason } });
-    await postCancel(req, manageParams("validtoken1"));
+    await postCancel(req, manageParams("abcdefghij1234567890"));
     const data = (prisma as any).meeting.update.mock.calls[0][0].data;
     expect(data.cancelReason).toBe("I have a conflict");
   });
@@ -1110,34 +1131,31 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
     (prisma as any).meeting.findUnique.mockResolvedValue(meetingData);
     (prisma as any).meeting.update.mockResolvedValue({});
     const req = makeRequest({ method: "POST", body: { reason: 123 } });
-    await postCancel(req, manageParams("validtoken1"));
+    await postCancel(req, manageParams("abcdefghij1234567890"));
     const data = (prisma as any).meeting.update.mock.calls[0][0].data;
     expect(data.cancelReason).toBeUndefined();
   });
 
-  it("handles missing JSON body gracefully (no error)", async () => {
+  it("returns 415 when content-type is missing", async () => {
     (prisma as any).meeting.findUnique.mockResolvedValue(meetingData);
     (prisma as any).meeting.update.mockResolvedValue({});
-    // Create request with no body - request.json() will throw
-    const req = new NextRequest("http://localhost/api/p/meetings/manage/validtoken1/cancel", {
+    const req = new NextRequest("http://localhost/api/p/meetings/manage/abcdefghij1234567890/cancel", {
       method: "POST",
     });
-    const res = await postCancel(req, manageParams("validtoken1"));
-    expect(res.status).toBe(200);
-    expect(await jsonBody(res)).toEqual({ success: true });
-    // W8a: Verify meeting.update was still called (cancellation proceeded)
-    expect((prisma as any).meeting.update).toHaveBeenCalled();
+    const res = await postCancel(req, manageParams("abcdefghij1234567890"));
+    expect(res.status).toBe(415);
+    expect(await jsonBody(res)).toEqual({ error: "Content-Type must be application/json" });
   });
 
   it("handles invalid JSON body gracefully", async () => {
     (prisma as any).meeting.findUnique.mockResolvedValue(meetingData);
     (prisma as any).meeting.update.mockResolvedValue({});
-    const req = new NextRequest("http://localhost/api/p/meetings/manage/validtoken1/cancel", {
+    const req = new NextRequest("http://localhost/api/p/meetings/manage/abcdefghij1234567890/cancel", {
       method: "POST",
       body: "not json",
       headers: { "content-type": "application/json" },
     });
-    const res = await postCancel(req, manageParams("validtoken1"));
+    const res = await postCancel(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(200);
     expect(await jsonBody(res)).toEqual({ success: true });
   });
@@ -1146,7 +1164,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
     (prisma as any).meeting.findUnique.mockResolvedValue(meetingData);
     (prisma as any).meeting.update.mockResolvedValue({});
     const req = makeRequest({ method: "POST", body: { reason: "Can't make it" } });
-    const res = await postCancel(req, manageParams("validtoken1"));
+    const res = await postCancel(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(200);
     expect(await jsonBody(res)).toEqual({ success: true });
   });
@@ -1157,7 +1175,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
     (prisma as any).meeting.update.mockResolvedValue({});
     (prisma as any).user.findMany.mockResolvedValue([{ id: 100 }, { id: 200 }]);
     const req = makeRequest({ method: "POST", body: {} });
-    await postCancel(req, manageParams("validtoken1"));
+    await postCancel(req, manageParams("abcdefghij1234567890"));
 
     // Flush fire-and-forget .then() chain
     await new Promise(r => setTimeout(r, 0));
@@ -1190,7 +1208,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
     (prisma as any).meeting.findUnique.mockResolvedValue(meetingData);
     (prisma as any).meeting.update.mockResolvedValue({});
     const req = makeRequest({ method: "POST", body: {} });
-    await postCancel(req, manageParams("validtoken1"));
+    await postCancel(req, manageParams("abcdefghij1234567890"));
 
     // Flush microtask for import(...).then(...)
     await new Promise(r => setTimeout(r, 0));
@@ -1204,8 +1222,8 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
         participantName: "John",
         participantEmail: "j@e.com",
         participantPhone: "0501234567",
-        startTime: new Date("2025-06-01T10:00:00Z"),
-        endTime: new Date("2025-06-01T10:30:00Z"),
+        startTime: new Date("2027-06-01T10:00:00Z"),
+        endTime: new Date("2027-06-01T10:30:00Z"),
         meetingTypeName: "Test",
       },
     );
@@ -1215,7 +1233,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
     (prisma as any).meeting.findUnique.mockResolvedValue({ ...meetingData, status: "NO_SHOW" });
     (prisma as any).meeting.update.mockResolvedValue({});
     const req = makeRequest({ method: "POST", body: {} });
-    const res = await postCancel(req, manageParams("validtoken1"));
+    const res = await postCancel(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(200);
     expect(await jsonBody(res)).toEqual({ success: true });
   });
@@ -1226,7 +1244,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
     (prisma as any).meeting.update.mockResolvedValue({});
     (prisma as any).user.findMany.mockResolvedValue([{ id: 100 }]);
     const req = makeRequest({ method: "POST", body: {} });
-    await postCancel(req, manageParams("validtoken1"));
+    await postCancel(req, manageParams("abcdefghij1234567890"));
 
     await new Promise(r => setTimeout(r, 0));
 
@@ -1236,7 +1254,7 @@ describe("POST /api/p/meetings/manage/[manageToken]/cancel", () => {
   it("returns 500 on unexpected error", async () => {
     (prisma as any).meeting.findUnique.mockRejectedValue(new Error("Unexpected"));
     const req = makeRequest({ method: "POST", body: {} });
-    const res = await postCancel(req, manageParams("validtoken1"));
+    const res = await postCancel(req, manageParams("abcdefghij1234567890"));
     expect(res.status).toBe(500);
     expect(await jsonBody(res)).toEqual({ error: "Internal server error" });
   });
