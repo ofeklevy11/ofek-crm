@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -35,11 +35,15 @@ import {
   AlertCircle,
 } from "lucide-react";
 import type { GoogleMeetEvent, GoogleMeetAttendee } from "@/lib/types";
+import { useGoogleMeetFilters } from "@/hooks/use-google-meet-filters";
+import GoogleMeetFilters from "./GoogleMeetFilters";
 
 interface GoogleMeetListProps {
   open: boolean;
   onClose: () => void;
 }
+
+const PAGE_SIZE = 20;
 
 function formatRelativeDate(date: Date): string {
   const now = new Date();
@@ -66,20 +70,6 @@ function formatTime(date: Date): string {
   });
 }
 
-function getWeekRange(offset: number): { start: Date; end: Date; label: string } {
-  const now = new Date();
-  const dayOfWeek = now.getDay();
-  const start = new Date(now);
-  start.setDate(now.getDate() - dayOfWeek + offset * 7);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  end.setHours(23, 59, 59, 999);
-
-  const label = `${start.toLocaleDateString("he-IL", { day: "numeric", month: "short" })} - ${end.toLocaleDateString("he-IL", { day: "numeric", month: "short", year: "numeric" })}`;
-  return { start, end, label };
-}
-
 function ResponseStatusIcon({ status }: { status?: string }) {
   switch (status) {
     case "accepted":
@@ -94,31 +84,58 @@ function ResponseStatusIcon({ status }: { status?: string }) {
 }
 
 export default function GoogleMeetList({ open, onClose }: GoogleMeetListProps) {
-  const [events, setEvents] = useState<GoogleMeetEvent[]>([]);
+  const [rawEvents, setRawEvents] = useState<GoogleMeetEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState<boolean | null>(null);
-  const [weekOffset, setWeekOffset] = useState(0);
-  const [nextPageToken, setNextPageToken] = useState<string | undefined>();
-  const [loadingMore, setLoadingMore] = useState(false);
   const [expandedAttendees, setExpandedAttendees] = useState<Set<string>>(new Set());
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const fetchCounterRef = useRef(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const { start, end, label: weekLabel } = useMemo(() => getWeekRange(weekOffset), [weekOffset]);
+  const {
+    filters,
+    setFilter,
+    resetFilters,
+    dateRange,
+    activeFilterCount,
+    applyFilters,
+  } = useGoogleMeetFilters();
 
-  const fetchEvents = useCallback(
-    async (pageToken?: string) => {
-      if (!pageToken) setLoading(true);
-      else setLoadingMore(true);
+  const filteredEvents = useMemo(() => applyFilters(rawEvents), [applyFilters, rawEvents]);
+  const totalPages = Math.max(1, Math.ceil(filteredEvents.length / PAGE_SIZE));
+  const paginatedEvents = useMemo(
+    () => filteredEvents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredEvents, page],
+  );
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [filters]);
+
+  // Scroll to top on page/filter change
+  useEffect(() => {
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [page, filters]);
+
+  const fetchAllEvents = useCallback(
+    async () => {
+      const currentFetch = ++fetchCounterRef.current;
+      setLoading(true);
+      setFetchError(null);
 
       try {
-        const { getGoogleMeetEvents } = await import(
+        const { getAllGoogleMeetEvents } = await import(
           "@/app/actions/google-meet"
         );
-        const result = await getGoogleMeetEvents(
-          start.toISOString(),
-          end.toISOString(),
-          pageToken,
+        const result = await getAllGoogleMeetEvents(
+          dateRange.start.toISOString(),
+          dateRange.end.toISOString(),
         );
+
+        // Discard stale fetch
+        if (currentFetch !== fetchCounterRef.current) return;
 
         if (!result.success) {
           const msg = result.error || "שגיאה בטעינת פגישות Google Meet";
@@ -129,7 +146,6 @@ export default function GoogleMeetList({ open, onClose }: GoogleMeetListProps) {
         }
 
         setConnected(result.connected ?? null);
-        setFetchError(null);
 
         if (result.data) {
           const parsed = result.data.events.map((e) => ({
@@ -137,32 +153,36 @@ export default function GoogleMeetList({ open, onClose }: GoogleMeetListProps) {
             startTime: new Date(e.startTime),
             endTime: new Date(e.endTime),
           }));
-
-          if (pageToken) {
-            setEvents((prev) => [...prev, ...parsed]);
-          } else {
-            setEvents(parsed);
-          }
-          setNextPageToken(result.data.nextPageToken);
+          setRawEvents(parsed);
         }
       } catch {
+        if (currentFetch !== fetchCounterRef.current) return;
         const msg = "שגיאה בטעינת פגישות Google Meet";
         toast.error(msg);
         setFetchError(msg);
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        if (currentFetch === fetchCounterRef.current) {
+          setLoading(false);
+        }
       }
     },
-    [start, end],
+    [dateRange.start, dateRange.end],
   );
 
+  // Fetch when dialog opens or date range changes
   useEffect(() => {
     if (open) {
       setExpandedAttendees(new Set());
-      fetchEvents();
+      fetchAllEvents();
     }
-  }, [open, fetchEvents]);
+  }, [open, fetchAllEvents]);
+
+  // Reset filters on dialog close
+  const handleClose = useCallback(() => {
+    resetFilters();
+    setPage(1);
+    onClose();
+  }, [resetFilters, onClose]);
 
   const handleConnect = async () => {
     try {
@@ -190,8 +210,9 @@ export default function GoogleMeetList({ open, onClose }: GoogleMeetListProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
+        ref={scrollContainerRef}
         className="sm:max-w-2xl max-h-[85vh] overflow-y-auto bg-[#1a3a2a] border-white/20 text-white p-0"
         dir="rtl"
       >
@@ -208,30 +229,16 @@ export default function GoogleMeetList({ open, onClose }: GoogleMeetListProps) {
         </div>
 
         <div className="px-6 pb-6 space-y-4">
-          {/* Week navigation */}
-          <div className="flex items-center justify-between bg-white/[0.06] rounded-lg px-3 py-2 border border-white/10">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white/60 hover:text-white hover:bg-white/10 p-1.5"
-              onClick={() => setWeekOffset((p) => p + 1)}
-              aria-label="שבוע הבא"
-            >
-              <ChevronRight className="size-4" />
-            </Button>
-            <span className="text-sm text-white/80 font-medium" dir="ltr">
-              {weekLabel}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white/60 hover:text-white hover:bg-white/10 p-1.5"
-              onClick={() => setWeekOffset((p) => p - 1)}
-              aria-label="שבוע קודם"
-            >
-              <ChevronLeft className="size-4" />
-            </Button>
-          </div>
+          {/* Filters */}
+          {connected !== false && (
+            <GoogleMeetFilters
+              filters={filters}
+              setFilter={setFilter}
+              resetFilters={resetFilters}
+              activeFilterCount={activeFilterCount}
+              totalResults={filteredEvents.length}
+            />
+          )}
 
           {/* Loading */}
           {loading && (
@@ -262,7 +269,7 @@ export default function GoogleMeetList({ open, onClose }: GoogleMeetListProps) {
               <Button
                 onClick={() => {
                   setFetchError(null);
-                  fetchEvents();
+                  fetchAllEvents();
                 }}
                 className="mt-3 bg-white/[0.08] hover:bg-white/[0.15] text-white border border-white/20"
               >
@@ -294,8 +301,8 @@ export default function GoogleMeetList({ open, onClose }: GoogleMeetListProps) {
             </Empty>
           )}
 
-          {/* Empty state */}
-          {!loading && connected !== false && events.length === 0 && (
+          {/* Empty state: no events in date range */}
+          {!loading && !fetchError && connected !== false && rawEvents.length === 0 && (
             <Empty>
               <EmptyHeader>
                 <EmptyMedia>
@@ -303,16 +310,37 @@ export default function GoogleMeetList({ open, onClose }: GoogleMeetListProps) {
                 </EmptyMedia>
                 <EmptyTitle>אין פגישות Google Meet</EmptyTitle>
                 <EmptyDescription>
-                  לא נמצאו פגישות Google Meet בשבוע הנבחר.
+                  לא נמצאו פגישות Google Meet בתקופה הנבחרת.
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
           )}
 
+          {/* Empty state: no events after filtering */}
+          {!loading && !fetchError && connected !== false && rawEvents.length > 0 && filteredEvents.length === 0 && (
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia>
+                  <Video className="size-8 text-white/40" />
+                </EmptyMedia>
+                <EmptyTitle>אין פגישות תואמות</EmptyTitle>
+                <EmptyDescription>
+                  לא נמצאו פגישות שמתאימות למסננים שנבחרו.
+                </EmptyDescription>
+              </EmptyHeader>
+              <Button
+                onClick={resetFilters}
+                className="mt-3 bg-white/[0.08] hover:bg-white/[0.15] text-white border border-white/20"
+              >
+                נקה מסננים
+              </Button>
+            </Empty>
+          )}
+
           {/* Events list */}
-          {!loading && events.length > 0 && (
+          {!loading && paginatedEvents.length > 0 && (
             <div className="space-y-3">
-              {events.map((event) => (
+              {paginatedEvents.map((event) => (
                 <div
                   key={event.id}
                   className="rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.07] transition-colors p-4 space-y-3"
@@ -452,22 +480,33 @@ export default function GoogleMeetList({ open, onClose }: GoogleMeetListProps) {
                 </div>
               ))}
 
-              {/* Load more */}
-              {nextPageToken && (
-                <Button
-                  variant="outline"
-                  className="w-full bg-white/[0.06] hover:bg-white/[0.1] text-white/60 border-white/10"
-                  onClick={() => fetchEvents(nextPageToken)}
-                  disabled={loadingMore}
-                >
-                  {loadingMore ? (
-                    <RefreshCw
-                      className="size-4 animate-spin ml-2"
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                  {loadingMore ? "טוען..." : "טען עוד"}
-                </Button>
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 p-0 rounded-lg bg-white/[0.08] border-white/20 text-white/80 hover:bg-white/[0.15] hover:text-white"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    aria-label="עמוד הקודם"
+                  >
+                    <ChevronRight className="size-4" />
+                  </Button>
+                  <span className="text-sm text-white/60 tabular-nums" aria-live="polite" aria-atomic="true">
+                    {page} / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 p-0 rounded-lg bg-white/[0.08] border-white/20 text-white/80 hover:bg-white/[0.15] hover:text-white"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    aria-label="עמוד הבא"
+                  >
+                    <ChevronLeft className="size-4" />
+                  </Button>
+                </div>
               )}
             </div>
           )}

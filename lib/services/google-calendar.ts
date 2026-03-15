@@ -279,6 +279,28 @@ export async function fetchGoogleMeetEvents(
   return { events: meetEvents, nextPageToken: data.nextPageToken };
 }
 
+// ─── Fetch All Google Meet Events (paginated) ───
+
+export async function fetchAllGoogleMeetEvents(
+  accessToken: string,
+  timeMin: string,
+  timeMax: string,
+): Promise<GoogleCalendarEvent[]> {
+  const allEvents: GoogleCalendarEvent[] = [];
+  let pageToken: string | undefined;
+  const MAX_PAGES = 10; // Safety cap: 10 pages × 50 = 500 events max
+
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const result = await fetchGoogleMeetEvents(accessToken, timeMin, timeMax, pageToken);
+    allEvents.push(...result.events);
+
+    if (!result.nextPageToken) break;
+    pageToken = result.nextPageToken;
+  }
+
+  return allEvents;
+}
+
 // ─── Token Revocation ───
 
 export async function revokeToken(token: string): Promise<void> {
