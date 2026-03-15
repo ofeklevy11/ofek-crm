@@ -36,11 +36,15 @@ const defaultFilters: GoogleMeetFilters = {
   sortBy: "closest",
 };
 
-function computeDateRange(filters: GoogleMeetFilters): { start: Date; end: Date } {
+function computeDateRange(
+  datePreset: GoogleMeetFilters["datePreset"],
+  customDateFrom: string | null,
+  customDateTo: string | null,
+): { start: Date; end: Date } {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  switch (filters.datePreset) {
+  switch (datePreset) {
     case "today": {
       const end = new Date(today);
       end.setHours(23, 59, 59, 999);
@@ -68,8 +72,8 @@ function computeDateRange(filters: GoogleMeetFilters): { start: Date; end: Date 
       return { start, end };
     }
     case "custom": {
-      let from = filters.customDateFrom ? new Date(filters.customDateFrom) : today;
-      let to = filters.customDateTo ? new Date(filters.customDateTo) : today;
+      let from = customDateFrom ? new Date(customDateFrom) : today;
+      let to = customDateTo ? new Date(customDateTo) : today;
 
       // Auto-swap if from > to
       if (from.getTime() > to.getTime()) {
@@ -152,11 +156,10 @@ export function useGoogleMeetFilters() {
     setFilters({ ...defaultFilters });
   }, []);
 
-  const dateRange = useMemo(() => computeDateRange(filters), [
-    filters.datePreset,
-    filters.customDateFrom,
-    filters.customDateTo,
-  ]);
+  const dateRange = useMemo(
+    () => computeDateRange(filters.datePreset, filters.customDateFrom, filters.customDateTo),
+    [filters.datePreset, filters.customDateFrom, filters.customDateTo],
+  );
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
