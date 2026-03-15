@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Trash2, Eye, EyeOff, Settings2, GripVertical } from "lucide-react";
+import { Trash2, Eye, EyeOff, Settings2, GripVertical, Video, ExternalLink, Users, LinkIcon } from "lucide-react";
 import { useEffect, useState, useMemo, memo } from "react";
 import { useRouter } from "next/navigation";
 import { updateDashboardWidgetSettings } from "@/app/actions/dashboard-widgets";
@@ -19,6 +19,9 @@ interface MeetingItem {
   tags: string[];
   meetingType: { name: string; color?: string | null };
   client: { name: string } | null;
+  source?: "crm" | "google_meet";
+  meetLink?: string;
+  attendeesCount?: number;
 }
 
 interface MiniMeetingsWidgetProps {
@@ -34,6 +37,12 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   COMPLETED: { label: "הושלם", color: "text-emerald-700", bg: "bg-emerald-100" },
   CANCELLED: { label: "בוטל", color: "text-red-700", bg: "bg-red-100" },
   NO_SHOW: { label: "לא הגיע", color: "text-gray-600", bg: "bg-gray-200" },
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  crm: "פגישות מערכת",
+  google_meet: "Google Meet",
+  all: "כל המקורות",
 };
 
 const PRESET_LABELS: Record<string, string> = {
@@ -72,6 +81,9 @@ function MiniMeetingsWidget({
   const [meetings, setMeetings] = useState<MeetingItem[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
+
+  const meetingSource = settings?.meetingSource || "crm";
 
   const filters = useMemo(() => {
     if (!settings) return undefined;
@@ -83,6 +95,7 @@ function MiniMeetingsWidget({
       dateTo: settings.dateTo,
       sortBy: settings.sortBy,
       maxMeetings: settings.maxMeetings,
+      meetingSource: settings.meetingSource,
     };
   }, [settings]);
 
@@ -94,10 +107,13 @@ function MiniMeetingsWidget({
   useEffect(() => {
     setLoading(true);
     getMiniMeetingsData(filters)
-      .then((res) => {
+      .then((res: any) => {
         if (res.success && res.data) {
           setMeetings(res.data.meetings as unknown as MeetingItem[]);
-          setCounts(res.data.counts);
+          setCounts(res.data.counts || {});
+        }
+        if (res.googleConnected !== undefined) {
+          setGoogleConnected(res.googleConnected);
         }
       })
       .finally(() => setLoading(false));
@@ -181,13 +197,17 @@ function MiniMeetingsWidget({
     const preset = settings?.preset || "today";
     parts.push(PRESET_LABELS[preset] || "היום");
 
+    if (meetingSource !== "crm") {
+      parts.push(SOURCE_LABELS[meetingSource] || "");
+    }
+
     if (settings?.statusFilter?.length) {
       const labels = settings.statusFilter.map((s: string) => STATUS_CONFIG[s]?.label || s);
       parts.push(labels.join(", "));
     }
 
     return parts.join(" · ");
-  }, [settings]);
+  }, [settings, meetingSource]);
 
   const formatTime = (d: string) =>
     new Date(d).toLocaleTimeString("he-IL", {
@@ -322,6 +342,17 @@ function MiniMeetingsWidget({
                   </div>
                 ))}
               </div>
+            ) : googleConnected === false && meetingSource !== "crm" && meetings.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+                <LinkIcon size={24} className="mb-2 text-gray-300" aria-hidden="true" />
+                <p className="text-sm mb-1">Google Calendar לא מחובר</p>
+                <a
+                  href="/calendar"
+                  className="text-xs text-violet-600 hover:text-violet-700 font-medium"
+                >
+                  חבר את Google Calendar
+                </a>
+              </div>
             ) : meetings.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-gray-400">
                 <p className="text-sm">אין פגישות</p>
@@ -345,6 +376,7 @@ function MiniMeetingsWidget({
                 {/* Meeting cards - 2 col grid */}
                 <div className="grid grid-cols-2 gap-3">
                   {meetings.map((m) => {
+                    const isGoogleMeet = m.source === "google_meet";
                     const st = STATUS_CONFIG[m.status] || STATUS_CONFIG.PENDING;
                     return (
                       <div
@@ -352,13 +384,21 @@ function MiniMeetingsWidget({
                         className="bg-gray-50 rounded-xl p-4 space-y-2"
                       >
                         <div className="flex items-center gap-2">
-                          <div
-                            className="w-2.5 h-2.5 rounded-full shrink-0"
-                            style={{
-                              backgroundColor: m.meetingType?.color || "#8B5CF6",
-                            }}
-                            aria-hidden="true"
-                          />
+                          {isGoogleMeet ? (
+                            <Video
+                              size={10}
+                              className="shrink-0 text-blue-500"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <div
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                              style={{
+                                backgroundColor: m.meetingType?.color || "#8B5CF6",
+                              }}
+                              aria-hidden="true"
+                            />
+                          )}
                           <p className="text-base font-medium text-gray-800 truncate">
                             {m.participantName}
                           </p>
@@ -366,23 +406,43 @@ function MiniMeetingsWidget({
                         <p className="text-xs text-gray-500 truncate">
                           {m.meetingType?.name}
                         </p>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded ${st.bg} ${st.color}`}
-                          >
-                            {st.label}
-                          </span>
-                        </div>
+                        {!isGoogleMeet && (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`text-xs font-medium px-2 py-0.5 rounded ${st.bg} ${st.color}`}
+                            >
+                              {st.label}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 text-xs text-gray-400">
                           <span dir="ltr">{formatTime(m.startTime)}</span>
                           {isMultiDay && (
                             <span>{formatDate(m.startTime)}</span>
                           )}
                         </div>
-                        {m.client?.name && (
+                        {!isGoogleMeet && m.client?.name && (
                           <p className="text-xs text-gray-400 truncate">
                             {m.client.name}
                           </p>
+                        )}
+                        {isGoogleMeet && m.attendeesCount != null && m.attendeesCount > 0 && (
+                          <div className="flex items-center gap-1 text-xs text-gray-400">
+                            <Users size={10} aria-hidden="true" />
+                            <span>{m.attendeesCount} משתתפים</span>
+                          </div>
+                        )}
+                        {isGoogleMeet && m.meetLink && (
+                          <a
+                            href={m.meetLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                            aria-label="הצטרף לפגישת Google Meet"
+                          >
+                            <ExternalLink size={10} aria-hidden="true" />
+                            הצטרף ל-Meet
+                          </a>
                         )}
                       </div>
                     );
