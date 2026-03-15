@@ -432,7 +432,7 @@ export default function DashboardClient({
     if (!widget) return;
     setMiniConfigModal({
       open: true,
-      widgetType: widget.type as "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES" | "MINI_MEETINGS" | "MINI_GOOGLE_MEET",
+      widgetType: widget.type as "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES" | "MINI_MEETINGS",
       editWidgetId: widgetId,
       currentSettings: widget.settings,
     });
