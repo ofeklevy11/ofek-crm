@@ -359,13 +359,16 @@ const VALID_MEETING_STATUSES = ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"
 const VALID_MEETING_SORTS = ["startTime", "createdAt"];
 
 export async function getMiniMeetingsData(filters?: MeetingsFilters) {
-  const user = await getCurrentUser();
-  if (!user) return { success: false, error: "Unauthorized" };
-  if (!hasUserFlag(user, "canViewMeetings"))
+  const maybeUser = await getCurrentUser();
+  if (!maybeUser) return { success: false, error: "Unauthorized" };
+  if (!hasUserFlag(maybeUser, "canViewMeetings"))
     return { success: false, error: "Forbidden" };
 
-  const rl = await checkActionRateLimit(String(user.id), DASHBOARD_RATE_LIMITS.read);
+  const rl = await checkActionRateLimit(String(maybeUser.id), DASHBOARD_RATE_LIMITS.read);
   if (rl) return { success: false, error: rl.error };
+
+  // Non-nullable reference safe for nested closures
+  const user = maybeUser;
 
   const now = new Date();
   let rangeStart: Date = startOfDay(now);
