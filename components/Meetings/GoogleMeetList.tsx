@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,7 @@ import {
   X,
   HelpCircle,
   Repeat,
+  AlertCircle,
 } from "lucide-react";
 import type { GoogleMeetEvent, GoogleMeetAttendee } from "@/lib/types";
 
@@ -100,8 +101,9 @@ export default function GoogleMeetList({ open, onClose }: GoogleMeetListProps) {
   const [nextPageToken, setNextPageToken] = useState<string | undefined>();
   const [loadingMore, setLoadingMore] = useState(false);
   const [expandedAttendees, setExpandedAttendees] = useState<Set<string>>(new Set());
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const { start, end, label: weekLabel } = getWeekRange(weekOffset);
+  const { start, end, label: weekLabel } = useMemo(() => getWeekRange(weekOffset), [weekOffset]);
 
   const fetchEvents = useCallback(
     async (pageToken?: string) => {
@@ -119,12 +121,15 @@ export default function GoogleMeetList({ open, onClose }: GoogleMeetListProps) {
         );
 
         if (!result.success) {
-          toast.error(result.error || "שגיאה בטעינת פגישות Google Meet");
+          const msg = result.error || "שגיאה בטעינת פגישות Google Meet";
+          toast.error(msg);
+          setFetchError(msg);
           if (result.connected === false) setConnected(false);
           return;
         }
 
         setConnected(result.connected ?? null);
+        setFetchError(null);
 
         if (result.data) {
           const parsed = result.data.events.map((e) => ({
@@ -141,7 +146,9 @@ export default function GoogleMeetList({ open, onClose }: GoogleMeetListProps) {
           setNextPageToken(result.data.nextPageToken);
         }
       } catch {
-        toast.error("שגיאה בטעינת פגישות Google Meet");
+        const msg = "שגיאה בטעינת פגישות Google Meet";
+        toast.error(msg);
+        setFetchError(msg);
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -240,6 +247,29 @@ export default function GoogleMeetList({ open, onClose }: GoogleMeetListProps) {
                 </div>
               ))}
             </div>
+          )}
+
+          {/* Error state */}
+          {!loading && fetchError && connected !== false && (
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia>
+                  <AlertCircle className="size-8 text-red-400" />
+                </EmptyMedia>
+                <EmptyTitle>שגיאה בטעינת פגישות</EmptyTitle>
+                <EmptyDescription>{fetchError}</EmptyDescription>
+              </EmptyHeader>
+              <Button
+                onClick={() => {
+                  setFetchError(null);
+                  fetchEvents();
+                }}
+                className="mt-3 bg-white/[0.08] hover:bg-white/[0.15] text-white border border-white/20"
+              >
+                <RefreshCw className="size-4 ml-2" aria-hidden="true" />
+                נסה שוב
+              </Button>
+            </Empty>
           )}
 
           {/* Not connected */}

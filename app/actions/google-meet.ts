@@ -23,31 +23,33 @@ export async function getGoogleMeetEvents(
   connected?: boolean;
   error?: string;
 }> {
-  const user = await getCurrentUser();
-  if (!user) return { success: false, error: "Unauthorized" };
-
-  const limited = await checkActionRateLimit(
-    String(user.id),
-    RATE_LIMITS.googleCalRead,
-  );
-  if (limited) {
-    return { success: false, error: "Rate limit exceeded. Please try again later." };
-  }
-
-  const connection = await prisma.googleCalendarConnection.findUnique({
-    where: {
-      companyId_userId: {
-        companyId: user.companyId,
-        userId: user.id,
-      },
-    },
-  });
-
-  if (!connection || !connection.isActive) {
-    return { success: true, data: { events: [], nextPageToken: undefined }, connected: false };
-  }
-
+  let userId: number | undefined;
   try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+    userId = user.id;
+
+    const limited = await checkActionRateLimit(
+      String(user.id),
+      RATE_LIMITS.googleCalRead,
+    );
+    if (limited) {
+      return { success: false, error: "Rate limit exceeded. Please try again later." };
+    }
+
+    const connection = await prisma.googleCalendarConnection.findUnique({
+      where: {
+        companyId_userId: {
+          companyId: user.companyId,
+          userId: user.id,
+        },
+      },
+    });
+
+    if (!connection || !connection.isActive) {
+      return { success: true, data: { events: [], nextPageToken: undefined }, connected: false };
+    }
+
     const accessToken = await getValidAccessToken(connection);
     const result = await fetchGoogleMeetEvents(
       accessToken,
@@ -116,7 +118,7 @@ export async function getGoogleMeetEvents(
     };
   } catch (error) {
     if (error instanceof TokenRevokedError) {
-      log.warn("Google Calendar token revoked", { userId: user.id });
+      log.warn("Google Calendar token revoked", { userId });
       return {
         success: false,
         connected: false,
@@ -125,7 +127,7 @@ export async function getGoogleMeetEvents(
     }
     log.error("Failed to fetch Google Meet events", {
       error: String(error),
-      userId: user.id,
+      userId,
     });
     return { success: false, error: "שגיאה בטעינת פגישות Google Meet" };
   }
