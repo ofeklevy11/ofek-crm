@@ -202,7 +202,11 @@
       "Bash(cd \"C:\\\\Users\\\\Ofek\\\\Desktop\\\\ofek-prog\\\\ofek-business-crm\\\\my-app\" && node fix-modal.js && rm fix-modal.js)",
       "Bash(cd \"C:\\\\Users\\\\Ofek\\\\Desktop\\\\ofek-prog\\\\ofek-business-crm\\\\my-app\" && node fix-modal2.js && rm fix-modal2.js)",
       "Read(//mnt/c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app/components/Calendar/**)",
-      "Bash(find /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app -type f \\\\\\( -name \"tailwind*\" -o -name \"next.config.*\" \\\\\\) 2>/dev/null | head -20)"
+      "Bash(find /c/Users/Ofek/Desktop/ofek-prog/ofek-business-crm/my-app -type f \\\\\\( -name \"tailwind*\" -o -name \"next.config.*\" \\\\\\) 2>/dev/null | head -20)",
+      "Bash(chmod:*)",
+      "Bash(git rm:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker exec:*)"
     ]
   }
 }

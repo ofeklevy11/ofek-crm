@@ -254,6 +254,7 @@ enum DashboardWidgetType {
   MINI_TASKS
   MINI_QUOTES
   MINI_MEETINGS
+  MINI_GOOGLE_MEET
 }
 
 enum MeetingStatus {

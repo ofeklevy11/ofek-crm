@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import MeetingsList from "@/components/Meetings/MeetingsList";
-import { CalendarDays, List, Layers, Clock, Zap } from "lucide-react";
+import { CalendarDays, List, Layers, Clock, Zap, Video } from "lucide-react";
 
 // Lazy-load non-default-tab components to reduce initial bundle
 const MeetingsCalendar = dynamic(() => import("@/components/Meetings/MeetingsCalendar"), { ssr: false });
@@ -13,6 +13,7 @@ const MeetingTypesList = dynamic(() => import("@/components/Meetings/MeetingType
 const AvailabilityEditor = dynamic(() => import("@/components/Meetings/AvailabilityEditor"), { ssr: false });
 const AvailabilityBlocksList = dynamic(() => import("@/components/Meetings/AvailabilityBlocksList"), { ssr: false });
 const GlobalMeetingAutomationsModal = dynamic(() => import("@/components/Meetings/GlobalMeetingAutomationsModal"), { ssr: false });
+const GoogleMeetList = dynamic(() => import("@/components/Meetings/GoogleMeetList"), { ssr: false });
 
 interface MeetingsPageClientProps {
   canManage: boolean;
@@ -25,6 +26,7 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
   const [blocks, setBlocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [automationsOpen, setAutomationsOpen] = useState(false);
+  const [meetListOpen, setMeetListOpen] = useState(false);
   const [stats, setStats] = useState<{ total: number; pending: number; confirmed: number; completed: number; noShow: number } | null>(null);
 
   useEffect(() => {
@@ -159,6 +161,16 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
           </TabsList>
           </div>
 
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 bg-white/[0.08] hover:bg-white/[0.15] text-white/80 border-white/20"
+            onClick={() => setMeetListOpen(true)}
+          >
+            <Video className="size-4" aria-hidden="true" />
+            פגישות Google Meet
+          </Button>
+
           {canManage && (
             <Button
               variant="outline"
@@ -214,6 +226,13 @@ export default function MeetingsPageClient({ canManage, userPlan }: MeetingsPage
           onClose={() => setAutomationsOpen(false)}
           meetingTypes={meetingTypes.map((t: any) => ({ id: t.id, name: t.name }))}
           userPlan={userPlan}
+        />
+      )}
+
+      {meetListOpen && (
+        <GoogleMeetList
+          open={meetListOpen}
+          onClose={() => setMeetListOpen(false)}
         />
       )}
     </>

@@ -7,6 +7,7 @@ import {
   CheckSquare,
   FileText,
   Users,
+  Video,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
@@ -19,7 +20,7 @@ import { getGoogleCalendarStatus } from "@/app/actions/google-calendar";
 
 // ── Types ──────────────────────────────────────────────────────────
 
-type MiniWidgetType = "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES" | "MINI_MEETINGS";
+type MiniWidgetType = "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES" | "MINI_MEETINGS" | "MINI_GOOGLE_MEET";
 
 interface MiniWidgetConfigModalProps {
   widgetType: MiniWidgetType;
@@ -86,6 +87,17 @@ const THEME: Record<MiniWidgetType, {
     btnHover: "hover:bg-violet-700",
     badge: "bg-violet-100 text-violet-700",
   },
+  MINI_GOOGLE_MEET: {
+    label: "מיני Google Meet",
+    icon: Video,
+    gradient: "from-blue-400 to-teal-500",
+    ring: "ring-blue-400",
+    bg: "bg-blue-50",
+    text: "text-blue-700",
+    btn: "bg-blue-600",
+    btnHover: "hover:bg-blue-700",
+    badge: "bg-blue-100 text-blue-700",
+  },
 };
 
 // ── Preset definitions ─────────────────────────────────────────────
@@ -108,6 +120,14 @@ const TASKS_PRESETS: PresetDef[] = [
 ];
 
 const MEETINGS_PRESETS: PresetDef[] = [
+  { id: "today", label: "היום", icon: "📅" },
+  { id: "this_week", label: "השבוע", icon: "🗓️" },
+  { id: "7d", label: "7 ימים", icon: "📆" },
+  { id: "14d", label: "14 ימים", icon: "🗃️" },
+  { id: "this_month", label: "החודש", icon: "📋" },
+];
+
+const GOOGLE_MEET_PRESETS: PresetDef[] = [
   { id: "today", label: "היום", icon: "📅" },
   { id: "this_week", label: "השבוע", icon: "🗓️" },
   { id: "7d", label: "7 ימים", icon: "📆" },
@@ -151,6 +171,13 @@ function getDefaultMeetingsSettings(preset = "today") {
   };
 }
 
+function getDefaultGoogleMeetSettings(preset = "this_week") {
+  return {
+    preset,
+    maxMeetings: 10,
+  };
+}
+
 function getDefaultQuotesSettings(preset = "recent") {
   return {
     preset,
@@ -186,6 +213,10 @@ function advancedFromTasksPreset(preset: string) {
 
 function advancedFromMeetingsPreset(preset: string) {
   return getDefaultMeetingsSettings(preset);
+}
+
+function advancedFromGoogleMeetPreset(preset: string) {
+  return getDefaultGoogleMeetSettings(preset);
 }
 
 function advancedFromQuotesPreset(preset: string) {
@@ -423,6 +454,20 @@ export default function MiniWidgetConfigModal({
   );
   const [meetingTypes, setMeetingTypes] = useState<{ id: number; name: string; color?: string | null }[]>([]);
 
+  // Google Meet state
+  const [gmeetPreset, setGmeetPreset] = useState(
+    currentSettings?.preset || "this_week"
+  );
+  const [gmeetMaxMeetings, setGmeetMaxMeetings] = useState(
+    currentSettings?.maxMeetings ?? 10
+  );
+  const [gmeetDateFrom, setGmeetDateFrom] = useState<string | undefined>(
+    currentSettings?.dateFrom
+  );
+  const [gmeetDateTo, setGmeetDateTo] = useState<string | undefined>(
+    currentSettings?.dateTo
+  );
+
   // ── Preset selection handlers ──────────────────────────────────
 
   const handleCalendarPreset = useCallback((preset: string) => {
@@ -470,6 +515,14 @@ export default function MiniWidgetConfigModal({
     setMeetMaxMeetings(adv.maxMeetings);
   }, []);
 
+  const handleGoogleMeetPreset = useCallback((preset: string) => {
+    setGmeetPreset(preset);
+    const adv = advancedFromGoogleMeetPreset(preset);
+    setGmeetMaxMeetings(adv.maxMeetings);
+    setGmeetDateFrom(undefined);
+    setGmeetDateTo(undefined);
+  }, []);
+
   // Fetch users for "specific user" filter
   useEffect(() => {
     if (canViewAllTasks) {
@@ -490,7 +543,7 @@ export default function MiniWidgetConfigModal({
 
   // Check Google Calendar connection status
   useEffect(() => {
-    if (widgetType === "MINI_CALENDAR") {
+    if (widgetType === "MINI_CALENDAR" || widgetType === "MINI_GOOGLE_MEET") {
       getGoogleCalendarStatus().then((res) => {
         setGoogleCalConnected(res.connected);
       });
@@ -502,6 +555,7 @@ export default function MiniWidgetConfigModal({
     if (widgetType === "MINI_CALENDAR") setCalPreset("custom");
     else if (widgetType === "MINI_TASKS") setTaskPreset("custom");
     else if (widgetType === "MINI_MEETINGS") setMeetPreset("custom");
+    else if (widgetType === "MINI_GOOGLE_MEET") setGmeetPreset("custom");
     else setQuotePreset("custom");
   }, [widgetType]);
 
@@ -543,6 +597,14 @@ export default function MiniWidgetConfigModal({
         maxMeetings: meetMaxMeetings,
       };
     }
+    if (widgetType === "MINI_GOOGLE_MEET") {
+      return {
+        collapsed: currentSettings?.collapsed ?? false,
+        preset: gmeetPreset,
+        ...(gmeetPreset === "custom" ? { dateFrom: gmeetDateFrom, dateTo: gmeetDateTo } : {}),
+        maxMeetings: gmeetMaxMeetings,
+      };
+    }
     // MINI_QUOTES
     return {
       collapsed: currentSettings?.collapsed ?? false,
@@ -568,7 +630,9 @@ export default function MiniWidgetConfigModal({
         ? TASKS_PRESETS
         : widgetType === "MINI_MEETINGS"
           ? MEETINGS_PRESETS
-          : QUOTES_PRESETS;
+          : widgetType === "MINI_GOOGLE_MEET"
+            ? GOOGLE_MEET_PRESETS
+            : QUOTES_PRESETS;
 
   const activePreset =
     widgetType === "MINI_CALENDAR"
@@ -577,12 +641,15 @@ export default function MiniWidgetConfigModal({
         ? taskPreset
         : widgetType === "MINI_MEETINGS"
           ? meetPreset
-          : quotePreset;
+          : widgetType === "MINI_GOOGLE_MEET"
+            ? gmeetPreset
+            : quotePreset;
 
   const handlePresetSelect = (id: string) => {
     if (widgetType === "MINI_CALENDAR") handleCalendarPreset(id);
     else if (widgetType === "MINI_TASKS") handleTasksPreset(id);
     else if (widgetType === "MINI_MEETINGS") handleMeetingsPreset(id);
+    else if (widgetType === "MINI_GOOGLE_MEET") handleGoogleMeetPreset(id);
     else handleQuotesPreset(id);
   };
 
@@ -1011,6 +1078,58 @@ export default function MiniWidgetConfigModal({
                       ]}
                       value={meetMaxMeetings}
                       onChange={(v: number) => setMeetMaxMeetings(v)}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* ── Google Meet Advanced ────────────────── */}
+              {widgetType === "MINI_GOOGLE_MEET" && (
+                <>
+                  {googleCalConnected === false && (
+                    <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+                      <p className="text-xs text-amber-700">
+                        יש לחבר Google Calendar כדי לצפות בפגישות Google Meet —{" "}
+                        <a href="/calendar" className="underline hover:text-amber-800">
+                          לחץ כאן
+                        </a>
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Custom Date Range */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">
+                      טווח תאריכים מותאם
+                    </label>
+                    <div className="flex gap-2">
+                      <DatePickerField
+                        label="מתאריך"
+                        value={gmeetDateFrom}
+                        onChange={(v) => { setGmeetDateFrom(v); goCustom(); }}
+                      />
+                      <DatePickerField
+                        label="עד תאריך"
+                        value={gmeetDateTo}
+                        onChange={(v) => { setGmeetDateTo(v); goCustom(); }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Max Meetings */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">
+                      מקסימום פגישות
+                    </label>
+                    <SegmentedControl
+                      options={[
+                        { value: 5, label: "5" },
+                        { value: 10, label: "10" },
+                        { value: 15, label: "15" },
+                        { value: 25, label: "25" },
+                      ]}
+                      value={gmeetMaxMeetings}
+                      onChange={(v: number) => { setGmeetMaxMeetings(v); goCustom(); }}
                     />
                   </div>
                 </>

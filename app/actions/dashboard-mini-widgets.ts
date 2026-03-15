@@ -5,6 +5,15 @@ import { getCurrentUser } from "@/lib/permissions-server";
 import { hasUserFlag } from "@/lib/permissions";
 import { checkActionRateLimit, DASHBOARD_RATE_LIMITS } from "@/lib/rate-limit-action";
 import { getGoogleCalendarEvents } from "@/app/actions/google-calendar";
+import {
+  getValidAccessToken,
+  fetchGoogleMeetEvents,
+  TokenRevokedError,
+} from "@/lib/services/google-calendar";
+import type { GoogleMeetEvent } from "@/lib/types";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("MiniGoogleMeet");
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -629,4 +638,165 @@ export async function getMiniQuotesData(filters?: QuotesFilters) {
   }
 
   return { success: true, data: { quotes: serializedQuotes, summary } };
+}
+
+// ── Mini Google Meet ──────────────────────────────────────────────────
+
+export interface GoogleMeetFilters {
+  preset?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  maxMeetings?: number;
+}
+
+export async function getMiniGoogleMeetData(filters?: GoogleMeetFilters): Promise<{
+  success: boolean;
+  data?: { meetings: GoogleMeetEvent[]; totalCount: number };
+  connected?: boolean;
+  error?: string;
+}> {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: "Unauthorized" };
+  if (!hasUserFlag(user, "canViewMeetings"))
+    return { success: false, error: "Forbidden" };
+
+  const rl = await checkActionRateLimit(String(user.id), DASHBOARD_RATE_LIMITS.read);
+  if (rl) return { success: false, error: rl.error };
+
+  const now = new Date();
+  let rangeStart: Date = startOfDay(now);
+  let rangeEnd: Date = endOfDay(now);
+
+  const preset = filters?.preset || "this_week";
+  const validPresets = ["today", "this_week", "7d", "14d", "this_month", "custom"];
+  const safePreset = validPresets.includes(preset) ? preset : "this_week";
+
+  switch (safePreset) {
+    case "today":
+      rangeStart = startOfDay(now);
+      rangeEnd = endOfDay(now);
+      break;
+    case "this_week":
+      rangeStart = startOfWeek(now);
+      rangeEnd = endOfWeek(now);
+      break;
+    case "7d":
+      rangeStart = startOfDay(now);
+      rangeEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      break;
+    case "14d":
+      rangeStart = startOfDay(now);
+      rangeEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+      break;
+    case "this_month":
+      rangeStart = startOfMonth(now);
+      rangeEnd = endOfMonth(now);
+      break;
+    case "custom": {
+      const from = parseDate(filters?.dateFrom);
+      const to = parseDate(filters?.dateTo);
+      if (from) rangeStart = startOfDay(from);
+      if (to) rangeEnd = endOfDay(to);
+      break;
+    }
+  }
+
+  // Check Google Calendar connection
+  const connection = await prisma.googleCalendarConnection.findUnique({
+    where: {
+      companyId_userId: {
+        companyId: user.companyId,
+        userId: user.id,
+      },
+    },
+  });
+
+  if (!connection || !connection.isActive) {
+    return { success: true, data: { meetings: [], totalCount: 0 }, connected: false };
+  }
+
+  try {
+    const accessToken = await getValidAccessToken(connection);
+    const maxMeetings = clamp(filters?.maxMeetings ?? 10, 1, 50);
+
+    const result = await fetchGoogleMeetEvents(
+      accessToken,
+      rangeStart.toISOString(),
+      rangeEnd.toISOString(),
+    );
+
+    const meetings: GoogleMeetEvent[] = result.events
+      .slice(0, maxMeetings)
+      .map((ge) => {
+        let startTime: Date;
+        let endTime: Date;
+
+        if (ge.start.dateTime) {
+          startTime = new Date(ge.start.dateTime);
+        } else if (ge.start.date) {
+          startTime = new Date(ge.start.date + "T00:00:00");
+        } else {
+          startTime = new Date();
+        }
+
+        if (ge.end.dateTime) {
+          endTime = new Date(ge.end.dateTime);
+        } else if (ge.end.date) {
+          endTime = new Date(ge.end.date + "T00:00:00");
+        } else {
+          endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+        }
+
+        const meetLink =
+          ge.hangoutLink ||
+          ge.conferenceData?.entryPoints?.find(
+            (ep) => ep.entryPointType === "video",
+          )?.uri ||
+          "";
+
+        const organizer = ge.organizer
+          ? { email: ge.organizer.email, displayName: ge.organizer.displayName }
+          : { email: "" };
+
+        const attendees = (ge.attendees || []).map((a) => ({
+          email: a.email,
+          displayName: a.displayName,
+          responseStatus: a.responseStatus,
+          self: a.self,
+        }));
+
+        return {
+          id: ge.id,
+          title: ge.summary || "(ללא כותרת)",
+          description: ge.description || null,
+          startTime,
+          endTime,
+          meetLink,
+          organizer,
+          attendees,
+          isRecurring: !!ge.recurringEventId,
+          googleEventUrl: ge.htmlLink || null,
+        };
+      });
+
+    return {
+      success: true,
+      data: { meetings, totalCount: result.events.length },
+      connected: true,
+    };
+  } catch (error) {
+    if (error instanceof TokenRevokedError) {
+      log.warn("Google Calendar token revoked for mini widget", { userId: user.id });
+      return {
+        success: false,
+        connected: false,
+        error: "חיבור Google Calendar פג תוקף - יש להתחבר מחדש",
+      };
+    }
+    log.error("Failed to fetch mini Google Meet data", {
+      error: String(error),
+      userId: user.id,
+    });
+    return { success: false, error: "שגיאה בטעינת פגישות Google Meet" };
+  }
 }

@@ -9,6 +9,26 @@ export interface CalendarEvent {
   googleEventUrl?: string | null;
 }
 
+export interface GoogleMeetAttendee {
+  email: string;
+  displayName?: string;
+  responseStatus?: "needsAction" | "declined" | "tentative" | "accepted";
+  self?: boolean;
+}
+
+export interface GoogleMeetEvent {
+  id: string;
+  title: string;
+  description?: string | null;
+  startTime: Date;
+  endTime: Date;
+  meetLink: string;
+  organizer: { email: string; displayName?: string };
+  attendees: GoogleMeetAttendee[];
+  isRecurring: boolean;
+  googleEventUrl?: string | null;
+}
+
 export const defaultEventColors = [
   "#4285F4", // Google Blue
   "#EA4335", // Google Red

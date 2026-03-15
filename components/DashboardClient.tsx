@@ -29,6 +29,7 @@ import {
   Calendar,
   CheckSquare,
   FileText,
+  Video,
 } from "lucide-react";
 import AnalyticsWidget from "./dashboard/AnalyticsWidget";
 import TableWidget from "./dashboard/TableWidget";
@@ -41,6 +42,7 @@ import MiniCalendarWidget from "./dashboard/MiniCalendarWidget";
 import MiniTasksWidget from "./dashboard/MiniTasksWidget";
 import MiniQuotesWidget from "./dashboard/MiniQuotesWidget";
 import MiniMeetingsWidget from "./dashboard/MiniMeetingsWidget";
+import MiniGoogleMeetWidget from "./dashboard/MiniGoogleMeetWidget";
 import MiniWidgetConfigModal from "./dashboard/MiniWidgetConfigModal";
 import AnalyticsDetailsModal from "./AnalyticsDetailsModal";
 import DeleteConfirmationModal from "@/components/DeleteConfirmationModal";
@@ -74,7 +76,8 @@ type WidgetType =
   | "MINI_CALENDAR"
   | "MINI_TASKS"
   | "MINI_QUOTES"
-  | "MINI_MEETINGS";
+  | "MINI_MEETINGS"
+  | "MINI_GOOGLE_MEET";
 
 interface DashboardWidget {
   id: string; // Unique ID for this instance on dashboard
@@ -173,7 +176,7 @@ export default function DashboardClient({
   // Mini Widget Config Modal State
   const [miniConfigModal, setMiniConfigModal] = useState<{
     open: boolean;
-    widgetType: "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES" | "MINI_MEETINGS";
+    widgetType: "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES" | "MINI_MEETINGS" | "MINI_GOOGLE_MEET";
     editWidgetId?: string;
     currentSettings?: any;
   } | null>(null);
@@ -383,6 +386,9 @@ export default function DashboardClient({
     setMiniConfigModal({ open: true, widgetType: "MINI_MEETINGS" });
   };
 
+  const handleAddMiniGoogleMeet = () => {
+    setMiniConfigModal({ open: true, widgetType: "MINI_GOOGLE_MEET" });
+  };
 
   const handleMiniConfigConfirm = async (settings: any) => {
     if (!miniConfigModal) return;
@@ -433,7 +439,7 @@ export default function DashboardClient({
     if (!widget) return;
     setMiniConfigModal({
       open: true,
-      widgetType: widget.type as "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES" | "MINI_MEETINGS",
+      widgetType: widget.type as "MINI_CALENDAR" | "MINI_TASKS" | "MINI_QUOTES" | "MINI_MEETINGS" | "MINI_GOOGLE_MEET",
       editWidgetId: widgetId,
       currentSettings: widget.settings,
     });
@@ -778,7 +784,7 @@ export default function DashboardClient({
       return widget.settings;
     } else if (widget.type === "ANALYTICS_TABLE") {
       return widget.settings;
-    } else if (widget.type === "MINI_CALENDAR" || widget.type === "MINI_TASKS" || widget.type === "MINI_QUOTES" || widget.type === "MINI_MEETINGS") {
+    } else if (widget.type === "MINI_CALENDAR" || widget.type === "MINI_TASKS" || widget.type === "MINI_QUOTES" || widget.type === "MINI_MEETINGS" || widget.type === "MINI_GOOGLE_MEET") {
       return null;
     } else {
       // TABLE
@@ -820,6 +826,8 @@ export default function DashboardClient({
       return "מיני הצעות מחיר";
     } else if (widget.type === "MINI_MEETINGS") {
       return "מיני פגישות";
+    } else if (widget.type === "MINI_GOOGLE_MEET") {
+      return "מיני Google Meet";
     } else {
       const table = tablesMap.get(widget.tableId!);
       if (String(widget.referenceId) === "custom") return "תצוגה מותאמת אישית";
@@ -1077,6 +1085,20 @@ export default function DashboardClient({
                 מיני פגישות
               </button>
             )}
+            {hasUserFlag(user, "canViewMeetings") && (
+              <button
+                onClick={handleAddMiniGoogleMeet}
+                disabled={!canAddWidget}
+                className={`flex items-center justify-center gap-2 px-4 py-2 bg-linear-to-r from-blue-50 to-teal-50 text-blue-700 border border-blue-100 rounded-lg transition shadow-sm font-medium text-sm ${
+                  !canAddWidget
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:shadow-md"
+                }`}
+              >
+                <Video size={16} aria-hidden="true" />
+                מיני Google Meet
+              </button>
+            )}
             <button
               onClick={handleOpenAddModal}
               disabled={!canAddWidget}
@@ -1258,6 +1280,17 @@ export default function DashboardClient({
                 return (
                   <div key={widget.id} className="break-inside-avoid" data-testid="dashboard-widget">
                     <MiniMeetingsWidget
+                      id={widget.id}
+                      onRemove={handleRemoveWidget}
+                      settings={(widget as any).settings}
+                      onOpenSettings={handleOpenMiniWidgetSettingsById}
+                    />
+                  </div>
+                );
+              } else if (widget.type === "MINI_GOOGLE_MEET") {
+                return (
+                  <div key={widget.id} className="break-inside-avoid" data-testid="dashboard-widget">
+                    <MiniGoogleMeetWidget
                       id={widget.id}
                       onRemove={handleRemoveWidget}
                       settings={(widget as any).settings}

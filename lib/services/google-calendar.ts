@@ -164,7 +164,28 @@ interface GoogleCalendarEventTime {
   timeZone?: string;
 }
 
-interface GoogleCalendarEvent {
+export interface GoogleCalendarEventAttendee {
+  email: string;
+  displayName?: string;
+  responseStatus?: "needsAction" | "declined" | "tentative" | "accepted";
+  self?: boolean;
+  organizer?: boolean;
+}
+
+export interface GoogleCalendarConferenceData {
+  conferenceSolution?: {
+    name: string;
+    iconUri?: string;
+  };
+  entryPoints?: Array<{
+    entryPointType: string;
+    uri?: string;
+    label?: string;
+  }>;
+  conferenceId?: string;
+}
+
+export interface GoogleCalendarEvent {
   id: string;
   summary?: string;
   description?: string;
@@ -172,6 +193,11 @@ interface GoogleCalendarEvent {
   end: GoogleCalendarEventTime;
   htmlLink?: string;
   status?: string;
+  hangoutLink?: string;
+  conferenceData?: GoogleCalendarConferenceData;
+  attendees?: GoogleCalendarEventAttendee[];
+  organizer?: { email: string; displayName?: string; self?: boolean };
+  recurringEventId?: string;
 }
 
 export async function fetchGoogleCalendarEvents(
@@ -205,6 +231,52 @@ export async function fetchGoogleCalendarEvents(
   return (data.items || []).filter(
     (e: GoogleCalendarEvent) => e.status !== "cancelled",
   );
+}
+
+// ─── Google Meet Events ───
+
+export async function fetchGoogleMeetEvents(
+  accessToken: string,
+  timeMin: string,
+  timeMax: string,
+  pageToken?: string,
+): Promise<{ events: GoogleCalendarEvent[]; nextPageToken?: string }> {
+  const params = new URLSearchParams({
+    timeMin,
+    timeMax,
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "50",
+    conferenceDataVersion: "1",
+  });
+  if (pageToken) params.set("pageToken", pageToken);
+
+  const res = await fetch(
+    `${GOOGLE_CALENDAR_API}/calendars/primary/events?${params}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    log.error("Failed to fetch Google Meet events", {
+      status: res.status,
+      body: text,
+    });
+    throw new Error("Failed to fetch Google Meet events");
+  }
+
+  const data = await res.json();
+  const allEvents: GoogleCalendarEvent[] = (data.items || []).filter(
+    (e: GoogleCalendarEvent) => e.status !== "cancelled",
+  );
+
+  const meetEvents = allEvents.filter(
+    (e) =>
+      e.hangoutLink ||
+      e.conferenceData?.conferenceSolution?.name === "Google Meet",
+  );
+
+  return { events: meetEvents, nextPageToken: data.nextPageToken };
 }
 
 // ─── Token Revocation ───
